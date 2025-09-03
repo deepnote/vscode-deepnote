@@ -212,13 +212,7 @@ module.exports = {
         'local-rules/dont-use-process': ['error'],
         'local-rules/dont-use-fspath': ['error'],
         'local-rules/dont-use-filename': ['error'],
-        strict: 'off',
-        'header/header': [
-            'error',
-            'line',
-            [' Copyright (c) Microsoft Corporation.', ' Licensed under the MIT License.'],
-            2
-        ]
+        strict: 'off'
     },
     overrides: [
         {

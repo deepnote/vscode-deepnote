@@ -36,6 +36,7 @@ import { EmptyNotebookCellLanguageService } from './languages/emptyNotebookCellL
 import { INotebookCommandHandler, NotebookCommandListener } from './notebookCommandListener';
 import { NotebookEditorProvider } from './notebookEditorProvider';
 import { NotebookPythonEnvironmentService } from './notebookEnvironmentService.node';
+import { CustomNotebookService } from './customNotebookService';
 import { CellOutputMimeTypeTracker } from './outputs/cellOutputMimeTypeTracker';
 import { NotebookTracebackFormatter } from './outputs/tracebackFormatter';
 import { InterpreterPackageTracker } from './telemetry/interpreterPackageTracker.node';
@@ -118,5 +119,9 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<NotebookPythonEnvironmentService>(
         INotebookPythonEnvironmentService,
         NotebookPythonEnvironmentService
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        CustomNotebookService
     );
 }

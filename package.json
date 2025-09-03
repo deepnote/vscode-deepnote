@@ -29,7 +29,7 @@
         "theme": "light"
     },
     "engines": {
-        "vscode": "^1.104.0"
+        "vscode": "^1.103.0"
     },
     "l10n": "./l10n",
     "extensionKind": [
@@ -54,6 +54,7 @@
         "onLanguage:python",
         "onLanguage:jupyter",
         "onNotebook:jupyter-notebook",
+        "onNotebook:custom-notebook",
         "onNotebook:interactive",
         "onWebviewPanel:jupyter-variables",
         "onWebviewPanel:jupyter",
@@ -71,181 +72,6 @@
         }
     },
     "contributes": {
-        "walkthroughs": [
-            {
-                "id": "jupyterWelcome",
-                "title": "%contributes.walkthroughs.jupyterWelcome.title%",
-                "description": "%contributes.walkthroughs.jupyterWelcome.description%",
-                "when": "workspacePlatform != webworker",
-                "steps": [
-                    {
-                        "id": "ipynb.newUntitledIpynb",
-                        "title": "%contributes.walkthroughs.jupyterWelcome.steps.ipynb.newUntitledIpynb.title%",
-                        "description": "%contributes.walkthroughs.jupyterWelcome.steps.ipynb.newUntitledIpynb.description%",
-                        "media": {
-                            "svg": "resources/walkthroughs/opennotebook.svg",
-                            "altText": "%contributes.walkthroughs.jupyterWelcome.steps.ipynb.newUntitledIpynb.media.altText%"
-                        },
-                        "completionEvents": [
-                            "onCommand:ipynb.newUntitledIpynb",
-                            "onCommand:jupyter.createnewinteractive",
-                            "onCommand:workbench.action.files.openFolder",
-                            "onCommand:workbench.action.files.openFileFolder"
-                        ]
-                    },
-                    {
-                        "id": "jupyter.selectKernel",
-                        "title": "%contributes.walkthroughs.jupyterWelcome.steps.jupyter.selectKernel.title%",
-                        "description": "%contributes.walkthroughs.jupyterWelcome.steps.jupyter.selectKernel.description%",
-                        "media": {
-                            "svg": "resources/walkthroughs/kernel.svg",
-                            "altText": "%contributes.walkthroughs.jupyterWelcome.steps.jupyter.selectKernel.media.altText%"
-                        },
-                        "completionEvents": [
-                            "onCommand:notebook.selectKernel"
-                        ]
-                    },
-                    {
-                        "id": "jupyter.exploreAndDebug",
-                        "title": "%contributes.walkthroughs.jupyterWelcome.steps.jupyter.exploreAndDebug.title%",
-                        "description": "%contributes.walkthroughs.jupyterWelcome.steps.jupyter.exploreAndDebug.description%",
-                        "media": {
-                            "svg": "resources/walkthroughs/data.svg",
-                            "altText": "%contributes.walkthroughs.jupyterWelcome.steps.jupyter.exploreAndDebug.media.altText%"
-                        }
-                    },
-                    {
-                        "id": "jupyter.dataScienceLearnMore",
-                        "title": "%contributes.walkthroughs.jupyterWelcome.steps.jupyter.dataScienceLearnMore.title%",
-                        "description": "%contributes.walkthroughs.jupyterWelcome.steps.jupyter.dataScienceLearnMore.description%",
-                        "media": {
-                            "svg": "resources/walkthroughs/learnmore.svg",
-                            "altText": "%contributes.walkthroughs.jupyterWelcome.steps.jupyter.dataScienceLearnMore.media.altText%"
-                        }
-                    }
-                ]
-            }
-        ],
-        "keybindings": [
-            {
-                "command": "jupyter.execSelectionInteractive",
-                "key": "shift+enter",
-                "when": "editorTextFocus && editorLangId == python && !findInputFocussed && !replaceInputFocussed && jupyter.ownsSelection && !notebookEditorFocused && !isCompositeNotebook"
-            },
-            {
-                "command": "jupyter.runcurrentcelladvance",
-                "key": "shift+enter",
-                "when": "editorTextFocus && !editorHasSelection && jupyter.hascodecells && !notebookEditorFocused && !isCompositeNotebook"
-            },
-            {
-                "command": "jupyter.runcurrentcell",
-                "key": "ctrl+enter",
-                "when": "editorTextFocus && !editorHasSelection && jupyter.hascodecells && !notebookEditorFocused && !isCompositeNotebook"
-            },
-            {
-                "command": "jupyter.runcurrentcellandaddbelow",
-                "key": "alt+enter",
-                "when": "editorTextFocus && !editorHasSelection && jupyter.hascodecells && !notebookEditorFocused"
-            },
-            {
-                "key": "escape",
-                "when": "isCompositeNotebook && !editorHoverVisible && !suggestWidgetVisible && !isComposing && !inSnippetMode && !exceptionWidgetVisible && !selectionAnchorSet && !LinkedEditingInputVisible && !renameInputVisible && !editorHasSelection && !accessibilityHelpWidgetVisible && !breakpointWidgetVisible && !findWidgetVisible && !markersNavigationVisible && !parameterHintsVisible && !editorHasMultipleSelections && !notificationToastsVisible && !notebookEditorFocused && !inlineChatVisible",
-                "command": "interactive.input.clear"
-            },
-            {
-                "command": "jupyter.insertCellBelowPosition",
-                "key": "ctrl+; s",
-                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
-            },
-            {
-                "command": "jupyter.insertCellBelow",
-                "key": "ctrl+; b",
-                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
-            },
-            {
-                "command": "jupyter.insertCellAbove",
-                "key": "ctrl+; a",
-                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
-            },
-            {
-                "command": "jupyter.deleteCells",
-                "key": "ctrl+; x",
-                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
-            },
-            {
-                "command": "jupyter.extendSelectionByCellAbove",
-                "key": "ctrl+alt+shift+[",
-                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
-            },
-            {
-                "command": "jupyter.extendSelectionByCellBelow",
-                "key": "ctrl+alt+shift+]",
-                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
-            },
-            {
-                "command": "jupyter.moveCellsUp",
-                "key": "ctrl+; u",
-                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
-            },
-            {
-                "command": "jupyter.moveCellsDown",
-                "key": "ctrl+; d",
-                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
-            },
-            {
-                "command": "jupyter.changeCellToMarkdown",
-                "key": "ctrl+; m",
-                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
-            },
-            {
-                "command": "jupyter.changeCellToCode",
-                "key": "ctrl+; c",
-                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
-            },
-            {
-                "command": "jupyter.gotoNextCellInFile",
-                "key": "ctrl+alt+]",
-                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
-            },
-            {
-                "command": "jupyter.gotoPrevCellInFile",
-                "key": "ctrl+alt+[",
-                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
-            },
-            {
-                "command": "jupyter.selectCellContents",
-                "key": "ctrl+alt+\\",
-                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
-            },
-            {
-                "command": "jupyter.selectCell",
-                "key": "ctrl+alt+shift+\\",
-                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
-            },
-            {
-                "command": "jupyter.refreshDataViewer",
-                "key": "ctrl+r",
-                "mac": "cmd+r",
-                "when": "jupyter.dataViewerActive"
-            },
-            {
-                "command": "jupyter.runAndDebugCell",
-                "key": "ctrl+alt+shift+enter",
-                "mac": "ctrl+shift+enter"
-            },
-            {
-                "command": "jupyter.runByLine",
-                "key": "f10"
-            },
-            {
-                "command": "jupyter.runByLineNext",
-                "key": "f10"
-            },
-            {
-                "command": "jupyter.runByLineStop",
-                "key": "ctrl+enter"
-            }
-        ],
         "commands": [
             {
                 "command": "dataScience.ClearCache",
@@ -780,6 +606,126 @@
                 "title": "List Variables",
                 "enablement": "isWorkspaceTrusted && !jupyter.webExtension",
                 "category": "Jupyter"
+            }
+        ],
+        "keybindings": [
+            {
+                "command": "jupyter.execSelectionInteractive",
+                "key": "shift+enter",
+                "when": "editorTextFocus && editorLangId == python && !findInputFocussed && !replaceInputFocussed && jupyter.ownsSelection && !notebookEditorFocused && !isCompositeNotebook"
+            },
+            {
+                "command": "jupyter.runcurrentcelladvance",
+                "key": "shift+enter",
+                "when": "editorTextFocus && !editorHasSelection && jupyter.hascodecells && !notebookEditorFocused && !isCompositeNotebook"
+            },
+            {
+                "command": "jupyter.runcurrentcell",
+                "key": "ctrl+enter",
+                "when": "editorTextFocus && !editorHasSelection && jupyter.hascodecells && !notebookEditorFocused && !isCompositeNotebook"
+            },
+            {
+                "command": "jupyter.runcurrentcellandaddbelow",
+                "key": "alt+enter",
+                "when": "editorTextFocus && !editorHasSelection && jupyter.hascodecells && !notebookEditorFocused"
+            },
+            {
+                "key": "escape",
+                "when": "isCompositeNotebook && !editorHoverVisible && !suggestWidgetVisible && !isComposing && !inSnippetMode && !exceptionWidgetVisible && !selectionAnchorSet && !LinkedEditingInputVisible && !renameInputVisible && !editorHasSelection && !accessibilityHelpWidgetVisible && !breakpointWidgetVisible && !findWidgetVisible && !markersNavigationVisible && !parameterHintsVisible && !editorHasMultipleSelections && !notificationToastsVisible && !notebookEditorFocused && !inlineChatVisible",
+                "command": "interactive.input.clear"
+            },
+            {
+                "command": "jupyter.insertCellBelowPosition",
+                "key": "ctrl+; s",
+                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
+            },
+            {
+                "command": "jupyter.insertCellBelow",
+                "key": "ctrl+; b",
+                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
+            },
+            {
+                "command": "jupyter.insertCellAbove",
+                "key": "ctrl+; a",
+                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
+            },
+            {
+                "command": "jupyter.deleteCells",
+                "key": "ctrl+; x",
+                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
+            },
+            {
+                "command": "jupyter.extendSelectionByCellAbove",
+                "key": "ctrl+alt+shift+[",
+                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
+            },
+            {
+                "command": "jupyter.extendSelectionByCellBelow",
+                "key": "ctrl+alt+shift+]",
+                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
+            },
+            {
+                "command": "jupyter.moveCellsUp",
+                "key": "ctrl+; u",
+                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
+            },
+            {
+                "command": "jupyter.moveCellsDown",
+                "key": "ctrl+; d",
+                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
+            },
+            {
+                "command": "jupyter.changeCellToMarkdown",
+                "key": "ctrl+; m",
+                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
+            },
+            {
+                "command": "jupyter.changeCellToCode",
+                "key": "ctrl+; c",
+                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
+            },
+            {
+                "command": "jupyter.gotoNextCellInFile",
+                "key": "ctrl+alt+]",
+                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
+            },
+            {
+                "command": "jupyter.gotoPrevCellInFile",
+                "key": "ctrl+alt+[",
+                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
+            },
+            {
+                "command": "jupyter.selectCellContents",
+                "key": "ctrl+alt+\\",
+                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
+            },
+            {
+                "command": "jupyter.selectCell",
+                "key": "ctrl+alt+shift+\\",
+                "when": "editorTextFocus && jupyter.hascodecells && !notebookEditorFocused"
+            },
+            {
+                "command": "jupyter.refreshDataViewer",
+                "key": "ctrl+r",
+                "mac": "cmd+r",
+                "when": "jupyter.dataViewerActive"
+            },
+            {
+                "command": "jupyter.runAndDebugCell",
+                "key": "ctrl+alt+shift+enter",
+                "mac": "ctrl+shift+enter"
+            },
+            {
+                "command": "jupyter.runByLine",
+                "key": "f10"
+            },
+            {
+                "command": "jupyter.runByLineNext",
+                "key": "f10"
+            },
+            {
+                "command": "jupyter.runByLineStop",
+                "key": "ctrl+enter"
             }
         ],
         "submenus": [
@@ -1937,6 +1883,28 @@
                 ]
             }
         ],
+        "notebooks": [
+            {
+                "type": "custom-notebook",
+                "displayName": "Custom Jupyter Notebook",
+                "selector": [
+                    {
+                        "filenamePattern": "*.custom.ipynb"
+                    }
+                ]
+            }
+        ],
+        "notebookRenderer": [
+            {
+                "id": "custom-cell-renderer",
+                "displayName": "Custom Cell Renderer",
+                "entrypoint": "./dist/customCellRenderer.js",
+                "mimeTypes": [
+                    "application/vnd.custom.cell"
+                ],
+                "requiresMessaging": "optional"
+            }
+        ],
         "notebookPreload": [
             {
                 "type": "jupyter-notebook",
@@ -1951,17 +1919,6 @@
                     "./temp"
                 ],
                 "entrypoint": "./dist/webviews/webview-side/ipywidgetsKernel/ipywidgetsKernel.js"
-            }
-        ],
-        "notebookRenderer": [
-            {
-                "id": "jupyter-ipywidget-renderer",
-                "entrypoint": "./dist/webviews/webview-side/ipywidgetsRenderer/ipywidgetsRenderer.js",
-                "displayName": "%jupyter.notebookRenderer.IPyWidget.displayName%",
-                "mimeTypes": [
-                    "application/vnd.jupyter.widget-view+json"
-                ],
-                "requiresMessaging": "always"
             }
         ],
         "viewsContainers": {
@@ -2185,6 +2142,61 @@
                 },
                 "when": "false"
             }
+        ],
+        "walkthroughs": [
+            {
+                "id": "jupyterWelcome",
+                "title": "%contributes.walkthroughs.jupyterWelcome.title%",
+                "description": "%contributes.walkthroughs.jupyterWelcome.description%",
+                "when": "workspacePlatform != webworker",
+                "steps": [
+                    {
+                        "id": "ipynb.newUntitledIpynb",
+                        "title": "%contributes.walkthroughs.jupyterWelcome.steps.ipynb.newUntitledIpynb.title%",
+                        "description": "%contributes.walkthroughs.jupyterWelcome.steps.ipynb.newUntitledIpynb.description%",
+                        "media": {
+                            "svg": "resources/walkthroughs/opennotebook.svg",
+                            "altText": "%contributes.walkthroughs.jupyterWelcome.steps.ipynb.newUntitledIpynb.media.altText%"
+                        },
+                        "completionEvents": [
+                            "onCommand:ipynb.newUntitledIpynb",
+                            "onCommand:jupyter.createnewinteractive",
+                            "onCommand:workbench.action.files.openFolder",
+                            "onCommand:workbench.action.files.openFileFolder"
+                        ]
+                    },
+                    {
+                        "id": "jupyter.selectKernel",
+                        "title": "%contributes.walkthroughs.jupyterWelcome.steps.jupyter.selectKernel.title%",
+                        "description": "%contributes.walkthroughs.jupyterWelcome.steps.jupyter.selectKernel.description%",
+                        "media": {
+                            "svg": "resources/walkthroughs/kernel.svg",
+                            "altText": "%contributes.walkthroughs.jupyterWelcome.steps.jupyter.selectKernel.media.altText%"
+                        },
+                        "completionEvents": [
+                            "onCommand:notebook.selectKernel"
+                        ]
+                    },
+                    {
+                        "id": "jupyter.exploreAndDebug",
+                        "title": "%contributes.walkthroughs.jupyterWelcome.steps.jupyter.exploreAndDebug.title%",
+                        "description": "%contributes.walkthroughs.jupyterWelcome.steps.jupyter.exploreAndDebug.description%",
+                        "media": {
+                            "svg": "resources/walkthroughs/data.svg",
+                            "altText": "%contributes.walkthroughs.jupyterWelcome.steps.jupyter.exploreAndDebug.media.altText%"
+                        }
+                    },
+                    {
+                        "id": "jupyter.dataScienceLearnMore",
+                        "title": "%contributes.walkthroughs.jupyterWelcome.steps.jupyter.dataScienceLearnMore.title%",
+                        "description": "%contributes.walkthroughs.jupyterWelcome.steps.jupyter.dataScienceLearnMore.description%",
+                        "media": {
+                            "svg": "resources/walkthroughs/learnmore.svg",
+                            "altText": "%contributes.walkthroughs.jupyterWelcome.steps.jupyter.dataScienceLearnMore.media.altText%"
+                        }
+                    }
+                ]
+            }
         ]
     },
     "enabledApiProposals": [
@@ -2247,6 +2259,7 @@
         "setup-precommit-hook": "husky install"
     },
     "dependencies": {
+        "@aminya/node-gyp-build": "^4.8.1-aminya.1",
         "@c4312/evt": "^0.1.1",
         "@enonic/fnv-plus": "^1.3.0",
         "@jupyter-widgets/base": "^6.0.8",

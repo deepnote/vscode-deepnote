@@ -301,6 +301,11 @@ async function buildAll() {
             path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'data-explorer', 'index.tsx'),
             path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'viewers', 'dataExplorer.js'),
             { target: 'web', watch: watchAll }
+        ),
+        build(
+            path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'customCellRenderer', 'index.ts'),
+            path.join(extensionFolder, 'dist', 'customCellRenderer.js'),
+            { target: 'web', watch: watchAll }
         )
     );
 

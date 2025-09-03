@@ -35,6 +35,7 @@ import { NotebookPythonEnvironmentService } from './notebookEnvironmentService.w
 import { CellOutputMimeTypeTracker } from './outputs/cellOutputMimeTypeTracker';
 import { NotebookTracebackFormatter } from './outputs/tracebackFormatter';
 import { INotebookEditorProvider, INotebookPythonEnvironmentService } from './types';
+import { DeepnoteActivationService } from './deepnote/deepnoteActivationService';
 
 export function registerTypes(serviceManager: IServiceManager, isDevMode: boolean) {
     registerControllerTypes(serviceManager, isDevMode);
@@ -83,6 +84,10 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
         CellOutputMimeTypeTracker
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        DeepnoteActivationService
     );
 
     serviceManager.addSingleton<IExportBase>(IExportBase, ExportBase);

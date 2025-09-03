@@ -8,8 +8,8 @@ body:
     attributes:
       value: |
         ## Before submitting a bug, you may want to check out...
-        * Troubleshooting on [our wiki](https://github.com/microsoft/vscode-jupyter/wiki)
-        * Our [Discussions Forum](https://github.com/microsoft/vscode-jupyter/discussions)
+        * Troubleshooting on [our wiki](https://github.com/deepnote/vscode-extension/wiki)
+        * Our [Discussions Forum](https://github.com/deepnote/vscode-extension/discussions)
   - type: markdown
     attributes:
       value: |

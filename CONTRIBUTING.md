@@ -29,6 +29,27 @@
 ```shell
 git clone https://github.com/microsoft/vscode-jupyter
 cd vscode-jupyter
+
+```
+
+On Apple Silicon, you will have to use system versions of `libsodium` and `libzmq` instead of the bundled ones:
+
+```shell
+brew update
+brew install cmake pkg-config libsodium zeromq
+
+export CMAKE_POLICY_VERSION_MINIMUM=3.5
+export PKG_CONFIG_PATH="$(brew --prefix)/lib/pkgconfig"
+export CPPFLAGS="-I$(brew --prefix libsodium)/include -I$(brew --prefix zeromq)/include"
+export LDFLAGS="-L$(brew --prefix libsodium)/lib -L$(brew --prefix zeromq)/lib"
+
+npm_config_build_from_source=true npm install zeromq@^6.0.0-beta.16
+
+```
+
+Install the dependecies:
+
+```shell
 npm ci
 # Run this to setup the necessary pre-commit hooks.
 npm run setup-precommit-hook
@@ -39,6 +60,7 @@ source .venv/bin/activate
 .venv\Scripts\activate
 # The Python code in the extension is formatted using Black.
 python -m pip install black
+
 ```
 
 ### Incremental Build
@@ -49,6 +71,7 @@ You can also compile from the command-line. For a full compile you can use:
 
 ```shell
 npm run compile
+
 ```
 
 For incremental builds it is recommended you use the `watch` build task (for better integration with VS Code).

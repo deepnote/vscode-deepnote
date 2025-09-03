@@ -43,7 +43,7 @@ export PKG_CONFIG_PATH="$(brew --prefix)/lib/pkgconfig"
 export CPPFLAGS="-I$(brew --prefix libsodium)/include -I$(brew --prefix zeromq)/include"
 export LDFLAGS="-L$(brew --prefix libsodium)/lib -L$(brew --prefix zeromq)/lib"
 
-npm_config_build_from_source=true npm install zeromq@^6.0.0-beta.16
+npm_config_build_from_source=true npm install zeromq@
 
 ```
 

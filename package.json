@@ -54,7 +54,6 @@
         "onLanguage:python",
         "onLanguage:jupyter",
         "onNotebook:jupyter-notebook",
-        "onNotebook:custom-notebook",
         "onNotebook:interactive",
         "onWebviewPanel:jupyter-variables",
         "onWebviewPanel:jupyter",
@@ -1884,15 +1883,6 @@
             }
         ],
         "notebooks": [
-            {
-                "type": "custom-notebook",
-                "displayName": "Custom Jupyter Notebook",
-                "selector": [
-                    {
-                        "filenamePattern": "*.custom.ipynb"
-                    }
-                ]
-            }
         ],
         "notebookRenderer": [
             {
@@ -1919,6 +1909,18 @@
                     "./temp"
                 ],
                 "entrypoint": "./dist/webviews/webview-side/ipywidgetsKernel/ipywidgetsKernel.js"
+            }
+        ],
+        "customEditors": [
+            {
+                "viewType": "jupyter.customNotebook",
+                "displayName": "Custom Jupyter Notebook",
+                "selector": [
+                    {
+                        "filenamePattern": "*.custom.ipynb"
+                    }
+                ],
+                "priority": "default"
             }
         ],
         "viewsContainers": {

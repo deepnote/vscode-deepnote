@@ -306,6 +306,11 @@ async function buildAll() {
             path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'customCellRenderer', 'index.ts'),
             path.join(extensionFolder, 'dist', 'customCellRenderer.js'),
             { target: 'web', watch: watchAll }
+        ),
+        build(
+            path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'customNotebook', 'index.tsx'),
+            path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'customNotebook', 'customNotebook.js'),
+            { target: 'web', watch: watchAll }
         )
     );
 

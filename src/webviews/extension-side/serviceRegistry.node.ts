@@ -29,6 +29,8 @@ import { NotebookWatcher } from './variablesView/notebookWatcher';
 import { INotebookWatcher, IVariableViewProvider } from './variablesView/types';
 import { VariableViewActivationService } from './variablesView/variableViewActivationService';
 import { VariableViewProvider } from './variablesView/variableViewProvider';
+import { CustomNotebookProvider } from './customNotebook/customNotebookProvider';
+import { CustomNotebookActivationService } from './customNotebook/customNotebookActivationService';
 
 export function registerTypes(serviceManager: IServiceManager) {
     serviceManager.addSingleton<IExtensionSyncActivationService>(
@@ -70,5 +72,12 @@ export function registerTypes(serviceManager: IServiceManager) {
     serviceManager.addSingleton<IJupyterVariableDataProviderFactory>(
         IJupyterVariableDataProviderFactory,
         JupyterVariableDataProviderFactory
+    );
+
+    // Custom Notebook Editor
+    serviceManager.addSingleton<CustomNotebookProvider>(CustomNotebookProvider, CustomNotebookProvider);
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        CustomNotebookActivationService
     );
 }

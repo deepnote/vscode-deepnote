@@ -29,7 +29,7 @@
         "theme": "light"
     },
     "engines": {
-        "vscode": "^1.104.0"
+        "vscode": "^1.103.0"
     },
     "l10n": "./l10n",
     "extensionKind": [
@@ -51,15 +51,16 @@
         "Visualization"
     ],
     "activationEvents": [
-        "onLanguage:python",
         "onLanguage:jupyter",
-        "onNotebook:jupyter-notebook",
-        "onNotebook:interactive",
-        "onWebviewPanel:jupyter-variables",
-        "onWebviewPanel:jupyter",
+        "onLanguage:python",
         "onLanguageModelTool:configure_notebook",
+        "onLanguageModelTool:notebook_install_packages",
         "onLanguageModelTool:notebook_list_packages",
-        "onLanguageModelTool:notebook_install_packages"
+        "onNotebook:deepnote",
+        "onNotebook:interactive",
+        "onNotebook:jupyter-notebook",
+        "onWebviewPanel:jupyter-variables",
+        "onWebviewPanel:jupyter"
     ],
     "main": "./dist/extension.node.proxy.js",
     "browser": "./dist/extension.web.bundle.js",
@@ -315,6 +316,12 @@
                 "command": "jupyter.viewOutput",
                 "title": "%jupyter.command.jupyter.viewOutput.title%",
                 "category": "Jupyter"
+            },
+            {
+                "command": "jupyter.selectDeepnoteNotebook",
+                "title": "Select Notebook",
+                "category": "Deepnote",
+                "enablement": "notebookType == 'deepnote'"
             },
             {
                 "command": "jupyter.notebookeditor.export",
@@ -883,6 +890,11 @@
                     "command": "jupyter.openOutlineView",
                     "group": "navigation@2",
                     "when": "notebookType == 'jupyter-notebook' && config.jupyter.showOutlineButtonInNotebookToolbar"
+                },
+                {
+                    "command": "jupyter.selectDeepnoteNotebook",
+                    "group": "navigation@2",
+                    "when": "notebookType == 'deepnote'"
                 },
                 {
                     "command": "jupyter.continueEditSessionInCodespace",
@@ -1937,9 +1949,27 @@
                 ]
             }
         ],
+        "notebooks": [
+            {
+                "type": "deepnote",
+                "displayName": "Deepnote Notebook",
+                "selector": [
+                    {
+                        "filenamePattern": "*.deepnote"
+                    }
+                ]
+            }
+        ],
         "notebookPreload": [
             {
                 "type": "jupyter-notebook",
+                "localResourceRoots": [
+                    "./temp"
+                ],
+                "entrypoint": "./dist/webviews/webview-side/ipywidgetsKernel/ipywidgetsKernel.js"
+            },
+            {
+                "type": "deepnote",
                 "localResourceRoots": [
                     "./temp"
                 ],
@@ -2272,6 +2302,7 @@
         "inversify": "^6.0.1",
         "isomorphic-ws": "^4.0.1",
         "jquery": "^3.6.0",
+        "js-yaml": "^4.1.0",
         "jsonc-parser": "^2.0.3",
         "lodash": "^4.17.21",
         "marked": "^4.0.10",
@@ -2329,6 +2360,7 @@
         "@types/fs-extra": "^5.0.1",
         "@types/get-port": "^3.2.0",
         "@types/glob": "^5.0.35",
+        "@types/js-yaml": "^4.0.9",
         "@types/json2csv": "^5.0.3",
         "@types/loadable__component": "^5.10.0",
         "@types/lodash": "^4.14.104",

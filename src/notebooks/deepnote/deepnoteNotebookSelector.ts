@@ -1,6 +1,6 @@
 import { l10n, type QuickPickItem, window } from 'vscode';
-import { toPromise } from '../../platform/common/utils/events';
 
+import { toPromise } from '../../platform/common/utils/events';
 import type { DeepnoteNotebook } from './deepnoteTypes';
 
 interface NotebookQuickPickItem extends QuickPickItem {

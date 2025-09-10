@@ -41,6 +41,8 @@ import { NotebookTracebackFormatter } from './outputs/tracebackFormatter';
 import { InterpreterPackageTracker } from './telemetry/interpreterPackageTracker.node';
 import { INotebookEditorProvider, INotebookPythonEnvironmentService } from './types';
 import { DeepnoteActivationService } from './deepnote/deepnoteActivationService';
+import { DeepnoteNotebookManager } from './deepnote/deepnoteNotebookManager';
+import { IDeepnoteNotebookManager } from './types';
 
 export function registerTypes(serviceManager: IServiceManager, isDevMode: boolean) {
     registerControllerTypes(serviceManager, isDevMode);
@@ -113,6 +115,7 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
         IExtensionSyncActivationService,
         DeepnoteActivationService
     );
+    serviceManager.addSingleton<IDeepnoteNotebookManager>(IDeepnoteNotebookManager, DeepnoteNotebookManager);
 
     // File export/import
     serviceManager.addSingleton<IFileConverter>(IFileConverter, FileConverter);

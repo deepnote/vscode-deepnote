@@ -27,3 +27,4 @@
   - `deepnoteActivationService.ts` - VSCode activation
 - Whitespace is good for readability, add a blank line after const groups and before return statements
 - Separate third-party and local file imports
+- How the extension works is described in @architecture.md

@@ -23,3 +23,13 @@ export interface INotebookPythonEnvironmentService {
     onDidChangeEnvironment: Event<Uri>;
     getPythonEnvironment(uri: Uri): EnvironmentPath | undefined;
 }
+
+export const IDeepnoteNotebookManager = Symbol('IDeepnoteNotebookManager');
+export interface IDeepnoteNotebookManager {
+    getCurrentNotebookId(projectId: string): string | undefined;
+    getOriginalProject(projectId: string): unknown | undefined;
+    getTheSelectedNotebookForAProject(projectId: string): string | undefined;
+    selectNotebookForProject(projectId: string, notebookId: string): void;
+    storeOriginalProject(projectId: string, project: unknown, notebookId: string): void;
+    updateCurrentNotebookId(projectId: string, notebookId: string): void;
+}

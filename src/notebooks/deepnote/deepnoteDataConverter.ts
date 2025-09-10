@@ -39,10 +39,17 @@ export class DeepnoteDataConverter {
 
     private convertBlockToCell(block: DeepnoteBlock): NotebookCellData {
         const cellKind = block.type === 'code' ? NotebookCellKind.Code : NotebookCellKind.Markup;
-        const languageId = block.type === 'code' ? 'python' : 'markdown';
+        const source = block.content || '';
 
-        const cell = new NotebookCellData(cellKind, block.content, languageId);
+        // Create the cell with proper language ID
+        let cell: NotebookCellData;
+        if (block.type === 'code') {
+            cell = new NotebookCellData(cellKind, source, 'python');
+        } else {
+            cell = new NotebookCellData(cellKind, source, 'markdown');
+        }
 
+        // Set metadata after creation
         cell.metadata = {
             deepnoteBlockId: block.id,
             deepnoteBlockType: block.type,
@@ -52,7 +59,12 @@ export class DeepnoteDataConverter {
             ...(block.outputReference && { deepnoteOutputReference: block.outputReference })
         };
 
-        cell.outputs = this.convertDeepnoteOutputsToVSCodeOutputs(block.outputs || []);
+        // Only set outputs if they exist
+        if (block.outputs && block.outputs.length > 0) {
+            cell.outputs = this.convertDeepnoteOutputsToVSCodeOutputs(block.outputs);
+        } else {
+            cell.outputs = [];
+        }
 
         return cell;
     }
@@ -66,7 +78,7 @@ export class DeepnoteDataConverter {
             id: blockId,
             sortingKey: sortingKey,
             type: cell.kind === NotebookCellKind.Code ? 'code' : 'markdown',
-            content: cell.value
+            content: cell.value || ''
         };
 
         // Only add metadata if it exists and is not empty

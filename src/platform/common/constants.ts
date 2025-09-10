@@ -218,7 +218,10 @@ export namespace Commands {
     export const ScrollToCell = 'jupyter.scrolltocell';
     export const CreateNewNotebook = 'jupyter.createnewnotebook';
     export const ViewJupyterOutput = 'jupyter.viewOutput';
-    export const SelectDeepnoteNotebook = 'jupyter.selectDeepnoteNotebook';
+    export const RefreshDeepnoteExplorer = 'deepnote.refreshExplorer';
+    export const OpenDeepnoteNotebook = 'deepnote.openNotebook';
+    export const OpenDeepnoteFile = 'deepnote.openFile';
+    export const RevealInDeepnoteExplorer = 'deepnote.revealInExplorer';
     export const ExportAsPythonScript = 'jupyter.exportAsPythonScript';
     export const ExportToHTML = 'jupyter.exportToHTML';
     export const ExportToPDF = 'jupyter.exportToPDF';

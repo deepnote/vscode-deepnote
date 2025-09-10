@@ -1,11 +1,11 @@
 {
-    "name": "jupyter",
-    "displayName": "Jupyter",
-    "version": "2025.8.0",
-    "description": "Jupyter notebook support, interactive programming and computing that supports Intellisense, debugging and more.",
-    "publisher": "ms-toolsai",
+    "name": "vscode-deepnote",
+    "displayName": "Deepnote",
+    "version": "0.1.0",
+    "description": "Deepnote notebook support.",
+    "publisher": "Deepnote",
     "author": {
-        "name": "Microsoft Corporation"
+        "name": "Deepnote"
     },
     "extensionPack": [
         "ms-toolsai.jupyter-keymap",
@@ -14,15 +14,15 @@
         "ms-toolsai.vscode-jupyter-cell-tags"
     ],
     "license": "MIT",
-    "homepage": "https://github.com/Microsoft/vscode-jupyter",
+    "homepage": "https://github.com/deepnote/vscode-deepnote",
     "repository": {
         "type": "git",
-        "url": "https://github.com/Microsoft/vscode-jupyter"
+        "url": "https://github.com/deepnote/vscode-deepnote"
     },
     "bugs": {
-        "url": "https://github.com/Microsoft/vscode-jupyter/issues"
+        "url": "https://github.com/deepnote/vscode-deepnote/issues"
     },
-    "qna": "https://github.com/microsoft/vscode-jupyter/discussions",
+    "qna": "https://github.com/deepnote/vscode-deepnote/discussions",
     "icon": "icon.png",
     "galleryBanner": {
         "color": "#ffffff",
@@ -36,6 +36,9 @@
         "workspace"
     ],
     "keywords": [
+        "deepnote",
+        "data science",
+        "data-science",
         "jupyter",
         "notebook",
         "notebookKernelJupyterNotebook",

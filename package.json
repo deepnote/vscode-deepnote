@@ -29,7 +29,7 @@
         "theme": "light"
     },
     "engines": {
-        "vscode": "^1.104.0"
+        "vscode": "^1.103.0"
     },
     "l10n": "./l10n",
     "extensionKind": [
@@ -51,15 +51,16 @@
         "Visualization"
     ],
     "activationEvents": [
-        "onLanguage:python",
         "onLanguage:jupyter",
-        "onNotebook:jupyter-notebook",
-        "onNotebook:interactive",
-        "onWebviewPanel:jupyter-variables",
-        "onWebviewPanel:jupyter",
+        "onLanguage:python",
         "onLanguageModelTool:configure_notebook",
+        "onLanguageModelTool:notebook_install_packages",
         "onLanguageModelTool:notebook_list_packages",
-        "onLanguageModelTool:notebook_install_packages"
+        "onNotebook:deepnote",
+        "onNotebook:interactive",
+        "onNotebook:jupyter-notebook",
+        "onWebviewPanel:jupyter-variables",
+        "onWebviewPanel:jupyter"
     ],
     "main": "./dist/extension.node.proxy.js",
     "browser": "./dist/extension.web.bundle.js",
@@ -315,6 +316,12 @@
                 "command": "jupyter.viewOutput",
                 "title": "%jupyter.command.jupyter.viewOutput.title%",
                 "category": "Jupyter"
+            },
+            {
+                "command": "jupyter.selectDeepnoteNotebook",
+                "title": "%deepnote.command.selectNotebook.title%",
+                "category": "Deepnote",
+                "enablement": "notebookType == 'deepnote'"
             },
             {
                 "command": "jupyter.notebookeditor.export",
@@ -883,6 +890,11 @@
                     "command": "jupyter.openOutlineView",
                     "group": "navigation@2",
                     "when": "notebookType == 'jupyter-notebook' && config.jupyter.showOutlineButtonInNotebookToolbar"
+                },
+                {
+                    "command": "jupyter.selectDeepnoteNotebook",
+                    "group": "navigation@2",
+                    "when": "notebookType == 'deepnote'"
                 },
                 {
                     "command": "jupyter.continueEditSessionInCodespace",
@@ -1937,9 +1949,27 @@
                 ]
             }
         ],
+        "notebooks": [
+            {
+                "type": "deepnote",
+                "displayName": "%deepnote.notebook.displayName%",
+                "selector": [
+                    {
+                        "filenamePattern": "*.deepnote"
+                    }
+                ]
+            }
+        ],
         "notebookPreload": [
             {
                 "type": "jupyter-notebook",
+                "localResourceRoots": [
+                    "./temp"
+                ],
+                "entrypoint": "./dist/webviews/webview-side/ipywidgetsKernel/ipywidgetsKernel.js"
+            },
+            {
+                "type": "deepnote",
                 "localResourceRoots": [
                     "./temp"
                 ],
@@ -2203,48 +2233,49 @@
         "notebookReplDocument"
     ],
     "scripts": {
-        "package": "gulp clean && npm run build && vsce package -o ms-toolsai-jupyter-insiders.vsix",
-        "build:stable": "cross-env IS_PRE_RELEASE_VERSION_OF_JUPYTER_EXTENSION=false npm run build",
         "build:prerelease": "cross-env IS_PRE_RELEASE_VERSION_OF_JUPYTER_EXTENSION=true npm run build",
+        "build:stable": "cross-env IS_PRE_RELEASE_VERSION_OF_JUPYTER_EXTENSION=false npm run build",
         "build": "concurrently npm:compile-release npm:updatePackageJsonForBundle",
-        "updatePackageJsonForBundle": "gulp updatePackageJsonForBundle",
+        "checkDependencies": "gulp checkDependencies",
         "clean": "gulp clean",
-        "compile": "concurrently npm:compile-tsc npm:esbuild-all",
-        "watch": "concurrently \"tsc --watch -p ./\" \"npx tsx build/esbuild/build.ts --watch\"",
-        "watch-all": "concurrently \"tsc --watch -p ./\" \"npx tsx build/esbuild/build.ts --watch-all\"",
         "compile-esbuild-watch": "npx tsx build/esbuild/build.ts --watch",
+        "compile-release": "concurrently npm:compile-tsc npm:esbuild-release",
         "compile-tsc-watch": "tsc -p . --watch",
         "compile-tsc": "tsc -p ./",
-        "compile-release": "concurrently npm:compile-tsc npm:esbuild-release",
+        "compile": "concurrently npm:compile-tsc npm:esbuild-all",
+        "download-api": "npx vscode-dts dev",
         "esbuild-all": "npx tsx build/esbuild/build.ts",
         "esbuild-release": "npx tsx build/esbuild/build.ts --production",
-        "checkDependencies": "gulp checkDependencies",
-        "postinstall": "npm run download-api && node ./build/ci/postInstall.js",
-        "test": "npm run test:unittests",
-        "test:unittests": "mocha --config ./build/.mocha.unittests.js.json ./out/**/*.unit.test.js",
-        "test:cover:report": "nyc report --reporter=text --reporter=html --reporter=text-summary --reporter=cobertura",
-        "pretest:integration": "node ./out/test/datascience/dsTestSetup.js",
-        "test:integration": "cross-env CODE_TESTS_WORKSPACE=src/test/datascience TEST_FILES_SUFFIX=*.vscode.test,*.vscode.common.test node ./out/test/standardTest.node.js",
-        "pretest:performance:notebook": "cross-env VSC_JUPYTER_CI_TEST_GREP=@notebookPerformance VSC_JUPYTER_CI_TEST_DO_NOT_INSTALL_PYTHON_EXT=true node ./out/test/datascience/dsTestSetup.js",
-        "test:performance:notebook": "cross-env VSC_JUPYTER_CI_TEST_GREP=@notebookPerformance VSC_JUPYTER_CI_TEST_DO_NOT_INSTALL_PYTHON_EXT=true CODE_TESTS_WORKSPACE=src/test/datascience TEST_FILES_SUFFIX=*.vscode.test,*.vscode.common.test node ./out/test/standardTest.node.js",
-        "pretest:performance:execution": "cross-env VSC_JUPYTER_CI_TEST_GREP=@executionPerformance node ./out/test/datascience/dsTestSetup.js",
-        "test:performance:execution": "cross-env VSC_JUPYTER_CI_TEST_GREP=@executionPerformance CODE_TESTS_WORKSPACE=src/test/datascience TEST_FILES_SUFFIX=*.vscode.test,*.vscode.common.test VSC_JUPYTER_FORCE_LOGGING= node ./out/test/standardTest.node.js",
-        "test:integration:windows": "cross-env CODE_TESTS_WORKSPACE=src/test/datascience node ./out/test/standardTest.node.js",
-        "pretest:integration:nonpython": "cross-env VSC_JUPYTER_CI_TEST_VSC_CHANNEL=insiders node ./out/test/datascience/dsTestSetup.js",
-        "test:integration:nonpython": "cross-env CODE_TESTS_WORKSPACE=src/test/datascience TEST_FILES_SUFFIX=*.vscode.test,*.vscode.common.test VSC_JUPYTER_CI_TEST_GREP=@nonPython VSC_JUPYTER_CI_TEST_DO_NOT_INSTALL_PYTHON_EXT=true node ./out/test/standardTest.node.js",
-        "test:integration:web": "node ./build/launchWebTest.js",
-        "test:smoke": "cross-env VSC_JUPYTER_FORCE_LOGGING=true node --no-force-async-hooks-checks ./out/test/smokeTest.node.js",
-        "lint": "eslint --ext .ts,.js src",
-        "lint-fix": "eslint --fix --ext .ts,.js src build pythonExtensionApi gulpfile.js",
-        "format": "prettier --check *.js *.json 'src/**/*.ts*' 'build/**/*.js' '.github/**/*.yml' 'build/**/*.yml' 'build/**/*.ts' 'build/**/*.json' gulpfile.js",
         "format-fix": "prettier --write *.js *.json 'src/**/*.ts*' 'build/**/*.js' '.github/**/*.yml' 'build/**/*.yml' 'build/**/*.ts' 'build/**/*.json' gulpfile.js",
-        "download-api": "npx vscode-dts dev",
-        "postdownload-api": "npx vscode-dts main",
+        "format": "prettier --check *.js *.json 'src/**/*.ts*' 'build/**/*.js' '.github/**/*.yml' 'build/**/*.yml' 'build/**/*.ts' 'build/**/*.json' gulpfile.js",
         "generateTelemetry": "gulp generateTelemetry",
+        "lint-fix": "eslint --fix --ext .ts,.js src build pythonExtensionApi gulpfile.js",
+        "lint": "eslint --ext .ts,.js src",
         "openInBrowser": "vscode-test-web --extensionDevelopmentPath=. ./src/test/datascience",
+        "package": "gulp clean && npm run build && vsce package -o ms-toolsai-jupyter-insiders.vsix",
+        "postdownload-api": "npx vscode-dts main",
+        "postinstall": "npm run download-api && node ./build/ci/postInstall.js",
+        "pretest:integration:nonpython": "cross-env VSC_JUPYTER_CI_TEST_VSC_CHANNEL=insiders node ./out/test/datascience/dsTestSetup.js",
+        "pretest:integration": "node ./out/test/datascience/dsTestSetup.js",
+        "pretest:performance:execution": "cross-env VSC_JUPYTER_CI_TEST_GREP=@executionPerformance node ./out/test/datascience/dsTestSetup.js",
+        "pretest:performance:notebook": "cross-env VSC_JUPYTER_CI_TEST_GREP=@notebookPerformance VSC_JUPYTER_CI_TEST_DO_NOT_INSTALL_PYTHON_EXT=true node ./out/test/datascience/dsTestSetup.js",
+        "setup-precommit-hook": "husky install",
         "startJupyterServer": "node build/preDebugWebTest.js",
         "stopJupyterServer": "node build/postDebugWebTest.js",
-        "setup-precommit-hook": "husky install"
+        "test:cover:report": "nyc report --reporter=text --reporter=html --reporter=text-summary --reporter=cobertura",
+        "test:integration:nonpython": "cross-env CODE_TESTS_WORKSPACE=src/test/datascience TEST_FILES_SUFFIX=*.vscode.test,*.vscode.common.test VSC_JUPYTER_CI_TEST_GREP=@nonPython VSC_JUPYTER_CI_TEST_DO_NOT_INSTALL_PYTHON_EXT=true node ./out/test/standardTest.node.js",
+        "test:integration:web": "node ./build/launchWebTest.js",
+        "test:integration:windows": "cross-env CODE_TESTS_WORKSPACE=src/test/datascience node ./out/test/standardTest.node.js",
+        "test:integration": "cross-env CODE_TESTS_WORKSPACE=src/test/datascience TEST_FILES_SUFFIX=*.vscode.test,*.vscode.common.test node ./out/test/standardTest.node.js",
+        "test:performance:execution": "cross-env VSC_JUPYTER_CI_TEST_GREP=@executionPerformance CODE_TESTS_WORKSPACE=src/test/datascience TEST_FILES_SUFFIX=*.vscode.test,*.vscode.common.test VSC_JUPYTER_FORCE_LOGGING= node ./out/test/standardTest.node.js",
+        "test:performance:notebook": "cross-env VSC_JUPYTER_CI_TEST_GREP=@notebookPerformance VSC_JUPYTER_CI_TEST_DO_NOT_INSTALL_PYTHON_EXT=true CODE_TESTS_WORKSPACE=src/test/datascience TEST_FILES_SUFFIX=*.vscode.test,*.vscode.common.test node ./out/test/standardTest.node.js",
+        "test:smoke": "cross-env VSC_JUPYTER_FORCE_LOGGING=true node --no-force-async-hooks-checks ./out/test/smokeTest.node.js",
+        "test:unittests": "mocha --config ./build/.mocha.unittests.js.json ./out/**/*.unit.test.js",
+        "test": "npm run test:unittests",
+        "typecheck": "tsc -p ./ --noEmit",
+        "updatePackageJsonForBundle": "gulp updatePackageJsonForBundle",
+        "watch-all": "concurrently \"tsc --watch -p ./\" \"npx tsx build/esbuild/build.ts --watch-all\"",
+        "watch": "concurrently \"tsc --watch -p ./\" \"npx tsx build/esbuild/build.ts --watch\""
     },
     "dependencies": {
         "@c4312/evt": "^0.1.1",
@@ -2272,6 +2303,7 @@
         "inversify": "^6.0.1",
         "isomorphic-ws": "^4.0.1",
         "jquery": "^3.6.0",
+        "js-yaml": "^4.1.0",
         "jsonc-parser": "^2.0.3",
         "lodash": "^4.17.21",
         "marked": "^4.0.10",
@@ -2329,6 +2361,7 @@
         "@types/fs-extra": "^5.0.1",
         "@types/get-port": "^3.2.0",
         "@types/glob": "^5.0.35",
+        "@types/js-yaml": "^4.0.9",
         "@types/json2csv": "^5.0.3",
         "@types/loadable__component": "^5.10.0",
         "@types/lodash": "^4.14.104",

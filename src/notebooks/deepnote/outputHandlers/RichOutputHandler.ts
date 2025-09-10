@@ -33,8 +33,13 @@ export class RichOutputHandler {
             ) {
                 try {
                     // Check if this item has preserved original base64 data
-                    if ((item as NotebookCellOutputItem & { _originalBase64?: string })._originalBase64 && item.mime.startsWith('image/')) {
-                        deepnoteOutput.data![item.mime] = (item as NotebookCellOutputItem & { _originalBase64?: string })._originalBase64;
+                    if (
+                        (item as NotebookCellOutputItem & { _originalBase64?: string })._originalBase64 &&
+                        item.mime.startsWith('image/')
+                    ) {
+                        deepnoteOutput.data![item.mime] = (
+                            item as NotebookCellOutputItem & { _originalBase64?: string }
+                        )._originalBase64;
                     } else {
                         const decodedContent = decodeContent(item.data);
                         deepnoteOutput.data![item.mime] = this.mimeRegistry.processForDeepnote(

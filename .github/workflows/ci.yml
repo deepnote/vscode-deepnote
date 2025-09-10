@@ -40,7 +40,7 @@ jobs:
         run: npm run lint
 
       - name: Check Prettier formatting
-        run: npx prettier --check .
+        run: npm run format
 
   build:
     name: Build & Test

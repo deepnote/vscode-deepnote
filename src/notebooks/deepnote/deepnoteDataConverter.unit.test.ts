@@ -55,36 +55,6 @@ suite('DeepnoteDataConverter', () => {
             assert.strictEqual(cells[0].metadata?.deepnoteBlockType, 'markdown');
         });
 
-        test('sorts blocks by sortingKey', () => {
-            const blocks: DeepnoteBlock[] = [
-                {
-                    id: 'block2',
-                    type: 'code',
-                    content: 'second',
-                    sortingKey: 'b0'
-                },
-                {
-                    id: 'block1',
-                    type: 'code',
-                    content: 'first',
-                    sortingKey: 'a0'
-                },
-                {
-                    id: 'block3',
-                    type: 'code',
-                    content: 'third',
-                    sortingKey: 'c0'
-                }
-            ];
-
-            const cells = converter.convertBlocksToCells(blocks);
-
-            assert.strictEqual(cells.length, 3);
-            assert.strictEqual(cells[0].value, 'first');
-            assert.strictEqual(cells[1].value, 'second');
-            assert.strictEqual(cells[2].value, 'third');
-        });
-
         test('handles execution count and output reference', () => {
             const blocks: DeepnoteBlock[] = [
                 {
@@ -446,6 +416,204 @@ suite('DeepnoteDataConverter', () => {
                     content: '# Title',
                     sortingKey: 'a1',
                     metadata: { another: 'value' }
+                }
+            ];
+
+            const cells = converter.convertBlocksToCells(originalBlocks);
+            const roundTripBlocks = converter.convertCellsToBlocks(cells);
+
+            assert.deepStrictEqual(roundTripBlocks, originalBlocks);
+        });
+
+        test('blocks -> cells -> blocks preserves minimal multi-mime outputs', () => {
+            const originalBlocks: DeepnoteBlock[] = [
+                {
+                    id: 'simple-multi',
+                    type: 'code',
+                    content: 'test',
+                    sortingKey: 'z0',
+                    outputs: [
+                        {
+                            output_type: 'execute_result',
+                            execution_count: 1,
+                            data: {
+                                'text/plain': 'Result object',
+                                'text/html': '<div>Result</div>'
+                            }
+                        }
+                    ]
+                }
+            ];
+
+            const cells = converter.convertBlocksToCells(originalBlocks);
+            const roundTripBlocks = converter.convertCellsToBlocks(cells);
+
+            assert.deepStrictEqual(roundTripBlocks, originalBlocks);
+        });
+
+        test('blocks -> cells -> blocks preserves simpler multi-mime outputs', () => {
+            const originalBlocks: DeepnoteBlock[] = [
+                {
+                    id: 'multi-output-1',
+                    type: 'code',
+                    content: 'display(data)',
+                    sortingKey: 'b0',
+                    executionCount: 2,
+                    outputs: [
+                        // Stream with name
+                        {
+                            output_type: 'stream',
+                            name: 'stdout',
+                            text: 'Starting...\n'
+                        },
+                        // Execute result with multiple mimes
+                        {
+                            output_type: 'execute_result',
+                            execution_count: 2,
+                            data: {
+                                'text/plain': 'Result object',
+                                'text/html': '<div>Result</div>'
+                            },
+                            metadata: {
+                                custom: 'value'
+                            }
+                        },
+                        // Display data
+                        {
+                            output_type: 'display_data',
+                            data: {
+                                'text/plain': 'Display text',
+                                'application/json': { result: true }
+                            }
+                        }
+                    ]
+                },
+                {
+                    id: 'error-block',
+                    type: 'code',
+                    content: 'error()',
+                    sortingKey: 'b1',
+                    executionCount: 3,
+                    outputs: [
+                        {
+                            output_type: 'error',
+                            ename: 'RuntimeError',
+                            evalue: 'Something went wrong',
+                            traceback: ['Line 1: error']
+                        }
+                    ]
+                }
+            ];
+
+            const cells = converter.convertBlocksToCells(originalBlocks);
+            const roundTripBlocks = converter.convertCellsToBlocks(cells);
+
+            assert.deepStrictEqual(roundTripBlocks, originalBlocks);
+        });
+
+        test('blocks -> cells -> blocks preserves complex multi-mime rich outputs', () => {
+            const originalBlocks: DeepnoteBlock[] = [
+                {
+                    id: 'rich-block-1',
+                    type: 'code',
+                    content: 'import matplotlib.pyplot as plt\nplt.plot([1,2,3])',
+                    sortingKey: 'aa0',
+                    executionCount: 3,
+                    metadata: { slideshow: { slide_type: 'slide' } },
+                    outputs: [
+                        // Stream output
+                        {
+                            output_type: 'stream',
+                            name: 'stdout',
+                            text: 'Processing data...\n'
+                        },
+                        // Execute result with multiple mime types
+                        {
+                            output_type: 'execute_result',
+                            execution_count: 3,
+                            data: {
+                                'text/plain': '<matplotlib.lines.Line2D at 0x7f8b8c0d5f50>',
+                                'text/html': '<div class="plot">Plot rendered</div>',
+                                'application/json': { type: 'plot', data: [1, 2, 3] }
+                            },
+                            metadata: {
+                                needs_background: 'light'
+                            }
+                        },
+                        // Display data with image
+                        {
+                            output_type: 'display_data',
+                            data: {
+                                'image/png':
+                                    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+                                'text/plain': '<Figure size 640x480 with 1 Axes>'
+                            },
+                            metadata: {
+                                image: {
+                                    width: 640,
+                                    height: 480
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    id: 'rich-block-2',
+                    type: 'code',
+                    content: 'raise ValueError("Test error")',
+                    sortingKey: 'aa1',
+                    executionCount: 4,
+                    outputs: [
+                        // Error output with traceback
+                        {
+                            output_type: 'error',
+                            ename: 'ValueError',
+                            evalue: 'Test error',
+                            traceback: [
+                                '\u001b[0;31m---------------------------------------------------------------------------\u001b[0m',
+                                '\u001b[0;31mValueError\u001b[0m                                Traceback (most recent call last)',
+                                '\u001b[0;32m<ipython-input-4-5c5c51ed1a63>\u001b[0m in \u001b[0;36m<module>\u001b[0;34m\u001b[0m\n\u001b[0;32m----> 1\u001b[0;31m \u001b[0;32mraise\u001b[0m \u001b[0mValueError\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m"Test error"\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m',
+                                '\u001b[0;31mValueError\u001b[0m: Test error'
+                            ]
+                        }
+                    ]
+                },
+                {
+                    id: 'rich-block-3',
+                    type: 'code',
+                    content:
+                        'from IPython.display import display, HTML, JSON\ndisplay(HTML("<b>Bold text</b>"), JSON({"key": "value"}))',
+                    sortingKey: 'aa2',
+                    executionCount: 5,
+                    outputReference: 'output-ref-789',
+                    outputs: [
+                        // Multiple display_data outputs
+                        {
+                            output_type: 'display_data',
+                            data: {
+                                'text/html': '<b>Bold text</b>',
+                                'text/plain': 'Bold text'
+                            }
+                        },
+                        {
+                            output_type: 'display_data',
+                            data: {
+                                'application/json': { key: 'value' },
+                                'text/plain': "{'key': 'value'}"
+                            },
+                            metadata: {
+                                expanded: false,
+                                root: 'object'
+                            }
+                        }
+                    ]
+                },
+                {
+                    id: 'markdown-block',
+                    type: 'markdown',
+                    content: '## Results\n\nThe above cells demonstrate various output types.',
+                    sortingKey: 'aa3',
+                    metadata: { tags: ['documentation'] }
                 }
             ];
 

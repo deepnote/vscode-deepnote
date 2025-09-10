@@ -36,7 +36,7 @@ suite('DeepnoteNotebookSelector', () => {
             const description = (selector as any).getDescription(mockNotebooks[0], 'notebook-1');
 
             // Now using direct strings, the mock should return the English text
-            assert.strictEqual(description, '1 cells (current)');
+            assert.strictEqual(description, '1 cell (current)');
         });
 
         test('should return regular notebook description for non-matching notebook', () => {

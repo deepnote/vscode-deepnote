@@ -32,9 +32,18 @@ export class OutputTypeDetector {
             };
         }
 
-        // Check for stream outputs
-        const streamItems = output.items.filter((item) => this.streamMimes.includes(item.mime));
-        if (streamItems.length > 0) {
+        // Check for stream outputs - only if ALL items are stream mimes
+        // or if it contains stdout/stderr specific mimes
+        const hasStdoutStderr = output.items.some(
+            (item) =>
+                item.mime === 'application/vnd.code.notebook.stdout' ||
+                item.mime === 'application/vnd.code.notebook.stderr'
+        );
+
+        const allItemsAreStream = output.items.every((item) => this.streamMimes.includes(item.mime));
+
+        if (hasStdoutStderr || (allItemsAreStream && output.items.length === 1)) {
+            const streamItems = output.items.filter((item) => this.streamMimes.includes(item.mime));
             return {
                 type: 'stream',
                 streamMimes: streamItems.map((item) => item.mime)

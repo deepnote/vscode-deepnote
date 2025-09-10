@@ -23,7 +23,7 @@ export class TextMimeProcessor implements MimeProcessor {
 
     processForVSCode(content: unknown, mimeType: string): NotebookCellOutputItem | null {
         if (mimeType === 'text/plain') {
-            return NotebookCellOutputItem.text(content as string);
+            return NotebookCellOutputItem.text(content as string, 'text/plain');
         }
         if (mimeType === 'text/html') {
             return NotebookCellOutputItem.text(content as string, 'text/html');
@@ -40,11 +40,12 @@ export class ImageMimeProcessor implements MimeProcessor {
         return mimeType.startsWith('image/');
     }
 
-    processForDeepnote(content: unknown, mimeType: string): unknown {
+    processForDeepnote(content: unknown, _mimeType: string): unknown {
         if (content instanceof Uint8Array) {
             const base64String = btoa(String.fromCharCode(...content));
-            return `data:${mimeType};base64,${base64String}`;
+            return base64String;
         }
+        // If it's already a string (base64 or data URL), return as-is
         return content;
     }
 
@@ -54,6 +55,11 @@ export class ImageMimeProcessor implements MimeProcessor {
 
             if (typeof content === 'string') {
                 uint8Array = convertBase64ToUint8Array(content);
+                // Store the original base64 string for round-trip preservation
+                const item = new NotebookCellOutputItem(uint8Array, mimeType);
+                // Use a property that won't interfere with VS Code but preserves the original data
+                (item as any)._originalBase64 = content;
+                return item;
             } else if (content instanceof ArrayBuffer) {
                 uint8Array = new Uint8Array(content);
             } else if (content instanceof Uint8Array) {

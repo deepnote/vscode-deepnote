@@ -24,9 +24,7 @@ export class DeepnoteDataConverter {
      * @returns Array of VS Code notebook cell data
      */
     convertBlocksToCells(blocks: DeepnoteBlock[]): NotebookCellData[] {
-        return blocks
-            .sort((a, b) => a.sortingKey.localeCompare(b.sortingKey))
-            .map((block) => this.convertBlockToCell(block));
+        return blocks.map((block) => this.convertBlockToCell(block));
     }
 
     /**
@@ -62,18 +60,23 @@ export class DeepnoteDataConverter {
     private convertCellToBlock(cell: NotebookCellData, index: number): DeepnoteBlock {
         const blockId = cell.metadata?.deepnoteBlockId || generateBlockId();
         const sortingKey = cell.metadata?.deepnoteSortingKey || generateSortingKey(index);
-        const originalMetadata = cell.metadata?.deepnoteMetadata || {};
+        const originalMetadata = cell.metadata?.deepnoteMetadata;
 
         const block: DeepnoteBlock = {
             id: blockId,
             sortingKey: sortingKey,
             type: cell.kind === NotebookCellKind.Code ? 'code' : 'markdown',
-            content: cell.value,
-            metadata: originalMetadata
+            content: cell.value
         };
 
+        // Only add metadata if it exists and is not empty
+        if (originalMetadata && Object.keys(originalMetadata).length > 0) {
+            block.metadata = originalMetadata;
+        }
+
         if (cell.kind === NotebookCellKind.Code) {
-            const executionCount = cell.metadata?.executionCount || cell.executionSummary?.executionOrder;
+            const executionCount = cell.metadata?.executionCount ?? cell.executionSummary?.executionOrder;
+
             if (executionCount !== undefined) {
                 block.executionCount = executionCount;
             }
@@ -131,11 +134,16 @@ export class DeepnoteDataConverter {
 
         // Preserve metadata from VS Code output
         if (output.metadata) {
-            deepnoteOutput.metadata = mergeMetadata(deepnoteOutput.metadata, output.metadata);
+            // Extract execution count from metadata before merging
+            const { executionCount, ...restMetadata } = output.metadata;
 
-            // Extract execution count from metadata
-            if (output.metadata.executionCount !== undefined) {
-                deepnoteOutput.execution_count = output.metadata.executionCount as number;
+            if (executionCount !== undefined && deepnoteOutput.execution_count === undefined) {
+                deepnoteOutput.execution_count = executionCount as number;
+            }
+
+            // Only merge non-executionCount metadata
+            if (Object.keys(restMetadata).length > 0) {
+                deepnoteOutput.metadata = mergeMetadata(deepnoteOutput.metadata, restMetadata);
             }
         }
 

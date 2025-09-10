@@ -1,4 +1,4 @@
-import { type CancellationToken, type NotebookData, type NotebookSerializer } from 'vscode';
+import { l10n, type CancellationToken, type NotebookData, type NotebookSerializer } from 'vscode';
 import * as yaml from 'js-yaml';
 import type { DeepnoteProject, DeepnoteNotebook } from './deepnoteTypes';
 import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
@@ -56,12 +56,16 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
      * Deserializes a Deepnote YAML file into VS Code notebook format.
      * Parses YAML, selects appropriate notebook, and converts blocks to cells.
      * @param content Raw file content as bytes
-     * @param _token Cancellation token (unused)
+     * @param token Cancellation token (unused)
      * @returns Promise resolving to notebook data
      */
-    async deserializeNotebook(content: Uint8Array, _token: CancellationToken): Promise<NotebookData> {
+    async deserializeNotebook(content: Uint8Array, token: CancellationToken): Promise<NotebookData> {
+        if (token?.isCancellationRequested) {
+            throw new Error('Serialization cancelled');
+        }
+
         try {
-            const contentString = Buffer.from(content).toString('utf8');
+            const contentString = new TextDecoder('utf-8').decode(content);
             const deepnoteProject = yaml.load(contentString) as DeepnoteProject;
 
             if (!deepnoteProject.project?.notebooks) {
@@ -73,7 +77,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 : await this.selectNotebookForOpen(deepnoteProject.project.id, deepnoteProject.project.notebooks);
 
             if (!selectedNotebook) {
-                throw new Error('No notebook selected');
+                throw new Error(l10n.t('No notebook selected'));
             }
 
             const cells = this.converter.convertBlocksToCells(selectedNotebook.blocks);
@@ -104,10 +108,14 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
      * Serializes VS Code notebook data back to Deepnote YAML format.
      * Converts cells to blocks, updates project data, and generates YAML.
      * @param data Notebook data to serialize
-     * @param _token Cancellation token (unused)
+     * @param token Cancellation token (unused)
      * @returns Promise resolving to YAML content as bytes
      */
-    async serializeNotebook(data: NotebookData, _token: CancellationToken): Promise<Uint8Array> {
+    async serializeNotebook(data: NotebookData, token: CancellationToken): Promise<Uint8Array> {
+        if (token?.isCancellationRequested) {
+            throw new Error('Serialization cancelled');
+        }
+
         try {
             const projectId = data.metadata?.deepnoteProjectId;
             if (!projectId) {

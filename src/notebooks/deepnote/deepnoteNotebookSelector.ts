@@ -40,6 +40,8 @@ export class DeepnoteNotebookSelector {
         quickPick.placeholder = options?.placeHolder || l10n.t('Select a notebook to open');
         quickPick.title = options?.title || l10n.t('Select Notebook');
         quickPick.ignoreFocusOut = false;
+        quickPick.matchOnDescription = true;
+        quickPick.matchOnDetail = true;
 
         // Pre-select the current notebook if provided
         if (currentNotebookId) {
@@ -53,11 +55,14 @@ export class DeepnoteNotebookSelector {
         quickPick.show();
 
         await Promise.race([
-            toPromise(quickPick.onDidAccept).then(() => (accepted = true)),
+            toPromise(quickPick.onDidAccept).then(() => {
+                accepted = true;
+            }),
             toPromise(quickPick.onDidHide)
         ]);
 
         const selectedItem = accepted ? quickPick.selectedItems[0] : undefined;
+
         quickPick.dispose();
 
         return selectedItem?.notebook;
@@ -65,12 +70,9 @@ export class DeepnoteNotebookSelector {
 
     private getDescription(notebook: DeepnoteNotebook, currentNotebookId?: string): string {
         const cellCount = notebook.blocks.length;
+        const base = cellCount === 1 ? l10n.t('{0} cell', cellCount) : l10n.t('{0} cells', cellCount);
 
-        if (notebook.id === currentNotebookId) {
-            return l10n.t('{0} cells (current)', cellCount);
-        }
-
-        return l10n.t('{0} cells', cellCount);
+        return notebook.id === currentNotebookId ? l10n.t('{0} (current)', base) : base;
     }
 
     private getDetail(notebook: DeepnoteNotebook): string {

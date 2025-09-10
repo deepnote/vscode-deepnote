@@ -58,7 +58,7 @@ export class ImageMimeProcessor implements MimeProcessor {
                 // Store the original base64 string for round-trip preservation
                 const item = new NotebookCellOutputItem(uint8Array, mimeType);
                 // Use a property that won't interfere with VS Code but preserves the original data
-                (item as any)._originalBase64 = content;
+                (item as NotebookCellOutputItem & { _originalBase64?: string })._originalBase64 = content;
                 return item;
             } else if (content instanceof ArrayBuffer) {
                 uint8Array = new Uint8Array(content);

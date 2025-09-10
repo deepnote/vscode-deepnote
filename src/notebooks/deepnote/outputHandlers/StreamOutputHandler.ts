@@ -30,7 +30,7 @@ export class StreamOutputHandler {
         // Only set stream name if we can definitively determine it from mime type
         const stderrItem = streamItems.find((item) => item.mime === 'application/vnd.code.notebook.stderr');
         const stdoutItem = streamItems.find((item) => item.mime === 'application/vnd.code.notebook.stdout');
-        const unnamedStreamItem = streamItems.find((item) => (item as any)._wasUnnamedStream);
+        const unnamedStreamItem = streamItems.find((item) => (item as NotebookCellOutputItem & { _wasUnnamedStream?: boolean })._wasUnnamedStream);
 
         if (stderrItem) {
             deepnoteOutput.name = 'stderr';
@@ -60,7 +60,7 @@ export class StreamOutputHandler {
             // For streams without explicit name, use stdout for proper VS Code display
             // but mark it as originally unnamed for round-trip preservation
             const item = NotebookCellOutputItem.stdout(output.text);
-            (item as any)._wasUnnamedStream = true;
+            (item as NotebookCellOutputItem & { _wasUnnamedStream?: boolean })._wasUnnamedStream = true;
             return [item];
         }
     }

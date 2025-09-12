@@ -252,6 +252,18 @@
         ],
         "commands": [
             {
+                "command": "deepnote.refreshExplorer",
+                "title": "%deepnote.commands.refreshExplorer.title%",
+                "category": "Deepnote",
+                "icon": "$(refresh)"
+            },
+            {
+                "command": "deepnote.revealInExplorer",
+                "title": "%deepnote.commands.revealInExplorer.title%",
+                "category": "Deepnote",
+                "icon": "$(reveal)"
+            },
+            {
                 "command": "dataScience.ClearCache",
                 "title": "%jupyter.command.dataScience.clearCache.title%",
                 "category": "Jupyter (Dev)",
@@ -319,12 +331,6 @@
                 "command": "jupyter.viewOutput",
                 "title": "%jupyter.command.jupyter.viewOutput.title%",
                 "category": "Jupyter"
-            },
-            {
-                "command": "jupyter.selectDeepnoteNotebook",
-                "title": "%deepnote.command.selectNotebook.title%",
-                "category": "Deepnote",
-                "enablement": "notebookType == 'deepnote'"
             },
             {
                 "command": "jupyter.notebookeditor.export",
@@ -895,11 +901,6 @@
                     "when": "notebookType == 'jupyter-notebook' && config.jupyter.showOutlineButtonInNotebookToolbar"
                 },
                 {
-                    "command": "jupyter.selectDeepnoteNotebook",
-                    "group": "navigation@2",
-                    "when": "notebookType == 'deepnote'"
-                },
-                {
                     "command": "jupyter.continueEditSessionInCodespace",
                     "group": "navigation@3",
                     "when": "notebookType == 'jupyter-notebook' && jupyter.kernelSource == 'github-codespaces'"
@@ -1401,6 +1402,13 @@
                     "group": "jupyter",
                     "title": "%jupyter.command.jupyter.runFileInteractive.title%",
                     "when": "resourceLangId == python && !isInDiffEditor && isWorkspaceTrusted"
+                }
+            ],
+            "view/item/context": [
+                {
+                    "command": "deepnote.revealInExplorer",
+                    "when": "view == deepnoteExplorer",
+                    "group": "inline@2"
                 }
             ]
         },
@@ -2003,6 +2011,11 @@
                     "id": "jupyter",
                     "title": "Jupyter",
                     "icon": "$(notebook)"
+                },
+                {
+                    "id": "deepnote",
+                    "title": "Deepnote",
+                    "icon": "resources/DnDeepnoteLineLogo.svg"
                 }
             ],
             "panel": [
@@ -2020,6 +2033,17 @@
                     "id": "jupyterViewVariables",
                     "name": "Jupyter Variables",
                     "when": "jupyter.hasNativeNotebookOrInteractiveWindowOpen"
+                }
+            ],
+            "deepnote": [
+                {
+                    "id": "deepnoteExplorer",
+                    "name": "%deepnote.views.explorer.name%",
+                    "when": "workspaceFolderCount != 0",
+                    "iconPath": {
+                        "light": "./resources/light/deepnote-icon.svg",
+                        "dark": "./resources/dark/deepnote-icon.svg"
+                    }
                 }
             ]
         },

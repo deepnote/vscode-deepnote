@@ -1,14 +1,17 @@
+import { injectable } from 'inversify';
+
+import { IDeepnoteNotebookManager } from '../types';
 import type { DeepnoteProject } from './deepnoteTypes';
 
 /**
  * Centralized manager for tracking Deepnote notebook selections and project state.
- * Manages per-project and per-URI state including current selections and user preferences.
+ * Manages per-project state including current selections and project data caching.
  */
-export class DeepnoteNotebookManager {
-    private currentNotebookId = new Map<string, string>();
-    private originalProjects = new Map<string, DeepnoteProject>();
-    private selectedNotebookByUri = new Map<string, string>();
-    private skipPromptForUri = new Set<string>();
+@injectable()
+export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
+    private readonly currentNotebookId = new Map<string, string>();
+    private readonly originalProjects = new Map<string, DeepnoteProject>();
+    private readonly selectedNotebookByProject = new Map<string, string>();
 
     /**
      * Gets the currently selected notebook ID for a project.
@@ -29,42 +32,24 @@ export class DeepnoteNotebookManager {
     }
 
     /**
-     * Gets the selected notebook ID for a specific file URI.
-     * @param uri File URI string
+     * Gets the selected notebook ID for a specific project.
+     * @param projectId Project identifier
      * @returns Selected notebook ID or undefined if not set
      */
-    getSelectedNotebookForUri(uri: string): string | undefined {
-        return this.selectedNotebookByUri.get(uri);
+    getTheSelectedNotebookForAProject(projectId: string): string | undefined {
+        return this.selectedNotebookByProject.get(projectId);
     }
 
     /**
-     * Associates a notebook ID with a file URI to remember user's notebook selection.
-     * When a Deepnote file contains multiple notebooks, this mapping persists the user's
+     * Associates a notebook ID with a project to remember user's notebook selection.
+     * When a Deepnote project contains multiple notebooks, this mapping persists the user's
      * choice so we can automatically open the same notebook on subsequent file opens.
-     * Also marks the URI to skip the selection prompt on the next immediate open.
      *
-     * @param uri - The file URI (or project ID) that identifies the Deepnote file
-     * @param notebookId - The ID of the selected notebook within the file
+     * @param projectId - The project ID that identifies the Deepnote project
+     * @param notebookId - The ID of the selected notebook within the project
      */
-    setSelectedNotebookForUri(uri: string, notebookId: string): void {
-        this.selectedNotebookByUri.set(uri, notebookId);
-        this.skipPromptForUri.add(uri);
-    }
-
-    /**
-     * Checks if prompts should be skipped for a given URI and consumes the skip flag.
-     * This is used to avoid showing selection prompts immediately after a user makes a choice.
-     * @param uri File URI string
-     * @returns True if prompts should be skipped (and resets the flag)
-     */
-    shouldSkipPrompt(uri: string): boolean {
-        if (this.skipPromptForUri.has(uri)) {
-            this.skipPromptForUri.delete(uri);
-
-            return true;
-        }
-
-        return false;
+    selectNotebookForProject(projectId: string, notebookId: string): void {
+        this.selectedNotebookByProject.set(projectId, notebookId);
     }
 
     /**

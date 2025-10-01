@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import { inject, injectable } from 'inversify';
-import { NotebookDocument, workspace, commands } from 'vscode';
+import { NotebookDocument, workspace, NotebookControllerAffinity } from 'vscode';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { logger } from '../../platform/logging';
@@ -15,7 +15,7 @@ import {
 } from '../../kernels/deepnote/types';
 import { DeepnoteKernelConnectionMetadata } from '../../kernels/deepnote/types';
 import { IControllerRegistration } from '../controllers/types';
-import { JupyterNotebookView, JVSC_EXTENSION_ID } from '../../platform/common/constants';
+import { JVSC_EXTENSION_ID } from '../../platform/common/constants';
 import { getDisplayPath } from '../../platform/common/platform/fs-paths';
 import { createInterpreterKernelSpec } from '../../kernels/helpers';
 import { JupyterServerProviderHandle } from '../../kernels/jupyter/types';
@@ -116,8 +116,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 serverProviderHandle
             });
 
-            // Register controller
-            const controllers = this.controllerRegistration.addOrUpdate(connectionMetadata, [JupyterNotebookView]);
+            // Register controller for deepnote notebook type
+            const controllers = this.controllerRegistration.addOrUpdate(connectionMetadata, [DEEPNOTE_NOTEBOOK_TYPE]);
 
             if (controllers.length === 0) {
                 logger.error('Failed to create Deepnote kernel controller');
@@ -127,11 +127,9 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             const controller = controllers[0];
             logger.info(`Created Deepnote kernel controller: ${controller.id}`);
 
-            // Auto-select the controller for this notebook
-            await commands.executeCommand('notebook.selectKernel', {
-                id: controller.id,
-                extension: JVSC_EXTENSION_ID
-            });
+            // Auto-select the controller for this notebook using affinity
+            // Setting NotebookControllerAffinity.Preferred will make VSCode automatically select this controller
+            controller.controller.updateNotebookAffinity(notebook, NotebookControllerAffinity.Preferred);
 
             logger.info(`Successfully auto-selected Deepnote kernel for ${getDisplayPath(notebook.uri)}`);
         } catch (ex) {

@@ -83,7 +83,7 @@ export interface IControllerRegistration {
      */
     addOrUpdate(
         metadata: KernelConnectionMetadata,
-        types: (typeof JupyterNotebookView | typeof InteractiveWindowView)[]
+        types: (typeof JupyterNotebookView | typeof InteractiveWindowView | 'deepnote')[]
     ): IVSCodeNotebookController[];
     /**
      * Gets the controller for a particular connection
@@ -92,7 +92,7 @@ export interface IControllerRegistration {
      */
     get(
         connection: KernelConnectionMetadata,
-        notebookType: typeof JupyterNotebookView | typeof InteractiveWindowView
+        notebookType: typeof JupyterNotebookView | typeof InteractiveWindowView | 'deepnote'
     ): IVSCodeNotebookController | undefined;
 }
 

@@ -236,14 +236,14 @@ export class ControllerRegistration implements IControllerRegistration, IExtensi
     }
     addOrUpdate(
         metadata: KernelConnectionMetadata,
-        types: ('jupyter-notebook' | 'interactive')[]
+        types: ('jupyter-notebook' | 'interactive' | 'deepnote')[]
     ): IVSCodeNotebookController[] {
         const { added, existing } = this.addImpl(metadata, types, true);
         return added.concat(existing);
     }
     addImpl(
         metadata: KernelConnectionMetadata,
-        types: ('jupyter-notebook' | 'interactive')[],
+        types: ('jupyter-notebook' | 'interactive' | 'deepnote')[],
         triggerChangeEvent: boolean
     ): { added: IVSCodeNotebookController[]; existing: IVSCodeNotebookController[] } {
         const added: IVSCodeNotebookController[] = [];
@@ -350,7 +350,7 @@ export class ControllerRegistration implements IControllerRegistration, IExtensi
     }
     get(
         metadata: KernelConnectionMetadata,
-        notebookType: 'jupyter-notebook' | 'interactive'
+        notebookType: 'jupyter-notebook' | 'interactive' | 'deepnote'
     ): IVSCodeNotebookController | undefined {
         const id = this.getControllerId(metadata, notebookType);
         return this.registeredControllers.get(id);
@@ -358,8 +358,11 @@ export class ControllerRegistration implements IControllerRegistration, IExtensi
 
     private getControllerId(
         metadata: KernelConnectionMetadata,
-        viewType: typeof JupyterNotebookView | typeof InteractiveWindowView
+        viewType: typeof JupyterNotebookView | typeof InteractiveWindowView | 'deepnote'
     ) {
+        if (viewType === 'deepnote') {
+            return metadata.id;
+        }
         return viewType === JupyterNotebookView ? metadata.id : `${metadata.id}${InteractiveControllerIdSuffix}`;
     }
 

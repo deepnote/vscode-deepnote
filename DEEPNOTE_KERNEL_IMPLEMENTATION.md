@@ -104,7 +104,7 @@ Create DeepnoteKernelConnectionMetadata
         ↓
 Register controller with IControllerRegistration
         ↓
-Execute notebook.selectKernel command
+Set controller affinity to Preferred (auto-selects kernel)
         ↓
 User runs cell → Executes on Deepnote kernel
 ```

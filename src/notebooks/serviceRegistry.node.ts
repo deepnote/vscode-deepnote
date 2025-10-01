@@ -51,6 +51,7 @@ import {
 import { DeepnoteToolkitInstaller } from '../kernels/deepnote/deepnoteToolkitInstaller.node';
 import { DeepnoteServerStarter } from '../kernels/deepnote/deepnoteServerStarter.node';
 import { DeepnoteKernelAutoSelector } from './deepnote/deepnoteKernelAutoSelector.node';
+import { DeepnoteServerProvider } from '../kernels/deepnote/deepnoteServerProvider.node';
 
 export function registerTypes(serviceManager: IServiceManager, isDevMode: boolean) {
     registerControllerTypes(serviceManager, isDevMode);
@@ -128,6 +129,8 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     // Deepnote kernel services
     serviceManager.addSingleton<IDeepnoteToolkitInstaller>(IDeepnoteToolkitInstaller, DeepnoteToolkitInstaller);
     serviceManager.addSingleton<IDeepnoteServerStarter>(IDeepnoteServerStarter, DeepnoteServerStarter);
+    serviceManager.addSingleton<DeepnoteServerProvider>(DeepnoteServerProvider, DeepnoteServerProvider);
+    serviceManager.addBinding(DeepnoteServerProvider, IExtensionSyncActivationService);
     serviceManager.addSingleton<IDeepnoteKernelAutoSelector>(IDeepnoteKernelAutoSelector, DeepnoteKernelAutoSelector);
     serviceManager.addBinding(IDeepnoteKernelAutoSelector, IExtensionSyncActivationService);
 

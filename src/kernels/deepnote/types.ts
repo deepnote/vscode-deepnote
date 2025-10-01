@@ -20,6 +20,7 @@ export class DeepnoteKernelConnectionMetadata {
     public readonly baseUrl: string;
     public readonly interpreter?: PythonEnvironment;
     public readonly serverProviderHandle: JupyterServerProviderHandle;
+    public readonly serverInfo?: DeepnoteServerInfo; // Store server info for connection
 
     private constructor(options: {
         interpreter?: PythonEnvironment;
@@ -27,12 +28,14 @@ export class DeepnoteKernelConnectionMetadata {
         baseUrl: string;
         id: string;
         serverProviderHandle: JupyterServerProviderHandle;
+        serverInfo?: DeepnoteServerInfo;
     }) {
         this.interpreter = options.interpreter;
         this.kernelSpec = options.kernelSpec;
         this.baseUrl = options.baseUrl;
         this.id = options.id;
         this.serverProviderHandle = options.serverProviderHandle;
+        this.serverInfo = options.serverInfo;
     }
 
     public static create(options: {
@@ -41,6 +44,7 @@ export class DeepnoteKernelConnectionMetadata {
         baseUrl: string;
         id: string;
         serverProviderHandle: JupyterServerProviderHandle;
+        serverInfo?: DeepnoteServerInfo;
     }) {
         return new DeepnoteKernelConnectionMetadata(options);
     }

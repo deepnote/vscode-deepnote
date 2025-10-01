@@ -19,6 +19,7 @@ This implementation adds automatic kernel selection and startup for `.deepnote` 
 - `IDeepnoteToolkitInstaller`: Interface for toolkit installation service
 - `IDeepnoteServerStarter`: Interface for server management
 - `IDeepnoteKernelAutoSelector`: Interface for automatic kernel selection
+- `DeepnoteServerInfo`: Server connection information (URL, port, token)
 - Constants for wheel URL, default port, and notebook type
 
 #### 2. **Deepnote Toolkit Installer** (`src/kernels/deepnote/deepnoteToolkitInstaller.node.ts`)
@@ -47,9 +48,24 @@ This implementation adds automatic kernel selection and startup for `.deepnote` 
 - `stopServer(deepnoteFileUri)`: Stops the running server for a specific file
 - `isServerRunning(serverInfo)`: Checks if server is responsive
 
-#### 4. **Deepnote Kernel Auto-Selector** (`src/notebooks/deepnote/deepnoteKernelAutoSelector.node.ts`)
+#### 4. **Deepnote Server Provider** (`src/kernels/deepnote/deepnoteServerProvider.node.ts`)
+- Jupyter server provider that registers and resolves Deepnote toolkit servers
+- Implements `JupyterServerProvider` interface from VSCode Jupyter API
+- Maintains a map of server handles to server connection information
+- Allows the kernel infrastructure to resolve server connections
+
+**Key Methods:**
+- `activate()`: Registers the server provider with the Jupyter server provider registry
+- `registerServer(handle, serverInfo)`: Registers a Deepnote server for a specific handle
+- `provideJupyterServers(token)`: Lists all registered Deepnote servers
+- `resolveJupyterServer(server, token)`: Resolves server connection info by handle
+
+#### 5. **Deepnote Kernel Auto-Selector** (`src/notebooks/deepnote/deepnoteKernelAutoSelector.node.ts`)
 - Activation service that listens for notebook open events
 - Automatically selects Deepnote kernel for `.deepnote` files
+- Queries the Deepnote server for available kernel specs
+- Uses an existing kernel spec from the server (e.g., `python3-venv`)
+- Registers the server with the server provider
 - Creates kernel connection metadata
 - Registers the controller with VSCode
 - Auto-selects the kernel for the notebook
@@ -59,11 +75,12 @@ This implementation adds automatic kernel selection and startup for `.deepnote` 
 - `ensureKernelSelected(notebook)`: Main logic for auto-selection
 - `onDidOpenNotebook(notebook)`: Event handler for notebook opens
 
-#### 5. **Service Registry Updates** (`src/notebooks/serviceRegistry.node.ts`)
+#### 6. **Service Registry Updates** (`src/notebooks/serviceRegistry.node.ts`)
 - Registers all new Deepnote kernel services
+- Binds `DeepnoteServerProvider` as an activation service
 - Binds `IDeepnoteKernelAutoSelector` as an activation service
 
-#### 6. **Kernel Types Updates** (`src/kernels/types.ts`)
+#### 7. **Kernel Types Updates** (`src/kernels/types.ts`)
 - Adds `DeepnoteKernelConnectionMetadata` to `RemoteKernelConnectionMetadata` union type
 - Adds deserialization support for `'startUsingDeepnoteKernel'` kind
 
@@ -100,7 +117,13 @@ Start: python -m deepnote_toolkit server --jupyter-port <port>
         ↓
 Wait for server to be ready (poll /api endpoint)
         ↓
-Create DeepnoteKernelConnectionMetadata
+Register server with DeepnoteServerProvider
+        ↓
+Query server for available kernel specs
+        ↓
+Select existing kernel spec (e.g., python3-venv)
+        ↓
+Create DeepnoteKernelConnectionMetadata with server kernel spec
         ↓
 Register controller with IControllerRegistration
         ↓
@@ -112,10 +135,12 @@ User runs cell → Executes on Deepnote kernel
 ## Configuration
 
 ### Hardcoded Values (as requested)
-- **Wheel URL**: `https://deepnote-staging-runtime-artifactory.s3.amazonaws.com/deepnote-toolkit-packages/0.2.30.post19/deepnote_toolkit-0.2.30.post19-py3-none-any.whl`
+- **Wheel URL**: `https://deepnote-staging-runtime-artifactory.s3.amazonaws.com/deepnote-toolkit-packages/0.2.30.post20/deepnote_toolkit-0.2.30.post20-py3-none-any.whl`
 - **Default Port**: `8888` (will find next available if occupied)
 - **Notebook Type**: `deepnote`
 - **Venv Location**: `~/.vscode/extensions/storage/deepnote-venvs/<file-path-hash>/`
+- **Server Provider ID**: `deepnote-server`
+- **Default Kernel**: Uses server's default Python kernel (typically `python3-venv`)
 
 ## Usage
 
@@ -135,6 +160,8 @@ User runs cell → Executes on Deepnote kernel
 - **Multi-file support**: Can run multiple `.deepnote` files with separate servers
 - **Resource efficiency**: Reuses venv and server for notebooks within the same `.deepnote` file
 - **Clean integration**: Uses existing VSCode notebook controller infrastructure
+- **Proper server resolution**: Implements Jupyter server provider for proper kernel connection handling
+- **Compatible kernel specs**: Uses kernel specs that exist on the Deepnote server
 
 ## Future Enhancements
 
@@ -161,14 +188,15 @@ To test the implementation:
 ## Files Modified/Created
 
 ### Created:
-- `src/kernels/deepnote/types.ts`
-- `src/kernels/deepnote/deepnoteToolkitInstaller.node.ts`
-- `src/kernels/deepnote/deepnoteServerStarter.node.ts`
-- `src/notebooks/deepnote/deepnoteKernelAutoSelector.node.ts`
+- `src/kernels/deepnote/types.ts` - Type definitions and interfaces
+- `src/kernels/deepnote/deepnoteToolkitInstaller.node.ts` - Toolkit installation service
+- `src/kernels/deepnote/deepnoteServerStarter.node.ts` - Server lifecycle management
+- `src/kernels/deepnote/deepnoteServerProvider.node.ts` - Jupyter server provider implementation
+- `src/notebooks/deepnote/deepnoteKernelAutoSelector.node.ts` - Automatic kernel selection
 
 ### Modified:
-- `src/kernels/types.ts`
-- `src/notebooks/serviceRegistry.node.ts`
+- `src/kernels/types.ts` - Added DeepnoteKernelConnectionMetadata to union types
+- `src/notebooks/serviceRegistry.node.ts` - Registered new services
 
 ## Dependencies
 
@@ -176,4 +204,48 @@ To test the implementation:
 - Existing VSCode notebook infrastructure
 - Existing kernel controller system
 - Python interpreter service
+- Jupyter server provider registry
+- JupyterLab session management
 
+## Technical Details
+
+### Server Provider Architecture
+
+The implementation uses VSCode's Jupyter server provider API to properly integrate Deepnote servers:
+
+1. **DeepnoteServerProvider** implements the `JupyterServerProvider` interface
+2. It registers with the `IJupyterServerProviderRegistry` during activation
+3. When a Deepnote server is started, it's registered with the provider using a unique handle
+4. The kernel infrastructure can then resolve the server connection through this provider
+5. This allows the kernel session factory to properly connect to the Deepnote server
+
+### Kernel Spec Resolution
+
+Instead of creating custom kernel specs, the implementation:
+
+1. Connects to the running Deepnote server using `JupyterLabHelper`
+2. Queries the server for available kernel specs via `getKernelSpecs()`
+3. Selects the first Python kernel spec (or falls back to `python3-venv`)
+4. Uses this existing spec when creating the kernel connection metadata
+5. This ensures compatibility with the Deepnote server's kernel configuration
+
+## Troubleshooting & Key Fixes
+
+### Issue 1: "Unable to get resolved server information"
+
+**Problem**: The kernel infrastructure couldn't resolve the server connection because the `serverProviderHandle` pointed to a non-existent server provider.
+
+**Solution**: Created `DeepnoteServerProvider` that implements the `JupyterServerProvider` interface and registered it with the `IJupyterServerProviderRegistry`. This allows the kernel session factory to properly resolve server connections.
+
+### Issue 2: "No such kernel named python31211jvsc74a57bd0..."
+
+**Problem**: The extension was creating a custom kernel spec name based on the interpreter hash, but this kernel spec didn't exist on the Deepnote server.
+
+**Solution**: Instead of creating a custom kernel spec, the implementation now:
+- Queries the Deepnote server for available kernel specs
+- Selects an existing Python kernel (typically `python3-venv`)
+- Uses this server-native kernel spec for the connection
+
+These changes ensure that Deepnote notebooks can execute cells properly by:
+1. Providing a valid server provider that can be resolved
+2. Using kernel specs that actually exist on the Deepnote server

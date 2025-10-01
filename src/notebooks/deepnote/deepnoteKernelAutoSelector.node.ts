@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { inject, injectable } from 'inversify';
+import { inject, injectable, optional } from 'inversify';
 import { NotebookDocument, workspace, NotebookControllerAffinity } from 'vscode';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
@@ -11,15 +11,20 @@ import {
     IDeepnoteKernelAutoSelector,
     IDeepnoteServerStarter,
     IDeepnoteToolkitInstaller,
-    DEEPNOTE_NOTEBOOK_TYPE
+    DEEPNOTE_NOTEBOOK_TYPE,
+    DeepnoteKernelConnectionMetadata
 } from '../../kernels/deepnote/types';
-import { DeepnoteKernelConnectionMetadata } from '../../kernels/deepnote/types';
 import { IControllerRegistration } from '../controllers/types';
 import { JVSC_EXTENSION_ID } from '../../platform/common/constants';
 import { getDisplayPath } from '../../platform/common/platform/fs-paths';
-import { createInterpreterKernelSpec } from '../../kernels/helpers';
 import { JupyterServerProviderHandle } from '../../kernels/jupyter/types';
 import { IPythonExtensionChecker } from '../../platform/api/types';
+import { DeepnoteServerProvider } from '../../kernels/deepnote/deepnoteServerProvider.node';
+import { JupyterLabHelper } from '../../kernels/jupyter/session/jupyterLabHelper';
+import { createJupyterConnectionInfo } from '../../kernels/jupyter/jupyterUtils';
+import { IJupyterRequestCreator, IJupyterRequestAgentCreator } from '../../kernels/jupyter/types';
+import { IConfigurationService } from '../../platform/common/types';
+import { disposeAsync } from '../../platform/common/utils';
 
 /**
  * Automatically selects and starts Deepnote kernel for .deepnote notebooks
@@ -32,7 +37,13 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         @inject(IInterpreterService) private readonly interpreterService: IInterpreterService,
         @inject(IDeepnoteToolkitInstaller) private readonly toolkitInstaller: IDeepnoteToolkitInstaller,
         @inject(IDeepnoteServerStarter) private readonly serverStarter: IDeepnoteServerStarter,
-        @inject(IPythonExtensionChecker) private readonly pythonExtensionChecker: IPythonExtensionChecker
+        @inject(IPythonExtensionChecker) private readonly pythonExtensionChecker: IPythonExtensionChecker,
+        @inject(DeepnoteServerProvider) private readonly serverProvider: DeepnoteServerProvider,
+        @inject(IJupyterRequestCreator) private readonly requestCreator: IJupyterRequestCreator,
+        @inject(IJupyterRequestAgentCreator)
+        @optional()
+        private readonly requestAgentCreator: IJupyterRequestAgentCreator | undefined,
+        @inject(IConfigurationService) private readonly configService: IConfigurationService
     ) {}
 
     public activate() {
@@ -100,20 +111,59 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             const serverInfo = await this.serverStarter.getOrStartServer(venvInterpreter, baseFileUri);
             logger.info(`Deepnote server running at ${serverInfo.url}`);
 
-            // Create kernel connection metadata
-            const kernelSpec = await createInterpreterKernelSpec(interpreter);
+            // Create server provider handle
             const serverProviderHandle: JupyterServerProviderHandle = {
                 extensionId: JVSC_EXTENSION_ID,
                 id: 'deepnote-server',
-                handle: 'deepnote-toolkit-server'
+                handle: `deepnote-toolkit-server-${baseFileUri.fsPath}`
             };
+
+            // Register the server with the provider so it can be resolved
+            this.serverProvider.registerServer(serverProviderHandle.handle, serverInfo);
+
+            // Connect to the server and get available kernel specs
+            const connectionInfo = createJupyterConnectionInfo(
+                serverProviderHandle,
+                {
+                    baseUrl: serverInfo.url,
+                    token: serverInfo.token || '',
+                    displayName: 'Deepnote Server',
+                    authorizationHeader: {}
+                },
+                this.requestCreator,
+                this.requestAgentCreator,
+                this.configService,
+                baseFileUri
+            );
+
+            const sessionManager = JupyterLabHelper.create(connectionInfo.settings);
+            let kernelSpec;
+            try {
+                const kernelSpecs = await sessionManager.getKernelSpecs();
+                logger.info(`Available kernel specs on Deepnote server: ${kernelSpecs.map((s) => s.name).join(', ')}`);
+
+                // Use the first available Python kernel spec, or fall back to 'python3-venv'
+                kernelSpec =
+                    kernelSpecs.find((s) => s.language === 'python') ||
+                    kernelSpecs.find((s) => s.name === 'python3-venv') ||
+                    kernelSpecs[0];
+
+                if (!kernelSpec) {
+                    throw new Error('No kernel specs available on Deepnote server');
+                }
+
+                logger.info(`Using kernel spec: ${kernelSpec.name} (${kernelSpec.display_name})`);
+            } finally {
+                await disposeAsync(sessionManager);
+            }
 
             const connectionMetadata = DeepnoteKernelConnectionMetadata.create({
                 interpreter,
                 kernelSpec,
                 baseUrl: serverInfo.url,
                 id: `deepnote-kernel-${interpreter.id}`,
-                serverProviderHandle
+                serverProviderHandle,
+                serverInfo // Pass the server info so we can use it later
             });
 
             // Register controller for deepnote notebook type

@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+import * as vscode from 'vscode';
 import { IJupyterKernelSpec } from '../types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { JupyterServerProviderHandle } from '../jupyter/types';
@@ -101,7 +102,7 @@ export interface IDeepnoteKernelAutoSelector {
     /**
      * Automatically selects and starts a Deepnote kernel for the given notebook.
      */
-    ensureKernelSelected(notebook: any): Promise<void>;
+    ensureKernelSelected(notebook: vscode.NotebookDocument): Promise<void>;
 }
 
 export const DEEPNOTE_TOOLKIT_WHEEL_URL =

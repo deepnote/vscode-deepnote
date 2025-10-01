@@ -97,7 +97,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             const venvProcessService = await this.processServiceFactory.create(venvInterpreter.uri);
             const installResult = await venvProcessService.exec(
                 venvInterpreter.uri.fsPath,
-                ['-m', 'pip', 'install', '--upgrade', DEEPNOTE_TOOLKIT_WHEEL_URL],
+                ['-m', 'pip', 'install', '--upgrade', `deepnote-toolkit[server] @ ${DEEPNOTE_TOOLKIT_WHEEL_URL}`],
                 { throwOnStdErr: false }
             );
 

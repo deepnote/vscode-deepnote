@@ -16,66 +16,76 @@ import { IFileSystem } from '../../platform/common/platform/types';
  */
 @injectable()
 export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
-    private readonly venvPath: Uri;
-    private venvPythonPath: Uri | undefined;
+    private readonly venvPythonPaths: Map<string, Uri> = new Map();
 
     constructor(
         @inject(IProcessServiceFactory) private readonly processServiceFactory: IProcessServiceFactory,
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel,
         @inject(IExtensionContext) private readonly context: IExtensionContext,
         @inject(IFileSystem) private readonly fs: IFileSystem
-    ) {
-        // Create venv in global storage: ~/.vscode/extensions/storage/deepnote-venv
-        this.venvPath = Uri.joinPath(this.context.globalStorageUri, 'deepnote-toolkit-venv');
+    ) {}
+
+    private getVenvPath(deepnoteFileUri: Uri): Uri {
+        // Create a unique venv name based on the file path
+        // Use a simple hash approach - replace special chars with underscores
+        const safePath = deepnoteFileUri.fsPath.replace(/[^a-zA-Z0-9]/g, '_');
+        return Uri.joinPath(this.context.globalStorageUri, 'deepnote-venvs', safePath);
     }
 
-    public async getVenvInterpreter(): Promise<PythonEnvironment | undefined> {
-        if (this.venvPythonPath) {
-            return { uri: this.venvPythonPath, id: this.venvPythonPath.fsPath };
+    public async getVenvInterpreter(deepnoteFileUri: Uri): Promise<PythonEnvironment | undefined> {
+        const venvPath = this.getVenvPath(deepnoteFileUri);
+        const cacheKey = venvPath.fsPath;
+
+        if (this.venvPythonPaths.has(cacheKey)) {
+            return { uri: this.venvPythonPaths.get(cacheKey)!, id: this.venvPythonPaths.get(cacheKey)!.fsPath };
         }
 
         // Check if venv exists
         const pythonInVenv =
             process.platform === 'win32'
-                ? Uri.joinPath(this.venvPath, 'Scripts', 'python.exe')
-                : Uri.joinPath(this.venvPath, 'bin', 'python');
+                ? Uri.joinPath(venvPath, 'Scripts', 'python.exe')
+                : Uri.joinPath(venvPath, 'bin', 'python');
 
         if (await this.fs.exists(pythonInVenv)) {
-            this.venvPythonPath = pythonInVenv;
+            this.venvPythonPaths.set(cacheKey, pythonInVenv);
             return { uri: pythonInVenv, id: pythonInVenv.fsPath };
         }
 
         return undefined;
     }
 
-    public async ensureInstalled(baseInterpreter: PythonEnvironment): Promise<PythonEnvironment | undefined> {
+    public async ensureInstalled(
+        baseInterpreter: PythonEnvironment,
+        deepnoteFileUri: Uri
+    ): Promise<PythonEnvironment | undefined> {
+        const venvPath = this.getVenvPath(deepnoteFileUri);
+
         try {
             // Check if venv already exists with toolkit installed
-            const existingVenv = await this.getVenvInterpreter();
+            const existingVenv = await this.getVenvInterpreter(deepnoteFileUri);
             if (existingVenv && (await this.isToolkitInstalled(existingVenv))) {
-                logger.info('deepnote-toolkit venv already exists and is ready');
+                logger.info(`deepnote-toolkit venv already exists and is ready for ${deepnoteFileUri.fsPath}`);
                 return existingVenv;
             }
 
-            logger.info(`Creating virtual environment at ${this.venvPath.fsPath}`);
-            this.outputChannel.appendLine('Setting up Deepnote toolkit environment...');
+            logger.info(`Creating virtual environment at ${venvPath.fsPath} for ${deepnoteFileUri.fsPath}`);
+            this.outputChannel.appendLine(`Setting up Deepnote toolkit environment for ${deepnoteFileUri.fsPath}...`);
 
-            // Create venv directory if it doesn't exist
-            await this.fs.createDirectory(this.context.globalStorageUri);
+            // Create venv parent directory if it doesn't exist
+            const venvParentDir = Uri.joinPath(this.context.globalStorageUri, 'deepnote-venvs');
+            await this.fs.createDirectory(venvParentDir);
 
             // Remove old venv if it exists but is broken
-            if (await this.fs.exists(this.venvPath)) {
+            if (await this.fs.exists(venvPath)) {
                 logger.info('Removing existing broken venv');
-                await this.fs.delete(this.venvPath);
+                await this.fs.delete(venvPath);
             }
 
             // Create new venv
             const processService = await this.processServiceFactory.create(baseInterpreter.uri);
-            const venvResult = await processService.exec(
-                baseInterpreter.uri.fsPath,
-                ['-m', 'venv', this.venvPath.fsPath],
-                { throwOnStdErr: false }
-            );
+            const venvResult = await processService.exec(baseInterpreter.uri.fsPath, ['-m', 'venv', venvPath.fsPath], {
+                throwOnStdErr: false
+            });
 
             if (venvResult.stderr && !venvResult.stderr.includes('WARNING')) {
                 logger.error(`Failed to create venv: ${venvResult.stderr}`);
@@ -84,7 +94,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             }
 
             // Get venv Python interpreter
-            const venvInterpreter = await this.getVenvInterpreter();
+            const venvInterpreter = await this.getVenvInterpreter(deepnoteFileUri);
             if (!venvInterpreter) {
                 logger.error('Failed to locate venv Python interpreter');
                 return undefined;

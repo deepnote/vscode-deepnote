@@ -22,26 +22,29 @@ This implementation adds automatic kernel selection and startup for `.deepnote` 
 - Constants for wheel URL, default port, and notebook type
 
 #### 2. **Deepnote Toolkit Installer** (`src/kernels/deepnote/deepnoteToolkitInstaller.node.ts`)
-- Checks if `deepnote-toolkit` is installed in the Python environment
+- Creates a dedicated virtual environment per `.deepnote` file
+- Checks if `deepnote-toolkit` is installed in the venv
 - Installs the toolkit from the hardcoded S3 wheel URL
 - Outputs installation progress to the output channel
 - Verifies successful installation
+- Reuses existing venvs for the same `.deepnote` file
 
 **Key Methods:**
-- `isInstalled(interpreter)`: Checks if toolkit is available
-- `ensureInstalled(interpreter)`: Installs if missing, returns true on success
+- `getVenvInterpreter(deepnoteFileUri)`: Gets the venv Python interpreter for a specific file
+- `ensureInstalled(interpreter, deepnoteFileUri)`: Creates venv and installs toolkit if needed
 
 #### 3. **Deepnote Server Starter** (`src/kernels/deepnote/deepnoteServerStarter.node.ts`)
-- Manages the lifecycle of the deepnote-toolkit Jupyter server
+- Manages the lifecycle of deepnote-toolkit Jupyter servers (one per `.deepnote` file)
 - Finds an available port (starting from 8888)
 - Starts the server with `python -m deepnote_toolkit server --jupyter-port <port>`
 - Monitors server output and logs it
 - Waits for server to be ready before returning connection info
-- Reuses existing server if already running
+- Reuses existing server for the same `.deepnote` file if already running
+- Manages multiple servers for different `.deepnote` files simultaneously
 
 **Key Methods:**
-- `getOrStartServer(interpreter)`: Returns server info, starting if needed
-- `stopServer()`: Stops the running server
+- `getOrStartServer(interpreter, deepnoteFileUri)`: Returns server info for a file, starting if needed
+- `stopServer(deepnoteFileUri)`: Stops the running server for a specific file
 - `isServerRunning(serverInfo)`: Checks if server is responsive
 
 #### 4. **Deepnote Kernel Auto-Selector** (`src/notebooks/deepnote/deepnoteKernelAutoSelector.node.ts`)
@@ -77,15 +80,19 @@ Get active Python interpreter
         ↓
 DeepnoteToolkitInstaller.ensureInstalled()
         ↓
-Check if installed → Yes → Skip
+Extract base file URI (remove query params)
+        ↓
+Check if venv exists for this file → Yes → Skip to server
         ↓ No
-pip install <wheel-url>
+Create venv for this .deepnote file
+        ↓
+pip install <wheel-url> in venv
         ↓
 Verify installation
         ↓
-DeepnoteServerStarter.getOrStartServer()
+DeepnoteServerStarter.getOrStartServer(venv, fileUri)
         ↓
-Check if server running → Yes → Return info
+Check if server running for this file → Yes → Return info
         ↓ No
 Find available port
         ↓
@@ -108,6 +115,7 @@ User runs cell → Executes on Deepnote kernel
 - **Wheel URL**: `https://deepnote-staging-runtime-artifactory.s3.amazonaws.com/deepnote-toolkit-packages/0.2.30.post19/deepnote_toolkit-0.2.30.post19-py3-none-any.whl`
 - **Default Port**: `8888` (will find next available if occupied)
 - **Notebook Type**: `deepnote`
+- **Venv Location**: `~/.vscode/extensions/storage/deepnote-venvs/<file-path-hash>/`
 
 ## Usage
 
@@ -123,15 +131,17 @@ User runs cell → Executes on Deepnote kernel
 
 - **Zero configuration**: No manual kernel selection needed
 - **Automatic setup**: Toolkit installation and server startup handled automatically
-- **Single server instance**: Reuses running server for efficiency
+- **Isolated environments**: Each `.deepnote` file gets its own virtual environment
+- **Multi-file support**: Can run multiple `.deepnote` files with separate servers
+- **Resource efficiency**: Reuses venv and server for notebooks within the same `.deepnote` file
 - **Clean integration**: Uses existing VSCode notebook controller infrastructure
 
 ## Future Enhancements
 
 1. **PyPI Package**: Replace S3 URL with PyPI package name once published
 2. **Configuration**: Add settings for custom ports, wheel URLs, etc.
-3. **Server Management UI**: Add commands to start/stop/restart server manually
-4. **Multi-server Support**: Support multiple servers for different workspaces
+3. **Server Management UI**: Add commands to start/stop/restart servers for specific files
+4. **Venv Cleanup**: Add command to clean up unused venvs
 5. **Error Recovery**: Better handling of server crashes and auto-restart
 6. **Progress Indicators**: Visual feedback during installation and startup
 

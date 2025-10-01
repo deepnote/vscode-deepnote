@@ -66,6 +66,11 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         try {
             logger.info(`Auto-selecting Deepnote kernel for ${getDisplayPath(notebook.uri)}`);
 
+            // Extract the base file URI (without query parameters)
+            // Notebooks from the same .deepnote file have different URIs with ?notebook=id query params
+            const baseFileUri = notebook.uri.with({ query: '', fragment: '' });
+            logger.info(`Base Deepnote file: ${getDisplayPath(baseFileUri)}`);
+
             // Check if Python extension is installed
             if (!this.pythonExtensionChecker.isPythonExtensionInstalled) {
                 logger.warn('Python extension is not installed. Prompting user to install it.');
@@ -83,7 +88,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             logger.info(`Using base interpreter: ${getDisplayPath(interpreter.uri)}`);
 
             // Ensure deepnote-toolkit is installed in a venv and get the venv interpreter
-            const venvInterpreter = await this.toolkitInstaller.ensureInstalled(interpreter);
+            const venvInterpreter = await this.toolkitInstaller.ensureInstalled(interpreter, baseFileUri);
             if (!venvInterpreter) {
                 logger.error('Failed to set up Deepnote toolkit environment');
                 return; // Exit gracefully
@@ -92,7 +97,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             logger.info(`Deepnote toolkit venv ready at: ${getDisplayPath(venvInterpreter.uri)}`);
 
             // Start the Deepnote server using the venv interpreter
-            const serverInfo = await this.serverStarter.getOrStartServer(venvInterpreter);
+            const serverInfo = await this.serverStarter.getOrStartServer(venvInterpreter, baseFileUri);
             logger.info(`Deepnote server running at ${serverInfo.url}`);
 
             // Create kernel connection metadata

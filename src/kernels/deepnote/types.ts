@@ -66,14 +66,19 @@ export interface IDeepnoteToolkitInstaller {
     /**
      * Ensures deepnote-toolkit is installed in a dedicated virtual environment.
      * @param baseInterpreter The base Python interpreter to use for creating the venv
+     * @param deepnoteFileUri The URI of the .deepnote file (used to create a unique venv per file)
      * @returns The Python interpreter from the venv if installed successfully, undefined otherwise
      */
-    ensureInstalled(baseInterpreter: PythonEnvironment): Promise<PythonEnvironment | undefined>;
+    ensureInstalled(
+        baseInterpreter: PythonEnvironment,
+        deepnoteFileUri: vscode.Uri
+    ): Promise<PythonEnvironment | undefined>;
 
     /**
      * Gets the venv Python interpreter if toolkit is installed, undefined otherwise.
+     * @param deepnoteFileUri The URI of the .deepnote file
      */
-    getVenvInterpreter(): Promise<PythonEnvironment | undefined>;
+    getVenvInterpreter(deepnoteFileUri: vscode.Uri): Promise<PythonEnvironment | undefined>;
 }
 
 export const IDeepnoteServerStarter = Symbol('IDeepnoteServerStarter');
@@ -81,14 +86,16 @@ export interface IDeepnoteServerStarter {
     /**
      * Starts or gets an existing deepnote-toolkit Jupyter server.
      * @param interpreter The Python interpreter to use
+     * @param deepnoteFileUri The URI of the .deepnote file (for server management per file)
      * @returns Connection information (URL, port, etc.)
      */
-    getOrStartServer(interpreter: PythonEnvironment): Promise<DeepnoteServerInfo>;
+    getOrStartServer(interpreter: PythonEnvironment, deepnoteFileUri: vscode.Uri): Promise<DeepnoteServerInfo>;
 
     /**
      * Stops the deepnote-toolkit server if running.
+     * @param deepnoteFileUri The URI of the .deepnote file
      */
-    stopServer(): Promise<void>;
+    stopServer(deepnoteFileUri: vscode.Uri): Promise<void>;
 }
 
 export interface DeepnoteServerInfo {
@@ -106,6 +113,6 @@ export interface IDeepnoteKernelAutoSelector {
 }
 
 export const DEEPNOTE_TOOLKIT_WHEEL_URL =
-    'https://deepnote-staging-runtime-artifactory.s3.amazonaws.com/deepnote-toolkit-packages/0.2.30.post19/deepnote_toolkit-0.2.30.post19-py3-none-any.whl';
+    'https://deepnote-staging-runtime-artifactory.s3.amazonaws.com/deepnote-toolkit-packages/0.2.30.post20/deepnote_toolkit-0.2.30.post20-py3-none-any.whl';
 export const DEEPNOTE_DEFAULT_PORT = 8888;
 export const DEEPNOTE_NOTEBOOK_TYPE = 'deepnote';

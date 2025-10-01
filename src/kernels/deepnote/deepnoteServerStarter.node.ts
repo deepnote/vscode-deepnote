@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 import { inject, injectable, named } from 'inversify';
+import { Uri } from 'vscode';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { IDeepnoteServerStarter, IDeepnoteToolkitInstaller, DeepnoteServerInfo, DEEPNOTE_DEFAULT_PORT } from './types';
 import { IProcessServiceFactory, ObservableExecutionResult } from '../../platform/common/process/types.node';
@@ -17,9 +18,9 @@ import getPort from 'get-port';
  */
 @injectable()
 export class DeepnoteServerStarter implements IDeepnoteServerStarter {
-    private serverProcess?: ObservableExecutionResult<string>;
-    private serverInfo?: DeepnoteServerInfo;
-    private readonly disposables: IDisposable[] = [];
+    private readonly serverProcesses: Map<string, ObservableExecutionResult<string>> = new Map();
+    private readonly serverInfos: Map<string, DeepnoteServerInfo> = new Map();
+    private readonly disposablesByFile: Map<string, IDisposable[]> = new Map();
     private readonly httpClient = new HttpClient();
 
     constructor(
@@ -28,29 +29,32 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter {
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel
     ) {}
 
-    public async getOrStartServer(interpreter: PythonEnvironment): Promise<DeepnoteServerInfo> {
-        // If server is already running, return existing info
-        if (this.serverInfo && (await this.isServerRunning(this.serverInfo))) {
-            logger.info(`Deepnote server already running at ${this.serverInfo.url}`);
-            return this.serverInfo;
+    public async getOrStartServer(interpreter: PythonEnvironment, deepnoteFileUri: Uri): Promise<DeepnoteServerInfo> {
+        const fileKey = deepnoteFileUri.fsPath;
+
+        // If server is already running for this file, return existing info
+        const existingServerInfo = this.serverInfos.get(fileKey);
+        if (existingServerInfo && (await this.isServerRunning(existingServerInfo))) {
+            logger.info(`Deepnote server already running at ${existingServerInfo.url} for ${fileKey}`);
+            return existingServerInfo;
         }
 
         // Ensure toolkit is installed
-        logger.info('Ensuring deepnote-toolkit is installed...');
-        const installed = await this.toolkitInstaller.ensureInstalled(interpreter);
+        logger.info(`Ensuring deepnote-toolkit is installed for ${fileKey}...`);
+        const installed = await this.toolkitInstaller.ensureInstalled(interpreter, deepnoteFileUri);
         if (!installed) {
             throw new Error('Failed to install deepnote-toolkit. Please check the output for details.');
         }
 
         // Find available port
         const port = await getPort({ host: 'localhost', port: DEEPNOTE_DEFAULT_PORT });
-        logger.info(`Starting deepnote-toolkit server on port ${port}`);
-        this.outputChannel.appendLine(`Starting Deepnote server on port ${port}...`);
+        logger.info(`Starting deepnote-toolkit server on port ${port} for ${fileKey}`);
+        this.outputChannel.appendLine(`Starting Deepnote server on port ${port} for ${deepnoteFileUri.fsPath}...`);
 
         // Start the server
         const processService = await this.processServiceFactory.create(interpreter.uri);
 
-        this.serverProcess = processService.execObservable(interpreter.uri.fsPath, [
+        const serverProcess = processService.execObservable(interpreter.uri.fsPath, [
             '-m',
             'deepnote_toolkit',
             'server',
@@ -58,51 +62,65 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter {
             port.toString()
         ]);
 
+        this.serverProcesses.set(fileKey, serverProcess);
+
+        // Track disposables for this file
+        const disposables: IDisposable[] = [];
+        this.disposablesByFile.set(fileKey, disposables);
+
         // Monitor server output
-        this.serverProcess.out.onDidChange(
+        serverProcess.out.onDidChange(
             (output) => {
                 if (output.source === 'stdout') {
-                    logger.trace(`Deepnote server: ${output.out}`);
+                    logger.trace(`Deepnote server (${fileKey}): ${output.out}`);
                     this.outputChannel.appendLine(output.out);
                 } else if (output.source === 'stderr') {
-                    logger.warn(`Deepnote server stderr: ${output.out}`);
+                    logger.warn(`Deepnote server stderr (${fileKey}): ${output.out}`);
                     this.outputChannel.appendLine(output.out);
                 }
             },
             this,
-            this.disposables
+            disposables
         );
 
         // Wait for server to be ready
         const url = `http://localhost:${port}`;
-        this.serverInfo = { url, port };
+        const serverInfo = { url, port };
+        this.serverInfos.set(fileKey, serverInfo);
 
-        const serverReady = await this.waitForServer(this.serverInfo, 30000);
+        const serverReady = await this.waitForServer(serverInfo, 30000);
         if (!serverReady) {
-            await this.stopServer();
+            await this.stopServer(deepnoteFileUri);
             throw new Error('Deepnote server failed to start within timeout period');
         }
 
-        logger.info(`Deepnote server started successfully at ${url}`);
+        logger.info(`Deepnote server started successfully at ${url} for ${fileKey}`);
         this.outputChannel.appendLine(`✓ Deepnote server running at ${url}`);
 
-        return this.serverInfo;
+        return serverInfo;
     }
 
-    public async stopServer(): Promise<void> {
-        if (this.serverProcess) {
+    public async stopServer(deepnoteFileUri: Uri): Promise<void> {
+        const fileKey = deepnoteFileUri.fsPath;
+        const serverProcess = this.serverProcesses.get(fileKey);
+
+        if (serverProcess) {
             try {
-                logger.info('Stopping Deepnote server...');
-                this.serverProcess.proc?.kill();
-                this.serverProcess = undefined;
-                this.serverInfo = undefined;
-                this.outputChannel.appendLine('Deepnote server stopped');
+                logger.info(`Stopping Deepnote server for ${fileKey}...`);
+                serverProcess.proc?.kill();
+                this.serverProcesses.delete(fileKey);
+                this.serverInfos.delete(fileKey);
+                this.outputChannel.appendLine(`Deepnote server stopped for ${fileKey}`);
             } catch (ex) {
                 logger.error(`Error stopping Deepnote server: ${ex}`);
             }
         }
-        this.disposables.forEach((d) => d.dispose());
-        this.disposables.length = 0;
+
+        const disposables = this.disposablesByFile.get(fileKey);
+        if (disposables) {
+            disposables.forEach((d) => d.dispose());
+            this.disposablesByFile.delete(fileKey);
+        }
     }
 
     private async waitForServer(serverInfo: DeepnoteServerInfo, timeout: number): Promise<boolean> {

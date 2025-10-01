@@ -457,6 +457,9 @@ export class RemoteKernelFinder extends ObservableDisposable implements IRemoteK
                 return false;
             case 'connectToLiveRemoteKernel':
                 return this.cachedRemoteKernelValidator.isValid(kernel);
+            case 'startUsingDeepnoteKernel':
+                // Deepnote kernels are dynamically created, no need to cache/validate
+                return false;
         }
     }
 }

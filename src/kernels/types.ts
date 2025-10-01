@@ -79,6 +79,10 @@ export class BaseKernelConnectionMetadata {
             case 'startUsingPythonInterpreter':
                 // eslint-disable-next-line @typescript-eslint/no-use-before-define
                 return PythonKernelConnectionMetadata.create(clone as PythonKernelConnectionMetadata);
+            case 'startUsingDeepnoteKernel':
+                // eslint-disable-next-line @typescript-eslint/no-use-before-define
+                const { DeepnoteKernelConnectionMetadata } = require('./deepnote/types');
+                return DeepnoteKernelConnectionMetadata.create(clone);
             default:
                 throw new Error(`Invalid object to be deserialized into a connection, kind = ${clone.kind}`);
         }
@@ -311,7 +315,8 @@ export type LocalKernelConnectionMetadata =
  */
 export type RemoteKernelConnectionMetadata =
     | Readonly<LiveRemoteKernelConnectionMetadata>
-    | Readonly<RemoteKernelSpecConnectionMetadata>;
+    | Readonly<RemoteKernelSpecConnectionMetadata>
+    | Readonly<import('./deepnote/types').DeepnoteKernelConnectionMetadata>;
 
 export function isLocalConnection(
     kernelConnection: KernelConnectionMetadata

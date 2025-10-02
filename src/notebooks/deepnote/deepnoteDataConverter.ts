@@ -1,21 +1,25 @@
 import { NotebookCellData, NotebookCellKind, NotebookCellOutput, NotebookCellOutputItem } from 'vscode';
 
 import type { DeepnoteBlock, DeepnoteOutput } from './deepnoteTypes';
-import { OutputTypeDetector } from './OutputTypeDetector';
-import { StreamOutputHandler } from './outputHandlers/StreamOutputHandler';
-import { ErrorOutputHandler } from './outputHandlers/ErrorOutputHandler';
-import { RichOutputHandler } from './outputHandlers/RichOutputHandler';
-import { mergeMetadata, hasMetadataContent, generateBlockId, generateSortingKey } from './dataConversionUtils';
+import { generateBlockId, generateSortingKey } from './dataConversionUtils';
+import { ConverterRegistry } from './converters/converterRegistry';
+import { CodeBlockConverter } from './converters/codeBlockConverter';
+import { addPocketToCellMetadata, createBlockFromPocket } from './pocket';
+import { TextBlockConverter } from './converters/textBlockConverter';
+import { MarkdownBlockConverter } from './converters/markdownBlockConverter';
 
 /**
  * Utility class for converting between Deepnote block structures and VS Code notebook cells.
  * Handles bidirectional conversion while preserving metadata and execution state.
  */
 export class DeepnoteDataConverter {
-    private readonly outputDetector = new OutputTypeDetector();
-    private readonly streamHandler = new StreamOutputHandler();
-    private readonly errorHandler = new ErrorOutputHandler();
-    private readonly richHandler = new RichOutputHandler();
+    private readonly registry = new ConverterRegistry();
+
+    constructor() {
+        this.registry.register(new CodeBlockConverter());
+        this.registry.register(new TextBlockConverter());
+        this.registry.register(new MarkdownBlockConverter());
+    }
 
     /**
      * Converts Deepnote blocks to VS Code notebook cells.
@@ -24,7 +28,36 @@ export class DeepnoteDataConverter {
      * @returns Array of VS Code notebook cell data
      */
     convertBlocksToCells(blocks: DeepnoteBlock[]): NotebookCellData[] {
-        return blocks.map((block) => this.convertBlockToCell(block));
+        return blocks.map((block) => {
+            const converter = this.registry.findConverter(block.type);
+
+            if (!converter) {
+                // Fallback for unknown types - convert to markdown
+                console.warn(`Unknown block type: ${block.type}, converting to markdown`);
+                return this.createFallbackCell(block);
+            }
+
+            const cell = converter.convertToCell(block);
+
+            const blockWithOptionalFields = block as DeepnoteBlock & { blockGroup?: string };
+
+            cell.metadata = {
+                ...block.metadata,
+                id: block.id,
+                type: block.type,
+                sortingKey: block.sortingKey,
+                ...(blockWithOptionalFields.blockGroup && { blockGroup: blockWithOptionalFields.blockGroup }),
+                ...(block.executionCount !== undefined && { executionCount: block.executionCount }),
+                ...(block.outputs !== undefined && { outputs: block.outputs })
+            };
+
+            // The pocket is a place to tuck away Deepnote-specific fields for later.
+            addPocketToCellMetadata(cell);
+
+            cell.outputs = this.transformOutputsForVsCode(block.outputs || []);
+
+            return cell;
+        });
     }
 
     /**
@@ -34,149 +67,255 @@ export class DeepnoteDataConverter {
      * @returns Array of Deepnote blocks
      */
     convertCellsToBlocks(cells: NotebookCellData[]): DeepnoteBlock[] {
-        return cells.map((cell, index) => this.convertCellToBlock(cell, index));
+        return cells.map((cell, index) => {
+            const block = createBlockFromPocket(cell, index);
+
+            const converter = this.registry.findConverter(block.type);
+
+            if (!converter) {
+                return this.createFallbackBlock(cell, index);
+            }
+
+            converter.applyChangesToBlock(block, cell);
+
+            // If pocket didn't have outputs, but cell does, convert VS Code outputs to Deepnote format
+            if (!block.outputs && cell.outputs && cell.outputs.length > 0) {
+                block.outputs = this.transformOutputsForDeepnote(cell.outputs);
+            }
+
+            return block;
+        });
     }
 
-    private convertBlockToCell(block: DeepnoteBlock): NotebookCellData {
-        const cellKind = block.type === 'code' ? NotebookCellKind.Code : NotebookCellKind.Markup;
-        const source = block.content || '';
+    private base64ToUint8Array(base64: string): Uint8Array {
+        const binaryString = atob(base64);
+        const bytes = new Uint8Array(binaryString.length);
 
-        // Create the cell with proper language ID
-        let cell: NotebookCellData;
-        if (block.type === 'code') {
-            cell = new NotebookCellData(cellKind, source, 'python');
-        } else {
-            cell = new NotebookCellData(cellKind, source, 'markdown');
+        for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
         }
 
-        // Set metadata after creation
+        return bytes;
+    }
+
+    private createFallbackBlock(cell: NotebookCellData, index: number): DeepnoteBlock {
+        return {
+            id: generateBlockId(),
+            sortingKey: generateSortingKey(index),
+            type: cell.kind === NotebookCellKind.Code ? 'code' : 'markdown',
+            content: cell.value || ''
+        };
+    }
+
+    private createFallbackCell(block: DeepnoteBlock): NotebookCellData {
+        const cell = new NotebookCellData(NotebookCellKind.Markup, block.content || '', 'markdown');
+
         cell.metadata = {
             deepnoteBlockId: block.id,
             deepnoteBlockType: block.type,
             deepnoteSortingKey: block.sortingKey,
-            deepnoteMetadata: block.metadata,
-            ...(typeof block.executionCount === 'number' && { executionCount: block.executionCount }),
-            ...(block.outputReference && { deepnoteOutputReference: block.outputReference })
+            deepnoteMetadata: block.metadata
         };
-
-        // Only set outputs if they exist
-        if (block.outputs && block.outputs.length > 0) {
-            cell.outputs = this.convertDeepnoteOutputsToVSCodeOutputs(block.outputs);
-        } else {
-            cell.outputs = [];
-        }
 
         return cell;
     }
 
-    private convertCellToBlock(cell: NotebookCellData, index: number): DeepnoteBlock {
-        const blockId = cell.metadata?.deepnoteBlockId || generateBlockId();
-        const sortingKey = cell.metadata?.deepnoteSortingKey || generateSortingKey(index);
-        const originalMetadata = cell.metadata?.deepnoteMetadata;
+    private transformOutputsForDeepnote(outputs: NotebookCellOutput[]): DeepnoteOutput[] {
+        return outputs.map((output) => {
+            // Check if this is an error output
+            const errorItem = output.items.find((item) => item.mime === 'application/vnd.code.notebook.error');
 
-        const block: DeepnoteBlock = {
-            id: blockId,
-            sortingKey: sortingKey,
-            type: cell.kind === NotebookCellKind.Code ? 'code' : 'markdown',
-            content: cell.value || ''
-        };
+            if (errorItem) {
+                try {
+                    const errorData = JSON.parse(new TextDecoder().decode(errorItem.data));
 
-        // Only add metadata if it exists and is not empty
-        if (originalMetadata && Object.keys(originalMetadata).length > 0) {
-            block.metadata = originalMetadata;
-        }
-
-        if (cell.kind === NotebookCellKind.Code) {
-            const executionCount = cell.metadata?.executionCount ?? cell.executionSummary?.executionOrder;
-
-            if (executionCount !== undefined) {
-                block.executionCount = executionCount;
-            }
-        }
-
-        if (cell.metadata?.deepnoteOutputReference) {
-            block.outputReference = cell.metadata.deepnoteOutputReference;
-        }
-
-        if (cell.outputs && cell.outputs.length > 0) {
-            block.outputs = this.convertVSCodeOutputsToDeepnoteOutputs(cell.outputs);
-        }
-
-        return block;
-    }
-
-    private convertDeepnoteOutputsToVSCodeOutputs(deepnoteOutputs: DeepnoteOutput[]): NotebookCellOutput[] {
-        return deepnoteOutputs.map((output) => this.convertSingleOutput(output));
-    }
-
-    private convertSingleOutput(output: DeepnoteOutput): NotebookCellOutput {
-        const outputItems = this.createOutputItems(output);
-
-        const metadata = mergeMetadata(
-            output.metadata,
-            output.execution_count !== undefined ? { executionCount: output.execution_count } : undefined
-        );
-
-        return hasMetadataContent(metadata)
-            ? new NotebookCellOutput(outputItems, metadata)
-            : new NotebookCellOutput(outputItems);
-    }
-
-    private convertVSCodeOutputsToDeepnoteOutputs(vscodeOutputs: NotebookCellOutput[]): DeepnoteOutput[] {
-        return vscodeOutputs.map((output) => this.convertVSCodeSingleOutput(output));
-    }
-
-    private convertVSCodeSingleOutput(output: NotebookCellOutput): DeepnoteOutput {
-        // Detect output type and delegate to appropriate handler
-        const detection = this.outputDetector.detect(output);
-        let deepnoteOutput: DeepnoteOutput;
-
-        switch (detection.type) {
-            case 'error':
-                deepnoteOutput = this.errorHandler.convertToDeepnote(detection.errorItem!);
-                break;
-            case 'stream':
-                deepnoteOutput = this.streamHandler.convertToDeepnote(output);
-                break;
-            case 'rich':
-            default:
-                deepnoteOutput = this.richHandler.convertToDeepnote(output);
-                break;
-        }
-
-        // Preserve metadata from VS Code output
-        if (output.metadata) {
-            // Extract execution count from metadata before merging
-            const { executionCount, ...restMetadata } = output.metadata;
-
-            if (executionCount !== undefined && deepnoteOutput.execution_count === undefined) {
-                deepnoteOutput.execution_count = executionCount as number;
-            }
-
-            // Only merge non-executionCount metadata
-            if (Object.keys(restMetadata).length > 0) {
-                deepnoteOutput.metadata = mergeMetadata(deepnoteOutput.metadata, restMetadata);
-            }
-        }
-
-        return deepnoteOutput;
-    }
-
-    private createOutputItems(output: DeepnoteOutput): NotebookCellOutputItem[] {
-        switch (output.output_type) {
-            case 'stream':
-                return this.streamHandler.convertToVSCode(output);
-            case 'error':
-                return this.errorHandler.convertToVSCode(output);
-            case 'execute_result':
-            case 'display_data':
-                return this.richHandler.convertToVSCode(output);
-            default:
-                // Fallback for unknown types with text
-                if (output.text) {
-                    return [NotebookCellOutputItem.text(output.text)];
+                    return {
+                        ename: errorData.name || 'Error',
+                        evalue: errorData.message || '',
+                        output_type: 'error',
+                        traceback: errorData.stack ? errorData.stack.split('\n') : []
+                    } as DeepnoteOutput;
+                } catch {
+                    return {
+                        ename: 'Error',
+                        evalue: '',
+                        output_type: 'error',
+                        traceback: []
+                    } as DeepnoteOutput;
                 }
-                return [];
-        }
+            }
+
+            // Check if this is a stream output
+            const stdoutItem = output.items.find((item) => item.mime === 'application/vnd.code.notebook.stdout');
+            const stderrItem = output.items.find((item) => item.mime === 'application/vnd.code.notebook.stderr');
+
+            if (stdoutItem || stderrItem) {
+                const item = stdoutItem || stderrItem;
+                const text = new TextDecoder().decode(item!.data);
+
+                return {
+                    name: stderrItem ? 'stderr' : 'stdout',
+                    output_type: 'stream',
+                    text
+                } as DeepnoteOutput;
+            }
+
+            // Rich output (execute_result or display_data)
+            const data: Record<string, unknown> = {};
+
+            for (const item of output.items) {
+                if (item.mime === 'text/plain') {
+                    data['text/plain'] = new TextDecoder().decode(item.data);
+                } else if (item.mime === 'text/html') {
+                    data['text/html'] = new TextDecoder().decode(item.data);
+                } else if (item.mime === 'application/json') {
+                    data['application/json'] = JSON.parse(new TextDecoder().decode(item.data));
+                } else if (item.mime === 'image/png') {
+                    data['image/png'] = btoa(String.fromCharCode(...new Uint8Array(item.data)));
+                } else if (item.mime === 'image/jpeg') {
+                    data['image/jpeg'] = btoa(String.fromCharCode(...new Uint8Array(item.data)));
+                } else if (item.mime === 'application/vnd.deepnote.dataframe.v3+json') {
+                    data['application/vnd.deepnote.dataframe.v3+json'] = JSON.parse(
+                        new TextDecoder().decode(item.data)
+                    );
+                }
+            }
+
+            const deepnoteOutput: DeepnoteOutput = {
+                data,
+                execution_count: (output.metadata?.executionCount as number) || 0,
+                output_type: 'execute_result'
+            };
+
+            // Add metadata if present (excluding executionCount which we already handled)
+            if (output.metadata) {
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                const { executionCount, ...restMetadata } = output.metadata;
+
+                if (Object.keys(restMetadata).length > 0) {
+                    (deepnoteOutput as DeepnoteOutput & { metadata?: Record<string, unknown> }).metadata = restMetadata;
+                }
+            }
+
+            return deepnoteOutput;
+        });
+    }
+
+    private transformOutputsForVsCode(outputs: DeepnoteOutput[]): NotebookCellOutput[] {
+        return outputs.map((output) => {
+            if ('output_type' in output) {
+                if (output.output_type === 'error') {
+                    const errorOutput = output as { ename?: string; evalue?: string; traceback?: string[] };
+                    const error = {
+                        name: errorOutput.ename || 'Error',
+                        message: errorOutput.evalue || '',
+                        stack: errorOutput.traceback ? errorOutput.traceback.join('\n') : ''
+                    };
+
+                    return new NotebookCellOutput([NotebookCellOutputItem.error(error)]);
+                }
+
+                if (output.output_type === 'execute_result' || output.output_type === 'display_data') {
+                    const items: NotebookCellOutputItem[] = [];
+
+                    // Handle text fallback if data is not present
+                    if (!output.data && 'text' in output && output.text) {
+                        items.push(NotebookCellOutputItem.text(String(output.text), 'text/plain'));
+                    } else if (output.data && typeof output.data === 'object') {
+                        const data = output.data as Record<string, unknown>;
+
+                        // Order matters! Rich formats first, text/plain last
+                        if (data['text/html']) {
+                            items.push(
+                                new NotebookCellOutputItem(
+                                    new TextEncoder().encode(data['text/html'] as string),
+                                    'text/html'
+                                )
+                            );
+                        }
+
+                        if (data['application/vnd.deepnote.dataframe.v3+json']) {
+                            items.push(
+                                NotebookCellOutputItem.json(
+                                    data['application/vnd.deepnote.dataframe.v3+json'],
+                                    'application/vnd.deepnote.dataframe.v3+json'
+                                )
+                            );
+                        }
+
+                        if (data['application/json']) {
+                            items.push(NotebookCellOutputItem.json(data['application/json'], 'application/json'));
+                        }
+
+                        // Images (base64 encoded)
+                        if (data['image/png']) {
+                            items.push(
+                                new NotebookCellOutputItem(
+                                    this.base64ToUint8Array(data['image/png'] as string),
+                                    'image/png'
+                                )
+                            );
+                        }
+
+                        if (data['image/jpeg']) {
+                            items.push(
+                                new NotebookCellOutputItem(
+                                    this.base64ToUint8Array(data['image/jpeg'] as string),
+                                    'image/jpeg'
+                                )
+                            );
+                        }
+
+                        // Plain text as fallback (always last)
+                        if (data['text/plain']) {
+                            items.push(NotebookCellOutputItem.text(data['text/plain'] as string));
+                        }
+                    }
+
+                    // Preserve metadata and execution_count
+                    const metadata: Record<string, unknown> = {};
+
+                    if (output.execution_count !== undefined) {
+                        metadata.executionCount = output.execution_count;
+                    }
+
+                    if ('metadata' in output && output.metadata) {
+                        Object.assign(metadata, output.metadata);
+                    }
+
+                    return Object.keys(metadata).length > 0
+                        ? new NotebookCellOutput(items, metadata)
+                        : new NotebookCellOutput(items);
+                }
+
+                if (output.output_type === 'stream') {
+                    if (!output.text) {
+                        return new NotebookCellOutput([]);
+                    }
+
+                    const mimeType =
+                        'name' in output && output.name === 'stderr'
+                            ? 'application/vnd.code.notebook.stderr'
+                            : 'application/vnd.code.notebook.stdout';
+
+                    return new NotebookCellOutput([NotebookCellOutputItem.text(String(output.text), mimeType)]);
+                }
+
+                // Unknown output type - return as text if available
+                if ('text' in output && output.text) {
+                    return new NotebookCellOutput([NotebookCellOutputItem.text(String(output.text), 'text/plain')]);
+                }
+
+                // No text, return empty output
+                return new NotebookCellOutput([]);
+            }
+
+            // Fallback for outputs without output_type but with text
+            if ('text' in output && output.text) {
+                return new NotebookCellOutput([NotebookCellOutputItem.text(String(output.text), 'text/plain')]);
+            }
+
+            return new NotebookCellOutput([]);
+        });
     }
 }

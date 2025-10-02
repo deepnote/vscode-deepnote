@@ -129,7 +129,7 @@ suite('Pocket', () => {
             assert.strictEqual(block.type, 'code');
             assert.strictEqual(block.sortingKey, 'a0');
             assert.strictEqual(block.executionCount, 5);
-            assert.strictEqual(block.content, '');
+            assert.strictEqual(block.content, 'print("hello")');
             assert.strictEqual(block.outputs, undefined);
         });
 

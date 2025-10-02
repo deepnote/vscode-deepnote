@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import { inject, injectable, named } from 'inversify';
-import { CancellationToken, Uri } from 'vscode';
+import { CancellationToken, Uri, workspace } from 'vscode';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { IDeepnoteToolkitInstaller, DEEPNOTE_TOOLKIT_WHEEL_URL } from './types';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
@@ -130,7 +130,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             // Remove old venv if it exists but is broken
             if (await this.fs.exists(venvPath)) {
                 logger.info('Removing existing broken venv');
-                await this.fs.delete(venvPath);
+                await workspace.fs.delete(venvPath, { recursive: true });
             }
 
             // Create new venv

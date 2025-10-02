@@ -84,6 +84,18 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             return existingVenv;
         }
 
+        // Double-check for race condition: another caller might have started installation
+        // while we were checking the venv
+        const pendingAfterCheck = this.pendingInstallations.get(venvKey);
+        if (pendingAfterCheck) {
+            logger.info(`Another installation started for ${venvKey} while checking, waiting for it...`);
+            try {
+                return await pendingAfterCheck;
+            } catch {
+                logger.info(`Concurrent installation for ${venvKey} failed, retrying...`);
+            }
+        }
+
         // Start the installation and track it
         const installation = this.installImpl(baseInterpreter, deepnoteFileUri, venvPath, token);
         this.pendingInstallations.set(venvKey, installation);
@@ -127,18 +139,21 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                 throwOnStdErr: false
             });
 
-            if (venvResult.stderr && !venvResult.stderr.includes('WARNING')) {
-                logger.error(`Failed to create venv: ${venvResult.stderr}`);
-                this.outputChannel.appendLine(`Error creating venv: ${venvResult.stderr}`);
-                return undefined;
+            // Log any stderr output (warnings, etc.) but don't fail on it
+            if (venvResult.stderr) {
+                logger.info(`venv creation stderr: ${venvResult.stderr}`);
             }
 
             Cancellation.throwIfCanceled(token);
 
-            // Get venv Python interpreter
+            // Verify venv was created successfully by checking for the Python interpreter
             const venvInterpreter = await this.getVenvInterpreter(deepnoteFileUri);
             if (!venvInterpreter) {
-                logger.error('Failed to locate venv Python interpreter');
+                logger.error('Failed to create venv: Python interpreter not found after venv creation');
+                if (venvResult.stderr) {
+                    logger.error(`venv stderr: ${venvResult.stderr}`);
+                }
+                this.outputChannel.appendLine('Error: Failed to create virtual environment');
                 return undefined;
             }
 

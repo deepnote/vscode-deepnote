@@ -10,14 +10,16 @@ import { IJupyterServerProviderRegistry } from '../jupyter/types';
 import { JVSC_EXTENSION_ID } from '../../platform/common/constants';
 import { logger } from '../../platform/logging';
 import { DeepnoteServerNotFoundError } from '../../platform/errors/deepnoteServerNotFoundError';
-import { DeepnoteServerInfo } from './types';
+import { DeepnoteServerInfo, IDeepnoteServerProvider } from './types';
 
 /**
  * Jupyter Server Provider for Deepnote kernels.
  * This provider resolves server connections for Deepnote kernels.
  */
 @injectable()
-export class DeepnoteServerProvider implements IExtensionSyncActivationService, JupyterServerProvider {
+export class DeepnoteServerProvider
+    implements IDeepnoteServerProvider, IExtensionSyncActivationService, JupyterServerProvider
+{
     public readonly id = 'deepnote-server';
     private readonly _onDidChangeServers = new EventEmitter<void>();
     public readonly onDidChangeServers: Event<void> = this._onDidChangeServers.event;
@@ -51,6 +53,28 @@ export class DeepnoteServerProvider implements IExtensionSyncActivationService, 
         logger.info(`Registering Deepnote server: ${handle} -> ${serverInfo.url}`);
         this.servers.set(handle, serverInfo);
         this._onDidChangeServers.fire();
+    }
+
+    /**
+     * Unregister a server for a specific handle.
+     * Called when the server is no longer needed or notebook is closed.
+     * No-op if the handle doesn't exist.
+     */
+    public unregisterServer(handle: string): void {
+        if (this.servers.has(handle)) {
+            logger.info(`Unregistering Deepnote server: ${handle}`);
+            this.servers.delete(handle);
+            this._onDidChangeServers.fire();
+        }
+    }
+
+    /**
+     * Dispose of all servers and resources.
+     */
+    public dispose(): void {
+        logger.info('Disposing Deepnote server provider, clearing all registered servers');
+        this.servers.clear();
+        this._onDidChangeServers.dispose();
     }
 
     /**

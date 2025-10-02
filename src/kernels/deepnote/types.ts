@@ -115,6 +115,22 @@ export interface DeepnoteServerInfo {
     token?: string;
 }
 
+export const IDeepnoteServerProvider = Symbol('IDeepnoteServerProvider');
+export interface IDeepnoteServerProvider {
+    /**
+     * Register a server for a specific handle.
+     * Called by DeepnoteKernelAutoSelector when a server is started.
+     */
+    registerServer(handle: string, serverInfo: DeepnoteServerInfo): void;
+
+    /**
+     * Unregister a server for a specific handle.
+     * Called when the server is no longer needed or notebook is closed.
+     * No-op if the handle doesn't exist.
+     */
+    unregisterServer(handle: string): void;
+}
+
 export const IDeepnoteKernelAutoSelector = Symbol('IDeepnoteKernelAutoSelector');
 export interface IDeepnoteKernelAutoSelector {
     /**

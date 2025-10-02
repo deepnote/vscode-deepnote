@@ -30,6 +30,7 @@ import {
 } from './types';
 import { VSCodeNotebookController } from './vscodeNotebookController';
 import { IJupyterVariablesProvider } from '../../kernels/variables/types';
+import { DEEPNOTE_NOTEBOOK_TYPE } from '../../kernels/deepnote/types';
 
 /**
  * Keeps track of registered controllers and available KernelConnectionMetadatas.
@@ -236,14 +237,14 @@ export class ControllerRegistration implements IControllerRegistration, IExtensi
     }
     addOrUpdate(
         metadata: KernelConnectionMetadata,
-        types: ('jupyter-notebook' | 'interactive' | 'deepnote')[]
+        types: (typeof JupyterNotebookView | typeof InteractiveWindowView | typeof DEEPNOTE_NOTEBOOK_TYPE)[]
     ): IVSCodeNotebookController[] {
         const { added, existing } = this.addImpl(metadata, types, true);
         return added.concat(existing);
     }
     addImpl(
         metadata: KernelConnectionMetadata,
-        types: ('jupyter-notebook' | 'interactive' | 'deepnote')[],
+        types: (typeof JupyterNotebookView | typeof InteractiveWindowView | typeof DEEPNOTE_NOTEBOOK_TYPE)[],
         triggerChangeEvent: boolean
     ): { added: IVSCodeNotebookController[]; existing: IVSCodeNotebookController[] } {
         const added: IVSCodeNotebookController[] = [];

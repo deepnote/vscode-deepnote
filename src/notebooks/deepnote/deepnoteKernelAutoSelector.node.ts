@@ -11,6 +11,7 @@ import {
     IDeepnoteKernelAutoSelector,
     IDeepnoteServerStarter,
     IDeepnoteToolkitInstaller,
+    IDeepnoteServerProvider,
     DEEPNOTE_NOTEBOOK_TYPE,
     DeepnoteKernelConnectionMetadata
 } from '../../kernels/deepnote/types';
@@ -19,7 +20,6 @@ import { JVSC_EXTENSION_ID } from '../../platform/common/constants';
 import { getDisplayPath } from '../../platform/common/platform/fs-paths';
 import { JupyterServerProviderHandle } from '../../kernels/jupyter/types';
 import { IPythonExtensionChecker } from '../../platform/api/types';
-import { DeepnoteServerProvider } from '../../kernels/deepnote/deepnoteServerProvider.node';
 import { JupyterLabHelper } from '../../kernels/jupyter/session/jupyterLabHelper';
 import { createJupyterConnectionInfo } from '../../kernels/jupyter/jupyterUtils';
 import { IJupyterRequestCreator, IJupyterRequestAgentCreator } from '../../kernels/jupyter/types';
@@ -31,6 +31,9 @@ import { disposeAsync } from '../../platform/common/utils';
  */
 @injectable()
 export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, IExtensionSyncActivationService {
+    // Track server handles per notebook URI for cleanup
+    private readonly notebookServerHandles = new Map<string, string>();
+
     constructor(
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
         @inject(IControllerRegistration) private readonly controllerRegistration: IControllerRegistration,
@@ -38,7 +41,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         @inject(IDeepnoteToolkitInstaller) private readonly toolkitInstaller: IDeepnoteToolkitInstaller,
         @inject(IDeepnoteServerStarter) private readonly serverStarter: IDeepnoteServerStarter,
         @inject(IPythonExtensionChecker) private readonly pythonExtensionChecker: IPythonExtensionChecker,
-        @inject(DeepnoteServerProvider) private readonly serverProvider: DeepnoteServerProvider,
+        @inject(IDeepnoteServerProvider) private readonly serverProvider: IDeepnoteServerProvider,
         @inject(IJupyterRequestCreator) private readonly requestCreator: IJupyterRequestCreator,
         @inject(IJupyterRequestAgentCreator)
         @optional()
@@ -50,8 +53,13 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         // Listen to notebook open events
         workspace.onDidOpenNotebookDocument(this.onDidOpenNotebook, this, this.disposables);
 
-        // Handle currently open notebooks
-        workspace.notebookDocuments.forEach((d) => this.onDidOpenNotebook(d));
+        // Listen to notebook close events for cleanup
+        workspace.onDidCloseNotebookDocument(this.onDidCloseNotebook, this, this.disposables);
+
+        // Handle currently open notebooks - await all async operations
+        Promise.all(workspace.notebookDocuments.map((d) => this.onDidOpenNotebook(d))).catch((error) => {
+            logger.error(`Error handling open notebooks during activation: ${error}`);
+        });
     }
 
     private async onDidOpenNotebook(notebook: NotebookDocument) {
@@ -69,8 +77,34 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             return;
         }
 
-        // Auto-select Deepnote kernel
-        await this.ensureKernelSelected(notebook);
+        // Auto-select Deepnote kernel with error handling
+        try {
+            await this.ensureKernelSelected(notebook);
+        } catch (error) {
+            logger.error(`Failed to auto-select Deepnote kernel for ${getDisplayPath(notebook.uri)}: ${error}`);
+            // Don't rethrow - we want activation to continue even if one notebook fails
+        }
+    }
+
+    private onDidCloseNotebook(notebook: NotebookDocument) {
+        // Only handle deepnote notebooks
+        if (notebook.notebookType !== DEEPNOTE_NOTEBOOK_TYPE) {
+            return;
+        }
+
+        logger.info(`Deepnote notebook closed: ${getDisplayPath(notebook.uri)}`);
+
+        // Extract the base file URI to match what we used when registering
+        const baseFileUri = notebook.uri.with({ query: '', fragment: '' });
+        const notebookKey = baseFileUri.fsPath;
+
+        // Unregister the server if we have a handle for this notebook
+        const serverHandle = this.notebookServerHandles.get(notebookKey);
+        if (serverHandle) {
+            logger.info(`Unregistering server for closed notebook: ${serverHandle}`);
+            this.serverProvider.unregisterServer(serverHandle);
+            this.notebookServerHandles.delete(notebookKey);
+        }
     }
 
     public async ensureKernelSelected(notebook: NotebookDocument, token?: CancellationToken): Promise<void> {
@@ -120,6 +154,9 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
             // Register the server with the provider so it can be resolved
             this.serverProvider.registerServer(serverProviderHandle.handle, serverInfo);
+
+            // Track the server handle for cleanup when notebook is closed
+            this.notebookServerHandles.set(baseFileUri.fsPath, serverProviderHandle.handle);
 
             // Connect to the server and get available kernel specs
             const connectionInfo = createJupyterConnectionInfo(

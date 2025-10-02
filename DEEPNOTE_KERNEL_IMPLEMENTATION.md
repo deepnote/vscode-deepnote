@@ -61,7 +61,7 @@ This implementation adds automatic kernel selection and startup for `.deepnote` 
 - `resolveJupyterServer(server, token)`: Resolves server connection info by handle
 
 #### 5. **Deepnote Kernel Auto-Selector** (`src/notebooks/deepnote/deepnoteKernelAutoSelector.node.ts`)
-- Activation service that listens for notebook open events
+- Activation service that listens for notebook open events and controller selection changes
 - Automatically selects Deepnote kernel for `.deepnote` files
 - Queries the Deepnote server for available kernel specs
 - Uses an existing kernel spec from the server (e.g., `python3-venv`)
@@ -69,11 +69,16 @@ This implementation adds automatic kernel selection and startup for `.deepnote` 
 - Creates kernel connection metadata
 - Registers the controller with VSCode
 - Auto-selects the kernel for the notebook
+- **Reuses existing controllers and servers** for persistent kernel sessions
+- **Automatically reselects kernel** if it becomes unselected after errors
+- Tracks controllers per notebook file for efficient reuse
 
 **Key Methods:**
-- `activate()`: Registers event listeners
-- `ensureKernelSelected(notebook)`: Main logic for auto-selection
+- `activate()`: Registers event listeners for notebook open/close and controller selection changes
+- `ensureKernelSelected(notebook)`: Main logic for auto-selection and kernel reuse
 - `onDidOpenNotebook(notebook)`: Event handler for notebook opens
+- `onControllerSelectionChanged(event)`: Event handler for controller selection changes (auto-reselects if needed)
+- `onDidCloseNotebook(notebook)`: Event handler for notebook closes (preserves controllers for reuse)
 
 #### 6. **Service Registry Updates** (`src/notebooks/serviceRegistry.node.ts`)
 - Registers all new Deepnote kernel services
@@ -162,6 +167,9 @@ User runs cell → Executes on Deepnote kernel
 - **Clean integration**: Uses existing VSCode notebook controller infrastructure
 - **Proper server resolution**: Implements Jupyter server provider for proper kernel connection handling
 - **Compatible kernel specs**: Uses kernel specs that exist on the Deepnote server
+- **Persistent kernel sessions**: Controllers and servers remain available even after errors
+- **Automatic recovery**: If kernel becomes unselected, it's automatically reselected
+- **Seamless reusability**: Run cells as many times as you want without manual kernel selection
 
 ## Future Enhancements
 
@@ -246,6 +254,36 @@ Instead of creating custom kernel specs, the implementation:
 - Selects an existing Python kernel (typically `python3-venv`)
 - Uses this server-native kernel spec for the connection
 
-These changes ensure that Deepnote notebooks can execute cells properly by:
+### Issue 3: "Kernel becomes unregistered after errors"
+
+**Problem**: When a cell execution resulted in an error, the kernel controller would sometimes become unselected or disposed. Subsequent attempts to run cells would fail because no kernel was selected, requiring manual intervention.
+
+**Solution**: Implemented persistent kernel tracking and automatic reselection:
+- Controllers and connection metadata are stored per notebook file and reused across sessions
+- Listens to `onControllerSelectionChanged` events to detect when a Deepnote kernel becomes unselected
+- Automatically reselects the same kernel controller when it becomes deselected
+- Reuses existing servers and controllers instead of creating new ones
+- Ensures the same kernel remains available for the entire session, even after errors
+
+### Issue 4: "Controllers getting disposed causing repeated recreation"
+
+**Problem**: Controllers were being automatically disposed by VSCode's `ControllerRegistration` system when:
+1. The kernel finder refreshed its list of available kernels
+2. The Deepnote kernel wasn't in that list (because it's created dynamically)
+3. The `loadControllers()` method would dispose controllers that weren't in the kernel finder's list
+4. This led to a cycle of recreation, disposal, and race conditions
+
+**Root Cause**: The `ControllerRegistration.loadControllers()` method periodically checks if controllers are still valid by comparing them against the kernel finder's list. Controllers that aren't found and aren't "protected" get disposed. Deepnote controllers weren't protected, so they were being disposed and recreated repeatedly.
+
+**Solution**: Mark Deepnote controllers as protected using `trackActiveInterpreterControllers()`:
+- Call `controllerRegistration.trackActiveInterpreterControllers(controllers)` when creating Deepnote controllers
+- This adds them to the `_activeInterpreterControllerIds` set, which prevents disposal in `canControllerBeDisposed()`
+- Controllers are now created **once** and persist for the entire session
+- **No more recreation, no more debouncing, no more race conditions**
+- The same controller instance handles all cell executions, even after errors
+
+These changes ensure that Deepnote notebooks can execute cells reliably by:
 1. Providing a valid server provider that can be resolved
-2. Using kernel specs that actually exist on the Deepnote server
+2. Using kernel specs that actually exist on the Deepnote server  
+3. Maintaining persistent kernel sessions that survive errors and can be reused indefinitely
+4. **Preventing controller disposal entirely** - controllers are created once and reused forever

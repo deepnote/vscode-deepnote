@@ -25,19 +25,27 @@ This implementation adds automatic kernel selection and startup for `.deepnote` 
 #### 2. **Deepnote Toolkit Installer** (`src/kernels/deepnote/deepnoteToolkitInstaller.node.ts`)
 - Creates a dedicated virtual environment per `.deepnote` file
 - Checks if `deepnote-toolkit` is installed in the venv
-- Installs the toolkit from the hardcoded S3 wheel URL
+- Installs the toolkit and `ipykernel` from the hardcoded S3 wheel URL
+- **Registers a kernel spec** that points to the venv's Python interpreter
+- This ensures packages installed via `pip` are available to the kernel
 - Outputs installation progress to the output channel
 - Verifies successful installation
 - Reuses existing venvs for the same `.deepnote` file
 
 **Key Methods:**
 - `getVenvInterpreter(deepnoteFileUri)`: Gets the venv Python interpreter for a specific file
-- `ensureInstalled(interpreter, deepnoteFileUri)`: Creates venv and installs toolkit if needed
+- `ensureInstalled(interpreter, deepnoteFileUri)`: Creates venv, installs toolkit and ipykernel, and registers kernel spec
+- `getVenvHash(deepnoteFileUri)`: Creates a unique hash for kernel naming
+- `getDisplayName(deepnoteFileUri)`: Gets a friendly display name for the kernel
 
 #### 3. **Deepnote Server Starter** (`src/kernels/deepnote/deepnoteServerStarter.node.ts`)
 - Manages the lifecycle of deepnote-toolkit Jupyter servers (one per `.deepnote` file)
 - Finds an available port (starting from 8888)
 - Starts the server with `python -m deepnote_toolkit server --jupyter-port <port>`
+- **Sets environment variables** so shell commands use the venv's Python:
+  - Prepends venv's bin directory to `PATH`
+  - Sets `VIRTUAL_ENV` to the venv path
+  - Removes `PYTHONHOME` to avoid conflicts
 - Monitors server output and logs it
 - Waits for server to be ready before returning connection info
 - Reuses existing server for the same `.deepnote` file if already running
@@ -64,7 +72,9 @@ This implementation adds automatic kernel selection and startup for `.deepnote` 
 - Activation service that listens for notebook open events and controller selection changes
 - Automatically selects Deepnote kernel for `.deepnote` files
 - Queries the Deepnote server for available kernel specs
-- Uses an existing kernel spec from the server (e.g., `python3-venv`)
+- **Prefers the venv kernel spec** (`deepnote-venv-<hash>`) that uses the venv's Python interpreter
+- This ensures the kernel uses the same environment where packages are installed
+- Falls back to other Python kernel specs if venv kernel not found
 - Registers the server with the server provider
 - Creates kernel connection metadata
 - Registers the controller with VSCode
@@ -75,7 +85,7 @@ This implementation adds automatic kernel selection and startup for `.deepnote` 
 
 **Key Methods:**
 - `activate()`: Registers event listeners for notebook open/close and controller selection changes
-- `ensureKernelSelected(notebook)`: Main logic for auto-selection and kernel reuse
+- `ensureKernelSelected(notebook)`: Main logic for auto-selection, kernel spec selection, and kernel reuse
 - `onDidOpenNotebook(notebook)`: Event handler for notebook opens
 - `onControllerSelectionChanged(event)`: Event handler for controller selection changes (auto-reselects if needed)
 - `onDidCloseNotebook(notebook)`: Event handler for notebook closes (preserves controllers for reuse)
@@ -108,7 +118,9 @@ Check if venv exists for this file → Yes → Skip to server
         ↓ No
 Create venv for this .deepnote file
         ↓
-pip install <wheel-url> in venv
+pip install deepnote-toolkit[server] and ipykernel in venv
+        ↓
+Register kernel spec pointing to venv's Python
         ↓
 Verify installation
         ↓
@@ -126,7 +138,7 @@ Register server with DeepnoteServerProvider
         ↓
 Query server for available kernel specs
         ↓
-Select existing kernel spec (e.g., python3-venv)
+Select venv kernel spec (deepnote-venv-<hash>) or fall back to other Python kernel
         ↓
 Create DeepnoteKernelConnectionMetadata with server kernel spec
         ↓
@@ -145,7 +157,8 @@ User runs cell → Executes on Deepnote kernel
 - **Notebook Type**: `deepnote`
 - **Venv Location**: `~/.vscode/extensions/storage/deepnote-venvs/<file-path-hash>/`
 - **Server Provider ID**: `deepnote-server`
-- **Default Kernel**: Uses server's default Python kernel (typically `python3-venv`)
+- **Kernel Spec Name**: `deepnote-venv-<file-path-hash>` (registered via ipykernel to point to venv Python)
+- **Kernel Display Name**: `Deepnote (<notebook-filename>)`
 
 ## Usage
 
@@ -287,3 +300,27 @@ These changes ensure that Deepnote notebooks can execute cells reliably by:
 2. Using kernel specs that actually exist on the Deepnote server  
 3. Maintaining persistent kernel sessions that survive errors and can be reused indefinitely
 4. **Preventing controller disposal entirely** - controllers are created once and reused forever
+
+### Issue 5: "Packages installed via pip not available in kernel"
+
+**Problem**: When users ran `!pip install matplotlib`, the package was installed successfully, but when they tried to import it, they got `ModuleNotFoundError`. This happened because:
+1. The Jupyter server was running in the venv
+2. But the kernel was using a different Python interpreter (system Python or different environment)
+3. So `pip install` went to one environment, but imports came from another
+
+**Root Cause**: The kernel was using the venv's Python (correct), but shell commands (`!pip install`) were using the system Python or pyenv (wrong) because they inherit the shell's PATH environment variable.
+
+**Solution**: Two-part fix:
+1. **Kernel spec registration** (ensures kernel uses venv Python):
+   - Install `ipykernel` in the venv along with deepnote-toolkit
+   - Use `python -m ipykernel install --user --name deepnote-venv-<hash>` to register a kernel spec
+   - In the kernel selection logic, prefer the venv kernel spec (`deepnote-venv-<hash>`)
+
+2. **Environment variable configuration** (ensures shell commands use venv Python):
+   - When starting the Jupyter server, set environment variables:
+     - Prepend venv's `bin/` directory to `PATH`
+     - Set `VIRTUAL_ENV` to point to the venv
+     - Remove `PYTHONHOME` (can interfere with venv)
+   - This ensures `!pip install` and other shell commands use the venv's Python
+   
+**Result**: Both the kernel and shell commands now use the same Python environment (the venv), so packages installed via `!pip install` or `%pip install` are immediately available for import.

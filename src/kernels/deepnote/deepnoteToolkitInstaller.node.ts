@@ -157,14 +157,21 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                 return undefined;
             }
 
-            // Install deepnote-toolkit in venv
-            logger.info(`Installing deepnote-toolkit in venv from ${DEEPNOTE_TOOLKIT_WHEEL_URL}`);
-            this.outputChannel.appendLine('Installing deepnote-toolkit...');
+            // Install deepnote-toolkit and ipykernel in venv
+            logger.info(`Installing deepnote-toolkit and ipykernel in venv from ${DEEPNOTE_TOOLKIT_WHEEL_URL}`);
+            this.outputChannel.appendLine('Installing deepnote-toolkit and ipykernel...');
 
             const venvProcessService = await this.processServiceFactory.create(venvInterpreter.uri);
             const installResult = await venvProcessService.exec(
                 venvInterpreter.uri.fsPath,
-                ['-m', 'pip', 'install', '--upgrade', `deepnote-toolkit[server] @ ${DEEPNOTE_TOOLKIT_WHEEL_URL}`],
+                [
+                    '-m',
+                    'pip',
+                    'install',
+                    '--upgrade',
+                    `deepnote-toolkit[server] @ ${DEEPNOTE_TOOLKIT_WHEEL_URL}`,
+                    'ipykernel'
+                ],
                 { throwOnStdErr: false }
             );
 
@@ -180,6 +187,30 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             // Verify installation
             if (await this.isToolkitInstalled(venvInterpreter)) {
                 logger.info('deepnote-toolkit installed successfully in venv');
+
+                // Install kernel spec so the kernel uses this venv's Python
+                logger.info('Installing kernel spec for venv...');
+                try {
+                    await venvProcessService.exec(
+                        venvInterpreter.uri.fsPath,
+                        [
+                            '-m',
+                            'ipykernel',
+                            'install',
+                            '--user',
+                            '--name',
+                            `deepnote-venv-${this.getVenvHash(deepnoteFileUri)}`,
+                            '--display-name',
+                            `Deepnote (${this.getDisplayName(deepnoteFileUri)})`
+                        ],
+                        { throwOnStdErr: false }
+                    );
+                    logger.info('Kernel spec installed successfully');
+                } catch (ex) {
+                    logger.warn(`Failed to install kernel spec: ${ex}`);
+                    // Don't fail the entire installation if kernel spec creation fails
+                }
+
                 this.outputChannel.appendLine('✓ Deepnote toolkit ready');
                 return venvInterpreter;
             } else {
@@ -206,5 +237,17 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             logger.debug(`deepnote-toolkit not found: ${ex}`);
             return false;
         }
+    }
+
+    private getVenvHash(deepnoteFileUri: Uri): string {
+        // Create a short hash from the file path for kernel naming
+        const safePath = deepnoteFileUri.fsPath.replace(/[^a-zA-Z0-9]/g, '_');
+        return safePath.substring(0, 16); // Limit length
+    }
+
+    private getDisplayName(deepnoteFileUri: Uri): string {
+        // Get a friendly display name from the file path
+        const parts = deepnoteFileUri.fsPath.split('/');
+        return parts[parts.length - 1] || 'notebook';
     }
 }

@@ -253,8 +253,16 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 const kernelSpecs = await sessionManager.getKernelSpecs();
                 logger.info(`Available kernel specs on Deepnote server: ${kernelSpecs.map((s) => s.name).join(', ')}`);
 
-                // Use the first available Python kernel spec, or fall back to 'python3-venv'
+                // Create expected kernel name based on file path (same logic as in installer)
+                const safePath = baseFileUri.fsPath.replace(/[^a-zA-Z0-9]/g, '_');
+                const venvHash = safePath.substring(0, 16);
+                const expectedKernelName = `deepnote-venv-${venvHash}`;
+                logger.info(`Looking for venv kernel spec: ${expectedKernelName}`);
+
+                // Prefer the venv kernel spec that uses the venv's Python interpreter
+                // This ensures packages installed via pip are available to the kernel
                 kernelSpec =
+                    kernelSpecs.find((s) => s.name === expectedKernelName) ||
                     kernelSpecs.find((s) => s.language === 'python') ||
                     kernelSpecs.find((s) => s.name === 'python3-venv') ||
                     kernelSpecs[0];

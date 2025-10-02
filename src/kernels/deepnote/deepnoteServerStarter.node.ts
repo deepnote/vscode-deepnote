@@ -94,16 +94,29 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter {
         logger.info(`Starting deepnote-toolkit server on port ${port} for ${fileKey}`);
         this.outputChannel.appendLine(`Starting Deepnote server on port ${port} for ${deepnoteFileUri.fsPath}...`);
 
-        // Start the server
+        // Start the server with venv's Python in PATH
+        // This ensures shell commands (!) in notebooks use the venv's Python
         const processService = await this.processServiceFactory.create(interpreter.uri);
 
-        const serverProcess = processService.execObservable(interpreter.uri.fsPath, [
-            '-m',
-            'deepnote_toolkit',
-            'server',
-            '--jupyter-port',
-            port.toString()
-        ]);
+        // Set up environment to ensure the venv's Python is used for shell commands
+        const venvBinDir = interpreter.uri.fsPath.replace(/\/python$/, '').replace(/\\python\.exe$/, '');
+        const env = { ...process.env };
+
+        // Prepend venv bin directory to PATH so shell commands use venv's Python
+        env.PATH = `${venvBinDir}${process.platform === 'win32' ? ';' : ':'}${env.PATH || ''}`;
+
+        // Also set VIRTUAL_ENV to indicate we're in a venv
+        const venvPath = venvBinDir.replace(/\/bin$/, '').replace(/\\Scripts$/, '');
+        env.VIRTUAL_ENV = venvPath;
+
+        // Remove PYTHONHOME if it exists (can interfere with venv)
+        delete env.PYTHONHOME;
+
+        const serverProcess = processService.execObservable(
+            interpreter.uri.fsPath,
+            ['-m', 'deepnote_toolkit', 'server', '--jupyter-port', port.toString()],
+            { env }
+        );
 
         this.serverProcesses.set(fileKey, serverProcess);
 

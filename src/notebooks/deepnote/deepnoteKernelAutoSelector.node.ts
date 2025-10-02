@@ -2,7 +2,16 @@
 // Licensed under the MIT License.
 
 import { inject, injectable, optional } from 'inversify';
-import { CancellationToken, NotebookDocument, workspace, NotebookControllerAffinity } from 'vscode';
+import {
+    CancellationToken,
+    NotebookDocument,
+    workspace,
+    NotebookControllerAffinity,
+    window,
+    ProgressLocation,
+    notebooks,
+    NotebookController
+} from 'vscode';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { logger } from '../../platform/logging';
@@ -37,6 +46,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     private readonly notebookControllers = new Map<string, IVSCodeNotebookController>();
     // Track connection metadata per notebook file for reuse
     private readonly notebookConnectionMetadata = new Map<string, DeepnoteKernelConnectionMetadata>();
+    // Track temporary loading controllers that get disposed when real controller is ready
+    private readonly loadingControllers = new Map<string, NotebookController>();
 
     constructor(
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
@@ -82,13 +93,23 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         logger.info(`Deepnote notebook opened: ${getDisplayPath(notebook.uri)}`);
 
-        // Always try to ensure kernel is selected (this will reuse existing controllers)
-        try {
-            await this.ensureKernelSelected(notebook);
-        } catch (error) {
-            logger.error(`Failed to auto-select Deepnote kernel for ${getDisplayPath(notebook.uri)}: ${error}`);
-            // Don't rethrow - we want activation to continue even if one notebook fails
+        // Check if we already have a controller ready for this notebook
+        const baseFileUri = notebook.uri.with({ query: '', fragment: '' });
+        const notebookKey = baseFileUri.fsPath;
+        const hasExistingController = this.notebookControllers.has(notebookKey);
+
+        // If no existing controller, create a temporary "Loading" controller immediately
+        // This prevents the kernel selector from appearing when user clicks Run All
+        if (!hasExistingController) {
+            this.createLoadingController(notebook, notebookKey);
         }
+
+        // Always try to ensure kernel is selected (this will reuse existing controllers)
+        // Don't await - let it happen in background so notebook opens quickly
+        void this.ensureKernelSelected(notebook).catch((error) => {
+            logger.error(`Failed to auto-select Deepnote kernel for ${getDisplayPath(notebook.uri)}: ${error}`);
+            void window.showErrorMessage(`Failed to load Deepnote kernel: ${error}`);
+        });
     }
 
     private onControllerSelectionChanged(event: {
@@ -146,185 +167,264 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         }
     }
 
-    public async ensureKernelSelected(notebook: NotebookDocument, token?: CancellationToken): Promise<void> {
-        try {
-            logger.info(`Ensuring Deepnote kernel is selected for ${getDisplayPath(notebook.uri)}`);
+    public async ensureKernelSelected(notebook: NotebookDocument, _token?: CancellationToken): Promise<void> {
+        return window.withProgress(
+            {
+                location: ProgressLocation.Notification,
+                title: 'Loading Deepnote Kernel',
+                cancellable: true
+            },
+            async (progress, progressToken) => {
+                try {
+                    logger.info(`Ensuring Deepnote kernel is selected for ${getDisplayPath(notebook.uri)}`);
 
-            // Extract the base file URI (without query parameters)
-            // Notebooks from the same .deepnote file have different URIs with ?notebook=id query params
-            const baseFileUri = notebook.uri.with({ query: '', fragment: '' });
-            const notebookKey = baseFileUri.fsPath;
-            logger.info(`Base Deepnote file: ${getDisplayPath(baseFileUri)}`);
+                    // Extract the base file URI (without query parameters)
+                    // Notebooks from the same .deepnote file have different URIs with ?notebook=id query params
+                    const baseFileUri = notebook.uri.with({ query: '', fragment: '' });
+                    const notebookKey = baseFileUri.fsPath;
+                    logger.info(`Base Deepnote file: ${getDisplayPath(baseFileUri)}`);
 
-            // Check if we already have a controller for this notebook file
-            let existingController = this.notebookControllers.get(notebookKey);
-            const connectionMetadata = this.notebookConnectionMetadata.get(notebookKey);
+                    // Check if we already have a controller for this notebook file
+                    let existingController = this.notebookControllers.get(notebookKey);
+                    const connectionMetadata = this.notebookConnectionMetadata.get(notebookKey);
 
-            // If we have an existing controller, reuse it (controllers are now protected from disposal)
-            if (existingController && connectionMetadata) {
-                logger.info(
-                    `Reusing existing Deepnote controller ${existingController.id} for ${getDisplayPath(notebook.uri)}`
-                );
+                    // If we have an existing controller, reuse it (controllers are now protected from disposal)
+                    if (existingController && connectionMetadata) {
+                        logger.info(
+                            `Reusing existing Deepnote controller ${existingController.id} for ${getDisplayPath(
+                                notebook.uri
+                            )}`
+                        );
+                        progress.report({ message: 'Reusing existing kernel...' });
 
-                // Ensure server is registered with the provider (it might have been unregistered on close)
-                if (connectionMetadata.serverInfo) {
-                    const serverProviderHandle = connectionMetadata.serverProviderHandle;
-                    this.serverProvider.registerServer(serverProviderHandle.handle, connectionMetadata.serverInfo);
+                        // Ensure server is registered with the provider (it might have been unregistered on close)
+                        if (connectionMetadata.serverInfo) {
+                            const serverProviderHandle = connectionMetadata.serverProviderHandle;
+                            this.serverProvider.registerServer(
+                                serverProviderHandle.handle,
+                                connectionMetadata.serverInfo
+                            );
+                            this.notebookServerHandles.set(notebookKey, serverProviderHandle.handle);
+                            logger.info(`Re-registered server for reuse: ${serverProviderHandle.handle}`);
+                        }
+
+                        // Check if this controller is already selected for this notebook
+                        const selectedController = this.controllerRegistration.getSelected(notebook);
+                        if (selectedController && selectedController.id === existingController.id) {
+                            logger.info(`Controller already selected for ${getDisplayPath(notebook.uri)}`);
+                            return;
+                        }
+
+                        // Auto-select the existing controller for this notebook
+                        existingController.controller.updateNotebookAffinity(
+                            notebook,
+                            NotebookControllerAffinity.Preferred
+                        );
+                        logger.info(`Reselected existing Deepnote kernel for ${getDisplayPath(notebook.uri)}`);
+
+                        // Dispose the loading controller if it exists
+                        const loadingController = this.loadingControllers.get(notebookKey);
+                        if (loadingController) {
+                            loadingController.dispose();
+                            this.loadingControllers.delete(notebookKey);
+                            logger.info(`Disposed loading controller for ${notebookKey}`);
+                        }
+
+                        return;
+                    }
+
+                    // No existing controller, so create a new one
+                    logger.info(`Creating new Deepnote kernel for ${getDisplayPath(notebook.uri)}`);
+                    progress.report({ message: 'Setting up Deepnote kernel...' });
+
+                    // Check if Python extension is installed
+                    if (!this.pythonExtensionChecker.isPythonExtensionInstalled) {
+                        logger.warn('Python extension is not installed. Prompting user to install it.');
+                        await this.pythonExtensionChecker.showPythonExtensionInstallRequiredPrompt();
+                        return; // Exit - user needs to install Python extension first
+                    }
+
+                    // Get active Python interpreter
+                    progress.report({ message: 'Finding Python interpreter...' });
+                    const interpreter = await this.interpreterService.getActiveInterpreter(notebook.uri);
+                    if (!interpreter) {
+                        logger.warn(
+                            'No Python interpreter found for Deepnote notebook. Kernel selection will be manual.'
+                        );
+                        return; // Exit gracefully - user can select kernel manually
+                    }
+
+                    logger.info(`Using base interpreter: ${getDisplayPath(interpreter.uri)}`);
+
+                    // Ensure deepnote-toolkit is installed in a venv and get the venv interpreter
+                    progress.report({ message: 'Installing Deepnote toolkit...' });
+                    const venvInterpreter = await this.toolkitInstaller.ensureInstalled(
+                        interpreter,
+                        baseFileUri,
+                        progressToken
+                    );
+                    if (!venvInterpreter) {
+                        logger.error('Failed to set up Deepnote toolkit environment');
+                        return; // Exit gracefully
+                    }
+
+                    logger.info(`Deepnote toolkit venv ready at: ${getDisplayPath(venvInterpreter.uri)}`);
+
+                    // Start the Deepnote server using the venv interpreter
+                    progress.report({ message: 'Starting Deepnote server...' });
+                    const serverInfo = await this.serverStarter.getOrStartServer(
+                        venvInterpreter,
+                        baseFileUri,
+                        progressToken
+                    );
+                    logger.info(`Deepnote server running at ${serverInfo.url}`);
+
+                    // Create server provider handle
+                    const serverProviderHandle: JupyterServerProviderHandle = {
+                        extensionId: JVSC_EXTENSION_ID,
+                        id: 'deepnote-server',
+                        handle: `deepnote-toolkit-server-${baseFileUri.fsPath}`
+                    };
+
+                    // Register the server with the provider so it can be resolved
+                    this.serverProvider.registerServer(serverProviderHandle.handle, serverInfo);
+
+                    // Track the server handle for cleanup when notebook is closed
                     this.notebookServerHandles.set(notebookKey, serverProviderHandle.handle);
-                    logger.info(`Re-registered server for reuse: ${serverProviderHandle.handle}`);
+
+                    // Connect to the server and get available kernel specs
+                    progress.report({ message: 'Connecting to kernel...' });
+                    const connectionInfo = createJupyterConnectionInfo(
+                        serverProviderHandle,
+                        {
+                            baseUrl: serverInfo.url,
+                            token: serverInfo.token || '',
+                            displayName: 'Deepnote Server',
+                            authorizationHeader: {}
+                        },
+                        this.requestCreator,
+                        this.requestAgentCreator,
+                        this.configService,
+                        baseFileUri
+                    );
+
+                    const sessionManager = JupyterLabHelper.create(connectionInfo.settings);
+                    let kernelSpec;
+                    try {
+                        const kernelSpecs = await sessionManager.getKernelSpecs();
+                        logger.info(
+                            `Available kernel specs on Deepnote server: ${kernelSpecs.map((s) => s.name).join(', ')}`
+                        );
+
+                        // Create expected kernel name based on file path (same logic as in installer)
+                        const safePath = baseFileUri.fsPath.replace(/[^a-zA-Z0-9]/g, '_');
+                        const venvHash = safePath.substring(0, 16);
+                        const expectedKernelName = `deepnote-venv-${venvHash}`;
+                        logger.info(`Looking for venv kernel spec: ${expectedKernelName}`);
+
+                        // Prefer the venv kernel spec that uses the venv's Python interpreter
+                        // This ensures packages installed via pip are available to the kernel
+                        kernelSpec =
+                            kernelSpecs.find((s) => s.name === expectedKernelName) ||
+                            kernelSpecs.find((s) => s.language === 'python') ||
+                            kernelSpecs.find((s) => s.name === 'python3-venv') ||
+                            kernelSpecs[0];
+
+                        if (!kernelSpec) {
+                            throw new Error('No kernel specs available on Deepnote server');
+                        }
+
+                        logger.info(`Using kernel spec: ${kernelSpec.name} (${kernelSpec.display_name})`);
+                    } finally {
+                        await disposeAsync(sessionManager);
+                    }
+
+                    progress.report({ message: 'Finalizing kernel setup...' });
+                    const newConnectionMetadata = DeepnoteKernelConnectionMetadata.create({
+                        interpreter,
+                        kernelSpec,
+                        baseUrl: serverInfo.url,
+                        id: `deepnote-kernel-${interpreter.id}`,
+                        serverProviderHandle,
+                        serverInfo // Pass the server info so we can use it later
+                    });
+
+                    // Store connection metadata for reuse
+                    this.notebookConnectionMetadata.set(notebookKey, newConnectionMetadata);
+
+                    // Register controller for deepnote notebook type
+                    const controllers = this.controllerRegistration.addOrUpdate(newConnectionMetadata, [
+                        DEEPNOTE_NOTEBOOK_TYPE
+                    ]);
+
+                    if (controllers.length === 0) {
+                        logger.error('Failed to create Deepnote kernel controller');
+                        throw new Error('Failed to create Deepnote kernel controller');
+                    }
+
+                    const controller = controllers[0];
+                    logger.info(`Created Deepnote kernel controller: ${controller.id}`);
+
+                    // Store the controller for reuse
+                    this.notebookControllers.set(notebookKey, controller);
+
+                    // Mark this controller as protected so it won't be automatically disposed
+                    // This is similar to how active interpreter controllers are protected
+                    this.controllerRegistration.trackActiveInterpreterControllers(controllers);
+                    logger.info(`Marked Deepnote controller as protected from automatic disposal`);
+
+                    // Listen to controller disposal so we can clean up our tracking
+                    controller.onDidDispose(() => {
+                        logger.info(`Deepnote controller ${controller!.id} disposed, removing from tracking`);
+                        this.notebookControllers.delete(notebookKey);
+                        // Keep connection metadata for quick recreation
+                        // The metadata is still valid and can be used to recreate the controller
+                    });
+
+                    // Auto-select the controller for this notebook using affinity
+                    // Setting NotebookControllerAffinity.Preferred will make VSCode automatically select this controller
+                    controller.controller.updateNotebookAffinity(notebook, NotebookControllerAffinity.Preferred);
+
+                    logger.info(`Successfully auto-selected Deepnote kernel for ${getDisplayPath(notebook.uri)}`);
+                    progress.report({ message: 'Kernel ready!' });
+
+                    // Dispose the loading controller once the real one is ready
+                    const loadingController = this.loadingControllers.get(notebookKey);
+                    if (loadingController) {
+                        loadingController.dispose();
+                        this.loadingControllers.delete(notebookKey);
+                        logger.info(`Disposed loading controller for ${notebookKey}`);
+                    }
+                } catch (ex) {
+                    logger.error(`Failed to auto-select Deepnote kernel: ${ex}`);
+                    throw ex;
                 }
-
-                // Check if this controller is already selected for this notebook
-                const selectedController = this.controllerRegistration.getSelected(notebook);
-                if (selectedController && selectedController.id === existingController.id) {
-                    logger.info(`Controller already selected for ${getDisplayPath(notebook.uri)}`);
-                    return;
-                }
-
-                // Auto-select the existing controller for this notebook
-                existingController.controller.updateNotebookAffinity(notebook, NotebookControllerAffinity.Preferred);
-                logger.info(`Reselected existing Deepnote kernel for ${getDisplayPath(notebook.uri)}`);
-                return;
             }
+        );
+    }
 
-            // No existing controller, so create a new one
-            logger.info(`Creating new Deepnote kernel for ${getDisplayPath(notebook.uri)}`);
+    private createLoadingController(notebook: NotebookDocument, notebookKey: string): void {
+        // Create a temporary controller that shows "Loading..." and prevents kernel selection prompt
+        const loadingController = notebooks.createNotebookController(
+            `deepnote-loading-${notebookKey}`,
+            DEEPNOTE_NOTEBOOK_TYPE,
+            'Loading Deepnote Kernel...'
+        );
 
-            // Check if Python extension is installed
-            if (!this.pythonExtensionChecker.isPythonExtensionInstalled) {
-                logger.warn('Python extension is not installed. Prompting user to install it.');
-                await this.pythonExtensionChecker.showPythonExtensionInstallRequiredPrompt();
-                return; // Exit - user needs to install Python extension first
-            }
+        // Set it as the preferred controller immediately
+        loadingController.supportsExecutionOrder = false;
+        loadingController.supportedLanguages = ['python'];
 
-            // Get active Python interpreter
-            const interpreter = await this.interpreterService.getActiveInterpreter(notebook.uri);
-            if (!interpreter) {
-                logger.warn('No Python interpreter found for Deepnote notebook. Kernel selection will be manual.');
-                return; // Exit gracefully - user can select kernel manually
-            }
+        // Execution handler that does nothing - cells will just sit there until real kernel is ready
+        loadingController.executeHandler = () => {
+            // No-op: execution is blocked until the real controller takes over
+        };
 
-            logger.info(`Using base interpreter: ${getDisplayPath(interpreter.uri)}`);
+        // Select this controller for the notebook
+        loadingController.updateNotebookAffinity(notebook, NotebookControllerAffinity.Preferred);
 
-            // Ensure deepnote-toolkit is installed in a venv and get the venv interpreter
-            const venvInterpreter = await this.toolkitInstaller.ensureInstalled(interpreter, baseFileUri, token);
-            if (!venvInterpreter) {
-                logger.error('Failed to set up Deepnote toolkit environment');
-                return; // Exit gracefully
-            }
-
-            logger.info(`Deepnote toolkit venv ready at: ${getDisplayPath(venvInterpreter.uri)}`);
-
-            // Start the Deepnote server using the venv interpreter
-            const serverInfo = await this.serverStarter.getOrStartServer(venvInterpreter, baseFileUri, token);
-            logger.info(`Deepnote server running at ${serverInfo.url}`);
-
-            // Create server provider handle
-            const serverProviderHandle: JupyterServerProviderHandle = {
-                extensionId: JVSC_EXTENSION_ID,
-                id: 'deepnote-server',
-                handle: `deepnote-toolkit-server-${baseFileUri.fsPath}`
-            };
-
-            // Register the server with the provider so it can be resolved
-            this.serverProvider.registerServer(serverProviderHandle.handle, serverInfo);
-
-            // Track the server handle for cleanup when notebook is closed
-            this.notebookServerHandles.set(notebookKey, serverProviderHandle.handle);
-
-            // Connect to the server and get available kernel specs
-            const connectionInfo = createJupyterConnectionInfo(
-                serverProviderHandle,
-                {
-                    baseUrl: serverInfo.url,
-                    token: serverInfo.token || '',
-                    displayName: 'Deepnote Server',
-                    authorizationHeader: {}
-                },
-                this.requestCreator,
-                this.requestAgentCreator,
-                this.configService,
-                baseFileUri
-            );
-
-            const sessionManager = JupyterLabHelper.create(connectionInfo.settings);
-            let kernelSpec;
-            try {
-                const kernelSpecs = await sessionManager.getKernelSpecs();
-                logger.info(`Available kernel specs on Deepnote server: ${kernelSpecs.map((s) => s.name).join(', ')}`);
-
-                // Create expected kernel name based on file path (same logic as in installer)
-                const safePath = baseFileUri.fsPath.replace(/[^a-zA-Z0-9]/g, '_');
-                const venvHash = safePath.substring(0, 16);
-                const expectedKernelName = `deepnote-venv-${venvHash}`;
-                logger.info(`Looking for venv kernel spec: ${expectedKernelName}`);
-
-                // Prefer the venv kernel spec that uses the venv's Python interpreter
-                // This ensures packages installed via pip are available to the kernel
-                kernelSpec =
-                    kernelSpecs.find((s) => s.name === expectedKernelName) ||
-                    kernelSpecs.find((s) => s.language === 'python') ||
-                    kernelSpecs.find((s) => s.name === 'python3-venv') ||
-                    kernelSpecs[0];
-
-                if (!kernelSpec) {
-                    throw new Error('No kernel specs available on Deepnote server');
-                }
-
-                logger.info(`Using kernel spec: ${kernelSpec.name} (${kernelSpec.display_name})`);
-            } finally {
-                await disposeAsync(sessionManager);
-            }
-
-            const newConnectionMetadata = DeepnoteKernelConnectionMetadata.create({
-                interpreter,
-                kernelSpec,
-                baseUrl: serverInfo.url,
-                id: `deepnote-kernel-${interpreter.id}`,
-                serverProviderHandle,
-                serverInfo // Pass the server info so we can use it later
-            });
-
-            // Store connection metadata for reuse
-            this.notebookConnectionMetadata.set(notebookKey, newConnectionMetadata);
-
-            // Register controller for deepnote notebook type
-            const controllers = this.controllerRegistration.addOrUpdate(newConnectionMetadata, [
-                DEEPNOTE_NOTEBOOK_TYPE
-            ]);
-
-            if (controllers.length === 0) {
-                logger.error('Failed to create Deepnote kernel controller');
-                throw new Error('Failed to create Deepnote kernel controller');
-            }
-
-            const controller = controllers[0];
-            logger.info(`Created Deepnote kernel controller: ${controller.id}`);
-
-            // Store the controller for reuse
-            this.notebookControllers.set(notebookKey, controller);
-
-            // Mark this controller as protected so it won't be automatically disposed
-            // This is similar to how active interpreter controllers are protected
-            this.controllerRegistration.trackActiveInterpreterControllers(controllers);
-            logger.info(`Marked Deepnote controller as protected from automatic disposal`);
-
-            // Listen to controller disposal so we can clean up our tracking
-            controller.onDidDispose(() => {
-                logger.info(`Deepnote controller ${controller!.id} disposed, removing from tracking`);
-                this.notebookControllers.delete(notebookKey);
-                // Keep connection metadata for quick recreation
-                // The metadata is still valid and can be used to recreate the controller
-            });
-
-            // Auto-select the controller for this notebook using affinity
-            // Setting NotebookControllerAffinity.Preferred will make VSCode automatically select this controller
-            controller.controller.updateNotebookAffinity(notebook, NotebookControllerAffinity.Preferred);
-
-            logger.info(`Successfully auto-selected Deepnote kernel for ${getDisplayPath(notebook.uri)}`);
-        } catch (ex) {
-            logger.error(`Failed to auto-select Deepnote kernel: ${ex}`);
-            throw ex;
-        }
+        // Store it so we can dispose it later
+        this.loadingControllers.set(notebookKey, loadingController);
+        logger.info(`Created loading controller for ${notebookKey}`);
     }
 }

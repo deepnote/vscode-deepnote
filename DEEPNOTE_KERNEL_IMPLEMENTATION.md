@@ -163,12 +163,21 @@ User runs cell → Executes on Deepnote kernel
 ## Usage
 
 1. **Open a .deepnote file** in VSCode
-2. **Click "Run All"** or run any cell
-3. The extension will:
-   - Show "Installing deepnote-toolkit..." in output (if needed)
-   - Show "Starting Deepnote server on port..." in output
-   - Automatically select the Deepnote kernel
-   - Execute the cell
+   - A temporary "Loading Deepnote Kernel..." controller is automatically selected
+   - A progress notification appears in the bottom-right
+2. **You can immediately click "Run All" or run individual cells**
+   - Cells will wait for the kernel to be ready before executing
+   - No kernel selection dialog will appear
+3. **Once the progress notification shows "Kernel ready!"**:
+   - The loading controller is automatically replaced with the real Deepnote kernel
+   - Your cells start executing
+4. The extension automatically:
+   - Installs deepnote-toolkit in a dedicated virtual environment (first time only)
+   - Starts a Deepnote server on an available port (if not already running)
+   - Selects the appropriate Deepnote kernel
+   - Executes your cells
+
+**First-time setup** takes 15-30 seconds. **Subsequent opens** of the same file reuse the existing environment and server, taking less than 1 second.
 
 ## Benefits
 
@@ -184,6 +193,50 @@ User runs cell → Executes on Deepnote kernel
 - **Automatic recovery**: If kernel becomes unselected, it's automatically reselected
 - **Seamless reusability**: Run cells as many times as you want without manual kernel selection
 
+## UI Customization
+
+### Hidden UI Elements for Deepnote Notebooks
+
+To provide a cleaner experience for Deepnote notebooks, the following UI elements are hidden when working with `.deepnote` files:
+
+1. **Notebook Toolbar Buttons:**
+   - Restart Kernel
+   - Variable View
+   - Outline View
+   - Export
+   - Codespace Integration
+
+2. **Cell Title Menu Items:**
+   - Run by Line
+   - Run by Line Next/Stop
+   - Select Precedent/Dependent Cells
+
+3. **Cell Execute Menu Items:**
+   - Run and Debug Cell
+   - Run Precedent/Dependent Cells
+
+These items are hidden by adding `notebookType != 'deepnote'` conditions to the `when` clauses in `package.json`. The standard cell run buttons (play icons) remain visible as they are the primary way to execute cells.
+
+### Progress Indicators
+
+The extension shows a visual progress notification while the Deepnote kernel is being set up:
+
+- **Location**: Notification area (bottom-right)
+- **Title**: "Loading Deepnote Kernel"
+- **Cancellable**: Yes
+- **Progress Steps**:
+  1. "Setting up Deepnote kernel..."
+  2. "Finding Python interpreter..."
+  3. "Installing Deepnote toolkit..." (shown if installation is needed)
+  4. "Starting Deepnote server..." (shown if server needs to be started)
+  5. "Connecting to kernel..."
+  6. "Finalizing kernel setup..."
+  7. "Kernel ready!"
+
+For notebooks that already have a running kernel, the notification shows "Reusing existing kernel..." and completes quickly.
+
+**Important**: When you first open a `.deepnote` file, a temporary "Loading Deepnote Kernel..." controller is automatically selected. This prevents the kernel selection dialog from appearing. The kernel setup happens automatically in the background. During this loading period (typically 5-30 seconds for first-time setup, < 1 second for subsequent opens), if you try to run cells, they will wait until the real kernel is ready. Once ready, the loading controller is automatically replaced with the real Deepnote kernel and your cells will execute.
+
 ## Future Enhancements
 
 1. **PyPI Package**: Replace S3 URL with PyPI package name once published
@@ -191,7 +244,6 @@ User runs cell → Executes on Deepnote kernel
 3. **Server Management UI**: Add commands to start/stop/restart servers for specific files
 4. **Venv Cleanup**: Add command to clean up unused venvs
 5. **Error Recovery**: Better handling of server crashes and auto-restart
-6. **Progress Indicators**: Visual feedback during installation and startup
 
 ## Testing
 

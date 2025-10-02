@@ -710,80 +710,80 @@
                 {
                     "command": "jupyter.restartkernel",
                     "group": "navigation/execute@5",
-                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && notebookType == 'jupyter-notebook' && isWorkspaceTrusted && jupyter.kernel.isjupyter"
+                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && notebookType == 'jupyter-notebook' && notebookType != 'deepnote' && isWorkspaceTrusted && jupyter.kernel.isjupyter"
                 },
                 {
                     "command": "jupyter.openVariableView",
                     "group": "navigation@1",
-                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && notebookType == 'jupyter-notebook' && isWorkspaceTrusted && jupyter.ispythonnotebook && jupyter.kernel.isjupyter"
+                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && notebookType == 'jupyter-notebook' && notebookType != 'deepnote' && isWorkspaceTrusted && jupyter.ispythonnotebook && jupyter.kernel.isjupyter"
                 },
                 {
                     "command": "jupyter.openOutlineView",
                     "group": "navigation@2",
-                    "when": "notebookType == 'jupyter-notebook' && config.jupyter.showOutlineButtonInNotebookToolbar"
+                    "when": "notebookType == 'jupyter-notebook' && notebookType != 'deepnote' && config.jupyter.showOutlineButtonInNotebookToolbar"
                 },
                 {
                     "command": "jupyter.continueEditSessionInCodespace",
                     "group": "navigation@3",
-                    "when": "notebookType == 'jupyter-notebook' && jupyter.kernelSource == 'github-codespaces'"
+                    "when": "notebookType == 'jupyter-notebook' && notebookType != 'deepnote' && jupyter.kernelSource == 'github-codespaces'"
                 },
                 {
                     "command": "jupyter.notebookeditor.export",
                     "group": "Jupyter",
-                    "when": "notebookType == 'jupyter-notebook' && isWorkspaceTrusted"
+                    "when": "notebookType == 'jupyter-notebook' && notebookType != 'deepnote' && isWorkspaceTrusted"
                 },
                 {
                     "command": "jupyter.replayPylanceLogStep",
                     "group": "navigation@1",
-                    "when": "notebookType == 'jupyter-notebook' && isWorkspaceTrusted && jupyter.replayLogLoaded"
+                    "when": "notebookType == 'jupyter-notebook' && notebookType != 'deepnote' && isWorkspaceTrusted && jupyter.replayLogLoaded"
                 }
             ],
             "notebook/cell/title": [
                 {
                     "command": "jupyter.runByLine",
-                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && notebookType == jupyter-notebook && jupyter.ispythonnotebook && notebookCellType == code && isWorkspaceTrusted && resource not in jupyter.notebookeditor.runByLineDocuments || !notebookKernel && notebookType == jupyter-notebook && jupyter.ispythonnotebook && notebookCellType == code && isWorkspaceTrusted",
+                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && notebookType == jupyter-notebook && notebookType != deepnote && jupyter.ispythonnotebook && notebookCellType == code && isWorkspaceTrusted && resource not in jupyter.notebookeditor.runByLineDocuments || !notebookKernel && notebookType == jupyter-notebook && notebookType != deepnote && jupyter.ispythonnotebook && notebookCellType == code && isWorkspaceTrusted",
                     "group": "inline/cell@0"
                 },
                 {
                     "command": "jupyter.runByLineNext",
-                    "when": "notebookCellResource in jupyter.notebookeditor.runByLineCells",
+                    "when": "notebookCellResource in jupyter.notebookeditor.runByLineCells && notebookType != deepnote",
                     "group": "inline/cell@0"
                 },
                 {
                     "command": "jupyter.runByLineStop",
-                    "when": "notebookCellResource in jupyter.notebookeditor.runByLineCells && notebookCellToolbarLocation == left",
+                    "when": "notebookCellResource in jupyter.notebookeditor.runByLineCells && notebookType != deepnote && notebookCellToolbarLocation == left",
                     "group": "inline/cell@1"
                 },
                 {
                     "command": "jupyter.runByLineStop",
-                    "when": "notebookCellResource in jupyter.notebookeditor.runByLineCells && notebookCellToolbarLocation == right",
+                    "when": "notebookCellResource in jupyter.notebookeditor.runByLineCells && notebookType != deepnote && notebookCellToolbarLocation == right",
                     "group": "inline/cell@0"
                 },
                 {
                     "command": "jupyter.selectPrecedentCells",
-                    "when": "notebookType == 'jupyter-notebook' && isWorkspaceTrusted && config.jupyter.executionAnalysis.enabled",
+                    "when": "notebookType == 'jupyter-notebook' && notebookType != 'deepnote' && isWorkspaceTrusted && config.jupyter.executionAnalysis.enabled",
                     "group": "executionAnalysis@0"
                 },
                 {
                     "command": "jupyter.selectDependentCells",
-                    "when": "notebookType == 'jupyter-notebook' && isWorkspaceTrusted && config.jupyter.executionAnalysis.enabled",
+                    "when": "notebookType == 'jupyter-notebook' && notebookType != 'deepnote' && isWorkspaceTrusted && config.jupyter.executionAnalysis.enabled",
                     "group": "executionAnalysis@1"
                 }
             ],
             "notebook/cell/execute": [
                 {
                     "command": "jupyter.runAndDebugCell",
-                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && jupyter.ispythonnotebook && notebookCellType == code && isWorkspaceTrusted && resource not in jupyter.notebookeditor.debugDocuments || !notebookKernel && jupyter.ispythonnotebook && notebookCellType == code && isWorkspaceTrusted",
+                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && jupyter.ispythonnotebook && notebookType != deepnote && notebookCellType == code && isWorkspaceTrusted && resource not in jupyter.notebookeditor.debugDocuments || !notebookKernel && jupyter.ispythonnotebook && notebookType != deepnote && notebookCellType == code && isWorkspaceTrusted",
                     "group": "jupyterCellExecute@0"
                 },
                 {
                     "command": "jupyter.runPrecedentCells",
-                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && jupyter.ispythonnotebook && notebookCellType == code && isWorkspaceTrusted && config.jupyter.executionAnalysis.enabled",
+                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && jupyter.ispythonnotebook && notebookType != deepnote && notebookCellType == code && isWorkspaceTrusted && config.jupyter.executionAnalysis.enabled",
                     "group": "jupyterCellExecute@1"
                 },
                 {
                     "command": "jupyter.runDependentCells",
-                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && jupyter.ispythonnotebook && notebookCellType == code && isWorkspaceTrusted && config.jupyter.executionAnalysis.enabled",
+                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && jupyter.ispythonnotebook && notebookType != deepnote && notebookCellType == code && isWorkspaceTrusted && config.jupyter.executionAnalysis.enabled",
                     "group": "jupyterCellExecute@2"
                 }
             ],

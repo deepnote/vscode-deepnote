@@ -172,7 +172,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                     `deepnote-toolkit[server] @ ${DEEPNOTE_TOOLKIT_WHEEL_URL}`,
                     'ipykernel'
                 ],
-                { throwOnStdErr: false }
+                { throwOnStdErr: true }
             );
 
             Cancellation.throwIfCanceled(token);

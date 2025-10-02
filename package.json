@@ -2055,6 +2055,7 @@
         "build:prerelease": "cross-env IS_PRE_RELEASE_VERSION_OF_JUPYTER_EXTENSION=true npm run build",
         "build:stable": "cross-env IS_PRE_RELEASE_VERSION_OF_JUPYTER_EXTENSION=false npm run build",
         "build": "concurrently npm:compile-release npm:updatePackageJsonForBundle",
+        "check-licenses": "npx license-checker-rseidelsohn --onlyAllow 'MIT;Apache-2.0;ISC;BSD-2-Clause;BSD-3-Clause;0BSD;Python-2.0;CC0-1.0;CC-BY-3.0;CC-BY-4.0;Unlicense;BlueOak-1.0.0' --excludePrivatePackages",
         "checkDependencies": "gulp checkDependencies",
         "clean": "gulp clean",
         "compile-esbuild-watch": "npx tsx build/esbuild/build.ts --watch",

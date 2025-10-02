@@ -112,10 +112,17 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter {
         // Remove PYTHONHOME if it exists (can interfere with venv)
         delete env.PYTHONHOME;
 
+        // Get the directory containing the notebook file to set as working directory
+        // This ensures relative file paths in the notebook work correctly
+        const notebookDir = Uri.joinPath(deepnoteFileUri, '..').fsPath;
+
         const serverProcess = processService.execObservable(
             interpreter.uri.fsPath,
             ['-m', 'deepnote_toolkit', 'server', '--jupyter-port', port.toString()],
-            { env }
+            {
+                env,
+                cwd: notebookDir
+            }
         );
 
         this.serverProcesses.set(fileKey, serverProcess);

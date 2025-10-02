@@ -32,7 +32,7 @@ Converters are registered in a `ConverterRegistry` and retrieved based on block 
 
 When opening a Deepnote notebook in VS Code:
 
-```
+```text
 Deepnote YAML File
     ↓
 Parse YAML (js-yaml)
@@ -58,7 +58,7 @@ VS Code NotebookData with cells
 
 When saving a notebook in VS Code:
 
-```
+```text
 VS Code NotebookData with cells
     ↓
 For each cell:
@@ -225,6 +225,7 @@ test('my-block-type round-trips correctly', () => {
 ## Important Guidelines
 
 ### DO:
+
 - ✅ Use the pocket system for Deepnote-specific fields
 - ✅ Preserve all block metadata during conversion
 - ✅ Test round-trip conversion (blocks → cells → blocks)
@@ -232,6 +233,7 @@ test('my-block-type round-trips correctly', () => {
 - ✅ Use `assert.deepStrictEqual()` for object comparisons in tests
 
 ### DON'T:
+
 - ❌ Store Deepnote-specific data directly in cell metadata (use the pocket)
 - ❌ Modify the pocket in converters (it's managed automatically)
 - ❌ Assume all optional fields exist (check for undefined)

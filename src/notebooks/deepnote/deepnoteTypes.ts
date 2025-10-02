@@ -34,6 +34,7 @@ export interface DeepnoteNotebook {
  * Can be either a code block or a markdown block.
  */
 export interface DeepnoteBlock {
+    blockGroup?: string;
     content: string;
     executionCount?: number;
     id: string;

@@ -9,7 +9,7 @@ export class CodeBlockConverter implements BlockConverter {
     }
 
     canConvert(blockType: string): boolean {
-        return blockType === 'code';
+        return blockType.toLowerCase() === 'code';
     }
 
     convertToCell(block: DeepnoteBlock): NotebookCellData {

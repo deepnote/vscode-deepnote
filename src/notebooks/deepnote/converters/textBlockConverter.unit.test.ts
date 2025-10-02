@@ -135,6 +135,20 @@ suite('TextBlockConverter', () => {
             assert.strictEqual(block.content, 'New Title');
         });
 
+        test('strips # prefix with leading whitespace from h1 cell', () => {
+            const block: DeepnoteBlock = {
+                content: 'old content',
+                id: 'block-123',
+                sortingKey: 'a0',
+                type: 'text-cell-h1'
+            };
+            const cell = new NotebookCellData(NotebookCellKind.Markup, '  # New Title', 'markdown');
+
+            converter.applyChangesToBlock(block, cell);
+
+            assert.strictEqual(block.content, 'New Title');
+        });
+
         test('strips ## prefix from h2 cell', () => {
             const block: DeepnoteBlock = {
                 content: 'old content',
@@ -149,6 +163,20 @@ suite('TextBlockConverter', () => {
             assert.strictEqual(block.content, 'New Section');
         });
 
+        test('strips ## prefix with leading whitespace from h2 cell', () => {
+            const block: DeepnoteBlock = {
+                content: 'old content',
+                id: 'block-123',
+                sortingKey: 'a0',
+                type: 'text-cell-h2'
+            };
+            const cell = new NotebookCellData(NotebookCellKind.Markup, '   ## New Section', 'markdown');
+
+            converter.applyChangesToBlock(block, cell);
+
+            assert.strictEqual(block.content, 'New Section');
+        });
+
         test('strips ### prefix from h3 cell', () => {
             const block: DeepnoteBlock = {
                 content: 'old content',
@@ -157,6 +185,20 @@ suite('TextBlockConverter', () => {
                 type: 'text-cell-h3'
             };
             const cell = new NotebookCellData(NotebookCellKind.Markup, '### New Subsection', 'markdown');
+
+            converter.applyChangesToBlock(block, cell);
+
+            assert.strictEqual(block.content, 'New Subsection');
+        });
+
+        test('strips ### prefix with leading whitespace from h3 cell', () => {
+            const block: DeepnoteBlock = {
+                content: 'old content',
+                id: 'block-123',
+                sortingKey: 'a0',
+                type: 'text-cell-h3'
+            };
+            const cell = new NotebookCellData(NotebookCellKind.Markup, '\t### New Subsection', 'markdown');
 
             converter.applyChangesToBlock(block, cell);
 

@@ -10,11 +10,11 @@ export class TextBlockConverter implements BlockConverter {
         let value = cell.value || '';
 
         if (block.type === 'text-cell-h1') {
-            value = value.replace(/^#\s+/, '');
+            value = value.replace(/^\s*#\s+/, '');
         } else if (block.type === 'text-cell-h2') {
-            value = value.replace(/^##\s+/, '');
+            value = value.replace(/^\s*##\s+/, '');
         } else if (block.type === 'text-cell-h3') {
-            value = value.replace(/^###\s+/, '');
+            value = value.replace(/^\s*###\s+/, '');
         }
 
         block.content = value;
@@ -43,6 +43,6 @@ export class TextBlockConverter implements BlockConverter {
     }
 
     getSupportedTypes(): string[] {
-        return TextBlockConverter.textBlockTypes;
+        return [...TextBlockConverter.textBlockTypes];
     }
 }

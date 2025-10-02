@@ -3,7 +3,7 @@ import type { NotebookCellData } from 'vscode';
 import type { DeepnoteBlock, DeepnoteOutput } from './deepnoteTypes';
 import { generateBlockId, generateSortingKey } from './dataConversionUtils';
 
-const deepnoteBlockSpecificFields: string[] = ['blockGroup', 'executionCount', 'id', 'outputs', 'sortingKey', 'type'];
+const deepnoteBlockSpecificFields = ['blockGroup', 'executionCount', 'id', 'outputs', 'sortingKey', 'type'] as const;
 
 // Stores extra Deepnote-specific fields for each block that are not part of the standard VSCode NotebookCellData structure.
 export interface Pocket {
@@ -53,7 +53,7 @@ export function createBlockFromPocket(cell: NotebookCellData, index: number): De
     }
 
     const block: DeepnoteBlock = {
-        content: '',
+        content: cell.value,
         id: pocket?.id || generateBlockId(),
         metadata,
         sortingKey: pocket?.sortingKey || generateSortingKey(index),
@@ -62,7 +62,7 @@ export function createBlockFromPocket(cell: NotebookCellData, index: number): De
 
     // Only add optional fields if they exist
     if (pocket?.blockGroup) {
-        (block as DeepnoteBlock & { blockGroup?: string }).blockGroup = pocket.blockGroup;
+        block.blockGroup = pocket.blockGroup;
     }
 
     if (pocket?.executionCount !== undefined) {

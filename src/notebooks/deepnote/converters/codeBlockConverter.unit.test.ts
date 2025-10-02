@@ -16,6 +16,12 @@ suite('CodeBlockConverter', () => {
             assert.isTrue(converter.canConvert('code'));
         });
 
+        test('canConvert ignores case', () => {
+            assert.isTrue(converter.canConvert('CODE'));
+            assert.isTrue(converter.canConvert('Code'));
+            assert.isTrue(converter.canConvert('CoDe'));
+        });
+
         test('returns false for non-code types', () => {
             assert.isFalse(converter.canConvert('markdown'));
             assert.isFalse(converter.canConvert('text-cell-h1'));

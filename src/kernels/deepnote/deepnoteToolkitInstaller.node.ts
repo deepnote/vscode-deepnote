@@ -29,10 +29,10 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
     ) {}
 
     private getVenvPath(deepnoteFileUri: Uri): Uri {
-        // Create a unique venv name based on the file path
-        // Use a simple hash approach - replace special chars with underscores
-        const safePath = deepnoteFileUri.fsPath.replace(/[^a-zA-Z0-9]/g, '_');
-        return Uri.joinPath(this.context.globalStorageUri, 'deepnote-venvs', safePath);
+        // Create a unique venv name based on the file path using a hash
+        // This avoids Windows MAX_PATH issues and prevents directory structure leakage
+        const hash = this.getVenvHash(deepnoteFileUri);
+        return Uri.joinPath(this.context.globalStorageUri, 'deepnote-venvs', hash);
     }
 
     public async getVenvInterpreter(deepnoteFileUri: Uri): Promise<PythonEnvironment | undefined> {
@@ -240,9 +240,21 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
     }
 
     private getVenvHash(deepnoteFileUri: Uri): string {
-        // Create a short hash from the file path for kernel naming
-        const safePath = deepnoteFileUri.fsPath.replace(/[^a-zA-Z0-9]/g, '_');
-        return safePath.substring(0, 16); // Limit length
+        // Create a short hash from the file path for kernel naming and venv directory
+        // This provides better uniqueness and prevents directory structure leakage
+        const path = deepnoteFileUri.fsPath;
+
+        // Use a simple hash function for better distribution
+        let hash = 0;
+        for (let i = 0; i < path.length; i++) {
+            const char = path.charCodeAt(i);
+            hash = (hash << 5) - hash + char;
+            hash = hash & hash; // Convert to 32-bit integer
+        }
+
+        // Convert to positive hex string and limit length
+        const hashStr = Math.abs(hash).toString(16);
+        return `venv_${hashStr}`.substring(0, 16);
     }
 
     private getDisplayName(deepnoteFileUri: Uri): string {

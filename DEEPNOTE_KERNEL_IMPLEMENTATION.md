@@ -35,7 +35,7 @@ This implementation adds automatic kernel selection and startup for `.deepnote` 
 **Key Methods:**
 - `getVenvInterpreter(deepnoteFileUri)`: Gets the venv Python interpreter for a specific file
 - `ensureInstalled(interpreter, deepnoteFileUri)`: Creates venv, installs toolkit and ipykernel, and registers kernel spec
-- `getVenvHash(deepnoteFileUri)`: Creates a unique hash for kernel naming
+- `getVenvHash(deepnoteFileUri)`: Creates a unique hash for both kernel naming and venv directory paths
 - `getDisplayName(deepnoteFileUri)`: Gets a friendly display name for the kernel
 
 #### 3. **Deepnote Server Starter** (`src/kernels/deepnote/deepnoteServerStarter.node.ts`)
@@ -155,7 +155,7 @@ User runs cell → Executes on Deepnote kernel
 - **Wheel URL**: `https://deepnote-staging-runtime-artifactory.s3.amazonaws.com/deepnote-toolkit-packages/0.2.30.post20/deepnote_toolkit-0.2.30.post20-py3-none-any.whl`
 - **Default Port**: `8888` (will find next available if occupied)
 - **Notebook Type**: `deepnote`
-- **Venv Location**: `~/.vscode/extensions/storage/deepnote-venvs/<file-path-hash>/`
+- **Venv Location**: `~/.vscode/extensions/storage/deepnote-venvs/<hashed-path>/` (e.g., `venv_a1b2c3d4`)
 - **Server Provider ID**: `deepnote-server`
 - **Kernel Spec Name**: `deepnote-venv-<file-path-hash>` (registered via ipykernel to point to venv Python)
 - **Kernel Display Name**: `Deepnote (<notebook-filename>)`
@@ -301,6 +301,19 @@ Instead of creating custom kernel specs, the implementation:
 3. Selects the first Python kernel spec (or falls back to `python3-venv`)
 4. Uses this existing spec when creating the kernel connection metadata
 5. This ensures compatibility with the Deepnote server's kernel configuration
+
+### Virtual Environment Path Handling
+
+The implementation uses a robust hashing approach for virtual environment directory names:
+
+1. **Path Hashing**: Uses `getVenvHash()` to create short, unique identifiers from file paths
+2. **Hash Algorithm**: Implements a djb2-style hash function for better distribution
+3. **Format**: Generates identifiers like `venv_a1b2c3d4` (max 16 characters)
+4. **Benefits**:
+   - Avoids Windows MAX_PATH (260 character) limitations
+   - Prevents directory structure leakage into extension storage
+   - Provides consistent naming for both venv directories and kernel specs
+   - Reduces collision risk with better hash distribution
 
 ## Troubleshooting & Key Fixes
 

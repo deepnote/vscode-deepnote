@@ -167,7 +167,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter {
         this.serverInfos.set(fileKey, serverInfo);
 
         try {
-            const serverReady = await this.waitForServer(serverInfo, 30000, token);
+            const serverReady = await this.waitForServer(serverInfo, 120000, token);
             if (!serverReady) {
                 await this.stopServerImpl(deepnoteFileUri);
                 throw new Error('Deepnote server failed to start within timeout period');

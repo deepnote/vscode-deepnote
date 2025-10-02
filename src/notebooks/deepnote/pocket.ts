@@ -16,20 +16,25 @@ export interface Pocket {
 }
 
 export function addPocketToCellMetadata(cell: NotebookCellData): void {
+    const src: Record<string, unknown> = cell.metadata ? { ...cell.metadata } : {};
     const pocket: Pocket = {};
+    let found = false;
 
     for (const field of deepnoteBlockSpecificFields) {
-        if (cell.metadata && field in cell.metadata) {
-            pocket[field as keyof Pocket] = cell.metadata[field];
+        if (Object.prototype.hasOwnProperty.call(src, field)) {
+            const value = src[field];
+            (pocket as Record<string, unknown>)[field] = value;
+            delete src[field];
+            found = true;
         }
     }
 
-    if (Object.keys(pocket).length === 0) {
+    if (!found) {
         return;
     }
 
     cell.metadata = {
-        ...cell.metadata,
+        ...src,
         __deepnotePocket: pocket
     };
 }

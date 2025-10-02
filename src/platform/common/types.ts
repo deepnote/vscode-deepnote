@@ -161,6 +161,7 @@ export type DownloadOptions = {
     extension: 'tmp' | string;
 };
 
+export const IHttpClient = Symbol('IHttpClient');
 export interface IHttpClient {
     downloadFile(uri: string): Promise<Response>;
     /**

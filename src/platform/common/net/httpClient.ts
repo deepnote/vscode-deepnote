@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+import { injectable } from 'inversify';
 import { IHttpClient } from '../types';
 import { logger } from '../../logging';
 import * as fetch from 'cross-fetch';
@@ -9,6 +10,7 @@ import { workspace } from 'vscode';
 /**
  * Class used to verify http connections and make GET requests
  */
+@injectable()
 export class HttpClient implements IHttpClient {
     private readonly requestOptions: RequestInit = {};
     constructor(private readonly fetchImplementation: typeof fetch.fetch = fetch.fetch) {

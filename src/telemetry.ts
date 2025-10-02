@@ -890,7 +890,8 @@ export class IEventNamePropertyMapping {
             | 'startUsingPythonInterpreter'
             | 'startUsingLocalKernelSpec'
             | 'startUsingRemoteKernelSpec'
-            | 'connectToLiveRemoteKernel';
+            | 'connectToLiveRemoteKernel'
+            | 'startUsingDeepnoteKernel';
         /**
          * Language of the kernel spec.
          */
@@ -3533,7 +3534,8 @@ export class IEventNamePropertyMapping {
                 | 'startUsingPythonInterpreter'
                 | 'startUsingLocalKernelSpec'
                 | 'startUsingRemoteKernelSpec'
-                | 'connectToLiveRemoteKernel';
+                | 'connectToLiveRemoteKernel'
+                | 'startUsingDeepnoteKernel';
             /**
              * Language of the kernel spec.
              */
@@ -3653,7 +3655,8 @@ export class IEventNamePropertyMapping {
             | 'startUsingPythonInterpreter'
             | 'startUsingLocalKernelSpec'
             | 'startUsingRemoteKernelSpec'
-            | 'connectToLiveRemoteKernel';
+            | 'connectToLiveRemoteKernel'
+            | 'startUsingDeepnoteKernel';
         /**
          * Language of the kernel spec.
          */

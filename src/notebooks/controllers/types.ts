@@ -16,6 +16,7 @@ import { IDisposable } from '../../platform/common/types';
 import { JupyterServerCollection } from '../../api';
 import { EnvironmentPath } from '@vscode/python-extension';
 import type { VSCodeNotebookController } from './vscodeNotebookController';
+import { DEEPNOTE_NOTEBOOK_TYPE } from '../../kernels/deepnote/types';
 
 export const InteractiveControllerIdSuffix = ' (Interactive)';
 
@@ -83,7 +84,7 @@ export interface IControllerRegistration {
      */
     addOrUpdate(
         metadata: KernelConnectionMetadata,
-        types: (typeof JupyterNotebookView | typeof InteractiveWindowView)[]
+        types: (typeof JupyterNotebookView | typeof InteractiveWindowView | typeof DEEPNOTE_NOTEBOOK_TYPE)[]
     ): IVSCodeNotebookController[];
     /**
      * Gets the controller for a particular connection
@@ -92,7 +93,7 @@ export interface IControllerRegistration {
      */
     get(
         connection: KernelConnectionMetadata,
-        notebookType: typeof JupyterNotebookView | typeof InteractiveWindowView
+        notebookType: typeof JupyterNotebookView | typeof InteractiveWindowView | typeof DEEPNOTE_NOTEBOOK_TYPE
     ): IVSCodeNotebookController | undefined;
 }
 

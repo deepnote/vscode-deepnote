@@ -26,7 +26,7 @@ This implementation adds automatic kernel selection and startup for `.deepnote` 
 - Creates a dedicated virtual environment per `.deepnote` file
 - Checks if `deepnote-toolkit` is installed in the venv
 - Installs the toolkit and `ipykernel` from the hardcoded S3 wheel URL
-- **Registers a kernel spec** that points to the venv's Python interpreter
+- **Registers a kernel spec** using `ipykernel install --user --name deepnote-venv-<hash>` that points to the venv's Python interpreter
 - This ensures packages installed via `pip` are available to the kernel
 - Outputs installation progress to the output channel
 - Verifies successful installation
@@ -72,7 +72,7 @@ This implementation adds automatic kernel selection and startup for `.deepnote` 
 - Activation service that listens for notebook open events and controller selection changes
 - Automatically selects Deepnote kernel for `.deepnote` files
 - Queries the Deepnote server for available kernel specs
-- **Prefers the venv kernel spec** (`deepnote-venv-<hash>`) that uses the venv's Python interpreter
+- **Prefers the venv kernel spec** (`deepnote-venv-<hash>`) that was registered by the installer and uses the venv's Python interpreter
 - This ensures the kernel uses the same environment where packages are installed
 - Falls back to other Python kernel specs if venv kernel not found
 - Registers the server with the server provider
@@ -294,13 +294,13 @@ The implementation uses VSCode's Jupyter server provider API to properly integra
 
 ### Kernel Spec Resolution
 
-Instead of creating custom kernel specs, the implementation:
+The implementation uses a hybrid approach:
 
-1. Connects to the running Deepnote server using `JupyterLabHelper`
-2. Queries the server for available kernel specs via `getKernelSpecs()`
-3. Selects the first Python kernel spec (or falls back to `python3-venv`)
-4. Uses this existing spec when creating the kernel connection metadata
-5. This ensures compatibility with the Deepnote server's kernel configuration
+1. **Registers per-venv kernel specs**: The installer registers kernel specs using `ipykernel install --user --name deepnote-venv-<hash>` that point to each venv's Python interpreter
+2. **Queries server for available specs**: Connects to the running Deepnote server using `JupyterLabHelper` and queries available kernel specs via `getKernelSpecs()`
+3. **Prefers venv kernel specs**: Looks for the registered venv kernel spec (`deepnote-venv-<hash>`) first
+4. **Falls back gracefully**: Falls back to other Python kernel specs (like `python3-venv`) if the venv kernel spec is not found
+5. **Uses server-compatible specs**: This ensures compatibility with the Deepnote server's kernel configuration while maintaining venv isolation
 
 ### Virtual Environment Path Handling
 
@@ -378,8 +378,8 @@ These changes ensure that Deepnote notebooks can execute cells reliably by:
 **Solution**: Two-part fix:
 1. **Kernel spec registration** (ensures kernel uses venv Python):
    - Install `ipykernel` in the venv along with deepnote-toolkit
-   - Use `python -m ipykernel install --user --name deepnote-venv-<hash>` to register a kernel spec
-   - In the kernel selection logic, prefer the venv kernel spec (`deepnote-venv-<hash>`)
+   - Use `python -m ipykernel install --user --name deepnote-venv-<hash>` to register a kernel spec that points to the venv's Python interpreter
+   - In the kernel selection logic, prefer the venv kernel spec (`deepnote-venv-<hash>`) when querying the server for available specs
 
 2. **Environment variable configuration** (ensures shell commands use venv Python):
    - When starting the Jupyter server, set environment variables:

@@ -71,3 +71,21 @@ jobs:
 
       - name: Check licenses
         run: npm run check-licenses
+  check_licenses:
+    name: Check Licenses
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Check Licenses
+        run: npm run check-licenses

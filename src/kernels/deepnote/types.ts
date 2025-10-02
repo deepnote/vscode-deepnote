@@ -143,5 +143,6 @@ export interface IDeepnoteKernelAutoSelector {
 
 export const DEEPNOTE_TOOLKIT_WHEEL_URL =
     'https://deepnote-staging-runtime-artifactory.s3.amazonaws.com/deepnote-toolkit-packages/0.2.30.post20/deepnote_toolkit-0.2.30.post20-py3-none-any.whl';
+export const DEEPNOTE_TOOLKIT_VERSION = '0.2.30.post20';
 export const DEEPNOTE_DEFAULT_PORT = 8888;
 export const DEEPNOTE_NOTEBOOK_TYPE = 'deepnote';

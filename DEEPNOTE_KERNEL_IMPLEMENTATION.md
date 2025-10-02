@@ -43,9 +43,9 @@ This implementation adds automatic kernel selection and startup for `.deepnote` 
 - Finds an available port (starting from 8888)
 - Starts the server with `python -m deepnote_toolkit server --jupyter-port <port>`
 - **Sets environment variables** so shell commands use the venv's Python:
-  - Prepends venv's bin directory to `PATH` (POSIX: `<venv>/bin`, Windows: `<venv>\Scripts`)
-  - Sets `VIRTUAL_ENV` to the venv path (both platforms)
-  - Removes `PYTHONHOME` to avoid conflicts (both platforms)
+  - Prepends venv's bin directory to `PATH`
+  - Sets `VIRTUAL_ENV` to the venv path
+  - Removes `PYTHONHOME` to avoid conflicts
 - Monitors server output and logs it
 - Waits for server to be ready before returning connection info
 - Reuses existing server for the same `.deepnote` file if already running
@@ -383,9 +383,9 @@ These changes ensure that Deepnote notebooks can execute cells reliably by:
 
 2. **Environment variable configuration** (ensures shell commands use venv Python):
    - When starting the Jupyter server, set environment variables:
-     - Prepend venv's bin directory to `PATH` (POSIX: `<venv>/bin`, Windows: `<venv>\Scripts`)
-     - Set `VIRTUAL_ENV` to point to the venv (both platforms)
-     - Remove `PYTHONHOME` (can interfere with venv, both platforms)
+     - Prepend venv's `bin/` directory to `PATH`
+     - Set `VIRTUAL_ENV` to point to the venv
+     - Remove `PYTHONHOME` (can interfere with venv)
    - This ensures `!pip install` and other shell commands use the venv's Python
    
 **Result**: Both the kernel and shell commands now use the same Python environment (the venv), so packages installed via `!pip install` or `%pip install` are immediately available for import.

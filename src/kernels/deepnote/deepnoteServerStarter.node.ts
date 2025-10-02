@@ -99,32 +99,17 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter {
         const processService = await this.processServiceFactory.create(interpreter.uri);
 
         // Set up environment to ensure the venv's Python is used for shell commands
+        const venvBinDir = interpreter.uri.fsPath.replace(/\/python$/, '').replace(/\\python\.exe$/, '');
         const env = { ...process.env };
-
-        // Get the virtual environment directory from the Python interpreter path
-        const interpreterPath = interpreter.uri.fsPath;
-        let venvPath: string;
-        let venvBinDir: string;
-
-        if (process.platform === 'win32') {
-            // Windows: Python executable is typically in <venv>\Scripts\python.exe
-            // Extract venv path by removing \Scripts\python.exe
-            venvPath = interpreterPath.replace(/[\\/]Scripts[\\/]python\.exe$/i, '');
-            venvBinDir = interpreterPath.replace(/[\\/]python\.exe$/i, '');
-        } else {
-            // POSIX: Python executable is typically in <venv>/bin/python
-            // Extract venv path by removing /bin/python
-            venvPath = interpreterPath.replace(/\/bin\/python$/, '');
-            venvBinDir = interpreterPath.replace(/\/python$/, '');
-        }
 
         // Prepend venv bin directory to PATH so shell commands use venv's Python
         env.PATH = `${venvBinDir}${process.platform === 'win32' ? ';' : ':'}${env.PATH || ''}`;
 
-        // Set VIRTUAL_ENV to indicate we're in a venv (both platforms)
+        // Also set VIRTUAL_ENV to indicate we're in a venv
+        const venvPath = venvBinDir.replace(/\/bin$/, '').replace(/\\Scripts$/, '');
         env.VIRTUAL_ENV = venvPath;
 
-        // Remove PYTHONHOME if it exists (can interfere with venv, both platforms)
+        // Remove PYTHONHOME if it exists (can interfere with venv)
         delete env.PYTHONHOME;
 
         // Get the directory containing the notebook file to set as working directory

@@ -86,6 +86,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-        
+
       - name: Check Licenses
         run: npm run check-licenses

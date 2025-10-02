@@ -9,6 +9,7 @@ import { IDisposableRegistry } from '../../platform/common/types';
 import { IJupyterServerProviderRegistry } from '../jupyter/types';
 import { JVSC_EXTENSION_ID } from '../../platform/common/constants';
 import { logger } from '../../platform/logging';
+import { DeepnoteServerNotFoundError } from '../../platform/errors/deepnoteServerNotFoundError';
 import { DeepnoteServerInfo } from './types';
 
 /**
@@ -79,7 +80,7 @@ export class DeepnoteServerProvider implements IExtensionSyncActivationService, 
         const serverInfo = this.servers.get(server.id);
 
         if (!serverInfo) {
-            throw new Error(`Deepnote server not found: ${server.id}`);
+            throw new DeepnoteServerNotFoundError(server.id);
         }
 
         return {

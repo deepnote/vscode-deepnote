@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import { inject, injectable, optional } from 'inversify';
-import { NotebookDocument, workspace, NotebookControllerAffinity } from 'vscode';
+import { CancellationToken, NotebookDocument, workspace, NotebookControllerAffinity } from 'vscode';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { logger } from '../../platform/logging';
@@ -73,7 +73,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         await this.ensureKernelSelected(notebook);
     }
 
-    public async ensureKernelSelected(notebook: NotebookDocument): Promise<void> {
+    public async ensureKernelSelected(notebook: NotebookDocument, token?: CancellationToken): Promise<void> {
         try {
             logger.info(`Auto-selecting Deepnote kernel for ${getDisplayPath(notebook.uri)}`);
 
@@ -99,7 +99,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             logger.info(`Using base interpreter: ${getDisplayPath(interpreter.uri)}`);
 
             // Ensure deepnote-toolkit is installed in a venv and get the venv interpreter
-            const venvInterpreter = await this.toolkitInstaller.ensureInstalled(interpreter, baseFileUri);
+            const venvInterpreter = await this.toolkitInstaller.ensureInstalled(interpreter, baseFileUri, token);
             if (!venvInterpreter) {
                 logger.error('Failed to set up Deepnote toolkit environment');
                 return; // Exit gracefully
@@ -108,7 +108,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             logger.info(`Deepnote toolkit venv ready at: ${getDisplayPath(venvInterpreter.uri)}`);
 
             // Start the Deepnote server using the venv interpreter
-            const serverInfo = await this.serverStarter.getOrStartServer(venvInterpreter, baseFileUri);
+            const serverInfo = await this.serverStarter.getOrStartServer(venvInterpreter, baseFileUri, token);
             logger.info(`Deepnote server running at ${serverInfo.url}`);
 
             // Create server provider handle

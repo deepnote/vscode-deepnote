@@ -71,11 +71,13 @@ export interface IDeepnoteToolkitInstaller {
      * Ensures deepnote-toolkit is installed in a dedicated virtual environment.
      * @param baseInterpreter The base Python interpreter to use for creating the venv
      * @param deepnoteFileUri The URI of the .deepnote file (used to create a unique venv per file)
+     * @param token Cancellation token to cancel the operation
      * @returns The Python interpreter from the venv if installed successfully, undefined otherwise
      */
     ensureInstalled(
         baseInterpreter: PythonEnvironment,
-        deepnoteFileUri: vscode.Uri
+        deepnoteFileUri: vscode.Uri,
+        token?: vscode.CancellationToken
     ): Promise<PythonEnvironment | undefined>;
 
     /**
@@ -86,14 +88,19 @@ export interface IDeepnoteToolkitInstaller {
 }
 
 export const IDeepnoteServerStarter = Symbol('IDeepnoteServerStarter');
-export interface IDeepnoteServerStarter {
+export interface IDeepnoteServerStarter extends vscode.Disposable {
     /**
      * Starts or gets an existing deepnote-toolkit Jupyter server.
      * @param interpreter The Python interpreter to use
      * @param deepnoteFileUri The URI of the .deepnote file (for server management per file)
+     * @param token Cancellation token to cancel the operation
      * @returns Connection information (URL, port, etc.)
      */
-    getOrStartServer(interpreter: PythonEnvironment, deepnoteFileUri: vscode.Uri): Promise<DeepnoteServerInfo>;
+    getOrStartServer(
+        interpreter: PythonEnvironment,
+        deepnoteFileUri: vscode.Uri,
+        token?: vscode.CancellationToken
+    ): Promise<DeepnoteServerInfo>;
 
     /**
      * Stops the deepnote-toolkit server if running.
@@ -112,8 +119,10 @@ export const IDeepnoteKernelAutoSelector = Symbol('IDeepnoteKernelAutoSelector')
 export interface IDeepnoteKernelAutoSelector {
     /**
      * Automatically selects and starts a Deepnote kernel for the given notebook.
+     * @param notebook The notebook document
+     * @param token Cancellation token to cancel the operation
      */
-    ensureKernelSelected(notebook: vscode.NotebookDocument): Promise<void>;
+    ensureKernelSelected(notebook: vscode.NotebookDocument, token?: vscode.CancellationToken): Promise<void>;
 }
 
 export const DEEPNOTE_TOOLKIT_WHEEL_URL =

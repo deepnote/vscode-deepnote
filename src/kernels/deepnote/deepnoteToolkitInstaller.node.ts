@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import { inject, injectable, named } from 'inversify';
-import { Uri } from 'vscode';
+import { CancellationToken, Uri } from 'vscode';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { IDeepnoteToolkitInstaller, DEEPNOTE_TOOLKIT_WHEEL_URL } from './types';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
@@ -10,6 +10,7 @@ import { logger } from '../../platform/logging';
 import { IOutputChannel, IExtensionContext } from '../../platform/common/types';
 import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
 import { IFileSystem } from '../../platform/common/platform/types';
+import { Cancellation } from '../../platform/common/cancellation';
 
 /**
  * Handles installation of the deepnote-toolkit Python package.
@@ -17,6 +18,8 @@ import { IFileSystem } from '../../platform/common/platform/types';
 @injectable()
 export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
     private readonly venvPythonPaths: Map<string, Uri> = new Map();
+    // Track in-flight installations per venv path to prevent concurrent installs
+    private readonly pendingInstallations: Map<string, Promise<PythonEnvironment | undefined>> = new Map();
 
     constructor(
         @inject(IProcessServiceFactory) private readonly processServiceFactory: IProcessServiceFactory,
@@ -56,17 +59,54 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
 
     public async ensureInstalled(
         baseInterpreter: PythonEnvironment,
-        deepnoteFileUri: Uri
+        deepnoteFileUri: Uri,
+        token?: CancellationToken
     ): Promise<PythonEnvironment | undefined> {
         const venvPath = this.getVenvPath(deepnoteFileUri);
+        const venvKey = venvPath.fsPath;
+
+        // Wait for any pending installation for this venv to complete
+        const pendingInstall = this.pendingInstallations.get(venvKey);
+        if (pendingInstall) {
+            logger.info(`Waiting for pending installation for ${venvKey} to complete...`);
+            try {
+                return await pendingInstall;
+            } catch {
+                // If the previous installation failed, continue to retry
+                logger.info(`Previous installation for ${venvKey} failed, retrying...`);
+            }
+        }
+
+        // Check if venv already exists with toolkit installed
+        const existingVenv = await this.getVenvInterpreter(deepnoteFileUri);
+        if (existingVenv && (await this.isToolkitInstalled(existingVenv))) {
+            logger.info(`deepnote-toolkit venv already exists and is ready for ${deepnoteFileUri.fsPath}`);
+            return existingVenv;
+        }
+
+        // Start the installation and track it
+        const installation = this.installImpl(baseInterpreter, deepnoteFileUri, venvPath, token);
+        this.pendingInstallations.set(venvKey, installation);
 
         try {
-            // Check if venv already exists with toolkit installed
-            const existingVenv = await this.getVenvInterpreter(deepnoteFileUri);
-            if (existingVenv && (await this.isToolkitInstalled(existingVenv))) {
-                logger.info(`deepnote-toolkit venv already exists and is ready for ${deepnoteFileUri.fsPath}`);
-                return existingVenv;
+            const result = await installation;
+            return result;
+        } finally {
+            // Remove from pending installations when done
+            if (this.pendingInstallations.get(venvKey) === installation) {
+                this.pendingInstallations.delete(venvKey);
             }
+        }
+    }
+
+    private async installImpl(
+        baseInterpreter: PythonEnvironment,
+        deepnoteFileUri: Uri,
+        venvPath: Uri,
+        token?: CancellationToken
+    ): Promise<PythonEnvironment | undefined> {
+        try {
+            Cancellation.throwIfCanceled(token);
 
             logger.info(`Creating virtual environment at ${venvPath.fsPath} for ${deepnoteFileUri.fsPath}`);
             this.outputChannel.appendLine(`Setting up Deepnote toolkit environment for ${deepnoteFileUri.fsPath}...`);
@@ -93,6 +133,8 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                 return undefined;
             }
 
+            Cancellation.throwIfCanceled(token);
+
             // Get venv Python interpreter
             const venvInterpreter = await this.getVenvInterpreter(deepnoteFileUri);
             if (!venvInterpreter) {
@@ -110,6 +152,8 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                 ['-m', 'pip', 'install', '--upgrade', `deepnote-toolkit[server] @ ${DEEPNOTE_TOOLKIT_WHEEL_URL}`],
                 { throwOnStdErr: false }
             );
+
+            Cancellation.throwIfCanceled(token);
 
             if (installResult.stdout) {
                 this.outputChannel.appendLine(installResult.stdout);

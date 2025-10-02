@@ -96,7 +96,8 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter {
 
         // Start the server with venv's Python in PATH
         // This ensures shell commands (!) in notebooks use the venv's Python
-        const processService = await this.processServiceFactory.create(interpreter.uri);
+        // Use undefined as resource to get full system environment (including git in PATH)
+        const processService = await this.processServiceFactory.create(undefined);
 
         // Set up environment to ensure the venv's Python is used for shell commands
         const venvBinDir = interpreter.uri.fsPath.replace(/\/python$/, '').replace(/\\python\.exe$/, '');

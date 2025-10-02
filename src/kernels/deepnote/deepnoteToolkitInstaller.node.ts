@@ -134,7 +134,8 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             }
 
             // Create new venv
-            const processService = await this.processServiceFactory.create(baseInterpreter.uri);
+            // Use undefined as resource to get full system environment
+            const processService = await this.processServiceFactory.create(undefined);
             const venvResult = await processService.exec(baseInterpreter.uri.fsPath, ['-m', 'venv', venvPath.fsPath], {
                 throwOnStdErr: false
             });
@@ -161,7 +162,8 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             logger.info(`Installing deepnote-toolkit and ipykernel in venv from ${DEEPNOTE_TOOLKIT_WHEEL_URL}`);
             this.outputChannel.appendLine('Installing deepnote-toolkit and ipykernel...');
 
-            const venvProcessService = await this.processServiceFactory.create(venvInterpreter.uri);
+            // Use undefined as resource to get full system environment (including git in PATH)
+            const venvProcessService = await this.processServiceFactory.create(undefined);
             const installResult = await venvProcessService.exec(
                 venvInterpreter.uri.fsPath,
                 [
@@ -191,6 +193,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                 // Install kernel spec so the kernel uses this venv's Python
                 logger.info('Installing kernel spec for venv...');
                 try {
+                    // Reuse the process service with system environment
                     await venvProcessService.exec(
                         venvInterpreter.uri.fsPath,
                         [
@@ -227,7 +230,8 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
 
     private async isToolkitInstalled(interpreter: PythonEnvironment): Promise<boolean> {
         try {
-            const processService = await this.processServiceFactory.create(interpreter.uri);
+            // Use undefined as resource to get full system environment
+            const processService = await this.processServiceFactory.create(undefined);
             const result = await processService.exec(interpreter.uri.fsPath, [
                 '-c',
                 "import deepnote_toolkit; print('installed')"

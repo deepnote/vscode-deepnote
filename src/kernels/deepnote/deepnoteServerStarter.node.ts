@@ -12,6 +12,19 @@ import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
 import { sleep } from '../../platform/common/utils/async';
 import { Cancellation, raceCancellationError } from '../../platform/common/cancellation';
 import getPort from 'get-port';
+import * as fs from 'fs-extra';
+import * as os from 'os';
+import * as path from '../../platform/vscode-path/path';
+import { generateUuid } from '../../platform/common/uuid';
+
+/**
+ * Lock file data structure for tracking server ownership
+ */
+interface ServerLockFile {
+    sessionId: string;
+    pid: number;
+    timestamp: number;
+}
 
 /**
  * Starts and manages the deepnote-toolkit Jupyter server.
@@ -23,6 +36,10 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter {
     private readonly disposablesByFile: Map<string, IDisposable[]> = new Map();
     // Track in-flight operations per file to prevent concurrent start/stop
     private readonly pendingOperations: Map<string, Promise<DeepnoteServerInfo | void>> = new Map();
+    // Unique session ID for this VS Code window instance
+    private readonly sessionId: string = generateUuid();
+    // Directory for lock files
+    private readonly lockFileDir: string = path.join(os.tmpdir(), 'vscode-deepnote-locks');
 
     constructor(
         @inject(IProcessServiceFactory) private readonly processServiceFactory: IProcessServiceFactory,
@@ -33,6 +50,11 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter {
     ) {
         // Register for disposal when the extension deactivates
         asyncRegistry.push(this);
+
+        // Ensure lock file directory exists
+        this.initializeLockFileDirectory().catch((ex) => {
+            logger.warn(`Failed to initialize lock file directory: ${ex}`);
+        });
 
         // Clean up any orphaned deepnote-toolkit processes from previous sessions
         this.cleanupOrphanedProcesses().catch((ex) => {
@@ -161,6 +183,14 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter {
         const serverInfo = { url, port };
         this.serverInfos.set(fileKey, serverInfo);
 
+        // Write lock file for the server process
+        const serverPid = serverProcess.proc?.pid;
+        if (serverPid) {
+            await this.writeLockFile(serverPid);
+        } else {
+            logger.warn(`Could not get PID for server process for ${fileKey}`);
+        }
+
         try {
             const serverReady = await this.waitForServer(serverInfo, 120000, token);
             if (!serverReady) {
@@ -212,12 +242,19 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter {
         const serverProcess = this.serverProcesses.get(fileKey);
 
         if (serverProcess) {
+            const serverPid = serverProcess.proc?.pid;
+
             try {
                 logger.info(`Stopping Deepnote server for ${fileKey}...`);
                 serverProcess.proc?.kill();
                 this.serverProcesses.delete(fileKey);
                 this.serverInfos.delete(fileKey);
                 this.outputChannel.appendLine(`Deepnote server stopped for ${fileKey}`);
+
+                // Clean up lock file after stopping the server
+                if (serverPid) {
+                    await this.deleteLockFile(serverPid);
+                }
             } catch (ex) {
                 logger.error(`Error stopping Deepnote server: ${ex}`);
             }
@@ -268,11 +305,18 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter {
 
         // Stop all server processes and wait for them to exit
         const killPromises: Promise<void>[] = [];
+        const pidsToCleanup: number[] = [];
+
         for (const [fileKey, serverProcess] of this.serverProcesses.entries()) {
             try {
                 logger.info(`Stopping Deepnote server for ${fileKey}...`);
                 const proc = serverProcess.proc;
                 if (proc && !proc.killed) {
+                    const serverPid = proc.pid;
+                    if (serverPid) {
+                        pidsToCleanup.push(serverPid);
+                    }
+
                     // Create a promise that resolves when the process exits
                     const exitPromise = new Promise<void>((resolve) => {
                         const timeout = setTimeout(() => {
@@ -306,6 +350,11 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter {
             await Promise.allSettled(killPromises);
         }
 
+        // Clean up lock files for all stopped processes
+        for (const pid of pidsToCleanup) {
+            await this.deleteLockFile(pid);
+        }
+
         // Dispose all tracked disposables
         for (const [fileKey, disposables] of this.disposablesByFile.entries()) {
             try {
@@ -322,6 +371,135 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter {
         this.pendingOperations.clear();
 
         logger.info('DeepnoteServerStarter disposed successfully');
+    }
+
+    /**
+     * Initialize the lock file directory
+     */
+    private async initializeLockFileDirectory(): Promise<void> {
+        try {
+            await fs.ensureDir(this.lockFileDir);
+            logger.info(`Lock file directory initialized at ${this.lockFileDir} with session ID ${this.sessionId}`);
+        } catch (ex) {
+            logger.error(`Failed to create lock file directory: ${ex}`);
+        }
+    }
+
+    /**
+     * Get the lock file path for a given PID
+     */
+    private getLockFilePath(pid: number): string {
+        return path.join(this.lockFileDir, `server-${pid}.json`);
+    }
+
+    /**
+     * Write a lock file for a server process
+     */
+    private async writeLockFile(pid: number): Promise<void> {
+        try {
+            const lockData: ServerLockFile = {
+                sessionId: this.sessionId,
+                pid,
+                timestamp: Date.now()
+            };
+            const lockFilePath = this.getLockFilePath(pid);
+            await fs.writeJson(lockFilePath, lockData, { spaces: 2 });
+            logger.info(`Created lock file for PID ${pid} with session ID ${this.sessionId}`);
+        } catch (ex) {
+            logger.warn(`Failed to write lock file for PID ${pid}: ${ex}`);
+        }
+    }
+
+    /**
+     * Read a lock file for a given PID
+     */
+    private async readLockFile(pid: number): Promise<ServerLockFile | null> {
+        try {
+            const lockFilePath = this.getLockFilePath(pid);
+            if (await fs.pathExists(lockFilePath)) {
+                return await fs.readJson(lockFilePath);
+            }
+        } catch (ex) {
+            logger.warn(`Failed to read lock file for PID ${pid}: ${ex}`);
+        }
+        return null;
+    }
+
+    /**
+     * Delete a lock file for a given PID
+     */
+    private async deleteLockFile(pid: number): Promise<void> {
+        try {
+            const lockFilePath = this.getLockFilePath(pid);
+            if (await fs.pathExists(lockFilePath)) {
+                await fs.remove(lockFilePath);
+                logger.info(`Deleted lock file for PID ${pid}`);
+            }
+        } catch (ex) {
+            logger.warn(`Failed to delete lock file for PID ${pid}: ${ex}`);
+        }
+    }
+
+    /**
+     * Check if a process is orphaned by verifying its parent process
+     */
+    private async isProcessOrphaned(pid: number): Promise<boolean> {
+        try {
+            const processService = await this.processServiceFactory.create(undefined);
+
+            if (process.platform === 'win32') {
+                // Windows: use WMIC to get parent process ID
+                const result = await processService.exec(
+                    'wmic',
+                    ['process', 'where', `ProcessId=${pid}`, 'get', 'ParentProcessId'],
+                    { throwOnStdErr: false }
+                );
+
+                if (result.stdout) {
+                    const lines = result.stdout
+                        .split('\n')
+                        .filter((line) => line.trim() && !line.includes('ParentProcessId'));
+                    if (lines.length > 0) {
+                        const ppid = parseInt(lines[0].trim(), 10);
+                        if (!isNaN(ppid) && ppid > 0) {
+                            // Check if parent process exists
+                            const parentCheck = await processService.exec(
+                                'tasklist',
+                                ['/FI', `PID eq ${ppid}`, '/FO', 'CSV', '/NH'],
+                                { throwOnStdErr: false }
+                            );
+                            // If parent doesn't exist or is system process, it's orphaned
+                            return !parentCheck.stdout || parentCheck.stdout.trim().length === 0 || ppid === 0;
+                        }
+                    }
+                }
+            } else {
+                // Unix: use ps to get parent process ID
+                const result = await processService.exec('ps', ['-o', 'ppid=', '-p', pid.toString()], {
+                    throwOnStdErr: false
+                });
+
+                if (result.stdout) {
+                    const ppid = parseInt(result.stdout.trim(), 10);
+                    if (!isNaN(ppid)) {
+                        // PPID of 1 typically means orphaned (adopted by init/systemd)
+                        if (ppid === 1) {
+                            return true;
+                        }
+                        // Check if parent process exists
+                        const parentCheck = await processService.exec('ps', ['-p', ppid.toString()], {
+                            throwOnStdErr: false
+                        });
+                        return !parentCheck.stdout || parentCheck.stdout.trim().length === 0;
+                    }
+                }
+            }
+        } catch (ex) {
+            logger.warn(`Failed to check if process ${pid} is orphaned: ${ex}`);
+        }
+
+        // If we can't determine, assume it's not orphaned (safer)
+        return false;
     }
 
     /**
@@ -351,7 +529,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter {
 
             if (result.stdout) {
                 const lines = result.stdout.split('\n');
-                const pidsToKill: number[] = [];
+                const candidatePids: number[] = [];
 
                 for (const line of lines) {
                     // Look for processes running deepnote_toolkit server
@@ -374,38 +552,94 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter {
                         }
 
                         if (pid && !isNaN(pid)) {
-                            pidsToKill.push(pid);
+                            candidatePids.push(pid);
                         }
                     }
                 }
 
-                if (pidsToKill.length > 0) {
+                if (candidatePids.length > 0) {
                     logger.info(
-                        `Found ${pidsToKill.length} orphaned deepnote-toolkit processes: ${pidsToKill.join(', ')}`
-                    );
-                    this.outputChannel.appendLine(
-                        `Cleaning up ${pidsToKill.length} orphaned deepnote-toolkit process(es) from previous session...`
+                        `Found ${candidatePids.length} deepnote-toolkit server process(es): ${candidatePids.join(', ')}`
                     );
 
-                    // Kill each process
-                    for (const pid of pidsToKill) {
-                        try {
-                            if (process.platform === 'win32') {
-                                await processService.exec('taskkill', ['/F', '/T', '/PID', pid.toString()], {
-                                    throwOnStdErr: false
-                                });
+                    const pidsToKill: number[] = [];
+                    const pidsToSkip: Array<{ pid: number; reason: string }> = [];
+
+                    // Check each process to determine if it should be killed
+                    for (const pid of candidatePids) {
+                        // Check if there's a lock file for this PID
+                        const lockData = await this.readLockFile(pid);
+
+                        if (lockData) {
+                            // Lock file exists - check if it belongs to a different session
+                            if (lockData.sessionId !== this.sessionId) {
+                                // Different session - check if the process is actually orphaned
+                                const isOrphaned = await this.isProcessOrphaned(pid);
+                                if (isOrphaned) {
+                                    logger.info(
+                                        `PID ${pid} belongs to session ${lockData.sessionId} and is orphaned - will kill`
+                                    );
+                                    pidsToKill.push(pid);
+                                } else {
+                                    pidsToSkip.push({
+                                        pid,
+                                        reason: `belongs to active session ${lockData.sessionId.substring(0, 8)}...`
+                                    });
+                                }
                             } else {
-                                await processService.exec('kill', ['-9', pid.toString()], { throwOnStdErr: false });
+                                // Same session - this shouldn't happen during startup, but skip it
+                                pidsToSkip.push({ pid, reason: 'belongs to current session' });
                             }
-                            logger.info(`Killed orphaned process ${pid}`);
-                        } catch (ex) {
-                            logger.warn(`Failed to kill process ${pid}: ${ex}`);
+                        } else {
+                            // No lock file - check if orphaned before killing
+                            const isOrphaned = await this.isProcessOrphaned(pid);
+                            if (isOrphaned) {
+                                logger.info(`PID ${pid} has no lock file and is orphaned - will kill`);
+                                pidsToKill.push(pid);
+                            } else {
+                                pidsToSkip.push({ pid, reason: 'no lock file but has active parent process' });
+                            }
                         }
                     }
 
-                    this.outputChannel.appendLine('✓ Cleanup complete');
+                    // Log skipped processes
+                    if (pidsToSkip.length > 0) {
+                        for (const { pid, reason } of pidsToSkip) {
+                            logger.info(`Skipping PID ${pid}: ${reason}`);
+                        }
+                    }
+
+                    // Kill orphaned processes
+                    if (pidsToKill.length > 0) {
+                        logger.info(`Killing ${pidsToKill.length} orphaned process(es): ${pidsToKill.join(', ')}`);
+                        this.outputChannel.appendLine(
+                            `Cleaning up ${pidsToKill.length} orphaned deepnote-toolkit process(es)...`
+                        );
+
+                        for (const pid of pidsToKill) {
+                            try {
+                                if (process.platform === 'win32') {
+                                    await processService.exec('taskkill', ['/F', '/T', '/PID', pid.toString()], {
+                                        throwOnStdErr: false
+                                    });
+                                } else {
+                                    await processService.exec('kill', ['-9', pid.toString()], { throwOnStdErr: false });
+                                }
+                                logger.info(`Killed orphaned process ${pid}`);
+
+                                // Clean up the lock file after killing
+                                await this.deleteLockFile(pid);
+                            } catch (ex) {
+                                logger.warn(`Failed to kill process ${pid}: ${ex}`);
+                            }
+                        }
+
+                        this.outputChannel.appendLine('✓ Cleanup complete');
+                    } else {
+                        logger.info('No orphaned deepnote-toolkit processes found (all processes are active)');
+                    }
                 } else {
-                    logger.info('No orphaned deepnote-toolkit processes found');
+                    logger.info('No deepnote-toolkit server processes found');
                 }
             }
         } catch (ex) {

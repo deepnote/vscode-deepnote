@@ -1,35 +1,41 @@
 # Orphan Process Cleanup Implementation
 
 ## Overview
+
 This document describes the implementation of a sophisticated orphan process cleanup mechanism for the Deepnote server starter that prevents terminating active servers from other VS Code windows.
 
 ## Problem Statement
+
 Previously, the cleanup logic in `cleanupOrphanedProcesses()` would force-kill **every** process matching "deepnote_toolkit server", which could terminate active servers from other VS Code windows, causing disruption to users working in multiple windows.
 
 ## Solution
+
 The new implementation uses a lock file system combined with parent process verification to only kill genuine orphan processes.
 
 ## Key Components
 
 ### 1. Session Management
+
 - **Session ID**: Each VS Code window instance generates a unique session ID using `generateUuid()`
 - **Lock File Directory**: Lock files are stored in `${os.tmpdir()}/vscode-deepnote-locks/`
 - **Lock File Format**: JSON files named `server-{pid}.json` containing:
   ```typescript
   interface ServerLockFile {
-      sessionId: string;  // Unique ID for the VS Code window
-      pid: number;        // Process ID of the server
-      timestamp: number;  // When the server was started
+    sessionId: string; // Unique ID for the VS Code window
+    pid: number; // Process ID of the server
+    timestamp: number; // When the server was started
   }
   ```
 
 ### 2. Lock File Lifecycle
 
 #### Creation
+
 - When a server starts successfully, a lock file is written with the server's PID and current session ID
 - Location: `writeLockFile()` called in `startServerImpl()` after the server process is spawned
 
 #### Deletion
+
 - Lock files are deleted when:
   1. The server is explicitly stopped via `stopServerImpl()`
   2. The extension is disposed and all servers are shut down
@@ -40,17 +46,21 @@ The new implementation uses a lock file system combined with parent process veri
 The `isProcessOrphaned()` method checks if a process is truly orphaned by verifying its parent process:
 
 #### Unix/Linux/macOS
+
 ```bash
 # Get parent process ID
 ps -o ppid= -p <pid>
 
-# Check if parent exists
-ps -p <ppid>
+# Check if parent exists (using -o pid= to get only PID with no header)
+ps -p <ppid> -o pid=
 ```
+
 - If PPID is 1 (init/systemd), the process is orphaned
-- If parent process doesn't exist, the process is orphaned
+- If parent process doesn't exist (empty stdout from `ps -o pid=`), the process is orphaned
+- The `-o pid=` flag ensures no header is printed, so empty output reliably indicates a missing process
 
 #### Windows
+
 ```cmd
 # Get parent process ID
 wmic process where ProcessId=<pid> get ParentProcessId
@@ -58,6 +68,7 @@ wmic process where ProcessId=<pid> get ParentProcessId
 # Check if parent exists
 tasklist /FI "PID eq <ppid>" /FO CSV /NH
 ```
+
 - If parent process doesn't exist or PPID is 0, the process is orphaned
 
 ### 4. Cleanup Decision Flow
@@ -65,25 +76,29 @@ tasklist /FI "PID eq <ppid>" /FO CSV /NH
 When `cleanupOrphanedProcesses()` runs (at extension startup):
 
 1. **Find all deepnote_toolkit server processes**
+
    - Use `ps aux` (Unix) or `tasklist` (Windows)
    - Extract PIDs of matching processes
 
 2. **For each candidate PID:**
-   
+
    a. **Check for lock file**
-      - If lock file exists:
-        - If session ID matches current session → **SKIP** (shouldn't happen at startup)
-        - If session ID differs:
-          - Check if process is orphaned
-          - If orphaned → **KILL**
-          - If not orphaned → **SKIP** (active in another window)
-      
-      - If no lock file exists:
-        - Check if process is orphaned
-        - If orphaned → **KILL**
-        - If not orphaned → **SKIP** (might be from older version without lock files)
+
+   - If lock file exists:
+
+     - If session ID matches current session → **SKIP** (shouldn't happen at startup)
+     - If session ID differs:
+       - Check if process is orphaned
+       - If orphaned → **KILL**
+       - If not orphaned → **SKIP** (active in another window)
+
+   - If no lock file exists:
+     - Check if process is orphaned
+     - If orphaned → **KILL**
+     - If not orphaned → **SKIP** (might be from older version without lock files)
 
 3. **Kill orphaned processes**
+
    - Use `kill -9` (Unix) or `taskkill /F /T` (Windows)
    - Delete lock file after successful kill
 
@@ -95,9 +110,11 @@ When `cleanupOrphanedProcesses()` runs (at extension startup):
 ## Code Changes
 
 ### Modified Files
+
 - `src/kernels/deepnote/deepnoteServerStarter.node.ts`
 
 ### New Imports
+
 ```typescript
 import * as fs from 'fs-extra';
 import * as os from 'os';
@@ -106,12 +123,14 @@ import { generateUuid } from '../../platform/common/uuid';
 ```
 
 ### New Class Members
+
 ```typescript
 private readonly sessionId: string = generateUuid();
 private readonly lockFileDir: string = path.join(os.tmpdir(), 'vscode-deepnote-locks');
 ```
 
 ### New Methods
+
 1. `initializeLockFileDirectory()` - Creates lock file directory
 2. `getLockFilePath(pid)` - Returns path to lock file for a PID
 3. `writeLockFile(pid)` - Creates lock file for a server process
@@ -120,6 +139,7 @@ private readonly lockFileDir: string = path.join(os.tmpdir(), 'vscode-deepnote-l
 6. `isProcessOrphaned(pid)` - Checks if process is orphaned by verifying parent
 
 ### Modified Methods
+
 1. `constructor()` - Initializes lock file directory
 2. `startServerImpl()` - Writes lock file after server starts
 3. `stopServerImpl()` - Deletes lock file when server stops
@@ -158,4 +178,3 @@ private readonly lockFileDir: string = path.join(os.tmpdir(), 'vscode-deepnote-l
 2. **Lock File Expiry**: Add TTL to lock files to handle edge cases
 3. **Health Monitoring**: Periodic checks to ensure servers are still responsive
 4. **Graceful Shutdown**: Try SIGTERM before SIGKILL for orphaned processes
-

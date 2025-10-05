@@ -158,12 +158,31 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                 return undefined;
             }
 
+            // Use undefined as resource to get full system environment (including git in PATH)
+            const venvProcessService = await this.processServiceFactory.create(undefined);
+
+            // Upgrade pip in the venv to the latest version
+            logger.info('Upgrading pip in venv to latest version...');
+            this.outputChannel.appendLine('Upgrading pip...');
+            const pipUpgradeResult = await venvProcessService.exec(
+                venvInterpreter.uri.fsPath,
+                ['-m', 'pip', 'install', '--upgrade', 'pip'],
+                { throwOnStdErr: false }
+            );
+
+            if (pipUpgradeResult.stdout) {
+                logger.info(`pip upgrade output: ${pipUpgradeResult.stdout}`);
+            }
+            if (pipUpgradeResult.stderr) {
+                logger.info(`pip upgrade stderr: ${pipUpgradeResult.stderr}`);
+            }
+
+            Cancellation.throwIfCanceled(token);
+
             // Install deepnote-toolkit and ipykernel in venv
             logger.info(`Installing deepnote-toolkit and ipykernel in venv from ${DEEPNOTE_TOOLKIT_WHEEL_URL}`);
             this.outputChannel.appendLine('Installing deepnote-toolkit and ipykernel...');
 
-            // Use undefined as resource to get full system environment (including git in PATH)
-            const venvProcessService = await this.processServiceFactory.create(undefined);
             const installResult = await venvProcessService.exec(
                 venvInterpreter.uri.fsPath,
                 [
@@ -174,7 +193,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                     `deepnote-toolkit[server] @ ${DEEPNOTE_TOOLKIT_WHEEL_URL}`,
                     'ipykernel'
                 ],
-                { throwOnStdErr: true }
+                { throwOnStdErr: false }
             );
 
             Cancellation.throwIfCanceled(token);

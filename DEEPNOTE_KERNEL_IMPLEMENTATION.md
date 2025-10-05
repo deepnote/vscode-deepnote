@@ -112,7 +112,7 @@ This implementation adds automatic kernel selection and startup for `.deepnote` 
 
 ## Flow Diagram
 
-```
+```text
 User opens .deepnote file
     ↓
 DeepnoteKernelAutoSelector.onDidOpenNotebook()

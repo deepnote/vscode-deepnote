@@ -16,99 +16,99 @@ This implementation adds automatic kernel selection and startup for `.deepnote` 
 
 #### 1. **Deepnote Kernel Types** (`src/kernels/deepnote/types.ts`)
 
--   `DeepnoteKernelConnectionMetadata`: Connection metadata for Deepnote kernels (similar to RemoteKernelSpecConnectionMetadata)
--   `IDeepnoteToolkitInstaller`: Interface for toolkit installation service
--   `IDeepnoteServerStarter`: Interface for server management
--   `IDeepnoteKernelAutoSelector`: Interface for automatic kernel selection
--   `DeepnoteServerInfo`: Server connection information (URL, port, token)
--   Constants for wheel URL, default port, and notebook type
+- `DeepnoteKernelConnectionMetadata`: Connection metadata for Deepnote kernels (similar to RemoteKernelSpecConnectionMetadata)
+- `IDeepnoteToolkitInstaller`: Interface for toolkit installation service
+- `IDeepnoteServerStarter`: Interface for server management
+- `IDeepnoteKernelAutoSelector`: Interface for automatic kernel selection
+- `DeepnoteServerInfo`: Server connection information (URL, port, token)
+- Constants for wheel URL, default port, and notebook type
 
 #### 2. **Deepnote Toolkit Installer** (`src/kernels/deepnote/deepnoteToolkitInstaller.node.ts`)
 
--   Creates a dedicated virtual environment per `.deepnote` file
--   **Upgrades pip** in the venv to the latest version (ensures latest pip features and fixes)
--   Checks if `deepnote-toolkit` is installed in the venv
--   Installs the toolkit and `ipykernel` from the hardcoded S3 wheel URL
--   Installs ipykernel in the venv to enable kernel functionality
--   Outputs installation progress to the output channel
--   Verifies successful installation
--   Reuses existing venvs for the same `.deepnote` file
+- Creates a dedicated virtual environment per `.deepnote` file
+- **Upgrades pip** in the venv to the latest version (ensures latest pip features and fixes)
+- Checks if `deepnote-toolkit` is installed in the venv
+- Installs the toolkit and `ipykernel` from the hardcoded S3 wheel URL
+- Installs ipykernel in the venv to enable kernel functionality
+- Outputs installation progress to the output channel
+- Verifies successful installation
+- Reuses existing venvs for the same `.deepnote` file
 
 **Key Methods:**
 
--   `getVenvInterpreter(deepnoteFileUri)`: Gets the venv Python interpreter for a specific file
--   `ensureInstalled(interpreter, deepnoteFileUri)`: Creates venv, installs toolkit and ipykernel
--   `getVenvHash(deepnoteFileUri)`: Creates a unique hash for venv directory paths
--   `getDisplayName(deepnoteFileUri)`: Gets a friendly display name for the kernel
+- `getVenvInterpreter(deepnoteFileUri)`: Gets the venv Python interpreter for a specific file
+- `ensureInstalled(interpreter, deepnoteFileUri)`: Creates venv, installs toolkit and ipykernel
+- `getVenvHash(deepnoteFileUri)`: Creates a unique hash for venv directory paths
+- `getDisplayName(deepnoteFileUri)`: Gets a friendly display name for the kernel
 
 #### 3. **Deepnote Server Starter** (`src/kernels/deepnote/deepnoteServerStarter.node.ts`)
 
--   Manages the lifecycle of deepnote-toolkit Jupyter servers (one per `.deepnote` file)
--   Finds an available port (starting from 8888)
--   Starts the server with `python -m deepnote_toolkit server --jupyter-port <port>`
--   **Sets environment variables** so shell commands use the venv's Python:
-    -   Prepends venv's bin directory to `PATH`
-    -   Sets `VIRTUAL_ENV` to the venv path
-    -   Removes `PYTHONHOME` to avoid conflicts
--   Monitors server output and logs it
--   Waits for server to be ready before returning connection info
--   Reuses existing server for the same `.deepnote` file if already running
--   Manages multiple servers for different `.deepnote` files simultaneously
+- Manages the lifecycle of deepnote-toolkit Jupyter servers (one per `.deepnote` file)
+- Finds an available port (starting from 8888)
+- Starts the server with `python -m deepnote_toolkit server --jupyter-port <port>`
+- **Sets environment variables** so shell commands use the venv's Python:
+  - Prepends venv's bin directory to `PATH`
+  - Sets `VIRTUAL_ENV` to the venv path
+  - Removes `PYTHONHOME` to avoid conflicts
+- Monitors server output and logs it
+- Waits for server to be ready before returning connection info
+- Reuses existing server for the same `.deepnote` file if already running
+- Manages multiple servers for different `.deepnote` files simultaneously
 
 **Key Methods:**
 
--   `getOrStartServer(interpreter, deepnoteFileUri)`: Returns server info for a file, starting if needed
--   `stopServer(deepnoteFileUri)`: Stops the running server for a specific file
--   `isServerRunning(serverInfo)`: Checks if server is responsive
+- `getOrStartServer(interpreter, deepnoteFileUri)`: Returns server info for a file, starting if needed
+- `stopServer(deepnoteFileUri)`: Stops the running server for a specific file
+- `isServerRunning(serverInfo)`: Checks if server is responsive
 
 #### 4. **Deepnote Server Provider** (`src/kernels/deepnote/deepnoteServerProvider.node.ts`)
 
--   Jupyter server provider that registers and resolves Deepnote toolkit servers
--   Implements `JupyterServerProvider` interface from VSCode Jupyter API
--   Maintains a map of server handles to server connection information
--   Allows the kernel infrastructure to resolve server connections
+- Jupyter server provider that registers and resolves Deepnote toolkit servers
+- Implements `JupyterServerProvider` interface from VSCode Jupyter API
+- Maintains a map of server handles to server connection information
+- Allows the kernel infrastructure to resolve server connections
 
 **Key Methods:**
 
--   `activate()`: Registers the server provider with the Jupyter server provider registry
--   `registerServer(handle, serverInfo)`: Registers a Deepnote server for a specific handle
--   `provideJupyterServers(token)`: Lists all registered Deepnote servers
--   `resolveJupyterServer(server, token)`: Resolves server connection info by handle
+- `activate()`: Registers the server provider with the Jupyter server provider registry
+- `registerServer(handle, serverInfo)`: Registers a Deepnote server for a specific handle
+- `provideJupyterServers(token)`: Lists all registered Deepnote servers
+- `resolveJupyterServer(server, token)`: Resolves server connection info by handle
 
 #### 5. **Deepnote Kernel Auto-Selector** (`src/notebooks/deepnote/deepnoteKernelAutoSelector.node.ts`)
 
--   Activation service that listens for notebook open events and controller selection changes
--   Automatically selects Deepnote kernel for `.deepnote` files
--   Queries the Deepnote server for available kernel specs
--   **Selects a server-native Python kernel spec** (e.g., `python3-venv` or any available Python kernel)
--   The Deepnote server is started with the venv's Python interpreter, ensuring the kernel uses the venv environment
--   Environment variables (`PATH`, `VIRTUAL_ENV`) are configured so the server and kernel use the venv's Python
--   Registers the server with the server provider
--   Creates kernel connection metadata
--   Registers the controller with VSCode
--   Auto-selects the kernel for the notebook
--   **Reuses existing controllers and servers** for persistent kernel sessions
--   **Automatically reselects kernel** if it becomes unselected after errors
--   Tracks controllers per notebook file for efficient reuse
+- Activation service that listens for notebook open events and controller selection changes
+- Automatically selects Deepnote kernel for `.deepnote` files
+- Queries the Deepnote server for available kernel specs
+- **Selects a server-native Python kernel spec** (e.g., `python3-venv` or any available Python kernel)
+- The Deepnote server is started with the venv's Python interpreter, ensuring the kernel uses the venv environment
+- Environment variables (`PATH`, `VIRTUAL_ENV`) are configured so the server and kernel use the venv's Python
+- Registers the server with the server provider
+- Creates kernel connection metadata
+- Registers the controller with VSCode
+- Auto-selects the kernel for the notebook
+- **Reuses existing controllers and servers** for persistent kernel sessions
+- **Automatically reselects kernel** if it becomes unselected after errors
+- Tracks controllers per notebook file for efficient reuse
 
 **Key Methods:**
 
--   `activate()`: Registers event listeners for notebook open/close and controller selection changes
--   `ensureKernelSelected(notebook)`: Main logic for auto-selection, kernel spec selection, and kernel reuse
--   `onDidOpenNotebook(notebook)`: Event handler for notebook opens
--   `onControllerSelectionChanged(event)`: Event handler for controller selection changes (auto-reselects if needed)
--   `onDidCloseNotebook(notebook)`: Event handler for notebook closes (preserves controllers for reuse)
+- `activate()`: Registers event listeners for notebook open/close and controller selection changes
+- `ensureKernelSelected(notebook)`: Main logic for auto-selection, kernel spec selection, and kernel reuse
+- `onDidOpenNotebook(notebook)`: Event handler for notebook opens
+- `onControllerSelectionChanged(event)`: Event handler for controller selection changes (auto-reselects if needed)
+- `onDidCloseNotebook(notebook)`: Event handler for notebook closes (preserves controllers for reuse)
 
 #### 6. **Service Registry Updates** (`src/notebooks/serviceRegistry.node.ts`)
 
--   Registers all new Deepnote kernel services
--   Binds `DeepnoteServerProvider` as an activation service
--   Binds `IDeepnoteKernelAutoSelector` as an activation service
+- Registers all new Deepnote kernel services
+- Binds `DeepnoteServerProvider` as an activation service
+- Binds `IDeepnoteKernelAutoSelector` as an activation service
 
 #### 7. **Kernel Types Updates** (`src/kernels/types.ts`)
 
--   Adds `DeepnoteKernelConnectionMetadata` to `RemoteKernelConnectionMetadata` union type
--   Adds deserialization support for `'startUsingDeepnoteKernel'` kind
+- Adds `DeepnoteKernelConnectionMetadata` to `RemoteKernelConnectionMetadata` union type
+- Adds deserialization support for `'startUsingDeepnoteKernel'` kind
 
 ## Flow Diagram
 
@@ -164,53 +164,53 @@ User runs cell → Executes on Deepnote kernel
 
 ### Hardcoded Values (as requested)
 
--   **Wheel URL**: `https://deepnote-staging-runtime-artifactory.s3.amazonaws.com/deepnote-toolkit-packages/0.2.30.post20/deepnote_toolkit-0.2.30.post20-py3-none-any.whl`
--   **Default Port**: `8888` (will find next available if occupied)
--   **Notebook Type**: `deepnote`
--   **Venv Location**: `~/.vscode/extensions/storage/deepnote-venvs/<hashed-path>/` (e.g., `venv_a1b2c3d4`)
--   **Server Provider ID**: `deepnote-server`
--   **Kernel Spec**: Uses server-native Python kernel specs (e.g., `python3-venv`)
--   **Kernel Display Name**: `Deepnote (<notebook-filename>)`
+- **Wheel URL**: `https://deepnote-staging-runtime-artifactory.s3.amazonaws.com/deepnote-toolkit-packages/0.2.30.post20/deepnote_toolkit-0.2.30.post20-py3-none-any.whl`
+- **Default Port**: `8888` (will find next available if occupied)
+- **Notebook Type**: `deepnote`
+- **Venv Location**: `~/.vscode/extensions/storage/deepnote-venvs/<hashed-path>/` (e.g., `venv_a1b2c3d4`)
+- **Server Provider ID**: `deepnote-server`
+- **Kernel Spec**: Uses server-native Python kernel specs (e.g., `python3-venv`)
+- **Kernel Display Name**: `Deepnote (<notebook-filename>)`
 
 ## Usage
 
 1. **Open a .deepnote file** in VSCode
 
--   A temporary "Loading Deepnote Kernel..." controller is automatically selected
--   A progress notification appears in the bottom-right
+- A temporary "Loading Deepnote Kernel..." controller is automatically selected
+- A progress notification appears in the bottom-right
 
 2. **You can immediately click "Run All" or run individual cells**
 
--   Cells will wait for the kernel to be ready before executing
--   No kernel selection dialog will appear
+- Cells will wait for the kernel to be ready before executing
+- No kernel selection dialog will appear
 
 3. **Once the progress notification shows "Kernel ready!"**:
 
--   The loading controller is automatically replaced with the real Deepnote kernel
--   Your cells start executing
+- The loading controller is automatically replaced with the real Deepnote kernel
+- Your cells start executing
 
 4. The extension automatically:
 
--   Installs deepnote-toolkit in a dedicated virtual environment (first time only)
--   Starts a Deepnote server on an available port (if not already running)
--   Selects the appropriate Deepnote kernel
--   Executes your cells
+- Installs deepnote-toolkit in a dedicated virtual environment (first time only)
+- Starts a Deepnote server on an available port (if not already running)
+- Selects the appropriate Deepnote kernel
+- Executes your cells
 
 **First-time setup** takes 15-30 seconds. **Subsequent opens** of the same file reuse the existing environment and server, taking less than 1 second.
 
 ## Benefits
 
--   **Zero configuration**: No manual kernel selection needed
--   **Automatic setup**: Toolkit installation and server startup handled automatically
--   **Isolated environments**: Each `.deepnote` file gets its own virtual environment
--   **Multi-file support**: Can run multiple `.deepnote` files with separate servers
--   **Resource efficiency**: Reuses venv and server for notebooks within the same `.deepnote` file
--   **Clean integration**: Uses existing VSCode notebook controller infrastructure
--   **Proper server resolution**: Implements Jupyter server provider for proper kernel connection handling
--   **Compatible kernel specs**: Uses kernel specs that exist on the Deepnote server
--   **Persistent kernel sessions**: Controllers and servers remain available even after errors
--   **Automatic recovery**: If kernel becomes unselected, it's automatically reselected
--   **Seamless reusability**: Run cells as many times as you want without manual kernel selection
+- **Zero configuration**: No manual kernel selection needed
+- **Automatic setup**: Toolkit installation and server startup handled automatically
+- **Isolated environments**: Each `.deepnote` file gets its own virtual environment
+- **Multi-file support**: Can run multiple `.deepnote` files with separate servers
+- **Resource efficiency**: Reuses venv and server for notebooks within the same `.deepnote` file
+- **Clean integration**: Uses existing VSCode notebook controller infrastructure
+- **Proper server resolution**: Implements Jupyter server provider for proper kernel connection handling
+- **Compatible kernel specs**: Uses kernel specs that exist on the Deepnote server
+- **Persistent kernel sessions**: Controllers and servers remain available even after errors
+- **Automatic recovery**: If kernel becomes unselected, it's automatically reselected
+- **Seamless reusability**: Run cells as many times as you want without manual kernel selection
 
 ## UI Customization
 
@@ -220,22 +220,22 @@ To provide a cleaner experience for Deepnote notebooks, the following UI element
 
 1. **Notebook Toolbar Buttons:**
 
--   Restart Kernel
--   Variable View
--   Outline View
--   Export
--   Codespace Integration
+- Restart Kernel
+- Variable View
+- Outline View
+- Export
+- Codespace Integration
 
 2. **Cell Title Menu Items:**
 
--   Run by Line
--   Run by Line Next/Stop
--   Select Precedent/Dependent Cells
+- Run by Line
+- Run by Line Next/Stop
+- Select Precedent/Dependent Cells
 
 3. **Cell Execute Menu Items:**
 
--   Run and Debug Cell
--   Run Precedent/Dependent Cells
+- Run and Debug Cell
+- Run Precedent/Dependent Cells
 
 These items are hidden by adding `notebookType != 'deepnote'` conditions to the `when` clauses in `package.json`. The standard cell run buttons (play icons) remain visible as they are the primary way to execute cells.
 
@@ -243,17 +243,17 @@ These items are hidden by adding `notebookType != 'deepnote'` conditions to the 
 
 The extension shows a visual progress notification while the Deepnote kernel is being set up:
 
--   **Location**: Notification area (bottom-right)
--   **Title**: "Loading Deepnote Kernel"
--   **Cancellable**: Yes
--   **Progress Steps**:
-    1. "Setting up Deepnote kernel..."
-    2. "Finding Python interpreter..."
-    3. "Installing Deepnote toolkit..." (shown if installation is needed)
-    4. "Starting Deepnote server..." (shown if server needs to be started)
-    5. "Connecting to kernel..."
-    6. "Finalizing kernel setup..."
-    7. "Kernel ready!"
+- **Location**: Notification area (bottom-right)
+- **Title**: "Loading Deepnote Kernel"
+- **Cancellable**: Yes
+- **Progress Steps**:
+  1. "Setting up Deepnote kernel..."
+  2. "Finding Python interpreter..."
+  3. "Installing Deepnote toolkit..." (shown if installation is needed)
+  4. "Starting Deepnote server..." (shown if server needs to be started)
+  5. "Connecting to kernel..."
+  6. "Finalizing kernel setup..."
+  7. "Kernel ready!"
 
 For notebooks that already have a running kernel, the notification shows "Reusing existing kernel..." and completes quickly.
 
@@ -276,34 +276,34 @@ To test the implementation:
 3. Run a cell
 4. Verify:
 
--   Toolkit gets installed (check output channel)
--   Server starts (check output channel)
--   Kernel is auto-selected (check kernel picker)
--   Code executes successfully
+- Toolkit gets installed (check output channel)
+- Server starts (check output channel)
+- Kernel is auto-selected (check kernel picker)
+- Code executes successfully
 
 ## Files Modified/Created
 
 ### Created:
 
--   `src/kernels/deepnote/types.ts` - Type definitions and interfaces
--   `src/kernels/deepnote/deepnoteToolkitInstaller.node.ts` - Toolkit installation service
--   `src/kernels/deepnote/deepnoteServerStarter.node.ts` - Server lifecycle management
--   `src/kernels/deepnote/deepnoteServerProvider.node.ts` - Jupyter server provider implementation
--   `src/notebooks/deepnote/deepnoteKernelAutoSelector.node.ts` - Automatic kernel selection
+- `src/kernels/deepnote/types.ts` - Type definitions and interfaces
+- `src/kernels/deepnote/deepnoteToolkitInstaller.node.ts` - Toolkit installation service
+- `src/kernels/deepnote/deepnoteServerStarter.node.ts` - Server lifecycle management
+- `src/kernels/deepnote/deepnoteServerProvider.node.ts` - Jupyter server provider implementation
+- `src/notebooks/deepnote/deepnoteKernelAutoSelector.node.ts` - Automatic kernel selection
 
 ### Modified:
 
--   `src/kernels/types.ts` - Added DeepnoteKernelConnectionMetadata to union types
--   `src/notebooks/serviceRegistry.node.ts` - Registered new services
+- `src/kernels/types.ts` - Added DeepnoteKernelConnectionMetadata to union types
+- `src/notebooks/serviceRegistry.node.ts` - Registered new services
 
 ## Dependencies
 
--   `get-port`: For finding available ports
--   Existing VSCode notebook infrastructure
--   Existing kernel controller system
--   Python interpreter service
--   Jupyter server provider registry
--   JupyterLab session management
+- `get-port`: For finding available ports
+- Existing VSCode notebook infrastructure
+- Existing kernel controller system
+- Python interpreter service
+- Jupyter server provider registry
+- JupyterLab session management
 
 ## Technical Details
 
@@ -324,9 +324,9 @@ The implementation uses server-native kernel specs with venv isolation:
 1. **Queries server for available specs**: Connects to the running Deepnote server using `JupyterLabHelper` and queries available kernel specs via `getKernelSpecs()`
 2. **Selects any Python kernel spec**: Selects any available Python kernel spec (e.g., `python3-venv`, `python3`, or the first available kernel)
 3. **Venv isolation via server environment**: The Deepnote server is started with the venv's Python interpreter and environment variables configured:
-    - `PATH` is prepended with the venv's `bin/` directory
-    - `VIRTUAL_ENV` points to the venv path
-    - `PYTHONHOME` is removed to avoid conflicts
+   - `PATH` is prepended with the venv's `bin/` directory
+   - `VIRTUAL_ENV` points to the venv path
+   - `PYTHONHOME` is removed to avoid conflicts
 4. **Result**: The kernel uses the venv's Python environment even though it's using a server-native kernel spec, ensuring packages installed via `pip` are available
 
 ### Virtual Environment Path Handling
@@ -338,10 +338,10 @@ The implementation uses a robust hashing approach for virtual environment direct
 3. **Format**: Generates identifiers like `venv_a1b2c3d4` (max 16 characters)
 4. **Benefits**:
 
--   Avoids Windows MAX_PATH (260 character) limitations
--   Prevents directory structure leakage into extension storage
--   Provides consistent naming for both venv directories and kernel specs
--   Reduces collision risk with better hash distribution
+- Avoids Windows MAX_PATH (260 character) limitations
+- Prevents directory structure leakage into extension storage
+- Provides consistent naming for both venv directories and kernel specs
+- Reduces collision risk with better hash distribution
 
 ## Troubleshooting & Key Fixes
 
@@ -357,9 +357,9 @@ The implementation uses a robust hashing approach for virtual environment direct
 
 **Solution**: Instead of creating a custom kernel spec, the implementation now:
 
--   Queries the Deepnote server for available kernel specs
--   Selects an existing Python kernel (typically `python3-venv`)
--   Uses this server-native kernel spec for the connection
+- Queries the Deepnote server for available kernel specs
+- Selects an existing Python kernel (typically `python3-venv`)
+- Uses this server-native kernel spec for the connection
 
 ### Issue 3: "Kernel becomes unregistered after errors"
 
@@ -367,11 +367,11 @@ The implementation uses a robust hashing approach for virtual environment direct
 
 **Solution**: Implemented persistent kernel tracking and automatic reselection:
 
--   Controllers and connection metadata are stored per notebook file and reused across sessions
--   Listens to `onControllerSelectionChanged` events to detect when a Deepnote kernel becomes unselected
--   Automatically reselects the same kernel controller when it becomes deselected
--   Reuses existing servers and controllers instead of creating new ones
--   Ensures the same kernel remains available for the entire session, even after errors
+- Controllers and connection metadata are stored per notebook file and reused across sessions
+- Listens to `onControllerSelectionChanged` events to detect when a Deepnote kernel becomes unselected
+- Automatically reselects the same kernel controller when it becomes deselected
+- Reuses existing servers and controllers instead of creating new ones
+- Ensures the same kernel remains available for the entire session, even after errors
 
 ### Issue 4: "Controllers getting disposed causing repeated recreation"
 
@@ -386,11 +386,11 @@ The implementation uses a robust hashing approach for virtual environment direct
 
 **Solution**: Mark Deepnote controllers as protected using `trackActiveInterpreterControllers()`:
 
--   Call `controllerRegistration.trackActiveInterpreterControllers(controllers)` when creating Deepnote controllers
--   This adds them to the `_activeInterpreterControllerIds` set, which prevents disposal in `canControllerBeDisposed()`
--   Controllers are now created **once** and persist for the entire session
--   **No more recreation, no more debouncing, no more race conditions**
--   The same controller instance handles all cell executions, even after errors
+- Call `controllerRegistration.trackActiveInterpreterControllers(controllers)` when creating Deepnote controllers
+- This adds them to the `_activeInterpreterControllerIds` set, which prevents disposal in `canControllerBeDisposed()`
+- Controllers are now created **once** and persist for the entire session
+- **No more recreation, no more debouncing, no more race conditions**
+- The same controller instance handles all cell executions, even after errors
 
 These changes ensure that Deepnote notebooks can execute cells reliably by:
 
@@ -411,14 +411,14 @@ These changes ensure that Deepnote notebooks can execute cells reliably by:
 
 **Solution**: Configure the Deepnote server's environment to use the venv:
 
--   When starting the Jupyter server, set environment variables:
-    -   Prepend venv's `bin/` directory to `PATH`
-    -   Set `VIRTUAL_ENV` to point to the venv
-    -   Remove `PYTHONHOME` (can interfere with venv)
--   Install `ipykernel` in the venv along with deepnote-toolkit
--   Use any server-native Python kernel spec (e.g., `python3-venv`)
--   The kernel inherits the server's environment, so it uses the venv's Python
--   Shell commands (`!pip install`) also inherit the server's environment, so they use the venv's Python
+- When starting the Jupyter server, set environment variables:
+  - Prepend venv's `bin/` directory to `PATH`
+  - Set `VIRTUAL_ENV` to point to the venv
+  - Remove `PYTHONHOME` (can interfere with venv)
+- Install `ipykernel` in the venv along with deepnote-toolkit
+- Use any server-native Python kernel spec (e.g., `python3-venv`)
+- The kernel inherits the server's environment, so it uses the venv's Python
+- Shell commands (`!pip install`) also inherit the server's environment, so they use the venv's Python
 
 **Result**: Both the kernel and shell commands use the same Python environment (the venv), so packages installed via `!pip install` or `%pip install` are immediately available for import.
 
@@ -434,8 +434,8 @@ These changes ensure that Deepnote notebooks can execute cells reliably by:
 
 **Solution**: Explicitly upgrade pip in the venv after creation:
 
--   After creating the venv and verifying the interpreter exists, run `python -m pip install --upgrade pip`
--   This ensures the venv uses the latest available pip version from PyPI
--   The upgrade happens before installing deepnote-toolkit, ensuring all package installations use the latest pip
+- After creating the venv and verifying the interpreter exists, run `python -m pip install --upgrade pip`
+- This ensures the venv uses the latest available pip version from PyPI
+- The upgrade happens before installing deepnote-toolkit, ensuring all package installations use the latest pip
 
 **Result**: The venv now uses the latest pip version (e.g., 25.2), ensuring compatibility with modern package installations and access to the latest pip features and bug fixes.

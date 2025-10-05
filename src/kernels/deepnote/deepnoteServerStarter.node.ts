@@ -461,15 +461,32 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter {
                         .filter((line) => line.trim() && !line.includes('ParentProcessId'));
                     if (lines.length > 0) {
                         const ppid = parseInt(lines[0].trim(), 10);
-                        if (!isNaN(ppid) && ppid > 0) {
+                        if (!isNaN(ppid)) {
+                            // PPID of 0 means orphaned
+                            if (ppid === 0) {
+                                return true;
+                            }
+
                             // Check if parent process exists
                             const parentCheck = await processService.exec(
                                 'tasklist',
                                 ['/FI', `PID eq ${ppid}`, '/FO', 'CSV', '/NH'],
                                 { throwOnStdErr: false }
                             );
-                            // If parent doesn't exist or is system process, it's orphaned
-                            return !parentCheck.stdout || parentCheck.stdout.trim().length === 0 || ppid === 0;
+
+                            // Normalize and check stdout
+                            const stdout = (parentCheck.stdout || '').trim();
+
+                            // Parent is missing if:
+                            // 1. stdout is empty
+                            // 2. stdout starts with "INFO:" (case-insensitive)
+                            // 3. stdout contains "no tasks are running" (case-insensitive)
+                            if (stdout.length === 0 || /^INFO:/i.test(stdout) || /no tasks are running/i.test(stdout)) {
+                                return true; // Parent missing, process is orphaned
+                            }
+
+                            // Parent exists
+                            return false;
                         }
                     }
                 }

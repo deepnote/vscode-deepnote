@@ -7,7 +7,7 @@ import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { IDeepnoteServerStarter, IDeepnoteToolkitInstaller, DeepnoteServerInfo, DEEPNOTE_DEFAULT_PORT } from './types';
 import { IProcessServiceFactory, ObservableExecutionResult } from '../../platform/common/process/types.node';
 import { logger } from '../../platform/logging';
-import { IOutputChannel, IDisposable, IHttpClient } from '../../platform/common/types';
+import { IOutputChannel, IDisposable, IHttpClient, IAsyncDisposableRegistry } from '../../platform/common/types';
 import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
 import { sleep } from '../../platform/common/utils/async';
 import { Cancellation, raceCancellationError } from '../../platform/common/cancellation';
@@ -28,8 +28,17 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter {
         @inject(IProcessServiceFactory) private readonly processServiceFactory: IProcessServiceFactory,
         @inject(IDeepnoteToolkitInstaller) private readonly toolkitInstaller: IDeepnoteToolkitInstaller,
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel,
-        @inject(IHttpClient) private readonly httpClient: IHttpClient
-    ) {}
+        @inject(IHttpClient) private readonly httpClient: IHttpClient,
+        @inject(IAsyncDisposableRegistry) asyncRegistry: IAsyncDisposableRegistry
+    ) {
+        // Register for disposal when the extension deactivates
+        asyncRegistry.push(this);
+
+        // Clean up any orphaned deepnote-toolkit processes from previous sessions
+        this.cleanupOrphanedProcesses().catch((ex) => {
+            logger.warn(`Failed to cleanup orphaned processes: ${ex}`);
+        });
+    }
 
     public async getOrStartServer(
         interpreter: PythonEnvironment,
@@ -247,17 +256,54 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter {
         }
     }
 
-    public dispose(): void {
+    public async dispose(): Promise<void> {
         logger.info('Disposing DeepnoteServerStarter - stopping all servers...');
 
-        // Stop all server processes
+        // Wait for any pending operations to complete (with timeout)
+        const pendingOps = Array.from(this.pendingOperations.values());
+        if (pendingOps.length > 0) {
+            logger.info(`Waiting for ${pendingOps.length} pending operations to complete...`);
+            await Promise.allSettled(pendingOps.map((op) => Promise.race([op, sleep(2000)])));
+        }
+
+        // Stop all server processes and wait for them to exit
+        const killPromises: Promise<void>[] = [];
         for (const [fileKey, serverProcess] of this.serverProcesses.entries()) {
             try {
                 logger.info(`Stopping Deepnote server for ${fileKey}...`);
-                serverProcess.proc?.kill();
+                const proc = serverProcess.proc;
+                if (proc && !proc.killed) {
+                    // Create a promise that resolves when the process exits
+                    const exitPromise = new Promise<void>((resolve) => {
+                        const timeout = setTimeout(() => {
+                            logger.warn(`Process for ${fileKey} did not exit gracefully, force killing...`);
+                            try {
+                                proc.kill('SIGKILL');
+                            } catch {
+                                // Ignore errors on force kill
+                            }
+                            resolve();
+                        }, 3000); // Wait up to 3 seconds for graceful exit
+
+                        proc.once('exit', () => {
+                            clearTimeout(timeout);
+                            resolve();
+                        });
+                    });
+
+                    // Send SIGTERM for graceful shutdown
+                    proc.kill('SIGTERM');
+                    killPromises.push(exitPromise);
+                }
             } catch (ex) {
                 logger.error(`Error stopping Deepnote server for ${fileKey}: ${ex}`);
             }
+        }
+
+        // Wait for all processes to exit
+        if (killPromises.length > 0) {
+            logger.info(`Waiting for ${killPromises.length} server processes to exit...`);
+            await Promise.allSettled(killPromises);
         }
 
         // Dispose all tracked disposables
@@ -276,5 +322,95 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter {
         this.pendingOperations.clear();
 
         logger.info('DeepnoteServerStarter disposed successfully');
+    }
+
+    /**
+     * Cleans up any orphaned deepnote-toolkit processes from previous VS Code sessions.
+     * This prevents port conflicts when starting new servers.
+     */
+    private async cleanupOrphanedProcesses(): Promise<void> {
+        try {
+            logger.info('Checking for orphaned deepnote-toolkit processes...');
+            const processService = await this.processServiceFactory.create(undefined);
+
+            // Find all deepnote-toolkit server processes
+            let command: string;
+            let args: string[];
+
+            if (process.platform === 'win32') {
+                // Windows: use tasklist and findstr
+                command = 'tasklist';
+                args = ['/FI', 'IMAGENAME eq python.exe', '/FO', 'CSV', '/NH'];
+            } else {
+                // Unix-like: use ps and grep
+                command = 'ps';
+                args = ['aux'];
+            }
+
+            const result = await processService.exec(command, args, { throwOnStdErr: false });
+
+            if (result.stdout) {
+                const lines = result.stdout.split('\n');
+                const pidsToKill: number[] = [];
+
+                for (const line of lines) {
+                    // Look for processes running deepnote_toolkit server
+                    if (line.includes('deepnote_toolkit') && line.includes('server')) {
+                        // Extract PID based on platform
+                        let pid: number | undefined;
+
+                        if (process.platform === 'win32') {
+                            // Windows CSV format: "python.exe","12345",...
+                            const match = line.match(/"python\.exe","(\d+)"/);
+                            if (match) {
+                                pid = parseInt(match[1], 10);
+                            }
+                        } else {
+                            // Unix format: user PID ...
+                            const parts = line.trim().split(/\s+/);
+                            if (parts.length > 1) {
+                                pid = parseInt(parts[1], 10);
+                            }
+                        }
+
+                        if (pid && !isNaN(pid)) {
+                            pidsToKill.push(pid);
+                        }
+                    }
+                }
+
+                if (pidsToKill.length > 0) {
+                    logger.info(
+                        `Found ${pidsToKill.length} orphaned deepnote-toolkit processes: ${pidsToKill.join(', ')}`
+                    );
+                    this.outputChannel.appendLine(
+                        `Cleaning up ${pidsToKill.length} orphaned deepnote-toolkit process(es) from previous session...`
+                    );
+
+                    // Kill each process
+                    for (const pid of pidsToKill) {
+                        try {
+                            if (process.platform === 'win32') {
+                                await processService.exec('taskkill', ['/F', '/T', '/PID', pid.toString()], {
+                                    throwOnStdErr: false
+                                });
+                            } else {
+                                await processService.exec('kill', ['-9', pid.toString()], { throwOnStdErr: false });
+                            }
+                            logger.info(`Killed orphaned process ${pid}`);
+                        } catch (ex) {
+                            logger.warn(`Failed to kill process ${pid}: ${ex}`);
+                        }
+                    }
+
+                    this.outputChannel.appendLine('✓ Cleanup complete');
+                } else {
+                    logger.info('No orphaned deepnote-toolkit processes found');
+                }
+            }
+        } catch (ex) {
+            // Don't fail startup if cleanup fails
+            logger.warn(`Error during orphaned process cleanup: ${ex}`);
+        }
     }
 }

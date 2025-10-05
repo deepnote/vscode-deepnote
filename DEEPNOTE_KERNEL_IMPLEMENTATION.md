@@ -26,6 +26,7 @@ This implementation adds automatic kernel selection and startup for `.deepnote` 
 #### 2. **Deepnote Toolkit Installer** (`src/kernels/deepnote/deepnoteToolkitInstaller.node.ts`)
 
 -   Creates a dedicated virtual environment per `.deepnote` file
+-   **Upgrades pip** in the venv to the latest version (ensures latest pip features and fixes)
 -   Checks if `deepnote-toolkit` is installed in the venv
 -   Installs the toolkit and `ipykernel` from the hardcoded S3 wheel URL
 -   **Registers a kernel spec** using `ipykernel install --user --name deepnote-venv-<hash>` that points to the venv's Python interpreter
@@ -128,6 +129,8 @@ Extract base file URI (remove query params)
 Check if venv exists for this file → Yes → Skip to server
     ↓ No
 Create venv for this .deepnote file
+    ↓
+Upgrade pip to latest version in venv
     ↓
 pip install deepnote-toolkit[server] and ipykernel in venv
     ↓
@@ -424,3 +427,21 @@ These changes ensure that Deepnote notebooks can execute cells reliably by:
 -   This ensures `!pip install` and other shell commands use the venv's Python
 
 **Result**: Both the kernel and shell commands now use the same Python environment (the venv), so packages installed via `!pip install` or `%pip install` are immediately available for import.
+
+### Issue 6: "Venv created with outdated pip version"
+
+**Problem**: When creating a virtual environment using `python -m venv`, Python's venv module bundles its own version of pip (e.g., 25.0.1) rather than copying the pip from the host system (e.g., 25.2). This could lead to:
+
+1. Missing features or bug fixes available in newer pip versions
+2. Installation failures for packages that require newer pip features
+3. Inconsistent behavior between host and venv environments
+
+**Root Cause**: The `venv` module includes a bundled version of pip that may be older than the pip installed on the host system. This bundled version is used when creating new virtual environments.
+
+**Solution**: Explicitly upgrade pip in the venv after creation:
+
+-   After creating the venv and verifying the interpreter exists, run `python -m pip install --upgrade pip`
+-   This ensures the venv uses the latest available pip version from PyPI
+-   The upgrade happens before installing deepnote-toolkit, ensuring all package installations use the latest pip
+
+**Result**: The venv now uses the latest pip version (e.g., 25.2), ensuring compatibility with modern package installations and access to the latest pip features and bug fixes.

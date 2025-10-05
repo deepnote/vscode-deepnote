@@ -504,10 +504,10 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter {
                             return true;
                         }
                         // Check if parent process exists
-                        const parentCheck = await processService.exec('ps', ['-p', ppid.toString()], {
+                        const parentCheck = await processService.exec('ps', ['-p', ppid.toString(), '-o', 'pid='], {
                             throwOnStdErr: false
                         });
-                        return !parentCheck.stdout || parentCheck.stdout.trim().length === 0;
+                        return parentCheck.stdout.trim().length === 0;
                     }
                 }
             }

@@ -88,7 +88,7 @@ export interface IDeepnoteToolkitInstaller {
 }
 
 export const IDeepnoteServerStarter = Symbol('IDeepnoteServerStarter');
-export interface IDeepnoteServerStarter extends vscode.Disposable {
+export interface IDeepnoteServerStarter {
     /**
      * Starts or gets an existing deepnote-toolkit Jupyter server.
      * @param interpreter The Python interpreter to use
@@ -107,6 +107,12 @@ export interface IDeepnoteServerStarter extends vscode.Disposable {
      * @param deepnoteFileUri The URI of the .deepnote file
      */
     stopServer(deepnoteFileUri: vscode.Uri): Promise<void>;
+
+    /**
+     * Disposes all server processes and resources.
+     * Called when the extension is deactivated.
+     */
+    dispose(): Promise<void>;
 }
 
 export interface DeepnoteServerInfo {

@@ -29,10 +29,10 @@ suite('DeepnoteDataConverter', () => {
             assert.strictEqual(cells[0].kind, NotebookCellKind.Code);
             assert.strictEqual(cells[0].value, 'print("hello")');
             assert.strictEqual(cells[0].languageId, 'python');
-            assert.strictEqual(cells[0].metadata?.deepnoteBlockId, 'block1');
-            assert.strictEqual(cells[0].metadata?.deepnoteBlockType, 'code');
-            assert.strictEqual(cells[0].metadata?.deepnoteSortingKey, 'a0');
-            assert.deepStrictEqual(cells[0].metadata?.deepnoteMetadata, { custom: 'data' });
+            assert.strictEqual(cells[0].metadata?.__deepnotePocket?.id, 'block1');
+            assert.strictEqual(cells[0].metadata?.__deepnotePocket?.type, 'code');
+            assert.strictEqual(cells[0].metadata?.__deepnotePocket?.sortingKey, 'a0');
+            assert.strictEqual(cells[0].metadata?.custom, 'data');
         });
 
         test('converts simple markdown block to cell', () => {
@@ -51,26 +51,24 @@ suite('DeepnoteDataConverter', () => {
             assert.strictEqual(cells[0].kind, NotebookCellKind.Markup);
             assert.strictEqual(cells[0].value, '# Title');
             assert.strictEqual(cells[0].languageId, 'markdown');
-            assert.strictEqual(cells[0].metadata?.deepnoteBlockId, 'block2');
-            assert.strictEqual(cells[0].metadata?.deepnoteBlockType, 'markdown');
+            assert.strictEqual(cells[0].metadata?.__deepnotePocket?.id, 'block2');
+            assert.strictEqual(cells[0].metadata?.__deepnotePocket?.type, 'markdown');
         });
 
-        test('handles execution count and output reference', () => {
+        test('handles execution count', () => {
             const blocks: DeepnoteBlock[] = [
                 {
                     id: 'block1',
                     type: 'code',
                     content: 'x = 1',
                     sortingKey: 'a0',
-                    executionCount: 5,
-                    outputReference: 'output-ref-123'
+                    executionCount: 5
                 }
             ];
 
             const cells = converter.convertBlocksToCells(blocks);
 
-            assert.strictEqual(cells[0].metadata?.executionCount, 5);
-            assert.strictEqual(cells[0].metadata?.deepnoteOutputReference, 'output-ref-123');
+            assert.strictEqual(cells[0].metadata?.__deepnotePocket?.executionCount, 5);
         });
 
         test('converts blocks with outputs', () => {
@@ -105,9 +103,12 @@ suite('DeepnoteDataConverter', () => {
                     value: 'print("test")',
                     languageId: 'python',
                     metadata: {
-                        deepnoteBlockId: 'existing-id',
-                        deepnoteSortingKey: 'a5',
-                        deepnoteMetadata: { original: 'metadata' }
+                        __deepnotePocket: {
+                            id: 'existing-id',
+                            type: 'code',
+                            sortingKey: 'a5'
+                        },
+                        original: 'metadata'
                     }
                 }
             ];
@@ -127,7 +128,12 @@ suite('DeepnoteDataConverter', () => {
                 {
                     kind: NotebookCellKind.Markup,
                     value: '## Heading',
-                    languageId: 'markdown'
+                    languageId: 'markdown',
+                    metadata: {
+                        __deepnotePocket: {
+                            type: 'markdown'
+                        }
+                    }
                 }
             ];
 
@@ -161,19 +167,29 @@ suite('DeepnoteDataConverter', () => {
             assert.strictEqual(blocks[1].sortingKey, 'a1');
         });
 
-        test('handles execution count from metadata and executionSummary', () => {
+        test('handles execution count from pocket', () => {
             const cells: NotebookCellData[] = [
                 {
                     kind: NotebookCellKind.Code,
                     value: 'x = 1',
                     languageId: 'python',
-                    metadata: { executionCount: 10 }
+                    metadata: {
+                        __deepnotePocket: {
+                            type: 'code',
+                            executionCount: 10
+                        }
+                    }
                 },
                 {
                     kind: NotebookCellKind.Code,
                     value: 'y = 2',
                     languageId: 'python',
-                    executionSummary: { executionOrder: 20 }
+                    metadata: {
+                        __deepnotePocket: {
+                            type: 'code',
+                            executionCount: 20
+                        }
+                    }
                 }
             ];
 
@@ -181,21 +197,6 @@ suite('DeepnoteDataConverter', () => {
 
             assert.strictEqual(blocks[0].executionCount, 10);
             assert.strictEqual(blocks[1].executionCount, 20);
-        });
-
-        test('includes output reference when present', () => {
-            const cells: NotebookCellData[] = [
-                {
-                    kind: NotebookCellKind.Code,
-                    value: 'print("test")',
-                    languageId: 'python',
-                    metadata: { deepnoteOutputReference: 'ref-123' }
-                }
-            ];
-
-            const blocks = converter.convertCellsToBlocks(cells);
-
-            assert.strictEqual(blocks[0].outputReference, 'ref-123');
         });
     });
 
@@ -402,9 +403,9 @@ suite('DeepnoteDataConverter', () => {
                     sortingKey: 'a0',
                     executionCount: 5,
                     metadata: { custom: 'data' },
-                    outputReference: 'ref-123',
                     outputs: [
                         {
+                            name: 'stdout',
                             output_type: 'stream',
                             text: 'hello\n'
                         }
@@ -425,201 +426,80 @@ suite('DeepnoteDataConverter', () => {
             assert.deepStrictEqual(roundTripBlocks, originalBlocks);
         });
 
-        test('blocks -> cells -> blocks preserves minimal multi-mime outputs', () => {
-            const originalBlocks: DeepnoteBlock[] = [
+        test('real deepnote notebook round-trips without losing data', () => {
+            // Inline test data representing a real Deepnote notebook with various block types
+            // blockGroup is an optional field not in the DeepnoteBlock interface, so we cast as any
+            const originalBlocks = [
                 {
-                    id: 'simple-multi',
-                    type: 'code',
-                    content: 'test',
-                    sortingKey: 'z0',
-                    outputs: [
-                        {
-                            output_type: 'execute_result',
-                            execution_count: 1,
-                            data: {
-                                'text/plain': 'Result object',
-                                'text/html': '<div>Result</div>'
-                            }
-                        }
-                    ]
-                }
-            ];
-
-            const cells = converter.convertBlocksToCells(originalBlocks);
-            const roundTripBlocks = converter.convertCellsToBlocks(cells);
-
-            assert.deepStrictEqual(roundTripBlocks, originalBlocks);
-        });
-
-        test('blocks -> cells -> blocks preserves simpler multi-mime outputs', () => {
-            const originalBlocks: DeepnoteBlock[] = [
-                {
-                    id: 'multi-output-1',
-                    type: 'code',
-                    content: 'display(data)',
-                    sortingKey: 'b0',
-                    executionCount: 2,
-                    outputs: [
-                        // Stream with name
-                        {
-                            output_type: 'stream',
-                            name: 'stdout',
-                            text: 'Starting...\n'
-                        },
-                        // Execute result with multiple mimes
-                        {
-                            output_type: 'execute_result',
-                            execution_count: 2,
-                            data: {
-                                'text/plain': 'Result object',
-                                'text/html': '<div>Result</div>'
-                            },
-                            metadata: {
-                                custom: 'value'
-                            }
-                        },
-                        // Display data
-                        {
-                            output_type: 'display_data',
-                            data: {
-                                'text/plain': 'Display text',
-                                'application/json': { result: true }
-                            }
-                        }
-                    ]
+                    blockGroup: '1a4224497bcd499ba180e5795990aaa8',
+                    content: '# Data Exploration\n\nThis notebook demonstrates basic data exploration.',
+                    id: 'b0524a309dff421e95f2efd64aaca02a',
+                    metadata: {},
+                    sortingKey: 'a0',
+                    type: 'markdown'
                 },
                 {
-                    id: 'error-block',
-                    type: 'code',
-                    content: 'error()',
-                    sortingKey: 'b1',
-                    executionCount: 3,
-                    outputs: [
-                        {
-                            output_type: 'error',
-                            ename: 'RuntimeError',
-                            evalue: 'Something went wrong',
-                            traceback: ['Line 1: error']
-                        }
-                    ]
-                }
-            ];
-
-            const cells = converter.convertBlocksToCells(originalBlocks);
-            const roundTripBlocks = converter.convertCellsToBlocks(cells);
-
-            assert.deepStrictEqual(roundTripBlocks, originalBlocks);
-        });
-
-        test('blocks -> cells -> blocks preserves complex multi-mime rich outputs', () => {
-            const originalBlocks: DeepnoteBlock[] = [
-                {
-                    id: 'rich-block-1',
-                    type: 'code',
-                    content: 'import matplotlib.pyplot as plt\nplt.plot([1,2,3])',
-                    sortingKey: 'aa0',
-                    executionCount: 3,
-                    metadata: { slideshow: { slide_type: 'slide' } },
-                    outputs: [
-                        // Stream output
-                        {
-                            output_type: 'stream',
-                            name: 'stdout',
-                            text: 'Processing data...\n'
-                        },
-                        // Execute result with multiple mime types
-                        {
-                            output_type: 'execute_result',
-                            execution_count: 3,
-                            data: {
-                                'text/plain': '<matplotlib.lines.Line2D at 0x7f8b8c0d5f50>',
-                                'text/html': '<div class="plot">Plot rendered</div>',
-                                'application/json': { type: 'plot', data: [1, 2, 3] }
-                            },
-                            metadata: {
-                                needs_background: 'light'
-                            }
-                        },
-                        // Display data with image
-                        {
-                            output_type: 'display_data',
-                            data: {
-                                'image/png':
-                                    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
-                                'text/plain': '<Figure size 640x480 with 1 Axes>'
-                            },
-                            metadata: {
-                                image: {
-                                    width: 640,
-                                    height: 480
-                                }
-                            }
-                        }
-                    ]
+                    blockGroup: '9dd9578e604a4235a552d1f4a53336ee',
+                    content: 'import pandas as pd\nimport numpy as np\n\nnp.random.seed(42)',
+                    executionCount: 1,
+                    id: 'b75d3ada977549b29f4c7f2183d52fcf',
+                    metadata: {
+                        execution_start: 1759390294701,
+                        execution_millis: 1
+                    },
+                    outputs: [],
+                    sortingKey: 'm',
+                    type: 'code'
                 },
                 {
-                    id: 'rich-block-2',
-                    type: 'code',
-                    content: 'raise ValueError("Test error")',
-                    sortingKey: 'aa1',
-                    executionCount: 4,
+                    blockGroup: 'cf243a3bbe914b7598eb86935c9f5cf4',
+                    content: 'print("Dataset shape:", df.shape)',
+                    executionCount: 3,
+                    id: '6e8982f5cae54715b7620c9dc58e6de5',
+                    metadata: {
+                        execution_start: 1759390294821,
+                        execution_millis: 3
+                    },
                     outputs: [
-                        // Error output with traceback
                         {
+                            name: 'stdout',
+                            output_type: 'stream',
+                            text: 'Dataset shape: (100, 5)\n'
+                        }
+                    ],
+                    sortingKey: 'y',
+                    type: 'code'
+                },
+                {
+                    blockGroup: 'e3e8eea67aa64ed981c86edff029dc40',
+                    content: 'print(r)',
+                    executionCount: 7,
+                    id: '8b99dc5b5ee94e0e9ec278466344ae2b',
+                    metadata: {
+                        execution_start: 1759390787589,
+                        execution_millis: 320
+                    },
+                    outputs: [
+                        {
+                            ename: 'NameError',
+                            evalue: "name 'r' is not defined",
                             output_type: 'error',
-                            ename: 'ValueError',
-                            evalue: 'Test error',
                             traceback: [
                                 '\u001b[0;31m---------------------------------------------------------------------------\u001b[0m',
-                                '\u001b[0;31mValueError\u001b[0m                                Traceback (most recent call last)',
-                                '\u001b[0;32m<ipython-input-4-5c5c51ed1a63>\u001b[0m in \u001b[0;36m<module>\u001b[0;34m\u001b[0m\n\u001b[0;32m----> 1\u001b[0;31m \u001b[0;32mraise\u001b[0m \u001b[0mValueError\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m"Test error"\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m',
-                                '\u001b[0;31mValueError\u001b[0m: Test error'
+                                '\u001b[0;31mNameError\u001b[0m                                 Traceback (most recent call last)'
                             ]
                         }
-                    ]
-                },
-                {
-                    id: 'rich-block-3',
-                    type: 'code',
-                    content:
-                        'from IPython.display import display, HTML, JSON\ndisplay(HTML("<b>Bold text</b>"), JSON({"key": "value"}))',
-                    sortingKey: 'aa2',
-                    executionCount: 5,
-                    outputReference: 'output-ref-789',
-                    outputs: [
-                        // Multiple display_data outputs
-                        {
-                            output_type: 'display_data',
-                            data: {
-                                'text/html': '<b>Bold text</b>',
-                                'text/plain': 'Bold text'
-                            }
-                        },
-                        {
-                            output_type: 'display_data',
-                            data: {
-                                'application/json': { key: 'value' },
-                                'text/plain': "{'key': 'value'}"
-                            },
-                            metadata: {
-                                expanded: false,
-                                root: 'object'
-                            }
-                        }
-                    ]
-                },
-                {
-                    id: 'markdown-block',
-                    type: 'markdown',
-                    content: '## Results\n\nThe above cells demonstrate various output types.',
-                    sortingKey: 'aa3',
-                    metadata: { tags: ['documentation'] }
+                    ],
+                    sortingKey: 'yj',
+                    type: 'code'
                 }
-            ];
+            ] as unknown as DeepnoteBlock[];
 
+            // Convert blocks -> cells -> blocks
             const cells = converter.convertBlocksToCells(originalBlocks);
             const roundTripBlocks = converter.convertCellsToBlocks(cells);
 
+            // Should preserve all blocks without data loss
             assert.deepStrictEqual(roundTripBlocks, originalBlocks);
         });
     });

@@ -43,6 +43,16 @@ import { INotebookEditorProvider, INotebookPythonEnvironmentService } from './ty
 import { DeepnoteActivationService } from './deepnote/deepnoteActivationService';
 import { DeepnoteNotebookManager } from './deepnote/deepnoteNotebookManager';
 import { IDeepnoteNotebookManager } from './types';
+import {
+    IDeepnoteToolkitInstaller,
+    IDeepnoteServerStarter,
+    IDeepnoteKernelAutoSelector,
+    IDeepnoteServerProvider
+} from '../kernels/deepnote/types';
+import { DeepnoteToolkitInstaller } from '../kernels/deepnote/deepnoteToolkitInstaller.node';
+import { DeepnoteServerStarter } from '../kernels/deepnote/deepnoteServerStarter.node';
+import { DeepnoteKernelAutoSelector } from './deepnote/deepnoteKernelAutoSelector.node';
+import { DeepnoteServerProvider } from '../kernels/deepnote/deepnoteServerProvider.node';
 
 export function registerTypes(serviceManager: IServiceManager, isDevMode: boolean) {
     registerControllerTypes(serviceManager, isDevMode);
@@ -116,6 +126,14 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
         DeepnoteActivationService
     );
     serviceManager.addSingleton<IDeepnoteNotebookManager>(IDeepnoteNotebookManager, DeepnoteNotebookManager);
+
+    // Deepnote kernel services
+    serviceManager.addSingleton<IDeepnoteToolkitInstaller>(IDeepnoteToolkitInstaller, DeepnoteToolkitInstaller);
+    serviceManager.addSingleton<IDeepnoteServerStarter>(IDeepnoteServerStarter, DeepnoteServerStarter);
+    serviceManager.addSingleton<IDeepnoteServerProvider>(IDeepnoteServerProvider, DeepnoteServerProvider);
+    serviceManager.addBinding(IDeepnoteServerProvider, IExtensionSyncActivationService);
+    serviceManager.addSingleton<IDeepnoteKernelAutoSelector>(IDeepnoteKernelAutoSelector, DeepnoteKernelAutoSelector);
+    serviceManager.addBinding(IDeepnoteKernelAutoSelector, IExtensionSyncActivationService);
 
     // File export/import
     serviceManager.addSingleton<IFileConverter>(IFileConverter, FileConverter);

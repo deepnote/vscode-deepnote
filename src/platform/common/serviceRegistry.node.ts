@@ -20,6 +20,7 @@ import {
     ICryptoUtils,
     IExtensions,
     IFeaturesManager,
+    IHttpClient,
     IPersistentStateFactory,
     IsWindows
 } from './types';
@@ -31,6 +32,7 @@ import { registerTypes as variableRegisterTypes } from './variables/serviceRegis
 import { RunInDedicatedExtensionHostCommandHandler } from './application/commands/runInDedicatedExtensionHost.node';
 import { OldCacheCleaner } from './cache';
 import { ApplicationEnvironment } from './application/applicationEnvironment';
+import { HttpClient } from './net/httpClient';
 
 // eslint-disable-next-line
 export function registerTypes(serviceManager: IServiceManager) {
@@ -45,6 +47,7 @@ export function registerTypes(serviceManager: IServiceManager) {
     serviceManager.addSingleton<IExperimentService>(IExperimentService, ExperimentService);
 
     serviceManager.addSingleton<IFeaturesManager>(IFeaturesManager, FeatureManager);
+    serviceManager.addSingleton<IHttpClient>(IHttpClient, HttpClient);
 
     serviceManager.addSingleton<IAsyncDisposableRegistry>(IAsyncDisposableRegistry, AsyncDisposableRegistry);
     serviceManager.addSingleton<IMultiStepInputFactory>(IMultiStepInputFactory, MultiStepInputFactory);

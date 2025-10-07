@@ -2,7 +2,7 @@ import { inject, injectable } from 'inversify';
 
 import { logger } from '../../../platform/logging';
 import { IDeepnoteNotebookManager } from '../../types';
-import { IntegrationStatus, IntegrationWithStatus } from './integrationTypes';
+import { DATAFRAME_SQL_INTEGRATION_ID, IntegrationStatus, IntegrationWithStatus } from './integrationTypes';
 import { IIntegrationDetector, IIntegrationStorage } from './types';
 
 /**
@@ -10,9 +10,6 @@ import { IIntegrationDetector, IIntegrationStorage } from './types';
  */
 @injectable()
 export class IntegrationDetector implements IIntegrationDetector {
-    // Special integration IDs that should be excluded from management
-    private readonly EXCLUDED_INTEGRATION_IDS = new Set(['deepnote-dataframe-sql']);
-
     constructor(
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager
@@ -48,7 +45,7 @@ export class IntegrationDetector implements IIntegrationDetector {
                     const integrationId = block.metadata.sql_integration_id;
 
                     // Skip excluded integrations (e.g., internal DuckDB integration)
-                    if (this.EXCLUDED_INTEGRATION_IDS.has(integrationId)) {
+                    if (integrationId === DATAFRAME_SQL_INTEGRATION_ID) {
                         logger.trace(
                             `IntegrationDetector: Skipping excluded integration: ${integrationId} in block ${block.id}`
                         );

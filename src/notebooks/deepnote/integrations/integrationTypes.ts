@@ -1,4 +1,10 @@
 /**
+ * Special integration ID that should be excluded from management.
+ * This is the internal DuckDB integration that doesn't require configuration.
+ */
+export const DATAFRAME_SQL_INTEGRATION_ID = 'deepnote-dataframe-sql';
+
+/**
  * Supported integration types
  */
 export enum IntegrationType {

@@ -6,16 +6,13 @@ import { Commands } from '../../../platform/common/constants';
 import { logger } from '../../../platform/logging';
 import { IntegrationWebviewProvider } from './integrationWebview';
 import { IIntegrationDetector, IIntegrationStorage } from './types';
-import { IntegrationStatus, IntegrationWithStatus } from './integrationTypes';
+import { DATAFRAME_SQL_INTEGRATION_ID, IntegrationStatus, IntegrationWithStatus } from './integrationTypes';
 
 /**
  * Manages integration UI and commands for Deepnote notebooks
  */
 @injectable()
 export class IntegrationManager {
-    // Special integration IDs that should be excluded from management
-    private readonly EXCLUDED_INTEGRATION_IDS = new Set(['deepnote-dataframe-sql']);
-
     private hasIntegrationsContext = 'deepnote.hasIntegrations';
 
     private hasUnconfiguredIntegrationsContext = 'deepnote.hasUnconfiguredIntegrations';
@@ -134,7 +131,7 @@ export class IntegrationManager {
                 const integrationId = deepnoteMetadata.sql_integration_id;
 
                 // Skip excluded integrations (e.g., internal DuckDB integration)
-                if (this.EXCLUDED_INTEGRATION_IDS.has(integrationId)) {
+                if (integrationId === DATAFRAME_SQL_INTEGRATION_ID) {
                     logger.trace(`IntegrationManager: Skipping excluded integration: ${integrationId}`);
                     continue;
                 }

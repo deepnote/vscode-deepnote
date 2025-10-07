@@ -32,16 +32,34 @@ export class IntegrationManager {
 
         // Listen for active notebook changes to update context
         this.extensionContext.subscriptions.push(
-            window.onDidChangeActiveNotebookEditor(() => void this.updateContext())
+            window.onDidChangeActiveNotebookEditor(() =>
+                this.updateContext().catch((err) =>
+                    logger.error('IntegrationManager: Failed to update context on notebook editor change', err)
+                )
+            )
         );
 
         // Listen for notebook document changes
-        this.extensionContext.subscriptions.push(workspace.onDidOpenNotebookDocument(() => void this.updateContext()));
+        this.extensionContext.subscriptions.push(
+            workspace.onDidOpenNotebookDocument(() =>
+                this.updateContext().catch((err) =>
+                    logger.error('IntegrationManager: Failed to update context on notebook open', err)
+                )
+            )
+        );
 
-        this.extensionContext.subscriptions.push(workspace.onDidCloseNotebookDocument(() => void this.updateContext()));
+        this.extensionContext.subscriptions.push(
+            workspace.onDidCloseNotebookDocument(() =>
+                this.updateContext().catch((err) =>
+                    logger.error('IntegrationManager: Failed to update context on notebook close', err)
+                )
+            )
+        );
 
         // Initial context update
-        void this.updateContext();
+        this.updateContext().catch((err) =>
+            logger.error('IntegrationManager: Failed to update context on activation', err)
+        );
     }
 
     /**

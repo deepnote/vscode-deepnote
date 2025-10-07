@@ -34,12 +34,14 @@ export class IntegrationManager {
         );
 
         // Listen for active notebook changes to update context
-        this.extensionContext.subscriptions.push(window.onDidChangeActiveNotebookEditor(() => this.updateContext()));
+        this.extensionContext.subscriptions.push(
+            window.onDidChangeActiveNotebookEditor(() => void this.updateContext())
+        );
 
         // Listen for notebook document changes
-        this.extensionContext.subscriptions.push(workspace.onDidOpenNotebookDocument(() => this.updateContext()));
+        this.extensionContext.subscriptions.push(workspace.onDidOpenNotebookDocument(() => void this.updateContext()));
 
-        this.extensionContext.subscriptions.push(workspace.onDidCloseNotebookDocument(() => this.updateContext()));
+        this.extensionContext.subscriptions.push(workspace.onDidCloseNotebookDocument(() => void this.updateContext()));
 
         // Initial context update
         void this.updateContext();

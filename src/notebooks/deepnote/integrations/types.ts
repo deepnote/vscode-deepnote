@@ -22,4 +22,3 @@ export interface IIntegrationDetector {
      */
     hasUnconfiguredIntegrations(projectId: string): Promise<boolean>;
 }
-

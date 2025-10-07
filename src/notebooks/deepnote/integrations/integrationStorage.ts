@@ -148,4 +148,3 @@ export class IntegrationStorage {
         await this.encryptedStorage.store(INTEGRATION_SERVICE_NAME, 'index', indexJson);
     }
 }
-

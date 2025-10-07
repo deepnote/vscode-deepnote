@@ -9,6 +9,7 @@ import { IIntegrationDetector, IIntegrationStorage } from './types';
 import {
     IntegrationStatus,
     IntegrationType,
+    IntegrationWithStatus,
     PostgresIntegrationConfig,
     BigQueryIntegrationConfig
 } from './integrationTypes';
@@ -101,38 +102,20 @@ export class IntegrationManager {
         logger.debug(`IntegrationManager: Project ID: ${projectId}`);
         logger.trace(`IntegrationManager: Notebook metadata:`, activeNotebook.metadata);
 
-        // Check if project is actually stored
-        const storedProject = this.notebookManager.getOriginalProject(projectId);
-        if (!storedProject) {
-            logger.warn(
-                `IntegrationManager: Project ${projectId} not found in notebook manager. This may indicate the notebook hasn't been fully loaded yet.`
-            );
-        } else {
-            logger.debug(
-                `IntegrationManager: Project ${projectId} found with ${storedProject.project.notebooks.length} notebooks`
-            );
+        // First try to detect integrations from the stored project
+        let integrations = await this.integrationDetector.detectIntegrations(projectId);
+
+        // If no integrations found in stored project, scan cells directly
+        // This handles the case where the notebook was already open when the extension loaded
+        if (integrations.size === 0) {
+            logger.debug(`IntegrationManager: No integrations found in stored project, scanning cells directly`);
+            integrations = await this.detectIntegrationsFromCells(activeNotebook);
         }
 
-        // Detect integrations in the project
-        const integrations = await this.integrationDetector.detectIntegrations(projectId);
-
-        logger.debug(`IntegrationManager: Detected ${integrations.size} integrations`);
+        logger.debug(`IntegrationManager: Found ${integrations.size} integrations`);
 
         if (integrations.size === 0) {
-            // Try to scan cells directly as a fallback
-            const cellIntegrations = this.scanCellsForIntegrations(activeNotebook);
-            logger.debug(`IntegrationManager: Found ${cellIntegrations.size} integrations by scanning cells directly`);
-
-            if (cellIntegrations.size > 0) {
-                void window.showInformationMessage(
-                    `Found ${cellIntegrations.size} integrations in cells, but they're not in the project store. This is a bug - check the logs.`
-                );
-                return;
-            }
-
-            void window.showInformationMessage(
-                `No integrations found in this project. Project ID: ${projectId}. Check the logs for details.`
-            );
+            void window.showInformationMessage(`No integrations found in this project.`);
             return;
         }
 
@@ -161,10 +144,11 @@ export class IntegrationManager {
     }
 
     /**
-     * Scan cells directly for integration metadata (fallback method)
+     * Detect integrations by scanning cells directly (fallback method)
+     * This is used when the project isn't stored in the notebook manager
      */
-    private scanCellsForIntegrations(notebook: NotebookDocument): Set<string> {
-        const integrationIds = new Set<string>();
+    private async detectIntegrationsFromCells(notebook: NotebookDocument): Promise<Map<string, IntegrationWithStatus>> {
+        const integrations = new Map<string, IntegrationWithStatus>();
 
         for (const cell of notebook.getCells()) {
             const deepnoteMetadata = cell.metadata?.deepnoteMetadata;
@@ -179,12 +163,24 @@ export class IntegrationManager {
                     continue;
                 }
 
-                integrationIds.add(integrationId);
+                // Skip if we've already detected this integration
+                if (integrations.has(integrationId)) {
+                    continue;
+                }
+
+                // Check if the integration is configured
+                const config = await this.integrationStorage.get(integrationId);
+
+                integrations.set(integrationId, {
+                    config: config || null,
+                    status: config ? IntegrationStatus.Connected : IntegrationStatus.Disconnected
+                });
+
                 logger.debug(`IntegrationManager: Found integration in cell: ${integrationId}`);
             }
         }
 
-        return integrationIds;
+        return integrations;
     }
 
     /**

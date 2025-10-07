@@ -27,7 +27,9 @@ export class IntegrationDetector implements IIntegrationDetector {
         // Get the project
         const project = this.notebookManager.getOriginalProject(projectId);
         if (!project) {
-            logger.debug(`IntegrationDetector: No project found for ID: ${projectId}`);
+            logger.warn(
+                `IntegrationDetector: No project found for ID: ${projectId}. The project may not have been loaded yet.`
+            );
             return integrations;
         }
 

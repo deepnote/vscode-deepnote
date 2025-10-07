@@ -4,6 +4,7 @@ import { commands, NotebookDocument, window, workspace } from 'vscode';
 import { IExtensionContext } from '../../../platform/common/types';
 import { Commands } from '../../../platform/common/constants';
 import { logger } from '../../../platform/logging';
+import { IDeepnoteNotebookManager } from '../../types';
 import { IIntegrationDetector, IIntegrationStorage } from './types';
 import {
     IntegrationStatus,
@@ -27,7 +28,8 @@ export class IntegrationManager {
     constructor(
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
         @inject(IIntegrationDetector) private readonly integrationDetector: IIntegrationDetector,
-        @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage
+        @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
+        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager
     ) {}
 
     public activate(): void {
@@ -98,6 +100,18 @@ export class IntegrationManager {
 
         logger.debug(`IntegrationManager: Project ID: ${projectId}`);
         logger.trace(`IntegrationManager: Notebook metadata:`, activeNotebook.metadata);
+
+        // Check if project is actually stored
+        const storedProject = this.notebookManager.getOriginalProject(projectId);
+        if (!storedProject) {
+            logger.warn(
+                `IntegrationManager: Project ${projectId} not found in notebook manager. This may indicate the notebook hasn't been fully loaded yet.`
+            );
+        } else {
+            logger.debug(
+                `IntegrationManager: Project ${projectId} found with ${storedProject.project.notebooks.length} notebooks`
+            );
+        }
 
         // Detect integrations in the project
         const integrations = await this.integrationDetector.detectIntegrations(projectId);

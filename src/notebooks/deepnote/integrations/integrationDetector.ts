@@ -10,6 +10,9 @@ import { IIntegrationDetector, IIntegrationStorage } from './types';
  */
 @injectable()
 export class IntegrationDetector implements IIntegrationDetector {
+    // Special integration IDs that should be excluded from management
+    private readonly EXCLUDED_INTEGRATION_IDS = new Set(['deepnote-dataframe-sql']);
+
     constructor(
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager
@@ -41,6 +44,14 @@ export class IntegrationDetector implements IIntegrationDetector {
                 // Check if this is a code block with SQL integration metadata
                 if (block.type === 'code' && block.metadata?.sql_integration_id) {
                     const integrationId = block.metadata.sql_integration_id;
+
+                    // Skip excluded integrations (e.g., internal DuckDB integration)
+                    if (this.EXCLUDED_INTEGRATION_IDS.has(integrationId)) {
+                        logger.trace(
+                            `IntegrationDetector: Skipping excluded integration: ${integrationId} in block ${block.id}`
+                        );
+                        continue;
+                    }
 
                     logger.debug(`IntegrationDetector: Found integration: ${integrationId} in block ${block.id}`);
 

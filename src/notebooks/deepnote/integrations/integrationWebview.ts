@@ -368,30 +368,71 @@ export class IntegrationWebviewProvider {
 
             function renderIntegrations() {
             const listEl = document.getElementById('integrationList');
+
+            // Clear existing content
+            while (listEl.firstChild) {
+                listEl.removeChild(listEl.firstChild);
+            }
+
             if (!integrations || integrations.length === 0) {
-                listEl.innerHTML = '<p>No integrations found in this project.</p>';
+                const noIntegrationsMsg = document.createElement('p');
+                noIntegrationsMsg.textContent = 'No integrations found in this project.';
+                listEl.appendChild(noIntegrationsMsg);
                 return;
             }
 
-            listEl.innerHTML = integrations.map(integration => {
+            integrations.forEach(integration => {
                 const statusClass = integration.status === 'connected' ? 'status-connected' : 'status-disconnected';
                 const statusText = integration.status === 'connected' ? 'Connected' : 'Not Configured';
                 const configureText = integration.config ? 'Reconfigure' : 'Configure';
                 const displayName = integration.config?.name || integration.id;
 
-                return \`
-                    <div class="integration-item">
-                        <div class="integration-info">
-                            <div class="integration-name">\${displayName}</div>
-                            <div class="integration-status \${statusClass}">\${statusText}</div>
-                        </div>
-                        <div class="integration-actions">
-                            <button data-action="configure" data-id="\${integration.id}">\${configureText}</button>
-                            \${integration.config ? '<button class="secondary" data-action="delete" data-id="'+integration.id+'">Delete</button>' : ''}
-                        </div>
-                    </div>
-                \`;
-            }).join('');
+                // Create item container
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'integration-item';
+
+                // Create info section
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'integration-info';
+
+                const nameDiv = document.createElement('div');
+                nameDiv.className = 'integration-name';
+                nameDiv.textContent = displayName;
+
+                const statusDiv = document.createElement('div');
+                statusDiv.className = 'integration-status';
+                statusDiv.classList.add(statusClass);
+                statusDiv.textContent = statusText;
+
+                infoDiv.appendChild(nameDiv);
+                infoDiv.appendChild(statusDiv);
+
+                // Create actions section
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'integration-actions';
+
+                const configureBtn = document.createElement('button');
+                configureBtn.dataset.action = 'configure';
+                configureBtn.dataset.id = integration.id;
+                configureBtn.textContent = configureText;
+
+                actionsDiv.appendChild(configureBtn);
+
+                // Add delete button if configured
+                if (integration.config) {
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.className = 'secondary';
+                    deleteBtn.dataset.action = 'delete';
+                    deleteBtn.dataset.id = integration.id;
+                    deleteBtn.textContent = 'Delete';
+                    actionsDiv.appendChild(deleteBtn);
+                }
+
+                // Assemble the item
+                itemDiv.appendChild(infoDiv);
+                itemDiv.appendChild(actionsDiv);
+                listEl.appendChild(itemDiv);
+            });
         }
 
         // Event delegation for button clicks
@@ -417,29 +458,59 @@ export class IntegrationWebviewProvider {
             }
         });
 
+        function createFormGroup(labelText, inputElement) {
+            const formGroup = document.createElement('div');
+            formGroup.className = 'form-group';
+
+            const label = document.createElement('label');
+            label.textContent = labelText;
+
+            formGroup.appendChild(label);
+            formGroup.appendChild(inputElement);
+
+            return formGroup;
+        }
+
         function showConfigurationForm(integrationId, existingConfig) {
             currentIntegrationId = integrationId;
             const formContainer = document.getElementById('formContainer');
+
+            // Clear existing content
+            while (formContainer.firstChild) {
+                formContainer.removeChild(formContainer.firstChild);
+            }
 
             // Determine integration type
             let integrationType = existingConfig?.type;
             if (!integrationType) {
                 // Show type selection first
-                formContainer.innerHTML = \`
-                    <h2>Configure \${integrationId}</h2>
-                    <div class="form-group">
-                        <label>Integration Type:</label>
-                        <select id="integrationType">
-                            <option value="">Select type...</option>
-                            <option value="postgres">PostgreSQL</option>
-                            <option value="bigquery">BigQuery</option>
-                        </select>
-                    </div>
-                \`;
+                const heading = document.createElement('h2');
+                heading.textContent = 'Configure ' + integrationId;
+                formContainer.appendChild(heading);
+
+                const select = document.createElement('select');
+                select.id = 'integrationType';
+
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = 'Select type...';
+                select.appendChild(defaultOption);
+
+                const postgresOption = document.createElement('option');
+                postgresOption.value = 'postgres';
+                postgresOption.textContent = 'PostgreSQL';
+                select.appendChild(postgresOption);
+
+                const bigqueryOption = document.createElement('option');
+                bigqueryOption.value = 'bigquery';
+                bigqueryOption.textContent = 'BigQuery';
+                select.appendChild(bigqueryOption);
+
+                formContainer.appendChild(createFormGroup('Integration Type:', select));
                 formContainer.classList.add('visible');
 
                 // Add event listener for type selection
-                document.getElementById('integrationType').addEventListener('change', (e) => {
+                select.addEventListener('change', (e) => {
                     showTypeSpecificForm(e.target.value);
                 });
                 return;
@@ -456,58 +527,135 @@ export class IntegrationWebviewProvider {
 
             const formContainer = document.getElementById('formContainer');
 
+            // Clear existing content
+            while (formContainer.firstChild) {
+                formContainer.removeChild(formContainer.firstChild);
+            }
+
             if (type === 'postgres') {
-                formContainer.innerHTML = \`
-                    <h2>Configure PostgreSQL: \${currentIntegrationId}</h2>
-                    <div class="form-group">
-                        <label>Display Name:</label>
-                        <input type="text" id="name" value="\${config?.name || ''}" placeholder="My PostgreSQL Database" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Host:</label>
-                        <input type="text" id="host" value="\${config?.host || ''}" placeholder="localhost" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Port:</label>
-                        <input type="number" id="port" value="\${config?.port || 5432}" placeholder="5432" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Database:</label>
-                        <input type="text" id="database" value="\${config?.database || ''}" placeholder="mydb" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Username:</label>
-                        <input type="text" id="username" value="\${config?.username || ''}" placeholder="postgres" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Password:</label>
-                        <input type="password" id="password" value="\${config?.password || ''}" placeholder="Enter password" required>
-                    </div>
-                    <div class="form-group">
-                        <button data-action="save-postgres">Save</button>
-                        <button class="secondary" data-action="cancel">Cancel</button>
-                    </div>
-                \`;
+                const heading = document.createElement('h2');
+                heading.textContent = 'Configure PostgreSQL: ' + currentIntegrationId;
+                formContainer.appendChild(heading);
+
+                // Display Name
+                const nameInput = document.createElement('input');
+                nameInput.type = 'text';
+                nameInput.id = 'name';
+                nameInput.value = config?.name || '';
+                nameInput.placeholder = 'My PostgreSQL Database';
+                nameInput.required = true;
+                formContainer.appendChild(createFormGroup('Display Name:', nameInput));
+
+                // Host
+                const hostInput = document.createElement('input');
+                hostInput.type = 'text';
+                hostInput.id = 'host';
+                hostInput.value = config?.host || '';
+                hostInput.placeholder = 'localhost';
+                hostInput.required = true;
+                formContainer.appendChild(createFormGroup('Host:', hostInput));
+
+                // Port
+                const portInput = document.createElement('input');
+                portInput.type = 'number';
+                portInput.id = 'port';
+                portInput.value = config?.port || 5432;
+                portInput.placeholder = '5432';
+                portInput.required = true;
+                formContainer.appendChild(createFormGroup('Port:', portInput));
+
+                // Database
+                const databaseInput = document.createElement('input');
+                databaseInput.type = 'text';
+                databaseInput.id = 'database';
+                databaseInput.value = config?.database || '';
+                databaseInput.placeholder = 'mydb';
+                databaseInput.required = true;
+                formContainer.appendChild(createFormGroup('Database:', databaseInput));
+
+                // Username
+                const usernameInput = document.createElement('input');
+                usernameInput.type = 'text';
+                usernameInput.id = 'username';
+                usernameInput.value = config?.username || '';
+                usernameInput.placeholder = 'postgres';
+                usernameInput.required = true;
+                formContainer.appendChild(createFormGroup('Username:', usernameInput));
+
+                // Password
+                const passwordInput = document.createElement('input');
+                passwordInput.type = 'password';
+                passwordInput.id = 'password';
+                passwordInput.value = config?.password || '';
+                passwordInput.placeholder = 'Enter password';
+                passwordInput.required = true;
+                formContainer.appendChild(createFormGroup('Password:', passwordInput));
+
+                // Buttons
+                const buttonGroup = document.createElement('div');
+                buttonGroup.className = 'form-group';
+
+                const saveBtn = document.createElement('button');
+                saveBtn.dataset.action = 'save-postgres';
+                saveBtn.textContent = 'Save';
+
+                const cancelBtn = document.createElement('button');
+                cancelBtn.className = 'secondary';
+                cancelBtn.dataset.action = 'cancel';
+                cancelBtn.textContent = 'Cancel';
+
+                buttonGroup.appendChild(saveBtn);
+                buttonGroup.appendChild(cancelBtn);
+                formContainer.appendChild(buttonGroup);
+
             } else if (type === 'bigquery') {
-                formContainer.innerHTML = \`
-                    <h2>Configure BigQuery: \${currentIntegrationId}</h2>
-                    <div class="form-group">
-                        <label>Display Name:</label>
-                        <input type="text" id="name" value="\${config?.name || ''}" placeholder="My BigQuery Project" required>
-                    </div>
-                    <div class="form-group">
-                        <label>GCP Project ID:</label>
-                        <input type="text" id="projectId" value="\${config?.projectId || ''}" placeholder="my-gcp-project" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Service Account Credentials (JSON):</label>
-                        <textarea id="credentials" rows="10" placeholder="Paste service account JSON here" required>\${config?.credentials || ''}</textarea>
-                    </div>
-                    <div class="form-group">
-                        <button data-action="save-bigquery">Save</button>
-                        <button class="secondary" data-action="cancel">Cancel</button>
-                    </div>
-                \`;
+                const heading = document.createElement('h2');
+                heading.textContent = 'Configure BigQuery: ' + currentIntegrationId;
+                formContainer.appendChild(heading);
+
+                // Display Name
+                const nameInput = document.createElement('input');
+                nameInput.type = 'text';
+                nameInput.id = 'name';
+                nameInput.value = config?.name || '';
+                nameInput.placeholder = 'My BigQuery Project';
+                nameInput.required = true;
+                formContainer.appendChild(createFormGroup('Display Name:', nameInput));
+
+                // GCP Project ID
+                const projectIdInput = document.createElement('input');
+                projectIdInput.type = 'text';
+                projectIdInput.id = 'projectId';
+                projectIdInput.value = config?.projectId || '';
+                projectIdInput.placeholder = 'my-gcp-project';
+                projectIdInput.required = true;
+                formContainer.appendChild(createFormGroup('GCP Project ID:', projectIdInput));
+
+                // Service Account Credentials
+                const credentialsTextarea = document.createElement('textarea');
+                credentialsTextarea.id = 'credentials';
+                credentialsTextarea.rows = 10;
+                credentialsTextarea.placeholder = 'Paste service account JSON here';
+                credentialsTextarea.required = true;
+                credentialsTextarea.value = config?.credentials || '';
+                formContainer.appendChild(createFormGroup('Service Account Credentials (JSON):', credentialsTextarea));
+
+                // Buttons
+                const buttonGroup = document.createElement('div');
+                buttonGroup.className = 'form-group';
+
+                const saveBtn = document.createElement('button');
+                saveBtn.dataset.action = 'save-bigquery';
+                saveBtn.textContent = 'Save';
+
+                const cancelBtn = document.createElement('button');
+                cancelBtn.className = 'secondary';
+                cancelBtn.dataset.action = 'cancel';
+                cancelBtn.textContent = 'Cancel';
+
+                buttonGroup.appendChild(saveBtn);
+                buttonGroup.appendChild(cancelBtn);
+                formContainer.appendChild(buttonGroup);
             }
 
             formContainer.classList.add('visible');

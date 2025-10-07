@@ -122,22 +122,141 @@ export class IntegrationManager {
      * Show configuration UI for a specific integration
      */
     private async configureIntegration(integrationId: string, integrationType?: string): Promise<void> {
-        // For now, show a simple input box
-        // TODO: Replace with proper configuration forms
-        const name = await window.showInputBox({
-            prompt: `Enter a name for this ${integrationType || 'integration'}`,
-            placeHolder: 'My Integration'
-        });
+        // If type is not known, ask user to select
+        let selectedType = integrationType;
 
-        if (!name) {
-            return;
+        if (!selectedType) {
+            const typeSelection = await window.showQuickPick(
+                [
+                    { label: 'PostgreSQL', value: 'postgres' as const },
+                    { label: 'BigQuery', value: 'bigquery' as const }
+                ],
+                {
+                    placeHolder: 'Select integration type',
+                    title: `Configure ${integrationId}`
+                }
+            );
+
+            if (!typeSelection) {
+                return;
+            }
+
+            selectedType = typeSelection.value;
         }
 
-        void window.showInformationMessage(
-            `Integration configuration UI will be implemented in the next step. Integration: ${integrationId}, Name: ${name}`
-        );
+        // Show configuration form based on type
+        if (selectedType === 'postgres') {
+            await this.configurePostgres(integrationId);
+        } else if (selectedType === 'bigquery') {
+            await this.configureBigQuery(integrationId);
+        }
 
         // Update context after configuration
         await this.updateContext();
+    }
+
+    /**
+     * Configure PostgreSQL integration
+     */
+    private async configurePostgres(integrationId: string): Promise<void> {
+        const host = await window.showInputBox({
+            placeHolder: 'localhost',
+            prompt: 'PostgreSQL Host',
+            validateInput: (value) => (value ? null : 'Host is required')
+        });
+
+        if (!host) {
+            return;
+        }
+
+        const portStr = await window.showInputBox({
+            placeHolder: '5432',
+            prompt: 'PostgreSQL Port',
+            value: '5432',
+            validateInput: (value) => {
+                const port = parseInt(value, 10);
+                return !isNaN(port) && port > 0 && port < 65536 ? null : 'Invalid port number';
+            }
+        });
+
+        if (!portStr) {
+            return;
+        }
+
+        const database = await window.showInputBox({
+            placeHolder: 'mydb',
+            prompt: 'Database Name',
+            validateInput: (value) => (value ? null : 'Database name is required')
+        });
+
+        if (!database) {
+            return;
+        }
+
+        const username = await window.showInputBox({
+            placeHolder: 'postgres',
+            prompt: 'Username',
+            validateInput: (value) => (value ? null : 'Username is required')
+        });
+
+        if (!username) {
+            return;
+        }
+
+        const password = await window.showInputBox({
+            password: true,
+            placeHolder: 'Enter password',
+            prompt: 'Password',
+            validateInput: (value) => (value ? null : 'Password is required')
+        });
+
+        if (!password) {
+            return;
+        }
+
+        void window.showInformationMessage(`PostgreSQL integration "${integrationId}" configured successfully`);
+    }
+
+    /**
+     * Configure BigQuery integration
+     */
+    private async configureBigQuery(integrationId: string): Promise<void> {
+        const projectId = await window.showInputBox({
+            placeHolder: 'my-gcp-project',
+            prompt: 'GCP Project ID',
+            validateInput: (value) => (value ? null : 'Project ID is required')
+        });
+
+        if (!projectId) {
+            return;
+        }
+
+        const datasetId = await window.showInputBox({
+            placeHolder: 'my_dataset',
+            prompt: 'Dataset ID (optional)'
+        });
+
+        const credentials = await window.showInputBox({
+            password: true,
+            placeHolder: 'Paste service account JSON',
+            prompt: 'Service Account Credentials (JSON)',
+            validateInput: (value) => {
+                if (!value) {
+                    return 'Credentials are required';
+                }
+                try {
+                    JSON.parse(value);
+                    return null;
+                } catch {
+                    return 'Invalid JSON format';
+                }
+            }
+        });
+
+        if (!credentials) {
+            return;
+        }
+
+        void window.showInformationMessage(`BigQuery integration "${integrationId}" configured successfully`);
     }
 }

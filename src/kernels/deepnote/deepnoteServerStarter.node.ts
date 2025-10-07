@@ -11,6 +11,7 @@ import { IOutputChannel, IDisposable, IHttpClient, IAsyncDisposableRegistry } fr
 import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
 import { sleep } from '../../platform/common/utils/async';
 import { Cancellation, raceCancellationError } from '../../platform/common/cancellation';
+import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import getPort from 'get-port';
 import * as fs from 'fs-extra';
 import * as os from 'os';
@@ -30,7 +31,7 @@ interface ServerLockFile {
  * Starts and manages the deepnote-toolkit Jupyter server.
  */
 @injectable()
-export class DeepnoteServerStarter implements IDeepnoteServerStarter {
+export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtensionSyncActivationService {
     private readonly serverProcesses: Map<string, ObservableExecutionResult<string>> = new Map();
     private readonly serverInfos: Map<string, DeepnoteServerInfo> = new Map();
     private readonly disposablesByFile: Map<string, IDisposable[]> = new Map();
@@ -50,7 +51,9 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter {
     ) {
         // Register for disposal when the extension deactivates
         asyncRegistry.push(this);
+    }
 
+    public activate(): void {
         // Ensure lock file directory exists
         this.initializeLockFileDirectory().catch((ex) => {
             logger.warn(`Failed to initialize lock file directory: ${ex}`);

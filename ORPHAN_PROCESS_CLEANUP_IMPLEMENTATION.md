@@ -116,6 +116,7 @@ When `cleanupOrphanedProcesses()` runs (at extension startup):
 ### New Imports
 
 ```typescript
+import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import * as fs from 'fs-extra';
 import * as os from 'os';
 import * as path from '../../platform/vscode-path/path';
@@ -140,11 +141,12 @@ private readonly lockFileDir: string = path.join(os.tmpdir(), 'vscode-deepnote-l
 
 ### Modified Methods
 
-1. `constructor()` - Initializes lock file directory
-2. `startServerImpl()` - Writes lock file after server starts
-3. `stopServerImpl()` - Deletes lock file when server stops
-4. `dispose()` - Deletes lock files for all stopped servers
-5. `cleanupOrphanedProcesses()` - Implements sophisticated orphan detection
+1. `constructor()` - Minimal initialization (dependency injection only)
+2. `activate()` - Initializes lock file directory and triggers cleanup (implements IExtensionSyncActivationService)
+3. `startServerImpl()` - Writes lock file after server starts
+4. `stopServerImpl()` - Deletes lock file when server stops
+5. `dispose()` - Deletes lock files for all stopped servers
+6. `cleanupOrphanedProcesses()` - Implements sophisticated orphan detection
 
 ## Benefits
 

@@ -209,7 +209,7 @@ export class IntegrationWebviewProvider {
     /**
      * Get the HTML content for the webview
      */
-    private getWebviewContent(integrations: Map<string, IntegrationWithStatus>): string {
+    private getWebviewContent(_integrations: Map<string, IntegrationWithStatus>): string {
         const nonce = this.getNonce();
 
         return `<!DOCTYPE html>

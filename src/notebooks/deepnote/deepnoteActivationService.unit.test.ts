@@ -3,11 +3,13 @@ import { assert } from 'chai';
 import { DeepnoteActivationService } from './deepnoteActivationService';
 import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
 import { IExtensionContext } from '../../platform/common/types';
+import { IntegrationManager } from './integrations/integrationManager';
 
 suite('DeepnoteActivationService', () => {
     let activationService: DeepnoteActivationService;
     let mockExtensionContext: IExtensionContext;
     let manager: DeepnoteNotebookManager;
+    let mockIntegrationManager: IntegrationManager;
 
     setup(() => {
         mockExtensionContext = {
@@ -15,7 +17,10 @@ suite('DeepnoteActivationService', () => {
         } as any;
 
         manager = new DeepnoteNotebookManager();
-        activationService = new DeepnoteActivationService(mockExtensionContext, manager);
+        mockIntegrationManager = {
+            activate: () => {}
+        } as any;
+        activationService = new DeepnoteActivationService(mockExtensionContext, manager, mockIntegrationManager);
     });
 
     suite('constructor', () => {
@@ -75,8 +80,10 @@ suite('DeepnoteActivationService', () => {
 
             const manager1 = new DeepnoteNotebookManager();
             const manager2 = new DeepnoteNotebookManager();
-            const service1 = new DeepnoteActivationService(context1, manager1);
-            const service2 = new DeepnoteActivationService(context2, manager2);
+            const mockIntegrationManager1 = { activate: () => {} } as any;
+            const mockIntegrationManager2 = { activate: () => {} } as any;
+            const service1 = new DeepnoteActivationService(context1, manager1, mockIntegrationManager1);
+            const service2 = new DeepnoteActivationService(context2, manager2, mockIntegrationManager2);
 
             // Verify each service has its own context
             assert.strictEqual((service1 as any).extensionContext, context1);
@@ -101,8 +108,10 @@ suite('DeepnoteActivationService', () => {
 
             const manager1 = new DeepnoteNotebookManager();
             const manager2 = new DeepnoteNotebookManager();
-            new DeepnoteActivationService(context1, manager1);
-            new DeepnoteActivationService(context2, manager2);
+            const mockIntegrationManager1 = { activate: () => {} } as any;
+            const mockIntegrationManager2 = { activate: () => {} } as any;
+            new DeepnoteActivationService(context1, manager1, mockIntegrationManager1);
+            new DeepnoteActivationService(context2, manager2, mockIntegrationManager2);
 
             assert.strictEqual(context1.subscriptions.length, 0);
             assert.strictEqual(context2.subscriptions.length, 1);

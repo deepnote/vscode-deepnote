@@ -1,6 +1,7 @@
 import { inject, injectable } from 'inversify';
 
 import { IEncryptedStorage } from '../../../platform/common/application/types';
+import { logger } from '../../../platform/logging';
 import { IntegrationConfig, IntegrationType } from './integrationTypes';
 
 const INTEGRATION_SERVICE_NAME = 'deepnote-integrations';
@@ -128,12 +129,12 @@ export class IntegrationStorage {
                         const config: IntegrationConfig = JSON.parse(configJson);
                         this.cache.set(id, config);
                     } catch (error) {
-                        console.error(`Failed to parse integration config for ${id}:`, error);
+                        logger.error(`Failed to parse integration config for ${id}:`, error);
                     }
                 }
             }
         } catch (error) {
-            console.error('Failed to parse integration index:', error);
+            logger.error('Failed to parse integration index:', error);
         }
 
         this.cacheLoaded = true;

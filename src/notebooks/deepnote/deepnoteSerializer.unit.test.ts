@@ -21,14 +21,30 @@ suite('DeepnoteNotebookSerializer', () => {
                 {
                     id: 'notebook-1',
                     name: 'First Notebook',
-                    blocks: [{ id: 'block-1', content: 'print("hello")', sortingKey: 'a0', type: 'code' }],
+                    blocks: [
+                        {
+                            blockGroup: 'group-123',
+                            id: 'block-1',
+                            content: 'print("hello")',
+                            sortingKey: 'a0',
+                            type: 'code'
+                        }
+                    ],
                     executionMode: 'python',
                     isModule: false
                 },
                 {
                     id: 'notebook-2',
                     name: 'Second Notebook',
-                    blocks: [{ id: 'block-2', content: '# Title', sortingKey: 'a1', type: 'markdown' }],
+                    blocks: [
+                        {
+                            blockGroup: 'group-123',
+                            id: 'block-2',
+                            content: '# Title',
+                            sortingKey: 'a1',
+                            type: 'markdown'
+                        }
+                    ],
                     executionMode: 'python',
                     isModule: false
                 }

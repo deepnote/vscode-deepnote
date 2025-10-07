@@ -15,6 +15,7 @@ suite('DeepnoteDataConverter', () => {
         test('converts simple code block to cell', () => {
             const blocks: DeepnoteBlock[] = [
                 {
+                    blockGroup: 'test-group',
                     id: 'block1',
                     type: 'code',
                     content: 'print("hello")',
@@ -38,6 +39,7 @@ suite('DeepnoteDataConverter', () => {
         test('converts simple markdown block to cell', () => {
             const blocks: DeepnoteBlock[] = [
                 {
+                    blockGroup: 'test-group',
                     id: 'block2',
                     type: 'markdown',
                     content: '# Title',
@@ -58,6 +60,7 @@ suite('DeepnoteDataConverter', () => {
         test('handles execution count', () => {
             const blocks: DeepnoteBlock[] = [
                 {
+                    blockGroup: 'test-group',
                     id: 'block1',
                     type: 'code',
                     content: 'x = 1',
@@ -74,6 +77,7 @@ suite('DeepnoteDataConverter', () => {
         test('converts blocks with outputs', () => {
             const blocks: DeepnoteBlock[] = [
                 {
+                    blockGroup: 'test-group',
                     id: 'block1',
                     type: 'code',
                     content: 'print("hello")',
@@ -211,6 +215,7 @@ suite('DeepnoteDataConverter', () => {
 
             const blocks: DeepnoteBlock[] = [
                 {
+                    blockGroup: 'test-group',
                     id: 'block1',
                     type: 'code',
                     content: 'print("Hello world")',
@@ -238,6 +243,7 @@ suite('DeepnoteDataConverter', () => {
 
             const blocks: DeepnoteBlock[] = [
                 {
+                    blockGroup: 'test-group',
                     id: 'block1',
                     type: 'code',
                     content: 'print(x)',
@@ -270,6 +276,7 @@ suite('DeepnoteDataConverter', () => {
 
             const blocks: DeepnoteBlock[] = [
                 {
+                    blockGroup: 'test-group',
                     id: 'block1',
                     type: 'code',
                     content: 'x',
@@ -299,6 +306,7 @@ suite('DeepnoteDataConverter', () => {
 
             const blocks: DeepnoteBlock[] = [
                 {
+                    blockGroup: 'test-group',
                     id: 'block1',
                     type: 'code',
                     content: 'None',
@@ -324,6 +332,7 @@ suite('DeepnoteDataConverter', () => {
 
             const blocks: DeepnoteBlock[] = [
                 {
+                    blockGroup: 'test-group',
                     id: 'block1',
                     type: 'code',
                     content: 'something',
@@ -350,6 +359,7 @@ suite('DeepnoteDataConverter', () => {
 
             const blocks: DeepnoteBlock[] = [
                 {
+                    blockGroup: 'test-group',
                     id: 'block1',
                     type: 'code',
                     content: 'print()',
@@ -375,6 +385,7 @@ suite('DeepnoteDataConverter', () => {
 
             const blocks: DeepnoteBlock[] = [
                 {
+                    blockGroup: 'test-group',
                     id: 'block1',
                     type: 'code',
                     content: 'result',
@@ -397,6 +408,7 @@ suite('DeepnoteDataConverter', () => {
         test('blocks -> cells -> blocks preserves data', () => {
             const originalBlocks: DeepnoteBlock[] = [
                 {
+                    blockGroup: 'test-group',
                     id: 'block1',
                     type: 'code',
                     content: 'print("hello")',
@@ -412,6 +424,7 @@ suite('DeepnoteDataConverter', () => {
                     ]
                 },
                 {
+                    blockGroup: 'test-group',
                     id: 'block2',
                     type: 'markdown',
                     content: '# Title',

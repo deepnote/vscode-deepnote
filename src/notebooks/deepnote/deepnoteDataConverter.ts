@@ -100,6 +100,7 @@ export class DeepnoteDataConverter {
 
     private createFallbackBlock(cell: NotebookCellData, index: number): DeepnoteBlock {
         return {
+            blockGroup: 'default-group',
             id: generateBlockId(),
             sortingKey: generateSortingKey(index),
             type: cell.kind === NotebookCellKind.Code ? 'code' : 'markdown',

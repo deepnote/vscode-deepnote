@@ -58,17 +58,13 @@ export function createBlockFromPocket(cell: NotebookCellData, index: number): De
     }
 
     const block: DeepnoteBlock = {
+        blockGroup: pocket?.blockGroup || 'default-group',
         content: cell.value,
         id: pocket?.id || generateBlockId(),
         metadata,
         sortingKey: pocket?.sortingKey || generateSortingKey(index),
         type: pocket?.type || 'code'
     };
-
-    // Only add optional fields if they exist
-    if (pocket?.blockGroup) {
-        block.blockGroup = pocket.blockGroup;
-    }
 
     if (pocket?.executionCount !== undefined) {
         block.executionCount = pocket.executionCount;

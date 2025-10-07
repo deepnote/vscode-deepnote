@@ -30,7 +30,7 @@ suite('DeepnoteTreeItem', () => {
     const mockNotebook: DeepnoteNotebook = {
         id: 'notebook-456',
         name: 'Analysis Notebook',
-        blocks: [{ id: 'block-1', content: 'print("hello")', sortingKey: 'a0', type: 'code' }],
+        blocks: [{ blockGroup: 'group-123', id: 'block-1', content: 'print("hello")', sortingKey: 'a0', type: 'code' }],
         executionMode: 'python',
         isModule: false
     };
@@ -244,10 +244,34 @@ suite('DeepnoteTreeItem', () => {
             const notebookWithMultipleBlocks = {
                 ...mockNotebook,
                 blocks: [
-                    { id: 'block-1', content: 'import pandas', sortingKey: 'a0', type: 'code' as const },
-                    { id: 'block-2', content: '# Analysis', sortingKey: 'a1', type: 'markdown' as const },
-                    { id: 'block-3', content: 'df = pd.read_csv("data.csv")', sortingKey: 'a2', type: 'code' as const },
-                    { id: 'block-4', content: 'print(df.head())', sortingKey: 'a3', type: 'code' as const }
+                    {
+                        blockGroup: 'group-123',
+                        id: 'block-1',
+                        content: 'import pandas',
+                        sortingKey: 'a0',
+                        type: 'code' as const
+                    },
+                    {
+                        blockGroup: 'group-123',
+                        id: 'block-2',
+                        content: '# Analysis',
+                        sortingKey: 'a1',
+                        type: 'markdown' as const
+                    },
+                    {
+                        blockGroup: 'group-123',
+                        id: 'block-3',
+                        content: 'df = pd.read_csv("data.csv")',
+                        sortingKey: 'a2',
+                        type: 'code' as const
+                    },
+                    {
+                        blockGroup: 'group-123',
+                        id: 'block-4',
+                        content: 'print(df.head())',
+                        sortingKey: 'a3',
+                        type: 'code' as const
+                    }
                 ]
             };
 

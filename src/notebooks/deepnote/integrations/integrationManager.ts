@@ -30,9 +30,7 @@ export class IntegrationManager {
         );
 
         // Listen for active notebook changes to update context
-        this.extensionContext.subscriptions.push(
-            window.onDidChangeActiveNotebookEditor(() => this.updateContext())
-        );
+        this.extensionContext.subscriptions.push(window.onDidChangeActiveNotebookEditor(() => this.updateContext()));
 
         // Listen for notebook document changes
         this.extensionContext.subscriptions.push(workspace.onDidOpenNotebookDocument(() => this.updateContext()));
@@ -40,7 +38,7 @@ export class IntegrationManager {
         this.extensionContext.subscriptions.push(workspace.onDidCloseNotebookDocument(() => this.updateContext()));
 
         // Initial context update
-        this.updateContext();
+        void this.updateContext();
     }
 
     /**
@@ -81,13 +79,13 @@ export class IntegrationManager {
         const activeNotebook = window.activeNotebookEditor?.notebook;
 
         if (!activeNotebook || activeNotebook.notebookType !== 'deepnote') {
-            window.showErrorMessage('No active Deepnote notebook');
+            void window.showErrorMessage('No active Deepnote notebook');
             return;
         }
 
         const projectId = activeNotebook.metadata?.deepnoteProjectId;
         if (!projectId) {
-            window.showErrorMessage('Cannot determine project ID');
+            void window.showErrorMessage('Cannot determine project ID');
             return;
         }
 
@@ -95,7 +93,7 @@ export class IntegrationManager {
         const integrations = await this.integrationDetector.detectIntegrations(projectId);
 
         if (integrations.size === 0) {
-            window.showInformationMessage('No integrations found in this project');
+            void window.showInformationMessage('No integrations found in this project');
             return;
         }
 
@@ -105,9 +103,7 @@ export class IntegrationManager {
             label: integration.config?.name || id,
             description: integration.config?.type || 'Unknown type',
             detail:
-                integration.status === IntegrationStatus.Connected
-                    ? '$(check) Connected'
-                    : '$(warning) Not configured',
+                integration.status === IntegrationStatus.Connected ? '$(check) Connected' : '$(warning) Not configured',
             integrationId: id,
             integration
         }));
@@ -140,7 +136,7 @@ export class IntegrationManager {
             return;
         }
 
-        window.showInformationMessage(
+        void window.showInformationMessage(
             `Integration configuration UI will be implemented in the next step. Integration: ${integrationId}, Name: ${name}`
         );
 
@@ -148,4 +144,3 @@ export class IntegrationManager {
         await this.updateContext();
     }
 }
-

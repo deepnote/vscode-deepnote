@@ -1,7 +1,7 @@
 import { inject, injectable } from 'inversify';
 
 import { IDeepnoteNotebookManager } from '../../types';
-import { IntegrationStatus, IntegrationType, IntegrationWithStatus } from './integrationTypes';
+import { IntegrationStatus, IntegrationWithStatus } from './integrationTypes';
 import { IIntegrationDetector, IIntegrationStorage } from './types';
 
 /**

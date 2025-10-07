@@ -6,7 +6,8 @@ import { Commands } from '../../../platform/common/constants';
 import { logger } from '../../../platform/logging';
 import { IntegrationWebviewProvider } from './integrationWebview';
 import { IIntegrationDetector, IIntegrationStorage } from './types';
-import { DATAFRAME_SQL_INTEGRATION_ID, IntegrationStatus, IntegrationWithStatus } from './integrationTypes';
+import { IntegrationStatus, IntegrationWithStatus } from './integrationTypes';
+import { BlockWithIntegration, scanBlocksForIntegrations } from './integrationUtils';
 
 /**
  * Manages integration UI and commands for Deepnote notebooks
@@ -139,38 +140,22 @@ export class IntegrationManager {
      * This is used when the project isn't stored in the notebook manager
      */
     private async detectIntegrationsFromCells(notebook: NotebookDocument): Promise<Map<string, IntegrationWithStatus>> {
-        const integrations = new Map<string, IntegrationWithStatus>();
+        // Collect all cells with SQL integration metadata
+        const blocksWithIntegrations: BlockWithIntegration[] = [];
 
         for (const cell of notebook.getCells()) {
             const deepnoteMetadata = cell.metadata?.deepnoteMetadata;
             logger.trace(`IntegrationManager: Cell ${cell.index} metadata:`, deepnoteMetadata);
 
             if (deepnoteMetadata?.sql_integration_id) {
-                const integrationId = deepnoteMetadata.sql_integration_id;
-
-                // Skip excluded integrations (e.g., internal DuckDB integration)
-                if (integrationId === DATAFRAME_SQL_INTEGRATION_ID) {
-                    logger.trace(`IntegrationManager: Skipping excluded integration: ${integrationId}`);
-                    continue;
-                }
-
-                // Skip if we've already detected this integration
-                if (integrations.has(integrationId)) {
-                    continue;
-                }
-
-                // Check if the integration is configured
-                const config = await this.integrationStorage.get(integrationId);
-
-                integrations.set(integrationId, {
-                    config: config || null,
-                    status: config ? IntegrationStatus.Connected : IntegrationStatus.Disconnected
+                blocksWithIntegrations.push({
+                    id: `cell-${cell.index}`,
+                    sql_integration_id: deepnoteMetadata.sql_integration_id
                 });
-
-                logger.debug(`IntegrationManager: Found integration in cell: ${integrationId}`);
             }
         }
 
-        return integrations;
+        // Use the shared utility to scan blocks and build the status map
+        return scanBlocksForIntegrations(blocksWithIntegrations, this.integrationStorage, 'IntegrationManager');
     }
 }

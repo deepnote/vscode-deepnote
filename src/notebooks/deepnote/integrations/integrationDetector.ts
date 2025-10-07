@@ -2,8 +2,9 @@ import { inject, injectable } from 'inversify';
 
 import { logger } from '../../../platform/logging';
 import { IDeepnoteNotebookManager } from '../../types';
-import { DATAFRAME_SQL_INTEGRATION_ID, IntegrationStatus, IntegrationWithStatus } from './integrationTypes';
+import { IntegrationStatus, IntegrationWithStatus } from './integrationTypes';
 import { IIntegrationDetector, IIntegrationStorage } from './types';
+import { BlockWithIntegration, scanBlocksForIntegrations } from './integrationUtils';
 
 /**
  * Service for detecting integrations used in Deepnote notebooks
@@ -19,55 +20,31 @@ export class IntegrationDetector implements IIntegrationDetector {
      * Detect all integrations used in the given project
      */
     async detectIntegrations(projectId: string): Promise<Map<string, IntegrationWithStatus>> {
-        const integrations = new Map<string, IntegrationWithStatus>();
-
         // Get the project
         const project = this.notebookManager.getOriginalProject(projectId);
         if (!project) {
             logger.warn(
                 `IntegrationDetector: No project found for ID: ${projectId}. The project may not have been loaded yet.`
             );
-            return integrations;
+            return new Map();
         }
 
         logger.debug(
             `IntegrationDetector: Scanning project ${projectId} with ${project.project.notebooks.length} notebooks`
         );
 
-        // Scan all notebooks in the project
+        // Collect all blocks with SQL integration metadata from all notebooks
+        const blocksWithIntegrations: BlockWithIntegration[] = [];
         for (const notebook of project.project.notebooks) {
             logger.trace(`IntegrationDetector: Scanning notebook ${notebook.id} with ${notebook.blocks.length} blocks`);
 
-            // Scan all blocks in the notebook
             for (const block of notebook.blocks) {
                 // Check if this is a code block with SQL integration metadata
                 if (block.type === 'code' && block.metadata?.sql_integration_id) {
-                    const integrationId = block.metadata.sql_integration_id;
-
-                    // Skip excluded integrations (e.g., internal DuckDB integration)
-                    if (integrationId === DATAFRAME_SQL_INTEGRATION_ID) {
-                        logger.trace(
-                            `IntegrationDetector: Skipping excluded integration: ${integrationId} in block ${block.id}`
-                        );
-                        continue;
-                    }
-
-                    logger.debug(`IntegrationDetector: Found integration: ${integrationId} in block ${block.id}`);
-
-                    // Skip if we've already detected this integration
-                    if (integrations.has(integrationId)) {
-                        continue;
-                    }
-
-                    // Check if the integration is configured
-                    const config = await this.integrationStorage.get(integrationId);
-
-                    const status: IntegrationWithStatus = {
-                        config: config || null,
-                        status: config ? IntegrationStatus.Connected : IntegrationStatus.Disconnected
-                    };
-
-                    integrations.set(integrationId, status);
+                    blocksWithIntegrations.push({
+                        id: block.id,
+                        sql_integration_id: block.metadata.sql_integration_id
+                    });
                 } else if (block.type === 'code') {
                     logger.trace(
                         `IntegrationDetector: Block ${block.id} has no sql_integration_id. Metadata:`,
@@ -77,8 +54,8 @@ export class IntegrationDetector implements IIntegrationDetector {
             }
         }
 
-        logger.debug(`IntegrationDetector: Found ${integrations.size} integrations`);
-        return integrations;
+        // Use the shared utility to scan blocks and build the status map
+        return scanBlocksForIntegrations(blocksWithIntegrations, this.integrationStorage, 'IntegrationDetector');
     }
 
     /**

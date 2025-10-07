@@ -29,6 +29,11 @@ export async function scanBlocksForIntegrations(
     for (const block of blocks) {
         const integrationId = block.sql_integration_id;
 
+        // Skip blocks without integration IDs
+        if (!integrationId) {
+            continue;
+        }
+
         // Skip excluded integrations (e.g., internal DuckDB integration)
         if (integrationId === DATAFRAME_SQL_INTEGRATION_ID) {
             logger.trace(`${logContext}: Skipping excluded integration: ${integrationId} in block ${block.id}`);
@@ -54,5 +59,6 @@ export async function scanBlocksForIntegrations(
     }
 
     logger.debug(`${logContext}: Found ${integrations.size} integrations`);
+
     return integrations;
 }

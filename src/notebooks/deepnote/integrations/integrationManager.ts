@@ -3,8 +3,7 @@ import { commands, window, workspace } from 'vscode';
 
 import { IExtensionContext } from '../../../platform/common/types';
 import { Commands } from '../../../platform/common/constants';
-import { IDeepnoteNotebookManager } from '../../types';
-import { IIntegrationDetector, IIntegrationStorage } from './types';
+import { IIntegrationDetector } from './types';
 import { IntegrationStatus } from './integrationTypes';
 
 /**
@@ -18,9 +17,7 @@ export class IntegrationManager {
 
     constructor(
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
-        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
-        @inject(IIntegrationDetector) private readonly integrationDetector: IIntegrationDetector,
-        @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage
+        @inject(IIntegrationDetector) private readonly integrationDetector: IIntegrationDetector
     ) {}
 
     public activate(): void {

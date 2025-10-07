@@ -88,7 +88,7 @@ export interface IDeepnoteToolkitInstaller {
 }
 
 export const IDeepnoteServerStarter = Symbol('IDeepnoteServerStarter');
-export interface IDeepnoteServerStarter extends vscode.Disposable {
+export interface IDeepnoteServerStarter {
     /**
      * Starts or gets an existing deepnote-toolkit Jupyter server.
      * @param interpreter The Python interpreter to use
@@ -107,6 +107,12 @@ export interface IDeepnoteServerStarter extends vscode.Disposable {
      * @param deepnoteFileUri The URI of the .deepnote file
      */
     stopServer(deepnoteFileUri: vscode.Uri): Promise<void>;
+
+    /**
+     * Disposes all server processes and resources.
+     * Called when the extension is deactivated.
+     */
+    dispose(): Promise<void>;
 }
 
 export interface DeepnoteServerInfo {
@@ -141,8 +147,7 @@ export interface IDeepnoteKernelAutoSelector {
     ensureKernelSelected(notebook: vscode.NotebookDocument, token?: vscode.CancellationToken): Promise<void>;
 }
 
-export const DEEPNOTE_TOOLKIT_WHEEL_URL =
-    'https://deepnote-staging-runtime-artifactory.s3.amazonaws.com/deepnote-toolkit-packages/0.2.30.post20/deepnote_toolkit-0.2.30.post20-py3-none-any.whl';
-export const DEEPNOTE_TOOLKIT_VERSION = '0.2.30.post20';
+export const DEEPNOTE_TOOLKIT_VERSION = '0.2.30.post23';
+export const DEEPNOTE_TOOLKIT_WHEEL_URL = `https://deepnote-staging-runtime-artifactory.s3.amazonaws.com/deepnote-toolkit-packages/${DEEPNOTE_TOOLKIT_VERSION}/deepnote_toolkit-${DEEPNOTE_TOOLKIT_VERSION}-py3-none-any.whl`;
 export const DEEPNOTE_DEFAULT_PORT = 8888;
 export const DEEPNOTE_NOTEBOOK_TYPE = 'deepnote';

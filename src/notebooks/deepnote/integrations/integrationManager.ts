@@ -1,5 +1,5 @@
 import { inject, injectable } from 'inversify';
-import { commands, window, workspace } from 'vscode';
+import { commands, NotebookDocument, window, workspace } from 'vscode';
 
 import { IExtensionContext } from '../../../platform/common/types';
 import { Commands } from '../../../platform/common/constants';
@@ -92,12 +92,28 @@ export class IntegrationManager {
             return;
         }
 
+        console.log(`[IntegrationManager] Project ID: ${projectId}`);
+        console.log(`[IntegrationManager] Notebook metadata:`, activeNotebook.metadata);
+
         // Detect integrations in the project
         const integrations = await this.integrationDetector.detectIntegrations(projectId);
 
+        console.log(`[IntegrationManager] Detected ${integrations.size} integrations`);
+
         if (integrations.size === 0) {
+            // Try to scan cells directly as a fallback
+            const cellIntegrations = this.scanCellsForIntegrations(activeNotebook);
+            console.log(`[IntegrationManager] Found ${cellIntegrations.size} integrations by scanning cells directly`);
+
+            if (cellIntegrations.size > 0) {
+                void window.showInformationMessage(
+                    `Found ${cellIntegrations.size} integrations in cells, but they're not in the project store. This is a bug - please check the console.`
+                );
+                return;
+            }
+
             void window.showInformationMessage(
-                `No integrations found in this project. Project ID: ${projectId}. Make sure SQL blocks have 'sql_integration_id' in their metadata.`
+                `No integrations found in this project. Project ID: ${projectId}. Check the Developer Console for details.`
             );
             return;
         }
@@ -124,6 +140,25 @@ export class IntegrationManager {
 
         // Show configuration UI for the selected integration
         await this.configureIntegration(selected.integrationId, selected.integration.config?.type);
+    }
+
+    /**
+     * Scan cells directly for integration metadata (fallback method)
+     */
+    private scanCellsForIntegrations(notebook: NotebookDocument): Set<string> {
+        const integrationIds = new Set<string>();
+
+        for (const cell of notebook.getCells()) {
+            const deepnoteMetadata = cell.metadata?.deepnoteMetadata;
+            console.log(`[IntegrationManager] Cell ${cell.index} metadata:`, deepnoteMetadata);
+
+            if (deepnoteMetadata?.sql_integration_id) {
+                integrationIds.add(deepnoteMetadata.sql_integration_id);
+                console.log(`[IntegrationManager] Found integration in cell: ${deepnoteMetadata.sql_integration_id}`);
+            }
+        }
+
+        return integrationIds;
     }
 
     /**

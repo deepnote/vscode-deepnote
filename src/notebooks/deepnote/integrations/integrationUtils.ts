@@ -56,4 +56,3 @@ export async function scanBlocksForIntegrations(
     logger.debug(`${logContext}: Found ${integrations.size} integrations`);
     return integrations;
 }
-

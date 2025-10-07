@@ -22,3 +22,11 @@ export interface IIntegrationDetector {
      */
     hasUnconfiguredIntegrations(projectId: string): Promise<boolean>;
 }
+
+export const IIntegrationWebviewProvider = Symbol('IIntegrationWebviewProvider');
+export interface IIntegrationWebviewProvider {
+    /**
+     * Show the integration management webview
+     */
+    show(integrations: Map<string, IntegrationWithStatus>): Promise<void>;
+}

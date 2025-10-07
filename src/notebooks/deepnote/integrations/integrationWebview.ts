@@ -3,14 +3,14 @@ import { Disposable, ViewColumn, WebviewPanel, window } from 'vscode';
 
 import { IExtensionContext } from '../../../platform/common/types';
 import { logger } from '../../../platform/logging';
-import { IIntegrationStorage } from './types';
+import { IIntegrationStorage, IIntegrationWebviewProvider } from './types';
 import { IntegrationConfig, IntegrationStatus, IntegrationWithStatus } from './integrationTypes';
 
 /**
  * Manages the webview panel for integration configuration
  */
 @injectable()
-export class IntegrationWebviewProvider {
+export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     private currentPanel: WebviewPanel | undefined;
 
     private readonly disposables: Disposable[] = [];

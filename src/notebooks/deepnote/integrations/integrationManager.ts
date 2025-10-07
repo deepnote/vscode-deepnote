@@ -4,8 +4,7 @@ import { commands, NotebookDocument, window, workspace } from 'vscode';
 import { IExtensionContext } from '../../../platform/common/types';
 import { Commands } from '../../../platform/common/constants';
 import { logger } from '../../../platform/logging';
-import { IntegrationWebviewProvider } from './integrationWebview';
-import { IIntegrationDetector, IIntegrationStorage } from './types';
+import { IIntegrationDetector, IIntegrationStorage, IIntegrationWebviewProvider } from './types';
 import { IntegrationStatus, IntegrationWithStatus } from './integrationTypes';
 import { BlockWithIntegration, scanBlocksForIntegrations } from './integrationUtils';
 
@@ -22,7 +21,7 @@ export class IntegrationManager {
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
         @inject(IIntegrationDetector) private readonly integrationDetector: IIntegrationDetector,
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
-        @inject(IntegrationWebviewProvider) private readonly webviewProvider: IntegrationWebviewProvider
+        @inject(IIntegrationWebviewProvider) private readonly webviewProvider: IIntegrationWebviewProvider
     ) {}
 
     public activate(): void {

@@ -110,6 +110,9 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter {
         const venvPath = venvBinDir.replace(/\/bin$/, '').replace(/\\Scripts$/, '');
         env.VIRTUAL_ENV = venvPath;
 
+        // Enforce published pip constraints to prevent breaking Deepnote Toolkit's dependencies
+        env.DEEPNOTE_ENFORCE_PIP_CONSTRAINTS = 'true';
+
         // Remove PYTHONHOME if it exists (can interfere with venv)
         delete env.PYTHONHOME;
 

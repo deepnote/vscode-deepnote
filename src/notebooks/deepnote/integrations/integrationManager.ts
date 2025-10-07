@@ -3,8 +3,13 @@ import { commands, window, workspace } from 'vscode';
 
 import { IExtensionContext } from '../../../platform/common/types';
 import { Commands } from '../../../platform/common/constants';
-import { IIntegrationDetector } from './types';
-import { IntegrationStatus } from './integrationTypes';
+import { IIntegrationDetector, IIntegrationStorage } from './types';
+import {
+    IntegrationStatus,
+    IntegrationType,
+    PostgresIntegrationConfig,
+    BigQueryIntegrationConfig
+} from './integrationTypes';
 
 /**
  * Manages integration UI and commands for Deepnote notebooks
@@ -17,7 +22,8 @@ export class IntegrationManager {
 
     constructor(
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
-        @inject(IIntegrationDetector) private readonly integrationDetector: IIntegrationDetector
+        @inject(IIntegrationDetector) private readonly integrationDetector: IIntegrationDetector,
+        @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage
     ) {}
 
     public activate(): void {
@@ -214,6 +220,20 @@ export class IntegrationManager {
             return;
         }
 
+        // Save the configuration
+        const config: PostgresIntegrationConfig = {
+            database,
+            host,
+            id: integrationId,
+            name: integrationId,
+            password,
+            port: parseInt(portStr, 10),
+            type: IntegrationType.Postgres,
+            username
+        };
+
+        await this.integrationStorage.save(config);
+
         void window.showInformationMessage(`PostgreSQL integration "${integrationId}" configured successfully`);
     }
 
@@ -230,11 +250,6 @@ export class IntegrationManager {
         if (!projectId) {
             return;
         }
-
-        const datasetId = await window.showInputBox({
-            placeHolder: 'my_dataset',
-            prompt: 'Dataset ID (optional)'
-        });
 
         const credentials = await window.showInputBox({
             password: true,
@@ -256,6 +271,17 @@ export class IntegrationManager {
         if (!credentials) {
             return;
         }
+
+        // Save the configuration
+        const config: BigQueryIntegrationConfig = {
+            credentials,
+            id: integrationId,
+            name: integrationId,
+            projectId,
+            type: IntegrationType.BigQuery
+        };
+
+        await this.integrationStorage.save(config);
 
         void window.showInformationMessage(`BigQuery integration "${integrationId}" configured successfully`);
     }

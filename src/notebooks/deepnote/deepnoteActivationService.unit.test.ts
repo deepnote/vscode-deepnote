@@ -18,7 +18,7 @@ suite('DeepnoteActivationService', () => {
 
         manager = new DeepnoteNotebookManager();
         mockIntegrationManager = {
-            activate: () => {}
+            activate: () => Promise.resolve()
         } as any;
         activationService = new DeepnoteActivationService(mockExtensionContext, manager, mockIntegrationManager);
     });
@@ -80,8 +80,8 @@ suite('DeepnoteActivationService', () => {
 
             const manager1 = new DeepnoteNotebookManager();
             const manager2 = new DeepnoteNotebookManager();
-            const mockIntegrationManager1 = { activate: () => {} } as any;
-            const mockIntegrationManager2 = { activate: () => {} } as any;
+            const mockIntegrationManager1 = { activate: () => Promise.resolve() } as any;
+            const mockIntegrationManager2 = { activate: () => Promise.resolve() } as any;
             const service1 = new DeepnoteActivationService(context1, manager1, mockIntegrationManager1);
             const service2 = new DeepnoteActivationService(context2, manager2, mockIntegrationManager2);
 
@@ -108,8 +108,8 @@ suite('DeepnoteActivationService', () => {
 
             const manager1 = new DeepnoteNotebookManager();
             const manager2 = new DeepnoteNotebookManager();
-            const mockIntegrationManager1 = { activate: () => {} } as any;
-            const mockIntegrationManager2 = { activate: () => {} } as any;
+            const mockIntegrationManager1 = { activate: () => Promise.resolve() } as any;
+            const mockIntegrationManager2 = { activate: () => Promise.resolve() } as any;
             new DeepnoteActivationService(context1, manager1, mockIntegrationManager1);
             new DeepnoteActivationService(context2, manager2, mockIntegrationManager2);
 

@@ -1,0 +1,25 @@
+import { IntegrationConfig, IntegrationWithStatus } from './integrationTypes';
+
+export const IIntegrationStorage = Symbol('IIntegrationStorage');
+export interface IIntegrationStorage {
+    getAll(): Promise<IntegrationConfig[]>;
+    get(integrationId: string): Promise<IntegrationConfig | undefined>;
+    save(config: IntegrationConfig): Promise<void>;
+    delete(integrationId: string): Promise<void>;
+    exists(integrationId: string): Promise<boolean>;
+    clear(): Promise<void>;
+}
+
+export const IIntegrationDetector = Symbol('IIntegrationDetector');
+export interface IIntegrationDetector {
+    /**
+     * Detect all integrations used in the given project
+     */
+    detectIntegrations(projectId: string): Promise<Map<string, IntegrationWithStatus>>;
+
+    /**
+     * Check if a project has any unconfigured integrations
+     */
+    hasUnconfiguredIntegrations(projectId: string): Promise<boolean>;
+}
+

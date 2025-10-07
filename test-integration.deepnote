@@ -1,0 +1,31 @@
+version: 1.0
+metadata:
+  createdAt: '2024-01-01T00:00:00Z'
+  modifiedAt: '2024-01-02T00:00:00Z'
+project:
+  id: 'test-project-123'
+  name: 'Test Integration Project'
+  notebooks:
+    - id: 'notebook-1'
+      name: 'SQL Notebook'
+      blocks:
+        - id: 'block-1'
+          content: 'SELECT * FROM users;'
+          sortingKey: 'a0'
+          type: 'code'
+          metadata:
+            sql_integration_id: 'postgres-prod'
+        - id: 'block-2'
+          content: 'SELECT COUNT(*) FROM orders;'
+          sortingKey: 'a1'
+          type: 'code'
+          metadata:
+            sql_integration_id: 'bigquery-analytics'
+        - id: 'block-3'
+          content: '# Analysis Results'
+          sortingKey: 'a2'
+          type: 'markdown'
+      executionMode: 'sql'
+      isModule: false
+  settings: {}
+

@@ -716,7 +716,7 @@
                 {
                     "command": "deepnote.manageIntegrations",
                     "group": "navigation@0",
-                    "when": "notebookType == 'deepnote' && deepnote.hasIntegrations"
+                    "when": "notebookType == 'deepnote'"
                 },
                 {
                     "command": "jupyter.restartkernel",

@@ -340,32 +340,33 @@ export class IntegrationWebviewProvider {
 
     private getWebviewScript(): string {
         return `
-        const vscode = acquireVsCodeApi();
-        let integrations = [];
-        let currentIntegrationId = null;
+        (function() {
+            const vscode = acquireVsCodeApi();
+            let integrations = [];
+            let currentIntegrationId = null;
 
-        // Handle messages from the extension
-        window.addEventListener('message', event => {
-            const message = event.data;
-            switch (message.type) {
-                case 'update':
-                    integrations = message.integrations;
-                    renderIntegrations();
-                    break;
-                case 'showForm':
-                    showConfigurationForm(message.integrationId, message.config);
-                    break;
-                case 'success':
-                    showMessage(message.message, 'success');
-                    hideForm();
-                    break;
-                case 'error':
-                    showMessage(message.message, 'error');
-                    break;
-            }
-        });
+            // Handle messages from the extension
+            window.addEventListener('message', event => {
+                const message = event.data;
+                switch (message.type) {
+                    case 'update':
+                        integrations = message.integrations;
+                        renderIntegrations();
+                        break;
+                    case 'showForm':
+                        showConfigurationForm(message.integrationId, message.config);
+                        break;
+                    case 'success':
+                        showMessage(message.message, 'success');
+                        hideForm();
+                        break;
+                    case 'error':
+                        showMessage(message.message, 'error');
+                        break;
+                }
+            });
 
-        function renderIntegrations() {
+            function renderIntegrations() {
             const listEl = document.getElementById('integrationList');
             if (!integrations || integrations.length === 0) {
                 listEl.innerHTML = '<p>No integrations found in this project.</p>';
@@ -384,23 +385,36 @@ export class IntegrationWebviewProvider {
                             <div class="integration-status \${statusClass}">\${statusText}</div>
                         </div>
                         <div class="integration-actions">
-                            <button onclick="configure('\${integration.id}')">\${configureText}</button>
-                            \${integration.config ? '<button class="secondary" onclick="deleteConfig(\\''+integration.id+'\\')">Delete</button>' : ''}
+                            <button data-action="configure" data-id="\${integration.id}">\${configureText}</button>
+                            \${integration.config ? '<button class="secondary" data-action="delete" data-id="'+integration.id+'">Delete</button>' : ''}
                         </div>
                     </div>
                 \`;
             }).join('');
         }
 
-        function configure(integrationId) {
-            vscode.postMessage({ type: 'configure', integrationId });
-        }
+        // Event delegation for button clicks
+        document.addEventListener('click', (e) => {
+            const target = e.target;
+            if (target.tagName === 'BUTTON' && target.dataset.action) {
+                const action = target.dataset.action;
+                const integrationId = target.dataset.id;
 
-        function deleteConfig(integrationId) {
-            if (confirm('Are you sure you want to delete this integration configuration?')) {
-                vscode.postMessage({ type: 'delete', integrationId });
+                if (action === 'configure') {
+                    vscode.postMessage({ type: 'configure', integrationId });
+                } else if (action === 'delete') {
+                    if (confirm('Are you sure you want to delete this integration configuration?')) {
+                        vscode.postMessage({ type: 'delete', integrationId });
+                    }
+                } else if (action === 'save-postgres') {
+                    savePostgresConfig();
+                } else if (action === 'save-bigquery') {
+                    saveBigQueryConfig();
+                } else if (action === 'cancel') {
+                    hideForm();
+                }
             }
-        }
+        });
 
         function showConfigurationForm(integrationId, existingConfig) {
             currentIntegrationId = integrationId;
@@ -414,7 +428,7 @@ export class IntegrationWebviewProvider {
                     <h2>Configure \${integrationId}</h2>
                     <div class="form-group">
                         <label>Integration Type:</label>
-                        <select id="integrationType" onchange="showTypeSpecificForm()">
+                        <select id="integrationType">
                             <option value="">Select type...</option>
                             <option value="postgres">PostgreSQL</option>
                             <option value="bigquery">BigQuery</option>
@@ -422,6 +436,11 @@ export class IntegrationWebviewProvider {
                     </div>
                 \`;
                 formContainer.classList.add('visible');
+
+                // Add event listener for type selection
+                document.getElementById('integrationType').addEventListener('change', (e) => {
+                    showTypeSpecificForm(e.target.value);
+                });
                 return;
             }
 
@@ -460,8 +479,8 @@ export class IntegrationWebviewProvider {
                         <input type="password" id="password" value="\${config?.password || ''}" placeholder="Enter password" required>
                     </div>
                     <div class="form-group">
-                        <button onclick="savePostgresConfig()">Save</button>
-                        <button class="secondary" onclick="hideForm()">Cancel</button>
+                        <button data-action="save-postgres">Save</button>
+                        <button class="secondary" data-action="cancel">Cancel</button>
                     </div>
                 \`;
             } else if (type === 'bigquery') {
@@ -476,8 +495,8 @@ export class IntegrationWebviewProvider {
                         <textarea id="credentials" rows="10" placeholder="Paste service account JSON here" required>\${config?.credentials || ''}</textarea>
                     </div>
                     <div class="form-group">
-                        <button onclick="saveBigQueryConfig()">Save</button>
-                        <button class="secondary" onclick="hideForm()">Cancel</button>
+                        <button data-action="save-bigquery">Save</button>
+                        <button class="secondary" data-action="cancel">Cancel</button>
                     </div>
                 \`;
             }
@@ -535,6 +554,7 @@ export class IntegrationWebviewProvider {
                 messageEl.classList.remove('visible');
             }, 5000);
         }
+        })();
         `;
     }
 

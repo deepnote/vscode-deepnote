@@ -96,7 +96,9 @@ export class IntegrationManager {
         const integrations = await this.integrationDetector.detectIntegrations(projectId);
 
         if (integrations.size === 0) {
-            void window.showInformationMessage('No integrations found in this project');
+            void window.showInformationMessage(
+                `No integrations found in this project. Project ID: ${projectId}. Make sure SQL blocks have 'sql_integration_id' in their metadata.`
+            );
             return;
         }
 

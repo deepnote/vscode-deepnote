@@ -59,12 +59,3 @@ export interface IntegrationWithStatus {
     status: IntegrationStatus;
     error?: string;
 }
-
-/**
- * Integration reference in a block's metadata
- */
-export interface IntegrationReference {
-    integrationId: string;
-    integrationType: IntegrationType;
-}
-

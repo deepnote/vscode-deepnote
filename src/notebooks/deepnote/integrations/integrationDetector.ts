@@ -30,10 +30,9 @@ export class IntegrationDetector implements IIntegrationDetector {
         for (const notebook of project.project.notebooks) {
             // Scan all blocks in the notebook
             for (const block of notebook.blocks) {
-                // Check if this is a code block with integration metadata
-                if (block.type === 'code' && block.metadata?.integration) {
-                    const integrationRef = block.metadata.integration;
-                    const integrationId = integrationRef.id;
+                // Check if this is a code block with SQL integration metadata
+                if (block.type === 'code' && block.metadata?.sql_integration_id) {
+                    const integrationId = block.metadata.sql_integration_id;
 
                     // Skip if we've already detected this integration
                     if (integrations.has(integrationId)) {
@@ -71,4 +70,3 @@ export class IntegrationDetector implements IIntegrationDetector {
         return false;
     }
 }
-

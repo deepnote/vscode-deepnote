@@ -374,14 +374,15 @@ export class IntegrationWebviewProvider {
             }
 
             listEl.innerHTML = integrations.map(integration => {
-                const statusClass = integration.status === 1 ? 'status-connected' : 'status-disconnected';
-                const statusText = integration.status === 1 ? 'Connected' : 'Not Configured';
+                const statusClass = integration.status === 'connected' ? 'status-connected' : 'status-disconnected';
+                const statusText = integration.status === 'connected' ? 'Connected' : 'Not Configured';
                 const configureText = integration.config ? 'Reconfigure' : 'Configure';
+                const displayName = integration.config?.name || integration.id;
 
                 return \`
                     <div class="integration-item">
                         <div class="integration-info">
-                            <div class="integration-name">\${integration.id}</div>
+                            <div class="integration-name">\${displayName}</div>
                             <div class="integration-status \${statusClass}">\${statusText}</div>
                         </div>
                         <div class="integration-actions">
@@ -459,6 +460,10 @@ export class IntegrationWebviewProvider {
                 formContainer.innerHTML = \`
                     <h2>Configure PostgreSQL: \${currentIntegrationId}</h2>
                     <div class="form-group">
+                        <label>Display Name:</label>
+                        <input type="text" id="name" value="\${config?.name || ''}" placeholder="My PostgreSQL Database" required>
+                    </div>
+                    <div class="form-group">
                         <label>Host:</label>
                         <input type="text" id="host" value="\${config?.host || ''}" placeholder="localhost" required>
                     </div>
@@ -487,6 +492,10 @@ export class IntegrationWebviewProvider {
                 formContainer.innerHTML = \`
                     <h2>Configure BigQuery: \${currentIntegrationId}</h2>
                     <div class="form-group">
+                        <label>Display Name:</label>
+                        <input type="text" id="name" value="\${config?.name || ''}" placeholder="My BigQuery Project" required>
+                    </div>
+                    <div class="form-group">
                         <label>GCP Project ID:</label>
                         <input type="text" id="projectId" value="\${config?.projectId || ''}" placeholder="my-gcp-project" required>
                     </div>
@@ -505,9 +514,15 @@ export class IntegrationWebviewProvider {
         }
 
         function savePostgresConfig() {
+            const name = document.getElementById('name').value.trim();
+            if (!name) {
+                showMessage('Display name is required', 'error');
+                return;
+            }
+
             const config = {
                 id: currentIntegrationId,
-                name: currentIntegrationId,
+                name: name,
                 type: 'postgres',
                 host: document.getElementById('host').value,
                 port: parseInt(document.getElementById('port').value),
@@ -520,6 +535,12 @@ export class IntegrationWebviewProvider {
         }
 
         function saveBigQueryConfig() {
+            const name = document.getElementById('name').value.trim();
+            if (!name) {
+                showMessage('Display name is required', 'error');
+                return;
+            }
+
             const credentials = document.getElementById('credentials').value;
 
             // Validate JSON
@@ -532,7 +553,7 @@ export class IntegrationWebviewProvider {
 
             const config = {
                 id: currentIntegrationId,
-                name: currentIntegrationId,
+                name: name,
                 type: 'bigquery',
                 projectId: document.getElementById('projectId').value,
                 credentials: credentials

@@ -15,6 +15,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
 
     private readonly disposables: Disposable[] = [];
 
+    private integrations: Map<string, IntegrationWithStatus> = new Map();
+
     constructor(
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage
@@ -24,12 +26,15 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
      * Show the integration management webview
      */
     public async show(integrations: Map<string, IntegrationWithStatus>): Promise<void> {
+        // Update the stored integrations with the latest data
+        this.integrations = integrations;
+
         const column = window.activeTextEditor ? window.activeTextEditor.viewColumn : ViewColumn.One;
 
         // If we already have a panel, show it
         if (this.currentPanel) {
             this.currentPanel.reveal(column);
-            await this.updateWebview(integrations);
+            await this.updateWebview();
             return;
         }
 
@@ -46,12 +51,12 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         );
 
         // Set the webview's initial html content
-        this.currentPanel.webview.html = this.getWebviewContent(integrations);
+        this.currentPanel.webview.html = this.getWebviewContent();
 
         // Handle messages from the webview
         this.currentPanel.webview.onDidReceiveMessage(
             async (message) => {
-                await this.handleMessage(message, integrations);
+                await this.handleMessage(message);
             },
             null,
             this.disposables
@@ -61,6 +66,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         this.currentPanel.onDidDispose(
             () => {
                 this.currentPanel = undefined;
+                this.integrations = new Map();
                 this.disposables.forEach((d) => d.dispose());
                 this.disposables.length = 0;
             },
@@ -68,18 +74,18 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             this.disposables
         );
 
-        await this.updateWebview(integrations);
+        await this.updateWebview();
     }
 
     /**
      * Update the webview with current integration data
      */
-    private async updateWebview(integrations: Map<string, IntegrationWithStatus>): Promise<void> {
+    private async updateWebview(): Promise<void> {
         if (!this.currentPanel) {
             return;
         }
 
-        const integrationsData = Array.from(integrations.entries()).map(([id, integration]) => ({
+        const integrationsData = Array.from(this.integrations.entries()).map(([id, integration]) => ({
             config: integration.config,
             id,
             status: integration.status
@@ -94,28 +100,29 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     /**
      * Handle messages from the webview
      */
-    private async handleMessage(
-        message: { type: string; integrationId?: string; config?: IntegrationConfig },
-        integrations: Map<string, IntegrationWithStatus>
-    ): Promise<void> {
+    private async handleMessage(message: {
+        type: string;
+        integrationId?: string;
+        config?: IntegrationConfig;
+    }): Promise<void> {
         logger.debug(`IntegrationWebview: Received message: ${message.type}`);
 
         switch (message.type) {
             case 'configure':
                 if (message.integrationId) {
-                    await this.showConfigurationForm(message.integrationId, integrations);
+                    await this.showConfigurationForm(message.integrationId);
                 }
                 break;
 
             case 'save':
                 if (message.config) {
-                    await this.saveConfiguration(message.config, integrations);
+                    await this.saveConfiguration(message.config);
                 }
                 break;
 
             case 'delete':
                 if (message.integrationId) {
-                    await this.deleteConfiguration(message.integrationId, integrations);
+                    await this.deleteConfiguration(message.integrationId);
                 }
                 break;
 
@@ -127,11 +134,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     /**
      * Show configuration form for an integration
      */
-    private async showConfigurationForm(
-        integrationId: string,
-        integrations: Map<string, IntegrationWithStatus>
-    ): Promise<void> {
-        const integration = integrations.get(integrationId);
+    private async showConfigurationForm(integrationId: string): Promise<void> {
+        const integration = this.integrations.get(integrationId);
         const existingConfig = integration?.config;
 
         await this.currentPanel?.webview.postMessage({
@@ -144,20 +148,17 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     /**
      * Save integration configuration
      */
-    private async saveConfiguration(
-        config: IntegrationConfig,
-        integrations: Map<string, IntegrationWithStatus>
-    ): Promise<void> {
+    private async saveConfiguration(config: IntegrationConfig): Promise<void> {
         try {
             await this.integrationStorage.save(config);
 
-            // Update the integrations map
-            integrations.set(config.id, {
+            // Update the integrations map with the latest state
+            this.integrations.set(config.id, {
                 config,
                 status: IntegrationStatus.Connected
             });
 
-            await this.updateWebview(integrations);
+            await this.updateWebview();
 
             await this.currentPanel?.webview.postMessage({
                 message: 'Configuration saved successfully',
@@ -175,23 +176,20 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     /**
      * Delete integration configuration
      */
-    private async deleteConfiguration(
-        integrationId: string,
-        integrations: Map<string, IntegrationWithStatus>
-    ): Promise<void> {
+    private async deleteConfiguration(integrationId: string): Promise<void> {
         try {
             await this.integrationStorage.delete(integrationId);
 
-            // Update the integrations map
-            const integration = integrations.get(integrationId);
+            // Update the integrations map with the latest state
+            const integration = this.integrations.get(integrationId);
             if (integration) {
-                integrations.set(integrationId, {
+                this.integrations.set(integrationId, {
                     config: null,
                     status: IntegrationStatus.Disconnected
                 });
             }
 
-            await this.updateWebview(integrations);
+            await this.updateWebview();
 
             await this.currentPanel?.webview.postMessage({
                 message: 'Configuration deleted successfully',
@@ -209,7 +207,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     /**
      * Get the HTML content for the webview
      */
-    private getWebviewContent(_integrations: Map<string, IntegrationWithStatus>): string {
+    private getWebviewContent(): string {
         const nonce = this.getNonce();
 
         return `<!DOCTYPE html>

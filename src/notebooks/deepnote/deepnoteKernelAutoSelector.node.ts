@@ -461,29 +461,27 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                     // Prepare init notebook execution for when kernel starts
                     // This MUST complete before marking controller as preferred to avoid race conditions
                     const projectId = notebook.metadata?.deepnoteProjectId;
-                    if (projectId) {
-                        // Get the project and create requirements.txt before kernel starts
-                        const project = this.notebookManager.getOriginalProject(projectId) as
-                            | DeepnoteProject
-                            | undefined;
-                        if (project) {
-                            // Create requirements.txt first (needs to be ready for init notebook)
-                            progress.report({ message: 'Creating requirements.txt...' });
-                            await this.requirementsHelper.createRequirementsFile(project, progressToken);
-                            logger.info(`Created requirements.txt for project ${projectId}`);
+                    const project = projectId
+                        ? (this.notebookManager.getOriginalProject(projectId) as DeepnoteProject | undefined)
+                        : undefined;
 
-                            // Check if project has an init notebook
-                            if (
-                                project.project.initNotebookId &&
-                                !this.notebookManager.hasInitNotebookBeenRun(projectId)
-                            ) {
-                                // Store for execution when kernel actually starts
-                                // Kernels are created lazily when cells execute, so we can't run init notebook now
-                                this.projectsPendingInitNotebook.set(projectId, { notebook, project });
-                                logger.info(
-                                    `Init notebook will run automatically when kernel starts for project ${projectId}`
-                                );
-                            }
+                    if (project) {
+                        // Create requirements.txt first (needs to be ready for init notebook)
+                        progress.report({ message: 'Creating requirements.txt...' });
+                        await this.requirementsHelper.createRequirementsFile(project, progressToken);
+                        logger.info(`Created requirements.txt for project ${projectId}`);
+
+                        // Check if project has an init notebook that hasn't been run yet
+                        if (
+                            project.project.initNotebookId &&
+                            !this.notebookManager.hasInitNotebookBeenRun(projectId!)
+                        ) {
+                            // Store for execution when kernel actually starts
+                            // Kernels are created lazily when cells execute, so we can't run init notebook now
+                            this.projectsPendingInitNotebook.set(projectId!, { notebook, project });
+                            logger.info(
+                                `Init notebook will run automatically when kernel starts for project ${projectId}`
+                            );
                         }
                     }
 

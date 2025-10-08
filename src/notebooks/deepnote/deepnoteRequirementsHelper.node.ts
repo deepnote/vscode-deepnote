@@ -1,6 +1,3 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-
 import { inject, injectable } from 'inversify';
 import { workspace, CancellationToken } from 'vscode';
 import * as fs from 'fs';
@@ -27,7 +24,7 @@ export class DeepnoteRequirementsHelper {
                 return;
             }
 
-            const requirements = project.project.settings.requirements;
+            const requirements = project.project.settings?.requirements;
             if (!requirements || !Array.isArray(requirements) || requirements.length === 0) {
                 this.logger.info(`No requirements found in project ${project.project.id}`);
                 return;

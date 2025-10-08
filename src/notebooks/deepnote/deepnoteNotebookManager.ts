@@ -80,7 +80,7 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
      * @param projectId Project identifier
      * @returns True if init notebook has been run, false otherwise
      */
-    hasInitNotebookRun(projectId: string): boolean {
+    hasInitNotebookBeenRun(projectId: string): boolean {
         return this.projectsWithInitNotebookRun.has(projectId);
     }
 

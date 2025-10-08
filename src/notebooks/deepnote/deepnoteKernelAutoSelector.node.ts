@@ -10,7 +10,9 @@ import {
     window,
     ProgressLocation,
     notebooks,
-    NotebookController
+    NotebookController,
+    CancellationTokenSource,
+    Disposable
 } from 'vscode';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
@@ -215,12 +217,35 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         // Remove from pending list
         this.projectsPendingInitNotebook.delete(projectId);
 
-        // Run init notebook now that kernel is available
+        // Create a CancellationTokenSource tied to the notebook lifecycle
+        const cts = new CancellationTokenSource();
+        const disposables: Disposable[] = [];
+
         try {
-            await this.initNotebookRunner.runInitNotebookIfNeeded(notebook, projectId);
+            // Register handler to cancel the token if the notebook is closed
+            // Note: We check the URI to ensure we only cancel for the specific notebook that closed
+            const closeListener = workspace.onDidCloseNotebookDocument((closedNotebook) => {
+                if (closedNotebook.uri.toString() === notebook.uri.toString()) {
+                    logger.info(`Notebook closed while init notebook was running, cancelling for project ${projectId}`);
+                    cts.cancel();
+                }
+            });
+            disposables.push(closeListener);
+
+            // Run init notebook with cancellation support
+            await this.initNotebookRunner.runInitNotebookIfNeeded(projectId, notebook, cts.token);
         } catch (error) {
+            // Check if this is a cancellation error - if so, just log and continue
+            if (error instanceof Error && error.message === 'Cancelled') {
+                logger.info(`Init notebook cancelled for project ${projectId}`);
+                return;
+            }
             logger.error(`Error running init notebook: ${error}`);
             // Continue anyway - don't block user if init fails
+        } finally {
+            // Always clean up the CTS and event listeners
+            cts.dispose();
+            disposables.forEach((d) => d.dispose());
         }
     }
 
@@ -433,6 +458,35 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                     // Store the controller for reuse
                     this.notebookControllers.set(notebookKey, controller);
 
+                    // Prepare init notebook execution for when kernel starts
+                    // This MUST complete before marking controller as preferred to avoid race conditions
+                    const projectId = notebook.metadata?.deepnoteProjectId;
+                    if (projectId) {
+                        // Get the project and create requirements.txt before kernel starts
+                        const project = this.notebookManager.getOriginalProject(projectId) as
+                            | DeepnoteProject
+                            | undefined;
+                        if (project) {
+                            // Create requirements.txt first (needs to be ready for init notebook)
+                            progress.report({ message: 'Creating requirements.txt...' });
+                            await this.requirementsHelper.createRequirementsFile(project, progressToken);
+                            logger.info(`Created requirements.txt for project ${projectId}`);
+
+                            // Check if project has an init notebook
+                            if (
+                                project.project.initNotebookId &&
+                                !this.notebookManager.hasInitNotebookBeenRun(projectId)
+                            ) {
+                                // Store for execution when kernel actually starts
+                                // Kernels are created lazily when cells execute, so we can't run init notebook now
+                                this.projectsPendingInitNotebook.set(projectId, { notebook, project });
+                                logger.info(
+                                    `Init notebook will run automatically when kernel starts for project ${projectId}`
+                                );
+                            }
+                        }
+                    }
+
                     // Mark this controller as protected so it won't be automatically disposed
                     // This is similar to how active interpreter controllers are protected
                     this.controllerRegistration.trackActiveInterpreterControllers(controllers);
@@ -448,6 +502,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
                     // Auto-select the controller for this notebook using affinity
                     // Setting NotebookControllerAffinity.Preferred will make VSCode automatically select this controller
+                    // This is done AFTER requirements.txt creation to avoid race conditions
                     controller.controller.updateNotebookAffinity(notebook, NotebookControllerAffinity.Preferred);
 
                     logger.info(`Successfully auto-selected Deepnote kernel for ${getDisplayPath(notebook.uri)}`);
@@ -459,30 +514,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                         loadingController.dispose();
                         this.loadingControllers.delete(notebookKey);
                         logger.info(`Disposed loading controller for ${notebookKey}`);
-                    }
-
-                    // Prepare init notebook execution for when kernel starts
-                    const projectId = notebook.metadata?.deepnoteProjectId;
-                    if (projectId) {
-                        // Get the project and create requirements.txt before kernel starts
-                        const project = this.notebookManager.getOriginalProject(projectId) as
-                            | DeepnoteProject
-                            | undefined;
-                        if (project) {
-                            // Create requirements.txt first (needs to be ready for init notebook)
-                            progress.report({ message: 'Creating requirements.txt...' });
-                            await this.requirementsHelper.createRequirementsFile(project, progressToken);
-
-                            // Check if project has an init notebook
-                            if (project.project.initNotebookId && !this.notebookManager.hasInitNotebookRun(projectId)) {
-                                // Store for execution when kernel actually starts
-                                // Kernels are created lazily when cells execute, so we can't run init notebook now
-                                this.projectsPendingInitNotebook.set(projectId, { notebook, project });
-                                logger.info(
-                                    `Init notebook will run automatically when kernel starts for project ${projectId}`
-                                );
-                            }
-                        }
                     }
                 } catch (ex) {
                     logger.error(`Failed to auto-select Deepnote kernel: ${ex}`);

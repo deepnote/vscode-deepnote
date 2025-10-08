@@ -87,7 +87,7 @@ This implementation adds automatic kernel selection and startup for `.deepnote` 
 
 **Key Methods:**
 
-- `runInitNotebookIfNeeded(notebook, projectId)`: Main entry point, checks cache and executes if needed
+- `runInitNotebookIfNeeded(projectId, notebook)`: Main entry point, checks cache and executes if needed
 - `executeInitNotebook(notebook, initNotebook)`: Executes all code blocks from init notebook
 
 #### 6. **Deepnote Requirements Helper** (`src/notebooks/deepnote/deepnoteRequirementsHelper.node.ts`)
@@ -213,7 +213,7 @@ flowchart TD
 - Cells will wait for the kernel to be ready before executing
 - No kernel selection dialog will appear
 
-3. **The extension automatically sets up the environment:**
+1. **The extension automatically sets up the environment:**
 
 - Installs deepnote-toolkit in a dedicated virtual environment (first time only)
 - Starts a Deepnote server on an available port (if not already running)
@@ -221,7 +221,7 @@ flowchart TD
 - Creates `requirements.txt` from project settings (if defined)
 - Runs the init notebook (if `project.initNotebookId` is defined)
 
-4. **Once the progress notification shows "Kernel ready!"**:
+1. **Once the progress notification shows "Kernel ready!"**:
 
 - The loading controller is automatically replaced with the real Deepnote kernel
 - Init notebook code has been executed (if present)

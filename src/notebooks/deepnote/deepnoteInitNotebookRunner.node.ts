@@ -1,8 +1,5 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-
 import { inject, injectable } from 'inversify';
-import { NotebookDocument, ProgressLocation, window, CancellationTokenSource } from 'vscode';
+import { NotebookDocument, ProgressLocation, window, CancellationTokenSource, CancellationToken } from 'vscode';
 import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteProject, DeepnoteNotebook } from './deepnoteTypes';
@@ -25,12 +22,28 @@ export class DeepnoteInitNotebookRunner {
      * This should be called after the kernel is started but before user code executes.
      * @param notebook The notebook document
      * @param projectId The Deepnote project ID
+     * @param token Optional cancellation token to stop execution if notebook is closed
      */
-    async runInitNotebookIfNeeded(notebook: NotebookDocument, projectId: string): Promise<void> {
+    async runInitNotebookIfNeeded(
+        projectId: string,
+        notebook: NotebookDocument,
+        token?: CancellationToken
+    ): Promise<void> {
         try {
+            // Check for cancellation before starting
+            if (token?.isCancellationRequested) {
+                logger.info(`Init notebook cancelled before start for project ${projectId}`);
+                return;
+            }
+
             // Check if init notebook has already run for this project
-            if (this.notebookManager.hasInitNotebookRun(projectId)) {
-                logger.info(`Init notebook already run for project ${projectId}, skipping`);
+            if (this.notebookManager.hasInitNotebookBeenRun(projectId)) {
+                logger.info(`Init notebook already ran for project ${projectId}, skipping`);
+                return;
+            }
+
+            if (token?.isCancellationRequested) {
+                logger.info(`Init notebook cancelled for project ${projectId}`);
                 return;
             }
 
@@ -60,10 +73,15 @@ export class DeepnoteInitNotebookRunner {
                 return;
             }
 
+            if (token?.isCancellationRequested) {
+                logger.info(`Init notebook cancelled before execution for project ${projectId}`);
+                return;
+            }
+
             logger.info(`Running init notebook "${initNotebook.name}" (${initNotebookId}) for project ${projectId}`);
 
             // Execute the init notebook with progress
-            const success = await this.executeInitNotebook(notebook, initNotebook);
+            const success = await this.executeInitNotebook(notebook, initNotebook, token);
 
             if (success) {
                 // Mark as run so we don't run it again
@@ -73,6 +91,11 @@ export class DeepnoteInitNotebookRunner {
                 logger.warn(`Init notebook did not execute for project ${projectId} - kernel not available`);
             }
         } catch (error) {
+            // Check if this is a cancellation error
+            if (error instanceof Error && error.message === 'Cancelled') {
+                logger.info(`Init notebook cancelled for project ${projectId}`);
+                return;
+            }
             // Log error but don't throw - we want to let user continue anyway
             logger.error(`Error running init notebook for project ${projectId}:`, error);
             // Still mark as run to avoid retrying on every notebook open
@@ -84,11 +107,27 @@ export class DeepnoteInitNotebookRunner {
      * Executes the init notebook's code blocks in the kernel.
      * @param notebook The notebook document (for kernel context)
      * @param initNotebook The init notebook to execute
+     * @param token Optional cancellation token from parent operation
      * @returns True if execution completed, false if kernel was not available
      */
-    private async executeInitNotebook(notebook: NotebookDocument, initNotebook: DeepnoteNotebook): Promise<boolean> {
+    private async executeInitNotebook(
+        notebook: NotebookDocument,
+        initNotebook: DeepnoteNotebook,
+        token?: CancellationToken
+    ): Promise<boolean> {
+        // Check for cancellation before starting
+        if (token?.isCancellationRequested) {
+            logger.info(`Init notebook execution cancelled before start`);
+            return false;
+        }
+
         // Show progress in both notification AND window for maximum visibility
         const cancellationTokenSource = new CancellationTokenSource();
+
+        // Link parent token to our local token if provided
+        const tokenDisposable = token?.onCancellationRequested(() => {
+            cancellationTokenSource.cancel();
+        });
 
         // Create a wrapper that reports to both progress locations
         const executeWithDualProgress = async () => {
@@ -127,6 +166,7 @@ export class DeepnoteInitNotebookRunner {
         try {
             return await executeWithDualProgress();
         } finally {
+            tokenDisposable?.dispose();
             cancellationTokenSource.dispose();
         }
     }
@@ -135,9 +175,15 @@ export class DeepnoteInitNotebookRunner {
         notebook: NotebookDocument,
         initNotebook: DeepnoteNotebook,
         progress: (message: string, increment: number) => void,
-        _token: unknown
+        token: CancellationToken
     ): Promise<boolean> {
         try {
+            // Check for cancellation
+            if (token.isCancellationRequested) {
+                logger.info(`Init notebook execution cancelled`);
+                return false;
+            }
+
             progress(`Running init notebook "${initNotebook.name}"...`, 0);
 
             // Get the kernel for this notebook
@@ -170,11 +216,23 @@ export class DeepnoteInitNotebookRunner {
                 5
             );
 
+            // Check for cancellation
+            if (token.isCancellationRequested) {
+                logger.info(`Init notebook execution cancelled before starting blocks`);
+                return false;
+            }
+
             // Get kernel execution
             const kernelExecution = this.kernelProvider.getKernelExecution(kernel);
 
             // Execute each code block sequentially
             for (let i = 0; i < codeBlocks.length; i++) {
+                // Check for cancellation between blocks
+                if (token.isCancellationRequested) {
+                    logger.info(`Init notebook execution cancelled after block ${i}`);
+                    return false;
+                }
+
                 const block = codeBlocks[i];
                 const percentComplete = Math.floor((i / codeBlocks.length) * 100);
 
@@ -224,5 +282,5 @@ export class DeepnoteInitNotebookRunner {
 
 export const IDeepnoteInitNotebookRunner = Symbol('IDeepnoteInitNotebookRunner');
 export interface IDeepnoteInitNotebookRunner {
-    runInitNotebookIfNeeded(notebook: NotebookDocument, projectId: string): Promise<void>;
+    runInitNotebookIfNeeded(projectId: string, notebook: NotebookDocument, token?: CancellationToken): Promise<void>;
 }

@@ -40,6 +40,7 @@ suite('MarkdownBlockConverter', () => {
     suite('convertToCell', () => {
         test('converts markdown block to cell', () => {
             const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
                 content: '# Title\n\nParagraph text',
                 id: 'block-123',
                 sortingKey: 'a0',
@@ -55,6 +56,7 @@ suite('MarkdownBlockConverter', () => {
 
         test('handles empty content', () => {
             const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
                 sortingKey: 'a0',
@@ -80,6 +82,7 @@ suite('MarkdownBlockConverter', () => {
 
         test('handles complex markdown', () => {
             const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
                 content: '# Title\n\n## Subtitle\n\n- List item 1\n- List item 2\n\n```python\nprint("code")\n```',
                 id: 'block-123',
                 sortingKey: 'a0',
@@ -98,6 +101,7 @@ suite('MarkdownBlockConverter', () => {
     suite('applyChangesToBlock', () => {
         test('applies cell content to block', () => {
             const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
                 content: 'old content',
                 id: 'block-123',
                 sortingKey: 'a0',
@@ -112,6 +116,7 @@ suite('MarkdownBlockConverter', () => {
 
         test('handles empty cell value', () => {
             const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
                 content: 'old content',
                 id: 'block-123',
                 sortingKey: 'a0',
@@ -126,6 +131,7 @@ suite('MarkdownBlockConverter', () => {
 
         test('does not modify other block properties', () => {
             const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
                 content: 'old content',
                 id: 'block-123',
                 metadata: { custom: 'value' },
@@ -145,6 +151,7 @@ suite('MarkdownBlockConverter', () => {
 
         test('handles complex markdown content', () => {
             const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
                 content: 'old content',
                 id: 'block-123',
                 sortingKey: 'a0',

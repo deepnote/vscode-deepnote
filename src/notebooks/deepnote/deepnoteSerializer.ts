@@ -6,7 +6,7 @@ import { IDeepnoteNotebookManager } from '../types';
 import type { DeepnoteProject } from './deepnoteTypes';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
 
-export { DeepnoteProject, DeepnoteNotebook, DeepnoteBlock, DeepnoteOutput } from './deepnoteTypes';
+export { DeepnoteProject, DeepnoteNotebook, DeepnoteOutput } from './deepnoteTypes';
 
 /**
  * Serializer for converting between Deepnote YAML files and VS Code notebook format.

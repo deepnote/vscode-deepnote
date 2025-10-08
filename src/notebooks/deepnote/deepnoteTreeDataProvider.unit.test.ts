@@ -19,15 +19,31 @@ suite('DeepnoteTreeDataProvider', () => {
                 {
                     id: 'notebook-1',
                     name: 'First Notebook',
-                    blocks: [{ id: 'block-1', content: 'print("hello")', sortingKey: 'a0', type: 'code' }],
-                    executionMode: 'python',
+                    blocks: [
+                        {
+                            blockGroup: 'group-123',
+                            id: 'block-1',
+                            content: 'print("hello")',
+                            sortingKey: 'a0',
+                            type: 'code'
+                        }
+                    ],
+                    executionMode: 'block',
                     isModule: false
                 },
                 {
                     id: 'notebook-2',
                     name: 'Second Notebook',
-                    blocks: [{ id: 'block-2', content: '# Title', sortingKey: 'a0', type: 'markdown' }],
-                    executionMode: 'python',
+                    blocks: [
+                        {
+                            blockGroup: 'group-123',
+                            id: 'block-2',
+                            content: '# Title',
+                            sortingKey: 'a0',
+                            type: 'markdown'
+                        }
+                    ],
+                    executionMode: 'block',
                     isModule: false
                 }
             ],
@@ -95,7 +111,7 @@ suite('DeepnoteTreeDataProvider', () => {
                     id: 'notebook-1',
                     name: 'Test Notebook',
                     blocks: [],
-                    executionMode: 'python',
+                    executionMode: 'block',
                     isModule: false
                 },
                 0 // TreeItemCollapsibleState.None

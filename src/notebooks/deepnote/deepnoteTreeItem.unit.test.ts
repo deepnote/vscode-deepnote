@@ -18,7 +18,7 @@ suite('DeepnoteTreeItem', () => {
                     id: 'notebook-1',
                     name: 'First Notebook',
                     blocks: [],
-                    executionMode: 'python',
+                    executionMode: 'block',
                     isModule: false
                 }
             ],
@@ -30,8 +30,8 @@ suite('DeepnoteTreeItem', () => {
     const mockNotebook: DeepnoteNotebook = {
         id: 'notebook-456',
         name: 'Analysis Notebook',
-        blocks: [{ id: 'block-1', content: 'print("hello")', sortingKey: 'a0', type: 'code' }],
-        executionMode: 'python',
+        blocks: [{ blockGroup: 'group-123', id: 'block-1', content: 'print("hello")', sortingKey: 'a0', type: 'code' }],
+        executionMode: 'block',
         isModule: false
     };
 
@@ -124,14 +124,32 @@ suite('DeepnoteTreeItem', () => {
         });
 
         test('should handle project with multiple notebooks', () => {
-            const projectWithMultipleNotebooks = {
+            const projectWithMultipleNotebooks: DeepnoteProject = {
                 ...mockProject,
                 project: {
                     ...mockProject.project,
                     notebooks: [
-                        { id: 'notebook-1', name: 'First', blocks: [], executionMode: 'python', isModule: false },
-                        { id: 'notebook-2', name: 'Second', blocks: [], executionMode: 'python', isModule: false },
-                        { id: 'notebook-3', name: 'Third', blocks: [], executionMode: 'python', isModule: false }
+                        {
+                            id: 'notebook-1',
+                            name: 'First',
+                            blocks: [],
+                            executionMode: 'block' as const,
+                            isModule: false
+                        },
+                        {
+                            id: 'notebook-2',
+                            name: 'Second',
+                            blocks: [],
+                            executionMode: 'block' as const,
+                            isModule: false
+                        },
+                        {
+                            id: 'notebook-3',
+                            name: 'Third',
+                            blocks: [],
+                            executionMode: 'block' as const,
+                            isModule: false
+                        }
                     ]
                 }
             };
@@ -219,7 +237,7 @@ suite('DeepnoteTreeItem', () => {
             assert.strictEqual(item.type, DeepnoteTreeItemType.Notebook);
             assert.strictEqual(item.collapsibleState, TreeItemCollapsibleState.None);
             assert.strictEqual(item.contextValue, 'notebook');
-            assert.strictEqual(item.tooltip, 'Notebook: Analysis Notebook\nExecution Mode: python');
+            assert.strictEqual(item.tooltip, 'Notebook: Analysis Notebook\nExecution Mode: block');
             assert.strictEqual(item.description, '1 cell');
 
             // Should have file-code icon for notebooks
@@ -244,10 +262,34 @@ suite('DeepnoteTreeItem', () => {
             const notebookWithMultipleBlocks = {
                 ...mockNotebook,
                 blocks: [
-                    { id: 'block-1', content: 'import pandas', sortingKey: 'a0', type: 'code' as const },
-                    { id: 'block-2', content: '# Analysis', sortingKey: 'a1', type: 'markdown' as const },
-                    { id: 'block-3', content: 'df = pd.read_csv("data.csv")', sortingKey: 'a2', type: 'code' as const },
-                    { id: 'block-4', content: 'print(df.head())', sortingKey: 'a3', type: 'code' as const }
+                    {
+                        blockGroup: 'group-123',
+                        id: 'block-1',
+                        content: 'import pandas',
+                        sortingKey: 'a0',
+                        type: 'code' as const
+                    },
+                    {
+                        blockGroup: 'group-123',
+                        id: 'block-2',
+                        content: '# Analysis',
+                        sortingKey: 'a1',
+                        type: 'markdown' as const
+                    },
+                    {
+                        blockGroup: 'group-123',
+                        id: 'block-3',
+                        content: 'df = pd.read_csv("data.csv")',
+                        sortingKey: 'a2',
+                        type: 'code' as const
+                    },
+                    {
+                        blockGroup: 'group-123',
+                        id: 'block-4',
+                        content: 'print(df.head())',
+                        sortingKey: 'a3',
+                        type: 'code' as const
+                    }
                 ]
             };
 
@@ -473,10 +515,10 @@ suite('DeepnoteTreeItem', () => {
                 notebookId: 'notebook-1'
             };
 
-            const notebookWithDetails = {
+            const notebookWithDetails: DeepnoteNotebook = {
                 ...mockNotebook,
                 name: 'Data Analysis',
-                executionMode: 'python'
+                executionMode: 'block'
             };
 
             const notebookItem = new DeepnoteTreeItem(
@@ -486,7 +528,7 @@ suite('DeepnoteTreeItem', () => {
                 TreeItemCollapsibleState.None
             );
 
-            assert.strictEqual(notebookItem.tooltip, 'Notebook: Data Analysis\nExecution Mode: python');
+            assert.strictEqual(notebookItem.tooltip, 'Notebook: Data Analysis\nExecution Mode: block');
         });
 
         test('should handle special characters in names', () => {
@@ -496,10 +538,10 @@ suite('DeepnoteTreeItem', () => {
                 notebookId: 'notebook-456'
             };
 
-            const notebookWithSpecialChars = {
+            const notebookWithSpecialChars: DeepnoteNotebook = {
                 ...mockNotebook,
                 name: 'Notebook with "quotes" & special chars',
-                executionMode: 'python'
+                executionMode: 'block'
             };
 
             const item = new DeepnoteTreeItem(
@@ -509,10 +551,7 @@ suite('DeepnoteTreeItem', () => {
                 TreeItemCollapsibleState.None
             );
 
-            assert.strictEqual(
-                item.tooltip,
-                'Notebook: Notebook with "quotes" & special chars\nExecution Mode: python'
-            );
+            assert.strictEqual(item.tooltip, 'Notebook: Notebook with "quotes" & special chars\nExecution Mode: block');
         });
     });
 
@@ -556,7 +595,7 @@ suite('DeepnoteTreeItem', () => {
             );
 
             // Create child notebook items
-            const notebooks = [
+            const notebooks: Array<{ context: DeepnoteTreeItemContext; data: DeepnoteNotebook }> = [
                 {
                     context: {
                         filePath: '/workspace/research-project.deepnote',
@@ -567,7 +606,7 @@ suite('DeepnoteTreeItem', () => {
                         id: 'analysis-notebook',
                         name: 'Data Analysis',
                         blocks: [],
-                        executionMode: 'python',
+                        executionMode: 'block',
                         isModule: false
                     }
                 },
@@ -581,7 +620,7 @@ suite('DeepnoteTreeItem', () => {
                         id: 'visualization-notebook',
                         name: 'Data Visualization',
                         blocks: [],
-                        executionMode: 'python',
+                        executionMode: 'block',
                         isModule: false
                     }
                 }

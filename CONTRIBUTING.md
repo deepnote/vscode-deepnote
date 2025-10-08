@@ -32,6 +32,34 @@ cd vscode-jupyter
 
 ```
 
+#### Install Recommended Extensions
+
+First, install all the recommended VS Code extensions. Open the Command Palette (Ctrl+Shift+P or Cmd+Shift+P) and run:
+
+```text
+Extensions: Show Recommended Extensions
+```
+
+Then install all the extensions listed under "Workspace Recommendations".
+
+#### Configure Access to @deepnote/blocks Package
+
+The `@deepnote/blocks` package is published on GitHub Packages. To install it, you'll need to authenticate with GitHub:
+
+1. Create a GitHub Personal Access Token (classic) with `read:packages` scope:
+   - Go to https://github.com/settings/tokens
+   - Click "Generate new token (classic)"
+   - Select the `read:packages` scope
+   - Generate and copy the token
+
+2. Add the token to your global `.npmrc` file:
+   ```shell
+   echo "//npm.pkg.github.com/:_authToken=YOUR_TOKEN_HERE" >> ~/.npmrc
+   ```
+   Replace `YOUR_TOKEN_HERE` with your actual token.
+
+After completing these steps, you can install dependencies normally with `npm ci`. The project's `.npmrc` file is already configured to use GitHub Packages for the `@deepnote` scope.
+
 On Apple Silicon, you will have to use system versions of `libsodium` and `libzmq` instead of the bundled ones:
 
 ```shell

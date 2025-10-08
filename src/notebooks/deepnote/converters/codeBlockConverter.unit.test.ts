@@ -40,6 +40,7 @@ suite('CodeBlockConverter', () => {
     suite('convertToCell', () => {
         test('converts code block to cell', () => {
             const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
                 content: 'print("hello")',
                 id: 'block-123',
                 sortingKey: 'a0',
@@ -55,6 +56,7 @@ suite('CodeBlockConverter', () => {
 
         test('handles empty content', () => {
             const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
                 sortingKey: 'a0',
@@ -80,6 +82,7 @@ suite('CodeBlockConverter', () => {
 
         test('handles multi-line content', () => {
             const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
                 content: 'import numpy as np\nimport pandas as pd\n\nprint("hello")',
                 id: 'block-123',
                 sortingKey: 'a0',
@@ -95,6 +98,7 @@ suite('CodeBlockConverter', () => {
     suite('applyChangesToBlock', () => {
         test('applies cell content to block', () => {
             const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
                 content: 'old content',
                 id: 'block-123',
                 sortingKey: 'a0',
@@ -109,6 +113,7 @@ suite('CodeBlockConverter', () => {
 
         test('handles empty cell value', () => {
             const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
                 content: 'old content',
                 id: 'block-123',
                 sortingKey: 'a0',
@@ -123,6 +128,7 @@ suite('CodeBlockConverter', () => {
 
         test('does not modify other block properties', () => {
             const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
                 content: 'old content',
                 executionCount: 5,
                 id: 'block-123',

@@ -2099,6 +2099,7 @@
     },
     "dependencies": {
         "@c4312/evt": "^0.1.1",
+        "@deepnote/blocks": "^1.1.0",
         "@enonic/fnv-plus": "^1.3.0",
         "@jupyter-widgets/base": "^6.0.8",
         "@jupyter-widgets/controls": "^5.0.9",

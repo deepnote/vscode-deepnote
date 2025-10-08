@@ -1,23 +1,36 @@
+import { createMarkdown, stripMarkdown } from '@deepnote/blocks';
 import { NotebookCellData, NotebookCellKind } from 'vscode';
 
 import type { BlockConverter } from './blockConverter';
 import type { DeepnoteBlock } from '../deepnoteTypes';
 
 export class TextBlockConverter implements BlockConverter {
-    protected static readonly textBlockTypes = ['text-cell-h1', 'text-cell-h2', 'text-cell-h3', 'text-cell-p'];
+    protected static readonly textBlockTypes = [
+        'text-cell-h1',
+        'text-cell-h2',
+        'text-cell-h3',
+        'text-cell-p',
+        'text-cell-bullet',
+        'text-cell-todo',
+        'text-cell-callout',
+        'separator'
+    ];
 
     applyChangesToBlock(block: DeepnoteBlock, cell: NotebookCellData): void {
-        let value = cell.value || '';
+        // For separator, just keep empty content
+        if (block.type === 'separator') {
+            block.content = '';
 
-        if (block.type === 'text-cell-h1') {
-            value = value.replace(/^\s*#\s+/, '');
-        } else if (block.type === 'text-cell-h2') {
-            value = value.replace(/^\s*##\s+/, '');
-        } else if (block.type === 'text-cell-h3') {
-            value = value.replace(/^\s*###\s+/, '');
+            return;
         }
 
-        block.content = value;
+        // Update block content with cell value first
+        block.content = cell.value || '';
+
+        // Then strip the markdown formatting to get plain text
+        const textValue = stripMarkdown(block);
+
+        block.content = textValue;
     }
 
     canConvert(blockType: string): boolean {
@@ -25,19 +38,9 @@ export class TextBlockConverter implements BlockConverter {
     }
 
     convertToCell(block: DeepnoteBlock): NotebookCellData {
-        // TODO: Use the library to handle the markdown conversion here in the future.
+        const markdown = createMarkdown(block);
 
-        let value = block.content || '';
-
-        if (block.type === 'text-cell-h1') {
-            value = `# ${value}`;
-        } else if (block.type === 'text-cell-h2') {
-            value = `## ${value}`;
-        } else if (block.type === 'text-cell-h3') {
-            value = `### ${value}`;
-        }
-
-        const cell = new NotebookCellData(NotebookCellKind.Markup, value, 'markdown');
+        const cell = new NotebookCellData(NotebookCellKind.Markup, markdown, 'markdown');
 
         return cell;
     }

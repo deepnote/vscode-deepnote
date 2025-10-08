@@ -147,6 +147,12 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         // Enforce published pip constraints to prevent breaking Deepnote Toolkit's dependencies
         env.DEEPNOTE_ENFORCE_PIP_CONSTRAINTS = 'true';
 
+        // Detached mode ensures no requests are made to the backend (directly, or via proxy)
+        // as there is no backend running in the extension, therefore:
+        // 1. integration environment variables won't work / be injected
+        // 2. post start hooks won't work / are not executed
+        env.DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE = 'true';
+
         // Remove PYTHONHOME if it exists (can interfere with venv)
         delete env.PYTHONHOME;
 

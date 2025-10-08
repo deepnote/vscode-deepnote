@@ -1809,6 +1809,16 @@
                 "entrypoint": "./dist/webviews/webview-side/ipywidgetsKernel/ipywidgetsKernel.js"
             }
         ],
+        "notebookRenderer": [
+            {
+                "id": "deepnote-dataframe-renderer",
+                "displayName": "Deepnote Dataframe Renderer",
+                "entrypoint": "./dist/webviews/webview-side/dataframeRenderer/dataframeRenderer.js",
+                "mimeTypes": [
+                    "application/vnd.deepnote.dataframe.v3+json"
+                ]
+            }
+        ],
         "viewsContainers": {
             "activitybar": [
                 {

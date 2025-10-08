@@ -30,7 +30,7 @@ suite('DeepnoteNotebookSerializer', () => {
                             type: 'code'
                         }
                     ],
-                    executionMode: 'python',
+                    executionMode: 'block',
                     isModule: false
                 },
                 {
@@ -45,7 +45,7 @@ suite('DeepnoteNotebookSerializer', () => {
                             type: 'markdown'
                         }
                     ],
-                    executionMode: 'python',
+                    executionMode: 'block',
                     isModule: false
                 }
             ],
@@ -80,7 +80,7 @@ project:
           content: 'print("hello")'
           sortingKey: 'a0'
           type: 'code'
-      executionMode: 'python'
+      executionMode: 'block'
       isModule: false
   settings: {}
 `;
@@ -278,7 +278,7 @@ project:
         test('should handle notebook metadata', () => {
             const notebook = mockProject.project.notebooks[0];
 
-            assert.strictEqual(notebook.executionMode, 'python');
+            assert.strictEqual(notebook.executionMode, 'block');
             assert.strictEqual(notebook.isModule, false);
             assert.isDefined(notebook.blocks);
             assert.isArray(notebook.blocks);

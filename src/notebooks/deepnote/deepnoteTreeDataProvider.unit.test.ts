@@ -28,7 +28,7 @@ suite('DeepnoteTreeDataProvider', () => {
                             type: 'code'
                         }
                     ],
-                    executionMode: 'python',
+                    executionMode: 'block',
                     isModule: false
                 },
                 {
@@ -43,7 +43,7 @@ suite('DeepnoteTreeDataProvider', () => {
                             type: 'markdown'
                         }
                     ],
-                    executionMode: 'python',
+                    executionMode: 'block',
                     isModule: false
                 }
             ],
@@ -111,7 +111,7 @@ suite('DeepnoteTreeDataProvider', () => {
                     id: 'notebook-1',
                     name: 'Test Notebook',
                     blocks: [],
-                    executionMode: 'python',
+                    executionMode: 'block',
                     isModule: false
                 },
                 0 // TreeItemCollapsibleState.None

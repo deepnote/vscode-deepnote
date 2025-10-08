@@ -32,4 +32,6 @@ export interface IDeepnoteNotebookManager {
     selectNotebookForProject(projectId: string, notebookId: string): void;
     storeOriginalProject(projectId: string, project: unknown, notebookId: string): void;
     updateCurrentNotebookId(projectId: string, notebookId: string): void;
+    hasInitNotebookRun(projectId: string): boolean;
+    markInitNotebookAsRun(projectId: string): void;
 }

@@ -34,6 +34,11 @@ import { createJupyterConnectionInfo } from '../../kernels/jupyter/jupyterUtils'
 import { IJupyterRequestCreator, IJupyterRequestAgentCreator } from '../../kernels/jupyter/types';
 import { IConfigurationService } from '../../platform/common/types';
 import { disposeAsync } from '../../platform/common/utils';
+import { IDeepnoteInitNotebookRunner } from './deepnoteInitNotebookRunner.node';
+import { IDeepnoteNotebookManager } from '../types';
+import { DeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
+import { DeepnoteProject } from './deepnoteTypes';
+import { IKernelProvider, IKernel } from '../../kernels/types';
 
 /**
  * Automatically selects and starts Deepnote kernel for .deepnote notebooks
@@ -48,6 +53,11 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     private readonly notebookConnectionMetadata = new Map<string, DeepnoteKernelConnectionMetadata>();
     // Track temporary loading controllers that get disposed when real controller is ready
     private readonly loadingControllers = new Map<string, NotebookController>();
+    // Track projects where we need to run init notebook (set during controller setup)
+    private readonly projectsPendingInitNotebook = new Map<
+        string,
+        { notebook: NotebookDocument; project: DeepnoteProject }
+    >();
 
     constructor(
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
@@ -61,7 +71,10 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         @inject(IJupyterRequestAgentCreator)
         @optional()
         private readonly requestAgentCreator: IJupyterRequestAgentCreator | undefined,
-        @inject(IConfigurationService) private readonly configService: IConfigurationService
+        @inject(IConfigurationService) private readonly configService: IConfigurationService,
+        @inject(IDeepnoteInitNotebookRunner) private readonly initNotebookRunner: IDeepnoteInitNotebookRunner,
+        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
+        @inject(IKernelProvider) private readonly kernelProvider: IKernelProvider
     ) {}
 
     public activate() {
@@ -78,6 +91,10 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             this,
             this.disposables
         );
+
+        // Listen to kernel starts to run init notebooks
+        // Kernels are created lazily when cells are executed, so this is the right time to run init notebook
+        this.kernelProvider.onDidStartKernel(this.onKernelStarted, this, this.disposables);
 
         // Handle currently open notebooks - await all async operations
         Promise.all(workspace.notebookDocuments.map((d) => this.onDidOpenNotebook(d))).catch((error) => {
@@ -164,6 +181,45 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             logger.info(`Unregistering server for closed notebook: ${serverHandle}`);
             this.serverProvider.unregisterServer(serverHandle);
             this.notebookServerHandles.delete(notebookKey);
+        }
+
+        // Clean up pending init notebook tracking
+        const projectId = notebook.metadata?.deepnoteProjectId;
+        if (projectId) {
+            this.projectsPendingInitNotebook.delete(projectId);
+        }
+    }
+
+    private async onKernelStarted(kernel: IKernel) {
+        // Only handle deepnote notebooks
+        if (kernel.notebook?.notebookType !== DEEPNOTE_NOTEBOOK_TYPE) {
+            return;
+        }
+
+        const notebook = kernel.notebook;
+        const projectId = notebook.metadata?.deepnoteProjectId;
+
+        if (!projectId) {
+            return;
+        }
+
+        // Check if we have a pending init notebook for this project
+        const pendingInit = this.projectsPendingInitNotebook.get(projectId);
+        if (!pendingInit) {
+            return; // No init notebook to run
+        }
+
+        logger.info(`Kernel started for Deepnote notebook, running init notebook for project ${projectId}`);
+
+        // Remove from pending list
+        this.projectsPendingInitNotebook.delete(projectId);
+
+        // Run init notebook now that kernel is available
+        try {
+            await this.initNotebookRunner.runInitNotebookIfNeeded(notebook, projectId);
+        } catch (error) {
+            logger.error(`Error running init notebook: ${error}`);
+            // Continue anyway - don't block user if init fails
         }
     }
 
@@ -316,25 +372,33 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                             `Available kernel specs on Deepnote server: ${kernelSpecs.map((s) => s.name).join(', ')}`
                         );
 
-                        // Create expected kernel name based on file path (same logic as in installer)
-                        const safePath = baseFileUri.fsPath.replace(/[^a-zA-Z0-9]/g, '_');
-                        const venvHash = safePath.substring(0, 16);
+                        // Create expected kernel name based on file path (uses installer's hash logic)
+                        const venvHash = this.toolkitInstaller.getVenvHash(baseFileUri);
                         const expectedKernelName = `deepnote-venv-${venvHash}`;
                         logger.info(`Looking for venv kernel spec: ${expectedKernelName}`);
 
                         // Prefer the venv kernel spec that uses the venv's Python interpreter
                         // This ensures packages installed via pip are available to the kernel
-                        kernelSpec =
-                            kernelSpecs.find((s) => s.name === expectedKernelName) ||
-                            kernelSpecs.find((s) => s.language === 'python') ||
-                            kernelSpecs.find((s) => s.name === 'python3-venv') ||
-                            kernelSpecs[0];
+                        kernelSpec = kernelSpecs.find((s) => s.name === expectedKernelName);
+
+                        if (!kernelSpec) {
+                            logger.warn(
+                                `⚠️ Venv kernel spec '${expectedKernelName}' not found! Falling back to generic Python kernel.`
+                            );
+                            logger.warn(
+                                `This may cause import errors if packages are installed to the venv but kernel uses system Python.`
+                            );
+                            kernelSpec =
+                                kernelSpecs.find((s) => s.language === 'python') ||
+                                kernelSpecs.find((s) => s.name === 'python3-venv') ||
+                                kernelSpecs[0];
+                        }
 
                         if (!kernelSpec) {
                             throw new Error('No kernel specs available on Deepnote server');
                         }
 
-                        logger.info(`Using kernel spec: ${kernelSpec.name} (${kernelSpec.display_name})`);
+                        logger.info(`✓ Using kernel spec: ${kernelSpec.name} (${kernelSpec.display_name})`);
                     } finally {
                         await disposeAsync(sessionManager);
                     }
@@ -394,6 +458,30 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                         loadingController.dispose();
                         this.loadingControllers.delete(notebookKey);
                         logger.info(`Disposed loading controller for ${notebookKey}`);
+                    }
+
+                    // Prepare init notebook execution for when kernel starts
+                    const projectId = notebook.metadata?.deepnoteProjectId;
+                    if (projectId) {
+                        // Get the project and create requirements.txt before kernel starts
+                        const project = this.notebookManager.getOriginalProject(projectId) as
+                            | DeepnoteProject
+                            | undefined;
+                        if (project) {
+                            // Create requirements.txt first (needs to be ready for init notebook)
+                            progress.report({ message: 'Creating requirements.txt...' });
+                            await DeepnoteRequirementsHelper.createRequirementsFile(project);
+
+                            // Check if project has an init notebook
+                            if (project.project.initNotebookId && !this.notebookManager.hasInitNotebookRun(projectId)) {
+                                // Store for execution when kernel actually starts
+                                // Kernels are created lazily when cells execute, so we can't run init notebook now
+                                this.projectsPendingInitNotebook.set(projectId, { notebook, project });
+                                logger.info(
+                                    `Init notebook will run automatically when kernel starts for project ${projectId}`
+                                );
+                            }
+                        }
                     }
                 } catch (ex) {
                     logger.error(`Failed to auto-select Deepnote kernel: ${ex}`);

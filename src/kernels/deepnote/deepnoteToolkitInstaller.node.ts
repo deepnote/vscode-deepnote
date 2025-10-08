@@ -262,7 +262,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         }
     }
 
-    private getVenvHash(deepnoteFileUri: Uri): string {
+    public getVenvHash(deepnoteFileUri: Uri): string {
         // Create a short hash from the file path for kernel naming and venv directory
         // This provides better uniqueness and prevents directory structure leakage
         const path = deepnoteFileUri.fsPath;

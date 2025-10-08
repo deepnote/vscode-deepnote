@@ -9,6 +9,8 @@ This extension allows you to work with Deepnote notebooks in VS Code. Deepnote n
 -   **More block types** - Choose from SQL blocks, chart blocks, and more specialized data science blocks
 -   **Seamless language switching** - Switch between Python and SQL seamlessly within the same notebook
 -   **Database integrations** - Connect directly to Postgres, Snowflake, BigQuery and more data sources
+-   **Init notebooks** - Automatically runs initialization code (like dependency installation) before your notebooks execute
+-   **Project requirements** - Automatically creates `requirements.txt` from your project settings for easy dependency management
 
 ## Useful commands
 

@@ -75,7 +75,6 @@ export class DeepnoteInitNotebookRunner {
         } catch (error) {
             // Log error but don't throw - we want to let user continue anyway
             logger.error(`Error running init notebook for project ${projectId}:`, error);
-            console.error(`Failed to run init notebook:`, error);
             // Still mark as run to avoid retrying on every notebook open
             this.notebookManager.markInitNotebookAsRun(projectId);
         }
@@ -206,7 +205,6 @@ export class DeepnoteInitNotebookRunner {
                 } catch (blockError) {
                     // Log error but continue with next block
                     logger.error(`Error executing init notebook block ${i + 1}:`, blockError);
-                    console.error(`Error in init notebook block ${i + 1}:`, blockError);
                 }
             }
 

@@ -36,7 +36,7 @@ import { IConfigurationService } from '../../platform/common/types';
 import { disposeAsync } from '../../platform/common/utils';
 import { IDeepnoteInitNotebookRunner } from './deepnoteInitNotebookRunner.node';
 import { IDeepnoteNotebookManager } from '../types';
-import { DeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
+import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
 import { DeepnoteProject } from './deepnoteTypes';
 import { IKernelProvider, IKernel } from '../../kernels/types';
 
@@ -74,7 +74,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         @inject(IConfigurationService) private readonly configService: IConfigurationService,
         @inject(IDeepnoteInitNotebookRunner) private readonly initNotebookRunner: IDeepnoteInitNotebookRunner,
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
-        @inject(IKernelProvider) private readonly kernelProvider: IKernelProvider
+        @inject(IKernelProvider) private readonly kernelProvider: IKernelProvider,
+        @inject(IDeepnoteRequirementsHelper) private readonly requirementsHelper: IDeepnoteRequirementsHelper
     ) {}
 
     public activate() {
@@ -470,7 +471,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                         if (project) {
                             // Create requirements.txt first (needs to be ready for init notebook)
                             progress.report({ message: 'Creating requirements.txt...' });
-                            await DeepnoteRequirementsHelper.createRequirementsFile(project);
+                            await this.requirementsHelper.createRequirementsFile(project, progressToken);
 
                             // Check if project has an init notebook
                             if (project.project.initNotebookId && !this.notebookManager.hasInitNotebookRun(projectId)) {

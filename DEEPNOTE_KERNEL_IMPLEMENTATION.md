@@ -75,14 +75,40 @@ This implementation adds automatic kernel selection and startup for `.deepnote` 
 - `provideJupyterServers(token)`: Lists all registered Deepnote servers
 - `resolveJupyterServer(server, token)`: Resolves server connection info by handle
 
-#### 5. **Deepnote Kernel Auto-Selector** (`src/notebooks/deepnote/deepnoteKernelAutoSelector.node.ts`)
+#### 5. **Deepnote Init Notebook Runner** (`src/notebooks/deepnote/deepnoteInitNotebookRunner.node.ts`)
+
+- Runs initialization notebooks automatically before user code executes
+- Checks for `project.initNotebookId` in the Deepnote project YAML
+- Executes init notebook code blocks sequentially in the kernel
+- Shows progress notification to user
+- Caches execution per project (runs only once per session)
+- Logs errors but allows user to continue on failure
+- Blocks user cell execution until init notebook completes
+
+**Key Methods:**
+
+- `runInitNotebookIfNeeded(projectId, notebook)`: Main entry point, checks cache and executes if needed
+- `executeInitNotebook(notebook, initNotebook)`: Executes all code blocks from init notebook
+
+#### 6. **Deepnote Requirements Helper** (`src/notebooks/deepnote/deepnoteRequirementsHelper.node.ts`)
+
+- Static helper class for creating `requirements.txt` from project settings
+- Extracts `project.settings.requirements` array from Deepnote YAML
+- Creates `requirements.txt` in workspace root before init notebook runs
+- Ensures dependencies are available for pip installation in init notebook
+
+**Key Methods:**
+
+- `createRequirementsFile(project)`: Creates requirements.txt from project settings
+
+#### 7. **Deepnote Kernel Auto-Selector** (`src/notebooks/deepnote/deepnoteKernelAutoSelector.node.ts`)
 
 - Activation service that listens for notebook open events and controller selection changes
 - Automatically selects Deepnote kernel for `.deepnote` files
-- Queries the Deepnote server for available kernel specs
-- **Selects a server-native Python kernel spec** (e.g., `python3-venv` or any available Python kernel)
+- Queries the Deepnote server for available kernel specs using **matching hash function**
+- **Selects a server-native Python kernel spec** (e.g., `deepnote-venv-{hash}` or fallback to any available Python kernel)
 - The Deepnote server is started with the venv's Python interpreter, ensuring the kernel uses the venv environment
-- Environment variables (`PATH`, `VIRTUAL_ENV`) are configured so the server and kernel use the venv's Python
+- Environment variables (`PATH`, `VIRTUAL_ENV`, `JUPYTER_PATH`) are configured so the server and kernel use the venv's Python
 - Registers the server with the server provider
 - Creates kernel connection metadata
 - Registers the controller with VSCode
@@ -90,74 +116,77 @@ This implementation adds automatic kernel selection and startup for `.deepnote` 
 - **Reuses existing controllers and servers** for persistent kernel sessions
 - **Automatically reselects kernel** if it becomes unselected after errors
 - Tracks controllers per notebook file for efficient reuse
+- **Coordinates init notebook execution** via event-driven approach
 
 **Key Methods:**
 
-- `activate()`: Registers event listeners for notebook open/close and controller selection changes
-- `ensureKernelSelected(notebook)`: Main logic for auto-selection, kernel spec selection, and kernel reuse
+- `activate()`: Registers event listeners for notebook open/close, controller selection changes, and kernel starts
+- `ensureKernelSelected(notebook)`: Main logic for auto-selection, kernel spec selection, kernel reuse, and init notebook preparation
 - `onDidOpenNotebook(notebook)`: Event handler for notebook opens
 - `onControllerSelectionChanged(event)`: Event handler for controller selection changes (auto-reselects if needed)
 - `onDidCloseNotebook(notebook)`: Event handler for notebook closes (preserves controllers for reuse)
+- `onKernelStarted(kernel)`: Event handler for kernel starts (triggers init notebook execution)
+- `getVenvHash(fileUri)`: Creates consistent hash for kernel spec naming (must match installer)
 
-#### 6. **Service Registry Updates** (`src/notebooks/serviceRegistry.node.ts`)
+#### 8. **Service Registry Updates** (`src/notebooks/serviceRegistry.node.ts`)
 
 - Registers all new Deepnote kernel services
 - Binds `DeepnoteServerProvider` as an activation service
 - Binds `IDeepnoteKernelAutoSelector` as an activation service
 
-#### 7. **Kernel Types Updates** (`src/kernels/types.ts`)
+#### 9. **Kernel Types Updates** (`src/kernels/types.ts`)
 
 - Adds `DeepnoteKernelConnectionMetadata` to `RemoteKernelConnectionMetadata` union type
 - Adds deserialization support for `'startUsingDeepnoteKernel'` kind
 
 ## Flow Diagram
 
-```text
-User opens .deepnote file
-    ↓
-DeepnoteKernelAutoSelector.onDidOpenNotebook()
-    ↓
-Check if kernel already selected → Yes → Exit
-    ↓ No
-Get active Python interpreter
-    ↓
-DeepnoteToolkitInstaller.ensureInstalled()
-    ↓
-Extract base file URI (remove query params)
-    ↓
-Check if venv exists for this file → Yes → Skip to server
-    ↓ No
-Create venv for this .deepnote file
-    ↓
-Upgrade pip to latest version in venv
-    ↓
-pip install deepnote-toolkit[server] and ipykernel in venv
-    ↓
-Verify installation
-    ↓
-DeepnoteServerStarter.getOrStartServer(venv, fileUri)
-    ↓
-Check if server running for this file → Yes → Return info
-    ↓ No
-Find available port
-    ↓
-Start: python -m deepnote_toolkit server --jupyter-port <port>
-    ↓
-Wait for server to be ready (poll /api endpoint)
-    ↓
-Register server with DeepnoteServerProvider
-    ↓
-Query server for available kernel specs
-    ↓
-Select any available Python kernel spec (e.g., python3-venv)
-    ↓
-Create DeepnoteKernelConnectionMetadata with server kernel spec
-    ↓
-Register controller with IControllerRegistration
-    ↓
-Set controller affinity to Preferred (auto-selects kernel)
-    ↓
-User runs cell → Executes on Deepnote kernel
+```mermaid
+flowchart TD
+    Start([User opens .deepnote file]) --> OpenEvent[DeepnoteKernelAutoSelector.onDidOpenNotebook]
+    OpenEvent --> CheckSelected{Kernel already selected?}
+    CheckSelected -->|Yes| Exit([Exit])
+    CheckSelected -->|No| GetInterpreter[Get active Python interpreter]
+    GetInterpreter --> EnsureInstalled[DeepnoteToolkitInstaller.ensureInstalled]
+    EnsureInstalled --> ExtractURI[Extract base file URI]
+    ExtractURI --> CheckVenv{Venv exists?}
+    CheckVenv -->|Yes| GetServer[DeepnoteServerStarter.getOrStartServer]
+    CheckVenv -->|No| CreateVenv[Create venv for .deepnote file]
+    CreateVenv --> UpgradePip[Upgrade pip to latest version]
+    UpgradePip --> InstallToolkit[pip install deepnote-toolkit & ipykernel]
+    InstallToolkit --> InstallKernelSpec[Install kernel spec with --user]
+    InstallKernelSpec --> GetServer
+    GetServer --> CheckServer{Server running?}
+    CheckServer -->|Yes| RegisterServer[Register server with provider]
+    CheckServer -->|No| FindPort[Find available port]
+    FindPort --> StartServer[Start: python -m deepnote_toolkit server]
+    StartServer --> SetEnv[Set PATH, VIRTUAL_ENV, JUPYTER_PATH]
+    SetEnv --> WaitServer[Wait for server to be ready]
+    WaitServer --> RegisterServer
+    RegisterServer --> QuerySpecs[Query server for kernel specs]
+    QuerySpecs --> SelectSpec[Select deepnote-venv-hash spec]
+    SelectSpec --> CreateMetadata[Create DeepnoteKernelConnectionMetadata]
+    CreateMetadata --> RegisterController[Register controller]
+    RegisterController --> SetAffinity[Set controller affinity to Preferred]
+    SetAffinity --> CheckInit{Has initNotebookId?}
+    CheckInit -->|No| Ready([Controller ready!])
+    CheckInit -->|Yes| CreateReq[Create requirements.txt]
+    CreateReq --> StorePending[Store in projectsPendingInitNotebook]
+    StorePending --> Ready
+    Ready --> UserRuns([User runs first cell])
+    UserRuns --> CreateKernel[VS Code creates kernel lazily]
+    CreateKernel --> StartKernel[kernel.start]
+    StartKernel --> FireEvent[Fire onDidStartKernel event]
+    FireEvent --> EventHandler[onKernelStarted handler]
+    EventHandler --> CheckPending{Has pending init?}
+    CheckPending -->|No| ExecuteUser[Execute user's cell]
+    CheckPending -->|Yes| RunInit[Run init notebook]
+    RunInit --> GetKernel[Get kernel - guaranteed to exist!]
+    GetKernel --> ExecBlocks[Execute code blocks sequentially]
+    ExecBlocks --> PipInstall[pip install -r requirements.txt]
+    PipInstall --> MarkRun[Mark as run - cached]
+    MarkRun --> ExecuteUser
+    ExecuteUser --> ImportWorks([import pandas ✅])
 ```
 
 ## Configuration
@@ -184,17 +213,19 @@ User runs cell → Executes on Deepnote kernel
 - Cells will wait for the kernel to be ready before executing
 - No kernel selection dialog will appear
 
-3. **Once the progress notification shows "Kernel ready!"**:
-
-- The loading controller is automatically replaced with the real Deepnote kernel
-- Your cells start executing
-
-4. The extension automatically:
+1. **The extension automatically sets up the environment:**
 
 - Installs deepnote-toolkit in a dedicated virtual environment (first time only)
 - Starts a Deepnote server on an available port (if not already running)
 - Selects the appropriate Deepnote kernel
-- Executes your cells
+- Creates `requirements.txt` from project settings (if defined)
+- Runs the init notebook (if `project.initNotebookId` is defined)
+
+1. **Once the progress notification shows "Kernel ready!"**:
+
+- The loading controller is automatically replaced with the real Deepnote kernel
+- Init notebook code has been executed (if present)
+- Your cells start executing
 
 **First-time setup** takes 15-30 seconds. **Subsequent opens** of the same file reuse the existing environment and server, taking less than 1 second.
 
@@ -211,6 +242,254 @@ User runs cell → Executes on Deepnote kernel
 - **Persistent kernel sessions**: Controllers and servers remain available even after errors
 - **Automatic recovery**: If kernel becomes unselected, it's automatically reselected
 - **Seamless reusability**: Run cells as many times as you want without manual kernel selection
+- **Init notebook support**: Automatically runs initialization code before user notebooks execute
+- **Dependency management**: Creates `requirements.txt` from project settings for easy package installation
+
+## Init Notebook Feature
+
+### Overview
+
+Deepnote projects can define an **initialization notebook** that runs automatically before any user code executes. This feature ensures that the environment is properly configured with required packages and setup code before the main notebook runs.
+
+### How It Works
+
+When you open a Deepnote notebook, the extension:
+
+1. **Checks for `initNotebookId`** in the project YAML (`project.initNotebookId`)
+2. **Creates `requirements.txt`** from `project.settings.requirements` array
+3. **Finds the init notebook** in the project's notebooks array by ID
+4. **Executes all code blocks** from the init notebook sequentially
+5. **Shows progress** with a notification: "Running init notebook..."
+6. **Caches the execution** so it only runs once per project per session
+7. **Allows user code to run** after init notebook completes
+
+### Example Project Structure
+
+Here's an example of a Deepnote project YAML with an init notebook:
+
+```yaml
+metadata:
+  createdAt: 2025-07-21T14:50:41.160Z
+  modifiedAt: 2025-10-07T11:28:09.117Z
+project:
+  id: 4686ec79-9341-4ac4-8aba-ec0ea497f818
+  name: My Data Science Project
+  initNotebookId: a5356b1e77b34793a815faa71e75aad5  # <-- Init notebook ID
+  notebooks:
+    - id: a5356b1e77b34793a815faa71e75aad5  # <-- This is the init notebook
+      name: Init
+      blocks:
+        - type: code
+          content: |
+            %%bash
+            # Install requirements from requirements.txt
+            if test -f requirements.txt
+              then
+                pip install -r ./requirements.txt
+              else echo "No requirements.txt found."
+            fi
+    - id: d8403aaa3cd9462a8051a75b8c1eec42  # <-- This is the main notebook
+      name: Main Analysis
+      blocks:
+        - type: code
+          content: |
+            import pandas as pd
+            import numpy as np
+            # User code starts here
+  settings:
+    requirements:
+      - pandas
+      - numpy
+      - matplotlib
+      - scikit-learn
+version: 1.0.0
+```
+
+### Behavior Details
+
+**Execution Flow:**
+1. User opens any notebook from the project
+2. Kernel controller is registered and selected
+3. `requirements.txt` is created with: `pandas`, `numpy`, `matplotlib`, `scikit-learn`
+4. **Init notebook info stored as "pending"** (will run when kernel starts)
+5. Controller setup completes (no kernel exists yet)
+6. **User runs first cell** → Triggers kernel creation
+7. **Kernel starts** → `onDidStartKernel` event fires
+8. **Init notebook runs automatically** and blocks cell execution until complete
+9. Init notebook installs packages from `requirements.txt`
+10. User's cell executes → Packages available!
+
+**Critical Implementation Details - Event-Driven Approach:**
+- **Kernel is NOT explicitly started** (was causing `CancellationError`)
+- **Listen to `kernelProvider.onDidStartKernel` event** instead
+- Init notebook info is **stored as pending** during controller setup
+- When user runs first cell, kernel is created lazily by VS Code
+- `onDidStartKernel` fires, triggering init notebook execution
+- Init notebook execution is **awaited** (blocks user's cell execution)
+- Kernel is guaranteed to exist when init notebook runs (no retry logic needed)
+- User's cell waits for init notebook to complete before executing
+
+**Caching:**
+- Init notebook runs **once per project** per VS Code session
+- If you open multiple notebooks from the same project, init runs only once
+- Cache is cleared when VS Code restarts
+- Only marks as "run" if execution actually succeeds
+
+**Error Handling:**
+- If init notebook fails, the error is logged but user can still run cells
+- Progress continues even if some blocks fail
+- User receives notification about any errors
+- Returns `false` if kernel unavailable (won't mark as run, can retry)
+- Returns `true` if execution completes (marks as run)
+
+**Progress Indicators:**
+- "Creating requirements.txt..." - File creation phase (during controller setup)
+- "Kernel ready!" - Controller selection complete
+- [User runs first cell] - Triggers kernel creation
+- "Running init notebook..." - Execution phase (appears when kernel starts)
+- Shows current block progress: "Executing block 1/3..."
+- Displays per-block incremental progress
+- User's cell queued until init notebook completes
+
+**Kernel Spec Discovery:**
+- Uses correct hash function to match kernel spec name (djb2-style)
+- Both installer and auto-selector use **identical** hash function
+- Looks for `deepnote-venv-{hash}` (where hash matches installer exactly)
+- Falls back with warnings if venv kernel not found
+- Sets `JUPYTER_PATH` so server can find user-installed kernel specs
+
+**Event-Driven Execution:**
+- Init notebook does NOT run during controller setup (kernel doesn't exist yet)
+- Stores pending init info in `projectsPendingInitNotebook` map
+- Listens to `kernelProvider.onDidStartKernel` event
+- When user runs first cell and kernel is created, event fires
+- Init notebook runs in the event handler when kernel is guaranteed to exist
+- User's cell execution is blocked until init notebook completes
+
+### Use Cases
+
+**1. Package Installation**
+```python
+%%bash
+pip install -r requirements.txt
+```
+
+**2. Environment Setup**
+```python
+import os
+os.environ['DATA_PATH'] = '/workspace/data'
+os.environ['MODEL_PATH'] = '/workspace/models'
+```
+
+**3. Database Connections**
+```python
+import sqlalchemy
+engine = sqlalchemy.create_engine('postgresql://...')
+```
+
+**4. Data Preprocessing**
+```python
+import pandas as pd
+# Preload common datasets
+df = pd.read_csv('data/master_dataset.csv')
+```
+
+**5. Custom Imports**
+```python
+import sys
+sys.path.append('./custom_modules')
+from my_utils import helper_functions
+```
+
+### Benefits of Init Notebooks
+
+- ✅ **Consistent environment**: Every notebook in the project gets the same setup
+- ✅ **Automated dependency installation**: No manual pip install commands needed
+- ✅ **One-time setup**: Runs once per session, not every time you open a notebook
+- ✅ **Transparent to users**: Happens automatically in the background
+- ✅ **Error resilient**: Failures don't block user from running their code
+- ✅ **Progress visibility**: Clear notifications show what's happening
+- ✅ **Session persistence**: Init state is preserved across notebook switches
+
+### Configuration in Deepnote Projects
+
+To add an init notebook to your Deepnote project:
+
+1. Create a notebook named "Init" (or any name)
+2. Add your setup code blocks to this notebook
+3. Note the notebook's ID from the YAML
+4. Add `initNotebookId: <notebook-id>` to your `project` section
+5. Optionally add a `requirements` array under `project.settings`
+
+The extension will automatically detect and run this notebook when the project is opened.
+
+### Limitations
+
+- Init notebook must be a notebook within the same project
+- Only code blocks are executed (markdown blocks are skipped)
+- Runs in the same kernel as the main notebook (shared state)
+- Cannot be cancelled once started
+- Runs only once per project per VS Code session
+- Requires user to run at least one cell to trigger kernel creation and init notebook execution
+
+### Technical Notes
+
+**Why Event-Driven Approach?**
+
+VS Code creates notebook kernels **lazily** - they don't exist when controllers are selected. The kernel is only created when:
+1. User executes a cell, OR
+2. Controller explicitly calls `startKernel()` (but this can throw `CancellationError`)
+
+The event-driven approach is more reliable:
+- No `CancellationError` issues
+- Kernel is guaranteed to exist when `onDidStartKernel` fires
+- Natural integration with VS Code's lazy kernel creation
+- Simpler code without complex retry logic
+
+**Event-Driven Flow Diagram:**
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant VSCode
+    participant AutoSelector as Kernel Auto-Selector
+    participant KernelProvider
+    participant InitRunner as Init Notebook Runner
+    participant Kernel
+
+    User->>VSCode: Opens .deepnote file
+    VSCode->>AutoSelector: onDidOpenNotebook()
+    AutoSelector->>AutoSelector: ensureKernelSelected()
+    AutoSelector->>AutoSelector: Register controller
+    AutoSelector->>AutoSelector: Create requirements.txt
+
+    alt Has initNotebookId
+        AutoSelector->>AutoSelector: Store in projectsPendingInitNotebook
+        Note over AutoSelector: "Init notebook will run when kernel starts"
+    end
+
+    AutoSelector-->>User: Kernel ready! (but kernel not created yet)
+
+    User->>VSCode: Runs first cell
+    VSCode->>KernelProvider: getOrCreate(notebook)
+    KernelProvider->>Kernel: Create kernel instance
+    Kernel->>Kernel: start()
+    Kernel->>KernelProvider: Fire onDidStartKernel event
+    KernelProvider->>AutoSelector: onKernelStarted(kernel)
+
+    alt Has pending init notebook
+        AutoSelector->>InitRunner: runInitNotebookIfNeeded(notebook, projectId)
+        InitRunner->>KernelProvider: get(notebook) ✅ exists!
+        InitRunner->>Kernel: executeHidden(block.content)
+        Note over InitRunner,Kernel: pip install -r requirements.txt
+        InitRunner->>InitRunner: Mark as run (cached)
+        InitRunner-->>AutoSelector: Init complete ✅
+    end
+
+    AutoSelector-->>VSCode: Init notebook done
+    VSCode->>Kernel: Execute user's cell
+    Kernel-->>User: import pandas ✅ works!
+```
 
 ## UI Customization
 
@@ -290,11 +569,21 @@ To test the implementation:
 - `src/kernels/deepnote/deepnoteServerStarter.node.ts` - Server lifecycle management
 - `src/kernels/deepnote/deepnoteServerProvider.node.ts` - Jupyter server provider implementation
 - `src/notebooks/deepnote/deepnoteKernelAutoSelector.node.ts` - Automatic kernel selection
+- `src/notebooks/deepnote/deepnoteInitNotebookRunner.node.ts` - Init notebook execution service
+- `src/notebooks/deepnote/deepnoteRequirementsHelper.node.ts` - Requirements.txt creation helper
 
 ### Modified:
 
 - `src/kernels/types.ts` - Added DeepnoteKernelConnectionMetadata to union types
-- `src/notebooks/serviceRegistry.node.ts` - Registered new services
+- `src/notebooks/serviceRegistry.node.ts` - Registered new services including init notebook runner
+- `src/notebooks/deepnote/deepnoteNotebookManager.ts` - Added init notebook execution tracking
+- `src/notebooks/deepnote/deepnoteTypes.ts` - Added initNotebookId field to project type
+- `src/notebooks/types.ts` - Updated IDeepnoteNotebookManager interface
+- `src/notebooks/deepnote/deepnoteKernelAutoSelector.node.ts` - Removed duplicate hash function (now calls `toolkitInstaller.getVenvHash()`), added event-driven init notebook execution via `onDidStartKernel`, added pending init notebook tracking, changed to await init notebook
+- `src/notebooks/deepnote/deepnoteInitNotebookRunner.node.ts` - Changed to return boolean for success/failure, simplified by removing retry logic (kernel guaranteed to exist), added dual progress bars
+- `src/kernels/deepnote/deepnoteServerStarter.node.ts` - Added `JUPYTER_PATH` environment variable for kernel spec discovery
+- `src/kernels/deepnote/deepnoteToolkitInstaller.node.ts` - Made `getVenvHash()` public for reuse by auto-selector
+- `src/kernels/deepnote/types.ts` - Added `getVenvHash()` to `IDeepnoteToolkitInstaller` interface
 
 ## Dependencies
 
@@ -336,12 +625,16 @@ The implementation uses a robust hashing approach for virtual environment direct
 1. **Path Hashing**: Uses `getVenvHash()` to create short, unique identifiers from file paths
 2. **Hash Algorithm**: Implements a djb2-style hash function for better distribution
 3. **Format**: Generates identifiers like `venv_a1b2c3d4` (max 16 characters)
-4. **Benefits**:
+4. **Shared Implementation**: The hash function is defined in `DeepnoteToolkitInstaller` and exposed as a public method
+5. **Consistent Usage**: Both the toolkit installer and kernel auto-selector call `toolkitInstaller.getVenvHash()`
+6. **Benefits**:
 
 - Avoids Windows MAX_PATH (260 character) limitations
 - Prevents directory structure leakage into extension storage
 - Provides consistent naming for both venv directories and kernel specs
 - Reduces collision risk with better hash distribution
+- **Single source of truth** - hash function defined in one place only
+- **Guaranteed consistency** - both components use the exact same implementation
 
 ## Troubleshooting & Key Fixes
 

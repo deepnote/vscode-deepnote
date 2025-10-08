@@ -37,6 +37,7 @@ import {
 import { Common } from './platform/common/utils/localize';
 import { IServiceContainer, IServiceManager } from './platform/ioc/types';
 import { initializeLoggers as init, logger } from './platform/logging';
+import { ILogger } from './platform/logging/types';
 import { getJupyterOutputChannel } from './standalone/devTools/jupyterOutputChannel';
 import { isUsingPylance } from './standalone/intellisense/notebookPythonPathService';
 import { noop } from './platform/common/utils/misc';
@@ -127,6 +128,7 @@ export function initializeGlobals(
         getJupyterOutputChannel(context.subscriptions),
         JUPYTER_OUTPUT_CHANNEL
     );
+    serviceManager.addSingletonInstance<ILogger>(ILogger, logger);
 
     return [serviceManager, serviceContainer];
 }

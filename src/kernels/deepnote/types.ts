@@ -85,6 +85,13 @@ export interface IDeepnoteToolkitInstaller {
      * @param deepnoteFileUri The URI of the .deepnote file
      */
     getVenvInterpreter(deepnoteFileUri: vscode.Uri): Promise<PythonEnvironment | undefined>;
+
+    /**
+     * Gets the hash for the venv directory/kernel spec name based on file path.
+     * @param deepnoteFileUri The URI of the .deepnote file
+     * @returns The hash string used for venv directory and kernel spec naming
+     */
+    getVenvHash(deepnoteFileUri: vscode.Uri): string;
 }
 
 export const IDeepnoteServerStarter = Symbol('IDeepnoteServerStarter');

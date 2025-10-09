@@ -65,6 +65,8 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         const venvPath = this.getVenvPath(deepnoteFileUri);
         const venvKey = venvPath.fsPath;
 
+        logger.info(`Virtual environment at ${venvKey}.`);
+
         // Wait for any pending installation for this venv to complete
         const pendingInstall = this.pendingInstallations.get(venvKey);
         if (pendingInstall) {
@@ -210,6 +212,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                 logger.info('deepnote-toolkit installed successfully in venv');
 
                 // Install kernel spec so the kernel uses this venv's Python
+                // Install into the venv itself (not --user) so the Deepnote server can discover it
                 logger.info('Installing kernel spec for venv...');
                 try {
                     // Reuse the process service with system environment
@@ -219,7 +222,8 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                             '-m',
                             'ipykernel',
                             'install',
-                            '--user',
+                            '--prefix',
+                            venvPath.fsPath,
                             '--name',
                             `deepnote-venv-${this.getVenvHash(deepnoteFileUri)}`,
                             '--display-name',
@@ -227,7 +231,11 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                         ],
                         { throwOnStdErr: false }
                     );
-                    logger.info('Kernel spec installed successfully');
+                    logger.info(
+                        `Kernel spec installed successfully to ${
+                            venvPath.fsPath
+                        }/share/jupyter/kernels/deepnote-venv-${this.getVenvHash(deepnoteFileUri)}`
+                    );
                 } catch (ex) {
                     logger.warn(`Failed to install kernel spec: ${ex}`);
                     // Don't fail the entire installation if kernel spec creation fails

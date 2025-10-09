@@ -30,7 +30,8 @@ suite('DeepnoteDataConverter', () => {
             assert.strictEqual(cells[0].kind, NotebookCellKind.Code);
             assert.strictEqual(cells[0].value, 'print("hello")');
             assert.strictEqual(cells[0].languageId, 'python');
-            assert.strictEqual(cells[0].metadata?.__deepnotePocket?.id, 'block1');
+            // id should be at top level, not in pocket
+            assert.strictEqual(cells[0].metadata?.id, 'block1');
             assert.strictEqual(cells[0].metadata?.__deepnotePocket?.type, 'code');
             assert.strictEqual(cells[0].metadata?.__deepnotePocket?.sortingKey, 'a0');
             assert.strictEqual(cells[0].metadata?.custom, 'data');
@@ -53,7 +54,8 @@ suite('DeepnoteDataConverter', () => {
             assert.strictEqual(cells[0].kind, NotebookCellKind.Markup);
             assert.strictEqual(cells[0].value, '# Title');
             assert.strictEqual(cells[0].languageId, 'markdown');
-            assert.strictEqual(cells[0].metadata?.__deepnotePocket?.id, 'block2');
+            // id should be at top level, not in pocket
+            assert.strictEqual(cells[0].metadata?.id, 'block2');
             assert.strictEqual(cells[0].metadata?.__deepnotePocket?.type, 'markdown');
         });
 
@@ -108,10 +110,10 @@ suite('DeepnoteDataConverter', () => {
                     languageId: 'python',
                     metadata: {
                         __deepnotePocket: {
-                            id: 'existing-id',
                             type: 'code',
                             sortingKey: 'a5'
                         },
+                        id: 'existing-id',
                         original: 'metadata'
                     }
                 }

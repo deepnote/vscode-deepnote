@@ -28,7 +28,7 @@ export class DeepnoteDataConverter {
      * @returns Array of VS Code notebook cell data
      */
     convertBlocksToCells(blocks: DeepnoteBlock[]): NotebookCellData[] {
-        return blocks.map((block) => {
+        return blocks.map((block, index) => {
             const converter = this.registry.findConverter(block.type);
 
             if (!converter) {
@@ -54,7 +54,7 @@ export class DeepnoteDataConverter {
             // The pocket is a place to tuck away Deepnote-specific fields for later.
             addPocketToCellMetadata(cell);
 
-            cell.outputs = this.transformOutputsForVsCode(block.outputs || []);
+            cell.outputs = this.transformOutputsForVsCode(block.outputs || [], index, block.id);
 
             return cell;
         });
@@ -202,7 +202,11 @@ export class DeepnoteDataConverter {
         });
     }
 
-    private transformOutputsForVsCode(outputs: DeepnoteOutput[]): NotebookCellOutput[] {
+    private transformOutputsForVsCode(
+        outputs: DeepnoteOutput[],
+        cellIndex: number,
+        cellId: string
+    ): NotebookCellOutput[] {
         return outputs.map((output) => {
             if ('output_type' in output) {
                 if (output.output_type === 'error') {
@@ -213,7 +217,12 @@ export class DeepnoteDataConverter {
                         stack: errorOutput.traceback ? errorOutput.traceback.join('\n') : ''
                     };
 
-                    return new NotebookCellOutput([NotebookCellOutputItem.error(error)]);
+                    const metadata = {
+                        cellIndex,
+                        cellId
+                    };
+
+                    return new NotebookCellOutput([NotebookCellOutputItem.error(error)], metadata);
                 }
 
                 if (output.output_type === 'execute_result' || output.output_type === 'display_data') {
@@ -274,7 +283,10 @@ export class DeepnoteDataConverter {
                     }
 
                     // Preserve metadata and execution_count
-                    const metadata: Record<string, unknown> = {};
+                    const metadata: Record<string, unknown> = {
+                        cellIndex,
+                        cellId
+                    };
 
                     if (output.execution_count !== undefined) {
                         metadata.executionCount = output.execution_count;
@@ -284,9 +296,7 @@ export class DeepnoteDataConverter {
                         Object.assign(metadata, output.metadata);
                     }
 
-                    return Object.keys(metadata).length > 0
-                        ? new NotebookCellOutput(items, metadata)
-                        : new NotebookCellOutput(items);
+                    return new NotebookCellOutput(items, metadata);
                 }
 
                 if (output.output_type === 'stream') {
@@ -299,12 +309,28 @@ export class DeepnoteDataConverter {
                             ? 'application/vnd.code.notebook.stderr'
                             : 'application/vnd.code.notebook.stdout';
 
-                    return new NotebookCellOutput([NotebookCellOutputItem.text(String(output.text), mimeType)]);
+                    const metadata = {
+                        cellIndex,
+                        cellId
+                    };
+
+                    return new NotebookCellOutput(
+                        [NotebookCellOutputItem.text(String(output.text), mimeType)],
+                        metadata
+                    );
                 }
 
                 // Unknown output type - return as text if available
                 if ('text' in output && output.text) {
-                    return new NotebookCellOutput([NotebookCellOutputItem.text(String(output.text), 'text/plain')]);
+                    const metadata = {
+                        cellIndex,
+                        cellId
+                    };
+
+                    return new NotebookCellOutput(
+                        [NotebookCellOutputItem.text(String(output.text), 'text/plain')],
+                        metadata
+                    );
                 }
 
                 // No text, return empty output
@@ -313,7 +339,15 @@ export class DeepnoteDataConverter {
 
             // Fallback for outputs without output_type but with text
             if ('text' in output && output.text) {
-                return new NotebookCellOutput([NotebookCellOutputItem.text(String(output.text), 'text/plain')]);
+                const metadata = {
+                    cellIndex,
+                    cellId
+                };
+
+                return new NotebookCellOutput(
+                    [NotebookCellOutputItem.text(String(output.text), 'text/plain')],
+                    metadata
+                );
             }
 
             return new NotebookCellOutput([]);

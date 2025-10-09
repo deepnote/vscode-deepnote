@@ -411,16 +411,26 @@ export class CellExecution implements ICellExecution, IDisposable {
             'deepnote_table_state' in this.cell.metadata ? this.cell.metadata.deepnote_table_state : undefined;
 
         if (tableState) {
-            const tableStateAsJson = JSON.stringify(tableState);
+            const tableStateSpec = JSON.stringify(tableState);
 
-            code = dedent`
+            logger.info(
+                `Cell ${this.cell.index}: Found table state spec in metadata: ${JSON.stringify(
+                    tableStateSpec
+                ).substring(0, 200)}`
+            );
+            const tableStateAsJson = tableStateSpec;
+
+            const prependedCode = dedent`
                 if '_dntk' in globals():
                     _dntk.dataframe_utils.configure_dataframe_formatter(${escapePythonString(tableStateAsJson)})
                 else:
                     _deepnote_current_table_attrs = ${escapePythonString(tableStateAsJson)}
-
-                ${code}
             `;
+
+            logger.info(`Cell ${this.cell.index}: Prepending table state configuration code to cell execution`);
+            code = `${prependedCode}\n\n${code}`;
+        } else {
+            logger.info(`Cell ${this.cell.index}: No table state spec found in metadata`);
         }
 
         // Generate metadata from our cell (some kernels expect this.)

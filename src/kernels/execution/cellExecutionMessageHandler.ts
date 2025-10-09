@@ -634,7 +634,9 @@ export class CellExecutionMessageHandler implements IDisposable {
                 CellExecutionMessageHandler.modelIdsOwnedByCells.set(this.cell, modelIds);
             }
         }
-        const cellOutput = cellOutputToVSCCellOutput(output);
+        // Use cell metadata id if available (from Deepnote blocks), otherwise fall back to cell's internal id
+        const cellId = (this.cell.metadata?.id as string | undefined) || this.cell.document.uri.toString();
+        const cellOutput = cellOutputToVSCCellOutput(output, this.cell.index, cellId);
         const displayId =
             'transient' in output &&
             typeof output.transient === 'object' &&
@@ -1003,32 +1005,50 @@ export class CellExecutionMessageHandler implements IDisposable {
         // Ensure we append to previous output, only if the streams are the same &
         // If the last output is the desired stream type.
         if (this.lastUsedStreamOutput?.stream === msg.content.name) {
-            const output = cellOutputToVSCCellOutput({
-                output_type: 'stream',
-                name: msg.content.name,
-                text: msg.content.text
-            });
+            // Use cell metadata id if available (from Deepnote blocks), otherwise fall back to cell's internal id
+            const cellId = (this.cell.metadata?.id as string | undefined) || this.cell.document.uri.toString();
+            const output = cellOutputToVSCCellOutput(
+                {
+                    output_type: 'stream',
+                    name: msg.content.name,
+                    text: msg.content.text
+                },
+                this.cell.index,
+                cellId
+            );
             traceCellMessage(this.cell, `Append output items '${msg.content.text.substring(0, 100)}`);
             task?.appendOutputItems(output.items, this.lastUsedStreamOutput.output).then(noop, noop);
         } else if (previousValueOfClearOutputOnNextUpdateToOutput) {
             // Replace the current outputs with a single new output.
             const text = concatMultilineString(msg.content.text);
-            const output = cellOutputToVSCCellOutput({
-                output_type: 'stream',
-                name: msg.content.name,
-                text
-            });
+            // Use cell metadata id if available (from Deepnote blocks), otherwise fall back to cell's internal id
+            const cellId = (this.cell.metadata?.id as string | undefined) || this.cell.document.uri.toString();
+            const output = cellOutputToVSCCellOutput(
+                {
+                    output_type: 'stream',
+                    name: msg.content.name,
+                    text
+                },
+                this.cell.index,
+                cellId
+            );
             this.lastUsedStreamOutput = { output, stream: msg.content.name };
             traceCellMessage(this.cell, `Replace output with '${text.substring(0, 100)}'`);
             task?.replaceOutput([output]).then(noop, noop);
         } else {
             // Create a new output
             const text = formatStreamText(concatMultilineString(msg.content.text));
-            const output = cellOutputToVSCCellOutput({
-                output_type: 'stream',
-                name: msg.content.name,
-                text
-            });
+            // Use cell metadata id if available (from Deepnote blocks), otherwise fall back to cell's internal id
+            const cellId = (this.cell.metadata?.id as string | undefined) || this.cell.document.uri.toString();
+            const output = cellOutputToVSCCellOutput(
+                {
+                    output_type: 'stream',
+                    name: msg.content.name,
+                    text
+                },
+                this.cell.index,
+                cellId
+            );
             this.lastUsedStreamOutput = { output, stream: msg.content.name };
             traceCellMessage(this.cell, `Append new output '${text.substring(0, 100)}'`);
             task?.appendOutput([output]).then(noop, noop);
@@ -1146,11 +1166,19 @@ export class CellExecutionMessageHandler implements IDisposable {
         const output = translateCellDisplayOutput(
             new NotebookCellOutput(outputToBeUpdated.outputItems, outputToBeUpdated.outputContainer.metadata)
         );
-        const newOutput = cellOutputToVSCCellOutput({
-            ...output,
-            data: msg.content.data,
-            metadata: msg.content.metadata
-        } as nbformat.IDisplayData);
+        // Use cell metadata id if available (from Deepnote blocks), otherwise fall back to cell's internal id
+        const cellId =
+            (outputToBeUpdated.cell.metadata?.id as string | undefined) ||
+            outputToBeUpdated.cell.document.uri.toString();
+        const newOutput = cellOutputToVSCCellOutput(
+            {
+                ...output,
+                data: msg.content.data,
+                metadata: msg.content.metadata
+            } as nbformat.IDisplayData,
+            outputToBeUpdated.cell.index,
+            cellId
+        );
         // If there was no output and still no output, then nothing to do.
         if (outputToBeUpdated.outputItems.length === 0 && newOutput.items.length === 0) {
             logger.trace('Update display data message received, but no output to update', msg.content);

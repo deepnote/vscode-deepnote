@@ -115,7 +115,10 @@ export function traceCellMessage(cell: NotebookCell, message: string | (() => st
     );
 }
 
-const cellOutputMappers = new Map<nbformat.OutputType, (output: nbformat.IOutput) => NotebookCellOutput>();
+const cellOutputMappers = new Map<
+    nbformat.OutputType,
+    (output: nbformat.IOutput, cellIndex?: number, cellId?: string) => NotebookCellOutput
+>();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 cellOutputMappers.set('display_data', translateDisplayDataOutput as any);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -126,7 +129,11 @@ cellOutputMappers.set('execute_result', translateDisplayDataOutput as any);
 cellOutputMappers.set('stream', translateStreamOutput as any);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 cellOutputMappers.set('update_display_data', translateDisplayDataOutput as any);
-export function cellOutputToVSCCellOutput(output: nbformat.IOutput): NotebookCellOutput {
+export function cellOutputToVSCCellOutput(
+    output: nbformat.IOutput,
+    cellIndex?: number,
+    cellId?: string
+): NotebookCellOutput {
     /**
      * Stream, `application/x.notebook.stream`
      * Error, `application/x.notebook.error-traceback`
@@ -153,20 +160,29 @@ export function cellOutputToVSCCellOutput(output: nbformat.IOutput): NotebookCel
     const fn = cellOutputMappers.get(output.output_type as nbformat.OutputType);
     let result: NotebookCellOutput;
     if (fn) {
-        result = fn(output);
+        result = fn(output, cellIndex, cellId);
     } else {
         logger.warn(`Unable to translate cell from ${output.output_type} to NotebookCellData for VS Code.`);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        result = translateDisplayDataOutput(output as any);
+        result = translateDisplayDataOutput(output as any, cellIndex, cellId);
     }
     return result;
 }
 
-function getOutputMetadata(output: nbformat.IOutput): CellOutputMetadata {
+function getOutputMetadata(output: nbformat.IOutput, cellIndex?: number, cellId?: string): CellOutputMetadata {
     // Add on transient data if we have any. This should be removed by our save functions elsewhere.
     const metadata: CellOutputMetadata = {
         outputType: output.output_type
     };
+
+    if (cellIndex !== undefined) {
+        metadata.cellIndex = cellIndex;
+    }
+
+    if (cellId) {
+        metadata.cellId = cellId;
+    }
+
     if (output.transient) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         metadata.transient = output.transient as any;
@@ -200,7 +216,9 @@ export function getNotebookCellOutputMetadata(output: {
  * E.g. Jupyter cell output contains metadata to add backgrounds to images.
  */
 function translateDisplayDataOutput(
-    output: nbformat.IDisplayData | nbformat.IDisplayUpdate | nbformat.IExecuteResult
+    output: nbformat.IDisplayData | nbformat.IDisplayUpdate | nbformat.IExecuteResult,
+    cellIndex?: number,
+    cellId?: string
 ): NotebookCellOutput {
     // Metadata could be as follows:
     // We'll have metadata specific to each mime type as well as generic metadata.
@@ -219,7 +237,7 @@ function translateDisplayDataOutput(
         }
     }
     */
-    const metadata = getOutputMetadata(output);
+    const metadata = getOutputMetadata(output, cellIndex, cellId);
     // If we have SVG or PNG, then add special metadata to indicate whether to display `open plot`
     if ('image/svg+xml' in output.data || 'image/png' in output.data) {
         metadata.__displayOpenPlotIcon = true;
@@ -235,10 +253,10 @@ function translateDisplayDataOutput(
     return new NotebookCellOutput(sortOutputItemsBasedOnDisplayOrder(items), metadata);
 }
 
-function translateStreamOutput(output: nbformat.IStream): NotebookCellOutput {
+function translateStreamOutput(output: nbformat.IStream, cellIndex?: number, cellId?: string): NotebookCellOutput {
     const value = concatMultilineString(output.text);
     const factoryFn = output.name === 'stderr' ? NotebookCellOutputItem.stderr : NotebookCellOutputItem.stdout;
-    return new NotebookCellOutput([factoryFn(value)], getOutputMetadata(output));
+    return new NotebookCellOutput([factoryFn(value)], getOutputMetadata(output, cellIndex, cellId));
 }
 
 // Output stream can only have stderr or stdout so just check the first output. Undefined if no outputs
@@ -282,6 +300,14 @@ interface CellOutputMetadata {
      */
     outputType: nbformat.OutputType | string;
     executionCount?: nbformat.IExecuteResult['ExecutionCount'];
+    /**
+     * Index of the cell that produced this output
+     */
+    cellIndex?: number;
+    /**
+     * ID of the cell that produced this output
+     */
+    cellId?: string;
     /**
      * Whether the original Mime data is JSON or not.
      * This properly only exists in metadata for NotebookCellOutputItems
@@ -542,7 +568,7 @@ export function translateCellDisplayOutput(output: NotebookCellOutput): JupyterO
  * As we're displaying the error in the statusbar, we don't want this dup error in output.
  * Hence remove this.
  */
-function translateErrorOutput(output?: nbformat.IError): NotebookCellOutput {
+function translateErrorOutput(output?: nbformat.IError, cellIndex?: number, cellId?: string): NotebookCellOutput {
     output = output || { output_type: 'error', ename: '', evalue: '', traceback: [] };
     return new NotebookCellOutput(
         [
@@ -552,7 +578,7 @@ function translateErrorOutput(output?: nbformat.IError): NotebookCellOutput {
                 stack: (output?.traceback || []).join('\n')
             })
         ],
-        { ...getOutputMetadata(output), originalError: output }
+        { ...getOutputMetadata(output, cellIndex, cellId), originalError: output }
     );
 }
 

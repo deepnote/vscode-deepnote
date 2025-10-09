@@ -47,6 +47,24 @@ jobs:
       - name: Check Prettier formatting
         run: npm run format
 
+  qlty:
+    name: Qlty Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+
+      - name: Install qlty
+        uses: qltysh/qlty-action/install@06730ef41b86b073c3813c0fc07a0c734980ce5d
+
+      - name: Run qlty check
+        run: qlty check
+
+      - name: Run qlty code smells analysis
+        run: qlty smells
+
   build:
     name: Build & Test
     runs-on: ubuntu-latest

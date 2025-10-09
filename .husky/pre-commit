@@ -14,4 +14,4 @@ if [ -z "$changed" ]; then
     exit 0
 fi
 
-npx prettier $changed --check
+npx prettier $changed --check && qlty check

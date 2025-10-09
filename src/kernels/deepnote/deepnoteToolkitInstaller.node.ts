@@ -65,7 +65,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         const venvPath = this.getVenvPath(deepnoteFileUri);
         const venvKey = venvPath.fsPath;
 
-        logger.info(`Virtual environment at ${venvKey}.`);
+        logger.info(`Ensuring virtual environment at ${venvKey}`);
 
         // Wait for any pending installation for this venv to complete
         const pendingInstall = this.pendingInstallations.get(venvKey);
@@ -231,11 +231,14 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                         ],
                         { throwOnStdErr: false }
                     );
-                    logger.info(
-                        `Kernel spec installed successfully to ${
-                            venvPath.fsPath
-                        }/share/jupyter/kernels/deepnote-venv-${this.getVenvHash(deepnoteFileUri)}`
+                    const kernelSpecPath = Uri.joinPath(
+                        venvPath,
+                        'share',
+                        'jupyter',
+                        'kernels',
+                        `deepnote-venv-${this.getVenvHash(deepnoteFileUri)}`
                     );
+                    logger.info(`Kernel spec installed successfully to ${kernelSpecPath.fsPath}`);
                 } catch (ex) {
                     logger.warn(`Failed to install kernel spec: ${ex}`);
                     // Don't fail the entire installation if kernel spec creation fails

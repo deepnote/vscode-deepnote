@@ -1,6 +1,7 @@
 ## Code Style & Organization
 - Order method, fields and properties, first by accessibility and then by alphabetical order.
 - Don't add the Microsoft copyright header to new files.
+- Use `Uri.joinPath()` for constructing file paths to ensure platform-correct path separators (e.g., `Uri.joinPath(venvPath, 'share', 'jupyter', 'kernels')` instead of string concatenation with `/`)
 
 ## Testing
 - Unit tests use Mocha/Chai framework with `.unit.test.ts` extension

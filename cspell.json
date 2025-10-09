@@ -1,0 +1,46 @@
+{
+  "version": "0.2",
+  "ignorePaths": [
+    "node_modules",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "dist",
+    "out",
+    "build",
+    "coverage",
+    ".vscode",
+    ".git",
+    "*.min.js",
+    "*.min.css",
+    "*.map"
+  ],
+  "language": "en",
+  "overrides": [
+    {
+      "filename": "**/*.md",
+      "words": [
+        "deepnote",
+        "jupyter",
+        "jupyterlab",
+        "ipynb",
+        "vscode",
+        "pnpm",
+        "monorepo",
+        "notebookKernelJupyterNotebook",
+        "extensionKind"
+      ]
+    }
+  ],
+  "words": [
+    "deepnote",
+    "jupyter",
+    "jupyterlab",
+    "ipynb",
+    "vscode",
+    "pnpm",
+    "monorepo",
+    "notebookKernelJupyterNotebook",
+    "extensionKind"
+  ],
+  "useGitignore": true
+}

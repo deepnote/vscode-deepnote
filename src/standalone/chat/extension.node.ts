@@ -17,7 +17,13 @@ import { ConfigureNonPythonNotebookTool } from './configureNotebook.other.node';
 import { RestartKernelTool } from './restartKernelTool.node';
 import { INotebookCommandHandler } from '../../notebooks/notebookCommandListener';
 
+let chatActivated = false;
+
 export async function activate(context: vscode.ExtensionContext, serviceContainer: IServiceContainer): Promise<void> {
+    if (chatActivated) {
+        return;
+    }
+    chatActivated = true;
     context.subscriptions.push(
         vscode.lm.registerTool(
             InstallPackagesTool.toolName,

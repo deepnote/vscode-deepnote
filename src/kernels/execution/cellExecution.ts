@@ -32,6 +32,7 @@ import { KernelError } from '../errors/kernelError';
 import { getCachedSysPrefix } from '../../platform/interpreter/helpers';
 import { getCellMetadata } from '../../platform/common/utils';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
+import dedent from 'dedent';
 
 /**
  * Factory for CellExecution objects.
@@ -406,9 +407,21 @@ export class CellExecution implements ICellExecution, IDisposable {
             return this.completedSuccessfully();
         }
 
-        // Prepend initialization code
-        const prependCode = 'print("Hello world")';
-        code = prependCode + '\n' + code;
+        const tableState =
+            'deepnote_table_state' in this.cell.metadata ? this.cell.metadata.deepnote_table_state : undefined;
+
+        if (tableState) {
+            const tableStateAsJson = JSON.stringify(tableState);
+
+            code = dedent`
+                if '_dntk' in globals():
+                    _dntk.dataframe_utils.configure_dataframe_formatter(${escapePythonString(tableStateAsJson)})
+                else:
+                    _deepnote_current_table_attrs = ${escapePythonString(tableStateAsJson)}
+
+                ${code}
+            `;
+        }
 
         // Generate metadata from our cell (some kernels expect this.)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -504,4 +517,12 @@ export class CellExecution implements ICellExecution, IDisposable {
             }
         }
     }
+}
+
+function escapePythonString(value: string): string {
+    // We have to escape backslashes, single quotes, and newlines
+    const escaped = value.replaceAll('\\', '\\\\').replaceAll("'", "\\'").replaceAll('\n', '\\n');
+
+    // Wrap the escaped string in single quotes
+    return `'${escaped}'`;
 }

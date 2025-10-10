@@ -26,6 +26,7 @@
     "minimumReleaseAge": "3 days",
     "enabled": true
   },
+  "npmrc": "@deepnote:registry=https://npm.pkg.github.com\nalways-auth=true\n",
   "ignoreDeps": [
     "@apollo/client",
     "@chakra-ui/react",

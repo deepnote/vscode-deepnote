@@ -1,65 +1,60 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "configMigration": true,
-  "enabledManagers": ["npm", "nvm", "github-actions"],
-  "github-actions": {
-    "enabled": true,
-    "pinDigests": true
-  },
-  "extends": ["config:recommended"],
-  "ignorePaths": [
-    "**/dist/**",
-    "**/node_modules/**",
-    "**/tmp/**",
-    "**/out/**"
-  ],
-  "docker-compose": {
-    "enabled": false
-  },
-  "dockerfile": {
-    "enabled": false
-  },
-  "meteor": {
-    "enabled": false
-  },
-  "npm": {
-    "minimumReleaseAge": "3 days",
-    "enabled": true
-  },
-  "npmrc": "@deepnote:registry=https://npm.pkg.github.com\nalways-auth=true\n",
-  "ignoreDeps": [
-    "@apollo/client",
-    "@chakra-ui/react",
-    "@jupyterlab/coreutils",
-    "@jupyterlab/nbformat",
-    "@jupyterlab/services",
-    "@jupyterlab/toc",
-    "@kubernetes/client-node",
-    "@types/react",
-    "monaco-editor",
-    "node-fetch",
-    "wait-on",
-    "@testing-library/user-event",
-    "react-wrap-balancer"
-  ],
-  "labels": ["renovate"],
-  "packageRules": [
-    {
-      "description": "Group GitHub Actions",
-      "groupName": "GitHub Actions",
-      "groupSlug": "github-actions",
-      "matchManagers": ["github-actions"]
+    "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+    "configMigration": true,
+    "enabledManagers": ["npm", "nvm", "github-actions"],
+    "github-actions": {
+        "enabled": true,
+        "pinDigests": true
     },
-    {
-      "matchDepTypes": ["devDependencies"],
-      "groupName": "devDependencies",
-      "groupSlug": "dev-dependencies",
-      "enabled": true,
-      "schedule": ["every weekend"]
+    "extends": ["config:recommended"],
+    "ignorePaths": ["**/dist/**", "**/node_modules/**", "**/tmp/**", "**/out/**"],
+    "docker-compose": {
+        "enabled": false
     },
-    {
-      "groupName": "definitelyTyped",
-      "matchPackageNames": ["@types/{/,}**"]
-    }
-  ]
+    "dockerfile": {
+        "enabled": false
+    },
+    "meteor": {
+        "enabled": false
+    },
+    "npm": {
+        "minimumReleaseAge": "3 days",
+        "enabled": true
+    },
+    "npmrc": "@deepnote:registry=https://npm.pkg.github.com\nalways-auth=true\n",
+    "ignoreDeps": [
+        "@apollo/client",
+        "@chakra-ui/react",
+        "@jupyterlab/coreutils",
+        "@jupyterlab/nbformat",
+        "@jupyterlab/services",
+        "@jupyterlab/toc",
+        "@kubernetes/client-node",
+        "@types/react",
+        "monaco-editor",
+        "node-fetch",
+        "wait-on",
+        "@testing-library/user-event",
+        "react-wrap-balancer"
+    ],
+    "labels": ["renovate"],
+    "packageRules": [
+        {
+            "description": "Group GitHub Actions",
+            "groupName": "GitHub Actions",
+            "groupSlug": "github-actions",
+            "matchManagers": ["github-actions"]
+        },
+        {
+            "matchDepTypes": ["devDependencies"],
+            "groupName": "devDependencies",
+            "groupSlug": "dev-dependencies",
+            "enabled": true,
+            "schedule": ["every weekend"]
+        },
+        {
+            "groupName": "definitelyTyped",
+            "matchPackageNames": ["@types/{/,}**"]
+        }
+    ]
 }

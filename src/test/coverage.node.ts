@@ -14,7 +14,7 @@ export function setupCoverage() {
         return;
     }
     const htmlReport = process.env.VSC_JUPYTER_INSTRUMENT_CODE_FOR_COVERAGE_HTML ? ['html'] : [];
-    const reports = htmlReport.concat(['text', 'text-summary']);
+    const reports = htmlReport.concat(['text', 'text-summary', 'lcov']);
     const NYC = require('nyc');
     const nyc = new NYC({
         cwd: path.join(EXTENSION_ROOT_DIR_FOR_TESTS),

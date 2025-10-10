@@ -89,6 +89,9 @@ jobs:
       - name: Compile TypeScript
         run: npm run compile
 
+      - name: Run typecheck
+        run: npm run typecheck
+
       - name: Run tests
         run: npm test
 

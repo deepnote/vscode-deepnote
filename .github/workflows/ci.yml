@@ -138,3 +138,51 @@ jobs:
 
       - name: Check Licenses
         run: npm run check-licenses
+
+  audit-prod:
+    name: Audit - Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          cache: 'npm'
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@deepnote'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run audit for production dependencies
+        run: npm audit --production
+
+  audit-all:
+    name: Audit - All
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          cache: 'npm'
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@deepnote'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run audit for all dependencies
+        run: npm audit

@@ -99,7 +99,7 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage/lcov.info
-          fail_ci_if_error: false
+          fail_ci_if_error: true
 
       - name: Upload test results to Codecov
         if: '!cancelled()'
@@ -107,7 +107,7 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: test-report.xml
-          fail_ci_if_error: false
+          fail_ci_if_error: true
 
       - name: Check dependencies
         run: npm run checkDependencies

@@ -9,6 +9,17 @@ import { TextBlockConverter } from './converters/textBlockConverter';
 import { MarkdownBlockConverter } from './converters/markdownBlockConverter';
 import { ChartBigNumberBlockConverter } from './converters/chartBigNumberBlockConverter';
 import { CHART_BIG_NUMBER_MIME_TYPE, OUTPUT_BLOCK_METADATA_KEY } from './deepnoteConstants';
+import {
+    InputTextBlockConverter,
+    InputTextareaBlockConverter,
+    InputSelectBlockConverter,
+    InputSliderBlockConverter,
+    InputCheckboxBlockConverter,
+    InputDateBlockConverter,
+    InputDateRangeBlockConverter,
+    InputFileBlockConverter,
+    ButtonBlockConverter
+} from './converters/inputConverters';
 
 /**
  * Utility class for converting between Deepnote block structures and VS Code notebook cells.
@@ -22,6 +33,15 @@ export class DeepnoteDataConverter {
         this.registry.register(new TextBlockConverter());
         this.registry.register(new MarkdownBlockConverter());
         this.registry.register(new ChartBigNumberBlockConverter());
+        this.registry.register(new InputTextBlockConverter());
+        this.registry.register(new InputTextareaBlockConverter());
+        this.registry.register(new InputSelectBlockConverter());
+        this.registry.register(new InputSliderBlockConverter());
+        this.registry.register(new InputCheckboxBlockConverter());
+        this.registry.register(new InputDateBlockConverter());
+        this.registry.register(new InputDateRangeBlockConverter());
+        this.registry.register(new InputFileBlockConverter());
+        this.registry.register(new ButtonBlockConverter());
     }
 
     /**
@@ -32,6 +52,8 @@ export class DeepnoteDataConverter {
      */
     convertBlocksToCells(blocks: DeepnoteBlock[]): NotebookCellData[] {
         return blocks.map((block) => {
+            console.log('blockType:', block.type);
+            console.log('registry:', this.registry.listSupportedTypes());
             const converter = this.registry.findConverter(block.type);
 
             if (!converter) {

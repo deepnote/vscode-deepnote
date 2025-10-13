@@ -132,7 +132,7 @@ export const DeepnoteSliderInputMetadataSchema = z.object({
         .nullish()
         .transform((val) => val ?? null),
     deepnote_variable_value: z
-        .union([z.string(), z.number()])
+        .string()
         .nullish()
         .transform((val) => val ?? null),
     deepnote_slider_min_value: z

@@ -51,18 +51,18 @@ export abstract class BaseInputBlockConverter<T extends z.ZodObject> implements 
 
     convertToCell(block: DeepnoteBlock): NotebookCellData {
         const deepnoteJupyterRawContentResult = z.string().safeParse(block.metadata?.[DEEPNOTE_VSCODE_RAW_CONTENT_KEY]);
-        const deepnoteBigNumberMetadataResult = this.schema().safeParse(block.metadata);
+        const deepnoteMetadataResult = this.schema().safeParse(block.metadata);
 
-        if (deepnoteBigNumberMetadataResult.error != null) {
-            console.error('Error parsing deepnote big number metadata:', deepnoteBigNumberMetadataResult.error);
+        if (deepnoteMetadataResult.error != null) {
+            console.error('Error parsing deepnote input metadata:', deepnoteMetadataResult.error);
             console.debug('Metadata:', JSON.stringify(block.metadata));
         }
 
         const configStr = deepnoteJupyterRawContentResult.success
             ? deepnoteJupyterRawContentResult.data
-            : deepnoteBigNumberMetadataResult.success
-            ? JSON.stringify(deepnoteBigNumberMetadataResult.data, null, 2)
-            : JSON.stringify(this.defaultConfig());
+            : deepnoteMetadataResult.success
+            ? JSON.stringify(deepnoteMetadataResult.data, null, 2)
+            : JSON.stringify(this.defaultConfig(), null, 2);
 
         const cell = new NotebookCellData(NotebookCellKind.Code, configStr, 'json');
         console.log(cell);

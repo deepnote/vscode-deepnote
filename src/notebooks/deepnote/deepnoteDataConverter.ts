@@ -52,8 +52,6 @@ export class DeepnoteDataConverter {
      */
     convertBlocksToCells(blocks: DeepnoteBlock[]): NotebookCellData[] {
         return blocks.map((block) => {
-            console.log('blockType:', block.type);
-            console.log('registry:', this.registry.listSupportedTypes());
             const converter = this.registry.findConverter(block.type);
 
             if (!converter) {

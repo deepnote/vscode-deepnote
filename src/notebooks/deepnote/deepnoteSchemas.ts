@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { OUTPUT_BLOCK_METADATA_KEY } from './deepnoteConstants';
+
 export const DeepnoteChartBigNumberOutputSchema = z.object({
     title: z.string().nullish(),
     value: z.string().nullish(),
@@ -42,6 +44,12 @@ export const DeepnoteBigNumberMetadataSchema = z.object({
         .nullish()
         .transform((val) => val ?? null)
 });
+
+export function getDeepnoteBlockMetadataSchema<T extends z.ZodTypeAny>(schema: T) {
+    return z.object({
+        [OUTPUT_BLOCK_METADATA_KEY]: schema
+    });
+}
 
 export type DeepnoteChartBigNumberOutput = z.infer<typeof DeepnoteChartBigNumberOutputSchema>;
 export type DeepnoteBigNumberMetadata = z.infer<typeof DeepnoteBigNumberMetadataSchema>;

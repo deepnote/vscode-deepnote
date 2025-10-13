@@ -118,6 +118,10 @@ export function ChartBigNumberOutputRenderer({
         return 'deepnote-comparison-positive';
     }, [changeDirection, metadata.deepnote_big_number_comparison_format]);
 
+    const showComparison =
+        metadata.deepnote_big_number_comparison_enabled === true &&
+        metadata.deepnote_big_number_comparison_type != null;
+
     return (
         <div className="deepnote-big-number-container">
             <div className="deepnote-big-number-card">
@@ -128,18 +132,20 @@ export function ChartBigNumberOutputRenderer({
                     <div>
                         <p className="deepnote-big-number-value">{value}</p>
                     </div>
-                    <div className="deepnote-big-number-comparison">
-                        <div>
-                            <p className={`deepnote-comparison-text ${comparisonClassName}`}>
-                                {formattedComparisonValue}
-                            </p>
-                        </div>
-                        {output.comparisonTitle != null ? (
+                    {showComparison ? (
+                        <div className="deepnote-big-number-comparison">
                             <div>
-                                <p className="deepnote-comparison-title">{output.comparisonTitle}</p>
+                                <p className={`deepnote-comparison-text ${comparisonClassName}`}>
+                                    {formattedComparisonValue}
+                                </p>
                             </div>
-                        ) : null}
-                    </div>
+                            {output.comparisonTitle != null ? (
+                                <div>
+                                    <p className="deepnote-comparison-title">{output.comparisonTitle}</p>
+                                </div>
+                            ) : null}
+                        </div>
+                    ) : null}
                 </div>
             </div>
         </div>

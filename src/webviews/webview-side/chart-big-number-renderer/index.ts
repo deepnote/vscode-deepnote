@@ -8,7 +8,8 @@ import type { ActivationFunction, OutputItem, RendererContext } from 'vscode-not
 import { ChartBigNumberOutputRenderer } from './ChartBigNumberOutputRenderer';
 import {
     DeepnoteBigNumberMetadataSchema,
-    DeepnoteChartBigNumberOutputSchema
+    DeepnoteChartBigNumberOutputSchema,
+    getDeepnoteBlockMetadataSchema
 } from '../../../notebooks/deepnote/deepnoteSchemas';
 
 export const activate: ActivationFunction = (_context: RendererContext<unknown>) => {
@@ -17,7 +18,9 @@ export const activate: ActivationFunction = (_context: RendererContext<unknown>)
             try {
                 // Remove single quotes from start and end of string if present
                 const data = JSON.parse(outputItem.text().replace(/^'|'$/g, ''));
-                const metadata = DeepnoteBigNumberMetadataSchema.parse(outputItem.metadata);
+                const { blockMetadata } = getDeepnoteBlockMetadataSchema(DeepnoteBigNumberMetadataSchema).parse(
+                    outputItem.metadata
+                );
 
                 const chartBigNumberOutput = DeepnoteChartBigNumberOutputSchema.parse(data);
 
@@ -25,7 +28,10 @@ export const activate: ActivationFunction = (_context: RendererContext<unknown>)
                 element.appendChild(root);
 
                 ReactDOM.render(
-                    React.createElement(ChartBigNumberOutputRenderer, { output: chartBigNumberOutput, metadata }),
+                    React.createElement(ChartBigNumberOutputRenderer, {
+                        output: chartBigNumberOutput,
+                        metadata: blockMetadata
+                    }),
                     root
                 );
             } catch (error) {

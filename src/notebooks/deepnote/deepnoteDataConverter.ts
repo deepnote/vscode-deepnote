@@ -8,7 +8,7 @@ import { addPocketToCellMetadata, createBlockFromPocket } from './pocket';
 import { TextBlockConverter } from './converters/textBlockConverter';
 import { MarkdownBlockConverter } from './converters/markdownBlockConverter';
 import { ChartBigNumberBlockConverter } from './converters/chartBigNumberBlockConverter';
-import { CHART_BIG_NUMBER_MIME_TYPE } from './deepnoteConstants';
+import { CHART_BIG_NUMBER_MIME_TYPE, OUTPUT_BLOCK_METADATA_KEY } from './deepnoteConstants';
 
 /**
  * Utility class for converting between Deepnote block structures and VS Code notebook cells.
@@ -57,7 +57,7 @@ export class DeepnoteDataConverter {
             // The pocket is a place to tuck away Deepnote-specific fields for later.
             addPocketToCellMetadata(cell);
 
-            cell.outputs = this.transformOutputsForVsCode(block.type, block.outputs || []);
+            cell.outputs = this.transformOutputsForVsCode(block.type, block.metadata, block.outputs || []);
 
             return cell;
         });
@@ -198,6 +198,14 @@ export class DeepnoteDataConverter {
 
                 if (Object.keys(restMetadata).length > 0) {
                     (deepnoteOutput as DeepnoteOutput & { metadata?: Record<string, unknown> }).metadata = restMetadata;
+
+                    if (
+                        deepnoteOutput.metadata != null &&
+                        typeof deepnoteOutput.metadata === 'object' &&
+                        OUTPUT_BLOCK_METADATA_KEY in deepnoteOutput.metadata
+                    ) {
+                        delete deepnoteOutput.metadata[OUTPUT_BLOCK_METADATA_KEY];
+                    }
                 }
             }
 
@@ -207,6 +215,7 @@ export class DeepnoteDataConverter {
 
     private transformOutputsForVsCode(
         blockType: DeepnoteBlock['type'],
+        blockMetadata: DeepnoteBlock['metadata'],
         outputs: DeepnoteOutput[]
     ): NotebookCellOutput[] {
         return outputs.map((output) => {
@@ -294,7 +303,9 @@ export class DeepnoteDataConverter {
                     }
 
                     // Preserve metadata and execution_count
-                    const metadata: Record<string, unknown> = {};
+                    const metadata: Record<string, unknown> = {
+                        blockMetadata
+                    };
 
                     if (output.execution_count !== undefined) {
                         metadata.executionCount = output.execution_count;

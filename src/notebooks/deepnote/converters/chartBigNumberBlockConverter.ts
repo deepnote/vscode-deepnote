@@ -1,12 +1,12 @@
 import { NotebookCellData, NotebookCellKind } from 'vscode';
+import { z } from 'zod';
 
 import type { BlockConverter } from './blockConverter';
 import type { DeepnoteBlock } from '../deepnoteTypes';
 import { DeepnoteBigNumberMetadataSchema } from '../deepnoteSchemas';
 import { parseJsonWithFallback } from '../dataConversionUtils';
-import { z } from 'zod';
+import { DEEPNOTE_VSCODE_RAW_CONTENT_KEY } from './constants';
 
-export const DEEPNOTE_VSCODE_RAW_CONTENT_KEY = 'deepnote_jupyter_raw_content';
 const DEFAULT_BIG_NUMBER_CONFIG = DeepnoteBigNumberMetadataSchema.parse({});
 
 export class ChartBigNumberBlockConverter implements BlockConverter {

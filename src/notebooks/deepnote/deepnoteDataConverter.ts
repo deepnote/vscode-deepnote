@@ -1,12 +1,14 @@
 import { NotebookCellData, NotebookCellKind, NotebookCellOutput, NotebookCellOutputItem } from 'vscode';
 
-import type { DeepnoteBlock, DeepnoteOutput } from './deepnoteTypes';
 import { generateBlockId, generateSortingKey } from './dataConversionUtils';
+import type { DeepnoteBlock, DeepnoteOutput } from './deepnoteTypes';
 import { ConverterRegistry } from './converters/converterRegistry';
 import { CodeBlockConverter } from './converters/codeBlockConverter';
 import { addPocketToCellMetadata, createBlockFromPocket } from './pocket';
 import { TextBlockConverter } from './converters/textBlockConverter';
 import { MarkdownBlockConverter } from './converters/markdownBlockConverter';
+import { ChartBigNumberBlockConverter } from './converters/chartBigNumberBlockConverter';
+import { CHART_BIG_NUMBER_MIME_TYPE } from './deepnoteConstants';
 
 /**
  * Utility class for converting between Deepnote block structures and VS Code notebook cells.
@@ -19,6 +21,7 @@ export class DeepnoteDataConverter {
         this.registry.register(new CodeBlockConverter());
         this.registry.register(new TextBlockConverter());
         this.registry.register(new MarkdownBlockConverter());
+        this.registry.register(new ChartBigNumberBlockConverter());
     }
 
     /**
@@ -54,7 +57,7 @@ export class DeepnoteDataConverter {
             // The pocket is a place to tuck away Deepnote-specific fields for later.
             addPocketToCellMetadata(cell);
 
-            cell.outputs = this.transformOutputsForVsCode(block.outputs || []);
+            cell.outputs = this.transformOutputsForVsCode(block.type, block.outputs || []);
 
             return cell;
         });
@@ -202,7 +205,10 @@ export class DeepnoteDataConverter {
         });
     }
 
-    private transformOutputsForVsCode(outputs: DeepnoteOutput[]): NotebookCellOutput[] {
+    private transformOutputsForVsCode(
+        blockType: DeepnoteBlock['type'],
+        outputs: DeepnoteOutput[]
+    ): NotebookCellOutput[] {
         return outputs.map((output) => {
             if ('output_type' in output) {
                 if (output.output_type === 'error') {
@@ -269,7 +275,21 @@ export class DeepnoteDataConverter {
 
                         // Plain text as fallback (always last)
                         if (data['text/plain']) {
-                            items.push(NotebookCellOutputItem.text(data['text/plain'] as string));
+                            let mimeType = 'text/plain';
+                            if (blockType === 'big-number') {
+                                mimeType = CHART_BIG_NUMBER_MIME_TYPE;
+                            }
+                            items.push(NotebookCellOutputItem.text(data['text/plain'] as string, mimeType));
+                        }
+
+                        // Deepnote chart big number
+                        if (data[CHART_BIG_NUMBER_MIME_TYPE]) {
+                            items.push(
+                                NotebookCellOutputItem.text(
+                                    data[CHART_BIG_NUMBER_MIME_TYPE] as string,
+                                    CHART_BIG_NUMBER_MIME_TYPE
+                                )
+                            );
                         }
                     }
 

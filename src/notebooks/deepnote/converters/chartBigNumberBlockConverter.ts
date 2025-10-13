@@ -20,6 +20,7 @@ export class ChartBigNumberBlockConverter implements BlockConverter {
                 ...block.metadata,
                 [DEEPNOTE_VSCODE_RAW_CONTENT_KEY]: cell.value
             };
+
             return;
         }
 
@@ -50,10 +51,10 @@ export class ChartBigNumberBlockConverter implements BlockConverter {
             ? deepnoteJupyterRawContentResult.data
             : deepnoteBigNumberMetadataResult.success
             ? JSON.stringify(deepnoteBigNumberMetadataResult.data, null, 2)
-            : JSON.stringify(DEFAULT_BIG_NUMBER_CONFIG);
+            : JSON.stringify(DEFAULT_BIG_NUMBER_CONFIG, null, 2);
 
         const cell = new NotebookCellData(NotebookCellKind.Code, configStr, 'json');
-        console.log(cell);
+
         return cell;
     }
 

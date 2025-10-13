@@ -9,6 +9,7 @@ export function ChartBigNumberOutputRenderer({
     output: DeepnoteChartBigNumberOutput;
     metadata: DeepnoteBigNumberMetadata;
 }) {
+    // TODO: either remove or handle here .. currently handled in the parent
     const hasErrors = false;
 
     const title = useMemo(() => {
@@ -62,6 +63,10 @@ export function ChartBigNumberOutputRenderer({
         }
 
         if (metadata.deepnote_big_number_comparison_type === 'percentage-change') {
+            if (parsedComparisonValue === 0) {
+                return undefined;
+            }
+
             return (parsedValue - parsedComparisonValue) / parsedComparisonValue;
         }
 
@@ -77,7 +82,7 @@ export function ChartBigNumberOutputRenderer({
             return '-';
         }
 
-        if (!comparisonValue) {
+        if (comparisonValue == null) {
             return '-';
         }
 
@@ -91,7 +96,7 @@ export function ChartBigNumberOutputRenderer({
     }, [comparisonValue, metadata.deepnote_big_number_format, hasErrors, metadata.deepnote_big_number_comparison_type]);
 
     const changeDirection = useMemo(() => {
-        if (!comparisonValue) {
+        if (comparisonValue == null) {
             return 1;
         }
 
@@ -130,12 +135,9 @@ export function ChartBigNumberOutputRenderer({
                             </p>
                         </div>
                         {output.comparisonTitle != null ? (
-                            <>
-                                {' '}
-                                <div>
-                                    <p className="deepnote-comparison-title">{output.comparisonTitle}</p>
-                                </div>
-                            </>
+                            <div>
+                                <p className="deepnote-comparison-title">{output.comparisonTitle}</p>
+                            </div>
                         ) : null}
                     </div>
                 </div>

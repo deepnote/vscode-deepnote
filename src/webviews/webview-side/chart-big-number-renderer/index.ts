@@ -15,13 +15,11 @@ export const activate: ActivationFunction = (_context: RendererContext<unknown>)
     return {
         renderOutputItem(outputItem: OutputItem, element: HTMLElement) {
             try {
-                // .slice(1, -1) is to remove the quotes from the json string
-                const data = JSON.parse(outputItem.text().slice(1, -1));
+                // Remove single quotes from start and end of string if present
+                const data = JSON.parse(outputItem.text().replace(/^'|'$/g, ''));
                 const metadata = DeepnoteBigNumberMetadataSchema.parse(outputItem.metadata);
-                console.log('Chart Big Number renderer - received data:', data);
 
                 const chartBigNumberOutput = DeepnoteChartBigNumberOutputSchema.parse(data);
-                console.log('bigNumberConfig', chartBigNumberOutput);
 
                 const root = document.createElement('div');
                 element.appendChild(root);

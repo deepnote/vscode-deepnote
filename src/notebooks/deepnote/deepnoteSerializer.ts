@@ -64,15 +64,6 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
             const cells = this.converter.convertBlocksToCells(selectedNotebook.blocks);
 
-            // for (const cell of cells) {
-            //     console.log(cell.kind, cell.languageId, cell);
-            //     for (const output of cell.outputs ?? []) {
-            //         for (const item of output.items) {
-            //             console.log('  ', item.mime, decodeContent(item.data));
-            //         }
-            //     }
-            // }
-
             console.log(`Converted ${cells.length} cells from notebook blocks.`);
 
             this.notebookManager.storeOriginalProject(deepnoteProject.project.id, deepnoteProject, selectedNotebook.id);

@@ -320,7 +320,7 @@ async function buildAll() {
         build(
             path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'dataframe-renderer', 'index.ts'),
             path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'dataframeRenderer', 'dataframeRenderer.js'),
-            { target: 'web', watch: isWatchMode }
+            { target: 'web', watch: watchAll }
         ),
         build(
             path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'variable-view', 'index.tsx'),

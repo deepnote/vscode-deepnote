@@ -80,6 +80,14 @@ export function getParentHeaderMsgId(msg: KernelMessage.IMessage): string | unde
 }
 
 /**
+ * Gets the cell ID, preferring the metadata id from Deepnote blocks,
+ * otherwise falling back to the cell's document URI.
+ */
+function getCellId(cell: NotebookCell): string {
+    return (cell.metadata?.id as string | undefined) || cell.document.uri.toString();
+}
+
+/**
  * Responsible for handling of jupyter messages as a result of execution of individual cells.
  */
 export class CellExecutionMessageHandler implements IDisposable {
@@ -635,7 +643,7 @@ export class CellExecutionMessageHandler implements IDisposable {
             }
         }
         // Use cell metadata id if available (from Deepnote blocks), otherwise fall back to cell's internal id
-        const cellId = (this.cell.metadata?.id as string | undefined) || this.cell.document.uri.toString();
+        const cellId = getCellId(this.cell);
         const cellOutput = cellOutputToVSCCellOutput(output, this.cell.index, cellId);
         const displayId =
             'transient' in output &&
@@ -1006,7 +1014,7 @@ export class CellExecutionMessageHandler implements IDisposable {
         // If the last output is the desired stream type.
         if (this.lastUsedStreamOutput?.stream === msg.content.name) {
             // Use cell metadata id if available (from Deepnote blocks), otherwise fall back to cell's internal id
-            const cellId = (this.cell.metadata?.id as string | undefined) || this.cell.document.uri.toString();
+            const cellId = getCellId(this.cell);
             const output = cellOutputToVSCCellOutput(
                 {
                     output_type: 'stream',
@@ -1022,7 +1030,7 @@ export class CellExecutionMessageHandler implements IDisposable {
             // Replace the current outputs with a single new output.
             const text = concatMultilineString(msg.content.text);
             // Use cell metadata id if available (from Deepnote blocks), otherwise fall back to cell's internal id
-            const cellId = (this.cell.metadata?.id as string | undefined) || this.cell.document.uri.toString();
+            const cellId = getCellId(this.cell);
             const output = cellOutputToVSCCellOutput(
                 {
                     output_type: 'stream',
@@ -1039,7 +1047,7 @@ export class CellExecutionMessageHandler implements IDisposable {
             // Create a new output
             const text = formatStreamText(concatMultilineString(msg.content.text));
             // Use cell metadata id if available (from Deepnote blocks), otherwise fall back to cell's internal id
-            const cellId = (this.cell.metadata?.id as string | undefined) || this.cell.document.uri.toString();
+            const cellId = getCellId(this.cell);
             const output = cellOutputToVSCCellOutput(
                 {
                     output_type: 'stream',
@@ -1167,9 +1175,7 @@ export class CellExecutionMessageHandler implements IDisposable {
             new NotebookCellOutput(outputToBeUpdated.outputItems, outputToBeUpdated.outputContainer.metadata)
         );
         // Use cell metadata id if available (from Deepnote blocks), otherwise fall back to cell's internal id
-        const cellId =
-            (outputToBeUpdated.cell.metadata?.id as string | undefined) ||
-            outputToBeUpdated.cell.document.uri.toString();
+        const cellId = getCellId(outputToBeUpdated.cell);
         const newOutput = cellOutputToVSCCellOutput(
             {
                 ...output,

@@ -2,9 +2,26 @@ import React, { memo, useMemo, useState } from 'react';
 import { RendererContext } from 'vscode-notebook-renderer';
 
 import '../react-common/codicon/codicon.css';
+import { logMessage } from '../react-common/logger';
 
 export interface DataframeMetadata {
     table_state_spec?: string;
+}
+
+interface ColumnStats {
+    unique_count: number;
+    nan_count: number;
+    min: string | null;
+    max: string | null;
+    histogram: Array<{
+        bin_start: number;
+        bin_end: number;
+        count: number;
+    }> | null;
+    categories: Array<{
+        name: string;
+        count: number;
+    }> | null;
 }
 
 interface DataframeRendererProps {
@@ -16,13 +33,13 @@ interface DataframeRendererProps {
         columns: {
             dtype: string;
             name: string;
-            stats: any;
+            stats: ColumnStats;
         }[];
         preview_row_count: number;
         row_count: number;
         rows: {
             _deepnote_index_column: number;
-            [key: string]: any;
+            [key: string]: unknown;
         }[];
         type: string;
     };
@@ -43,13 +60,19 @@ export const DataframeRenderer = memo(function DataframeRenderer({
     data,
     metadata
 }: DataframeRendererProps) {
-    console.log('[DataframeRenderer] Rendering with:', { cellId, cellIndex, data, metadata });
+    logMessage(
+        `[DataframeRenderer] Rendering with cellId: ${cellId}, cellIndex: ${cellIndex}, data: ${JSON.stringify(
+            data
+        )}, metadata: ${JSON.stringify(metadata)}`
+    );
 
     const tableState = useMemo((): TableState => JSON.parse(metadata?.table_state_spec || '{}'), [metadata]);
     const [pageSize, setPageSize] = useState(tableState.pageSize || 10);
     const [pageIndex, setPageIndex] = useState(tableState.pageIndex || 0);
 
-    console.log({ state: context.getState(), tableState });
+    logMessage(
+        `[DataframeRenderer] State: ${JSON.stringify(context.getState())}, tableState: ${JSON.stringify(tableState)}`
+    );
 
     const filteredColumns = data.columns.filter((column) => !column.name.startsWith('_deepnote_'));
     const numberOfRows = Math.min(data.row_count, data.preview_row_count);
@@ -62,7 +85,7 @@ export const DataframeRenderer = memo(function DataframeRenderer({
 
         setPageSize(newPageSize);
 
-        console.log('[DataframeRenderer] handlePageSizeChange called with cellId:', cellId, 'cellIndex:', cellIndex);
+        logMessage(`[DataframeRenderer] handlePageSizeChange called with cellId: ${cellId}, cellIndex: ${cellIndex}`);
 
         const message = {
             command: 'selectPageSize',
@@ -71,7 +94,7 @@ export const DataframeRenderer = memo(function DataframeRenderer({
             size: newPageSize
         };
 
-        console.log('[DataframeRenderer] Posting message:', message);
+        logMessage(`[DataframeRenderer] Posting message: ${JSON.stringify(message)}`);
 
         context.postMessage?.(message);
     };
@@ -79,7 +102,7 @@ export const DataframeRenderer = memo(function DataframeRenderer({
     const handlePageChange = (newPageIndex: number) => {
         setPageIndex(newPageIndex);
 
-        console.log('[DataframeRenderer] handlePageChange called with cellId:', cellId, 'page:', newPageIndex);
+        logMessage(`[DataframeRenderer] handlePageChange called with cellId: ${cellId}, page: ${newPageIndex}`);
 
         const message = {
             command: 'goToPage',
@@ -88,7 +111,7 @@ export const DataframeRenderer = memo(function DataframeRenderer({
             page: newPageIndex
         };
 
-        console.log('[DataframeRenderer] Posting message:', message);
+        logMessage(`[DataframeRenderer] Posting message: ${JSON.stringify(message)}`);
 
         context.postMessage?.(message);
     };
@@ -116,7 +139,7 @@ export const DataframeRenderer = memo(function DataframeRenderer({
                                                     : 'bg-[var(--vscode-list-hoverBackground)]/50'
                                             }`}
                                         >
-                                            {value ? value.toString() : 'None'}
+                                            {value === null || value === undefined ? 'None' : String(value)}
                                         </div>
                                     ))}
                                 </div>
@@ -160,6 +183,7 @@ export const DataframeRenderer = memo(function DataframeRenderer({
                         `}
                         disabled={pageIndex === 0}
                         title="Previous page"
+                        type="button"
                         onClick={() => handlePageChange(pageIndex - 1)}
                     >
                         <div className="codicon codicon-chevron-left" style={{ fontSize: 12 }} />
@@ -177,6 +201,7 @@ export const DataframeRenderer = memo(function DataframeRenderer({
                         `}
                         disabled={pageIndex >= totalPages - 1}
                         title="Next page"
+                        type="button"
                         onClick={() => handlePageChange(pageIndex + 1)}
                     >
                         <div className="codicon codicon-chevron-right" style={{ fontSize: 12 }} />

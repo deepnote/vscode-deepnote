@@ -234,7 +234,7 @@ export class DeepnoteInitNotebookRunner {
                 }
 
                 const block = codeBlocks[i];
-                const percentComplete = Math.floor((i / codeBlocks.length) * 100);
+                const percentComplete = Math.min(100, Math.floor(((i + 1) / codeBlocks.length) * 100));
 
                 // Show more detailed progress with percentage
                 progress(

@@ -55,7 +55,7 @@ export class DataframeController implements IExtensionSyncActivationService {
         comms.onDidReceiveMessage(this.onDidReceiveMessage.bind(this, comms), this, this.disposables);
     }
 
-    private onDidReceiveMessage(
+    private async onDidReceiveMessage(
         _comms: NotebookRendererMessaging,
         { editor, message }: { editor: NotebookEditor; message: DataframeCommand }
     ) {
@@ -65,61 +65,52 @@ export class DataframeController implements IExtensionSyncActivationService {
             return;
         }
 
-        switch (message.command) {
-            case 'selectPageSize':
-                void this.handleSelectPageSize(editor, message);
-                break;
-            case 'goToPage':
-                void this.handleGoToPage(editor, message);
-                break;
-            case 'copyTableData':
-                void this.handleCopyTableData(message);
-                break;
-            case 'exportDataframe':
-                void this.handleExportDataframe(editor, message);
-                break;
+        if (message.command === 'selectPageSize') {
+            return this.handleSelectPageSize(editor, message);
         }
+
+        if (message.command === 'goToPage') {
+            return this.handleGoToPage(editor, message);
+        }
+
+        if (message.command === 'copyTableData') {
+            return this.handleCopyTableData(message);
+        }
+
+        if (message.command === 'exportDataframe') {
+            return this.handleExportDataframe(editor, message);
+        }
+
+        logger.warn(`DataframeController received unknown command:`, message);
     }
 
     private async handleSelectPageSize(editor: NotebookEditor, message: SelectPageSizeCommand) {
-        let cell;
-        let cellIndex: number;
-
-        // Try to find cell by cellId first (more reliable)
-        if (message.cellId) {
-            const cells = editor.notebook.getCells();
-            const foundCell = cells.find((c) => c.metadata.id === message.cellId);
-
-            if (foundCell) {
-                cell = foundCell;
-                cellIndex = foundCell.index;
-                logger.info(`[DataframeController] Found cell by cellId ${message.cellId} at index ${cellIndex}`);
-            } else {
-                const errorMessage = `Unable to update page size: Could not find the cell with ID ${message.cellId}. The cell may have been deleted.`;
-                logger.error(`[DataframeController] ${errorMessage}`);
-                await window.showErrorMessage(errorMessage);
-                throw new Error(errorMessage);
-            }
-        } else if (message.cellIndex !== undefined) {
-            // Fall back to cellIndex if cellId is not available
-            try {
-                cell = editor.notebook.cellAt(message.cellIndex);
-                cellIndex = message.cellIndex;
-                logger.info(`[DataframeController] Using cellIndex ${cellIndex} (cellId not available)`);
-            } catch (error) {
-                const errorMessage = `Unable to update page size: Cell at index ${message.cellIndex} not found. The notebook structure may have changed.`;
-                logger.error(`[DataframeController] ${errorMessage}`, error);
-                await window.showErrorMessage(errorMessage);
-                throw new Error(errorMessage);
-            }
-        } else {
+        if (!message.cellId && message.cellIndex === undefined) {
             const errorMessage =
                 'Unable to update page size: No cell identifier provided. ' +
                 'Please re-run the cell to update the output metadata.';
+
             logger.error(`[DataframeController] ${errorMessage}`);
+
             await window.showErrorMessage(errorMessage);
+
             throw new Error(errorMessage);
         }
+
+        const cells = editor.notebook.getCells();
+        const cell = cells.find((c) => c.metadata.id === message.cellId);
+
+        if (!cell) {
+            const errorMessage = `Unable to update page size: Could not find the cell with ID ${message.cellId}. The cell may have been deleted.`;
+
+            logger.error(`[DataframeController] ${errorMessage}`);
+
+            await window.showErrorMessage(errorMessage);
+
+            throw new Error(errorMessage);
+        }
+
+        const cellIndex = cell.index;
 
         // Update page size in table state within cell metadata
         const existingTableState = cell.metadata.deepnote_table_state || {};
@@ -140,6 +131,7 @@ export class DataframeController implements IExtensionSyncActivationService {
 
         // Re-execute the cell to apply the new page size
         logger.info(`[DataframeRenderer] Re-executing cell ${cellIndex} with new page size`);
+
         await commands.executeCommand('notebook.cell.execute', {
             ranges: [{ start: cellIndex, end: cellIndex + 1 }],
             document: editor.notebook.uri
@@ -147,30 +139,28 @@ export class DataframeController implements IExtensionSyncActivationService {
     }
 
     private async handleGoToPage(editor: NotebookEditor, message: GoToPageCommand) {
-        let cell;
-        let cellIndex: number;
-
-        // Try to find cell by cellId first (more reliable)
-        if (message.cellId) {
-            const cells = editor.notebook.getCells();
-            const foundCell = cells.find((c) => c.metadata.id === message.cellId);
-
-            if (foundCell) {
-                cell = foundCell;
-                cellIndex = foundCell.index;
-                logger.info(`[DataframeController] Found cell by cellId ${message.cellId} at index ${cellIndex}`);
-            } else {
-                const errorMessage = `Unable to navigate to page: Could not find the cell with ID ${message.cellId}. The cell may have been deleted.`;
-                logger.error(`[DataframeController] ${errorMessage}`);
-                await window.showErrorMessage(errorMessage);
-                throw new Error(errorMessage);
-            }
-        } else {
+        if (!message.cellId) {
             const errorMessage =
                 'Unable to navigate to page: No cell identifier provided. ' +
                 'Please re-run the cell to update the output metadata.';
+
             logger.error(`[DataframeController] ${errorMessage}`);
+
             await window.showErrorMessage(errorMessage);
+
+            throw new Error(errorMessage);
+        }
+
+        const cells = editor.notebook.getCells();
+        const cell = cells.find((c) => c.metadata.id === message.cellId);
+
+        if (!cell) {
+            const errorMessage = `Unable to navigate to page: Could not find the cell with ID ${message.cellId}. The cell may have been deleted.`;
+
+            logger.error(`[DataframeController] ${errorMessage}`);
+
+            await window.showErrorMessage(errorMessage);
+
             throw new Error(errorMessage);
         }
 
@@ -180,6 +170,8 @@ export class DataframeController implements IExtensionSyncActivationService {
             ...existingTableState,
             pageIndex: message.page
         };
+
+        const cellIndex = cell.index;
 
         const edit = new WorkspaceEdit();
         const notebookEdit = NotebookEdit.updateCellMetadata(cellIndex, {
@@ -193,6 +185,7 @@ export class DataframeController implements IExtensionSyncActivationService {
 
         // Re-execute the cell to apply the new page
         logger.info(`[DataframeController] Re-executing cell ${cellIndex} with new page index ${message.page}`);
+
         await commands.executeCommand('notebook.cell.execute', {
             ranges: [{ start: cellIndex, end: cellIndex + 1 }],
             document: editor.notebook.uri
@@ -201,11 +194,13 @@ export class DataframeController implements IExtensionSyncActivationService {
 
     private async handleCopyTableData(message: CopyTableDataCommand) {
         logger.info(`[DataframeRenderer] copyTableData called, data length=${message.data.length} characters`);
+
         await env.clipboard.writeText(message.data);
     }
 
-    private handleExportDataframe(editor: NotebookEditor, message: ExportDataframeCommand) {
+    private async handleExportDataframe(editor: NotebookEditor, message: ExportDataframeCommand) {
         const cell = editor.notebook.cellAt(message.cellIndex);
+
         logger.info(
             `[DataframeRenderer] exportDataframe called for cell ${
                 message.cellIndex

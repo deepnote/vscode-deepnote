@@ -24,8 +24,9 @@ type SelectPageSizeCommand = {
 };
 
 type GoToPageCommand = {
+    cellId?: string;
+    cellIndex?: number;
     command: 'goToPage';
-    cellIndex: number;
     page: number;
 };
 
@@ -145,14 +146,57 @@ export class DataframeController implements IExtensionSyncActivationService {
         });
     }
 
-    private handleGoToPage(editor: NotebookEditor, message: GoToPageCommand) {
-        const cell = editor.notebook.cellAt(message.cellIndex);
-        logger.info(
-            `[DataframeRenderer] goToPage called for cell ${
-                message.cellIndex
-            } (${cell?.document.uri.toString()}), page=${message.page}`
-        );
-        // Could store current page in cell metadata if needed
+    private async handleGoToPage(editor: NotebookEditor, message: GoToPageCommand) {
+        let cell;
+        let cellIndex: number;
+
+        // Try to find cell by cellId first (more reliable)
+        if (message.cellId) {
+            const cells = editor.notebook.getCells();
+            const foundCell = cells.find((c) => c.metadata.id === message.cellId);
+
+            if (foundCell) {
+                cell = foundCell;
+                cellIndex = foundCell.index;
+                logger.info(`[DataframeController] Found cell by cellId ${message.cellId} at index ${cellIndex}`);
+            } else {
+                const errorMessage = `Unable to navigate to page: Could not find the cell with ID ${message.cellId}. The cell may have been deleted.`;
+                logger.error(`[DataframeController] ${errorMessage}`);
+                await window.showErrorMessage(errorMessage);
+                throw new Error(errorMessage);
+            }
+        } else {
+            const errorMessage =
+                'Unable to navigate to page: No cell identifier provided. ' +
+                'Please re-run the cell to update the output metadata.';
+            logger.error(`[DataframeController] ${errorMessage}`);
+            await window.showErrorMessage(errorMessage);
+            throw new Error(errorMessage);
+        }
+
+        // Update page index in table state within cell metadata
+        const existingTableState = cell.metadata.deepnote_table_state || {};
+        const updatedTableState = {
+            ...existingTableState,
+            pageIndex: message.page
+        };
+
+        const edit = new WorkspaceEdit();
+        const notebookEdit = NotebookEdit.updateCellMetadata(cellIndex, {
+            ...cell.metadata,
+            deepnote_table_state: updatedTableState
+        });
+
+        edit.set(editor.notebook.uri, [notebookEdit]);
+
+        await workspace.applyEdit(edit);
+
+        // Re-execute the cell to apply the new page
+        logger.info(`[DataframeController] Re-executing cell ${cellIndex} with new page index ${message.page}`);
+        await commands.executeCommand('notebook.cell.execute', {
+            ranges: [{ start: cellIndex, end: cellIndex + 1 }],
+            document: editor.notebook.uri
+        });
     }
 
     private async handleCopyTableData(message: CopyTableDataCommand) {

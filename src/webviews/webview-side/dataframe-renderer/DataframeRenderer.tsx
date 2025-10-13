@@ -183,9 +183,7 @@ export const DataframeRenderer = memo(function DataframeRenderer({
                     </button>
                 </div>
 
-                <div>
-                    {/* Actions */}
-                </div>
+                <div>{/* Actions */}</div>
             </div>
         </div>
     );

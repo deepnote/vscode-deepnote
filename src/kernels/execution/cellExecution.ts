@@ -32,7 +32,8 @@ import { KernelError } from '../errors/kernelError';
 import { getCachedSysPrefix } from '../../platform/interpreter/helpers';
 import { getCellMetadata } from '../../platform/common/utils';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
-import dedent from 'dedent';
+import { createBlockFromPocket } from '../../notebooks/deepnote/pocket';
+import { createPythonCode } from '@deepnote/blocks';
 
 /**
  * Factory for CellExecution objects.
@@ -407,31 +408,19 @@ export class CellExecution implements ICellExecution, IDisposable {
             return this.completedSuccessfully();
         }
 
-        const tableState =
-            'deepnote_table_state' in this.cell.metadata ? this.cell.metadata.deepnote_table_state : undefined;
+        // Convert NotebookCell to Deepnote block for further operations
+        const cellData = {
+            kind: this.cell.kind,
+            value: this.cell.document.getText(),
+            languageId: this.cell.document.languageId,
+            metadata: this.cell.metadata,
+            outputs: [...(this.cell.outputs || [])]
+        };
+        const deepnoteBlock = createBlockFromPocket(cellData, this.cell.index);
 
-        if (tableState) {
-            const tableStateSpec = JSON.stringify(tableState);
-
-            logger.info(
-                `Cell ${this.cell.index}: Found table state spec in metadata: ${JSON.stringify(
-                    tableStateSpec
-                ).substring(0, 200)}`
-            );
-            const tableStateAsJson = tableStateSpec;
-
-            const prependedCode = dedent`
-                if '_dntk' in globals():
-                    _dntk.dataframe_utils.configure_dataframe_formatter(${escapePythonString(tableStateAsJson)})
-                else:
-                    _deepnote_current_table_attrs = ${escapePythonString(tableStateAsJson)}
-            `;
-
-            logger.info(`Cell ${this.cell.index}: Prepending table state configuration code to cell execution`);
-            code = `${prependedCode}\n\n${code}`;
-        } else {
-            logger.info(`Cell ${this.cell.index}: No table state spec found in metadata`);
-        }
+        // Use createPythonCode to generate code with table state already included
+        logger.info(`Cell ${this.cell.index}: Using createPythonCode to generate execution code with table state`);
+        code = createPythonCode(deepnoteBlock);
 
         // Generate metadata from our cell (some kernels expect this.)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -527,12 +516,4 @@ export class CellExecution implements ICellExecution, IDisposable {
             }
         }
     }
-}
-
-function escapePythonString(value: string): string {
-    // We have to escape backslashes, single quotes, and newlines
-    const escaped = value.replaceAll('\\', '\\\\').replaceAll("'", "\\'").replaceAll('\n', '\\n');
-
-    // Wrap the escaped string in single quotes
-    return `'${escaped}'`;
 }

@@ -1,31 +1,12 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-
 import {
     CancellationToken,
     NotebookCell,
     NotebookCellExecution,
     NotebookCellOutput,
-    NotebookCellOutputItem,
-    NotebookController
+    NotebookCellOutputItem
 } from 'vscode';
 
 import { KernelController } from '../kernelController';
-
-/**
- * DeepnoteController extends KernelController to intercept cell execution
- * and prepend initialization code to each cell execution.
- */
-export class DeepnoteController extends KernelController {
-    constructor(controller: NotebookController) {
-        super(controller);
-    }
-
-    public override createNotebookCellExecution(cell: NotebookCell): NotebookCellExecution {
-        const execution = super.createNotebookCellExecution(cell);
-        return new DeepnoteNotebookCellExecution(execution, cell);
-    }
-}
 
 /**
  * Wrapper around NotebookCellExecution that prepends initialization code.
@@ -87,5 +68,17 @@ class DeepnoteNotebookCellExecution implements NotebookCellExecution {
         output: NotebookCellOutput
     ): Thenable<void> {
         return this.execution.appendOutputItems(items, output);
+    }
+}
+
+/**
+ * DeepnoteController extends KernelController to intercept cell execution
+ * and prepend initialization code to each cell execution.
+ */
+export class DeepnoteController extends KernelController {
+    public override createNotebookCellExecution(cell: NotebookCell): NotebookCellExecution {
+        const execution = super.createNotebookCellExecution(cell);
+
+        return new DeepnoteNotebookCellExecution(execution, cell);
     }
 }

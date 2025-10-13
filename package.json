@@ -1816,7 +1816,8 @@
                 "entrypoint": "./dist/webviews/webview-side/dataframeRenderer/dataframeRenderer.js",
                 "mimeTypes": [
                     "application/vnd.deepnote.dataframe.v3+json"
-                ]
+                ],
+                "requiresMessaging": "optional"
             },
             {
                 "id": "deepnote-chart-big-number-renderer",

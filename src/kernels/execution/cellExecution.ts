@@ -406,6 +406,10 @@ export class CellExecution implements ICellExecution, IDisposable {
             return this.completedSuccessfully();
         }
 
+        // Prepend initialization code
+        const prependCode = 'print("Hello world")';
+        code = prependCode + '\n' + code;
+
         // Generate metadata from our cell (some kernels expect this.)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const metadata: any = {

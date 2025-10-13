@@ -1,42 +1,24 @@
+.dataframe-column {
+    background: 'red';
+    flex: 1;
+}
+
 .dataframe-container {
-    overflow: auto;
-    max-width: 100%;
     font-family: var(--vscode-editor-font-family);
     font-size: var(--vscode-editor-font-size);
-}
-
-.dataframe-table {
-    border-collapse: collapse;
+    max-width: 100%;
     width: 100%;
-    border: 1px solid var(--vscode-panel-border);
 }
 
-.dataframe-table th {
-    background-color: var(--vscode-editor-background);
-    border: 1px solid var(--vscode-panel-border);
-    font-weight: 600;
-    padding: 8px 12px;
-    text-align: left;
-    position: sticky;
-    top: 0;
-    color: var(--vscode-foreground);
+.dataframe-content {
+    display: flex;
+    flex-direction: row;
 }
 
-.dataframe-table td {
-    border: 1px solid var(--vscode-panel-border);
-    padding: 6px 12px;
-    color: var(--vscode-foreground);
-}
-
-.dataframe-table tbody tr.even-row {
-    background-color: var(--vscode-editor-background);
-}
-
-.dataframe-table tbody tr.odd-row {
-    background-color: var(--vscode-list-hoverBackground);
-}
-
-.dataframe-table tbody tr:hover {
-    background-color: var(--vscode-list-activeSelectionBackground);
-    color: var(--vscode-list-activeSelectionForeground);
+.dataframe-footer {
+    border-top: 1px solid var(--vscode-editorWidget-border);
+    display: flex;
+    justify-content: space-between;
+    flex-direction: row;
+    padding: 4px 8px;
 }

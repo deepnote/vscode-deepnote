@@ -7,9 +7,10 @@ import type { ActivationFunction, OutputItem, RendererContext } from 'vscode-not
 
 import { DataframeRenderer } from './DataframeRenderer';
 
-export const activate: ActivationFunction = (_context: RendererContext<unknown>) => {
+export const activate: ActivationFunction = (context: RendererContext<unknown>) => {
     return {
         renderOutputItem(outputItem: OutputItem, element: HTMLElement) {
+            console.log('Dataframe renderer - rendering output item:', { outputItem, context });
             try {
                 const data = outputItem.json();
                 console.log('Dataframe renderer - received data:', data);
@@ -17,7 +18,7 @@ export const activate: ActivationFunction = (_context: RendererContext<unknown>)
                 const root = document.createElement('div');
                 element.appendChild(root);
 
-                ReactDOM.render(React.createElement(DataframeRenderer, { data }), root);
+                ReactDOM.render(React.createElement(DataframeRenderer, { data, context }), root);
             } catch (error) {
                 console.error('Error rendering dataframe:', error);
                 const errorDiv = document.createElement('div');

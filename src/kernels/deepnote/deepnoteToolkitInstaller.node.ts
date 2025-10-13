@@ -181,20 +181,21 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
 
             Cancellation.throwIfCanceled(token);
 
-            // Install deepnote-toolkit and ipykernel in venv
-            logger.info(`Installing deepnote-toolkit and ipykernel in venv from ${DEEPNOTE_TOOLKIT_WHEEL_URL}`);
-            this.outputChannel.appendLine('Installing deepnote-toolkit and ipykernel...');
+            // Define dependencies to install
+            const dependencies = [
+                `deepnote-toolkit[server] @ ${DEEPNOTE_TOOLKIT_WHEEL_URL}`,
+                'ipykernel',
+                'pandas',
+                'numpy'
+            ];
+
+            // Install all dependencies in venv
+            logger.info(`Installing dependencies in venv: ${dependencies.join(', ')}`);
+            this.outputChannel.appendLine('Installing deepnote-toolkit, ipykernel, and other runtime dependencies...');
 
             const installResult = await venvProcessService.exec(
                 venvInterpreter.uri.fsPath,
-                [
-                    '-m',
-                    'pip',
-                    'install',
-                    '--upgrade',
-                    `deepnote-toolkit[server] @ ${DEEPNOTE_TOOLKIT_WHEEL_URL}`,
-                    'ipykernel'
-                ],
+                ['-m', 'pip', 'install', '--upgrade', ...dependencies],
                 { throwOnStdErr: false }
             );
 

@@ -2,6 +2,7 @@ import { injectable } from 'inversify';
 import {
     commands,
     env,
+    l10n,
     NotebookEdit,
     NotebookEditor,
     NotebookRendererMessaging,
@@ -86,9 +87,9 @@ export class DataframeController implements IExtensionSyncActivationService {
 
     private async handleSelectPageSize(editor: NotebookEditor, message: SelectPageSizeCommand) {
         if (!message.cellId && message.cellIndex === undefined) {
-            const errorMessage =
-                'Unable to update page size: No cell identifier provided. ' +
-                'Please re-run the cell to update the output metadata.';
+            const errorMessage = l10n.t(
+                'Unable to update page size: No cell identifier provided. Please re-run the cell to update the output metadata.'
+            );
 
             logger.error(`[DataframeController] ${errorMessage}`);
 
@@ -101,7 +102,10 @@ export class DataframeController implements IExtensionSyncActivationService {
         const cell = cells.find((c) => c.metadata.id === message.cellId);
 
         if (!cell) {
-            const errorMessage = `Unable to update page size: Could not find the cell with ID ${message.cellId}. The cell may have been deleted.`;
+            const errorMessage = l10n.t(
+                'Unable to update page size: Could not find the cell with ID {0}. The cell may have been deleted.',
+                message.cellId ?? ''
+            );
 
             logger.error(`[DataframeController] ${errorMessage}`);
 
@@ -140,9 +144,9 @@ export class DataframeController implements IExtensionSyncActivationService {
 
     private async handleGoToPage(editor: NotebookEditor, message: GoToPageCommand) {
         if (!message.cellId) {
-            const errorMessage =
-                'Unable to navigate to page: No cell identifier provided. ' +
-                'Please re-run the cell to update the output metadata.';
+            const errorMessage = l10n.t(
+                'Unable to navigate to page: No cell identifier provided. Please re-run the cell to update the output metadata.'
+            );
 
             logger.error(`[DataframeController] ${errorMessage}`);
 
@@ -155,7 +159,10 @@ export class DataframeController implements IExtensionSyncActivationService {
         const cell = cells.find((c) => c.metadata.id === message.cellId);
 
         if (!cell) {
-            const errorMessage = `Unable to navigate to page: Could not find the cell with ID ${message.cellId}. The cell may have been deleted.`;
+            const errorMessage = l10n.t(
+                'Unable to navigate to page: Could not find the cell with ID {0}. The cell may have been deleted.',
+                message.cellId ?? ''
+            );
 
             logger.error(`[DataframeController] ${errorMessage}`);
 

@@ -41,11 +41,15 @@ export class DeepnoteRequirementsHelper implements IDeepnoteRequirementsHelper {
                 return;
             }
 
-            // Validate and normalize requirements: ensure they are valid strings, trim them, and remove empty entries
-            const normalizedRequirements = requirements
-                .filter((req) => typeof req === 'string') // Keep only string entries
-                .map((req) => req.trim()) // Trim whitespace
-                .filter((req) => req.length > 0); // Remove empty strings
+            // Validate and normalize requirements: ensure they are valid strings, trim them, remove empty entries, and dedupe
+            const normalizedRequirements = Array.from(
+                new Set(
+                    requirements
+                        .filter((req): req is string => typeof req === 'string') // Keep only string entries with type guard
+                        .map((req) => req.trim()) // Trim whitespace
+                        .filter((req) => req.length > 0) // Remove empty strings
+                )
+            );
 
             if (normalizedRequirements.length === 0) {
                 this.logger.info(`No valid requirements found in project ${project.project.id}`);
@@ -67,8 +71,11 @@ export class DeepnoteRequirementsHelper implements IDeepnoteRequirementsHelper {
             // Use Uri.joinPath to build the filesystem path using the Uri API
             const requirementsPath = Uri.joinPath(workspaceFolders[0].uri, 'requirements.txt').fsPath;
 
-            // Convert normalized requirements array to text format
+            // Convert normalized requirements array to text format (using LF line endings)
             const requirementsText = normalizedRequirements.join('\n') + '\n';
+
+            // Helper to normalize line endings to LF for comparison
+            const normalizeLineEndings = (text: string): string => text.replace(/\r\n/g, '\n');
 
             // Check if requirements.txt already exists
             const fileExists = await fs.promises
@@ -77,10 +84,12 @@ export class DeepnoteRequirementsHelper implements IDeepnoteRequirementsHelper {
                 .catch(() => false);
 
             if (fileExists) {
-                // Read existing file contents and compare
+                // Read existing file contents and compare (normalize line endings for comparison)
                 const existingContent = await fs.promises.readFile(requirementsPath, 'utf8');
+                const normalizedExistingContent = normalizeLineEndings(existingContent);
+                const normalizedRequirementsText = normalizeLineEndings(requirementsText);
 
-                if (existingContent === requirementsText) {
+                if (normalizedExistingContent === normalizedRequirementsText) {
                     this.logger.info('requirements.txt already has the correct content, skipping update');
                     return;
                 }

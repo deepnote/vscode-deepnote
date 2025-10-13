@@ -141,7 +141,7 @@ function style({
             onLoad({ filter: /.*/, namespace: 'style-content' }, async (args) => {
                 // Process with PostCSS/Tailwind if enabled and file exists
                 if (enableTailwind && args.path.includes('tailwind.css') && fs.existsSync(args.path)) {
-                   try {
+                    try {
                         const cssContent = await fs.readFile(args.path, 'utf8');
                         const result = await postcss([tailwindcss, autoprefixer]).process(cssContent, {
                             from: args.path,
@@ -158,13 +158,11 @@ function style({
                         });
                         const { errors, warnings, outputFiles } = await esbuild.build(options);
                         return { errors, warnings, contents: outputFiles![0].text, loader: 'text' };
-                   } catch (error) {
-                       console.error(`PostCSS processing failed for ${args.path}:`, error);
-                       throw error;
-                   }
+                    } catch (error) {
+                        console.error(`PostCSS processing failed for ${args.path}:`, error);
+                        throw error;
+                    }
                 }
-                // …rest of the onLoad handler…
-            });
 
                 // Default behavior for other CSS files
                 const options = { entryPoints: [args.path], ...opt };
@@ -175,7 +173,9 @@ function style({
                         options.loader[key] = loader[key];
                     }
                 });
+
                 const { errors, warnings, outputFiles } = await esbuild.build(options);
+
                 return { errors, warnings, contents: outputFiles![0].text, loader: 'text' };
             });
         }

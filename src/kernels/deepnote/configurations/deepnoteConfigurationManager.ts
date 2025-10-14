@@ -1,6 +1,6 @@
 import { injectable, inject } from 'inversify';
 import { EventEmitter, Uri } from 'vscode';
-import { v4 as uuid } from 'uuid';
+import { generateUuid as uuid } from '../../../platform/common/uuid';
 import { IExtensionContext } from '../../../platform/common/types';
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
 import { logger } from '../../../platform/logging';

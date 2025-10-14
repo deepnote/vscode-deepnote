@@ -65,6 +65,89 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         });
     }
 
+    /**
+     * Configuration-based method: Start a server for a configuration.
+     * @param interpreter The Python interpreter to use
+     * @param venvPath The path to the venv
+     * @param configurationId The configuration ID (used as key for server management)
+     * @param token Cancellation token
+     * @returns Server connection information
+     */
+    public async startServer(
+        interpreter: PythonEnvironment,
+        venvPath: Uri,
+        configurationId: string,
+        token?: CancellationToken
+    ): Promise<DeepnoteServerInfo> {
+        // Wait for any pending operations on this configuration to complete
+        const pendingOp = this.pendingOperations.get(configurationId);
+        if (pendingOp) {
+            logger.info(`Waiting for pending operation on configuration ${configurationId} to complete...`);
+            try {
+                await pendingOp;
+            } catch {
+                // Ignore errors from previous operations
+            }
+        }
+
+        // If server is already running for this configuration, return existing info
+        const existingServerInfo = this.serverInfos.get(configurationId);
+        if (existingServerInfo && (await this.isServerRunning(existingServerInfo))) {
+            logger.info(
+                `Deepnote server already running at ${existingServerInfo.url} for configuration ${configurationId}`
+            );
+            return existingServerInfo;
+        }
+
+        // Start the operation and track it
+        const operation = this.startServerForConfiguration(interpreter, venvPath, configurationId, token);
+        this.pendingOperations.set(configurationId, operation);
+
+        try {
+            const result = await operation;
+            return result;
+        } finally {
+            // Remove from pending operations when done
+            if (this.pendingOperations.get(configurationId) === operation) {
+                this.pendingOperations.delete(configurationId);
+            }
+        }
+    }
+
+    /**
+     * Configuration-based method: Stop the server for a configuration.
+     * @param configurationId The configuration ID
+     */
+    public async stopServer(configurationId: string): Promise<void> {
+        // Wait for any pending operations on this configuration to complete
+        const pendingOp = this.pendingOperations.get(configurationId);
+        if (pendingOp) {
+            logger.info(`Waiting for pending operation on configuration ${configurationId} before stopping...`);
+            try {
+                await pendingOp;
+            } catch {
+                // Ignore errors from previous operations
+            }
+        }
+
+        // Start the stop operation and track it
+        const operation = this.stopServerForConfiguration(configurationId);
+        this.pendingOperations.set(configurationId, operation);
+
+        try {
+            await operation;
+        } finally {
+            // Remove from pending operations when done
+            if (this.pendingOperations.get(configurationId) === operation) {
+                this.pendingOperations.delete(configurationId);
+            }
+        }
+    }
+
+    /**
+     * Legacy file-based method (for backward compatibility).
+     * @deprecated Use startServer instead
+     */
     public async getOrStartServer(
         interpreter: PythonEnvironment,
         deepnoteFileUri: Uri,
@@ -221,31 +304,140 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         return serverInfo;
     }
 
-    public async stopServer(deepnoteFileUri: Uri): Promise<void> {
-        const fileKey = deepnoteFileUri.fsPath;
+    /**
+     * Configuration-based server start implementation.
+     */
+    private async startServerForConfiguration(
+        interpreter: PythonEnvironment,
+        venvPath: Uri,
+        configurationId: string,
+        token?: CancellationToken
+    ): Promise<DeepnoteServerInfo> {
+        Cancellation.throwIfCanceled(token);
 
-        // Wait for any pending operations on this file to complete
-        const pendingOp = this.pendingOperations.get(fileKey);
-        if (pendingOp) {
-            logger.info(`Waiting for pending operation on ${fileKey} before stopping...`);
+        // Ensure toolkit is installed in venv
+        logger.info(`Ensuring deepnote-toolkit is installed in venv for configuration ${configurationId}...`);
+        const installed = await this.toolkitInstaller.ensureVenvAndToolkit(interpreter, venvPath, token);
+        if (!installed) {
+            throw new Error('Failed to install deepnote-toolkit. Please check the output for details.');
+        }
+
+        Cancellation.throwIfCanceled(token);
+
+        // Find available port
+        const port = await getPort({ host: 'localhost', port: DEEPNOTE_DEFAULT_PORT });
+        logger.info(`Starting deepnote-toolkit server on port ${port} for configuration ${configurationId}`);
+        this.outputChannel.appendLine(`Starting Deepnote server on port ${port}...`);
+
+        // Start the server with venv's Python in PATH
+        const processService = await this.processServiceFactory.create(undefined);
+
+        // Set up environment to ensure the venv's Python is used for shell commands
+        const venvBinDir = interpreter.uri.fsPath.replace(/\/python$/, '').replace(/\\python\.exe$/, '');
+        const env = { ...process.env };
+
+        // Prepend venv bin directory to PATH so shell commands use venv's Python
+        env.PATH = `${venvBinDir}${process.platform === 'win32' ? ';' : ':'}${env.PATH || ''}`;
+
+        // Also set VIRTUAL_ENV to indicate we're in a venv
+        env.VIRTUAL_ENV = venvPath.fsPath;
+
+        // Enforce published pip constraints to prevent breaking Deepnote Toolkit's dependencies
+        env.DEEPNOTE_ENFORCE_PIP_CONSTRAINTS = 'true';
+
+        // Detached mode
+        env.DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE = 'true';
+
+        // Remove PYTHONHOME if it exists (can interfere with venv)
+        delete env.PYTHONHOME;
+
+        const serverProcess = processService.execObservable(
+            interpreter.uri.fsPath,
+            ['-m', 'deepnote_toolkit', 'server', '--jupyter-port', port.toString()],
+            { env }
+        );
+
+        this.serverProcesses.set(configurationId, serverProcess);
+
+        // Track disposables for this configuration
+        const disposables: IDisposable[] = [];
+        this.disposablesByFile.set(configurationId, disposables);
+
+        // Monitor server output
+        serverProcess.out.onDidChange(
+            (output) => {
+                if (output.source === 'stdout') {
+                    logger.trace(`Deepnote server (${configurationId}): ${output.out}`);
+                    this.outputChannel.appendLine(output.out);
+                } else if (output.source === 'stderr') {
+                    logger.warn(`Deepnote server stderr (${configurationId}): ${output.out}`);
+                    this.outputChannel.appendLine(output.out);
+                }
+            },
+            this,
+            disposables
+        );
+
+        // Wait for server to be ready
+        const url = `http://localhost:${port}`;
+        const serverInfo = { url, port };
+        this.serverInfos.set(configurationId, serverInfo);
+
+        // Write lock file for the server process
+        const serverPid = serverProcess.proc?.pid;
+        if (serverPid) {
+            await this.writeLockFile(serverPid);
+        } else {
+            logger.warn(`Could not get PID for server process for configuration ${configurationId}`);
+        }
+
+        try {
+            const serverReady = await this.waitForServer(serverInfo, 120000, token);
+            if (!serverReady) {
+                await this.stopServerForConfiguration(configurationId);
+                throw new Error('Deepnote server failed to start within timeout period');
+            }
+        } catch (error) {
+            // Clean up leaked server before rethrowing
+            await this.stopServerForConfiguration(configurationId);
+            throw error;
+        }
+
+        logger.info(`Deepnote server started successfully at ${url} for configuration ${configurationId}`);
+        this.outputChannel.appendLine(`✓ Deepnote server running at ${url}`);
+
+        return serverInfo;
+    }
+
+    /**
+     * Configuration-based server stop implementation.
+     */
+    private async stopServerForConfiguration(configurationId: string): Promise<void> {
+        const serverProcess = this.serverProcesses.get(configurationId);
+
+        if (serverProcess) {
+            const serverPid = serverProcess.proc?.pid;
+
             try {
-                await pendingOp;
-            } catch {
-                // Ignore errors from previous operations
+                logger.info(`Stopping Deepnote server for configuration ${configurationId}...`);
+                serverProcess.proc?.kill();
+                this.serverProcesses.delete(configurationId);
+                this.serverInfos.delete(configurationId);
+                this.outputChannel.appendLine(`Deepnote server stopped for configuration ${configurationId}`);
+
+                // Clean up lock file after stopping the server
+                if (serverPid) {
+                    await this.deleteLockFile(serverPid);
+                }
+            } catch (ex) {
+                logger.error(`Error stopping Deepnote server: ${ex}`);
             }
         }
 
-        // Start the stop operation and track it
-        const operation = this.stopServerImpl(deepnoteFileUri);
-        this.pendingOperations.set(fileKey, operation);
-
-        try {
-            await operation;
-        } finally {
-            // Remove from pending operations when done
-            if (this.pendingOperations.get(fileKey) === operation) {
-                this.pendingOperations.delete(fileKey);
-            }
+        const disposables = this.disposablesByFile.get(configurationId);
+        if (disposables) {
+            disposables.forEach((d) => d.dispose());
+            this.disposablesByFile.delete(configurationId);
         }
     }
 

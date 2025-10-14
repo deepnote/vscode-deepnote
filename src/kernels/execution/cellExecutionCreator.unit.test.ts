@@ -1,4 +1,4 @@
-import { assert } from 'chai';
+import { strict as assert } from 'assert';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { CancellationToken, NotebookCell, NotebookCellExecution } from 'vscode';
 
@@ -149,17 +149,17 @@ suite('NotebookCellExecutionWrapper', () => {
         // Should only be called once
         assert.strictEqual(clearOutputCallCount, 1, 'clearOutput should be called only once');
         assert.strictEqual(startCallCount, 1, 'start should be called only once');
-        assert.isTrue(wrapper.started, 'wrapper should be marked as started');
+        assert.strictEqual(wrapper.started, true, 'wrapper should be marked as started');
     });
 
     test('started flag is false initially and true after start', () => {
         const wrapper = new NotebookCellExecutionWrapper(instance(mockImpl), 'test-controller', endCallback, false);
 
-        assert.isFalse(wrapper.started, 'started should be false before start() is called');
+        assert.strictEqual(wrapper.started, false, 'started should be false before start() is called');
 
         wrapper.start();
 
-        assert.isTrue(wrapper.started, 'started should be true after start() is called');
+        assert.strictEqual(wrapper.started, true, 'started should be true after start() is called');
     });
 
     test('clearOutput() is called when reusing a started execution with clearOutputOnStartWithTime=true', () => {
@@ -281,7 +281,7 @@ suite('CellExecutionCreator', () => {
         assert.strictEqual(endCallCount, 1, 'Old execution should be ended when creating new one');
 
         // New execution should be started automatically because old one was started
-        assert.isTrue(execution2.started, 'New execution should be started automatically');
+        assert.strictEqual(execution2.started, true, 'New execution should be started automatically');
 
         // clearOutput should have been called again during the new execution's start
         assert.strictEqual(clearOutputCallCount, 2, 'clearOutput should be called again when new execution starts');

@@ -45,13 +45,13 @@ type DataframeCommand = SelectPageSizeCommand | GoToPageCommand | CopyTableDataC
 export class DataframeController implements IExtensionSyncActivationService {
     private readonly disposables: IDisposable[] = [];
 
-    public dispose() {
-        dispose(this.disposables);
-    }
-
-    activate() {
+    public activate() {
         const comms = notebooks.createRendererMessaging('deepnote-dataframe-renderer');
         comms.onDidReceiveMessage(this.onDidReceiveMessage.bind(this, comms), this, this.disposables);
+    }
+
+    public dispose() {
+        dispose(this.disposables);
     }
 
     private async onDidReceiveMessage(

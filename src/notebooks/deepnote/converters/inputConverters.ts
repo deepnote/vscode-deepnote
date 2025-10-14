@@ -65,7 +65,7 @@ export abstract class BaseInputBlockConverter<T extends z.ZodObject> implements 
             : JSON.stringify(this.defaultConfig(), null, 2);
 
         const cell = new NotebookCellData(NotebookCellKind.Code, configStr, 'json');
-        console.log(cell);
+
         return cell;
     }
 

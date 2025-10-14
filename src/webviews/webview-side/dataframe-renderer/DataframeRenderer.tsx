@@ -2,7 +2,6 @@ import React, { memo, useMemo, useState } from 'react';
 import { RendererContext } from 'vscode-notebook-renderer';
 
 import '../react-common/codicon/codicon.css';
-import { logMessage } from '../react-common/logger';
 
 export interface DataframeMetadata {
     table_state_spec?: string;
@@ -26,7 +25,6 @@ interface ColumnStats {
 
 interface DataframeRendererProps {
     cellId?: string;
-    cellIndex?: number;
     context: RendererContext<unknown>;
     data: {
         column_count: number;
@@ -55,22 +53,21 @@ interface TableState {
 
 export const DataframeRenderer = memo(function DataframeRenderer({
     cellId,
-    cellIndex,
     context,
     data,
     metadata
 }: DataframeRendererProps) {
-    logMessage(
-        `[DataframeRenderer] Rendering with cellId: ${cellId}, cellIndex: ${cellIndex}, data: ${JSON.stringify(
-            data
-        )}, metadata: ${JSON.stringify(metadata)}`
-    );
+    console.log('[DataframeRenderer] Rendering dataframe', {
+        cellId,
+        data,
+        metadata
+    });
 
     const tableState = useMemo((): TableState => JSON.parse(metadata?.table_state_spec || '{}'), [metadata]);
     const [pageSize, setPageSize] = useState(tableState.pageSize || 10);
     const [pageIndex, setPageIndex] = useState(tableState.pageIndex || 0);
 
-    logMessage(
+    console.log(
         `[DataframeRenderer] State: ${JSON.stringify(context.getState())}, tableState: ${JSON.stringify(tableState)}`
     );
 
@@ -85,16 +82,15 @@ export const DataframeRenderer = memo(function DataframeRenderer({
 
         setPageSize(newPageSize);
 
-        logMessage(`[DataframeRenderer] handlePageSizeChange called with cellId: ${cellId}, cellIndex: ${cellIndex}`);
+        console.log(`[DataframeRenderer] handlePageSizeChange called with cellId: ${cellId}`);
 
         const message = {
             command: 'selectPageSize',
             cellId,
-            cellIndex,
             size: newPageSize
         };
 
-        logMessage(`[DataframeRenderer] Posting message: ${JSON.stringify(message)}`);
+        console.log(`[DataframeRenderer] Posting message: ${JSON.stringify(message)}`);
 
         context.postMessage?.(message);
     };
@@ -102,16 +98,15 @@ export const DataframeRenderer = memo(function DataframeRenderer({
     const handlePageChange = (newPageIndex: number) => {
         setPageIndex(newPageIndex);
 
-        logMessage(`[DataframeRenderer] handlePageChange called with cellId: ${cellId}, page: ${newPageIndex}`);
+        console.log(`[DataframeRenderer] handlePageChange called with cellId: ${cellId}, page: ${newPageIndex}`);
 
         const message = {
             command: 'goToPage',
             cellId,
-            cellIndex,
             page: newPageIndex
         };
 
-        logMessage(`[DataframeRenderer] Posting message: ${JSON.stringify(message)}`);
+        console.log(`[DataframeRenderer] Posting message: ${JSON.stringify(message)}`);
 
         context.postMessage?.(message);
     };

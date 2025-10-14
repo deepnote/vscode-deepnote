@@ -644,7 +644,8 @@ export class CellExecutionMessageHandler implements IDisposable {
         }
         // Use cell metadata id if available (from Deepnote blocks), otherwise fall back to cell's internal id
         const cellId = getCellId(this.cell);
-        const cellOutput = cellOutputToVSCCellOutput(output, this.cell.index, cellId);
+        const cellMetadata = this.cell.metadata || {};
+        const cellOutput = cellOutputToVSCCellOutput(output, this.cell.index, cellId, cellMetadata);
         const displayId =
             'transient' in output &&
             typeof output.transient === 'object' &&
@@ -1015,6 +1016,7 @@ export class CellExecutionMessageHandler implements IDisposable {
         if (this.lastUsedStreamOutput?.stream === msg.content.name) {
             // Use cell metadata id if available (from Deepnote blocks), otherwise fall back to cell's internal id
             const cellId = getCellId(this.cell);
+            const cellMetadata = this.cell.metadata || {};
             const output = cellOutputToVSCCellOutput(
                 {
                     output_type: 'stream',
@@ -1022,7 +1024,8 @@ export class CellExecutionMessageHandler implements IDisposable {
                     text: msg.content.text
                 },
                 this.cell.index,
-                cellId
+                cellId,
+                cellMetadata
             );
             traceCellMessage(this.cell, `Append output items '${msg.content.text.substring(0, 100)}`);
             task?.appendOutputItems(output.items, this.lastUsedStreamOutput.output).then(noop, noop);
@@ -1031,6 +1034,7 @@ export class CellExecutionMessageHandler implements IDisposable {
             const text = concatMultilineString(msg.content.text);
             // Use cell metadata id if available (from Deepnote blocks), otherwise fall back to cell's internal id
             const cellId = getCellId(this.cell);
+            const cellMetadata = this.cell.metadata || {};
             const output = cellOutputToVSCCellOutput(
                 {
                     output_type: 'stream',
@@ -1038,7 +1042,8 @@ export class CellExecutionMessageHandler implements IDisposable {
                     text
                 },
                 this.cell.index,
-                cellId
+                cellId,
+                cellMetadata
             );
             this.lastUsedStreamOutput = { output, stream: msg.content.name };
             traceCellMessage(this.cell, `Replace output with '${text.substring(0, 100)}'`);
@@ -1048,6 +1053,7 @@ export class CellExecutionMessageHandler implements IDisposable {
             const text = formatStreamText(concatMultilineString(msg.content.text));
             // Use cell metadata id if available (from Deepnote blocks), otherwise fall back to cell's internal id
             const cellId = getCellId(this.cell);
+            const cellMetadata = this.cell.metadata || {};
             const output = cellOutputToVSCCellOutput(
                 {
                     output_type: 'stream',
@@ -1055,7 +1061,8 @@ export class CellExecutionMessageHandler implements IDisposable {
                     text
                 },
                 this.cell.index,
-                cellId
+                cellId,
+                cellMetadata
             );
             this.lastUsedStreamOutput = { output, stream: msg.content.name };
             traceCellMessage(this.cell, `Append new output '${text.substring(0, 100)}'`);
@@ -1176,6 +1183,7 @@ export class CellExecutionMessageHandler implements IDisposable {
         );
         // Use cell metadata id if available (from Deepnote blocks), otherwise fall back to cell's internal id
         const cellId = getCellId(outputToBeUpdated.cell);
+        const cellMetadata = outputToBeUpdated.cell.metadata || {};
         const newOutput = cellOutputToVSCCellOutput(
             {
                 ...output,
@@ -1183,7 +1191,8 @@ export class CellExecutionMessageHandler implements IDisposable {
                 metadata: msg.content.metadata
             } as nbformat.IDisplayData,
             outputToBeUpdated.cell.index,
-            cellId
+            cellId,
+            cellMetadata
         );
         // If there was no output and still no output, then nothing to do.
         if (outputToBeUpdated.outputItems.length === 0 && newOutput.items.length === 0) {

@@ -1,18 +1,18 @@
 import type { NotebookCellData } from 'vscode';
 
-import type { DeepnoteBlock, DeepnoteOutput } from './deepnoteTypes';
+import type { DeepnoteBlock } from './deepnoteTypes';
 import { generateBlockId, generateSortingKey } from './dataConversionUtils';
 
 // Note: 'id' is intentionally excluded from this list so it remains at the top level of cell.metadata
 // The id field is needed at runtime for cell identification during execution
-const deepnoteBlockSpecificFields = ['blockGroup', 'executionCount', 'outputs', 'sortingKey', 'type'] as const;
+// Note: 'outputs' is also excluded because VS Code manages outputs natively through cell.outputs
+const deepnoteBlockSpecificFields = ['blockGroup', 'executionCount', 'sortingKey', 'type'] as const;
 
 // Stores extra Deepnote-specific fields for each block that are not part of the standard VSCode NotebookCellData structure.
-// Note: 'id' is not in the pocket - it stays at the top level of cell.metadata for runtime access
+// Note: 'id' and 'outputs' are not in the pocket - they are managed by VS Code natively
 export interface Pocket {
     blockGroup?: string;
     executionCount?: number;
-    outputs?: DeepnoteOutput[];
     sortingKey?: string;
     type?: string;
 }
@@ -74,10 +74,6 @@ export function createBlockFromPocket(cell: NotebookCellData, index: number): De
 
     if (pocket?.executionCount !== undefined) {
         block.executionCount = pocket.executionCount;
-    }
-
-    if (pocket?.outputs !== undefined) {
-        block.outputs = pocket.outputs;
     }
 
     return block;

@@ -5,7 +5,6 @@ import * as ReactDOM from 'react-dom';
 
 import type { ActivationFunction, OutputItem, RendererContext } from 'vscode-notebook-renderer';
 
-import { logErrorMessage, logMessage } from '../react-common/logger';
 import { DataframeMetadata, DataframeRenderer } from './DataframeRenderer';
 
 interface Metadata {
@@ -19,19 +18,19 @@ interface Metadata {
 export const activate: ActivationFunction = (context: RendererContext<unknown>) => {
     return {
         renderOutputItem(outputItem: OutputItem, element: HTMLElement) {
-            logMessage(`Dataframe renderer - rendering output item: ${outputItem.id}`);
+            console.log(`Dataframe renderer - rendering output item: ${outputItem.id}`);
             try {
                 const data = outputItem.json();
-                logMessage(`Dataframe renderer - received data with ${Object.keys(data).length} keys`);
+                console.log(`Dataframe renderer - received data with ${Object.keys(data).length} keys`);
 
                 const metadata = outputItem.metadata as Metadata | undefined;
-                logMessage(`[DataframeRenderer] Full metadata: ${JSON.stringify(metadata)}`);
+                console.log('[DataframeRenderer] Full metadata', metadata);
 
                 const dataFrameMetadata = metadata?.metadata as DataframeMetadata | undefined;
                 const cellId = metadata?.cellId;
                 const cellIndex = metadata?.cellIndex;
 
-                logMessage(`[DataframeRenderer] Extracted cellId: ${cellId}, cellIndex: ${cellIndex}`);
+                console.log(`[DataframeRenderer] Extracted cellId: ${cellId}, cellIndex: ${cellIndex}`);
 
                 const root = document.createElement('div');
                 element.appendChild(root);
@@ -47,7 +46,7 @@ export const activate: ActivationFunction = (context: RendererContext<unknown>) 
                     root
                 );
             } catch (error) {
-                logErrorMessage(`Error rendering dataframe: ${error}`);
+                console.error(`Error rendering dataframe: ${error}`);
                 const errorDiv = document.createElement('div');
                 errorDiv.style.padding = '10px';
                 errorDiv.style.color = 'var(--vscode-errorForeground)';

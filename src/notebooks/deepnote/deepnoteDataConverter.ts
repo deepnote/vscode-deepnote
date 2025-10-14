@@ -47,14 +47,13 @@ export class DeepnoteDataConverter {
                 type: block.type,
                 sortingKey: block.sortingKey,
                 ...(blockWithOptionalFields.blockGroup && { blockGroup: blockWithOptionalFields.blockGroup }),
-                ...(block.executionCount !== undefined && { executionCount: block.executionCount }),
-                ...(block.outputs !== undefined && { outputs: block.outputs })
+                ...(block.executionCount !== undefined && { executionCount: block.executionCount })
             };
 
             // The pocket is a place to tuck away Deepnote-specific fields for later.
             addPocketToCellMetadata(cell);
 
-            cell.outputs = this.transformOutputsForVsCode(block.outputs || [], index, block.id);
+            cell.outputs = this.transformOutputsForVsCode(block.outputs || [], index, block.id, block.metadata);
 
             return cell;
         });
@@ -78,7 +77,8 @@ export class DeepnoteDataConverter {
 
             converter.applyChangesToBlock(block, cell);
 
-            // If pocket didn't have outputs, but cell does, convert VS Code outputs to Deepnote format
+            // Convert VS Code outputs to Deepnote format
+            // Outputs are managed by VS Code natively, not stored in the pocket
             if (!block.outputs && cell.outputs && cell.outputs.length > 0) {
                 block.outputs = this.transformOutputsForDeepnote(cell.outputs);
             }
@@ -205,7 +205,8 @@ export class DeepnoteDataConverter {
     private transformOutputsForVsCode(
         outputs: DeepnoteOutput[],
         cellIndex: number,
-        cellId: string
+        cellId: string,
+        blockMetadata?: Record<string, unknown>
     ): NotebookCellOutput[] {
         return outputs.map((output) => {
             if ('output_type' in output) {
@@ -217,9 +218,10 @@ export class DeepnoteDataConverter {
                         stack: errorOutput.traceback ? errorOutput.traceback.join('\n') : ''
                     };
 
-                    const metadata = {
-                        cellIndex,
-                        cellId
+                    const metadata: Record<string, unknown> = {
+                        cellId,
+                        ...blockMetadata,
+                        cellIndex
                     };
 
                     return new NotebookCellOutput([NotebookCellOutputItem.error(error)], metadata);
@@ -283,9 +285,11 @@ export class DeepnoteDataConverter {
                     }
 
                     // Preserve metadata and execution_count
+                    // Merge in order: cellId, blockMetadata, cellIndex, executionCount, then output.metadata (wins conflicts)
                     const metadata: Record<string, unknown> = {
-                        cellIndex,
-                        cellId
+                        cellId,
+                        ...blockMetadata,
+                        cellIndex
                     };
 
                     if (output.execution_count !== undefined) {
@@ -309,9 +313,10 @@ export class DeepnoteDataConverter {
                             ? 'application/vnd.code.notebook.stderr'
                             : 'application/vnd.code.notebook.stdout';
 
-                    const metadata = {
-                        cellIndex,
-                        cellId
+                    const metadata: Record<string, unknown> = {
+                        cellId,
+                        ...blockMetadata,
+                        cellIndex
                     };
 
                     return new NotebookCellOutput(
@@ -322,9 +327,10 @@ export class DeepnoteDataConverter {
 
                 // Unknown output type - return as text if available
                 if ('text' in output && output.text) {
-                    const metadata = {
-                        cellIndex,
-                        cellId
+                    const metadata: Record<string, unknown> = {
+                        cellId,
+                        ...blockMetadata,
+                        cellIndex
                     };
 
                     return new NotebookCellOutput(
@@ -339,9 +345,10 @@ export class DeepnoteDataConverter {
 
             // Fallback for outputs without output_type but with text
             if ('text' in output && output.text) {
-                const metadata = {
-                    cellIndex,
-                    cellId
+                const metadata: Record<string, unknown> = {
+                    cellId,
+                    ...blockMetadata,
+                    cellIndex
                 };
 
                 return new NotebookCellOutput(

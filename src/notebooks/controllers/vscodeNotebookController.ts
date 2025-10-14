@@ -71,6 +71,7 @@ import { initializeInteractiveOrNotebookTelemetryBasedOnUserAction } from '../..
 import { NotebookCellLanguageService } from '../languages/cellLanguageService';
 import { IDataScienceErrorHandler } from '../../kernels/errors/types';
 import { ITrustedKernelPaths } from '../../kernels/raw/finder/types';
+import { KernelController } from '../../kernels/kernelController';
 import { RemoteKernelReconnectBusyIndicator } from './remoteKernelReconnectBusyIndicator';
 import { LastCellExecutionTracker } from '../../kernels/execution/lastCellExecutionTracker';
 import type { IAnyMessageArgs } from '@jupyterlab/services/lib/kernel/kernel';
@@ -547,7 +548,7 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
         // Creating these execution objects marks the cell as queued for execution (vscode will update cell UI).
         type CellExec = { cell: NotebookCell; exec: NotebookCellExecution };
         const cellExecs: CellExec[] = (this.cellQueue.get(doc) || []).map((cell) => {
-            const exec = this.createCellExecutionIfNecessary(cell, this.controller);
+            const exec = this.createCellExecutionIfNecessary(cell, new KernelController(this.controller));
             return { cell, exec };
         });
         this.cellQueue.delete(doc);
@@ -560,7 +561,7 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
 
         // Connect to a matching kernel if possible (but user may pick a different one)
         let currentContext: 'start' | 'execution' = 'start';
-        let controller: IKernelController = this.controller;
+        let controller: IKernelController = new KernelController(this.controller);
         const lastCellExecutionTracker = this.serviceContainer.get<LastCellExecutionTracker>(LastCellExecutionTracker);
         let kernel: IKernel | undefined;
         try {

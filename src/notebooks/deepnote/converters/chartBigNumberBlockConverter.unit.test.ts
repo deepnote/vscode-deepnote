@@ -39,7 +39,8 @@ suite('ChartBigNumberBlockConverter', () => {
                         output_type: 'execute_result',
                         execution_count: 9,
                         data: {
-                            'text/plain': '{"comparisonTitle": "vs a", "comparisonValue": "10", "title": "percentage change", "value": "30"}'
+                            'text/plain':
+                                '{"comparisonTitle": "vs a", "comparisonValue": "10", "title": "percentage change", "value": "30"}'
                         },
                         metadata: {}
                     }
@@ -89,7 +90,8 @@ suite('ChartBigNumberBlockConverter', () => {
                         output_type: 'execute_result',
                         execution_count: 9,
                         data: {
-                            'text/plain': '{"comparisonTitle": "vs a", "comparisonValue": "10", "title": "absolute change", "value": "30"}'
+                            'text/plain':
+                                '{"comparisonTitle": "vs a", "comparisonValue": "10", "title": "absolute change", "value": "30"}'
                         },
                         metadata: {}
                     }
@@ -139,7 +141,8 @@ suite('ChartBigNumberBlockConverter', () => {
                         output_type: 'execute_result',
                         execution_count: 18,
                         data: {
-                            'text/plain': '{"comparisonTitle": "vs a", "comparisonValue": "10", "title": "absolute value", "value": "30"}'
+                            'text/plain':
+                                '{"comparisonTitle": "vs a", "comparisonValue": "10", "title": "absolute value", "value": "30"}'
                         },
                         metadata: {}
                     }
@@ -189,7 +192,8 @@ suite('ChartBigNumberBlockConverter', () => {
                         output_type: 'execute_result',
                         execution_count: 33,
                         data: {
-                            'text/plain': '{"comparisonTitle": "vs a", "comparisonValue": "10", "title": "sgjaoshdgoashgopiashgoihasdoighasoihgoiasdhgoisadhgoihsdoghasdoighaosdg", "value": "30"}'
+                            'text/plain':
+                                '{"comparisonTitle": "vs a", "comparisonValue": "10", "title": "sgjaoshdgoashgopiashgoihasdoighasoihgoiasdhgoisadhgoihsdoghasdoighaosdg", "value": "30"}'
                         },
                         metadata: {}
                     }
@@ -220,7 +224,8 @@ suite('ChartBigNumberBlockConverter', () => {
                 metadata: {
                     deepnote_big_number_title: 'metadata title',
                     deepnote_big_number_value: 'metadata value',
-                    [DEEPNOTE_VSCODE_RAW_CONTENT_KEY]: '{"deepnote_big_number_title": "raw title", "deepnote_big_number_value": "raw value"}'
+                    [DEEPNOTE_VSCODE_RAW_CONTENT_KEY]:
+                        '{"deepnote_big_number_title": "raw title", "deepnote_big_number_value": "raw value"}'
                 },
                 sortingKey: 'a0',
                 type: 'big-number'
@@ -230,7 +235,10 @@ suite('ChartBigNumberBlockConverter', () => {
 
             assert.strictEqual(cell.kind, NotebookCellKind.Code);
             assert.strictEqual(cell.languageId, 'json');
-            assert.strictEqual(cell.value, '{"deepnote_big_number_title": "raw title", "deepnote_big_number_value": "raw value"}');
+            assert.strictEqual(
+                cell.value,
+                '{"deepnote_big_number_title": "raw title", "deepnote_big_number_value": "raw value"}'
+            );
         });
 
         test('uses default config when metadata is invalid', () => {
@@ -298,16 +306,20 @@ suite('ChartBigNumberBlockConverter', () => {
                 sortingKey: 'a0',
                 type: 'big-number'
             };
-            const configStr = JSON.stringify({
-                deepnote_big_number_title: 'new title',
-                deepnote_big_number_value: 'new value',
-                deepnote_big_number_format: 'number',
-                deepnote_big_number_comparison_type: 'percentage-change',
-                deepnote_big_number_comparison_title: 'vs old',
-                deepnote_big_number_comparison_value: 'old value',
-                deepnote_big_number_comparison_format: '',
-                deepnote_big_number_comparison_enabled: true
-            }, null, 2);
+            const configStr = JSON.stringify(
+                {
+                    deepnote_big_number_title: 'new title',
+                    deepnote_big_number_value: 'new value',
+                    deepnote_big_number_format: 'number',
+                    deepnote_big_number_comparison_type: 'percentage-change',
+                    deepnote_big_number_comparison_title: 'vs old',
+                    deepnote_big_number_comparison_value: 'old value',
+                    deepnote_big_number_comparison_format: '',
+                    deepnote_big_number_comparison_enabled: true
+                },
+                null,
+                2
+            );
             const cell = new NotebookCellData(NotebookCellKind.Code, configStr, 'json');
 
             converter.applyChangesToBlock(block, cell);
@@ -354,9 +366,13 @@ suite('ChartBigNumberBlockConverter', () => {
                 sortingKey: 'a0',
                 type: 'big-number'
             };
-            const configStr = JSON.stringify({
-                deepnote_big_number_title: 'new title'
-            }, null, 2);
+            const configStr = JSON.stringify(
+                {
+                    deepnote_big_number_title: 'new title'
+                },
+                null,
+                2
+            );
             const cell = new NotebookCellData(NotebookCellKind.Code, configStr, 'json');
 
             converter.applyChangesToBlock(block, cell);
@@ -396,9 +412,13 @@ suite('ChartBigNumberBlockConverter', () => {
                 sortingKey: 'a0',
                 type: 'big-number'
             };
-            const configStr = JSON.stringify({
-                deepnote_big_number_title: 'new title'
-            }, null, 2);
+            const configStr = JSON.stringify(
+                {
+                    deepnote_big_number_title: 'new title'
+                },
+                null,
+                2
+            );
             const cell = new NotebookCellData(NotebookCellKind.Code, configStr, 'json');
 
             converter.applyChangesToBlock(block, cell);

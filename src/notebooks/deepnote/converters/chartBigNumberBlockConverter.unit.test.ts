@@ -53,14 +53,16 @@ suite('ChartBigNumberBlockConverter', () => {
             assert.strictEqual(cell.languageId, 'json');
 
             const config = JSON.parse(cell.value);
-            assert.strictEqual(config.deepnote_big_number_title, 'test title');
-            assert.strictEqual(config.deepnote_big_number_value, 'b');
-            assert.strictEqual(config.deepnote_big_number_format, 'number');
-            assert.strictEqual(config.deepnote_big_number_comparison_type, 'percentage-change');
-            assert.strictEqual(config.deepnote_big_number_comparison_title, 'vs a');
-            assert.strictEqual(config.deepnote_big_number_comparison_value, 'a');
-            assert.strictEqual(config.deepnote_big_number_comparison_format, '');
-            assert.strictEqual(config.deepnote_big_number_comparison_enabled, true);
+            assert.deepStrictEqual(config, {
+                deepnote_big_number_title: 'test title',
+                deepnote_big_number_value: 'b',
+                deepnote_big_number_format: 'number',
+                deepnote_big_number_comparison_type: 'percentage-change',
+                deepnote_big_number_comparison_title: 'vs a',
+                deepnote_big_number_comparison_value: 'a',
+                deepnote_big_number_comparison_format: '',
+                deepnote_big_number_comparison_enabled: true
+            });
         });
 
         test('converts absolute change comparison block to cell', () => {
@@ -104,14 +106,16 @@ suite('ChartBigNumberBlockConverter', () => {
             assert.strictEqual(cell.languageId, 'json');
 
             const config = JSON.parse(cell.value);
-            assert.strictEqual(config.deepnote_big_number_title, 'absolute change 2');
-            assert.strictEqual(config.deepnote_big_number_value, 'b');
-            assert.strictEqual(config.deepnote_big_number_format, 'number');
-            assert.strictEqual(config.deepnote_big_number_comparison_type, 'absolute-change');
-            assert.strictEqual(config.deepnote_big_number_comparison_title, 'vs a');
-            assert.strictEqual(config.deepnote_big_number_comparison_value, 'a');
-            assert.strictEqual(config.deepnote_big_number_comparison_format, '');
-            assert.strictEqual(config.deepnote_big_number_comparison_enabled, true);
+            assert.deepStrictEqual(config, {
+                deepnote_big_number_title: 'absolute change 2',
+                deepnote_big_number_value: 'b',
+                deepnote_big_number_format: 'number',
+                deepnote_big_number_comparison_type: 'absolute-change',
+                deepnote_big_number_comparison_title: 'vs a',
+                deepnote_big_number_comparison_value: 'a',
+                deepnote_big_number_comparison_format: '',
+                deepnote_big_number_comparison_enabled: true
+            });
         });
 
         test('converts absolute value comparison block to cell', () => {
@@ -155,14 +159,16 @@ suite('ChartBigNumberBlockConverter', () => {
             assert.strictEqual(cell.languageId, 'json');
 
             const config = JSON.parse(cell.value);
-            assert.strictEqual(config.deepnote_big_number_title, 'absolute change 2');
-            assert.strictEqual(config.deepnote_big_number_value, 'b');
-            assert.strictEqual(config.deepnote_big_number_format, 'number');
-            assert.strictEqual(config.deepnote_big_number_comparison_type, 'absolute-value');
-            assert.strictEqual(config.deepnote_big_number_comparison_title, 'vs a');
-            assert.strictEqual(config.deepnote_big_number_comparison_value, 'a');
-            assert.strictEqual(config.deepnote_big_number_comparison_format, '');
-            assert.strictEqual(config.deepnote_big_number_comparison_enabled, true);
+            assert.deepStrictEqual(config, {
+                deepnote_big_number_title: 'absolute change 2',
+                deepnote_big_number_value: 'b',
+                deepnote_big_number_format: 'number',
+                deepnote_big_number_comparison_type: 'absolute-value',
+                deepnote_big_number_comparison_title: 'vs a',
+                deepnote_big_number_comparison_value: 'a',
+                deepnote_big_number_comparison_format: '',
+                deepnote_big_number_comparison_enabled: true
+            });
         });
 
         test('converts disabled comparison block to cell', () => {
@@ -206,14 +212,16 @@ suite('ChartBigNumberBlockConverter', () => {
             assert.strictEqual(cell.languageId, 'json');
 
             const config = JSON.parse(cell.value);
-            assert.strictEqual(config.deepnote_big_number_title, 'some title');
-            assert.strictEqual(config.deepnote_big_number_value, 'b');
-            assert.strictEqual(config.deepnote_big_number_format, 'plain');
-            assert.strictEqual(config.deepnote_big_number_comparison_type, 'percentage-change');
-            assert.strictEqual(config.deepnote_big_number_comparison_title, 'vs a');
-            assert.strictEqual(config.deepnote_big_number_comparison_value, 'a');
-            assert.strictEqual(config.deepnote_big_number_comparison_format, '');
-            assert.strictEqual(config.deepnote_big_number_comparison_enabled, false);
+            assert.deepStrictEqual(config, {
+                deepnote_big_number_title: 'some title',
+                deepnote_big_number_value: 'b',
+                deepnote_big_number_format: 'plain',
+                deepnote_big_number_comparison_type: 'percentage-change',
+                deepnote_big_number_comparison_title: 'vs a',
+                deepnote_big_number_comparison_value: 'a',
+                deepnote_big_number_comparison_format: '',
+                deepnote_big_number_comparison_enabled: false
+            });
         });
 
         test('prefers raw content when DEEPNOTE_VSCODE_RAW_CONTENT_KEY exists', () => {
@@ -259,14 +267,16 @@ suite('ChartBigNumberBlockConverter', () => {
             assert.strictEqual(cell.languageId, 'json');
 
             const config = JSON.parse(cell.value);
-            assert.strictEqual(config.deepnote_big_number_title, null);
-            assert.strictEqual(config.deepnote_big_number_value, null);
-            assert.strictEqual(config.deepnote_big_number_format, null);
-            assert.strictEqual(config.deepnote_big_number_comparison_type, null);
-            assert.strictEqual(config.deepnote_big_number_comparison_title, null);
-            assert.strictEqual(config.deepnote_big_number_comparison_value, null);
-            assert.strictEqual(config.deepnote_big_number_comparison_format, null);
-            assert.strictEqual(config.deepnote_big_number_comparison_enabled, null);
+            assert.deepStrictEqual(config, {
+                deepnote_big_number_title: null,
+                deepnote_big_number_value: null,
+                deepnote_big_number_format: null,
+                deepnote_big_number_comparison_type: null,
+                deepnote_big_number_comparison_title: null,
+                deepnote_big_number_comparison_value: null,
+                deepnote_big_number_comparison_format: null,
+                deepnote_big_number_comparison_enabled: null
+            });
         });
 
         test('uses default config when metadata is empty', () => {
@@ -285,14 +295,16 @@ suite('ChartBigNumberBlockConverter', () => {
             assert.strictEqual(cell.languageId, 'json');
 
             const config = JSON.parse(cell.value);
-            assert.strictEqual(config.deepnote_big_number_title, null);
-            assert.strictEqual(config.deepnote_big_number_value, null);
-            assert.strictEqual(config.deepnote_big_number_format, null);
-            assert.strictEqual(config.deepnote_big_number_comparison_type, null);
-            assert.strictEqual(config.deepnote_big_number_comparison_title, null);
-            assert.strictEqual(config.deepnote_big_number_comparison_value, null);
-            assert.strictEqual(config.deepnote_big_number_comparison_format, null);
-            assert.strictEqual(config.deepnote_big_number_comparison_enabled, null);
+            assert.deepStrictEqual(config, {
+                deepnote_big_number_title: null,
+                deepnote_big_number_value: null,
+                deepnote_big_number_format: null,
+                deepnote_big_number_comparison_type: null,
+                deepnote_big_number_comparison_title: null,
+                deepnote_big_number_comparison_value: null,
+                deepnote_big_number_comparison_format: null,
+                deepnote_big_number_comparison_enabled: null
+            });
         });
     });
 
@@ -325,15 +337,17 @@ suite('ChartBigNumberBlockConverter', () => {
             converter.applyChangesToBlock(block, cell);
 
             assert.strictEqual(block.content, '');
-            assert.strictEqual(block.metadata?.deepnote_big_number_title, 'new title');
-            assert.strictEqual(block.metadata?.deepnote_big_number_value, 'new value');
-            assert.strictEqual(block.metadata?.deepnote_big_number_format, 'number');
-            assert.strictEqual(block.metadata?.deepnote_big_number_comparison_type, 'percentage-change');
-            assert.strictEqual(block.metadata?.deepnote_big_number_comparison_title, 'vs old');
-            assert.strictEqual(block.metadata?.deepnote_big_number_comparison_value, 'old value');
-            assert.strictEqual(block.metadata?.deepnote_big_number_comparison_format, '');
-            assert.strictEqual(block.metadata?.deepnote_big_number_comparison_enabled, true);
-            assert.strictEqual(block.metadata?.existing, 'value');
+            assert.deepStrictEqual(block.metadata, {
+                existing: 'value',
+                deepnote_big_number_title: 'new title',
+                deepnote_big_number_value: 'new value',
+                deepnote_big_number_format: 'number',
+                deepnote_big_number_comparison_type: 'percentage-change',
+                deepnote_big_number_comparison_title: 'vs old',
+                deepnote_big_number_comparison_value: 'old value',
+                deepnote_big_number_comparison_format: '',
+                deepnote_big_number_comparison_enabled: true
+            });
         });
 
         test('stores invalid JSON as raw content', () => {
@@ -423,12 +437,19 @@ suite('ChartBigNumberBlockConverter', () => {
 
             converter.applyChangesToBlock(block, cell);
 
-            assert.strictEqual(block.id, 'block-123');
-            assert.strictEqual(block.type, 'big-number');
-            assert.strictEqual(block.sortingKey, 'a0');
-            assert.strictEqual(block.executionCount, 5);
-            assert.deepStrictEqual(block.outputs, []);
-            assert.strictEqual(block.metadata?.custom, 'value');
+            assert.deepStrictEqual(block, {
+                blockGroup: 'test-group',
+                content: '',
+                executionCount: 5,
+                id: 'block-123',
+                metadata: {
+                    custom: 'value',
+                    deepnote_big_number_title: 'new title'
+                },
+                outputs: [],
+                sortingKey: 'a0',
+                type: 'big-number'
+            });
         });
     });
 });

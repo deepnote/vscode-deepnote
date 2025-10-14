@@ -47,13 +47,19 @@ export class DeepnoteDataConverter {
                 type: block.type,
                 sortingKey: block.sortingKey,
                 ...(blockWithOptionalFields.blockGroup && { blockGroup: blockWithOptionalFields.blockGroup }),
-                ...(block.executionCount !== undefined && { executionCount: block.executionCount })
+                ...(block.executionCount !== undefined && { executionCount: block.executionCount }),
+                // Track whether this block had outputs for round-trip fidelity
+                __hadOutputs: block.outputs !== undefined
             };
 
             // The pocket is a place to tuck away Deepnote-specific fields for later.
             addPocketToCellMetadata(cell);
 
-            cell.outputs = this.transformOutputsForVsCode(block.outputs || [], index, block.id, block.metadata);
+            // Only set outputs if the block has them (including empty arrays)
+            // This preserves round-trip fidelity
+            if (block.outputs !== undefined) {
+                cell.outputs = this.transformOutputsForVsCode(block.outputs, index, block.id, block.metadata);
+            }
 
             return cell;
         });
@@ -79,8 +85,15 @@ export class DeepnoteDataConverter {
 
             // Convert VS Code outputs to Deepnote format
             // Outputs are managed by VS Code natively, not stored in the pocket
-            if (!block.outputs && cell.outputs && cell.outputs.length > 0) {
+            // Only set outputs if the block originally had them (tracked by __hadOutputs flag)
+            const hadOutputs = cell.metadata?.__hadOutputs;
+            if (hadOutputs && !block.outputs && cell.outputs) {
                 block.outputs = this.transformOutputsForDeepnote(cell.outputs);
+            }
+
+            // Clean up internal tracking flags from metadata
+            if (block.metadata && '__hadOutputs' in block.metadata) {
+                delete block.metadata.__hadOutputs;
             }
 
             return block;

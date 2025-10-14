@@ -61,15 +61,16 @@ export class NotebookCellExecutionWrapper implements NotebookCellExecution {
         if (!this.started) {
             this._started = true;
 
-            // Clear outputs immediately on first start if configured to do so
+            // Must call start() before clearOutput() per VS Code API requirements
+            this._impl.start(startTime);
+            this._startTime = startTime;
+
+            // Clear outputs immediately after start if configured to do so
             // This ensures old outputs are removed before any new outputs arrive from the kernel
             if (this.clearOutputOnStartWithTime) {
                 logger.trace(`Start cell ${this.cell.index} execution (clear output)`);
                 this._impl.clearOutput().then(noop, noop);
             }
-
-            this._impl.start(startTime);
-            this._startTime = startTime;
 
             if (startTime) {
                 logger.trace(`Start cell ${this.cell.index} execution @ ${startTime}`);
@@ -125,27 +126,31 @@ export class NotebookCellExecutionWrapper implements NotebookCellExecution {
 export class CellExecutionCreator {
     private static _map = new WeakMap<NotebookCell, NotebookCellExecutionWrapper>();
     static getOrCreate(cell: NotebookCell, controller: IKernelController, clearOutputOnStartWithTime = false) {
-        let cellExecution: NotebookCellExecutionWrapper | undefined;
-        cellExecution = this.get(cell);
-        if (!cellExecution) {
-            cellExecution = CellExecutionCreator.create(cell, controller, clearOutputOnStartWithTime);
-        } else {
-            // Cell execution may already exist, but its controller may be different
-            if (cellExecution.controllerId !== controller.id) {
-                // Stop the old execution so we don't have more than one for a cell at a time.
-                const oldExecution = cellExecution;
-                oldExecution.end(undefined);
+        const existingExecution = this.get(cell);
 
-                // Create a new one with the new controller
-                cellExecution = CellExecutionCreator.create(cell, controller, clearOutputOnStartWithTime);
+        if (existingExecution) {
+            // Always end and replace existing executions.
+            // VS Code's NotebookCellExecution API doesn't support reuse - once end() is called,
+            // you cannot call start(), clearOutput(), or any other methods on it again.
+            // This handles both controller changes and re-executions.
+            const wasStarted = existingExecution.started;
+            existingExecution.end(undefined);
+            // Note: end() callback automatically removes it from the map
 
-                // Start the new one off now if the old one was already started
-                if (oldExecution.started) {
-                    cellExecution.start(new Date().getTime());
-                }
+            // Create a fresh execution wrapper
+            const cellExecution = CellExecutionCreator.create(cell, controller, clearOutputOnStartWithTime);
+
+            // If the old execution was started, start the new one immediately
+            // This handles the case where we're switching controllers mid-execution
+            if (wasStarted) {
+                cellExecution.start(new Date().getTime());
             }
+
+            return cellExecution;
         }
-        return cellExecution;
+
+        // No existing execution, create a fresh one
+        return CellExecutionCreator.create(cell, controller, clearOutputOnStartWithTime);
     }
     static get(cell: NotebookCell) {
         return CellExecutionCreator._map.get(cell);

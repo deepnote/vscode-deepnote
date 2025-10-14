@@ -18,12 +18,14 @@
 
         // Strictness
         "strict": true,
+        "forceConsistentCasingInFileNames": true,
         "noImplicitAny": true,
         "noImplicitThis": true,
         "noUnusedLocals": true,
         "noUnusedParameters": true,
         "noImplicitOverride": true,
         "noFallthroughCasesInSwitch": true,
+        "skipLibCheck": true,
         "useUnknownInCatchVariables": false,
         "strictPropertyInitialization": false
     }

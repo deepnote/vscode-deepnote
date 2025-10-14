@@ -381,10 +381,4 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         const hashStr = Math.abs(hash).toString(16);
         return `venv_${hashStr}`.substring(0, 16);
     }
-
-    private getDisplayName(deepnoteFileUri: Uri): string {
-        // Get a friendly display name from the file path
-        const parts = deepnoteFileUri.fsPath.split('/');
-        return parts[parts.length - 1] || 'notebook';
-    }
 }

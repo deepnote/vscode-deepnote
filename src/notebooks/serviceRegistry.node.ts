@@ -58,6 +58,8 @@ import { DeepnoteInitNotebookRunner, IDeepnoteInitNotebookRunner } from './deepn
 import { DeepnoteRequirementsHelper, IDeepnoteRequirementsHelper } from './deepnote/deepnoteRequirementsHelper.node';
 import { DeepnoteConfigurationManager } from '../kernels/deepnote/configurations/deepnoteConfigurationManager';
 import { DeepnoteConfigurationStorage } from '../kernels/deepnote/configurations/deepnoteConfigurationStorage';
+import { DeepnoteConfigurationsView } from '../kernels/deepnote/configurations/deepnoteConfigurationsView';
+import { DeepnoteConfigurationsActivationService } from '../kernels/deepnote/configurations/deepnoteConfigurationsActivationService';
 
 export function registerTypes(serviceManager: IServiceManager, isDevMode: boolean) {
     registerControllerTypes(serviceManager, isDevMode);
@@ -153,6 +155,13 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
         DeepnoteConfigurationManager
     );
     serviceManager.addBinding(IDeepnoteConfigurationManager, IExtensionSyncActivationService);
+
+    // Deepnote configuration view
+    serviceManager.addSingleton<DeepnoteConfigurationsView>(DeepnoteConfigurationsView, DeepnoteConfigurationsView);
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        DeepnoteConfigurationsActivationService
+    );
 
     // File export/import
     serviceManager.addSingleton<IFileConverter>(IFileConverter, FileConverter);

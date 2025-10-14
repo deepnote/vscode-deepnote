@@ -42,7 +42,7 @@ export class DeepnoteConfigurationManager implements IExtensionSyncActivationSer
     /**
      * Initialize the manager by loading configurations from storage
      */
-    private async initialize(): Promise<void> {
+    public async initialize(): Promise<void> {
         try {
             const configs = await this.storage.loadConfigurations();
             this.configurations.clear();

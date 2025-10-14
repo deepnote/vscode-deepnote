@@ -93,6 +93,9 @@ jobs:
     name: Build & Test
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -129,7 +132,7 @@ jobs:
         if: '!cancelled()'
         uses: codecov/test-results-action@v1
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
+          use_oidc: true
           files: test-report.xml
           fail_ci_if_error: true
 

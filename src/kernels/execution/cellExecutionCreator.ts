@@ -60,16 +60,18 @@ export class NotebookCellExecutionWrapper implements NotebookCellExecution {
         // Allow this to be called more than once (so we can switch out a kernel during running a cell)
         if (!this.started) {
             this._started = true;
+
+            // Clear outputs immediately on first start if configured to do so
+            // This ensures old outputs are removed before any new outputs arrive from the kernel
+            if (this.clearOutputOnStartWithTime) {
+                logger.trace(`Start cell ${this.cell.index} execution (clear output)`);
+                this._impl.clearOutput().then(noop, noop);
+            }
+
             this._impl.start(startTime);
             this._startTime = startTime;
-            // We clear the output as soon as we start,
-            // We generally start with a time, when we receive a response from the kernel,
-            // indicating the fact that the kernel has started processing the output.
-            // That's when we clear the output. (ideally it should be cleared as soon as its queued, but thats an upstream core issue).
-            if (this.clearOutputOnStartWithTime) {
-                logger.trace(`Start cell ${this.cell.index} execution @ ${startTime} (clear output)`);
-                this._impl.clearOutput().then(noop, noop);
-            } else {
+
+            if (startTime) {
                 logger.trace(`Start cell ${this.cell.index} execution @ ${startTime}`);
             }
         }

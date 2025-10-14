@@ -1,9 +1,7 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-
 import { assert } from 'chai';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { CancellationToken, NotebookCell, NotebookCellExecution } from 'vscode';
+
 import { IKernelController } from '../types';
 import { CellExecutionCreator, NotebookCellExecutionWrapper } from './cellExecutionCreator';
 
@@ -56,11 +54,7 @@ suite('NotebookCellExecutionWrapper', () => {
         wrapper.start();
 
         // Verify start was called before clearOutput
-        assert.deepStrictEqual(
-            callOrder,
-            ['start', 'clearOutput'],
-            'start should be called before clearOutput'
-        );
+        assert.deepStrictEqual(callOrder, ['start', 'clearOutput'], 'start should be called before clearOutput');
     });
 
     test('When clearOutputOnStartWithTime is false, clearOutput is not called on start', () => {
@@ -151,12 +145,7 @@ suite('NotebookCellExecutionWrapper', () => {
     });
 
     test('started flag is false initially and true after start', () => {
-        const wrapper = new NotebookCellExecutionWrapper(
-            instance(mockImpl),
-            'test-controller',
-            endCallback,
-            false
-        );
+        const wrapper = new NotebookCellExecutionWrapper(instance(mockImpl), 'test-controller', endCallback, false);
 
         assert.isFalse(wrapper.started, 'started should be false before start() is called');
 
@@ -197,7 +186,11 @@ suite('NotebookCellExecutionWrapper', () => {
         wrapper.clearOutput();
 
         // Should have called clearOutput twice now (once from start, once from manual call)
-        assert.strictEqual(clearOutputCallCount, 2, 'clearOutput should be called again when manually invoked on reused wrapper');
+        assert.strictEqual(
+            clearOutputCallCount,
+            2,
+            'clearOutput should be called again when manually invoked on reused wrapper'
+        );
     });
 });
 
@@ -251,9 +244,7 @@ suite('CellExecutionCreator', () => {
         // Create mock controller
         const mockController = mock<IKernelController>();
         when(mockController.id).thenReturn('test-controller');
-        when(mockController.createNotebookCellExecution(anything()))
-            .thenReturn(spyImpl1)
-            .thenReturn(spyImpl2);
+        when(mockController.createNotebookCellExecution(anything())).thenReturn(spyImpl1).thenReturn(spyImpl2);
 
         // First execution: Create a new execution wrapper
         const execution1 = CellExecutionCreator.getOrCreate(instance(mockCell), instance(mockController), true);
@@ -277,11 +268,7 @@ suite('CellExecutionCreator', () => {
         assert.isTrue(execution2.started, 'New execution should be started automatically');
 
         // clearOutput should have been called again during the new execution's start
-        assert.strictEqual(
-            clearOutputCallCount,
-            2,
-            'clearOutput should be called again when new execution starts'
-        );
+        assert.strictEqual(clearOutputCallCount, 2, 'clearOutput should be called again when new execution starts');
 
         // Clean up - end the execution to remove it from the map
         execution2.end(true);

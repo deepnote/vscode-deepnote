@@ -1,9 +1,9 @@
 module.exports = {
     singleQuote: true,
     printWidth: 120,
-    tabWidth: 4,
+    tabWidth: 2,
     endOfLine: 'auto',
-    trailingComma: 'none',
+    trailingComma: 'es5',
     overrides: [
         {
             files: ['*.yml', '*.yaml'],
@@ -15,12 +15,6 @@ module.exports = {
             files: ['*.md'],
             options: {
                 tabWidth: 2
-            }
-        },
-        {
-            files: ['**/datascience/serviceRegistry.ts'],
-            options: {
-                printWidth: 240
             }
         }
     ]

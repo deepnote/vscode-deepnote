@@ -2055,6 +2055,12 @@
         "build:prerelease": "cross-env IS_PRE_RELEASE_VERSION_OF_JUPYTER_EXTENSION=true npm run build",
         "build:stable": "cross-env IS_PRE_RELEASE_VERSION_OF_JUPYTER_EXTENSION=false npm run build",
         "build": "concurrently npm:compile-release npm:updatePackageJsonForBundle",
+        "biome:check": "biome check .",
+        "biome:check:fix": "biome check --write .",
+        "lintAndFormat": "biome check . && npm run prettier:check",
+        "lintAndFormat:fix": "biome check --write . && npm run prettier",
+        "prettier": "prettier --write \"**/*.{md,yml,yaml}\"",
+        "prettier:check": "prettier --check \"**/*.{md,yml,yaml}\"",
         "check-licenses": "npx license-checker-rseidelsohn --onlyAllow 'MIT;Apache-2.0;Apache v2;ISC;BSD;BSD-2-Clause;BSD-3-Clause;0BSD;Python-2.0;CC0-1.0;CC-BY-3.0;CC-BY-4.0;Unlicense;BlueOak-1.0.0;MPL-2.0' --excludePrivatePackages --excludePackages 'bootstrap-less@3.3.8;chai-as-promised@7.1.1;esbuild-plugin-less@1.3.19;eslint-plugin-local-rules@1.0.0;truncate-utf8-bytes@1.0.2;utf8-byte-length@1.0.4'",
         "checkDependencies": "gulp checkDependencies",
         "clean": "gulp clean",
@@ -2096,6 +2102,17 @@
         "updatePackageJsonForBundle": "gulp updatePackageJsonForBundle",
         "watch-all": "concurrently \"tsc --watch -p ./\" \"npx tsx build/esbuild/build.ts --watch-all\"",
         "watch": "concurrently \"tsc --watch -p ./\" \"npx tsx build/esbuild/build.ts --watch\""
+    },
+    "lint-staged": {
+        "**/*.{ts,tsx,html,json,jsonc}": [
+            "biome check --write"
+        ],
+        "**/*.{md,yml,yaml}": [
+            "prettier --write"
+        ],
+        ".gitignore": [
+            "sort -o .gitignore .gitignore"
+        ]
     },
     "dependencies": {
         "@c4312/evt": "^0.1.1",
@@ -2167,6 +2184,7 @@
         "@actions/github": "^6.0.1",
         "@actions/glob": "^0.5.0",
         "@aminya/node-gyp-build": "^4.8.1-aminya.1",
+        "@biomejs/biome": "2.2.5",
         "@istanbuljs/nyc-config-typescript": "^1.0.2",
         "@sinonjs/fake-timers": "^6.0.1",
         "@types/ansi-regex": "^4.0.0",
@@ -2258,12 +2276,13 @@
         "gulp": "^5.0.0",
         "gulp-filter": "^7.0.0",
         "gulp-rename": "^2.0.0",
-        "husky": "^8.0.3",
+        "husky": "9.1.7",
         "json2csv": "^5.0.7",
         "jsonschema": "^1.4.1",
         "keyv": "^4.1.0",
         "less": "^4.1.3",
         "less-plugin-inline-urls": "^1.2.0",
+        "lint-staged": "16.2.3",
         "lolex": "^6.0.0",
         "lru-cache": "^10.0.0",
         "mocha": "^11.0.1",
@@ -2274,7 +2293,7 @@
         "node-html-parser": "^6.1.13",
         "node-stdlib-browser": "^1.3.1",
         "nyc": "^15.1.0",
-        "prettier": "^3.0.0",
+        "prettier": "3.6.2",
         "relative": "^3.0.2",
         "rimraf": "^5.0.1",
         "screenshot-desktop": "^1.15.2",

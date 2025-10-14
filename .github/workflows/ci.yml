@@ -41,11 +41,8 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run ESLint
-        run: npm run lint
-
-      - name: Check Prettier formatting
-        run: npm run format
+      - name: Run linting and formatting checks
+        run: npm run lintAndFormat
 
   typecheck:
     name: TypeCheck

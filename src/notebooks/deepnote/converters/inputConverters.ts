@@ -29,7 +29,7 @@ export abstract class BaseInputBlockConverter<T extends z.ZodObject> implements 
 
         if (config.success !== true) {
             block.metadata = {
-                ...block.metadata,
+                ...(block.metadata ?? {}),
                 [DEEPNOTE_VSCODE_RAW_CONTENT_KEY]: cell.value
             };
             return;

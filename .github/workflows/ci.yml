@@ -124,7 +124,7 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
+          use_oidc: true
           files: coverage/lcov.info
           fail_ci_if_error: true
 
@@ -133,7 +133,7 @@ jobs:
         uses: codecov/test-results-action@v1
         with:
           use_oidc: true
-          files: test-report.xml
+          files: test-results.xml
           fail_ci_if_error: true
 
       - name: Check dependencies

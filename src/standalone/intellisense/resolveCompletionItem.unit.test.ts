@@ -546,7 +546,7 @@ suite('Jupyter Kernel Completion (requestInspect)', () => {
                     foo: 'bar'
                 }
             };
-            return [output1, finalOutput].map(cellOutputToVSCCellOutput);
+            return [output1, finalOutput].map((output) => cellOutputToVSCCellOutput(output));
         }
         test('Resolve the documentation', async () => {
             completionItem = new CompletionItem('One');

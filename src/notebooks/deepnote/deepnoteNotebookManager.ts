@@ -12,6 +12,7 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
     private readonly currentNotebookId = new Map<string, string>();
     private readonly originalProjects = new Map<string, DeepnoteProject>();
     private readonly selectedNotebookByProject = new Map<string, string>();
+    private readonly projectsWithInitNotebookRun = new Set<string>();
 
     /**
      * Gets the currently selected notebook ID for a project.
@@ -72,5 +73,22 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
      */
     updateCurrentNotebookId(projectId: string, notebookId: string): void {
         this.currentNotebookId.set(projectId, notebookId);
+    }
+
+    /**
+     * Checks if the init notebook has already been run for a project.
+     * @param projectId Project identifier
+     * @returns True if init notebook has been run, false otherwise
+     */
+    hasInitNotebookBeenRun(projectId: string): boolean {
+        return this.projectsWithInitNotebookRun.has(projectId);
+    }
+
+    /**
+     * Marks the init notebook as having been run for a project.
+     * @param projectId Project identifier
+     */
+    markInitNotebookAsRun(projectId: string): void {
+        this.projectsWithInitNotebookRun.add(projectId);
     }
 }

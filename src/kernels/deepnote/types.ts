@@ -85,6 +85,13 @@ export interface IDeepnoteToolkitInstaller {
      * @param deepnoteFileUri The URI of the .deepnote file
      */
     getVenvInterpreter(deepnoteFileUri: vscode.Uri): Promise<PythonEnvironment | undefined>;
+
+    /**
+     * Gets the hash for the venv directory/kernel spec name based on file path.
+     * @param deepnoteFileUri The URI of the .deepnote file
+     * @returns The hash string used for venv directory and kernel spec naming
+     */
+    getVenvHash(deepnoteFileUri: vscode.Uri): string;
 }
 
 export const IDeepnoteServerStarter = Symbol('IDeepnoteServerStarter');
@@ -147,7 +154,9 @@ export interface IDeepnoteKernelAutoSelector {
     ensureKernelSelected(notebook: vscode.NotebookDocument, token?: vscode.CancellationToken): Promise<void>;
 }
 
-export const DEEPNOTE_TOOLKIT_VERSION = '0.2.30.post23';
-export const DEEPNOTE_TOOLKIT_WHEEL_URL = `https://deepnote-staging-runtime-artifactory.s3.amazonaws.com/deepnote-toolkit-packages/${DEEPNOTE_TOOLKIT_VERSION}/deepnote_toolkit-${DEEPNOTE_TOOLKIT_VERSION}-py3-none-any.whl`;
+export const DEEPNOTE_TOOLKIT_VERSION = '0.2.30.dev29+890433e';
+export const DEEPNOTE_TOOLKIT_WHEEL_URL = `https://deepnote-staging-runtime-artifactory.s3.amazonaws.com/deepnote-toolkit-packages/${encodeURIComponent(
+    DEEPNOTE_TOOLKIT_VERSION
+)}/deepnote_toolkit-${encodeURIComponent(DEEPNOTE_TOOLKIT_VERSION)}-py3-none-any.whl`;
 export const DEEPNOTE_DEFAULT_PORT = 8888;
 export const DEEPNOTE_NOTEBOOK_TYPE = 'deepnote';

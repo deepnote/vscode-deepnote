@@ -25,7 +25,9 @@ suite('NotebookCellExecutionWrapper', () => {
         when(mockImpl.clearOutput(anything())).thenReturn(Promise.resolve());
         when(mockController.id).thenReturn('test-controller');
 
-        endCallback = () => {};
+        endCallback = () => {
+            // noop
+        };
     });
 
     test('When clearOutputOnStartWithTime is true, start is called before clearOutput', () => {
@@ -42,7 +44,9 @@ suite('NotebookCellExecutionWrapper', () => {
             start: () => {
                 callOrder.push('start');
             },
-            end: () => {},
+            end: () => {
+                // noop
+            },
             replaceOutput: () => Promise.resolve(),
             appendOutput: () => Promise.resolve(),
             replaceOutputItems: () => Promise.resolve(),
@@ -88,7 +92,9 @@ suite('NotebookCellExecutionWrapper', () => {
                 callOrder.push('start');
                 capturedStartTime = startTime;
             },
-            end: () => {},
+            end: () => {
+                // noop
+            },
             replaceOutput: () => Promise.resolve(),
             appendOutput: () => Promise.resolve(),
             replaceOutputItems: () => Promise.resolve(),
@@ -125,7 +131,9 @@ suite('NotebookCellExecutionWrapper', () => {
             start: () => {
                 startCallCount++;
             },
-            end: () => {},
+            end: () => {
+                // noop
+            },
             replaceOutput: () => Promise.resolve(),
             appendOutput: () => Promise.resolve(),
             replaceOutputItems: () => Promise.resolve(),
@@ -165,8 +173,12 @@ suite('NotebookCellExecutionWrapper', () => {
                 clearOutputCallCount++;
                 return Promise.resolve();
             },
-            start: () => {},
-            end: () => {},
+            start: () => {
+                // noop
+            },
+            end: () => {
+                // noop
+            },
             replaceOutput: () => Promise.resolve(),
             appendOutput: () => Promise.resolve(),
             replaceOutputItems: () => Promise.resolve(),
@@ -183,7 +195,7 @@ suite('NotebookCellExecutionWrapper', () => {
 
         // Now manually call clearOutput to simulate re-execution
         // This simulates what CellExecutionCreator.getOrCreate() does when reusing a started wrapper
-        wrapper.clearOutput();
+        void wrapper.clearOutput();
 
         // Should have called clearOutput twice now (once from start, once from manual call)
         assert.strictEqual(
@@ -213,7 +225,9 @@ suite('CellExecutionCreator', () => {
                 clearOutputCallCount++;
                 return Promise.resolve();
             },
-            start: () => {},
+            start: () => {
+                // noop
+            },
             end: () => {
                 endCallCount++;
             },
@@ -231,7 +245,9 @@ suite('CellExecutionCreator', () => {
                 clearOutputCallCount++;
                 return Promise.resolve();
             },
-            start: () => {},
+            start: () => {
+                // noop
+            },
             end: () => {
                 endCallCount++;
             },

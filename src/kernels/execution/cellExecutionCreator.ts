@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import {
+import type {
     CancellationToken,
     CellExecutionError,
     NotebookCell,
@@ -69,7 +69,10 @@ export class NotebookCellExecutionWrapper implements NotebookCellExecution {
             // This ensures old outputs are removed before any new outputs arrive from the kernel
             if (this.clearOutputOnStartWithTime) {
                 logger.trace(`Start cell ${this.cell.index} execution (clear output)`);
-                this._impl.clearOutput().then(noop, noop);
+
+                this._impl
+                    .clearOutput()
+                    .then(noop, (err) => logger.warn(`Failed to clear output for cell ${this.cell.index}`, err));
             }
 
             if (startTime) {

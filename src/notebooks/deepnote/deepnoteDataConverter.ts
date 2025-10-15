@@ -87,7 +87,9 @@ export class DeepnoteDataConverter {
             // Outputs are managed by VS Code natively, not stored in the pocket
             // Preserve outputs when they exist (including newly produced outputs)
             // Only set if not already set to avoid overwriting converter-managed outputs
-            if (cell.outputs && !block.outputs) {
+            // Only set if the cell actually has outputs (non-empty array) or if the block originally had outputs
+            const hadOutputs = cell.metadata?.__hadOutputs;
+            if (cell.outputs && !block.outputs && (cell.outputs.length > 0 || hadOutputs)) {
                 block.outputs = this.transformOutputsForDeepnote(cell.outputs);
             }
 

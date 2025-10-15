@@ -280,6 +280,48 @@ export interface IDeepnoteConfigurationManager {
     dispose(): void;
 }
 
+export const IDeepnoteConfigurationPicker = Symbol('IDeepnoteConfigurationPicker');
+export interface IDeepnoteConfigurationPicker {
+    /**
+     * Show a quick pick to select a kernel configuration for a notebook
+     * @param notebookUri The notebook URI (for context in messages)
+     * @returns Selected configuration, or undefined if cancelled
+     */
+    pickConfiguration(
+        notebookUri: vscode.Uri
+    ): Promise<import('./configurations/deepnoteKernelConfiguration').DeepnoteKernelConfiguration | undefined>;
+}
+
+export const IDeepnoteNotebookConfigurationMapper = Symbol('IDeepnoteNotebookConfigurationMapper');
+export interface IDeepnoteNotebookConfigurationMapper {
+    /**
+     * Get the configuration ID selected for a notebook
+     * @param notebookUri The notebook URI (without query/fragment)
+     * @returns Configuration ID, or undefined if not set
+     */
+    getConfigurationForNotebook(notebookUri: vscode.Uri): string | undefined;
+
+    /**
+     * Set the configuration for a notebook
+     * @param notebookUri The notebook URI (without query/fragment)
+     * @param configurationId The configuration ID
+     */
+    setConfigurationForNotebook(notebookUri: vscode.Uri, configurationId: string): Promise<void>;
+
+    /**
+     * Remove the configuration mapping for a notebook
+     * @param notebookUri The notebook URI (without query/fragment)
+     */
+    removeConfigurationForNotebook(notebookUri: vscode.Uri): Promise<void>;
+
+    /**
+     * Get all notebooks using a specific configuration
+     * @param configurationId The configuration ID
+     * @returns Array of notebook URIs
+     */
+    getNotebooksUsingConfiguration(configurationId: string): vscode.Uri[];
+}
+
 export const DEEPNOTE_TOOLKIT_VERSION = '0.2.30.post30';
 export const DEEPNOTE_TOOLKIT_WHEEL_URL = `https://deepnote-staging-runtime-artifactory.s3.amazonaws.com/deepnote-toolkit-packages/${DEEPNOTE_TOOLKIT_VERSION}/deepnote_toolkit-${DEEPNOTE_TOOLKIT_VERSION}-py3-none-any.whl`;
 export const DEEPNOTE_DEFAULT_PORT = 8888;

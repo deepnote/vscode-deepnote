@@ -48,7 +48,9 @@ import {
     IDeepnoteServerStarter,
     IDeepnoteKernelAutoSelector,
     IDeepnoteServerProvider,
-    IDeepnoteConfigurationManager
+    IDeepnoteConfigurationManager,
+    IDeepnoteConfigurationPicker,
+    IDeepnoteNotebookConfigurationMapper
 } from '../kernels/deepnote/types';
 import { DeepnoteToolkitInstaller } from '../kernels/deepnote/deepnoteToolkitInstaller.node';
 import { DeepnoteServerStarter } from '../kernels/deepnote/deepnoteServerStarter.node';
@@ -60,6 +62,8 @@ import { DeepnoteConfigurationManager } from '../kernels/deepnote/configurations
 import { DeepnoteConfigurationStorage } from '../kernels/deepnote/configurations/deepnoteConfigurationStorage';
 import { DeepnoteConfigurationsView } from '../kernels/deepnote/configurations/deepnoteConfigurationsView';
 import { DeepnoteConfigurationsActivationService } from '../kernels/deepnote/configurations/deepnoteConfigurationsActivationService';
+import { DeepnoteConfigurationPicker } from '../kernels/deepnote/configurations/deepnoteConfigurationPicker';
+import { DeepnoteNotebookConfigurationMapper } from '../kernels/deepnote/configurations/deepnoteNotebookConfigurationMapper';
 
 export function registerTypes(serviceManager: IServiceManager, isDevMode: boolean) {
     registerControllerTypes(serviceManager, isDevMode);
@@ -161,6 +165,16 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
         DeepnoteConfigurationsActivationService
+    );
+
+    // Deepnote configuration selection
+    serviceManager.addSingleton<IDeepnoteConfigurationPicker>(
+        IDeepnoteConfigurationPicker,
+        DeepnoteConfigurationPicker
+    );
+    serviceManager.addSingleton<IDeepnoteNotebookConfigurationMapper>(
+        IDeepnoteNotebookConfigurationMapper,
+        DeepnoteNotebookConfigurationMapper
     );
 
     // File export/import

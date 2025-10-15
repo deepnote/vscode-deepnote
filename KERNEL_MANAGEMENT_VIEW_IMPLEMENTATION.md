@@ -249,21 +249,52 @@ stopServer(configId: string): Promise<void>
 isServerRunning(configId: string): boolean
 ```
 
-#### 11. Updated Kernel Auto-Selector (`deepnoteKernelAutoSelector.ts` - refactored)
+#### 11. Configuration Picker (`deepnoteConfigurationPicker.ts`)
+
+**Purpose**: Shows UI for selecting kernel configuration for a notebook
+
+**Key Methods**:
+- `pickConfiguration(notebookUri)`: Shows quick pick with available configurations
+
+**Features**:
+- Lists all configurations with status indicators
+- Shows Python path and packages
+- Option to create new configuration
+- Cancellable by user
+
+#### 12. Notebook Configuration Mapper (`deepnoteNotebookConfigurationMapper.ts`)
+
+**Purpose**: Tracks which configuration is selected for each notebook
+
+**Key Methods**:
+- `getConfigurationForNotebook(uri)`: Get selected configuration ID
+- `setConfigurationForNotebook(uri, configId)`: Store selection
+- `removeConfigurationForNotebook(uri)`: Clear selection
+- `getNotebooksUsingConfiguration(configId)`: Find notebooks using a config
+
+**Storage**:
+- Uses `context.workspaceState` for persistence
+- Stored per workspace, cleared when workspace closes
+- Key: `deepnote.notebookConfigurationMappings`
+
+#### 13. Updated Kernel Auto-Selector (`deepnoteKernelAutoSelector.ts` - refactored)
 
 **Changes**:
-- On notebook open, show configuration picker (instead of auto-creating)
-- Remember selected configuration per notebook (workspace state)
-- Option to create new configuration from picker
-- Optional: setting to enable old auto-select behavior
+- On notebook open, check for selected configuration first
+- If no selection, show configuration picker
+- Remember selected configuration per notebook (via mapper)
+- Use configuration's venv and server instead of auto-creating
+- Fallback to old behavior if needed (for backward compatibility)
 
 **New Flow**:
 ```
 .deepnote file opens
   ↓
-Check workspace state for selected configuration
+Check workspace state for selected configuration (via mapper)
+  ↓ (if found)
+Use existing configuration's server
   ↓ (if not found)
-Show Quick Pick:
+Show Configuration Picker (via picker service):
   ├─ Python 3.11 (Data Science) [Running]
   ├─ Python 3.10 (Testing) [Stopped]
   ├─ [+] Create new configuration
@@ -271,11 +302,15 @@ Show Quick Pick:
   ↓
 User selects configuration
   ↓
+Save selection (via mapper)
+  ↓
 If stopped → Start server automatically
   ↓
-Select kernel for notebook
+Use configuration's venv Python interpreter
   ↓
-Save selection to workspace state
+Create connection to configuration's Jupyter server
+  ↓
+Register controller and select for notebook
 ```
 
 ## File Structure
@@ -283,23 +318,30 @@ Save selection to workspace state
 ```
 src/kernels/deepnote/
 ├── configurations/
-│   ├── deepnoteKernelConfiguration.ts          (model)
-│   ├── deepnoteConfigurationManager.ts         (business logic)
-│   ├── deepnoteConfigurationStorage.ts         (persistence)
-│   ├── deepnoteConfigurationsView.ts           (view controller)
-│   ├── deepnoteConfigurationTreeDataProvider.ts (tree data)
-│   ├── deepnoteConfigurationTreeItem.ts        (tree items)
-│   ├── deepnoteConfigurationDetailProvider.ts  (detail webview)
-│   └── deepnoteConfigurationsActivationService.ts (activation)
-├── deepnoteToolkitInstaller.node.ts            (refactored)
-├── deepnoteServerStarter.node.ts               (refactored)
-├── deepnoteServerProvider.node.ts              (updated)
-└── types.ts                                     (updated)
+│   ├── deepnoteKernelConfiguration.ts                (model) ✅
+│   ├── deepnoteConfigurationManager.ts               (business logic) ✅
+│   ├── deepnoteConfigurationStorage.ts               (persistence) ✅
+│   ├── deepnoteConfigurationsView.ts                 (view controller) ✅
+│   ├── deepnoteConfigurationTreeDataProvider.ts      (tree data) ✅
+│   ├── deepnoteConfigurationTreeItem.ts              (tree items) ✅
+│   ├── deepnoteConfigurationPicker.ts                (picker UI) ✅
+│   ├── deepnoteNotebookConfigurationMapper.ts        (notebook→config mapping) ✅
+│   ├── deepnoteConfigurationDetailProvider.ts        (detail webview) ⏸️ (Phase 6 - deferred)
+│   └── deepnoteConfigurationsActivationService.ts    (activation) ✅
+├── deepnoteToolkitInstaller.node.ts                  (refactored) ✅
+├── deepnoteServerStarter.node.ts                     (refactored) ✅
+├── deepnoteServerProvider.node.ts                    (updated) ✅
+└── types.ts                                           (updated) ✅
 
 src/notebooks/deepnote/
-├── deepnoteKernelAutoSelector.node.ts          (refactored)
+├── deepnoteKernelAutoSelector.node.ts                (needs refactoring) ⏳
 └── ... (rest unchanged)
 ```
+
+Legend:
+- ✅ Implemented
+- ⏳ In progress / needs work
+- ⏸️ Deferred to later phase
 
 ## package.json Changes
 
@@ -629,6 +671,81 @@ src/notebooks/deepnote/
 - Avoids dual code paths
 - Easier to maintain long-term
 - Better performance (no translation layer)
+
+## Implementation Status
+
+### Completed Phases
+
+**✅ Phase 1: Core Models & Storage**
+- All components implemented and tested
+- Configuration CRUD operations working
+- Global state persistence functional
+
+**✅ Phase 2: Refactor Existing Services**
+- Toolkit installer supports both configuration-based and file-based APIs
+- Server starter supports both configuration-based and file-based APIs
+- Server provider updated for configuration handles
+- Full backward compatibility maintained
+
+**✅ Phase 3: Tree View UI**
+- Tree data provider with full status display
+- Tree items with context-sensitive icons and menus
+- View with 8 commands (create, start, stop, restart, delete, editName, managePackages, refresh)
+- Activation service
+- 40 passing unit tests
+- Package.json fully updated with views, commands, and menus
+
+**✅ Phase 4: Server Control Commands**
+- Already implemented in Phase 3
+- Start/stop/restart with progress notifications
+- Real-time tree updates
+- Comprehensive error handling
+
+**✅ Phase 5: Package Management**
+- Already implemented in Phase 3
+- Input validation for package names
+- Progress notifications during installation
+- Configuration updates reflected in tree
+
+### In Progress
+
+**⏳ Phase 7: Notebook Integration** (Partial)
+- Configuration picker created ✅
+- Notebook configuration mapper created ✅
+- Services registered in DI container ✅
+- Kernel auto-selector integration **pending** ⏳
+
+### Deferred
+
+**⏸️ Phase 6: Detail View**
+- Moved to end of implementation
+- Will be implemented after E2E flow is working
+- Webview-based detail panel with live logs
+
+**⏸️ Phase 8: Migration & Polish**
+- Waiting for full E2E validation
+- Will include migration from old file-based venvs
+- UI polish and documentation
+
+### Next Steps
+
+1. **Complete Phase 7 Integration**: Modify `DeepnoteKernelAutoSelector.ensureKernelSelected()` to:
+   - Check mapper for existing configuration selection
+   - Show picker if no selection exists
+   - Use selected configuration's venv and server
+   - Save selection to mapper
+   - Maintain backward compatibility with old auto-create behavior
+
+2. **E2E Testing**: Validate complete flow:
+   - Create configuration via UI
+   - Start server via UI
+   - Open notebook, see picker
+   - Select configuration
+   - Execute cells successfully
+
+3. **Phase 6**: Implement detail view webview (optional enhancement)
+
+4. **Phase 8**: Polish, migration, and documentation
 
 ## Related Documentation
 

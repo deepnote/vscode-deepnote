@@ -1,8 +1,11 @@
-import React from 'react';
+import { clsx, type ClassValue } from 'clsx';
+import React, { ReactElement, ReactNode } from 'react';
 import { memo, useMemo, useState } from 'react';
+import { twMerge } from 'tailwind-merge';
 import type { RendererContext } from 'vscode-notebook-renderer';
 
 import '../react-common/codicon/codicon.css';
+import { generateUuid } from '../../../platform/common/uuid';
 
 export interface DataframeMetadata {
     table_state_spec?: string;
@@ -68,9 +71,7 @@ export const DataframeRenderer = memo(function DataframeRenderer({
     const [pageSize, setPageSize] = useState(tableState.pageSize || 10);
     const [pageIndex, setPageIndex] = useState(tableState.pageIndex || 0);
 
-    console.log(
-        `[DataframeRenderer] State: ${JSON.stringify(context.getState())}, tableState: ${JSON.stringify(tableState)}`
-    );
+    const selectId = useMemo(() => generateUuid(), []);
 
     const filteredColumns = data.columns.filter((column) => !column.name.startsWith('_deepnote_'));
     const numberOfRows = Math.min(data.row_count, data.preview_row_count);
@@ -112,6 +113,28 @@ export const DataframeRenderer = memo(function DataframeRenderer({
         context.postMessage?.(message);
     };
 
+    const handleCopyTable = () => {
+        console.log(`[DataframeRenderer] handleCopyTable called with cellId: ${cellId}`);
+
+        const message = {
+            cellId,
+            command: 'copyTable'
+        };
+
+        context.postMessage?.(message);
+    };
+
+    const handleExportTable = () => {
+        console.log(`[DataframeRenderer] handleExportTable called with cellId: ${cellId}`);
+
+        const message = {
+            cellId,
+            command: 'exportTable'
+        };
+
+        context.postMessage?.(message);
+    };
+
     return (
         <div className="w-full">
             <div className="w-full overflow-x-auto">
@@ -149,27 +172,20 @@ export const DataframeRenderer = memo(function DataframeRenderer({
                     <div>
                         {numberOfRows} rows, {numberOfColumns} columns
                     </div>
-                    <div className="dataframe-footer-controls">
-                        <select
-                            className="dataframe-page-size-select font-mono"
-                            id="page-size-select"
-                            value={pageSize}
-                            onChange={handlePageSizeChange}
-                        >
+                    <div>
+                        <select className="font-mono" id={selectId} value={pageSize} onChange={handlePageSizeChange}>
                             <option value={10}>10</option>
                             <option value={25}>25</option>
                             <option value={50}>50</option>
                             <option value={100}>100</option>
                         </select>
 
-                        <label htmlFor="page-size-select" className="dataframe-footer-label">
-                            / page
-                        </label>
+                        <label htmlFor={selectId}>/ page</label>
                     </div>
                 </div>
 
                 <div className="flex gap-[12px] items-center">
-                    <button
+                    <IconButton
                         aria-label="Previous page"
                         className={`
                             border border-[var(--vscode-panel-border)] bg-[var(--vscode-button-secondaryBackground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)]
@@ -184,11 +200,11 @@ export const DataframeRenderer = memo(function DataframeRenderer({
                         onClick={() => handlePageChange(pageIndex - 1)}
                     >
                         <div className="codicon codicon-chevron-left" style={{ fontSize: 12 }} />
-                    </button>
+                    </IconButton>
                     <span className="">
                         Page {pageIndex + 1} of {totalPages}
                     </span>
-                    <button
+                    <IconButton
                         aria-label="Next page"
                         className={`
                             border border-[var(--vscode-panel-border)] bg-[var(--vscode-button-secondaryBackground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)]
@@ -203,11 +219,53 @@ export const DataframeRenderer = memo(function DataframeRenderer({
                         onClick={() => handlePageChange(pageIndex + 1)}
                     >
                         <div className="codicon codicon-chevron-right" style={{ fontSize: 12 }} />
-                    </button>
+                    </IconButton>
                 </div>
 
-                <div>{/* Actions */}</div>
+                <div>
+                    <div className="flex items-center gap-[4px]">
+                        <IconButton aria-label="Copy table" title="Copy table" type="button" onClick={handleCopyTable}>
+                            <div className="codicon codicon-files" style={{ fontSize: 12 }} />
+                        </IconButton>
+
+                        <IconButton
+                            aria-label="Export table"
+                            title="Export table"
+                            type="button"
+                            onClick={handleExportTable}
+                        >
+                            <div className="codicon codicon-arrow-down" style={{ fontSize: 12 }} />
+                        </IconButton>
+                    </div>
+                </div>
             </div>
         </div>
     );
 });
+
+interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+    children: ReactNode;
+}
+
+function IconButton(props: IconButtonProps): ReactElement {
+    return (
+        <button
+            className={cn(
+                'border border-[var(--vscode-panel-border)] bg-[var(--vscode-button-secondaryBackground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)]',
+                'text-[var(--vscode-button-secondaryForeground)]',
+                'disabled:opacity-50 disabled:cursor-not-allowed',
+                'flex items-center justify-center',
+                'h-[20px] w-[20px]',
+                'cursor-pointer',
+                props.className || ''
+            )}
+            {...props}
+        >
+            {props.children}
+        </button>
+    );
+}
+
+function cn(...inputs: ClassValue[]) {
+    return twMerge(clsx(inputs));
+}

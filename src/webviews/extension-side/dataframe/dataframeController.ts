@@ -1,11 +1,13 @@
 import { injectable } from 'inversify';
 import {
     commands,
+    env,
     l10n,
     NotebookEdit,
     type NotebookEditor,
     type NotebookRendererMessaging,
     notebooks,
+    Uri,
     window,
     workspace,
     WorkspaceEdit
@@ -15,6 +17,7 @@ import type { IExtensionSyncActivationService } from '../../../platform/activati
 import type { IDisposable } from '../../../platform/common/types';
 import { dispose } from '../../../platform/common/utils/lifecycle';
 import { logger } from '../../../platform/logging';
+import { Output } from '../../../api';
 
 type SelectPageSizeCommand = {
     cellId?: string;
@@ -28,18 +31,29 @@ type GoToPageCommand = {
     page: number;
 };
 
-type CopyTableDataCommand = {
+type CopyTableCommand = {
     cellId?: string;
-    command: 'copyTableData';
-    data: string;
+    command: 'copyTable';
 };
 
-type ExportDataframeCommand = {
+type ExportTableCommand = {
     cellId?: string;
-    command: 'exportDataframe';
+    command: 'exportTable';
 };
 
-type DataframeCommand = SelectPageSizeCommand | GoToPageCommand | CopyTableDataCommand | ExportDataframeCommand;
+interface DataFrameObject {
+    column_count: number;
+    columns: {
+        dtype: string;
+        name: string;
+    }[];
+    preview_row_count: number;
+    row_count: number;
+    rows: Record<string, unknown>[];
+    type: string;
+}
+
+type DataframeCommand = SelectPageSizeCommand | GoToPageCommand | CopyTableCommand | ExportTableCommand;
 
 @injectable()
 export class DataframeController implements IExtensionSyncActivationService {
@@ -55,64 +69,215 @@ export class DataframeController implements IExtensionSyncActivationService {
         dispose(this.disposables);
     }
 
-    private async onDidReceiveMessage(
-        _comms: NotebookRendererMessaging,
-        { editor, message }: { editor: NotebookEditor; message: DataframeCommand }
-    ) {
-        logger.info('DataframeController received message', message);
+    private dataframeToCsv(dataframe: DataFrameObject): string {
+        console.log('Converting dataframe to CSV:', dataframe);
 
-        if (!message || typeof message !== 'object') {
-            return;
+        if (!dataframe || !dataframe.columns || !dataframe.rows) {
+            return '';
         }
 
-        if (message.command === 'selectPageSize') {
-            return this.handleSelectPageSize(editor, message);
-        }
+        const headers = dataframe.columns;
+        const rows = dataframe.rows;
+        const columnNames = headers
+            .map((header: { name: string }) => header.name)
+            .filter((name: string | undefined) => Boolean(name))
+            .filter((name: string) => !name.trim().toLowerCase().startsWith('_deepnote')) as string[];
 
-        if (message.command === 'goToPage') {
-            return this.handleGoToPage(editor, message);
-        }
+        const csvRows = rows.map((row: Record<string, unknown>) => columnNames.map((col) => row[col]).join(','));
 
-        if (message.command === 'copyTableData') {
-            // TODO: Implement dataframe export functionality
-            return;
-        }
-
-        if (message.command === 'exportDataframe') {
-            // TODO: Implement dataframe export functionality
-            return;
-        }
-
-        logger.warn(`DataframeController received unknown command:`, message);
+        return [columnNames.join(','), ...csvRows].join('\n');
     }
 
-    private async handleSelectPageSize(editor: NotebookEditor, message: SelectPageSizeCommand) {
-        if (!message.cellId) {
-            const errorMessage = l10n.t(
-                'Unable to update page size: No cell identifier provided. Please re-run the cell to update the output metadata.'
+    private async getDataframeFromDataframeOutput(outputs: readonly Output[]): Promise<DataFrameObject | undefined> {
+        if (outputs.length === 0) {
+            await this.showErrorToUser(l10n.t('No outputs found in the cell.'));
+            return;
+        }
+
+        const [firstOutput] = outputs;
+
+        const item = firstOutput.items.find(
+            (i: { data: unknown; mime: string }) => i.mime === 'application/vnd.deepnote.dataframe.v3+json'
+        );
+
+        if (!item) {
+            await this.showErrorToUser(
+                l10n.t('No dataframe output found in the cell. Please ensure the cell has been executed.')
             );
+            return;
+        }
 
-            logger.error(`[DataframeController] ${errorMessage}`);
+        const buffer = item.data as Uint8Array;
+        const json = new TextDecoder('utf-8').decode(buffer);
+        const dataframe = JSON.parse(json) as DataFrameObject;
 
-            await window.showErrorMessage(errorMessage);
+        return dataframe;
+    }
 
-            throw new Error(errorMessage);
+    private async handleCopyTable(editor: NotebookEditor, message: CopyTableCommand) {
+        if (!message.cellId) {
+            return this.showErrorToUser(
+                l10n.t(
+                    'Unable to copy table: No cell identifier provided. Please re-run the cell to update the output metadata.'
+                )
+            );
         }
 
         const cells = editor.notebook.getCells();
         const cell = cells.find((c) => c.metadata.id === message.cellId);
 
         if (!cell) {
-            const errorMessage = l10n.t(
-                'Unable to update page size: Could not find the cell with ID {0}. The cell may have been deleted.',
-                message.cellId ?? ''
+            return this.showErrorToUser(
+                l10n.t(
+                    'Unable to copy table: Could not find the cell with ID {0}. The cell may have been deleted.',
+                    message.cellId ?? ''
+                )
             );
+        }
 
-            logger.error(`[DataframeController] ${errorMessage}`);
+        const dataframe = await this.getDataframeFromDataframeOutput(cell.outputs);
 
-            await window.showErrorMessage(errorMessage);
+        if (!dataframe) {
+            return;
+        }
 
-            throw new Error(errorMessage);
+        const csv = this.dataframeToCsv(dataframe);
+
+        if (!csv) {
+            return this.showErrorToUser(l10n.t('The dataframe is empty or could not be converted to CSV format.'));
+        }
+
+        await env.clipboard.writeText(csv);
+
+        await window.showInformationMessage(l10n.t('Text copied to clipboard!'));
+
+        logger.info('[DataframeController] Dataframe copied to clipboard as CSV.');
+    }
+
+    private async handleExportTable(editor: NotebookEditor, message: ExportTableCommand) {
+        if (!message.cellId) {
+            return this.showErrorToUser(
+                l10n.t(
+                    'Unable to export table: No cell identifier provided. Please re-run the cell to update the output metadata.'
+                )
+            );
+        }
+
+        const cells = editor.notebook.getCells();
+        const cell = cells.find((c) => c.metadata.id === message.cellId);
+
+        if (!cell) {
+            return this.showErrorToUser(
+                l10n.t(
+                    'Unable to export table: Could not find the cell with ID {0}. The cell may have been deleted.',
+                    message.cellId ?? ''
+                )
+            );
+        }
+
+        const dataframe = await this.getDataframeFromDataframeOutput(cell.outputs);
+
+        if (!dataframe) {
+            return;
+        }
+
+        const csv = this.dataframeToCsv(dataframe);
+
+        if (!csv) {
+            return this.showErrorToUser(l10n.t('The dataframe is empty or could not be converted to CSV format.'));
+        }
+
+        const filename = `dataframe_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`;
+
+        try {
+            const uri = await window.showSaveDialog({
+                defaultUri: Uri.file(filename),
+                filters: {
+                    'CSV files': ['csv'],
+                    'All files': ['*']
+                }
+            });
+
+            if (uri) {
+                const encoder = new TextEncoder();
+
+                await workspace.fs.writeFile(uri, encoder.encode(csv));
+
+                await window.showInformationMessage(`File saved to ${uri}`);
+            }
+        } catch (error) {
+            await window.showErrorMessage(`Failed to save file: ${error}`);
+        }
+    }
+
+    private async handleGoToPage(editor: NotebookEditor, message: GoToPageCommand) {
+        if (!message.cellId) {
+            return this.showErrorToUser(
+                l10n.t(
+                    'Unable to navigate to page: No cell identifier provided. Please re-run the cell to update the output metadata.'
+                )
+            );
+        }
+
+        const cells = editor.notebook.getCells();
+        const cell = cells.find((c) => c.metadata.id === message.cellId);
+
+        if (!cell) {
+            return this.showErrorToUser(
+                l10n.t(
+                    'Unable to navigate to page: Could not find the cell with ID {0}. The cell may have been deleted.',
+                    message.cellId ?? ''
+                )
+            );
+        }
+
+        // Update page index in table state within cell metadata
+        const existingTableState = cell.metadata.deepnote_table_state || {};
+        const updatedTableState = {
+            ...existingTableState,
+            pageIndex: message.page
+        };
+
+        const cellIndex = cell.index;
+
+        const edit = new WorkspaceEdit();
+        const notebookEdit = NotebookEdit.updateCellMetadata(cellIndex, {
+            ...cell.metadata,
+            deepnote_table_state: updatedTableState
+        });
+
+        edit.set(editor.notebook.uri, [notebookEdit]);
+
+        await workspace.applyEdit(edit);
+
+        // Re-execute the cell to apply the new page
+        logger.info(`[DataframeController] Re-executing cell ${cellIndex} with new page index ${message.page}`);
+
+        await commands.executeCommand('notebook.cell.execute', {
+            ranges: [{ start: cellIndex, end: cellIndex + 1 }],
+            document: editor.notebook.uri
+        });
+    }
+
+    private async handleSelectPageSize(editor: NotebookEditor, message: SelectPageSizeCommand) {
+        if (!message.cellId) {
+            return this.showErrorToUser(
+                l10n.t(
+                    'Unable to update page size: No cell identifier provided. Please re-run the cell to update the output metadata.'
+                )
+            );
+        }
+
+        const cells = editor.notebook.getCells();
+        const cell = cells.find((c) => c.metadata.id === message.cellId);
+
+        if (!cell) {
+            return this.showErrorToUser(
+                l10n.t(
+                    'Unable to update page size: Could not find the cell with ID {0}. The cell may have been deleted.',
+                    message.cellId ?? ''
+                )
+            );
         }
 
         const cellIndex = cell.index;
@@ -143,60 +308,40 @@ export class DataframeController implements IExtensionSyncActivationService {
         });
     }
 
-    private async handleGoToPage(editor: NotebookEditor, message: GoToPageCommand) {
-        if (!message.cellId) {
-            const errorMessage = l10n.t(
-                'Unable to navigate to page: No cell identifier provided. Please re-run the cell to update the output metadata.'
-            );
+    private async onDidReceiveMessage(
+        _comms: NotebookRendererMessaging,
+        { editor, message }: { editor: NotebookEditor; message: DataframeCommand }
+    ) {
+        logger.info('DataframeController received message', message);
 
-            logger.error(`[DataframeController] ${errorMessage}`);
-
-            await window.showErrorMessage(errorMessage);
-
-            throw new Error(errorMessage);
+        if (!message || typeof message !== 'object') {
+            return;
         }
 
-        const cells = editor.notebook.getCells();
-        const cell = cells.find((c) => c.metadata.id === message.cellId);
-
-        if (!cell) {
-            const errorMessage = l10n.t(
-                'Unable to navigate to page: Could not find the cell with ID {0}. The cell may have been deleted.',
-                message.cellId ?? ''
-            );
-
-            logger.error(`[DataframeController] ${errorMessage}`);
-
-            await window.showErrorMessage(errorMessage);
-
-            throw new Error(errorMessage);
+        if (message.command === 'selectPageSize') {
+            return this.handleSelectPageSize(editor, message);
         }
 
-        // Update page index in table state within cell metadata
-        const existingTableState = cell.metadata.deepnote_table_state || {};
-        const updatedTableState = {
-            ...existingTableState,
-            pageIndex: message.page
-        };
+        if (message.command === 'goToPage') {
+            return this.handleGoToPage(editor, message);
+        }
 
-        const cellIndex = cell.index;
+        if (message.command === 'copyTable') {
+            return this.handleCopyTable(editor, message);
+        }
 
-        const edit = new WorkspaceEdit();
-        const notebookEdit = NotebookEdit.updateCellMetadata(cellIndex, {
-            ...cell.metadata,
-            deepnote_table_state: updatedTableState
-        });
+        if (message.command === 'exportTable') {
+            return this.handleExportTable(editor, message);
+        }
 
-        edit.set(editor.notebook.uri, [notebookEdit]);
+        logger.warn(`DataframeController received unknown command:`, message);
+    }
 
-        await workspace.applyEdit(edit);
+    private async showErrorToUser(errorMessage: string) {
+        logger.error(`[DataframeController] ${errorMessage}`);
 
-        // Re-execute the cell to apply the new page
-        logger.info(`[DataframeController] Re-executing cell ${cellIndex} with new page index ${message.page}`);
+        await window.showErrorMessage(errorMessage);
 
-        await commands.executeCommand('notebook.cell.execute', {
-            ranges: [{ start: cellIndex, end: cellIndex + 1 }],
-            document: editor.notebook.uri
-        });
+        throw new Error(errorMessage);
     }
 }

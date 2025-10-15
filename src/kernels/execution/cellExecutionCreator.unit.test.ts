@@ -1,4 +1,4 @@
-import { strict as assert } from 'assert';
+import { assert } from 'chai';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { CancellationToken, NotebookCell, NotebookCellExecution } from 'vscode';
 
@@ -58,7 +58,7 @@ suite('NotebookCellExecutionWrapper', () => {
         wrapper.start();
 
         // Verify start was called before clearOutput
-        assert.deepStrictEqual(callOrder, ['start', 'clearOutput'], 'start should be called before clearOutput');
+        assert.deepEqual(callOrder, ['start', 'clearOutput'], 'start should be called before clearOutput');
     });
 
     test('When clearOutputOnStartWithTime is false, clearOutput is not called on start', () => {
@@ -107,7 +107,7 @@ suite('NotebookCellExecutionWrapper', () => {
         wrapper.start(startTime);
 
         // Verify start was called before clearOutput
-        assert.deepStrictEqual(
+        assert.deepEqual(
             callOrder,
             ['start', 'clearOutput'],
             'start should be called before clearOutput even with startTime'
@@ -287,6 +287,80 @@ suite('CellExecutionCreator', () => {
         assert.strictEqual(clearOutputCallCount, 2, 'clearOutput should be called again when new execution starts');
 
         // Clean up - end the execution to remove it from the map
+        execution2.end(true);
+        assert.strictEqual(endCallCount, 2, 'Both executions should be ended');
+    });
+
+    test('Re-execution without starting first execution should not cause duplicate execution error', () => {
+        // This test catches a regression where unstarted executions weren't properly cleaned up
+        let endCallCount = 0;
+
+        // Create mock cell
+        const mockCell = mock<NotebookCell>();
+        const mockToken = mock<CancellationToken>();
+        when(mockCell.index).thenReturn(0);
+
+        // Create spy implementations
+        const spyImpl1 = {
+            cell: instance(mockCell),
+            token: instance(mockToken),
+            executionOrder: undefined as number | undefined,
+            clearOutput: () => Promise.resolve(),
+            start: () => {
+                // noop
+            },
+            end: () => {
+                endCallCount++;
+            },
+            replaceOutput: () => Promise.resolve(),
+            appendOutput: () => Promise.resolve(),
+            replaceOutputItems: () => Promise.resolve(),
+            appendOutputItems: () => Promise.resolve()
+        } as NotebookCellExecution;
+
+        const spyImpl2 = {
+            cell: instance(mockCell),
+            token: instance(mockToken),
+            executionOrder: undefined as number | undefined,
+            clearOutput: () => Promise.resolve(),
+            start: () => {
+                // noop
+            },
+            end: () => {
+                endCallCount++;
+            },
+            replaceOutput: () => Promise.resolve(),
+            appendOutput: () => Promise.resolve(),
+            replaceOutputItems: () => Promise.resolve(),
+            appendOutputItems: () => Promise.resolve()
+        } as NotebookCellExecution;
+
+        // Create mock controller
+        const mockController = mock<IKernelController>();
+        when(mockController.id).thenReturn('test-controller');
+        when(mockController.createNotebookCellExecution(anything())).thenReturn(spyImpl1).thenReturn(spyImpl2);
+
+        // First execution: Create but DON'T start it
+        const execution1 = CellExecutionCreator.getOrCreate(instance(mockCell), instance(mockController), false);
+        assert.strictEqual(execution1.started, false, 'First execution should not be started');
+        assert.strictEqual(endCallCount, 0, 'end should not be called yet');
+
+        // Second execution: This should not fail with "duplicate execution" error
+        // Even though the first execution was never started, it must be ended to clean up VS Code's internal state
+        const execution2 = CellExecutionCreator.getOrCreate(instance(mockCell), instance(mockController), false);
+
+        // First execution should have been ended (even though it was never started)
+        assert.strictEqual(endCallCount, 1, 'First execution should be ended to clean up VS Code state');
+
+        // Should be a different wrapper instance
+        assert.notStrictEqual(execution1, execution2, 'Should create a fresh execution wrapper');
+        assert.strictEqual(execution2.started, false, 'Second execution should not be started');
+
+        // Verify that we can get the new execution from the map
+        const retrieved = CellExecutionCreator.get(instance(mockCell));
+        assert.strictEqual(retrieved, execution2, 'Should retrieve the second execution from the map');
+
+        // Clean up
         execution2.end(true);
         assert.strictEqual(endCallCount, 2, 'Both executions should be ended');
     });

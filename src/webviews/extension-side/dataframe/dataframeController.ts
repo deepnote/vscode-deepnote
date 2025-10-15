@@ -47,7 +47,8 @@ export class DataframeController implements IExtensionSyncActivationService {
 
     public activate() {
         const comms = notebooks.createRendererMessaging('deepnote-dataframe-renderer');
-        comms.onDidReceiveMessage(this.onDidReceiveMessage.bind(this, comms), this, this.disposables);
+        const messageDisposable = comms.onDidReceiveMessage(this.onDidReceiveMessage.bind(this, comms), this);
+        this.disposables.push(messageDisposable);
     }
 
     public dispose() {

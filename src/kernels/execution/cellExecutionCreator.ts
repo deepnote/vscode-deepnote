@@ -137,6 +137,8 @@ export class CellExecutionCreator {
             // you cannot call start(), clearOutput(), or any other methods on it again.
             // This handles both controller changes and re-executions.
             const wasStarted = existingExecution.started;
+
+            // Always call end() to ensure VS Code cleans up its internal execution state
             existingExecution.end(undefined);
             // Note: end() callback automatically removes it from the map
 
@@ -146,7 +148,7 @@ export class CellExecutionCreator {
             // If the old execution was started, start the new one immediately
             // This handles the case where we're switching controllers mid-execution
             if (wasStarted) {
-                cellExecution.start(new Date().getTime());
+                cellExecution.start(Date.now());
             }
 
             return cellExecution;

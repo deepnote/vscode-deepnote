@@ -988,6 +988,10 @@ export class CellExecutionMessageHandler implements IDisposable {
         traceCellMessage(this.cell, `Update streamed output, new output '${msg.content.text.substring(0, 100)}'`);
         const task = this.getOrCreateExecutionTask(true);
 
+        // Use cell metadata id if available (from Deepnote blocks), otherwise fall back to cell's internal id
+        const cellId = getCellId(this.cell);
+        const cellMetadata = this.cell.metadata || {};
+
         const outputName =
             msg.content.name === 'stdout'
                 ? NotebookCellOutputItem.stdout('').mime
@@ -1014,9 +1018,6 @@ export class CellExecutionMessageHandler implements IDisposable {
         // Ensure we append to previous output, only if the streams are the same &
         // If the last output is the desired stream type.
         if (this.lastUsedStreamOutput?.stream === msg.content.name) {
-            // Use cell metadata id if available (from Deepnote blocks), otherwise fall back to cell's internal id
-            const cellId = getCellId(this.cell);
-            const cellMetadata = this.cell.metadata || {};
             const output = cellOutputToVSCCellOutput(
                 {
                     output_type: 'stream',
@@ -1032,9 +1033,6 @@ export class CellExecutionMessageHandler implements IDisposable {
         } else if (previousValueOfClearOutputOnNextUpdateToOutput) {
             // Replace the current outputs with a single new output.
             const text = concatMultilineString(msg.content.text);
-            // Use cell metadata id if available (from Deepnote blocks), otherwise fall back to cell's internal id
-            const cellId = getCellId(this.cell);
-            const cellMetadata = this.cell.metadata || {};
             const output = cellOutputToVSCCellOutput(
                 {
                     output_type: 'stream',
@@ -1051,9 +1049,6 @@ export class CellExecutionMessageHandler implements IDisposable {
         } else {
             // Create a new output
             const text = formatStreamText(concatMultilineString(msg.content.text));
-            // Use cell metadata id if available (from Deepnote blocks), otherwise fall back to cell's internal id
-            const cellId = getCellId(this.cell);
-            const cellMetadata = this.cell.metadata || {};
             const output = cellOutputToVSCCellOutput(
                 {
                     output_type: 'stream',
@@ -1178,12 +1173,14 @@ export class CellExecutionMessageHandler implements IDisposable {
             logger.warn('Update display data message received, but output cell is closed', msg.content);
             return;
         }
-        const output = translateCellDisplayOutput(
-            new NotebookCellOutput(outputToBeUpdated.outputItems, outputToBeUpdated.outputContainer.metadata)
-        );
+
         // Use cell metadata id if available (from Deepnote blocks), otherwise fall back to cell's internal id
         const cellId = getCellId(outputToBeUpdated.cell);
         const cellMetadata = outputToBeUpdated.cell.metadata || {};
+
+        const output = translateCellDisplayOutput(
+            new NotebookCellOutput(outputToBeUpdated.outputItems, outputToBeUpdated.outputContainer.metadata)
+        );
         const newOutput = cellOutputToVSCCellOutput(
             {
                 ...output,

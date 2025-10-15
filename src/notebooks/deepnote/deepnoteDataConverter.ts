@@ -85,9 +85,9 @@ export class DeepnoteDataConverter {
 
             // Convert VS Code outputs to Deepnote format
             // Outputs are managed by VS Code natively, not stored in the pocket
-            // Only set outputs if the block originally had them (tracked by __hadOutputs flag)
-            const hadOutputs = cell.metadata?.__hadOutputs;
-            if (hadOutputs && !block.outputs && cell.outputs) {
+            // Preserve outputs when they exist (including newly produced outputs)
+            // Only set if not already set to avoid overwriting converter-managed outputs
+            if (cell.outputs && !block.outputs) {
                 block.outputs = this.transformOutputsForDeepnote(cell.outputs);
             }
 

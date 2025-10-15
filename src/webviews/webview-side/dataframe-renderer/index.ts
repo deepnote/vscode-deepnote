@@ -21,9 +21,11 @@ export const activate: ActivationFunction = (context: RendererContext<unknown>) 
             console.log(`Dataframe renderer - rendering output item: ${outputItem.id}`);
             try {
                 const data = outputItem.json();
+
                 console.log(`Dataframe renderer - received data with ${Object.keys(data).length} keys`);
 
                 const metadata = outputItem.metadata as Metadata | undefined;
+
                 console.log('[DataframeRenderer] Full metadata', metadata);
 
                 const dataFrameMetadata = metadata?.metadata as DataframeMetadata | undefined;
@@ -33,6 +35,7 @@ export const activate: ActivationFunction = (context: RendererContext<unknown>) 
                 console.log(`[DataframeRenderer] Extracted cellId: ${cellId}, cellIndex: ${cellIndex}`);
 
                 const root = document.createElement('div');
+
                 element.appendChild(root);
 
                 ReactDOM.render(

@@ -1,5 +1,6 @@
-import React, { memo, useMemo, useState } from 'react';
-import { RendererContext } from 'vscode-notebook-renderer';
+import React from 'react';
+import { memo, useMemo, useState } from 'react';
+import type { RendererContext } from 'vscode-notebook-renderer';
 
 import '../react-common/codicon/codicon.css';
 
@@ -127,7 +128,7 @@ export const DataframeRenderer = memo(function DataframeRenderer({
                                 <div className="">
                                     {rows.map((value, index) => (
                                         <div
-                                            key={index}
+                                            key={index.toString()}
                                             className={`p-[4px] border-b border-r border-[var(--vscode-panel-border)] font-mono ${
                                                 index % 2 === 0
                                                     ? 'bg-[var(--vscode-editor-background)]'
@@ -150,8 +151,8 @@ export const DataframeRenderer = memo(function DataframeRenderer({
                     </div>
                     <div className="dataframe-footer-controls">
                         <select
-                            id="page-size-select"
                             className="dataframe-page-size-select font-mono"
+                            id="page-size-select"
                             value={pageSize}
                             onChange={handlePageSizeChange}
                         >
@@ -169,6 +170,7 @@ export const DataframeRenderer = memo(function DataframeRenderer({
 
                 <div className="flex gap-[12px] items-center">
                     <button
+                        aria-label="Previous page"
                         className={`
                             border border-[var(--vscode-panel-border)] bg-[var(--vscode-button-secondaryBackground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)]
                             text-[var(--vscode-button-secondaryForeground)]
@@ -187,6 +189,7 @@ export const DataframeRenderer = memo(function DataframeRenderer({
                         Page {pageIndex + 1} of {totalPages}
                     </span>
                     <button
+                        aria-label="Next page"
                         className={`
                             border border-[var(--vscode-panel-border)] bg-[var(--vscode-button-secondaryBackground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)]
                             text-[var(--vscode-button-secondaryForeground)]

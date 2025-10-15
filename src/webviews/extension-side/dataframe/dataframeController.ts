@@ -4,6 +4,7 @@ import {
     env,
     l10n,
     NotebookEdit,
+    type NotebookCellOutput,
     type NotebookEditor,
     type NotebookRendererMessaging,
     notebooks,
@@ -17,7 +18,6 @@ import type { IExtensionSyncActivationService } from '../../../platform/activati
 import type { IDisposable } from '../../../platform/common/types';
 import { dispose } from '../../../platform/common/utils/lifecycle';
 import { logger } from '../../../platform/logging';
-import { Output } from '../../../api';
 
 type SelectPageSizeCommand = {
     cellId?: string;
@@ -69,8 +69,35 @@ export class DataframeController implements IExtensionSyncActivationService {
         dispose(this.disposables);
     }
 
+    private escapeCsvField(value: unknown): string {
+        // Handle null/undefined as empty string
+        if (value === null || value === undefined) {
+            return '';
+        }
+
+        // Convert to string
+        const stringValue = String(value);
+
+        // Check if field needs quoting (contains comma, quote, or newline)
+        const needsQuoting =
+            stringValue.includes(',') ||
+            stringValue.includes('"') ||
+            stringValue.includes('\n') ||
+            stringValue.includes('\r');
+
+        if (needsQuoting) {
+            // Escape internal quotes by doubling them, then wrap in quotes
+            return `"${stringValue.replace(/"/g, '""')}"`;
+        }
+
+        return stringValue;
+    }
+
     private dataframeToCsv(dataframe: DataFrameObject): string {
-        console.log('Converting dataframe to CSV:', dataframe);
+        logger.debug('[DataframeController] Converting dataframe to CSV', {
+            columnCount: dataframe?.column_count,
+            rowCount: dataframe?.row_count
+        });
 
         if (!dataframe || !dataframe.columns || !dataframe.rows) {
             return '';
@@ -83,20 +110,27 @@ export class DataframeController implements IExtensionSyncActivationService {
             .filter((name: string | undefined) => Boolean(name))
             .filter((name: string) => !name.trim().toLowerCase().startsWith('_deepnote')) as string[];
 
-        const csvRows = rows.map((row: Record<string, unknown>) => columnNames.map((col) => row[col]).join(','));
+        // Escape and join header names
+        const headerRow = columnNames.map((name) => this.escapeCsvField(name)).join(',');
 
-        return [columnNames.join(','), ...csvRows].join('\n');
+        // Escape and join data rows
+        const csvRows = rows.map((row: Record<string, unknown>) =>
+            columnNames.map((col) => this.escapeCsvField(row[col])).join(',')
+        );
+
+        return [headerRow, ...csvRows].join('\n');
     }
 
-    private async getDataframeFromDataframeOutput(outputs: readonly Output[]): Promise<DataFrameObject | undefined> {
+    private async getDataframeFromDataframeOutput(
+        outputs: readonly NotebookCellOutput[]
+    ): Promise<DataFrameObject | undefined> {
         if (outputs.length === 0) {
             await this.showErrorToUser(l10n.t('No outputs found in the cell.'));
             return;
         }
 
-        const [firstOutput] = outputs;
-
-        const item = firstOutput.items.find(
+        const items = outputs.flatMap((output) => output.items);
+        const item = items.find(
             (i: { data: unknown; mime: string }) => i.mime === 'application/vnd.deepnote.dataframe.v3+json'
         );
 
@@ -203,10 +237,12 @@ export class DataframeController implements IExtensionSyncActivationService {
 
                 await workspace.fs.writeFile(uri, encoder.encode(csv));
 
-                await window.showInformationMessage(`File saved to ${uri}`);
+                await window.showInformationMessage(l10n.t('File saved to {0}', uri));
             }
         } catch (error) {
-            await window.showErrorMessage(`Failed to save file: ${error}`);
+            const message = error instanceof Error ? error.message : String(error);
+
+            await window.showErrorMessage(l10n.t('Failed to save file: {0}', message));
         }
     }
 
@@ -300,7 +336,7 @@ export class DataframeController implements IExtensionSyncActivationService {
         await workspace.applyEdit(edit);
 
         // Re-execute the cell to apply the new page size
-        logger.info(`[DataframeRenderer] Re-executing cell ${cellIndex} with new page size`);
+        logger.info(`[DataframeController] Re-executing cell ${cellIndex} with new page size`);
 
         await commands.executeCommand('notebook.cell.execute', {
             ranges: [{ start: cellIndex, end: cellIndex + 1 }],

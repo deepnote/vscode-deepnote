@@ -173,6 +173,132 @@ suite('DataframeController', () => {
             assert.strictEqual(lines[0], 'col1');
             assert.strictEqual(lines[1], '1');
         });
+
+        test('Should escape values containing commas', () => {
+            const dataframe = {
+                column_count: 2,
+                columns: [
+                    { dtype: 'int64', name: 'id' },
+                    { dtype: 'string', name: 'address' }
+                ],
+                preview_row_count: 2,
+                row_count: 2,
+                rows: [
+                    { id: 1, address: '123 Main St, Apt 4' },
+                    { id: 2, address: 'New York, NY' }
+                ],
+                type: 'dataframe'
+            };
+            const result = (controller as any).dataframeToCsv(dataframe);
+            const lines = result.split('\n');
+
+            assert.strictEqual(lines[0], 'id,address');
+            assert.strictEqual(lines[1], '1,"123 Main St, Apt 4"');
+            assert.strictEqual(lines[2], '2,"New York, NY"');
+        });
+
+        test('Should escape values containing quotes', () => {
+            const dataframe = {
+                column_count: 2,
+                columns: [
+                    { dtype: 'int64', name: 'id' },
+                    { dtype: 'string', name: 'message' }
+                ],
+                preview_row_count: 2,
+                row_count: 2,
+                rows: [
+                    { id: 1, message: 'He said "Hello"' },
+                    { id: 2, message: 'She replied "Hi"' }
+                ],
+                type: 'dataframe'
+            };
+            const result = (controller as any).dataframeToCsv(dataframe);
+            const lines = result.split('\n');
+
+            assert.strictEqual(lines[0], 'id,message');
+            assert.strictEqual(lines[1], '1,"He said ""Hello"""');
+            assert.strictEqual(lines[2], '2,"She replied ""Hi"""');
+        });
+
+        test('Should escape values containing newlines', () => {
+            const dataframe = {
+                column_count: 2,
+                columns: [
+                    { dtype: 'int64', name: 'id' },
+                    { dtype: 'string', name: 'notes' }
+                ],
+                preview_row_count: 1,
+                row_count: 1,
+                rows: [{ id: 1, notes: 'Line 1\nLine 2' }],
+                type: 'dataframe'
+            };
+            const result = (controller as any).dataframeToCsv(dataframe);
+
+            // Don't split by \n since the quoted field contains newlines
+            assert.strictEqual(result, 'id,notes\n1,"Line 1\nLine 2"');
+        });
+
+        test('Should handle null and undefined values', () => {
+            const dataframe = {
+                column_count: 3,
+                columns: [
+                    { dtype: 'int64', name: 'id' },
+                    { dtype: 'string', name: 'value1' },
+                    { dtype: 'string', name: 'value2' }
+                ],
+                preview_row_count: 2,
+                row_count: 2,
+                rows: [
+                    { id: 1, value1: null, value2: 'test' },
+                    { id: 2, value1: 'test', value2: undefined }
+                ],
+                type: 'dataframe'
+            };
+            const result = (controller as any).dataframeToCsv(dataframe);
+            const lines = result.split('\n');
+
+            assert.strictEqual(lines[0], 'id,value1,value2');
+            assert.strictEqual(lines[1], '1,,test');
+            assert.strictEqual(lines[2], '2,test,');
+        });
+
+        test('Should escape column names with special characters', () => {
+            const dataframe = {
+                column_count: 3,
+                columns: [
+                    { dtype: 'int64', name: 'id' },
+                    { dtype: 'string', name: 'name, title' },
+                    { dtype: 'string', name: 'description "quoted"' }
+                ],
+                preview_row_count: 1,
+                row_count: 1,
+                rows: [{ id: 1, 'name, title': 'John Doe', 'description "quoted"': 'Test' }],
+                type: 'dataframe'
+            };
+            const result = (controller as any).dataframeToCsv(dataframe);
+            const lines = result.split('\n');
+
+            assert.strictEqual(lines[0], 'id,"name, title","description ""quoted"""');
+            assert.strictEqual(lines[1], '1,John Doe,Test');
+        });
+
+        test('Should handle complex escaping scenarios', () => {
+            const dataframe = {
+                column_count: 2,
+                columns: [
+                    { dtype: 'int64', name: 'id' },
+                    { dtype: 'string', name: 'data' }
+                ],
+                preview_row_count: 1,
+                row_count: 1,
+                rows: [{ id: 1, data: 'Value with "quotes", commas, and\nnewlines' }],
+                type: 'dataframe'
+            };
+            const result = (controller as any).dataframeToCsv(dataframe);
+
+            // Don't split by \n since the quoted field contains newlines
+            assert.strictEqual(result, 'id,data\n1,"Value with ""quotes"", commas, and\nnewlines"');
+        });
     });
 
     suite('Dataframe Extraction (getDataframeFromDataframeOutput)', () => {

@@ -6,6 +6,7 @@ import type { RendererContext } from 'vscode-notebook-renderer';
 
 import '../react-common/codicon/codicon.css';
 import { generateUuid } from '../../../platform/common/uuid';
+import { getLocString } from '../react-common/locReactSide';
 
 export interface DataframeMetadata {
     table_state_spec?: string;
@@ -170,7 +171,9 @@ export const DataframeRenderer = memo(function DataframeRenderer({
             <div className="px-[8px] py-[12px] flex justify-between items-center border-l border-r border-b border-[var(--vscode-panel-border)] font-mono">
                 <div className="flex gap-[4px] items-center">
                     <div>
-                        {numberOfRows} rows, {numberOfColumns} columns
+                        {getLocString('dataframeRowsColumns', `{0} rows, {1} columns`)
+                            .replace('{0}', String(numberOfRows))
+                            .replace('{1}', String(numberOfColumns))}
                     </div>
                     <div>
                         <select className="font-mono" id={selectId} value={pageSize} onChange={handlePageSizeChange}>
@@ -180,13 +183,13 @@ export const DataframeRenderer = memo(function DataframeRenderer({
                             <option value={100}>100</option>
                         </select>
 
-                        <label htmlFor={selectId}>/ page</label>
+                        <label htmlFor={selectId}>{getLocString('dataframePerPage', '/ page')}</label>
                     </div>
                 </div>
 
                 <div className="flex gap-[12px] items-center">
                     <IconButton
-                        aria-label="Previous page"
+                        aria-label={getLocString('dataframePreviousPage', 'Previous page')}
                         className={`
                             border border-[var(--vscode-panel-border)] bg-[var(--vscode-button-secondaryBackground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)]
                             text-[var(--vscode-button-secondaryForeground)]
@@ -195,17 +198,19 @@ export const DataframeRenderer = memo(function DataframeRenderer({
                             h-[20px] w-[20px]
                         `}
                         disabled={pageIndex === 0}
-                        title="Previous page"
+                        title={getLocString('dataframePreviousPage', 'Previous page')}
                         type="button"
                         onClick={() => handlePageChange(pageIndex - 1)}
                     >
                         <div className="codicon codicon-chevron-left" style={{ fontSize: 12 }} />
                     </IconButton>
                     <span className="">
-                        Page {pageIndex + 1} of {totalPages}
+                        {getLocString('dataframePageOf', 'Page {0} of {1}')
+                            .replace('{0}', String(pageIndex + 1))
+                            .replace('{1}', String(totalPages))}
                     </span>
                     <IconButton
-                        aria-label="Next page"
+                        aria-label={getLocString('dataframeNextPage', 'Next page')}
                         className={`
                             border border-[var(--vscode-panel-border)] bg-[var(--vscode-button-secondaryBackground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)]
                             text-[var(--vscode-button-secondaryForeground)]
@@ -214,7 +219,7 @@ export const DataframeRenderer = memo(function DataframeRenderer({
                             h-[20px] w-[20px]
                         `}
                         disabled={pageIndex >= totalPages - 1}
-                        title="Next page"
+                        title={getLocString('dataframeNextPage', 'Next page')}
                         type="button"
                         onClick={() => handlePageChange(pageIndex + 1)}
                     >
@@ -224,13 +229,18 @@ export const DataframeRenderer = memo(function DataframeRenderer({
 
                 <div>
                     <div className="flex items-center gap-[4px]">
-                        <IconButton aria-label="Copy table" title="Copy table" type="button" onClick={handleCopyTable}>
+                        <IconButton
+                            aria-label={getLocString('dataframeCopyTable', 'Copy table')}
+                            title={getLocString('dataframeCopyTable', 'Copy table')}
+                            type="button"
+                            onClick={handleCopyTable}
+                        >
                             <div className="codicon codicon-files" style={{ fontSize: 12 }} />
                         </IconButton>
 
                         <IconButton
-                            aria-label="Export table"
-                            title="Export table"
+                            aria-label={getLocString('dataframeExportTable', 'Export table')}
+                            title={getLocString('dataframeExportTable', 'Export table')}
                             type="button"
                             onClick={handleExportTable}
                         >

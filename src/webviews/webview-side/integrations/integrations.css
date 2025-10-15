@@ -1,0 +1,252 @@
+/* Copyright (c) Microsoft Corporation.
+   Licensed under the MIT License. */
+
+.integration-panel {
+    padding: 20px;
+    color: var(--vscode-foreground);
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+}
+
+.integration-panel h1 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    font-size: 1.5em;
+    font-weight: 600;
+}
+
+/* Message styles */
+.message {
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+    border: 1px solid;
+}
+
+.message-success {
+    background-color: var(--vscode-testing-iconPassed);
+    border-color: var(--vscode-testing-iconPassed);
+    color: var(--vscode-editor-background);
+}
+
+.message-error {
+    background-color: var(--vscode-inputValidation-errorBackground);
+    border-color: var(--vscode-inputValidation-errorBorder);
+    color: var(--vscode-inputValidation-errorForeground);
+}
+
+/* Integration list */
+.integration-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.no-integrations {
+    color: var(--vscode-descriptionForeground);
+    font-style: italic;
+}
+
+/* Integration item */
+.integration-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    background-color: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+}
+
+.integration-info {
+    flex: 1;
+}
+
+.integration-name {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.integration-status {
+    font-size: 0.9em;
+}
+
+.status-connected {
+    color: var(--vscode-testing-iconPassed);
+}
+
+.status-disconnected {
+    color: var(--vscode-descriptionForeground);
+}
+
+.integration-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* Buttons */
+button {
+    padding: 6px 14px;
+    border: 1px solid var(--vscode-button-border);
+    border-radius: 2px;
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    cursor: pointer;
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+}
+
+button:hover {
+    background-color: var(--vscode-button-hoverBackground);
+}
+
+button:active {
+    background-color: var(--vscode-button-background);
+    opacity: 0.8;
+}
+
+button.secondary {
+    background-color: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+}
+
+button.secondary:hover {
+    background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+button.primary {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+}
+
+/* Configuration form overlay */
+.configuration-form-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.configuration-form-container {
+    background-color: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow: auto;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.configuration-form-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.configuration-form-header h2 {
+    margin: 0;
+    font-size: 1.2em;
+    font-weight: 600;
+}
+
+.close-button {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: var(--vscode-foreground);
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.close-button:hover {
+    background-color: var(--vscode-toolbar-hoverBackground);
+    border-radius: 4px;
+}
+
+.configuration-form-body {
+    padding: 20px;
+}
+
+/* Form styles */
+form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.form-group label {
+    font-weight: 500;
+    color: var(--vscode-foreground);
+}
+
+.form-group .required {
+    color: var(--vscode-inputValidation-errorBorder);
+}
+
+.form-group input[type='text'],
+.form-group input[type='password'],
+.form-group input[type='number'],
+.form-group textarea {
+    padding: 6px 8px;
+    background-color: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 2px;
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+    border-color: var(--vscode-focusBorder);
+}
+
+.form-group textarea {
+    resize: vertical;
+    font-family: var(--vscode-editor-font-family);
+}
+
+.checkbox-group label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: normal;
+}
+
+.checkbox-group input[type='checkbox'] {
+    cursor: pointer;
+}
+
+.form-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    padding-top: 16px;
+    border-top: 1px solid var(--vscode-panel-border);
+}
+
+.form-actions button {
+    flex: 1;
+}
+

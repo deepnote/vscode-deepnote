@@ -1,14 +1,14 @@
 import { assert } from 'chai';
 import { anything, instance, mock, when, verify, deepEqual } from 'ts-mockito';
 import { Memento, Uri } from 'vscode';
-import { DeepnoteConfigurationStorage } from './deepnoteConfigurationStorage';
+import { DeepnoteEnvironmentStorage } from './deepnoteEnvironmentStorage';
 import { IExtensionContext } from '../../../platform/common/types';
 import { IInterpreterService } from '../../../platform/interpreter/contracts';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
-import { DeepnoteKernelConfigurationState } from './deepnoteKernelConfiguration';
+import { DeepnoteEnvironmentState } from './deepnoteEnvironment';
 
-suite('DeepnoteConfigurationStorage', () => {
-    let storage: DeepnoteConfigurationStorage;
+suite('DeepnoteEnvironmentStorage', () => {
+    let storage: DeepnoteEnvironmentStorage;
     let mockContext: IExtensionContext;
     let mockInterpreterService: IInterpreterService;
     let mockGlobalState: Memento;
@@ -26,20 +26,20 @@ suite('DeepnoteConfigurationStorage', () => {
 
         when(mockContext.globalState).thenReturn(instance(mockGlobalState) as any);
 
-        storage = new DeepnoteConfigurationStorage(instance(mockContext), instance(mockInterpreterService));
+        storage = new DeepnoteEnvironmentStorage(instance(mockContext));
     });
 
-    suite('loadConfigurations', () => {
-        test('should return empty array when no configurations are stored', async () => {
-            when(mockGlobalState.get('deepnote.kernelConfigurations', anything())).thenReturn([]);
+    suite('loadEnvironments', () => {
+        test('should return empty array when no environments are stored', async () => {
+            when(mockGlobalState.get('deepnote.kernelEnvironments', anything())).thenReturn([]);
 
-            const configs = await storage.loadConfigurations();
+            const configs = await storage.loadEnvironments();
 
             assert.deepStrictEqual(configs, []);
         });
 
-        test('should load and deserialize stored configurations', async () => {
-            const storedState: DeepnoteKernelConfigurationState = {
+        test('should load and deserialize stored environments', async () => {
+            const storedState: DeepnoteEnvironmentState = {
                 id: 'config-1',
                 name: 'Test Config',
                 pythonInterpreterPath: '/usr/bin/python3',
@@ -48,13 +48,13 @@ suite('DeepnoteConfigurationStorage', () => {
                 lastUsedAt: '2025-01-01T00:00:00.000Z',
                 packages: ['numpy', 'pandas'],
                 toolkitVersion: '0.2.30',
-                description: 'Test configuration'
+                description: 'Test environment'
             };
 
-            when(mockGlobalState.get('deepnote.kernelConfigurations', anything())).thenReturn([storedState]);
+            when(mockGlobalState.get('deepnote.kernelEnvironments', anything())).thenReturn([storedState]);
             when(mockInterpreterService.getInterpreterDetails(anything())).thenResolve(testInterpreter);
 
-            const configs = await storage.loadConfigurations();
+            const configs = await storage.loadEnvironments();
 
             assert.strictEqual(configs.length, 1);
             assert.strictEqual(configs[0].id, 'config-1');
@@ -63,11 +63,11 @@ suite('DeepnoteConfigurationStorage', () => {
             assert.strictEqual(configs[0].venvPath.fsPath, '/path/to/venv');
             assert.deepStrictEqual(configs[0].packages, ['numpy', 'pandas']);
             assert.strictEqual(configs[0].toolkitVersion, '0.2.30');
-            assert.strictEqual(configs[0].description, 'Test configuration');
+            assert.strictEqual(configs[0].description, 'Test environment');
         });
 
-        test('should skip configurations with unresolvable interpreters', async () => {
-            const storedStates: DeepnoteKernelConfigurationState[] = [
+        test('should skip environments with unresolvable interpreters', async () => {
+            const storedStates: DeepnoteEnvironmentState[] = [
                 {
                     id: 'config-1',
                     name: 'Valid Config',
@@ -86,7 +86,7 @@ suite('DeepnoteConfigurationStorage', () => {
                 }
             ];
 
-            when(mockGlobalState.get('deepnote.kernelConfigurations', anything())).thenReturn(storedStates);
+            when(mockGlobalState.get('deepnote.kernelEnvironments', anything())).thenReturn(storedStates);
             when(mockInterpreterService.getInterpreterDetails(deepEqual(Uri.file('/usr/bin/python3')))).thenResolve(
                 testInterpreter
             );
@@ -94,25 +94,23 @@ suite('DeepnoteConfigurationStorage', () => {
                 undefined
             );
 
-            const configs = await storage.loadConfigurations();
+            const configs = await storage.loadEnvironments();
 
             assert.strictEqual(configs.length, 1);
             assert.strictEqual(configs[0].id, 'config-1');
         });
 
         test('should handle errors gracefully and return empty array', async () => {
-            when(mockGlobalState.get('deepnote.kernelConfigurations', anything())).thenThrow(
-                new Error('Storage error')
-            );
+            when(mockGlobalState.get('deepnote.kernelEnvironments', anything())).thenThrow(new Error('Storage error'));
 
-            const configs = await storage.loadConfigurations();
+            const configs = await storage.loadEnvironments();
 
             assert.deepStrictEqual(configs, []);
         });
     });
 
-    suite('saveConfigurations', () => {
-        test('should serialize and save configurations', async () => {
+    suite('saveEnvironments', () => {
+        test('should serialize and save environments', async () => {
             const config = {
                 id: 'config-1',
                 name: 'Test Config',
@@ -127,11 +125,11 @@ suite('DeepnoteConfigurationStorage', () => {
 
             when(mockGlobalState.update(anything(), anything())).thenResolve();
 
-            await storage.saveConfigurations([config]);
+            await storage.saveEnvironments([config]);
 
             verify(
                 mockGlobalState.update(
-                    'deepnote.kernelConfigurations',
+                    'deepnote.kernelEnvironments',
                     deepEqual([
                         {
                             id: 'config-1',
@@ -149,7 +147,7 @@ suite('DeepnoteConfigurationStorage', () => {
             ).once();
         });
 
-        test('should save multiple configurations', async () => {
+        test('should save multiple environments', async () => {
             const configs = [
                 {
                     id: 'config-1',
@@ -171,9 +169,9 @@ suite('DeepnoteConfigurationStorage', () => {
 
             when(mockGlobalState.update(anything(), anything())).thenResolve();
 
-            await storage.saveConfigurations(configs);
+            await storage.saveEnvironments(configs);
 
-            verify(mockGlobalState.update('deepnote.kernelConfigurations', anything())).once();
+            verify(mockGlobalState.update('deepnote.kernelEnvironments', anything())).once();
         });
 
         test('should throw error if storage update fails', async () => {
@@ -188,23 +186,23 @@ suite('DeepnoteConfigurationStorage', () => {
 
             when(mockGlobalState.update(anything(), anything())).thenReject(new Error('Storage error'));
 
-            await assert.isRejected(storage.saveConfigurations([config]), 'Storage error');
+            await assert.isRejected(storage.saveEnvironments([config]), 'Storage error');
         });
     });
 
-    suite('clearConfigurations', () => {
-        test('should clear all stored configurations', async () => {
+    suite('clearEnvironments', () => {
+        test('should clear all stored environments', async () => {
             when(mockGlobalState.update(anything(), anything())).thenResolve();
 
-            await storage.clearConfigurations();
+            await storage.clearEnvironments();
 
-            verify(mockGlobalState.update('deepnote.kernelConfigurations', deepEqual([]))).once();
+            verify(mockGlobalState.update('deepnote.kernelEnvironments', deepEqual([]))).once();
         });
 
         test('should throw error if clear fails', async () => {
             when(mockGlobalState.update(anything(), anything())).thenReject(new Error('Storage error'));
 
-            await assert.isRejected(storage.clearConfigurations(), 'Storage error');
+            await assert.isRejected(storage.clearEnvironments(), 'Storage error');
         });
     });
 });

@@ -86,48 +86,48 @@
                 "icon": "$(reveal)"
             },
             {
-                "command": "deepnote.configurations.create",
-                "title": "Create Kernel Configuration",
+                "command": "deepnote.environments.create",
+                "title": "Create Environment",
                 "category": "Deepnote",
                 "icon": "$(add)"
             },
             {
-                "command": "deepnote.configurations.start",
+                "command": "deepnote.environments.start",
                 "title": "Start Server",
                 "category": "Deepnote",
                 "icon": "$(debug-start)"
             },
             {
-                "command": "deepnote.configurations.stop",
+                "command": "deepnote.environments.stop",
                 "title": "Stop Server",
                 "category": "Deepnote",
                 "icon": "$(debug-stop)"
             },
             {
-                "command": "deepnote.configurations.restart",
+                "command": "deepnote.environments.restart",
                 "title": "Restart Server",
                 "category": "Deepnote",
                 "icon": "$(debug-restart)"
             },
             {
-                "command": "deepnote.configurations.delete",
-                "title": "Delete Configuration",
+                "command": "deepnote.environments.delete",
+                "title": "Delete Environment",
                 "category": "Deepnote",
                 "icon": "$(trash)"
             },
             {
-                "command": "deepnote.configurations.managePackages",
+                "command": "deepnote.environments.managePackages",
                 "title": "Manage Packages",
                 "category": "Deepnote",
                 "icon": "$(package)"
             },
             {
-                "command": "deepnote.configurations.editName",
-                "title": "Rename Configuration",
+                "command": "deepnote.environments.editName",
+                "title": "Rename Environment",
                 "category": "Deepnote"
             },
             {
-                "command": "deepnote.configurations.refresh",
+                "command": "deepnote.environments.refresh",
                 "title": "Refresh",
                 "category": "Deepnote",
                 "icon": "$(refresh)"
@@ -1275,13 +1275,13 @@
             ],
             "view/title": [
                 {
-                    "command": "deepnote.configurations.create",
-                    "when": "view == deepnoteKernelConfigurations",
+                    "command": "deepnote.environments.create",
+                    "when": "view == deepnoteEnvironments",
                     "group": "navigation@1"
                 },
                 {
-                    "command": "deepnote.configurations.refresh",
-                    "when": "view == deepnoteKernelConfigurations",
+                    "command": "deepnote.environments.refresh",
+                    "when": "view == deepnoteEnvironments",
                     "group": "navigation@2"
                 }
             ],
@@ -1292,33 +1292,33 @@
                     "group": "inline@2"
                 },
                 {
-                    "command": "deepnote.configurations.start",
-                    "when": "view == deepnoteKernelConfigurations && viewItem == deepnoteConfiguration.stopped",
+                    "command": "deepnote.environments.start",
+                    "when": "view == deepnoteEnvironments && viewItem == deepnoteEnvironment.stopped",
                     "group": "inline@1"
                 },
                 {
-                    "command": "deepnote.configurations.stop",
-                    "when": "view == deepnoteKernelConfigurations && viewItem == deepnoteConfiguration.running",
+                    "command": "deepnote.environments.stop",
+                    "when": "view == deepnoteEnvironments && viewItem == deepnoteEnvironment.running",
                     "group": "inline@1"
                 },
                 {
-                    "command": "deepnote.configurations.restart",
-                    "when": "view == deepnoteKernelConfigurations && viewItem == deepnoteConfiguration.running",
+                    "command": "deepnote.environments.restart",
+                    "when": "view == deepnoteEnvironments && viewItem == deepnoteEnvironment.running",
                     "group": "1_lifecycle@1"
                 },
                 {
-                    "command": "deepnote.configurations.managePackages",
-                    "when": "view == deepnoteKernelConfigurations && viewItem =~ /deepnoteConfiguration\\.(running|stopped)/",
+                    "command": "deepnote.environments.managePackages",
+                    "when": "view == deepnoteEnvironments && viewItem =~ /deepnoteEnvironment\\.(running|stopped)/",
                     "group": "2_manage@1"
                 },
                 {
-                    "command": "deepnote.configurations.editName",
-                    "when": "view == deepnoteKernelConfigurations && viewItem =~ /deepnoteConfiguration\\.(running|stopped)/",
+                    "command": "deepnote.environments.editName",
+                    "when": "view == deepnoteEnvironments && viewItem =~ /deepnoteEnvironment\\.(running|stopped)/",
                     "group": "2_manage@2"
                 },
                 {
-                    "command": "deepnote.configurations.delete",
-                    "when": "view == deepnoteKernelConfigurations && viewItem =~ /deepnoteConfiguration\\.(running|stopped)/",
+                    "command": "deepnote.environments.delete",
+                    "when": "view == deepnoteEnvironments && viewItem =~ /deepnoteEnvironment\\.(running|stopped)/",
                     "group": "4_danger@1"
                 }
             ]
@@ -1927,8 +1927,8 @@
                     }
                 },
                 {
-                    "id": "deepnoteKernelConfigurations",
-                    "name": "Kernel Configurations",
+                    "id": "deepnoteEnvironments",
+                    "name": "Environments",
                     "when": "workspaceFolderCount != 0"
                 }
             ]

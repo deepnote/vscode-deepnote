@@ -3,17 +3,17 @@ import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
 import { DeepnoteServerInfo } from '../types';
 
 /**
- * Represents a Deepnote kernel configuration.
+ * Represents a Deepnote kernel environment.
  * This is the runtime model with full objects.
  */
-export interface DeepnoteKernelConfiguration {
+export interface DeepnoteEnvironment {
     /**
-     * Unique identifier for this configuration (UUID)
+     * Unique identifier for this environment (UUID)
      */
     id: string;
 
     /**
-     * User-friendly name for the configuration
+     * User-friendly name for the environment
      * Example: "Python 3.11 (Data Science)"
      */
     name: string;
@@ -24,7 +24,7 @@ export interface DeepnoteKernelConfiguration {
     pythonInterpreter: PythonEnvironment;
 
     /**
-     * Path to the virtual environment for this configuration
+     * Path to the virtual environment for this environment
      */
     venvPath: Uri;
 
@@ -34,12 +34,12 @@ export interface DeepnoteKernelConfiguration {
     serverInfo?: DeepnoteServerInfo;
 
     /**
-     * Timestamp when this configuration was created
+     * Timestamp when this environment was created
      */
     createdAt: Date;
 
     /**
-     * Timestamp when this configuration was last used
+     * Timestamp when this environment was last used
      */
     lastUsedAt: Date;
 
@@ -54,16 +54,16 @@ export interface DeepnoteKernelConfiguration {
     toolkitVersion?: string;
 
     /**
-     * Optional description for this configuration
+     * Optional description for this environment
      */
     description?: string;
 }
 
 /**
- * Serializable state for storing configurations.
+ * Serializable state for storing environments.
  * Uses string paths instead of Uri objects for JSON serialization.
  */
-export interface DeepnoteKernelConfigurationState {
+export interface DeepnoteEnvironmentState {
     id: string;
     name: string;
     pythonInterpreterPath: string;
@@ -76,9 +76,9 @@ export interface DeepnoteKernelConfigurationState {
 }
 
 /**
- * Configuration for creating a new kernel configuration
+ * Options for creating a new kernel environment
  */
-export interface CreateKernelConfigurationOptions {
+export interface CreateEnvironmentOptions {
     name: string;
     pythonInterpreter: PythonEnvironment;
     packages?: string[];
@@ -86,11 +86,11 @@ export interface CreateKernelConfigurationOptions {
 }
 
 /**
- * Status of a kernel configuration
+ * Status of a kernel environment
  */
-export enum KernelConfigurationStatus {
+export enum EnvironmentStatus {
     /**
-     * Configuration exists but server is not running
+     * Environment exists but server is not running
      */
     Stopped = 'stopped',
 
@@ -111,9 +111,9 @@ export enum KernelConfigurationStatus {
 }
 
 /**
- * Extended configuration with runtime status information
+ * Extended environment with runtime status information
  */
-export interface DeepnoteKernelConfigurationWithStatus extends DeepnoteKernelConfiguration {
-    status: KernelConfigurationStatus;
+export interface DeepnoteEnvironmentWithStatus extends DeepnoteEnvironment {
+    status: EnvironmentStatus;
     errorMessage?: string;
 }

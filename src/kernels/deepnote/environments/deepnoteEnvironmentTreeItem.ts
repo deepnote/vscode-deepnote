@@ -2,50 +2,50 @@
 // Licensed under the MIT License.
 
 import { ThemeIcon, TreeItem, TreeItemCollapsibleState } from 'vscode';
-import { DeepnoteKernelConfiguration, KernelConfigurationStatus } from './deepnoteKernelConfiguration';
+import { DeepnoteEnvironment, EnvironmentStatus } from './deepnoteEnvironment';
 
 /**
- * Type of tree item in the kernel configurations view
+ * Type of tree item in the environments view
  */
-export enum ConfigurationTreeItemType {
-    Configuration = 'configuration',
+export enum EnvironmentTreeItemType {
+    Environment = 'environment',
     InfoItem = 'info',
     CreateAction = 'create'
 }
 
 /**
- * Tree item for displaying kernel configurations and related info
+ * Tree item for displaying environments and related info
  */
-export class DeepnoteConfigurationTreeItem extends TreeItem {
+export class DeepnoteEnvironmentTreeItem extends TreeItem {
     constructor(
-        public readonly type: ConfigurationTreeItemType,
-        public readonly configuration?: DeepnoteKernelConfiguration,
-        public readonly status?: KernelConfigurationStatus,
+        public readonly type: EnvironmentTreeItemType,
+        public readonly environment?: DeepnoteEnvironment,
+        public readonly status?: EnvironmentStatus,
         label?: string,
         collapsibleState?: TreeItemCollapsibleState
     ) {
         super(label || '', collapsibleState);
 
-        if (type === ConfigurationTreeItemType.Configuration && configuration) {
-            this.setupConfigurationItem();
-        } else if (type === ConfigurationTreeItemType.InfoItem) {
+        if (type === EnvironmentTreeItemType.Environment && environment) {
+            this.setupEnvironmentItem();
+        } else if (type === EnvironmentTreeItemType.InfoItem) {
             this.setupInfoItem();
-        } else if (type === ConfigurationTreeItemType.CreateAction) {
+        } else if (type === EnvironmentTreeItemType.CreateAction) {
             this.setupCreateAction();
         }
     }
 
-    private setupConfigurationItem(): void {
-        if (!this.configuration || !this.status) {
+    private setupEnvironmentItem(): void {
+        if (!this.environment || !this.status) {
             return;
         }
 
-        const isRunning = this.status === KernelConfigurationStatus.Running;
-        const isStarting = this.status === KernelConfigurationStatus.Starting;
+        const isRunning = this.status === EnvironmentStatus.Running;
+        const isStarting = this.status === EnvironmentStatus.Starting;
 
         // Set label with status indicator
         const statusText = isRunning ? '[Running]' : isStarting ? '[Starting...]' : '[Stopped]';
-        this.label = `${this.configuration.name} ${statusText}`;
+        this.label = `${this.environment.name} ${statusText}`;
 
         // Set icon based on status
         if (isRunning) {
@@ -58,16 +58,16 @@ export class DeepnoteConfigurationTreeItem extends TreeItem {
 
         // Set context value for command filtering
         this.contextValue = isRunning
-            ? 'deepnoteConfiguration.running'
+            ? 'deepnoteEnvironment.running'
             : isStarting
-            ? 'deepnoteConfiguration.starting'
-            : 'deepnoteConfiguration.stopped';
+            ? 'deepnoteEnvironment.starting'
+            : 'deepnoteEnvironment.stopped';
 
         // Make it collapsible to show info items
         this.collapsibleState = TreeItemCollapsibleState.Collapsed;
 
         // Set description with last used time
-        const lastUsed = this.getRelativeTime(this.configuration.lastUsedAt);
+        const lastUsed = this.getRelativeTime(this.environment.lastUsedAt);
         this.description = `Last used: ${lastUsed}`;
 
         // Set tooltip with detailed info
@@ -76,44 +76,44 @@ export class DeepnoteConfigurationTreeItem extends TreeItem {
 
     private setupInfoItem(): void {
         // Info items are not clickable and don't have context menus
-        this.contextValue = 'deepnoteConfiguration.info';
+        this.contextValue = 'deepnoteEnvironment.info';
         this.collapsibleState = TreeItemCollapsibleState.None;
     }
 
     private setupCreateAction(): void {
-        this.label = 'Create New Configuration';
+        this.label = 'Create New Environment';
         this.iconPath = new ThemeIcon('add');
-        this.contextValue = 'deepnoteConfiguration.create';
+        this.contextValue = 'deepnoteEnvironment.create';
         this.collapsibleState = TreeItemCollapsibleState.None;
         this.command = {
-            command: 'deepnote.configurations.create',
-            title: 'Create Configuration'
+            command: 'deepnote.environments.create',
+            title: 'Create Environment'
         };
     }
 
     private buildTooltip(): string {
-        if (!this.configuration) {
+        if (!this.environment) {
             return '';
         }
 
         const lines: string[] = [];
-        lines.push(`**${this.configuration.name}**`);
+        lines.push(`**${this.environment.name}**`);
         lines.push('');
         lines.push(`Status: ${this.status}`);
-        lines.push(`Python: ${this.configuration.pythonInterpreter.uri.fsPath}`);
-        lines.push(`Venv: ${this.configuration.venvPath.fsPath}`);
+        lines.push(`Python: ${this.environment.pythonInterpreter.uri.fsPath}`);
+        lines.push(`Venv: ${this.environment.venvPath.fsPath}`);
 
-        if (this.configuration.packages && this.configuration.packages.length > 0) {
-            lines.push(`Packages: ${this.configuration.packages.join(', ')}`);
+        if (this.environment.packages && this.environment.packages.length > 0) {
+            lines.push(`Packages: ${this.environment.packages.join(', ')}`);
         }
 
-        if (this.configuration.toolkitVersion) {
-            lines.push(`Toolkit: ${this.configuration.toolkitVersion}`);
+        if (this.environment.toolkitVersion) {
+            lines.push(`Toolkit: ${this.environment.toolkitVersion}`);
         }
 
         lines.push('');
-        lines.push(`Created: ${this.configuration.createdAt.toLocaleString()}`);
-        lines.push(`Last used: ${this.configuration.lastUsedAt.toLocaleString()}`);
+        lines.push(`Created: ${this.environment.createdAt.toLocaleString()}`);
+        lines.push(`Last used: ${this.environment.lastUsedAt.toLocaleString()}`);
 
         return lines.join('\n');
     }
@@ -140,10 +140,10 @@ export class DeepnoteConfigurationTreeItem extends TreeItem {
     }
 
     /**
-     * Create an info item to display under a configuration
+     * Create an info item to display under an environment
      */
-    public static createInfoItem(label: string, icon?: string): DeepnoteConfigurationTreeItem {
-        const item = new DeepnoteConfigurationTreeItem(ConfigurationTreeItemType.InfoItem, undefined, undefined, label);
+    public static createInfoItem(label: string, icon?: string): DeepnoteEnvironmentTreeItem {
+        const item = new DeepnoteEnvironmentTreeItem(EnvironmentTreeItemType.InfoItem, undefined, undefined, label);
 
         if (icon) {
             item.iconPath = new ThemeIcon(icon);

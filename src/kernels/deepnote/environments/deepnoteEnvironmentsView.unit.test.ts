@@ -1,8 +1,8 @@
 import { assert } from 'chai';
 import { anything, instance, mock, when, verify } from 'ts-mockito';
 import { Disposable } from 'vscode';
-import { DeepnoteConfigurationsView } from './deepnoteConfigurationsView';
-import { IDeepnoteConfigurationManager } from '../types';
+import { DeepnoteEnvironmentsView } from './deepnoteEnvironmentsView';
+import { IDeepnoteEnvironmentManager } from '../types';
 import { IPythonApiProvider } from '../../../platform/api/types';
 import { IDisposableRegistry } from '../../../platform/common/types';
 
@@ -10,28 +10,28 @@ import { IDisposableRegistry } from '../../../platform/common/types';
 // TODO: Add tests for startServer command execution
 // TODO: Add tests for stopServer command execution
 // TODO: Add tests for restartServer command execution
-// TODO: Add tests for deleteConfiguration command with confirmation
-// TODO: Add tests for editConfigurationName with input validation
+// TODO: Add tests for deleteEnvironment command with confirmation
+// TODO: Add tests for editEnvironmentName with input validation
 // TODO: Add tests for managePackages with package validation
-// TODO: Add tests for createConfiguration workflow
+// TODO: Add tests for createEnvironment workflow
 
-suite('DeepnoteConfigurationsView', () => {
-    let view: DeepnoteConfigurationsView;
-    let mockConfigManager: IDeepnoteConfigurationManager;
+suite('DeepnoteEnvironmentsView', () => {
+    let view: DeepnoteEnvironmentsView;
+    let mockConfigManager: IDeepnoteEnvironmentManager;
     let mockPythonApiProvider: IPythonApiProvider;
     let mockDisposableRegistry: IDisposableRegistry;
 
     setup(() => {
-        mockConfigManager = mock<IDeepnoteConfigurationManager>();
+        mockConfigManager = mock<IDeepnoteEnvironmentManager>();
         mockPythonApiProvider = mock<IPythonApiProvider>();
         mockDisposableRegistry = mock<IDisposableRegistry>();
 
-        // Mock onDidChangeConfigurations to return a disposable event
-        when(mockConfigManager.onDidChangeConfigurations).thenReturn(() => {
+        // Mock onDidChangeEnvironments to return a disposable event
+        when(mockConfigManager.onDidChangeEnvironments).thenReturn(() => {
             return { dispose: () => {} } as Disposable;
         });
 
-        view = new DeepnoteConfigurationsView(
+        view = new DeepnoteEnvironmentsView(
             instance(mockConfigManager),
             instance(mockPythonApiProvider),
             instance(mockDisposableRegistry)

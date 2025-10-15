@@ -1,17 +1,17 @@
 import { assert } from 'chai';
 import { anything, instance, mock, when, verify, deepEqual } from 'ts-mockito';
 import { Uri } from 'vscode';
-import { DeepnoteConfigurationManager } from './deepnoteConfigurationManager';
-import { DeepnoteConfigurationStorage } from './deepnoteConfigurationStorage';
+import { DeepnoteEnvironmentManager } from './deepnoteEnvironmentManager';
+import { DeepnoteEnvironmentStorage } from './deepnoteEnvironmentStorage';
 import { IExtensionContext } from '../../../platform/common/types';
 import { IDeepnoteServerStarter, IDeepnoteToolkitInstaller, DeepnoteServerInfo } from '../types';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
-import { KernelConfigurationStatus } from './deepnoteKernelConfiguration';
+import { EnvironmentStatus } from './deepnoteEnvironment';
 
-suite('DeepnoteConfigurationManager', () => {
-    let manager: DeepnoteConfigurationManager;
+suite('DeepnoteEnvironmentManager', () => {
+    let manager: DeepnoteEnvironmentManager;
     let mockContext: IExtensionContext;
-    let mockStorage: DeepnoteConfigurationStorage;
+    let mockStorage: DeepnoteEnvironmentStorage;
     let mockToolkitInstaller: IDeepnoteToolkitInstaller;
     let mockServerStarter: IDeepnoteServerStarter;
 
@@ -29,14 +29,14 @@ suite('DeepnoteConfigurationManager', () => {
 
     setup(() => {
         mockContext = mock<IExtensionContext>();
-        mockStorage = mock<DeepnoteConfigurationStorage>();
+        mockStorage = mock<DeepnoteEnvironmentStorage>();
         mockToolkitInstaller = mock<IDeepnoteToolkitInstaller>();
         mockServerStarter = mock<IDeepnoteServerStarter>();
 
         when(mockContext.globalStorageUri).thenReturn(Uri.file('/global/storage'));
-        when(mockStorage.loadConfigurations()).thenResolve([]);
+        when(mockStorage.loadEnvironments()).thenResolve([]);
 
-        manager = new DeepnoteConfigurationManager(
+        manager = new DeepnoteEnvironmentManager(
             instance(mockContext),
             instance(mockStorage),
             instance(mockToolkitInstaller),
@@ -45,7 +45,7 @@ suite('DeepnoteConfigurationManager', () => {
     });
 
     suite('activate', () => {
-        test('should load configurations on activation', async () => {
+        test('should load environments on activation', async () => {
             const existingConfigs = [
                 {
                     id: 'existing-config',
@@ -57,23 +57,23 @@ suite('DeepnoteConfigurationManager', () => {
                 }
             ];
 
-            when(mockStorage.loadConfigurations()).thenResolve(existingConfigs);
+            when(mockStorage.loadEnvironments()).thenResolve(existingConfigs);
 
             manager.activate();
             // Wait for async initialization
             await new Promise((resolve) => setTimeout(resolve, 100));
 
-            const configs = manager.listConfigurations();
+            const configs = manager.listEnvironments();
             assert.strictEqual(configs.length, 1);
             assert.strictEqual(configs[0].id, 'existing-config');
         });
     });
 
-    suite('createConfiguration', () => {
-        test('should create a new configuration', async () => {
-            when(mockStorage.saveConfigurations(anything())).thenResolve();
+    suite('createEnvironment', () => {
+        test('should create a new kernel environment', async () => {
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
 
-            const config = await manager.createConfiguration({
+            const config = await manager.createEnvironment({
                 name: 'Test Config',
                 pythonInterpreter: testInterpreter,
                 packages: ['numpy'],
@@ -89,18 +89,18 @@ suite('DeepnoteConfigurationManager', () => {
             assert.ok(config.createdAt);
             assert.ok(config.lastUsedAt);
 
-            verify(mockStorage.saveConfigurations(anything())).once();
+            verify(mockStorage.saveEnvironments(anything())).once();
         });
 
-        test('should generate unique IDs for each configuration', async () => {
-            when(mockStorage.saveConfigurations(anything())).thenResolve();
+        test('should generate unique IDs for each environment', async () => {
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
 
-            const config1 = await manager.createConfiguration({
+            const config1 = await manager.createEnvironment({
                 name: 'Config 1',
                 pythonInterpreter: testInterpreter
             });
 
-            const config2 = await manager.createConfiguration({
+            const config2 = await manager.createEnvironment({
                 name: 'Config 2',
                 pythonInterpreter: testInterpreter
             });
@@ -108,15 +108,15 @@ suite('DeepnoteConfigurationManager', () => {
             assert.notEqual(config1.id, config2.id);
         });
 
-        test('should fire onDidChangeConfigurations event', async () => {
-            when(mockStorage.saveConfigurations(anything())).thenResolve();
+        test('should fire onDidChangeEnvironments event', async () => {
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
 
             let eventFired = false;
-            manager.onDidChangeConfigurations(() => {
+            manager.onDidChangeEnvironments(() => {
                 eventFired = true;
             });
 
-            await manager.createConfiguration({
+            await manager.createEnvironment({
                 name: 'Test',
                 pythonInterpreter: testInterpreter
             });
@@ -125,58 +125,58 @@ suite('DeepnoteConfigurationManager', () => {
         });
     });
 
-    suite('listConfigurations', () => {
+    suite('listEnvironments', () => {
         test('should return empty array initially', () => {
-            const configs = manager.listConfigurations();
+            const configs = manager.listEnvironments();
             assert.deepStrictEqual(configs, []);
         });
 
-        test('should return all created configurations', async () => {
-            when(mockStorage.saveConfigurations(anything())).thenResolve();
+        test('should return all created environments', async () => {
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
 
-            await manager.createConfiguration({ name: 'Config 1', pythonInterpreter: testInterpreter });
-            await manager.createConfiguration({ name: 'Config 2', pythonInterpreter: testInterpreter });
+            await manager.createEnvironment({ name: 'Config 1', pythonInterpreter: testInterpreter });
+            await manager.createEnvironment({ name: 'Config 2', pythonInterpreter: testInterpreter });
 
-            const configs = manager.listConfigurations();
+            const configs = manager.listEnvironments();
             assert.strictEqual(configs.length, 2);
         });
     });
 
-    suite('getConfiguration', () => {
+    suite('getEnvironment', () => {
         test('should return undefined for non-existent ID', () => {
-            const config = manager.getConfiguration('non-existent');
+            const config = manager.getEnvironment('non-existent');
             assert.isUndefined(config);
         });
 
-        test('should return configuration by ID', async () => {
-            when(mockStorage.saveConfigurations(anything())).thenResolve();
+        test('should return environment by ID', async () => {
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
 
-            const created = await manager.createConfiguration({
+            const created = await manager.createEnvironment({
                 name: 'Test',
                 pythonInterpreter: testInterpreter
             });
 
-            const found = manager.getConfiguration(created.id);
+            const found = manager.getEnvironment(created.id);
             assert.strictEqual(found?.id, created.id);
             assert.strictEqual(found?.name, 'Test');
         });
     });
 
-    suite('getConfigurationWithStatus', () => {
-        test('should return configuration with stopped status when server is not running', async () => {
-            when(mockStorage.saveConfigurations(anything())).thenResolve();
+    suite('getEnvironmentWithStatus', () => {
+        test('should return environment with stopped status when server is not running', async () => {
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
 
-            const created = await manager.createConfiguration({
+            const created = await manager.createEnvironment({
                 name: 'Test',
                 pythonInterpreter: testInterpreter
             });
 
-            const withStatus = manager.getConfigurationWithStatus(created.id);
-            assert.strictEqual(withStatus?.status, KernelConfigurationStatus.Stopped);
+            const withStatus = manager.getEnvironmentWithStatus(created.id);
+            assert.strictEqual(withStatus?.status, EnvironmentStatus.Stopped);
         });
 
-        test('should return configuration with running status when server is running', async () => {
-            when(mockStorage.saveConfigurations(anything())).thenResolve();
+        test('should return environment with running status when server is running', async () => {
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
             when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
                 testInterpreter
             );
@@ -184,91 +184,91 @@ suite('DeepnoteConfigurationManager', () => {
                 testServerInfo
             );
 
-            const created = await manager.createConfiguration({
+            const created = await manager.createEnvironment({
                 name: 'Test',
                 pythonInterpreter: testInterpreter
             });
 
             await manager.startServer(created.id);
 
-            const withStatus = manager.getConfigurationWithStatus(created.id);
-            assert.strictEqual(withStatus?.status, KernelConfigurationStatus.Running);
+            const withStatus = manager.getEnvironmentWithStatus(created.id);
+            assert.strictEqual(withStatus?.status, EnvironmentStatus.Running);
         });
     });
 
-    suite('updateConfiguration', () => {
-        test('should update configuration name', async () => {
-            when(mockStorage.saveConfigurations(anything())).thenResolve();
+    suite('updateEnvironment', () => {
+        test('should update environment name', async () => {
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
 
-            const config = await manager.createConfiguration({
+            const config = await manager.createEnvironment({
                 name: 'Original Name',
                 pythonInterpreter: testInterpreter
             });
 
-            await manager.updateConfiguration(config.id, { name: 'Updated Name' });
+            await manager.updateEnvironment(config.id, { name: 'Updated Name' });
 
-            const updated = manager.getConfiguration(config.id);
+            const updated = manager.getEnvironment(config.id);
             assert.strictEqual(updated?.name, 'Updated Name');
         });
 
         test('should update packages', async () => {
-            when(mockStorage.saveConfigurations(anything())).thenResolve();
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
 
-            const config = await manager.createConfiguration({
+            const config = await manager.createEnvironment({
                 name: 'Test',
                 pythonInterpreter: testInterpreter,
                 packages: ['numpy']
             });
 
-            await manager.updateConfiguration(config.id, { packages: ['numpy', 'pandas'] });
+            await manager.updateEnvironment(config.id, { packages: ['numpy', 'pandas'] });
 
-            const updated = manager.getConfiguration(config.id);
+            const updated = manager.getEnvironment(config.id);
             assert.deepStrictEqual(updated?.packages, ['numpy', 'pandas']);
         });
 
-        test('should throw error for non-existent configuration', async () => {
+        test('should throw error for non-existent environment', async () => {
             await assert.isRejected(
-                manager.updateConfiguration('non-existent', { name: 'Test' }),
-                'Configuration not found: non-existent'
+                manager.updateEnvironment('non-existent', { name: 'Test' }),
+                'Environment not found: non-existent'
             );
         });
 
-        test('should fire onDidChangeConfigurations event', async () => {
-            when(mockStorage.saveConfigurations(anything())).thenResolve();
+        test('should fire onDidChangeEnvironments event', async () => {
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
 
-            const config = await manager.createConfiguration({
+            const config = await manager.createEnvironment({
                 name: 'Test',
                 pythonInterpreter: testInterpreter
             });
 
             let eventFired = false;
-            manager.onDidChangeConfigurations(() => {
+            manager.onDidChangeEnvironments(() => {
                 eventFired = true;
             });
 
-            await manager.updateConfiguration(config.id, { name: 'Updated' });
+            await manager.updateEnvironment(config.id, { name: 'Updated' });
 
             assert.isTrue(eventFired);
         });
     });
 
-    suite('deleteConfiguration', () => {
-        test('should delete configuration', async () => {
-            when(mockStorage.saveConfigurations(anything())).thenResolve();
+    suite('deleteEnvironment', () => {
+        test('should delete environment', async () => {
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
 
-            const config = await manager.createConfiguration({
+            const config = await manager.createEnvironment({
                 name: 'Test',
                 pythonInterpreter: testInterpreter
             });
 
-            await manager.deleteConfiguration(config.id);
+            await manager.deleteEnvironment(config.id);
 
-            const deleted = manager.getConfiguration(config.id);
+            const deleted = manager.getEnvironment(config.id);
             assert.isUndefined(deleted);
         });
 
         test('should stop server before deleting if running', async () => {
-            when(mockStorage.saveConfigurations(anything())).thenResolve();
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
             when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
                 testInterpreter
             );
@@ -277,28 +277,25 @@ suite('DeepnoteConfigurationManager', () => {
             );
             when(mockServerStarter.stopServer(anything())).thenResolve();
 
-            const config = await manager.createConfiguration({
+            const config = await manager.createEnvironment({
                 name: 'Test',
                 pythonInterpreter: testInterpreter
             });
 
             await manager.startServer(config.id);
-            await manager.deleteConfiguration(config.id);
+            await manager.deleteEnvironment(config.id);
 
             verify(mockServerStarter.stopServer(config.id)).once();
         });
 
-        test('should throw error for non-existent configuration', async () => {
-            await assert.isRejected(
-                manager.deleteConfiguration('non-existent'),
-                'Configuration not found: non-existent'
-            );
+        test('should throw error for non-existent environment', async () => {
+            await assert.isRejected(manager.deleteEnvironment('non-existent'), 'Environment not found: non-existent');
         });
     });
 
     suite('startServer', () => {
-        test('should start server for configuration', async () => {
-            when(mockStorage.saveConfigurations(anything())).thenResolve();
+        test('should start server for environment', async () => {
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
             when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
                 testInterpreter
             );
@@ -306,14 +303,14 @@ suite('DeepnoteConfigurationManager', () => {
                 testServerInfo
             );
 
-            const config = await manager.createConfiguration({
+            const config = await manager.createEnvironment({
                 name: 'Test',
                 pythonInterpreter: testInterpreter
             });
 
             await manager.startServer(config.id);
 
-            const updated = manager.getConfiguration(config.id);
+            const updated = manager.getEnvironment(config.id);
             assert.deepStrictEqual(updated?.serverInfo, testServerInfo);
 
             verify(mockToolkitInstaller.ensureVenvAndToolkit(testInterpreter, anything(), anything())).once();
@@ -321,7 +318,7 @@ suite('DeepnoteConfigurationManager', () => {
         });
 
         test('should install additional packages when specified', async () => {
-            when(mockStorage.saveConfigurations(anything())).thenResolve();
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
             when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
                 testInterpreter
             );
@@ -330,7 +327,7 @@ suite('DeepnoteConfigurationManager', () => {
                 testServerInfo
             );
 
-            const config = await manager.createConfiguration({
+            const config = await manager.createEnvironment({
                 name: 'Test',
                 pythonInterpreter: testInterpreter,
                 packages: ['numpy', 'pandas']
@@ -344,7 +341,7 @@ suite('DeepnoteConfigurationManager', () => {
         });
 
         test('should not start if server is already running', async () => {
-            when(mockStorage.saveConfigurations(anything())).thenResolve();
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
             when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
                 testInterpreter
             );
@@ -352,7 +349,7 @@ suite('DeepnoteConfigurationManager', () => {
                 testServerInfo
             );
 
-            const config = await manager.createConfiguration({
+            const config = await manager.createEnvironment({
                 name: 'Test',
                 pythonInterpreter: testInterpreter
             });
@@ -365,7 +362,7 @@ suite('DeepnoteConfigurationManager', () => {
         });
 
         test('should update lastUsedAt timestamp', async () => {
-            when(mockStorage.saveConfigurations(anything())).thenResolve();
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
             when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
                 testInterpreter
             );
@@ -373,7 +370,7 @@ suite('DeepnoteConfigurationManager', () => {
                 testServerInfo
             );
 
-            const config = await manager.createConfiguration({
+            const config = await manager.createEnvironment({
                 name: 'Test',
                 pythonInterpreter: testInterpreter
             });
@@ -382,18 +379,18 @@ suite('DeepnoteConfigurationManager', () => {
             await new Promise((resolve) => setTimeout(resolve, 10));
             await manager.startServer(config.id);
 
-            const updated = manager.getConfiguration(config.id);
+            const updated = manager.getEnvironment(config.id);
             assert.isTrue(updated!.lastUsedAt > originalLastUsed);
         });
 
-        test('should throw error for non-existent configuration', async () => {
-            await assert.isRejected(manager.startServer('non-existent'), 'Configuration not found: non-existent');
+        test('should throw error for non-existent environment', async () => {
+            await assert.isRejected(manager.startServer('non-existent'), 'Environment not found: non-existent');
         });
     });
 
     suite('stopServer', () => {
         test('should stop running server', async () => {
-            when(mockStorage.saveConfigurations(anything())).thenResolve();
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
             when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
                 testInterpreter
             );
@@ -402,7 +399,7 @@ suite('DeepnoteConfigurationManager', () => {
             );
             when(mockServerStarter.stopServer(anything())).thenResolve();
 
-            const config = await manager.createConfiguration({
+            const config = await manager.createEnvironment({
                 name: 'Test',
                 pythonInterpreter: testInterpreter
             });
@@ -410,16 +407,16 @@ suite('DeepnoteConfigurationManager', () => {
             await manager.startServer(config.id);
             await manager.stopServer(config.id);
 
-            const updated = manager.getConfiguration(config.id);
+            const updated = manager.getEnvironment(config.id);
             assert.isUndefined(updated?.serverInfo);
 
             verify(mockServerStarter.stopServer(config.id)).once();
         });
 
         test('should do nothing if server is not running', async () => {
-            when(mockStorage.saveConfigurations(anything())).thenResolve();
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
 
-            const config = await manager.createConfiguration({
+            const config = await manager.createEnvironment({
                 name: 'Test',
                 pythonInterpreter: testInterpreter
             });
@@ -429,14 +426,14 @@ suite('DeepnoteConfigurationManager', () => {
             verify(mockServerStarter.stopServer(anything())).never();
         });
 
-        test('should throw error for non-existent configuration', async () => {
-            await assert.isRejected(manager.stopServer('non-existent'), 'Configuration not found: non-existent');
+        test('should throw error for non-existent environment', async () => {
+            await assert.isRejected(manager.stopServer('non-existent'), 'Environment not found: non-existent');
         });
     });
 
     suite('restartServer', () => {
         test('should stop and start server', async () => {
-            when(mockStorage.saveConfigurations(anything())).thenResolve();
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
             when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
                 testInterpreter
             );
@@ -445,7 +442,7 @@ suite('DeepnoteConfigurationManager', () => {
             );
             when(mockServerStarter.stopServer(anything())).thenResolve();
 
-            const config = await manager.createConfiguration({
+            const config = await manager.createEnvironment({
                 name: 'Test',
                 pythonInterpreter: testInterpreter
             });
@@ -461,9 +458,9 @@ suite('DeepnoteConfigurationManager', () => {
 
     suite('updateLastUsed', () => {
         test('should update lastUsedAt timestamp', async () => {
-            when(mockStorage.saveConfigurations(anything())).thenResolve();
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
 
-            const config = await manager.createConfiguration({
+            const config = await manager.createEnvironment({
                 name: 'Test',
                 pythonInterpreter: testInterpreter
             });
@@ -472,11 +469,11 @@ suite('DeepnoteConfigurationManager', () => {
             await new Promise((resolve) => setTimeout(resolve, 10));
             await manager.updateLastUsed(config.id);
 
-            const updated = manager.getConfiguration(config.id);
+            const updated = manager.getEnvironment(config.id);
             assert.isTrue(updated!.lastUsedAt > originalLastUsed);
         });
 
-        test('should do nothing for non-existent configuration', async () => {
+        test('should do nothing for non-existent environment', async () => {
             await manager.updateLastUsed('non-existent');
             // Should not throw
         });

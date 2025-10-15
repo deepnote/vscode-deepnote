@@ -48,9 +48,9 @@ import {
     IDeepnoteServerStarter,
     IDeepnoteKernelAutoSelector,
     IDeepnoteServerProvider,
-    IDeepnoteConfigurationManager,
-    IDeepnoteConfigurationPicker,
-    IDeepnoteNotebookConfigurationMapper
+    IDeepnoteEnvironmentManager,
+    IDeepnoteEnvironmentPicker,
+    IDeepnoteNotebookEnvironmentMapper
 } from '../kernels/deepnote/types';
 import { DeepnoteToolkitInstaller } from '../kernels/deepnote/deepnoteToolkitInstaller.node';
 import { DeepnoteServerStarter } from '../kernels/deepnote/deepnoteServerStarter.node';
@@ -58,12 +58,12 @@ import { DeepnoteKernelAutoSelector } from './deepnote/deepnoteKernelAutoSelecto
 import { DeepnoteServerProvider } from '../kernels/deepnote/deepnoteServerProvider.node';
 import { DeepnoteInitNotebookRunner, IDeepnoteInitNotebookRunner } from './deepnote/deepnoteInitNotebookRunner.node';
 import { DeepnoteRequirementsHelper, IDeepnoteRequirementsHelper } from './deepnote/deepnoteRequirementsHelper.node';
-import { DeepnoteConfigurationManager } from '../kernels/deepnote/configurations/deepnoteConfigurationManager';
-import { DeepnoteConfigurationStorage } from '../kernels/deepnote/configurations/deepnoteConfigurationStorage';
-import { DeepnoteConfigurationsView } from '../kernels/deepnote/configurations/deepnoteConfigurationsView';
-import { DeepnoteConfigurationsActivationService } from '../kernels/deepnote/configurations/deepnoteConfigurationsActivationService';
-import { DeepnoteConfigurationPicker } from '../kernels/deepnote/configurations/deepnoteConfigurationPicker';
-import { DeepnoteNotebookConfigurationMapper } from '../kernels/deepnote/configurations/deepnoteNotebookConfigurationMapper';
+import { DeepnoteEnvironmentManager } from '../kernels/deepnote/environments/deepnoteEnvironmentManager';
+import { DeepnoteEnvironmentStorage } from '../kernels/deepnote/environments/deepnoteEnvironmentStorage';
+import { DeepnoteEnvironmentsView } from '../kernels/deepnote/environments/deepnoteEnvironmentsView';
+import { DeepnoteEnvironmentsActivationService } from '../kernels/deepnote/environments/deepnoteEnvironmentsActivationService';
+import { DeepnoteEnvironmentPicker } from '../kernels/deepnote/environments/deepnoteEnvironmentPicker';
+import { DeepnoteNotebookEnvironmentMapper } from '../kernels/deepnote/environments/deepnoteNotebookEnvironmentMapper';
 
 export function registerTypes(serviceManager: IServiceManager, isDevMode: boolean) {
     registerControllerTypes(serviceManager, isDevMode);
@@ -150,31 +150,22 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IDeepnoteRequirementsHelper>(IDeepnoteRequirementsHelper, DeepnoteRequirementsHelper);
 
     // Deepnote configuration services
-    serviceManager.addSingleton<DeepnoteConfigurationStorage>(
-        DeepnoteConfigurationStorage,
-        DeepnoteConfigurationStorage
-    );
-    serviceManager.addSingleton<IDeepnoteConfigurationManager>(
-        IDeepnoteConfigurationManager,
-        DeepnoteConfigurationManager
-    );
-    serviceManager.addBinding(IDeepnoteConfigurationManager, IExtensionSyncActivationService);
+    serviceManager.addSingleton<DeepnoteEnvironmentStorage>(DeepnoteEnvironmentStorage, DeepnoteEnvironmentStorage);
+    serviceManager.addSingleton<IDeepnoteEnvironmentManager>(IDeepnoteEnvironmentManager, DeepnoteEnvironmentManager);
+    serviceManager.addBinding(IDeepnoteEnvironmentManager, IExtensionSyncActivationService);
 
     // Deepnote configuration view
-    serviceManager.addSingleton<DeepnoteConfigurationsView>(DeepnoteConfigurationsView, DeepnoteConfigurationsView);
+    serviceManager.addSingleton<DeepnoteEnvironmentsView>(DeepnoteEnvironmentsView, DeepnoteEnvironmentsView);
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
-        DeepnoteConfigurationsActivationService
+        DeepnoteEnvironmentsActivationService
     );
 
     // Deepnote configuration selection
-    serviceManager.addSingleton<IDeepnoteConfigurationPicker>(
-        IDeepnoteConfigurationPicker,
-        DeepnoteConfigurationPicker
-    );
-    serviceManager.addSingleton<IDeepnoteNotebookConfigurationMapper>(
-        IDeepnoteNotebookConfigurationMapper,
-        DeepnoteNotebookConfigurationMapper
+    serviceManager.addSingleton<IDeepnoteEnvironmentPicker>(IDeepnoteEnvironmentPicker, DeepnoteEnvironmentPicker);
+    serviceManager.addSingleton<IDeepnoteNotebookEnvironmentMapper>(
+        IDeepnoteNotebookEnvironmentMapper,
+        DeepnoteNotebookEnvironmentMapper
     );
 
     // File export/import

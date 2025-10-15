@@ -6,10 +6,10 @@ import { commands, Disposable, ProgressLocation, TreeView, window } from 'vscode
 import { IDisposableRegistry } from '../../../platform/common/types';
 import { logger } from '../../../platform/logging';
 import { IPythonApiProvider } from '../../../platform/api/types';
-import { IDeepnoteConfigurationManager } from '../types';
-import { DeepnoteConfigurationTreeDataProvider } from './deepnoteConfigurationTreeDataProvider';
-import { DeepnoteConfigurationTreeItem } from './deepnoteConfigurationTreeItem';
-import { CreateKernelConfigurationOptions } from './deepnoteKernelConfiguration';
+import { IDeepnoteEnvironmentManager } from '../types';
+import { DeepnoteEnvironmentTreeDataProvider } from './deepnoteEnvironmentTreeDataProvider';
+import { DeepnoteEnvironmentTreeItem } from './deepnoteEnvironmentTreeItem';
+import { CreateEnvironmentOptions } from './deepnoteEnvironment';
 import {
     getCachedEnvironment,
     resolvedPythonEnvToJupyterEnv,
@@ -18,25 +18,25 @@ import {
 import { getDisplayPath } from '../../../platform/common/platform/fs-paths';
 
 /**
- * View controller for the Deepnote kernel configurations tree view.
- * Manages the tree view and handles all configuration-related commands.
+ * View controller for the Deepnote kernel environments tree view.
+ * Manages the tree view and handles all environment-related commands.
  */
 @injectable()
-export class DeepnoteConfigurationsView implements Disposable {
-    private readonly treeView: TreeView<DeepnoteConfigurationTreeItem>;
-    private readonly treeDataProvider: DeepnoteConfigurationTreeDataProvider;
+export class DeepnoteEnvironmentsView implements Disposable {
+    private readonly treeView: TreeView<DeepnoteEnvironmentTreeItem>;
+    private readonly treeDataProvider: DeepnoteEnvironmentTreeDataProvider;
     private readonly disposables: Disposable[] = [];
 
     constructor(
-        @inject(IDeepnoteConfigurationManager) private readonly configurationManager: IDeepnoteConfigurationManager,
+        @inject(IDeepnoteEnvironmentManager) private readonly environmentManager: IDeepnoteEnvironmentManager,
         @inject(IPythonApiProvider) private readonly pythonApiProvider: IPythonApiProvider,
         @inject(IDisposableRegistry) disposableRegistry: IDisposableRegistry
     ) {
         // Create tree data provider
-        this.treeDataProvider = new DeepnoteConfigurationTreeDataProvider(configurationManager);
+        this.treeDataProvider = new DeepnoteEnvironmentTreeDataProvider(environmentManager);
 
         // Create tree view
-        this.treeView = window.createTreeView('deepnoteKernelConfigurations', {
+        this.treeView = window.createTreeView('deepnoteKernelEnvironments', {
             treeDataProvider: this.treeDataProvider,
             showCollapseAll: true
         });
@@ -54,80 +54,77 @@ export class DeepnoteConfigurationsView implements Disposable {
     private registerCommands(): void {
         // Refresh command
         this.disposables.push(
-            commands.registerCommand('deepnote.configurations.refresh', () => {
+            commands.registerCommand('deepnote.environments.refresh', () => {
                 this.treeDataProvider.refresh();
             })
         );
 
-        // Create configuration command
+        // Create environment command
         this.disposables.push(
-            commands.registerCommand('deepnote.configurations.create', async () => {
-                await this.createConfiguration();
+            commands.registerCommand('deepnote.environments.create', async () => {
+                await this.createEnvironmentCommand();
             })
         );
 
         // Start server command
         this.disposables.push(
-            commands.registerCommand('deepnote.configurations.start', async (item: DeepnoteConfigurationTreeItem) => {
-                if (item?.configuration) {
-                    await this.startServer(item.configuration.id);
+            commands.registerCommand('deepnote.environments.start', async (item: DeepnoteEnvironmentTreeItem) => {
+                if (item?.environment) {
+                    await this.startServer(item.environment.id);
                 }
             })
         );
 
         // Stop server command
         this.disposables.push(
-            commands.registerCommand('deepnote.configurations.stop', async (item: DeepnoteConfigurationTreeItem) => {
-                if (item?.configuration) {
-                    await this.stopServer(item.configuration.id);
+            commands.registerCommand('deepnote.environments.stop', async (item: DeepnoteEnvironmentTreeItem) => {
+                if (item?.environment) {
+                    await this.stopServer(item.environment.id);
                 }
             })
         );
 
         // Restart server command
         this.disposables.push(
-            commands.registerCommand('deepnote.configurations.restart', async (item: DeepnoteConfigurationTreeItem) => {
-                if (item?.configuration) {
-                    await this.restartServer(item.configuration.id);
+            commands.registerCommand('deepnote.environments.restart', async (item: DeepnoteEnvironmentTreeItem) => {
+                if (item?.environment) {
+                    await this.restartServer(item.environment.id);
                 }
             })
         );
 
-        // Delete configuration command
+        // Delete environment command
         this.disposables.push(
-            commands.registerCommand('deepnote.configurations.delete', async (item: DeepnoteConfigurationTreeItem) => {
-                if (item?.configuration) {
-                    await this.deleteConfiguration(item.configuration.id);
+            commands.registerCommand('deepnote.environments.delete', async (item: DeepnoteEnvironmentTreeItem) => {
+                if (item?.environment) {
+                    await this.deleteEnvironmentCommand(item.environment.id);
                 }
             })
         );
 
         // Edit name command
         this.disposables.push(
-            commands.registerCommand(
-                'deepnote.configurations.editName',
-                async (item: DeepnoteConfigurationTreeItem) => {
-                    if (item?.configuration) {
-                        await this.editConfigurationName(item.configuration.id);
-                    }
+            commands.registerCommand('deepnote.environments.editName', async (item: DeepnoteEnvironmentTreeItem) => {
+                if (item?.environment) {
+                    await this.editEnvironmentName(item.environment.id);
                 }
-            )
+            })
         );
 
         // Manage packages command
         this.disposables.push(
             commands.registerCommand(
-                'deepnote.configurations.managePackages',
-                async (item: DeepnoteConfigurationTreeItem) => {
-                    if (item?.configuration) {
-                        await this.managePackages(item.configuration.id);
+                'deepnote.environments.managePackages',
+                async (item: DeepnoteEnvironmentTreeItem) => {
+                    if (item?.environment) {
+                        await this.managePackages(item.environment.id);
                     }
                 }
             )
         );
     }
 
-    private async createConfiguration(): Promise<void> {
+    private async createEnvironmentCommand(): Promise<void> {
         try {
             // Step 1: Select Python interpreter
             const api = await this.pythonApiProvider.getNewApi();
@@ -159,7 +156,7 @@ export class DeepnoteConfigurationsView implements Disposable {
                 );
 
             const selectedInterpreter = await window.showQuickPick(interpreterItems, {
-                placeHolder: 'Select a Python interpreter for this configuration',
+                placeHolder: 'Select a Python interpreter for this environment',
                 matchOnDescription: true
             });
 
@@ -167,9 +164,9 @@ export class DeepnoteConfigurationsView implements Disposable {
                 return;
             }
 
-            // Step 2: Enter configuration name
+            // Step 2: Enter environment name
             const name = await window.showInputBox({
-                prompt: 'Enter a name for this kernel configuration',
+                prompt: 'Enter a name for this environment',
                 placeHolder: 'e.g., Python 3.11 (Data Science)',
                 validateInput: (value: string) => {
                     if (!value || value.trim().length === 0) {
@@ -213,21 +210,21 @@ export class DeepnoteConfigurationsView implements Disposable {
 
             // Step 4: Enter description (optional)
             const description = await window.showInputBox({
-                prompt: 'Enter a description for this configuration (optional)',
+                prompt: 'Enter a description for this environment (optional)',
                 placeHolder: 'e.g., Environment for data science projects'
             });
 
-            // Create configuration with progress
+            // Create environment with progress
             await window.withProgress(
                 {
                     location: ProgressLocation.Notification,
-                    title: `Creating kernel configuration "${name}"...`,
+                    title: `Creating environment "${name}"...`,
                     cancellable: false
                 },
                 async (progress: { report: (value: { message?: string; increment?: number }) => void }) => {
                     progress.report({ message: 'Setting up virtual environment...' });
 
-                    const options: CreateKernelConfigurationOptions = {
+                    const options: CreateEnvironmentOptions = {
                         name: name.trim(),
                         pythonInterpreter: selectedInterpreter.interpreter,
                         packages,
@@ -235,23 +232,23 @@ export class DeepnoteConfigurationsView implements Disposable {
                     };
 
                     try {
-                        const config = await this.configurationManager.createConfiguration(options);
-                        logger.info(`Created kernel configuration: ${config.id} (${config.name})`);
+                        const config = await this.environmentManager.createEnvironment(options);
+                        logger.info(`Created environment: ${config.id} (${config.name})`);
 
-                        void window.showInformationMessage(`Kernel configuration "${name}" created successfully!`);
+                        void window.showInformationMessage(`Environment "${name}" created successfully!`);
                     } catch (error) {
-                        logger.error(`Failed to create kernel configuration: ${error}`);
+                        logger.error(`Failed to create environment: ${error}`);
                         throw error;
                     }
                 }
             );
         } catch (error) {
-            void window.showErrorMessage(`Failed to create configuration: ${error}`);
+            void window.showErrorMessage(`Failed to create environment: ${error}`);
         }
     }
 
-    private async startServer(configurationId: string): Promise<void> {
-        const config = this.configurationManager.getConfiguration(configurationId);
+    private async startServer(environmentId: string): Promise<void> {
+        const config = this.environmentManager.getEnvironment(environmentId);
         if (!config) {
             return;
         }
@@ -264,8 +261,8 @@ export class DeepnoteConfigurationsView implements Disposable {
                     cancellable: false
                 },
                 async () => {
-                    await this.configurationManager.startServer(configurationId);
-                    logger.info(`Started server for configuration: ${configurationId}`);
+                    await this.environmentManager.startServer(environmentId);
+                    logger.info(`Started server for environment: ${environmentId}`);
                 }
             );
 
@@ -276,8 +273,8 @@ export class DeepnoteConfigurationsView implements Disposable {
         }
     }
 
-    private async stopServer(configurationId: string): Promise<void> {
-        const config = this.configurationManager.getConfiguration(configurationId);
+    private async stopServer(environmentId: string): Promise<void> {
+        const config = this.environmentManager.getEnvironment(environmentId);
         if (!config) {
             return;
         }
@@ -290,8 +287,8 @@ export class DeepnoteConfigurationsView implements Disposable {
                     cancellable: false
                 },
                 async () => {
-                    await this.configurationManager.stopServer(configurationId);
-                    logger.info(`Stopped server for configuration: ${configurationId}`);
+                    await this.environmentManager.stopServer(environmentId);
+                    logger.info(`Stopped server for environment: ${environmentId}`);
                 }
             );
 
@@ -302,8 +299,8 @@ export class DeepnoteConfigurationsView implements Disposable {
         }
     }
 
-    private async restartServer(configurationId: string): Promise<void> {
-        const config = this.configurationManager.getConfiguration(configurationId);
+    private async restartServer(environmentId: string): Promise<void> {
+        const config = this.environmentManager.getEnvironment(environmentId);
         if (!config) {
             return;
         }
@@ -316,8 +313,8 @@ export class DeepnoteConfigurationsView implements Disposable {
                     cancellable: false
                 },
                 async () => {
-                    await this.configurationManager.restartServer(configurationId);
-                    logger.info(`Restarted server for configuration: ${configurationId}`);
+                    await this.environmentManager.restartServer(environmentId);
+                    logger.info(`Restarted server for environment: ${environmentId}`);
                 }
             );
 
@@ -328,8 +325,8 @@ export class DeepnoteConfigurationsView implements Disposable {
         }
     }
 
-    private async deleteConfiguration(configurationId: string): Promise<void> {
-        const config = this.configurationManager.getConfiguration(configurationId);
+    private async deleteEnvironmentCommand(environmentId: string): Promise<void> {
+        const config = this.environmentManager.getEnvironment(environmentId);
         if (!config) {
             return;
         }
@@ -349,30 +346,30 @@ export class DeepnoteConfigurationsView implements Disposable {
             await window.withProgress(
                 {
                     location: ProgressLocation.Notification,
-                    title: `Deleting configuration "${config.name}"...`,
+                    title: `Deleting environment "${config.name}"...`,
                     cancellable: false
                 },
                 async () => {
-                    await this.configurationManager.deleteConfiguration(configurationId);
-                    logger.info(`Deleted configuration: ${configurationId}`);
+                    await this.environmentManager.deleteEnvironment(environmentId);
+                    logger.info(`Deleted environment: ${environmentId}`);
                 }
             );
 
-            void window.showInformationMessage(`Configuration "${config.name}" deleted`);
+            void window.showInformationMessage(`Environment "${config.name}" deleted`);
         } catch (error) {
-            logger.error(`Failed to delete configuration: ${error}`);
-            void window.showErrorMessage(`Failed to delete configuration: ${error}`);
+            logger.error(`Failed to delete environment: ${error}`);
+            void window.showErrorMessage(`Failed to delete environment: ${error}`);
         }
     }
 
-    private async editConfigurationName(configurationId: string): Promise<void> {
-        const config = this.configurationManager.getConfiguration(configurationId);
+    private async editEnvironmentName(environmentId: string): Promise<void> {
+        const config = this.environmentManager.getEnvironment(environmentId);
         if (!config) {
             return;
         }
 
         const newName = await window.showInputBox({
-            prompt: 'Enter a new name for this configuration',
+            prompt: 'Enter a new name for this environment',
             value: config.name,
             validateInput: (value: string) => {
                 if (!value || value.trim().length === 0) {
@@ -387,20 +384,20 @@ export class DeepnoteConfigurationsView implements Disposable {
         }
 
         try {
-            await this.configurationManager.updateConfiguration(configurationId, {
+            await this.environmentManager.updateEnvironment(environmentId, {
                 name: newName.trim()
             });
 
-            logger.info(`Renamed configuration ${configurationId} to "${newName}"`);
-            void window.showInformationMessage(`Configuration renamed to "${newName}"`);
+            logger.info(`Renamed environment ${environmentId} to "${newName}"`);
+            void window.showInformationMessage(`Environment renamed to "${newName}"`);
         } catch (error) {
-            logger.error(`Failed to rename configuration: ${error}`);
-            void window.showErrorMessage(`Failed to rename configuration: ${error}`);
+            logger.error(`Failed to rename environment: ${error}`);
+            void window.showErrorMessage(`Failed to rename environment: ${error}`);
         }
     }
 
-    private async managePackages(configurationId: string): Promise<void> {
-        const config = this.configurationManager.getConfiguration(configurationId);
+    private async managePackages(environmentId: string): Promise<void> {
+        const config = this.environmentManager.getEnvironment(environmentId);
         if (!config) {
             return;
         }
@@ -441,8 +438,8 @@ export class DeepnoteConfigurationsView implements Disposable {
                     cancellable: false
                 },
                 async () => {
-                    await this.configurationManager.updateConfiguration(configurationId, { packages });
-                    logger.info(`Updated packages for configuration ${configurationId}`);
+                    await this.environmentManager.updateEnvironment(environmentId, { packages });
+                    logger.info(`Updated packages for environment ${environmentId}`);
                 }
             );
 

@@ -1,26 +1,26 @@
 import { assert } from 'chai';
 import { instance, mock, when, verify } from 'ts-mockito';
-import { DeepnoteConfigurationsActivationService } from './deepnoteConfigurationsActivationService';
-import { IDeepnoteConfigurationManager } from '../types';
-import { DeepnoteConfigurationsView } from './deepnoteConfigurationsView';
+import { DeepnoteEnvironmentsActivationService } from './deepnoteEnvironmentsActivationService';
+import { IDeepnoteEnvironmentManager } from '../types';
+import { DeepnoteEnvironmentsView } from './deepnoteEnvironmentsView';
 
-suite('DeepnoteConfigurationsActivationService', () => {
-    let activationService: DeepnoteConfigurationsActivationService;
-    let mockConfigManager: IDeepnoteConfigurationManager;
-    let mockConfigurationsView: DeepnoteConfigurationsView;
+suite('DeepnoteEnvironmentsActivationService', () => {
+    let activationService: DeepnoteEnvironmentsActivationService;
+    let mockConfigManager: IDeepnoteEnvironmentManager;
+    let mockEnvironmentsView: DeepnoteEnvironmentsView;
 
     setup(() => {
-        mockConfigManager = mock<IDeepnoteConfigurationManager>();
-        mockConfigurationsView = mock<DeepnoteConfigurationsView>();
+        mockConfigManager = mock<IDeepnoteEnvironmentManager>();
+        mockEnvironmentsView = mock<DeepnoteEnvironmentsView>();
 
-        activationService = new DeepnoteConfigurationsActivationService(
+        activationService = new DeepnoteEnvironmentsActivationService(
             instance(mockConfigManager),
-            instance(mockConfigurationsView)
+            instance(mockEnvironmentsView)
         );
     });
 
     suite('activate', () => {
-        test('should call initialize on configuration manager', async () => {
+        test('should call initialize on environment manager', async () => {
             when(mockConfigManager.initialize()).thenResolve();
 
             activationService.activate();
@@ -57,19 +57,19 @@ suite('DeepnoteConfigurationsActivationService', () => {
             assert.ok(activationService);
         });
 
-        test('should accept configuration manager', () => {
-            const service = new DeepnoteConfigurationsActivationService(
+        test('should accept environment manager', () => {
+            const service = new DeepnoteEnvironmentsActivationService(
                 instance(mockConfigManager),
-                instance(mockConfigurationsView)
+                instance(mockEnvironmentsView)
             );
 
             assert.ok(service);
         });
 
-        test('should accept configurations view', () => {
-            const service = new DeepnoteConfigurationsActivationService(
+        test('should accept environments view', () => {
+            const service = new DeepnoteEnvironmentsActivationService(
                 instance(mockConfigManager),
-                instance(mockConfigurationsView)
+                instance(mockEnvironmentsView)
             );
 
             assert.ok(service);

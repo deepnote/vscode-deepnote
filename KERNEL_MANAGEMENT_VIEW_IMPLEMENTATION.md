@@ -2,7 +2,7 @@
 
 ## Overview
 
-This implementation adds a comprehensive UI for managing Deepnote kernel configurations, allowing users to create, start, stop, and delete kernel environments with different Python versions and package configurations. This transforms the automatic, hidden kernel management into visible, user-controlled kernel lifecycle management.
+This implementation adds a comprehensive UI for managing Deepnote environments, allowing users to create, start, stop, and delete Python environments with different Python versions and package configurations. This transforms the automatic, hidden kernel management into visible, user-controlled environment lifecycle management.
 
 ## Problem Statement
 
@@ -16,14 +16,182 @@ The current Deepnote kernel implementation is fully automatic:
 
 ## Solution
 
-Implement a **Kernel Configuration Management System** with:
-1. **Persistent Configurations**: User-created kernel configurations stored globally
+Implement an **Environment Management System** with:
+1. **Persistent Environments**: User-created Python environments stored globally
 2. **Manual Lifecycle Control**: Start, stop, restart, delete servers from UI
-3. **Multi-Version Support**: Create configurations with different Python interpreters
-4. **Package Management**: Configure packages per configuration
-5. **Visual Management**: Tree view showing all configurations and their status
+3. **Multi-Version Support**: Create environments with different Python interpreters
+4. **Package Management**: Configure packages per environment
+5. **Visual Management**: Tree view showing all environments and their status
 
 ## Architecture
+
+### System Architecture Diagram
+
+```mermaid
+graph TB
+    subgraph "VS Code Extension"
+        Activation[DeepnoteConfigurationsActivationService<br/>Entry Point]
+    end
+
+    Activation --> Manager
+    Activation --> View
+
+    subgraph "Core Layer"
+        Manager[DeepnoteConfigurationManager<br/>Business Logic & State]
+        Storage[DeepnoteConfigurationStorage<br/>Persistence Layer]
+
+        Manager -->|serialize/deserialize| Storage
+        Storage -->|Memento API| VSCode[(VS Code<br/>Global State)]
+    end
+
+    subgraph "UI Layer"
+        View[DeepnoteConfigurationsView<br/>UI Controller]
+        TreeDataProvider[DeepnoteConfigurationTreeDataProvider<br/>MVC Controller]
+        TreeItem[DeepnoteConfigurationTreeItem<br/>View Model]
+
+        View -->|creates| TreeDataProvider
+        View -->|registers commands| Commands[Command Handlers]
+        TreeDataProvider -->|getChildren| TreeItem
+        TreeDataProvider -->|subscribes to| Manager
+    end
+
+    subgraph "Infrastructure"
+        Installer[DeepnoteToolkitInstaller<br/>Venv & Package Management]
+        ServerStarter[DeepnoteServerStarter<br/>Jupyter Server Lifecycle]
+
+        Manager -->|install toolkit| Installer
+        Manager -->|start/stop server| ServerStarter
+    end
+
+    subgraph "Integration"
+        Picker[DeepnoteConfigurationPicker<br/>QuickPick UI]
+        Mapper[DeepnoteNotebookConfigurationMapper<br/>Notebook→Config Mapping]
+        AutoSelector[DeepnoteKernelAutoSelector<br/>Notebook Integration]
+
+        AutoSelector -->|show picker| Picker
+        AutoSelector -->|get/set mapping| Mapper
+        Picker -->|list configs| Manager
+    end
+
+    Manager -.->|fires event| TreeDataProvider
+    TreeDataProvider -.->|fires event| VSCodeTree[VS Code TreeView]
+    VSCodeTree -.->|calls| TreeDataProvider
+
+    style Manager fill:#e1f5ff
+    style TreeDataProvider fill:#fff4e1
+    style Installer fill:#f0f0f0
+    style ServerStarter fill:#f0f0f0
+```
+
+### Data Model & Flow
+
+```mermaid
+graph LR
+    subgraph "Runtime Model"
+        Config[DeepnoteKernelConfiguration<br/>───────────<br/>id: UUID<br/>name: string<br/>pythonInterpreter: PythonEnvironment<br/>venvPath: Uri<br/>serverInfo?: DeepnoteServerInfo<br/>packages?: string]
+    end
+
+    subgraph "Storage Model"
+        State[DeepnoteKernelConfigurationState<br/>───────────<br/>All fields as JSON primitives<br/>pythonInterpreterPath: string]
+    end
+
+    subgraph "UI Model"
+        WithStatus[DeepnoteKernelConfigurationWithStatus<br/>───────────<br/>All config fields +<br/>status: KernelConfigurationStatus]
+    end
+
+    Config -->|serialize| State
+    State -->|deserialize| Config
+    Config -->|enrich| WithStatus
+
+    style Config fill:#e1f5ff
+    style State fill:#f0f0f0
+    style WithStatus fill:#fff4e1
+```
+
+### EventEmitter Pattern (Pub/Sub)
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant View as ConfigurationsView
+    participant Manager as ConfigurationManager
+    participant TreeProvider as TreeDataProvider
+    participant VSCode as VS Code TreeView
+
+    Note over Manager: PRIVATE _onDidChangeConfigurations<br/>(EventEmitter - can fire)
+    Note over Manager: PUBLIC onDidChangeConfigurations<br/>(Event - can subscribe)
+
+    User->>View: Create Configuration
+    View->>Manager: createConfiguration(options)
+
+    rect rgb(230, 240, 255)
+        Note over Manager: Add to Map<id, config>
+        Note over Manager: Persist to storage
+        Manager->>Manager: _onDidChangeConfigurations.fire()
+    end
+
+    Manager-->>TreeProvider: onDidChangeConfigurations event
+
+    rect rgb(255, 245, 225)
+        TreeProvider->>TreeProvider: refresh() called
+        TreeProvider->>TreeProvider: _onDidChangeTreeData.fire()
+    end
+
+    TreeProvider-->>VSCode: onDidChangeTreeData event
+    VSCode->>TreeProvider: getChildren()
+    TreeProvider->>Manager: listConfigurations()
+    Manager-->>TreeProvider: configs with status
+    TreeProvider-->>VSCode: TreeItems
+
+    VSCode->>User: UI updates
+```
+
+### Component Interaction Flow
+
+```mermaid
+graph TB
+    subgraph "User Actions"
+        CreateBtn[Create Configuration]
+        StartBtn[Start Server]
+        StopBtn[Stop Server]
+        DeleteBtn[Delete Configuration]
+    end
+
+    CreateBtn --> CreateCmd[createConfiguration]
+    StartBtn --> StartCmd[startServer]
+    StopBtn --> StopCmd[stopServer]
+    DeleteBtn --> DeleteCmd[deleteConfiguration]
+
+    CreateCmd --> Manager
+    StartCmd --> Manager
+    StopCmd --> Manager
+    DeleteCmd --> Manager
+
+    subgraph "Configuration Manager"
+        Manager[Manager Methods]
+
+        Manager --> |1. create venv path| CreateFlow[Create Flow]
+        Manager --> |2. add to Map| CreateFlow
+        Manager --> |3. persist| CreateFlow
+        Manager --> |4. fire event| CreateFlow
+
+        Manager --> |1. get config| StartFlow[Start Flow]
+        StartFlow --> |2. ensure venv| Installer
+        StartFlow --> |3. install packages| Installer
+        StartFlow --> |4. start server| ServerStarter
+        StartFlow --> |5. update serverInfo| Manager
+        StartFlow --> |6. persist & fire event| Manager
+    end
+
+    CreateFlow -.->|event| TreeRefresh[Tree Refresh]
+    StartFlow -.->|event| TreeRefresh
+
+    TreeRefresh --> TreeProvider
+    TreeProvider --> VSCodeUI[VS Code UI Updates]
+
+    style Manager fill:#e1f5ff
+    style TreeProvider fill:#fff4e1
+```
 
 ### Core Concepts
 
@@ -334,7 +502,7 @@ src/kernels/deepnote/
 └── types.ts                                           (updated) ✅
 
 src/notebooks/deepnote/
-├── deepnoteKernelAutoSelector.node.ts                (needs refactoring) ⏳
+├── deepnoteKernelAutoSelector.node.ts                (refactored) ✅
 └── ... (rest unchanged)
 ```
 
@@ -707,13 +875,18 @@ Legend:
 - Progress notifications during installation
 - Configuration updates reflected in tree
 
+**✅ Phase 7: Notebook Integration**
+- Configuration picker created and integrated ✅
+- Notebook configuration mapper created and integrated ✅
+- Services registered in DI container ✅
+- Kernel auto-selector integration completed ✅
+- Configuration selection flow implemented ✅
+- Auto-start stopped servers implemented ✅
+- Fallback to legacy behavior when cancelled ✅
+
 ### In Progress
 
-**⏳ Phase 7: Notebook Integration** (Partial)
-- Configuration picker created ✅
-- Notebook configuration mapper created ✅
-- Services registered in DI container ✅
-- Kernel auto-selector integration **pending** ⏳
+None - Core phases completed!
 
 ### Deferred
 
@@ -729,23 +902,102 @@ Legend:
 
 ### Next Steps
 
-1. **Complete Phase 7 Integration**: Modify `DeepnoteKernelAutoSelector.ensureKernelSelected()` to:
-   - Check mapper for existing configuration selection
-   - Show picker if no selection exists
-   - Use selected configuration's venv and server
-   - Save selection to mapper
-   - Maintain backward compatibility with old auto-create behavior
-
-2. **E2E Testing**: Validate complete flow:
+1. **E2E Testing**: Validate complete flow:
    - Create configuration via UI
    - Start server via UI
    - Open notebook, see picker
    - Select configuration
    - Execute cells successfully
+   - Verify selection persists across sessions
 
-3. **Phase 6**: Implement detail view webview (optional enhancement)
+2. **Phase 6** (Optional): Implement detail view webview with:
+   - Live server logs
+   - Editable configuration fields
+   - Package management UI
+   - Action buttons
 
-4. **Phase 8**: Polish, migration, and documentation
+3. **Phase 8**: Polish, migration, and documentation:
+   - Migrate existing file-based venvs to configurations
+   - Auto-detect and import old venvs on first run
+   - UI polish (better icons, tooltips, descriptions)
+   - Keyboard shortcuts
+   - User documentation
+
+## Naming Refactoring
+
+**Status**: ✅ **COMPLETED** - All files renamed, types updated, package.json updated, tests passing
+
+The naming refactoring from "Configuration" to "Environment" was completed on 2025-10-15. This section documents the rationale and implementation details.
+
+### Rationale
+
+The previous naming "Kernel Configuration" was confusing because:
+- It's not actually configuring kernels (those are Jupyter processes spawned on-demand)
+- It's really a **Python environment** (venv + packages + Jupyter server)
+- Users may confuse it with VSCode's kernel concept
+
+### Implemented Naming: "Environment" ✅
+
+**What it represents:**
+- A Python virtual environment (venv)
+- Installed packages
+- A long-running Jupyter server
+- Configuration metadata (name, created date, etc.)
+
+**Why "Environment":**
+1. **Technically accurate**: It IS a Python environment with a server
+2. **Familiar concept**: Developers know "environments" from conda, poetry, pipenv
+3. **Clear separation**:
+   - Environment = venv + packages + server (long-lived, reusable)
+   - Kernel = execution process (short-lived, per-session)
+4. **VSCode precedent**: Python extension uses "environment" for interpreters/venvs
+
+### Naming Mapping
+
+| Current Name | New Name | Type |
+|--------------|----------|------|
+| `DeepnoteKernelConfiguration` | `DeepnoteEnvironment` | Type/Interface |
+| `IDeepnoteConfigurationManager` | `IDeepnoteEnvironmentManager` | Interface |
+| `DeepnoteConfigurationManager` | `DeepnoteEnvironmentManager` | Class |
+| `DeepnoteConfigurationStorage` | `DeepnoteEnvironmentStorage` | Class |
+| `DeepnoteConfigurationPicker` | `DeepnoteEnvironmentPicker` | Class |
+| `DeepnoteNotebookConfigurationMapper` | `DeepnoteNotebookEnvironmentMapper` | Class |
+| `DeepnoteConfigurationsView` | `DeepnoteEnvironmentsView` | Class |
+| `DeepnoteConfigurationTreeDataProvider` | `DeepnoteEnvironmentTreeDataProvider` | Class |
+| `DeepnoteConfigurationTreeItem` | `DeepnoteEnvironmentTreeItem` | Class |
+| `deepnoteKernelConfigurations` (view ID) | `deepnoteEnvironments` | View ID |
+| `deepnote.configurations.*` (commands) | `deepnote.environments.*` | Commands |
+
+**Keep unchanged:**
+- `DeepnoteServerInfo` - Accurately describes Jupyter server
+- `DeepnoteKernelConnectionMetadata` - Actually IS kernel connection metadata
+- `DeepnoteKernelAutoSelector` - Selects kernels (appropriate name)
+
+### UI Text Changes
+
+| Current | New |
+|---------|-----|
+| "Kernel Configurations" | "Environments" |
+| "Create Kernel Configuration" | "Create Environment" |
+| "Delete Configuration" | "Delete Environment" |
+| "Select a kernel configuration for notebook" | "Select an environment for notebook" |
+| "Configuration not found" | "Environment not found" |
+
+### File Renames
+
+```
+configurations/ → environments/
+
+deepnoteKernelConfiguration.ts → deepnoteEnvironment.ts
+deepnoteConfigurationManager.ts → deepnoteEnvironmentManager.ts
+deepnoteConfigurationStorage.ts → deepnoteEnvironmentStorage.ts
+deepnoteConfigurationPicker.ts → deepnoteEnvironmentPicker.ts
+deepnoteNotebookConfigurationMapper.ts → deepnoteNotebookEnvironmentMapper.ts
+deepnoteConfigurationsView.ts → deepnoteEnvironmentsView.ts
+deepnoteConfigurationTreeDataProvider.ts → deepnoteEnvironmentTreeDataProvider.ts
+deepnoteConfigurationTreeItem.ts → deepnoteEnvironmentTreeItem.ts
+deepnoteConfigurationsActivationService.ts → deepnoteEnvironmentsActivationService.ts
+```
 
 ## Related Documentation
 

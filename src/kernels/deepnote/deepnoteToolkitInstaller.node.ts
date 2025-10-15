@@ -65,7 +65,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
     }
 
     /**
-     * Configuration-based method: Ensure venv and toolkit are installed at a specific path.
+     * Environment-based method: Ensure venv and toolkit are installed at a specific path.
      * @param baseInterpreter The base Python interpreter to use for creating the venv
      * @param venvPath The exact path where the venv should be created
      * @param token Cancellation token
@@ -188,7 +188,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
     }
 
     /**
-     * Install venv and toolkit at a specific path (configuration-based).
+     * Install venv and toolkit at a specific path (environment-based).
      */
     private async installVenvAndToolkit(
         baseInterpreter: PythonEnvironment,
@@ -348,7 +348,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
 
     /**
      * Generate a kernel spec name from a venv path.
-     * This is used for both file-based and configuration-based venvs.
+     * This is used for both file-based and environment-based venvs.
      */
     private getKernelSpecName(venvPath: Uri): string {
         // Extract the venv directory name (last segment of path)

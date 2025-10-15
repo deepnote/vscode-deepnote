@@ -69,7 +69,7 @@ export const IDeepnoteToolkitInstaller = Symbol('IDeepnoteToolkitInstaller');
 export interface IDeepnoteToolkitInstaller {
     /**
      * Ensures deepnote-toolkit is installed in a dedicated virtual environment.
-     * Configuration-based method.
+     * Environment-based method.
      * @param baseInterpreter The base Python interpreter to use for creating the venv
      * @param venvPath The path where the venv should be created
      * @param token Cancellation token to cancel the operation
@@ -124,26 +124,26 @@ export interface IDeepnoteToolkitInstaller {
 export const IDeepnoteServerStarter = Symbol('IDeepnoteServerStarter');
 export interface IDeepnoteServerStarter {
     /**
-     * Starts a deepnote-toolkit Jupyter server for a configuration.
-     * Configuration-based method.
+     * Starts a deepnote-toolkit Jupyter server for a kernel environment.
+     * Environment-based method.
      * @param interpreter The Python interpreter to use
      * @param venvPath The path to the venv
-     * @param configurationId The configuration ID (for server management)
+     * @param environmentId The environment ID (for server management)
      * @param token Cancellation token to cancel the operation
      * @returns Connection information (URL, port, etc.)
      */
     startServer(
         interpreter: PythonEnvironment,
         venvPath: vscode.Uri,
-        configurationId: string,
+        environmentId: string,
         token?: vscode.CancellationToken
     ): Promise<DeepnoteServerInfo>;
 
     /**
-     * Stops the deepnote-toolkit server for a configuration.
-     * @param configurationId The configuration ID
+     * Stops the deepnote-toolkit server for a kernel environment.
+     * @param environmentId The environment ID
      */
-    stopServer(configurationId: string): Promise<void>;
+    stopServer(environmentId: string): Promise<void>;
 
     /**
      * Legacy method: Starts or gets an existing deepnote-toolkit Jupyter server.
@@ -198,81 +198,81 @@ export interface IDeepnoteKernelAutoSelector {
     ensureKernelSelected(notebook: vscode.NotebookDocument, token?: vscode.CancellationToken): Promise<void>;
 }
 
-export const IDeepnoteConfigurationManager = Symbol('IDeepnoteConfigurationManager');
-export interface IDeepnoteConfigurationManager {
+export const IDeepnoteEnvironmentManager = Symbol('IDeepnoteEnvironmentManager');
+export interface IDeepnoteEnvironmentManager {
     /**
-     * Initialize the manager by loading configurations from storage
+     * Initialize the manager by loading environments from storage
      */
     initialize(): Promise<void>;
 
     /**
-     * Create a new kernel configuration
+     * Wait for initialization to complete
      */
-    createConfiguration(
-        options: import('./configurations/deepnoteKernelConfiguration').CreateKernelConfigurationOptions
-    ): Promise<import('./configurations/deepnoteKernelConfiguration').DeepnoteKernelConfiguration>;
+    waitForInitialization(): Promise<void>;
 
     /**
-     * Get all configurations
+     * Create a new kernel environment
      */
-    listConfigurations(): import('./configurations/deepnoteKernelConfiguration').DeepnoteKernelConfiguration[];
+    createEnvironment(
+        options: import('./environments/deepnoteEnvironment').CreateEnvironmentOptions
+    ): Promise<import('./environments/deepnoteEnvironment').DeepnoteEnvironment>;
 
     /**
-     * Get a specific configuration by ID
+     * Get all environments
      */
-    getConfiguration(
+    listEnvironments(): import('./environments/deepnoteEnvironment').DeepnoteEnvironment[];
+
+    /**
+     * Get a specific environment by ID
+     */
+    getEnvironment(id: string): import('./environments/deepnoteEnvironment').DeepnoteEnvironment | undefined;
+
+    /**
+     * Get environment with status information
+     */
+    getEnvironmentWithStatus(
         id: string
-    ): import('./configurations/deepnoteKernelConfiguration').DeepnoteKernelConfiguration | undefined;
+    ): import('./environments/deepnoteEnvironment').DeepnoteEnvironmentWithStatus | undefined;
 
     /**
-     * Get configuration with status information
+     * Update an environment's metadata
      */
-    getConfigurationWithStatus(
-        id: string
-    ): import('./configurations/deepnoteKernelConfiguration').DeepnoteKernelConfigurationWithStatus | undefined;
-
-    /**
-     * Update a configuration's metadata
-     */
-    updateConfiguration(
+    updateEnvironment(
         id: string,
         updates: Partial<
-            Pick<
-                import('./configurations/deepnoteKernelConfiguration').DeepnoteKernelConfiguration,
-                'name' | 'packages' | 'description'
-            >
+            Pick<import('./environments/deepnoteEnvironment').DeepnoteEnvironment, 'name' | 'packages' | 'description'>
         >
     ): Promise<void>;
 
     /**
-     * Delete a configuration
+     * Delete an environment
      */
-    deleteConfiguration(id: string): Promise<void>;
+    deleteEnvironment(id: string): Promise<void>;
 
     /**
-     * Start the Jupyter server for a configuration
+     * Start the Jupyter server for an environment
      */
     startServer(id: string): Promise<void>;
 
     /**
-     * Stop the Jupyter server for a configuration
+     * Stop the Jupyter server for an environment
      */
     stopServer(id: string): Promise<void>;
 
     /**
-     * Restart the Jupyter server for a configuration
+     * Restart the Jupyter server for an environment
      */
     restartServer(id: string): Promise<void>;
 
     /**
-     * Update the last used timestamp for a configuration
+     * Update the last used timestamp for an environment
      */
     updateLastUsed(id: string): Promise<void>;
 
     /**
-     * Event fired when configurations change
+     * Event fired when environments change
      */
-    onDidChangeConfigurations: vscode.Event<void>;
+    onDidChangeEnvironments: vscode.Event<void>;
 
     /**
      * Dispose of all resources
@@ -280,46 +280,46 @@ export interface IDeepnoteConfigurationManager {
     dispose(): void;
 }
 
-export const IDeepnoteConfigurationPicker = Symbol('IDeepnoteConfigurationPicker');
-export interface IDeepnoteConfigurationPicker {
+export const IDeepnoteEnvironmentPicker = Symbol('IDeepnoteEnvironmentPicker');
+export interface IDeepnoteEnvironmentPicker {
     /**
-     * Show a quick pick to select a kernel configuration for a notebook
+     * Show a quick pick to select an environment for a notebook
      * @param notebookUri The notebook URI (for context in messages)
-     * @returns Selected configuration, or undefined if cancelled
+     * @returns Selected environment, or undefined if cancelled
      */
-    pickConfiguration(
+    pickEnvironment(
         notebookUri: vscode.Uri
-    ): Promise<import('./configurations/deepnoteKernelConfiguration').DeepnoteKernelConfiguration | undefined>;
+    ): Promise<import('./environments/deepnoteEnvironment').DeepnoteEnvironment | undefined>;
 }
 
-export const IDeepnoteNotebookConfigurationMapper = Symbol('IDeepnoteNotebookConfigurationMapper');
-export interface IDeepnoteNotebookConfigurationMapper {
+export const IDeepnoteNotebookEnvironmentMapper = Symbol('IDeepnoteNotebookEnvironmentMapper');
+export interface IDeepnoteNotebookEnvironmentMapper {
     /**
-     * Get the configuration ID selected for a notebook
+     * Get the environment ID selected for a notebook
      * @param notebookUri The notebook URI (without query/fragment)
-     * @returns Configuration ID, or undefined if not set
+     * @returns Environment ID, or undefined if not set
      */
-    getConfigurationForNotebook(notebookUri: vscode.Uri): string | undefined;
+    getEnvironmentForNotebook(notebookUri: vscode.Uri): string | undefined;
 
     /**
-     * Set the configuration for a notebook
+     * Set the environment for a notebook
      * @param notebookUri The notebook URI (without query/fragment)
-     * @param configurationId The configuration ID
+     * @param environmentId The environment ID
      */
-    setConfigurationForNotebook(notebookUri: vscode.Uri, configurationId: string): Promise<void>;
+    setEnvironmentForNotebook(notebookUri: vscode.Uri, environmentId: string): Promise<void>;
 
     /**
-     * Remove the configuration mapping for a notebook
+     * Remove the environment mapping for a notebook
      * @param notebookUri The notebook URI (without query/fragment)
      */
-    removeConfigurationForNotebook(notebookUri: vscode.Uri): Promise<void>;
+    removeEnvironmentForNotebook(notebookUri: vscode.Uri): Promise<void>;
 
     /**
-     * Get all notebooks using a specific configuration
-     * @param configurationId The configuration ID
+     * Get all notebooks using a specific environment
+     * @param environmentId The environment ID
      * @returns Array of notebook URIs
      */
-    getNotebooksUsingConfiguration(configurationId: string): vscode.Uri[];
+    getNotebooksUsingEnvironment(environmentId: string): vscode.Uri[];
 }
 
 export const DEEPNOTE_TOOLKIT_VERSION = '0.2.30.post30';

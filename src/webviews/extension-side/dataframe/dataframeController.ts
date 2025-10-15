@@ -1,44 +1,42 @@
 import { injectable } from 'inversify';
 import {
     commands,
-    env,
     l10n,
     NotebookEdit,
-    NotebookEditor,
-    NotebookRendererMessaging,
+    type NotebookEditor,
+    type NotebookRendererMessaging,
     notebooks,
     window,
     workspace,
     WorkspaceEdit
 } from 'vscode';
 
-import { IExtensionSyncActivationService } from '../../../platform/activation/types';
-import { IDisposable } from '../../../platform/common/types';
+import type { IExtensionSyncActivationService } from '../../../platform/activation/types';
+import type { IDisposable } from '../../../platform/common/types';
 import { dispose } from '../../../platform/common/utils/lifecycle';
 import { logger } from '../../../platform/logging';
 
 type SelectPageSizeCommand = {
     cellId?: string;
-    cellIndex?: number;
     command: 'selectPageSize';
     size: number;
 };
 
 type GoToPageCommand = {
     cellId?: string;
-    cellIndex?: number;
     command: 'goToPage';
     page: number;
 };
 
 type CopyTableDataCommand = {
+    cellId?: string;
     command: 'copyTableData';
     data: string;
 };
 
 type ExportDataframeCommand = {
+    cellId?: string;
     command: 'exportDataframe';
-    cellIndex: number;
 };
 
 type DataframeCommand = SelectPageSizeCommand | GoToPageCommand | CopyTableDataCommand | ExportDataframeCommand;
@@ -47,13 +45,14 @@ type DataframeCommand = SelectPageSizeCommand | GoToPageCommand | CopyTableDataC
 export class DataframeController implements IExtensionSyncActivationService {
     private readonly disposables: IDisposable[] = [];
 
-    public dispose() {
-        dispose(this.disposables);
+    public activate() {
+        const comms = notebooks.createRendererMessaging('deepnote-dataframe-renderer');
+        const messageDisposable = comms.onDidReceiveMessage(this.onDidReceiveMessage.bind(this, comms), this);
+        this.disposables.push(messageDisposable);
     }
 
-    activate() {
-        const comms = notebooks.createRendererMessaging('deepnote-dataframe-renderer');
-        comms.onDidReceiveMessage(this.onDidReceiveMessage.bind(this, comms), this, this.disposables);
+    public dispose() {
+        dispose(this.disposables);
     }
 
     private async onDidReceiveMessage(
@@ -75,18 +74,20 @@ export class DataframeController implements IExtensionSyncActivationService {
         }
 
         if (message.command === 'copyTableData') {
-            return this.handleCopyTableData(message);
+            // TODO: Implement dataframe export functionality
+            return;
         }
 
         if (message.command === 'exportDataframe') {
-            return this.handleExportDataframe(editor, message);
+            // TODO: Implement dataframe export functionality
+            return;
         }
 
         logger.warn(`DataframeController received unknown command:`, message);
     }
 
     private async handleSelectPageSize(editor: NotebookEditor, message: SelectPageSizeCommand) {
-        if (!message.cellId && message.cellIndex === undefined) {
+        if (!message.cellId) {
             const errorMessage = l10n.t(
                 'Unable to update page size: No cell identifier provided. Please re-run the cell to update the output metadata.'
             );
@@ -197,22 +198,5 @@ export class DataframeController implements IExtensionSyncActivationService {
             ranges: [{ start: cellIndex, end: cellIndex + 1 }],
             document: editor.notebook.uri
         });
-    }
-
-    private async handleCopyTableData(message: CopyTableDataCommand) {
-        logger.info(`[DataframeRenderer] copyTableData called, data length=${message.data.length} characters`);
-
-        await env.clipboard.writeText(message.data);
-    }
-
-    private async handleExportDataframe(editor: NotebookEditor, message: ExportDataframeCommand) {
-        const cell = editor.notebook.cellAt(message.cellIndex);
-
-        logger.info(
-            `[DataframeRenderer] exportDataframe called for cell ${
-                message.cellIndex
-            } (${cell?.document.uri.toString()})`
-        );
-        // TODO: Implement dataframe export functionality
     }
 }

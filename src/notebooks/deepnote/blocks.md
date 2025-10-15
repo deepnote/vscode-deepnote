@@ -12,7 +12,7 @@ Every Deepnote block exists in **three different representations** as it moves t
 
 Understanding how data flows between these representations is key to working with this extension.
 
-```
+```text
 ┌─────────────────┐
 │  .deepnote File │
 │  (YAML format)  │

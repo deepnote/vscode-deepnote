@@ -50,13 +50,19 @@ export class DeepnoteDataConverter {
                 type: block.type,
                 sortingKey: block.sortingKey,
                 ...(blockWithOptionalFields.blockGroup && { blockGroup: blockWithOptionalFields.blockGroup }),
-                ...(block.executionCount !== undefined && { executionCount: block.executionCount })
+                ...(block.executionCount !== undefined && { executionCount: block.executionCount }),
+                // Track whether this block had outputs for round-trip fidelity
+                __hadOutputs: block.outputs !== undefined
             };
 
             // The pocket is a place to tuck away Deepnote-specific fields for later.
             addPocketToCellMetadata(cell);
 
-            cell.outputs = this.transformOutputsForVsCode(block.outputs || [], index, block.id, block.type, block.metadata);
+            // Only set outputs if the block has them (including empty arrays)
+            // This preserves round-trip fidelity
+            if (block.outputs !== undefined) {
+                cell.outputs = this.transformOutputsForVsCode(block.outputs, index, block.id, block.type, block.metadata);
+            }
 
             return cell;
         });
@@ -82,8 +88,17 @@ export class DeepnoteDataConverter {
 
             // Convert VS Code outputs to Deepnote format
             // Outputs are managed by VS Code natively, not stored in the pocket
-            if (!block.outputs && cell.outputs && cell.outputs.length > 0) {
+            // Preserve outputs when they exist (including newly produced outputs)
+            // Only set if not already set to avoid overwriting converter-managed outputs
+            // Only set if the cell actually has outputs (non-empty array) or if the block originally had outputs
+            const hadOutputs = cell.metadata?.__hadOutputs;
+            if (cell.outputs && !block.outputs && (cell.outputs.length > 0 || hadOutputs)) {
                 block.outputs = this.transformOutputsForDeepnote(cell.outputs);
+            }
+
+            // Clean up internal tracking flags from metadata
+            if (block.metadata && '__hadOutputs' in block.metadata) {
+                delete block.metadata.__hadOutputs;
             }
 
             return block;
@@ -232,7 +247,7 @@ export class DeepnoteDataConverter {
 
                     const metadata: Record<string, unknown> = {
                         cellId,
-                        ...blockMetadata,
+                        ...(blockMetadata ?? {}),
                         cellIndex
                     };
 
@@ -314,8 +329,7 @@ export class DeepnoteDataConverter {
                     // Merge in order: cellId, blockMetadata, cellIndex, executionCount, then output.metadata (wins conflicts)
                     const metadata: Record<string, unknown> = {
                         cellId,
-                        ...blockMetadata,
-                        blockMetadata, // TODO - remove duplicate
+                        ...(blockMetadata ?? {}),
                         cellIndex
                     };
 
@@ -342,7 +356,7 @@ export class DeepnoteDataConverter {
 
                     const metadata: Record<string, unknown> = {
                         cellId,
-                        ...blockMetadata,
+                        ...(blockMetadata ?? {}),
                         cellIndex
                     };
 
@@ -356,7 +370,7 @@ export class DeepnoteDataConverter {
                 if ('text' in output && output.text) {
                     const metadata: Record<string, unknown> = {
                         cellId,
-                        ...blockMetadata,
+                        ...(blockMetadata ?? {}),
                         cellIndex
                     };
 
@@ -374,7 +388,7 @@ export class DeepnoteDataConverter {
             if ('text' in output && output.text) {
                 const metadata: Record<string, unknown> = {
                     cellId,
-                    ...blockMetadata,
+                    ...(blockMetadata ?? {}),
                     cellIndex
                 };
 

@@ -1,8 +1,16 @@
 import { inject, injectable } from 'inversify';
-import { NotebookDocument, ProgressLocation, window, CancellationTokenSource, CancellationToken } from 'vscode';
+import {
+    type NotebookDocument,
+    ProgressLocation,
+    window,
+    CancellationTokenSource,
+    type CancellationToken,
+    l10n
+} from 'vscode';
+
 import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
-import { DeepnoteProject, DeepnoteNotebook } from './deepnoteTypes';
+import type { DeepnoteProject, DeepnoteNotebook } from './deepnoteTypes';
 import { IKernelProvider } from '../../kernels/types';
 import { getDisplayPath } from '../../platform/common/platform/fs-paths';
 
@@ -134,14 +142,14 @@ export class DeepnoteInitNotebookRunner {
             return window.withProgress(
                 {
                     location: ProgressLocation.Notification,
-                    title: `🚀 Initializing project environment`,
+                    title: l10n.t(`🚀 Initializing project environment`),
                     cancellable: false
                 },
                 async (notificationProgress) => {
                     return window.withProgress(
                         {
                             location: ProgressLocation.Window,
-                            title: `Init: "${initNotebook.name}"`,
+                            title: l10n.t(`Init: "${initNotebook.name}"`),
                             cancellable: false
                         },
                         async (windowProgress) => {

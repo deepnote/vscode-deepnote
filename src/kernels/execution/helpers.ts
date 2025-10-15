@@ -209,9 +209,12 @@ function getOutputMetadata(
         case 'execute_result':
         case 'update_display_data': {
             metadata.executionCount = output.execution_count;
-            // Output metadata is merged last so it overrides block metadata
+            // Output metadata is merged in two places:
+            // 1. At the top level for easy access by custom renderers
+            // 2. In the metadata property for round-trip conversion
             if (output.metadata) {
                 Object.assign(metadata, output.metadata);
+                metadata.metadata = output.metadata;
             }
             break;
         }

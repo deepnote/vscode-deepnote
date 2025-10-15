@@ -12,6 +12,8 @@ export interface IPostgresFormProps {
 }
 
 export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, existingConfig, onSave, onCancel }) => {
+    console.log('[PostgresForm] Rendering with existingConfig:', existingConfig);
+
     const [name, setName] = React.useState(existingConfig?.name || '');
     const [host, setHost] = React.useState(existingConfig?.host || '');
     const [port, setPort] = React.useState(existingConfig?.port?.toString() || '5432');
@@ -19,6 +21,19 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, exis
     const [username, setUsername] = React.useState(existingConfig?.username || '');
     const [password, setPassword] = React.useState(existingConfig?.password || '');
     const [ssl, setSsl] = React.useState(existingConfig?.ssl || false);
+
+    // Update form fields when existingConfig changes
+    React.useEffect(() => {
+        if (existingConfig) {
+            setName(existingConfig.name || '');
+            setHost(existingConfig.host || '');
+            setPort(existingConfig.port?.toString() || '5432');
+            setDatabase(existingConfig.database || '');
+            setUsername(existingConfig.username || '');
+            setPassword(existingConfig.password || '');
+            setSsl(existingConfig.ssl || false);
+        }
+    }, [existingConfig]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -139,4 +154,3 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, exis
         </form>
     );
 };
-

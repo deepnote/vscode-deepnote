@@ -65,6 +65,7 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
     const handleSave = (config: IntegrationConfig) => {
         vscodeApi.postMessage({
             type: 'save',
+            integrationId: config.id,
             config
         });
         setSelectedIntegrationId(null);

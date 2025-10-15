@@ -16,6 +16,15 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
     const [projectId, setProjectId] = React.useState(existingConfig?.projectId || '');
     const [credentials, setCredentials] = React.useState(existingConfig?.credentials || '');
 
+    // Update form fields when existingConfig changes
+    React.useEffect(() => {
+        if (existingConfig) {
+            setName(existingConfig.name || '');
+            setProjectId(existingConfig.projectId || '');
+            setCredentials(existingConfig.credentials || '');
+        }
+    }, [existingConfig]);
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -82,4 +91,3 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
         </form>
     );
 };
-

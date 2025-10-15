@@ -200,15 +200,20 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
             logger.info(`Starting server for environment: ${config.name} (${id})`);
 
             // First ensure venv is created and toolkit is installed
-            await this.toolkitInstaller.ensureVenvAndToolkit(config.pythonInterpreter, config.venvPath);
+            await this.toolkitInstaller.ensureVenvAndToolkit(config.pythonInterpreter, config.venvPath, undefined);
 
             // Install additional packages if specified
             if (config.packages && config.packages.length > 0) {
-                await this.toolkitInstaller.installAdditionalPackages(config.venvPath, config.packages);
+                await this.toolkitInstaller.installAdditionalPackages(config.venvPath, config.packages, undefined);
             }
 
             // Start the Jupyter server
-            const serverInfo = await this.serverStarter.startServer(config.pythonInterpreter, config.venvPath, id);
+            const serverInfo = await this.serverStarter.startServer(
+                config.pythonInterpreter,
+                config.venvPath,
+                id,
+                undefined
+            );
 
             config.serverInfo = serverInfo;
             config.lastUsedAt = new Date();

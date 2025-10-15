@@ -66,7 +66,7 @@ suite('DeepnoteEnvironmentStorage', () => {
             assert.strictEqual(configs[0].description, 'Test environment');
         });
 
-        test('should skip environments with unresolvable interpreters', async () => {
+        test('should load all environments including those with potentially invalid paths', async () => {
             const storedStates: DeepnoteEnvironmentState[] = [
                 {
                     id: 'config-1',
@@ -78,7 +78,7 @@ suite('DeepnoteEnvironmentStorage', () => {
                 },
                 {
                     id: 'config-2',
-                    name: 'Invalid Config',
+                    name: 'Potentially Invalid Config',
                     pythonInterpreterPath: '/invalid/python',
                     venvPath: '/path/to/venv2',
                     createdAt: '2025-01-01T00:00:00.000Z',
@@ -87,17 +87,13 @@ suite('DeepnoteEnvironmentStorage', () => {
             ];
 
             when(mockGlobalState.get('deepnote.kernelEnvironments', anything())).thenReturn(storedStates);
-            when(mockInterpreterService.getInterpreterDetails(deepEqual(Uri.file('/usr/bin/python3')))).thenResolve(
-                testInterpreter
-            );
-            when(mockInterpreterService.getInterpreterDetails(deepEqual(Uri.file('/invalid/python')))).thenResolve(
-                undefined
-            );
 
             const configs = await storage.loadEnvironments();
 
-            assert.strictEqual(configs.length, 1);
+            // All environments should be loaded - interpreter validation happens at usage time, not load time
+            assert.strictEqual(configs.length, 2);
             assert.strictEqual(configs[0].id, 'config-1');
+            assert.strictEqual(configs[1].id, 'config-2');
         });
 
         test('should handle errors gracefully and return empty array', async () => {

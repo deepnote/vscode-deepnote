@@ -12,7 +12,8 @@ import {
     notebooks,
     NotebookController,
     CancellationTokenSource,
-    Disposable
+    Disposable,
+    l10n
 } from 'vscode';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
@@ -127,8 +128,10 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         // Always try to ensure kernel is selected (this will reuse existing controllers)
         // Don't await - let it happen in background so notebook opens quickly
         void this.ensureKernelSelected(notebook).catch((error) => {
-            logger.error(`Failed to auto-select Deepnote kernel for ${getDisplayPath(notebook.uri)}: ${error}`);
-            void window.showErrorMessage(`Failed to load Deepnote kernel: ${error}`);
+            logger.error(`Failed to auto-select Deepnote kernel for ${getDisplayPath(notebook.uri)}`, error);
+            void window.showErrorMessage(
+                l10n.t('Failed to load Deepnote kernel. Please check the output for details.')
+            );
         });
     }
 
@@ -240,7 +243,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 logger.info(`Init notebook cancelled for project ${projectId}`);
                 return;
             }
-            logger.error(`Error running init notebook: ${error}`);
+            logger.error('Error running init notebook', error);
             // Continue anyway - don't block user if init fails
         } finally {
             // Always clean up the CTS and event listeners
@@ -253,7 +256,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         return window.withProgress(
             {
                 location: ProgressLocation.Notification,
-                title: 'Loading Deepnote Kernel',
+                title: l10n.t('Loading Deepnote Kernel'),
                 cancellable: true
             },
             async (progress, progressToken) => {
@@ -277,7 +280,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                                 notebook.uri
                             )}`
                         );
-                        progress.report({ message: 'Reusing existing kernel...' });
+                        progress.report({ message: l10n.t('Reusing existing kernel...') });
 
                         // Ensure server is registered with the provider (it might have been unregistered on close)
                         if (connectionMetadata.serverInfo) {
@@ -317,7 +320,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
                     // No existing controller, so create a new one
                     logger.info(`Creating new Deepnote kernel for ${getDisplayPath(notebook.uri)}`);
-                    progress.report({ message: 'Setting up Deepnote kernel...' });
+                    progress.report({ message: l10n.t('Setting up Deepnote kernel...') });
 
                     // Check if Python extension is installed
                     if (!this.pythonExtensionChecker.isPythonExtensionInstalled) {
@@ -327,7 +330,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                     }
 
                     // Get active Python interpreter
-                    progress.report({ message: 'Finding Python interpreter...' });
+                    progress.report({ message: l10n.t('Finding Python interpreter...') });
                     const interpreter = await this.interpreterService.getActiveInterpreter(notebook.uri);
                     if (!interpreter) {
                         logger.warn(
@@ -339,7 +342,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                     logger.info(`Using base interpreter: ${getDisplayPath(interpreter.uri)}`);
 
                     // Ensure deepnote-toolkit is installed in a venv and get the venv interpreter
-                    progress.report({ message: 'Installing Deepnote toolkit...' });
+                    progress.report({ message: l10n.t('Installing Deepnote toolkit...') });
                     const venvInterpreter = await this.toolkitInstaller.ensureInstalled(
                         interpreter,
                         baseFileUri,
@@ -353,7 +356,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                     logger.info(`Deepnote toolkit venv ready at: ${getDisplayPath(venvInterpreter.uri)}`);
 
                     // Start the Deepnote server using the venv interpreter
-                    progress.report({ message: 'Starting Deepnote server...' });
+                    progress.report({ message: l10n.t('Starting Deepnote server...') });
                     const serverInfo = await this.serverStarter.getOrStartServer(
                         venvInterpreter,
                         baseFileUri,
@@ -375,7 +378,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                     this.notebookServerHandles.set(notebookKey, serverProviderHandle.handle);
 
                     // Connect to the server and get available kernel specs
-                    progress.report({ message: 'Connecting to kernel...' });
+                    progress.report({ message: l10n.t('Connecting to kernel...') });
                     const connectionInfo = createJupyterConnectionInfo(
                         serverProviderHandle,
                         {
@@ -409,10 +412,15 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
                         if (!kernelSpec) {
                             logger.warn(
-                                `⚠️ Venv kernel spec '${expectedKernelName}' not found! Falling back to generic Python kernel.`
+                                l10n.t(
+                                    "⚠️ Venv kernel spec '{expectedKernelName}' not found! Falling back to generic Python kernel.",
+                                    { expectedKernelName }
+                                )
                             );
                             logger.warn(
-                                `This may cause import errors if packages are installed to the venv but kernel uses system Python.`
+                                l10n.t(
+                                    'This may cause import errors if packages are installed to the venv but kernel uses system Python.'
+                                )
                             );
                             kernelSpec =
                                 kernelSpecs.find((s) => s.language === 'python') ||
@@ -429,7 +437,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                         await disposeAsync(sessionManager);
                     }
 
-                    progress.report({ message: 'Finalizing kernel setup...' });
+                    progress.report({ message: l10n.t('Finalizing kernel setup...') });
                     const newConnectionMetadata = DeepnoteKernelConnectionMetadata.create({
                         interpreter,
                         kernelSpec,
@@ -467,7 +475,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
                     if (project) {
                         // Create requirements.txt first (needs to be ready for init notebook)
-                        progress.report({ message: 'Creating requirements.txt...' });
+                        progress.report({ message: l10n.t('Creating requirements.txt...') });
                         await this.requirementsHelper.createRequirementsFile(project, progressToken);
                         logger.info(`Created requirements.txt for project ${projectId}`);
 
@@ -504,7 +512,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                     controller.controller.updateNotebookAffinity(notebook, NotebookControllerAffinity.Preferred);
 
                     logger.info(`Successfully auto-selected Deepnote kernel for ${getDisplayPath(notebook.uri)}`);
-                    progress.report({ message: 'Kernel ready!' });
+                    progress.report({ message: l10n.t('Kernel ready!') });
 
                     // Dispose the loading controller once the real one is ready
                     const loadingController = this.loadingControllers.get(notebookKey);
@@ -514,7 +522,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                         logger.info(`Disposed loading controller for ${notebookKey}`);
                     }
                 } catch (ex) {
-                    logger.error(`Failed to auto-select Deepnote kernel: ${ex}`);
+                    logger.error('Failed to auto-select Deepnote kernel', ex);
                     throw ex;
                 }
             }
@@ -526,7 +534,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         const loadingController = notebooks.createNotebookController(
             `deepnote-loading-${notebookKey}`,
             DEEPNOTE_NOTEBOOK_TYPE,
-            'Loading Deepnote Kernel...'
+            l10n.t('Loading Deepnote Kernel...')
         );
 
         // Set it as the preferred controller immediately

@@ -32,6 +32,8 @@ import { KernelError } from '../errors/kernelError';
 import { getCachedSysPrefix } from '../../platform/interpreter/helpers';
 import { getCellMetadata } from '../../platform/common/utils';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
+import { createBlockFromPocket } from '../../notebooks/deepnote/pocket';
+import { createPythonCode } from '@deepnote/blocks';
 
 /**
  * Factory for CellExecution objects.
@@ -405,6 +407,20 @@ export class CellExecution implements ICellExecution, IDisposable {
             traceCellMessage(this.cell, 'Empty cell execution');
             return this.completedSuccessfully();
         }
+
+        // Convert NotebookCell to Deepnote block for further operations
+        const cellData = {
+            kind: this.cell.kind,
+            value: this.cell.document.getText(),
+            languageId: this.cell.document.languageId,
+            metadata: this.cell.metadata,
+            outputs: [...(this.cell.outputs || [])]
+        };
+        const deepnoteBlock = createBlockFromPocket(cellData, this.cell.index);
+
+        // Use createPythonCode to generate code with table state already included
+        logger.info(`Cell ${this.cell.index}: Using createPythonCode to generate execution code with table state`);
+        code = createPythonCode(deepnoteBlock);
 
         // Generate metadata from our cell (some kernels expect this.)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

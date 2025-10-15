@@ -235,7 +235,7 @@ export class DeepnoteDataConverter {
 
                     const metadata: Record<string, unknown> = {
                         cellId,
-                        ...blockMetadata,
+                        ...(blockMetadata ?? {}),
                         cellIndex
                     };
 
@@ -303,7 +303,7 @@ export class DeepnoteDataConverter {
                     // Merge in order: cellId, blockMetadata, cellIndex, executionCount, then output.metadata (wins conflicts)
                     const metadata: Record<string, unknown> = {
                         cellId,
-                        ...blockMetadata,
+                        ...(blockMetadata ?? {}),
                         cellIndex
                     };
 
@@ -330,7 +330,7 @@ export class DeepnoteDataConverter {
 
                     const metadata: Record<string, unknown> = {
                         cellId,
-                        ...blockMetadata,
+                        ...(blockMetadata ?? {}),
                         cellIndex
                     };
 
@@ -344,7 +344,7 @@ export class DeepnoteDataConverter {
                 if ('text' in output && output.text) {
                     const metadata: Record<string, unknown> = {
                         cellId,
-                        ...blockMetadata,
+                        ...(blockMetadata ?? {}),
                         cellIndex
                     };
 
@@ -362,7 +362,7 @@ export class DeepnoteDataConverter {
             if ('text' in output && output.text) {
                 const metadata: Record<string, unknown> = {
                     cellId,
-                    ...blockMetadata,
+                    ...(blockMetadata ?? {}),
                     cellIndex
                 };
 

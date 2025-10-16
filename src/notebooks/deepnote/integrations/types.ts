@@ -1,9 +1,21 @@
+import { Event } from 'vscode';
 import { IntegrationConfig, IntegrationWithStatus } from './integrationTypes';
 
 export const IIntegrationStorage = Symbol('IIntegrationStorage');
 export interface IIntegrationStorage {
+    /**
+     * Event fired when integrations change
+     */
+    readonly onDidChangeIntegrations: Event<void>;
+
     getAll(): Promise<IntegrationConfig[]>;
     get(integrationId: string): Promise<IntegrationConfig | undefined>;
+
+    /**
+     * Get integration configuration for a specific project and integration
+     */
+    getIntegrationConfig(projectId: string, integrationId: string): Promise<IntegrationConfig | undefined>;
+
     save(config: IntegrationConfig): Promise<void>;
     delete(integrationId: string): Promise<void>;
     exists(integrationId: string): Promise<boolean>;
@@ -27,8 +39,10 @@ export const IIntegrationWebviewProvider = Symbol('IIntegrationWebviewProvider')
 export interface IIntegrationWebviewProvider {
     /**
      * Show the integration management webview
+     * @param integrations Map of integration IDs to their status
+     * @param selectedIntegrationId Optional integration ID to select/configure immediately
      */
-    show(integrations: Map<string, IntegrationWithStatus>): Promise<void>;
+    show(integrations: Map<string, IntegrationWithStatus>, selectedIntegrationId?: string): Promise<void>;
 }
 
 export const IIntegrationManager = Symbol('IIntegrationManager');

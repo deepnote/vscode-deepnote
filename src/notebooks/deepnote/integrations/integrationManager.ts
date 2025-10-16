@@ -26,8 +26,11 @@ export class IntegrationManager implements IIntegrationManager {
 
     public activate(): void {
         // Register the manage integrations command
+        // The command can optionally receive an integration ID to select/configure
         this.extensionContext.subscriptions.push(
-            commands.registerCommand(Commands.ManageIntegrations, () => this.showIntegrationsUI())
+            commands.registerCommand(Commands.ManageIntegrations, (integrationId?: string) =>
+                this.showIntegrationsUI(integrationId)
+            )
         );
 
         // Listen for active notebook changes to update context
@@ -95,8 +98,9 @@ export class IntegrationManager implements IIntegrationManager {
 
     /**
      * Show the integrations management UI
+     * @param selectedIntegrationId Optional integration ID to select/configure immediately
      */
-    private async showIntegrationsUI(): Promise<void> {
+    private async showIntegrationsUI(selectedIntegrationId?: string): Promise<void> {
         const activeNotebook = window.activeNotebookEditor?.notebook;
 
         if (!activeNotebook || activeNotebook.notebookType !== 'deepnote') {
@@ -130,8 +134,8 @@ export class IntegrationManager implements IIntegrationManager {
             return;
         }
 
-        // Show the webview
-        await this.webviewProvider.show(integrations);
+        // Show the webview with optional selected integration
+        await this.webviewProvider.show(integrations, selectedIntegrationId);
     }
 
     /**

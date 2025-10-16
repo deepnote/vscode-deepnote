@@ -1,4 +1,5 @@
 import { inject, injectable } from 'inversify';
+import { EventEmitter } from 'vscode';
 
 import { IEncryptedStorage } from '../../../platform/common/application/types';
 import { logger } from '../../../platform/logging';
@@ -17,6 +18,10 @@ export class IntegrationStorage {
 
     private cacheLoaded = false;
 
+    private readonly _onDidChangeIntegrations = new EventEmitter<void>();
+
+    public readonly onDidChangeIntegrations = this._onDidChangeIntegrations.event;
+
     constructor(@inject(IEncryptedStorage) private readonly encryptedStorage: IEncryptedStorage) {}
 
     /**
@@ -33,6 +38,15 @@ export class IntegrationStorage {
     async get(integrationId: string): Promise<IntegrationConfig | undefined> {
         await this.ensureCacheLoaded();
         return this.cache.get(integrationId);
+    }
+
+    /**
+     * Get integration configuration for a specific project and integration
+     * Note: Currently integrations are stored globally, not per-project,
+     * so this method ignores the projectId parameter
+     */
+    async getIntegrationConfig(_projectId: string, integrationId: string): Promise<IntegrationConfig | undefined> {
+        return this.get(integrationId);
     }
 
     /**
@@ -58,6 +72,9 @@ export class IntegrationStorage {
 
         // Update the index
         await this.updateIndex();
+
+        // Fire change event
+        this._onDidChangeIntegrations.fire();
     }
 
     /**
@@ -74,6 +91,9 @@ export class IntegrationStorage {
 
         // Update the index
         await this.updateIndex();
+
+        // Fire change event
+        this._onDidChangeIntegrations.fire();
     }
 
     /**

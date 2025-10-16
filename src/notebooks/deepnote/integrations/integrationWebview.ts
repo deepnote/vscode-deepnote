@@ -24,8 +24,10 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
 
     /**
      * Show the integration management webview
+     * @param integrations Map of integration IDs to their status
+     * @param selectedIntegrationId Optional integration ID to select/configure immediately
      */
-    public async show(integrations: Map<string, IntegrationWithStatus>): Promise<void> {
+    public async show(integrations: Map<string, IntegrationWithStatus>, selectedIntegrationId?: string): Promise<void> {
         // Update the stored integrations with the latest data
         this.integrations = integrations;
 
@@ -35,6 +37,11 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         if (this.currentPanel) {
             this.currentPanel.reveal(column);
             await this.updateWebview();
+
+            // If a specific integration was requested, show its configuration form
+            if (selectedIntegrationId) {
+                await this.showConfigurationForm(selectedIntegrationId);
+            }
             return;
         }
 
@@ -76,6 +83,11 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         );
 
         await this.updateWebview();
+
+        // If a specific integration was requested, show its configuration form
+        if (selectedIntegrationId) {
+            await this.showConfigurationForm(selectedIntegrationId);
+        }
     }
 
     /**

@@ -64,6 +64,7 @@ export function initializeLoggers(options: {
         })
     );
     const standardOutputChannel = window.createOutputChannel(OutputChannelNames.jupyter, 'log');
+    standardOutputChannel.show(true); // Show by default without stealing focus
     registerLogger(new OutputChannelLogger(standardOutputChannel, options?.homePathRegEx, options?.userNameRegEx));
 
     if (options.addConsoleLogger) {

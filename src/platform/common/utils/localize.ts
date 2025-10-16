@@ -39,7 +39,7 @@ export namespace Experiments {
     export const inGroup = (groupName: string) => l10n.t("User belongs to experiment group '{0}'", groupName);
 }
 export namespace OutputChannelNames {
-    export const jupyter = l10n.t('Jupyter');
+    export const jupyter = l10n.t('Deepnote');
 }
 
 export namespace Logging {
@@ -706,7 +706,7 @@ export namespace DataScience {
 
     export const cellAtFormat = (filePath: string, lineNumber: number) => l10n.t('{0} Cell {1}', filePath, lineNumber);
 
-    export const jupyterServerConsoleOutputChannel = l10n.t(`Jupyter Server Console`);
+    export const jupyterServerConsoleOutputChannel = l10n.t(`Deepnote Server Console`);
 
     export const kernelConsoleOutputChannel = (kernelName: string) => l10n.t(`{0} Kernel Console Output`, kernelName);
     export const webNotSupported = l10n.t(`Operation not supported in web version of Jupyter Extension.`);

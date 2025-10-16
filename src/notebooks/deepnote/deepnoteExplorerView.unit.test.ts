@@ -238,8 +238,12 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Mock notebook opening
             const mockNotebook = { notebookType: 'deepnote' };
-            when(mockedVSCodeNamespaces.workspace.openNotebookDocument(anything())).thenReturn(Promise.resolve(mockNotebook as any));
-            when(mockedVSCodeNamespaces.window.showNotebookDocument(anything(), anything())).thenReturn(Promise.resolve(undefined as any));
+            when(mockedVSCodeNamespaces.workspace.openNotebookDocument(anything())).thenReturn(
+                Promise.resolve(mockNotebook as any)
+            );
+            when(mockedVSCodeNamespaces.window.showNotebookDocument(anything(), anything())).thenReturn(
+                Promise.resolve(undefined as any)
+            );
 
             // Execute command - capture writeFile call
             let capturedUri: Uri | undefined;
@@ -288,8 +292,12 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             });
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
 
-            when(mockedVSCodeNamespaces.workspace.openNotebookDocument(anything())).thenReturn(Promise.resolve({} as any));
-            when(mockedVSCodeNamespaces.window.showNotebookDocument(anything(), anything())).thenReturn(Promise.resolve(undefined as any));
+            when(mockedVSCodeNamespaces.workspace.openNotebookDocument(anything())).thenReturn(
+                Promise.resolve({} as any)
+            );
+            when(mockedVSCodeNamespaces.window.showNotebookDocument(anything(), anything())).thenReturn(
+                Promise.resolve(undefined as any)
+            );
 
             await (explorerView as any).newProject();
 
@@ -302,10 +310,12 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             let showInfoCalled = false;
             let executeCommandCalled = false;
-            when(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything(), anything())).thenCall(() => {
-                showInfoCalled = true;
-                return Promise.resolve('Open Folder');
-            });
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything(), anything())).thenCall(
+                () => {
+                    showInfoCalled = true;
+                    return Promise.resolve('Open Folder');
+                }
+            );
             when(mockedVSCodeNamespaces.commands.executeCommand(anything())).thenCall((cmd: string) => {
                 if (cmd === 'vscode.openFolder') {
                     executeCommandCalled = true;
@@ -421,7 +431,9 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 return Promise.resolve();
             });
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
-            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenReturn(Promise.resolve(undefined));
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenReturn(
+                Promise.resolve(undefined)
+            );
 
             await (explorerView as any).importNotebook();
 
@@ -458,7 +470,9 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             const jupyterUri = Uri.file('/external/test2.ipynb');
 
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder as any]);
-            when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(Promise.resolve([deepnoteUri, jupyterUri]));
+            when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(
+                Promise.resolve([deepnoteUri, jupyterUri])
+            );
 
             const mockFS = mock<typeof workspace.fs>();
             when(mockFS.stat(anything())).thenReject(new Error('File not found'));
@@ -548,10 +562,12 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             let showInfoCalled = false;
             let executeCommandCalled = false;
-            when(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything(), anything())).thenCall(() => {
-                showInfoCalled = true;
-                return Promise.resolve('Open Folder');
-            });
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything(), anything())).thenCall(
+                () => {
+                    showInfoCalled = true;
+                    return Promise.resolve('Open Folder');
+                }
+            );
             when(mockedVSCodeNamespaces.commands.executeCommand(anything())).thenCall((cmd: string) => {
                 if (cmd === 'vscode.openFolder') {
                     executeCommandCalled = true;
@@ -675,10 +691,12 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             let showInfoCalled = false;
             let executeCommandCalled = false;
-            when(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything(), anything())).thenCall(() => {
-                showInfoCalled = true;
-                return Promise.resolve('Open Folder');
-            });
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything(), anything())).thenCall(
+                () => {
+                    showInfoCalled = true;
+                    return Promise.resolve('Open Folder');
+                }
+            );
             when(mockedVSCodeNamespaces.commands.executeCommand(anything())).thenCall((cmd: string) => {
                 if (cmd === 'vscode.openFolder') {
                     executeCommandCalled = true;

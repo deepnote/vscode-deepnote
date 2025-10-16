@@ -204,9 +204,7 @@ export class DeepnoteExplorerView {
             // Check if file already exists
             try {
                 await workspace.fs.stat(fileUri);
-                await window.showErrorMessage(
-                    l10n.t('A file named "{0}" already exists in this workspace.', fileName)
-                );
+                await window.showErrorMessage(l10n.t('A file named "{0}" already exists in this workspace.', fileName));
                 return;
             } catch {
                 // File doesn't exist, continue
@@ -247,7 +245,8 @@ export class DeepnoteExplorerView {
             };
 
             const yamlContent = yaml.dump(projectData);
-            const contentBuffer = Buffer.from(yamlContent, 'utf8');
+            const encoder = new TextEncoder();
+            const contentBuffer = encoder.encode(yamlContent);
 
             await workspace.fs.writeFile(fileUri, contentBuffer);
 

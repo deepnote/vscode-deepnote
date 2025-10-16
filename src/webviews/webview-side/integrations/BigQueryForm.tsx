@@ -61,7 +61,7 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
 
         const config: BigQueryIntegrationConfig = {
             id: integrationId,
-            name: name || integrationId,
+            name: name || l10n.t('Unnamed BigQuery Integration ({0})', integrationId),
             type: 'bigquery',
             projectId,
             credentials

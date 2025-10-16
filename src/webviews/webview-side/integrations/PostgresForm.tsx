@@ -36,7 +36,7 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, exis
 
         const config: PostgresIntegrationConfig = {
             id: integrationId,
-            name: name || integrationId,
+            name: name || l10n.t('Unnamed PostgreSQL Integration ({0})', integrationId),
             type: 'postgres',
             host,
             port: parseInt(port, 10),

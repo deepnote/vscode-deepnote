@@ -3,6 +3,7 @@
 
 import * as React from 'react';
 import { BigQueryIntegrationConfig } from './types';
+import { l10n } from 'vscode';
 
 export interface IBigQueryFormProps {
     integrationId: string;
@@ -42,7 +43,7 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
     return (
         <form onSubmit={handleSubmit}>
             <div className="form-group">
-                <label htmlFor="name">Name (optional)</label>
+                <label htmlFor="name">{l10n.t('Name (optional)')}</label>
                 <input
                     type="text"
                     id="name"
@@ -54,7 +55,7 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
 
             <div className="form-group">
                 <label htmlFor="projectId">
-                    Project ID <span className="required">*</span>
+                    {l10n.t('Project ID')} <span className="required">*</span>
                 </label>
                 <input
                     type="text"
@@ -68,7 +69,7 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
 
             <div className="form-group">
                 <label htmlFor="credentials">
-                    Service Account Credentials (JSON) <span className="required">*</span>
+                    {l10n.t('Service Account Credentials (JSON)')} <span className="required">*</span>
                 </label>
                 <textarea
                     id="credentials"
@@ -82,10 +83,10 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
 
             <div className="form-actions">
                 <button type="submit" className="primary">
-                    Save
+                    {l10n.t('Save')}
                 </button>
                 <button type="button" className="secondary" onClick={onCancel}>
-                    Cancel
+                    {l10n.t('Cancel')}
                 </button>
             </div>
         </form>

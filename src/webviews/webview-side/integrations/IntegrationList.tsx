@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { IntegrationItem } from './IntegrationItem';
 import { IntegrationWithStatus } from './types';
+import { l10n } from 'vscode';
 
 export interface IIntegrationListProps {
     integrations: IntegrationWithStatus[];
@@ -10,7 +11,7 @@ export interface IIntegrationListProps {
 
 export const IntegrationList: React.FC<IIntegrationListProps> = ({ integrations, onConfigure, onDelete }) => {
     if (integrations.length === 0) {
-        return <p className="no-integrations">No integrations found in this project.</p>;
+        return <p className="no-integrations">{l10n.t('No integrations found in this project.')}</p>;
     }
 
     return (
@@ -26,4 +27,3 @@ export const IntegrationList: React.FC<IIntegrationListProps> = ({ integrations,
         </div>
     );
 };
-

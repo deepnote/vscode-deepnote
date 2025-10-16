@@ -1,5 +1,5 @@
 import { inject, injectable } from 'inversify';
-import { Disposable, Uri, ViewColumn, WebviewPanel, window } from 'vscode';
+import { Disposable, l10n, Uri, ViewColumn, WebviewPanel, window } from 'vscode';
 
 import { IExtensionContext } from '../../../platform/common/types';
 import { logger } from '../../../platform/logging';
@@ -158,13 +158,15 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
 
             await this.updateWebview();
             await this.currentPanel?.webview.postMessage({
-                message: 'Configuration saved successfully',
+                message: l10n.t('Configuration saved successfully'),
                 type: 'success'
             });
         } catch (error) {
             logger.error('Failed to save integration configuration', error);
             await this.currentPanel?.webview.postMessage({
-                message: `Failed to save configuration: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                message: `${l10n.t(`Failed to save configuration:`)} ${
+                    error instanceof Error ? error.message : 'Unknown error'
+                }`,
                 type: 'error'
             });
         }
@@ -187,13 +189,15 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
 
             await this.updateWebview();
             await this.currentPanel?.webview.postMessage({
-                message: 'Configuration deleted successfully',
+                message: l10n.t('Configuration deleted successfully'),
                 type: 'success'
             });
         } catch (error) {
             logger.error('Failed to delete integration configuration', error);
             await this.currentPanel?.webview.postMessage({
-                message: `Failed to delete configuration: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                message: `${l10n.t('Failed to delete configuration:')} ${
+                    error instanceof Error ? error.message : 'Unknown error'
+                }`,
                 type: 'error'
             });
         }

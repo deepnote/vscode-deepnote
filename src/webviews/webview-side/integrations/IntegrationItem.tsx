@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { IntegrationWithStatus } from './types';
+import { l10n } from 'vscode';
 
 export interface IIntegrationItemProps {
     integration: IntegrationWithStatus;
@@ -9,8 +10,8 @@ export interface IIntegrationItemProps {
 
 export const IntegrationItem: React.FC<IIntegrationItemProps> = ({ integration, onConfigure, onDelete }) => {
     const statusClass = integration.status === 'connected' ? 'status-connected' : 'status-disconnected';
-    const statusText = integration.status === 'connected' ? 'Connected' : 'Not Configured';
-    const configureText = integration.config ? 'Reconfigure' : 'Configure';
+    const statusText = integration.status === 'connected' ? l10n.t('Connected') : l10n.t('Not Configured');
+    const configureText = integration.config ? l10n.t('Reconfigure') : l10n.t('Configure');
     const displayName = integration.config?.name || integration.id;
 
     return (
@@ -20,10 +21,12 @@ export const IntegrationItem: React.FC<IIntegrationItemProps> = ({ integration, 
                 <div className={`integration-status ${statusClass}`}>{statusText}</div>
             </div>
             <div className="integration-actions">
-                <button onClick={() => onConfigure(integration.id)}>{configureText}</button>
+                <button type="button" onClick={() => onConfigure(integration.id)}>
+                    {configureText}
+                </button>
                 {integration.config && (
-                    <button className="secondary" onClick={() => onDelete(integration.id)}>
-                        Reset
+                    <button type="button" className="secondary" onClick={() => onDelete(integration.id)}>
+                        {l10n.t('Reset')}
                     </button>
                 )}
             </div>

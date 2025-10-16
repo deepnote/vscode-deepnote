@@ -1,9 +1,14 @@
-import { assert } from 'chai';
+import { assert, expect } from 'chai';
+import * as sinon from 'sinon';
+import { commands, Uri, window, workspace } from 'vscode';
+import * as yaml from 'js-yaml';
 
 import { DeepnoteExplorerView } from './deepnoteExplorerView';
 import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
 import type { DeepnoteTreeItemContext } from './deepnoteTreeItem';
 import type { IExtensionContext } from '../../platform/common/types';
+import * as uuidModule from '../../platform/common/uuid';
+import * as convertModule from '@deepnote/convert';
 
 suite('DeepnoteExplorerView', () => {
     let explorerView: DeepnoteExplorerView;

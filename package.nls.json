@@ -250,6 +250,10 @@
     "deepnote.commands.openFile.title": "Open File",
     "deepnote.commands.revealInExplorer.title": "Reveal in Explorer",
     "deepnote.commands.manageIntegrations.title": "Manage Integrations",
+    "deepnote.commands.newProject.title": "New Project",
+    "deepnote.commands.importNotebook.title": "Import Notebook",
+    "deepnote.commands.importJupyterNotebook.title": "Import Jupyter Notebook",
     "deepnote.views.explorer.name": "Explorer",
+    "deepnote.views.explorer.welcome": "No Deepnote notebooks found in this workspace.",
     "deepnote.command.selectNotebook.title": "Select Notebook"
 }

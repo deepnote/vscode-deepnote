@@ -224,6 +224,21 @@ form {
     font-family: var(--vscode-editor-font-family);
 }
 
+.form-group textarea[aria-invalid='true'] {
+    border-color: var(--vscode-inputValidation-errorBorder);
+    outline: 1px solid var(--vscode-inputValidation-errorBorder);
+}
+
+.error-message {
+    padding: 6px 8px;
+    margin-top: 4px;
+    background-color: var(--vscode-inputValidation-errorBackground);
+    border: 1px solid var(--vscode-inputValidation-errorBorder);
+    color: var(--vscode-inputValidation-errorForeground);
+    font-size: 0.9em;
+    border-radius: 2px;
+}
+
 .checkbox-group label {
     display: flex;
     align-items: center;

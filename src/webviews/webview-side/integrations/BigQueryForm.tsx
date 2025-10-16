@@ -16,6 +16,7 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
     const [name, setName] = React.useState(existingConfig?.name || '');
     const [projectId, setProjectId] = React.useState(existingConfig?.projectId || '');
     const [credentials, setCredentials] = React.useState(existingConfig?.credentials || '');
+    const [credentialsError, setCredentialsError] = React.useState<string | null>(null);
 
     // Update form fields when existingConfig changes
     React.useEffect(() => {
@@ -23,11 +24,40 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
             setName(existingConfig.name || '');
             setProjectId(existingConfig.projectId || '');
             setCredentials(existingConfig.credentials || '');
+            setCredentialsError(null);
         }
     }, [existingConfig]);
 
+    const validateCredentials = (value: string): boolean => {
+        if (!value.trim()) {
+            setCredentialsError(null);
+            return false;
+        }
+
+        try {
+            JSON.parse(value);
+            setCredentialsError(null);
+            return true;
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Invalid JSON format';
+            setCredentialsError(`Invalid JSON: ${errorMessage}`);
+            return false;
+        }
+    };
+
+    const handleCredentialsChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const value = e.target.value;
+        setCredentials(value);
+        validateCredentials(value);
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+
+        // Validate credentials before submitting
+        if (!validateCredentials(credentials)) {
+            return;
+        }
 
         const config: BigQueryIntegrationConfig = {
             id: integrationId,
@@ -76,13 +106,22 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
                 <textarea
                     id="credentials"
                     value={credentials}
-                    onChange={(e) => setCredentials(e.target.value)}
+                    onChange={handleCredentialsChange}
                     placeholder='{"type": "service_account", ...}'
                     rows={10}
                     autoComplete="off"
                     spellCheck={false}
+                    autoCorrect="off"
+                    autoCapitalize="off"
                     required
+                    aria-invalid={credentialsError ? 'true' : 'false'}
+                    aria-describedby={credentialsError ? 'credentials-error' : undefined}
                 />
+                {credentialsError && (
+                    <div id="credentials-error" className="error-message" role="alert">
+                        {credentialsError}
+                    </div>
+                )}
             </div>
 
             <div className="form-actions">

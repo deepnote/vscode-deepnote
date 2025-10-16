@@ -1,9 +1,7 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-
 import * as React from 'react';
-import { BigQueryIntegrationConfig } from './types';
 import { l10n } from 'vscode';
+
+import { BigQueryIntegrationConfig } from './types';
 
 export interface IBigQueryFormProps {
     integrationId: string;

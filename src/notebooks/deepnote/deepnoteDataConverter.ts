@@ -1,10 +1,10 @@
 import { NotebookCellData, NotebookCellKind, NotebookCellOutput, NotebookCellOutputItem } from 'vscode';
 
 import { generateBlockId, generateSortingKey } from './dataConversionUtils';
-import type { DeepnoteBlock, DeepnoteOutput } from './deepnoteTypes';
+import type { DeepnoteBlock, DeepnoteOutput } from '../../platform/deepnote/deepnoteTypes';
 import { ConverterRegistry } from './converters/converterRegistry';
 import { CodeBlockConverter } from './converters/codeBlockConverter';
-import { addPocketToCellMetadata, createBlockFromPocket } from './pocket';
+import { addPocketToCellMetadata, createBlockFromPocket } from '../../platform/deepnote/pocket';
 import { TextBlockConverter } from './converters/textBlockConverter';
 import { MarkdownBlockConverter } from './converters/markdownBlockConverter';
 import { ChartBigNumberBlockConverter } from './converters/chartBigNumberBlockConverter';

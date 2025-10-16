@@ -2,7 +2,7 @@ import { NotebookCellData, NotebookCellKind } from 'vscode';
 import { z } from 'zod';
 
 import type { BlockConverter } from './blockConverter';
-import type { DeepnoteBlock } from '../deepnoteTypes';
+import type { DeepnoteBlock } from '../../../platform/deepnote/deepnoteTypes';
 import { DeepnoteBigNumberMetadataSchema } from '../deepnoteSchemas';
 import { parseJsonWithFallback } from '../dataConversionUtils';
 import { DEEPNOTE_VSCODE_RAW_CONTENT_KEY } from './constants';

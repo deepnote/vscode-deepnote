@@ -1,7 +1,7 @@
 import { assert } from 'chai';
 import { NotebookCellData, NotebookCellKind } from 'vscode';
 
-import type { DeepnoteBlock } from '../deepnoteTypes';
+import type { DeepnoteBlock } from '../../../platform/deepnote/deepnoteTypes';
 import { ChartBigNumberBlockConverter } from './chartBigNumberBlockConverter';
 import { DEEPNOTE_VSCODE_RAW_CONTENT_KEY } from './constants';
 

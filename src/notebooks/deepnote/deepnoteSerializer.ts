@@ -4,9 +4,9 @@ import { l10n, workspace, type CancellationToken, type NotebookData, type Notebo
 
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
-import type { DeepnoteProject } from './deepnoteTypes';
+import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 
-export { DeepnoteBlock, DeepnoteNotebook, DeepnoteOutput, DeepnoteFile } from './deepnoteTypes';
+export { DeepnoteBlock, DeepnoteNotebook, DeepnoteOutput, DeepnoteFile } from '../../platform/deepnote/deepnoteTypes';
 
 /**
  * Serializer for converting between Deepnote YAML files and VS Code notebook format.

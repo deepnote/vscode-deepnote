@@ -2,30 +2,32 @@
 // Licensed under the MIT License.
 
 import type * as nbformat from '@jupyterlab/nbformat';
-import { NotebookCellOutput, NotebookCellOutputItem, NotebookCell, Position, Range } from 'vscode';
+import { NotebookCell, NotebookCellOutput, NotebookCellOutputItem, Position, Range } from 'vscode';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import type { KernelMessage } from '@jupyterlab/services';
 import fastDeepEqual from 'fast-deep-equal';
-import * as path from '../../platform/vscode-path/path';
-import * as uriPath from '../../platform/vscode-path/resources';
+import { Pocket } from '../../platform/deepnote/pocket';
 import { PYTHON_LANGUAGE } from '../../platform/common/constants';
 import { concatMultilineString, splitMultilineString } from '../../platform/common/utils';
-import { logger } from '../../platform/logging';
-import { sendTelemetryEvent, Telemetry } from '../../telemetry';
-import { createOutputWithErrorMessageForDisplay } from '../../platform/errors/errorUtils';
-import { CellExecutionCreator } from './cellExecutionCreator';
-import { IKernelController, KernelConnectionMetadata } from '../types';
-import {
-    isPythonKernelConnection,
-    getInterpreterFromKernelConnectionMetadata,
-    kernelConnectionMetadataHasKernelModel,
-    getKernelRegistrationInfo
-} from '../helpers';
 import { StopWatch } from '../../platform/common/utils/stopWatch';
-import { getExtensionSpecificStack } from '../../platform/errors/errors';
-import { getCachedEnvironment, getVersion } from '../../platform/interpreter/helpers';
 import { base64ToUint8Array, uint8ArrayToBase64 } from '../../platform/common/utils/string';
+import { CHART_BIG_NUMBER_MIME_TYPE } from '../../platform/deepnote/deepnoteConstants';
+import { getExtensionSpecificStack } from '../../platform/errors/errors';
+import { createOutputWithErrorMessageForDisplay } from '../../platform/errors/errorUtils';
+import { getCachedEnvironment, getVersion } from '../../platform/interpreter/helpers';
+import { logger } from '../../platform/logging';
 import type { NotebookCellExecutionState } from '../../platform/notebooks/cellExecutionStateService';
+import * as path from '../../platform/vscode-path/path';
+import * as uriPath from '../../platform/vscode-path/resources';
+import { sendTelemetryEvent, Telemetry } from '../../telemetry';
+import {
+    getInterpreterFromKernelConnectionMetadata,
+    getKernelRegistrationInfo,
+    isPythonKernelConnection,
+    kernelConnectionMetadataHasKernelModel
+} from '../helpers';
+import { IKernelController, KernelConnectionMetadata } from '../types';
+import { CellExecutionCreator } from './cellExecutionCreator';
 
 export enum CellOutputMimeTypes {
     error = 'application/vnd.code.notebook.error',
@@ -260,6 +262,10 @@ function translateDisplayDataOutput(
         }
     }
     */
+    // TODO - add DeepnotePocket zod schema validation
+    const deepnotePocket = cellMetadata?.__deepnotePocket as Pocket | undefined;
+    const deepnoteBlockType = deepnotePocket?.type;
+
     const metadata = getOutputMetadata(output, cellIndex, cellId, cellMetadata);
     // If we have SVG or PNG, then add special metadata to indicate whether to display `open plot`
     if ('image/svg+xml' in output.data || 'image/png' in output.data) {
@@ -269,7 +275,9 @@ function translateDisplayDataOutput(
     if (output.data) {
         // eslint-disable-next-line no-restricted-syntax
         for (const key in output.data) {
-            items.push(convertJupyterOutputToBuffer(key, output.data[key]));
+            // TODO - remove this once this is handled in the deepnote-toolkit
+            let effectiveKey = deepnoteBlockType === 'big-number' ? CHART_BIG_NUMBER_MIME_TYPE : key;
+            items.push(convertJupyterOutputToBuffer(effectiveKey, output.data[key] ?? output.data[effectiveKey]));
         }
     }
 

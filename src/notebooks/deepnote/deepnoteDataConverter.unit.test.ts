@@ -2,7 +2,7 @@ import { assert } from 'chai';
 import { NotebookCellKind, type NotebookCellData } from 'vscode';
 
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
-import type { DeepnoteBlock, DeepnoteOutput } from './deepnoteTypes';
+import type { DeepnoteBlock, DeepnoteOutput } from '../../platform/deepnote/deepnoteTypes';
 
 suite('DeepnoteDataConverter', () => {
     let converter: DeepnoteDataConverter;

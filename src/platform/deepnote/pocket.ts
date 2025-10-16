@@ -1,7 +1,7 @@
 import type { NotebookCellData } from 'vscode';
 
 import type { DeepnoteBlock } from './deepnoteTypes';
-import { generateBlockId, generateSortingKey } from './dataConversionUtils';
+import { generateBlockId, generateSortingKey } from '../../notebooks/deepnote/dataConversionUtils';
 
 // Note: 'id' is intentionally excluded from this list so it remains at the top level of cell.metadata
 // The id field is needed at runtime for cell identification during execution

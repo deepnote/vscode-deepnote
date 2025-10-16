@@ -4,6 +4,7 @@
 import type * as KernelMessage from '@jupyterlab/services/lib/kernel/messages';
 import { NotebookCell, NotebookCellExecution, workspace, NotebookCellOutput } from 'vscode';
 
+import { createPythonCode } from '@deepnote/blocks';
 import type { Kernel } from '@jupyterlab/services';
 import { CellExecutionCreator } from './cellExecutionCreator';
 import { analyzeKernelErrors, createOutputWithErrorMessageForDisplay } from '../../platform/errors/errorUtils';
@@ -32,8 +33,8 @@ import { KernelError } from '../errors/kernelError';
 import { getCachedSysPrefix } from '../../platform/interpreter/helpers';
 import { getCellMetadata } from '../../platform/common/utils';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
-import { createBlockFromPocket } from '../../notebooks/deepnote/pocket';
-import { createPythonCode } from '@deepnote/blocks';
+import { createBlockFromPocket } from '../../platform/deepnote/pocket';
+import { DeepnoteBigNumberMetadataSchema } from '../../notebooks/deepnote/deepnoteSchemas';
 
 /**
  * Factory for CellExecution objects.
@@ -417,6 +418,13 @@ export class CellExecution implements ICellExecution, IDisposable {
             outputs: [...(this.cell.outputs || [])]
         };
         const deepnoteBlock = createBlockFromPocket(cellData, this.cell.index);
+
+        if (deepnoteBlock.type === 'big-number') {
+            deepnoteBlock.metadata = {
+                ...deepnoteBlock.metadata,
+                ...DeepnoteBigNumberMetadataSchema.parse(JSON.parse(deepnoteBlock.content || '{}'))
+            };
+        }
 
         // Use createPythonCode to generate code with table state already included
         logger.info(`Cell ${this.cell.index}: Using createPythonCode to generate execution code with table state`);

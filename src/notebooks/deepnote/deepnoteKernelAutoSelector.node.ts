@@ -40,7 +40,7 @@ import { disposeAsync } from '../../platform/common/utils';
 import { IDeepnoteInitNotebookRunner } from './deepnoteInitNotebookRunner.node';
 import { IDeepnoteNotebookManager } from '../types';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
-import { DeepnoteProject } from './deepnoteTypes';
+import { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 import { IKernelProvider, IKernel } from '../../kernels/types';
 
 /**

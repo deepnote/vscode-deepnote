@@ -4,7 +4,7 @@ import { commands, NotebookDocument, window, workspace } from 'vscode';
 import { IExtensionContext } from '../../../platform/common/types';
 import { Commands } from '../../../platform/common/constants';
 import { logger } from '../../../platform/logging';
-import { IIntegrationDetector, IIntegrationStorage, IIntegrationWebviewProvider } from './types';
+import { IIntegrationDetector, IIntegrationManager, IIntegrationStorage, IIntegrationWebviewProvider } from './types';
 import { IntegrationStatus, IntegrationWithStatus } from './integrationTypes';
 import { BlockWithIntegration, scanBlocksForIntegrations } from './integrationUtils';
 
@@ -12,7 +12,7 @@ import { BlockWithIntegration, scanBlocksForIntegrations } from './integrationUt
  * Manages integration UI and commands for Deepnote notebooks
  */
 @injectable()
-export class IntegrationManager {
+export class IntegrationManager implements IIntegrationManager {
     private hasIntegrationsContext = 'deepnote.hasIntegrations';
 
     private hasUnconfiguredIntegrationsContext = 'deepnote.hasUnconfiguredIntegrations';

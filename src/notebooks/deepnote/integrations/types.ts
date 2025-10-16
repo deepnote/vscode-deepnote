@@ -30,3 +30,11 @@ export interface IIntegrationWebviewProvider {
      */
     show(integrations: Map<string, IntegrationWithStatus>): Promise<void>;
 }
+
+export const IIntegrationManager = Symbol('IIntegrationManager');
+export interface IIntegrationManager {
+    /**
+     * Activate the integration manager by registering commands and event listeners
+     */
+    activate(): void;
+}

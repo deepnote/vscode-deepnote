@@ -3,13 +3,13 @@ import { assert } from 'chai';
 import { DeepnoteActivationService } from './deepnoteActivationService';
 import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
 import { IExtensionContext } from '../../platform/common/types';
-import { IntegrationManager } from './integrations/integrationManager';
+import { IIntegrationManager } from './integrations/types';
 
 suite('DeepnoteActivationService', () => {
     let activationService: DeepnoteActivationService;
     let mockExtensionContext: IExtensionContext;
     let manager: DeepnoteNotebookManager;
-    let mockIntegrationManager: IntegrationManager;
+    let mockIntegrationManager: IIntegrationManager;
 
     setup(() => {
         mockExtensionContext = {

@@ -9,8 +9,6 @@ export interface IPostgresFormProps {
 }
 
 export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, existingConfig, onSave, onCancel }) => {
-    console.log('[PostgresForm] Rendering with existingConfig:', existingConfig);
-
     const [name, setName] = React.useState(existingConfig?.name || '');
     const [host, setHost] = React.useState(existingConfig?.host || '');
     const [port, setPort] = React.useState(existingConfig?.port?.toString() || '5432');

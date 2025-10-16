@@ -31,12 +31,9 @@ export const VegaRenderer = memo(function VegaRenderer(props: VegaRendererProps)
         vega.scheme('deepnote_blues', deepnoteBlues);
     }, []);
 
-    //   const unfreezedSpec = useMemo(() => clone(addRuntimeDataToVegaSpec(spec, theme)), [spec, theme])
-    const unfreezedSpec = spec;
-
     return (
         <Vega
-            spec={unfreezedSpec}
+            spec={spec}
             renderer={renderer}
             actions={false}
             style={{

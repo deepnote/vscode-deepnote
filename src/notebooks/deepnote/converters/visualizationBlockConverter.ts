@@ -36,8 +36,6 @@ interface FilterMetadata {
 interface VisualizationCellMetadata {
     deepnote_variable_name?: string;
     deepnote_visualization_spec?: Record<string, unknown>;
-    deepnote_config_collapsed?: boolean;
-    deepnote_chart_height?: number;
     deepnote_chart_filter?: FilterMetadata;
 }
 

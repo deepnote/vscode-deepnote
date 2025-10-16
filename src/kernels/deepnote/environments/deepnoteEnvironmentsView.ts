@@ -6,7 +6,7 @@ import { commands, Disposable, ProgressLocation, TreeView, window } from 'vscode
 import { IDisposableRegistry } from '../../../platform/common/types';
 import { logger } from '../../../platform/logging';
 import { IPythonApiProvider } from '../../../platform/api/types';
-import { IDeepnoteEnvironmentManager } from '../types';
+import { IDeepnoteEnvironmentManager, IDeepnoteKernelAutoSelector, IDeepnoteNotebookEnvironmentMapper } from '../types';
 import { DeepnoteEnvironmentTreeDataProvider } from './deepnoteEnvironmentTreeDataProvider';
 import { DeepnoteEnvironmentTreeItem } from './deepnoteEnvironmentTreeItem';
 import { CreateEnvironmentOptions } from './deepnoteEnvironment';
@@ -16,6 +16,7 @@ import {
     getPythonEnvironmentName
 } from '../../../platform/interpreter/helpers';
 import { getDisplayPath } from '../../../platform/common/platform/fs-paths';
+import { IKernelProvider } from '../../../kernels/types';
 
 /**
  * View controller for the Deepnote kernel environments tree view.
@@ -30,13 +31,17 @@ export class DeepnoteEnvironmentsView implements Disposable {
     constructor(
         @inject(IDeepnoteEnvironmentManager) private readonly environmentManager: IDeepnoteEnvironmentManager,
         @inject(IPythonApiProvider) private readonly pythonApiProvider: IPythonApiProvider,
-        @inject(IDisposableRegistry) disposableRegistry: IDisposableRegistry
+        @inject(IDisposableRegistry) disposableRegistry: IDisposableRegistry,
+        @inject(IDeepnoteKernelAutoSelector) private readonly kernelAutoSelector: IDeepnoteKernelAutoSelector,
+        @inject(IDeepnoteNotebookEnvironmentMapper)
+        private readonly notebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper,
+        @inject(IKernelProvider) private readonly kernelProvider: IKernelProvider
     ) {
         // Create tree data provider
         this.treeDataProvider = new DeepnoteEnvironmentTreeDataProvider(environmentManager);
 
         // Create tree view
-        this.treeView = window.createTreeView('deepnoteKernelEnvironments', {
+        this.treeView = window.createTreeView('deepnoteEnvironments', {
             treeDataProvider: this.treeDataProvider,
             showCollapseAll: true
         });
@@ -121,6 +126,13 @@ export class DeepnoteEnvironmentsView implements Disposable {
                     }
                 }
             )
+        );
+
+        // Switch environment for notebook command
+        this.disposables.push(
+            commands.registerCommand('deepnote.environments.selectForNotebook', async () => {
+                await this.selectEnvironmentForNotebook();
+            })
         );
     }
 
@@ -447,6 +459,138 @@ export class DeepnoteEnvironmentsView implements Disposable {
         } catch (error) {
             logger.error(`Failed to update packages: ${error}`);
             void window.showErrorMessage(`Failed to update packages: ${error}`);
+        }
+    }
+
+    private async selectEnvironmentForNotebook(): Promise<void> {
+        // Get the active notebook
+        const activeNotebook = window.activeNotebookEditor?.notebook;
+        if (!activeNotebook || activeNotebook.notebookType !== 'deepnote') {
+            void window.showWarningMessage('No active Deepnote notebook found');
+            return;
+        }
+
+        // Get base file URI (without query/fragment)
+        const baseFileUri = activeNotebook.uri.with({ query: '', fragment: '' });
+
+        // Get current environment selection
+        const currentEnvironmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri);
+        const currentEnvironment = currentEnvironmentId
+            ? this.environmentManager.getEnvironment(currentEnvironmentId)
+            : undefined;
+
+        // Get all environments
+        const environments = this.environmentManager.listEnvironments();
+
+        if (environments.length === 0) {
+            const choice = await window.showInformationMessage(
+                'No environments found. Create one first?',
+                'Create Environment',
+                'Cancel'
+            );
+
+            if (choice === 'Create Environment') {
+                await commands.executeCommand('deepnote.environments.create');
+            }
+            return;
+        }
+
+        // Build quick pick items
+        const items: (import('vscode').QuickPickItem & { environmentId?: string })[] = environments.map((env) => {
+            const envWithStatus = this.environmentManager.getEnvironmentWithStatus(env.id);
+            const statusIcon = envWithStatus?.status === 'running' ? '$(vm-running)' : '$(vm-outline)';
+            const statusText = envWithStatus?.status === 'running' ? '[Running]' : '[Stopped]';
+            const isCurrent = currentEnvironment?.id === env.id;
+
+            return {
+                label: `${statusIcon} ${env.name} ${statusText}${isCurrent ? ' $(check)' : ''}`,
+                description: getDisplayPath(env.pythonInterpreter.uri),
+                detail: env.packages?.length ? `Packages: ${env.packages.join(', ')}` : 'No additional packages',
+                environmentId: env.id
+            };
+        });
+
+        // Add "Create new" option at the end
+        items.push({
+            label: '$(add) Create New Environment',
+            description: 'Set up a new kernel environment',
+            alwaysShow: true
+        });
+
+        const selected = await window.showQuickPick(items, {
+            placeHolder: 'Select an environment for this notebook',
+            matchOnDescription: true,
+            matchOnDetail: true
+        });
+
+        if (!selected) {
+            return; // User cancelled
+        }
+
+        if (!selected.environmentId) {
+            // User chose "Create new"
+            await commands.executeCommand('deepnote.environments.create');
+            return;
+        }
+
+        // Check if user selected the same environment
+        if (selected.environmentId === currentEnvironmentId) {
+            logger.info(`User selected the same environment - no changes needed`);
+            return;
+        }
+
+        // Check if any cells are currently executing using the kernel execution state
+        // This is more reliable than checking executionSummary
+        const kernel = this.kernelProvider.get(activeNotebook);
+        const hasExecutingCells = kernel
+            ? this.kernelProvider.getKernelExecution(kernel).pendingCells.length > 0
+            : false;
+
+        if (hasExecutingCells) {
+            const proceed = await window.showWarningMessage(
+                'Some cells are currently executing. Switching environments now may cause errors. Do you want to continue?',
+                { modal: true },
+                'Yes, Switch Anyway',
+                'Cancel'
+            );
+
+            if (proceed !== 'Yes, Switch Anyway') {
+                logger.info('User cancelled environment switch due to executing cells');
+                return;
+            }
+        }
+
+        // User selected a different environment - switch to it
+        logger.info(
+            `Switching notebook ${getDisplayPath(activeNotebook.uri)} to environment ${selected.environmentId}`
+        );
+
+        try {
+            await window.withProgress(
+                {
+                    location: ProgressLocation.Notification,
+                    title: `Switching to environment...`,
+                    cancellable: false
+                },
+                async () => {
+                    // Update the notebook-to-environment mapping
+                    await this.notebookEnvironmentMapper.setEnvironmentForNotebook(
+                        baseFileUri,
+                        selected.environmentId!
+                    );
+
+                    // Force rebuild the controller with the new environment
+                    // This will dispose the old controller, clear cached metadata, and create a fresh controller
+                    await this.kernelAutoSelector.rebuildController(activeNotebook);
+
+                    logger.info(`Successfully switched to environment ${selected.environmentId}`);
+                }
+            );
+
+            void window.showInformationMessage('Environment switched successfully');
+        } catch (error) {
+            logger.error(`Failed to switch environment: ${error}`);
+            void window.showErrorMessage(`Failed to switch environment: ${error}`);
         }
     }
 

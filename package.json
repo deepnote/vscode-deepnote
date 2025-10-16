@@ -133,6 +133,12 @@
                 "icon": "$(refresh)"
             },
             {
+                "command": "deepnote.environments.selectForNotebook",
+                "title": "Select Environment for Notebook",
+                "category": "Deepnote",
+                "icon": "$(server-environment)"
+            },
+            {
                 "command": "dataScience.ClearCache",
                 "title": "%jupyter.command.dataScience.clearCache.title%",
                 "category": "Jupyter (Dev)",
@@ -754,6 +760,11 @@
                 }
             ],
             "notebook/toolbar": [
+                {
+                    "command": "deepnote.environments.selectForNotebook",
+                    "group": "navigation@1",
+                    "when": "notebookType == 'deepnote' && isWorkspaceTrusted"
+                },
                 {
                     "command": "jupyter.restartkernel",
                     "group": "navigation/execute@5",

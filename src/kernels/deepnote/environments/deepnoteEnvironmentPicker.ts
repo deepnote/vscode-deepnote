@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import { inject, injectable } from 'inversify';
-import { QuickPickItem, window, Uri } from 'vscode';
+import { QuickPickItem, window, Uri, commands } from 'vscode';
 import { logger } from '../../../platform/logging';
 import { IDeepnoteEnvironmentManager } from '../types';
 import { DeepnoteEnvironment } from './deepnoteEnvironment';
@@ -38,9 +38,16 @@ export class DeepnoteEnvironmentPicker {
 
             if (choice === 'Create Environment') {
                 // Trigger the create command
-                await window.showInformationMessage(
-                    'Use the "Create Environment" button in the Deepnote Environments view to create an environment.'
-                );
+                logger.info('Triggering create environment command from picker');
+                await commands.executeCommand('deepnote.environments.create');
+
+                // Check if an environment was created
+                const newEnvironments = this.environmentManager.listEnvironments();
+                if (newEnvironments.length > 0) {
+                    // Environment created, show picker again
+                    logger.info('Environment created, showing picker again');
+                    return this.pickEnvironment(notebookUri);
+                }
             }
 
             return undefined;
@@ -78,10 +85,20 @@ export class DeepnoteEnvironmentPicker {
         }
 
         if (!selected.environment) {
-            // User chose "Create new"
-            await window.showInformationMessage(
-                'Use the "Create Environment" button in the Deepnote Environments view to create an environment.'
-            );
+            // User chose "Create new" - execute the create command and retry
+            logger.info('User chose to create new environment - triggering create command');
+            await commands.executeCommand('deepnote.environments.create');
+
+            // After creation, refresh the list and show picker again
+            const newEnvironments = this.environmentManager.listEnvironments();
+            if (newEnvironments.length > environments.length) {
+                // A new environment was created, show the picker again
+                logger.info('Environment created, showing picker again');
+                return this.pickEnvironment(notebookUri);
+            }
+
+            // User cancelled creation
+            logger.info('No new environment created');
             return undefined;
         }
 

@@ -21,6 +21,7 @@ export class DeepnoteKernelConnectionMetadata {
     public readonly interpreter?: PythonEnvironment;
     public readonly serverProviderHandle: JupyterServerProviderHandle;
     public readonly serverInfo?: DeepnoteServerInfo; // Store server info for connection
+    public readonly environmentName?: string; // Name of the Deepnote environment for display purposes
 
     private constructor(options: {
         interpreter?: PythonEnvironment;
@@ -29,6 +30,7 @@ export class DeepnoteKernelConnectionMetadata {
         id: string;
         serverProviderHandle: JupyterServerProviderHandle;
         serverInfo?: DeepnoteServerInfo;
+        environmentName?: string;
     }) {
         this.interpreter = options.interpreter;
         this.kernelSpec = options.kernelSpec;
@@ -36,6 +38,7 @@ export class DeepnoteKernelConnectionMetadata {
         this.id = options.id;
         this.serverProviderHandle = options.serverProviderHandle;
         this.serverInfo = options.serverInfo;
+        this.environmentName = options.environmentName;
     }
 
     public static create(options: {
@@ -45,6 +48,7 @@ export class DeepnoteKernelConnectionMetadata {
         id: string;
         serverProviderHandle: JupyterServerProviderHandle;
         serverInfo?: DeepnoteServerInfo;
+        environmentName?: string;
     }) {
         return new DeepnoteKernelConnectionMetadata(options);
     }
@@ -196,6 +200,14 @@ export interface IDeepnoteKernelAutoSelector {
      * @param token Cancellation token to cancel the operation
      */
     ensureKernelSelected(notebook: vscode.NotebookDocument, token?: vscode.CancellationToken): Promise<void>;
+
+    /**
+     * Force rebuild the controller for a notebook by clearing cached controller and metadata.
+     * This is used when switching environments to ensure a new controller is created.
+     * @param notebook The notebook document
+     * @param token Cancellation token to cancel the operation
+     */
+    rebuildController(notebook: vscode.NotebookDocument, token?: vscode.CancellationToken): Promise<void>;
 }
 
 export const IDeepnoteEnvironmentManager = Symbol('IDeepnoteEnvironmentManager');

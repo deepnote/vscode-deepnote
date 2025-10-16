@@ -54,24 +54,14 @@ export class VisualizationBlockConverter implements BlockConverter {
         try {
             const config = JSON.parse(cell.value || '{}');
 
-            if (!block.metadata) {
-                block.metadata = {};
-            }
-
-            if (config.variable) {
-                block.metadata.deepnote_variable_name = config.variable;
-            }
-
-            if (config.spec) {
-                block.metadata.deepnote_visualization_spec = config.spec;
-            }
-
-            if (config.filters) {
-                if (!block.metadata.deepnote_chart_filter) {
-                    block.metadata.deepnote_chart_filter = {};
+            block.metadata = {
+                ...block.metadata,
+                deepnote_variable_name: config.variable || '',
+                deepnote_visualization_spec: config.spec || {},
+                deepnote_chart_filter: {
+                    advancedFilters: config.filters || []
                 }
-                block.metadata.deepnote_chart_filter.advancedFilters = config.filters;
-            }
+            };
         } catch (error) {
             // If JSON parsing fails, leave metadata unchanged
             console.warn('Failed to parse visualization JSON:', error);

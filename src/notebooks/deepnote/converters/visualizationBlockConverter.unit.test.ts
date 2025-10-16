@@ -11,46 +11,47 @@ suite('VisualizationBlockConverter', () => {
         converter = new VisualizationBlockConverter();
     });
 
-    suite('canConvert', () => {
-        test('returns true for visualization type', () => {
+    suite('canConvert and getSupportedTypes', () => {
+        test('returns true for visualization (case-insensitive) and false for other types', () => {
             assert.isTrue(converter.canConvert('visualization'));
-        });
-
-        test('canConvert ignores case', () => {
             assert.isTrue(converter.canConvert('VISUALIZATION'));
             assert.isTrue(converter.canConvert('Visualization'));
-            assert.isTrue(converter.canConvert('ViSuAlIzAtIoN'));
-        });
-
-        test('returns false for non-visualization types', () => {
             assert.isFalse(converter.canConvert('code'));
             assert.isFalse(converter.canConvert('markdown'));
-            assert.isFalse(converter.canConvert('text-cell-h1'));
-            assert.isFalse(converter.canConvert('unknown'));
-        });
-    });
-
-    suite('getSupportedTypes', () => {
-        test('returns array with visualization type', () => {
-            const types = converter.getSupportedTypes();
-
-            assert.deepStrictEqual(types, ['visualization']);
+            assert.deepStrictEqual(converter.getSupportedTypes(), ['visualization']);
         });
     });
 
     suite('convertToCell', () => {
-        test('converts visualization block with metadata to Python code', () => {
+        test('converts block with full metadata to properly formatted JSON cell', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
-                content: '',
-                id: 'block-123',
-                sortingKey: 'a0',
+                id: 'viz1',
                 type: 'visualization',
+                content: '',
+                sortingKey: 'a0',
                 metadata: {
-                    deepnote_variable_name: 'date_df',
+                    deepnote_variable_name: 'sales_data',
                     deepnote_visualization_spec: {
-                        layer: [{ mark: 'bar' }],
-                        config: { legend: { disable: false } }
+                        mark: 'bar',
+                        encoding: {
+                            x: { field: 'category', type: 'nominal' },
+                            y: { field: 'value', type: 'quantitative' }
+                        }
+                    },
+                    deepnote_chart_filter: {
+                        advancedFilters: [
+                            {
+                                column: 'status',
+                                operator: 'is-equal',
+                                comparativeValues: ['active']
+                            },
+                            {
+                                column: 'age',
+                                operator: 'greater-than',
+                                comparativeValues: ['18']
+                            }
+                        ]
                     }
                 }
             };
@@ -59,286 +60,252 @@ suite('VisualizationBlockConverter', () => {
 
             assert.strictEqual(cell.kind, NotebookCellKind.Code);
             assert.strictEqual(cell.languageId, 'python');
-            assert.include(cell.value, '_dntk.DeepnoteChart(');
-            assert.include(cell.value, 'date_df');
-            assert.include(cell.value, '"layer"');
-            assert.include(cell.value, '"mark": "bar"');
-            assert.include(cell.value, 'False');
-            assert.notInclude(cell.value, 'false');
-        });
+            assert.include(cell.value, '\n');
+            assert.match(cell.value, /{\n  "variable"/);
 
-        test('converts boolean values to Python format', () => {
-            const block: DeepnoteBlock = {
-                blockGroup: 'test-group',
-                content: '',
-                id: 'block-123',
-                sortingKey: 'a0',
-                type: 'visualization',
-                metadata: {
-                    deepnote_variable_name: 'df',
-                    deepnote_visualization_spec: {
-                        enabled: true,
-                        disabled: false,
-                        nullValue: null
-                    }
+            const config = JSON.parse(cell.value);
+            assert.strictEqual(config.variable, 'sales_data');
+            assert.deepStrictEqual(config.spec, {
+                mark: 'bar',
+                encoding: {
+                    x: { field: 'category', type: 'nominal' },
+                    y: { field: 'value', type: 'quantitative' }
                 }
-            };
-
-            const cell = converter.convertToCell(block);
-
-            assert.include(cell.value, 'True');
-            assert.include(cell.value, 'False');
-            assert.include(cell.value, 'None');
-            assert.notInclude(cell.value, 'true');
-            assert.notInclude(cell.value, 'false');
-            assert.notInclude(cell.value, 'null');
+            });
+            assert.strictEqual(config.filters.length, 2);
+            assert.strictEqual(config.filters[0].column, 'status');
+            assert.strictEqual(config.filters[1].operator, 'greater-than');
         });
 
-        test('removes usermeta field from spec', () => {
-            const block: DeepnoteBlock = {
+        test('uses defaults when metadata is missing or empty', () => {
+            const blockWithEmptyMetadata: DeepnoteBlock = {
                 blockGroup: 'test-group',
-                content: '',
-                id: 'block-123',
-                sortingKey: 'a0',
+                id: 'viz2',
                 type: 'visualization',
-                metadata: {
-                    deepnote_variable_name: 'df',
-                    deepnote_visualization_spec: {
-                        mark: 'bar',
-                        usermeta: {
-                            shouldBeRemoved: true
-                        }
-                    }
-                }
+                content: '',
+                sortingKey: 'a0',
+                metadata: {}
             };
 
-            const cell = converter.convertToCell(block);
-
-            assert.notInclude(cell.value, 'usermeta');
-            assert.notInclude(cell.value, 'shouldBeRemoved');
-            assert.include(cell.value, '"mark": "bar"');
-        });
-
-        test('handles missing variable name with default', () => {
-            const block: DeepnoteBlock = {
+            const blockWithNoMetadata: DeepnoteBlock = {
                 blockGroup: 'test-group',
-                content: '',
-                id: 'block-123',
-                sortingKey: 'a0',
+                id: 'viz3',
                 type: 'visualization',
-                metadata: {
-                    deepnote_visualization_spec: {
-                        layer: []
-                    }
-                }
-            };
-
-            const cell = converter.convertToCell(block);
-
-            assert.include(cell.value, 'df,');
-        });
-
-        test('handles missing visualization spec with empty object', () => {
-            const block: DeepnoteBlock = {
-                blockGroup: 'test-group',
                 content: '',
-                id: 'block-123',
-                sortingKey: 'a0',
-                type: 'visualization',
-                metadata: {
-                    deepnote_variable_name: 'my_df'
-                }
+                sortingKey: 'a0'
             };
 
-            const cell = converter.convertToCell(block);
+            const cell1 = converter.convertToCell(blockWithEmptyMetadata);
+            const config1 = JSON.parse(cell1.value);
+            assert.strictEqual(config1.variable, 'df');
+            assert.deepStrictEqual(config1.spec, {});
+            assert.deepStrictEqual(config1.filters, []);
 
-            assert.include(cell.value, 'my_df');
-            assert.include(cell.value, '{}');
-        });
-
-        test('handles missing metadata', () => {
-            const block: DeepnoteBlock = {
-                blockGroup: 'test-group',
-                content: '',
-                id: 'block-123',
-                sortingKey: 'a0',
-                type: 'visualization'
-            };
-
-            const cell = converter.convertToCell(block);
-
-            assert.strictEqual(cell.kind, NotebookCellKind.Code);
-            assert.include(cell.value, '_dntk.DeepnoteChart(');
-            assert.include(cell.value, 'df');
-            assert.include(cell.value, '{}');
-        });
-
-        test('generates properly formatted Python code', () => {
-            const block: DeepnoteBlock = {
-                blockGroup: 'test-group',
-                content: '',
-                id: 'block-123',
-                sortingKey: 'a0',
-                type: 'visualization',
-                metadata: {
-                    deepnote_variable_name: 'sales_data',
-                    deepnote_visualization_spec: {
-                        title: 'Sales Chart',
-                        mark: 'line'
-                    }
-                }
-            };
-
-            const cell = converter.convertToCell(block);
-
-            const expectedPattern = /_dntk\.DeepnoteChart\(\s+sales_data,\s+\{/;
-
-            assert.match(cell.value, expectedPattern);
-        });
-
-        test('handles complex nested visualization spec', () => {
-            const block: DeepnoteBlock = {
-                blockGroup: 'test-group',
-                content: '',
-                id: 'block-123',
-                sortingKey: 'a0',
-                type: 'visualization',
-                metadata: {
-                    deepnote_variable_name: 'df',
-                    deepnote_visualization_spec: {
-                        layer: [
-                            {
-                                layer: [
-                                    {
-                                        mark: { type: 'bar', color: '#2266D3' },
-                                        encoding: {
-                                            x: { type: 'temporal', field: 'date' },
-                                            y: { type: 'quantitative', aggregate: 'count' }
-                                        }
-                                    }
-                                ]
-                            }
-                        ],
-                        config: { legend: { disable: false } }
-                    }
-                }
-            };
-
-            const cell = converter.convertToCell(block);
-
-            assert.include(cell.value, '"layer"');
-            assert.include(cell.value, '"mark"');
-            assert.include(cell.value, '"encoding"');
-            assert.include(cell.value, '"config"');
+            const cell2 = converter.convertToCell(blockWithNoMetadata);
+            const config2 = JSON.parse(cell2.value);
+            assert.strictEqual(config2.variable, 'df');
+            assert.deepStrictEqual(config2.spec, {});
+            assert.deepStrictEqual(config2.filters, []);
         });
     });
 
     suite('applyChangesToBlock', () => {
-        test('sets content to empty string', () => {
+        test('updates block metadata from valid JSON and clears content', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
+                id: 'viz1',
+                type: 'visualization',
                 content: 'old content',
-                id: 'block-123',
                 sortingKey: 'a0',
-                type: 'visualization',
                 metadata: {
-                    deepnote_variable_name: 'df',
-                    deepnote_visualization_spec: {}
+                    other_field: 'should be preserved',
+                    deepnote_chart_height: 500
                 }
             };
-            const cell = new NotebookCellData(NotebookCellKind.Code, '_dntk.DeepnoteChart(df, {})', 'python');
 
-            converter.applyChangesToBlock(block, cell);
-
-            assert.strictEqual(block.content, '');
-        });
-
-        test('does not modify metadata', () => {
-            const block: DeepnoteBlock = {
-                blockGroup: 'test-group',
-                content: '',
-                id: 'block-123',
-                sortingKey: 'a0',
-                type: 'visualization',
-                metadata: {
-                    deepnote_variable_name: 'my_df',
-                    deepnote_visualization_spec: { mark: 'bar' },
-                    custom_field: 'custom_value'
-                }
-            };
             const cell = new NotebookCellData(
                 NotebookCellKind.Code,
-                '_dntk.DeepnoteChart(different_df, {"mark": "line"})',
+                JSON.stringify({
+                    variable: 'my_data',
+                    spec: { mark: 'point' },
+                    filters: [
+                        { column: 'status', operator: 'is-equal', comparativeValues: ['active'] },
+                        { column: 'date', operator: 'between', comparativeValues: ['2023-01-01', '2023-12-31'] }
+                    ]
+                }),
                 'python'
             );
 
             converter.applyChangesToBlock(block, cell);
 
-            assert.strictEqual(block.metadata?.deepnote_variable_name, 'my_df');
-            assert.deepStrictEqual(block.metadata?.deepnote_visualization_spec, { mark: 'bar' });
-            assert.strictEqual(block.metadata?.custom_field, 'custom_value');
+            assert.strictEqual(block.content, '');
+            assert.strictEqual(block.metadata?.deepnote_variable_name, 'my_data');
+            assert.deepStrictEqual(block.metadata?.deepnote_visualization_spec, { mark: 'point' });
+            assert.strictEqual(block.metadata?.deepnote_chart_filter?.advancedFilters?.length, 2);
+            assert.strictEqual(block.metadata?.deepnote_chart_filter?.advancedFilters?.[0].column, 'status');
+            assert.strictEqual(block.metadata?.other_field, 'should be preserved');
+            assert.strictEqual(block.metadata?.deepnote_chart_height, 500);
         });
 
-        test('does not modify other block properties', () => {
+        test('sets empty values for missing fields in JSON', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
+                id: 'viz2',
+                type: 'visualization',
                 content: '',
-                executionCount: 10,
-                id: 'block-123',
-                metadata: {
-                    deepnote_variable_name: 'df',
-                    deepnote_visualization_spec: {}
-                },
-                outputs: [],
                 sortingKey: 'a0',
-                type: 'visualization'
+                metadata: {
+                    deepnote_variable_name: 'existing_var',
+                    deepnote_visualization_spec: { mark: 'line' },
+                    deepnote_chart_filter: {
+                        advancedFilters: [{ column: 'old', operator: 'is-equal', comparativeValues: ['value'] }]
+                    },
+                    other_field: 'preserved'
+                }
             };
-            const cell = new NotebookCellData(NotebookCellKind.Code, 'any content', 'python');
+
+            const cellWithOnlyVariable = new NotebookCellData(
+                NotebookCellKind.Code,
+                JSON.stringify({ variable: 'updated_var', spec: {}, filters: [] }),
+                'python'
+            );
+            converter.applyChangesToBlock(block, cellWithOnlyVariable);
+            assert.strictEqual(block.metadata?.deepnote_variable_name, 'updated_var');
+            assert.deepStrictEqual(block.metadata?.deepnote_visualization_spec, {});
+            assert.deepStrictEqual(block.metadata?.deepnote_chart_filter?.advancedFilters, []);
+            assert.strictEqual(block.metadata?.other_field, 'preserved');
+
+            const cellWithOnlySpec = new NotebookCellData(
+                NotebookCellKind.Code,
+                JSON.stringify({ variable: 'var2', spec: { mark: 'bar' }, filters: [] }),
+                'python'
+            );
+            converter.applyChangesToBlock(block, cellWithOnlySpec);
+            assert.strictEqual(block.metadata?.deepnote_variable_name, 'var2');
+            assert.deepStrictEqual(block.metadata?.deepnote_visualization_spec, { mark: 'bar' });
+            assert.deepStrictEqual(block.metadata?.deepnote_chart_filter?.advancedFilters, []);
+        });
+
+        test('creates metadata and chart_filter objects when they do not exist', () => {
+            const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
+                id: 'viz3',
+                type: 'visualization',
+                content: '',
+                sortingKey: 'a0'
+            };
+
+            const cell = new NotebookCellData(
+                NotebookCellKind.Code,
+                JSON.stringify({
+                    variable: 'new_var',
+                    spec: { mark: 'area' },
+                    filters: [{ column: 'category', operator: 'is-not-null', comparativeValues: [] }]
+                }),
+                'python'
+            );
 
             converter.applyChangesToBlock(block, cell);
 
-            assert.strictEqual(block.content, '');
-            assert.strictEqual(block.id, 'block-123');
-            assert.strictEqual(block.type, 'visualization');
-            assert.strictEqual(block.sortingKey, 'a0');
-            assert.strictEqual(block.executionCount, 10);
+            assert.isDefined(block.metadata);
+            assert.strictEqual(block.metadata?.deepnote_variable_name, 'new_var');
+            assert.deepStrictEqual(block.metadata?.deepnote_visualization_spec, { mark: 'area' });
+            assert.isDefined(block.metadata?.deepnote_chart_filter);
+            assert.strictEqual(block.metadata?.deepnote_chart_filter?.advancedFilters?.length, 1);
+        });
+
+        test('handles invalid, empty, and undefined JSON gracefully', () => {
+            const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
+                id: 'viz4',
+                type: 'visualization',
+                content: '',
+                sortingKey: 'a0',
+                metadata: {
+                    deepnote_variable_name: 'original',
+                    deepnote_visualization_spec: { mark: 'original' },
+                    other_field: 'preserved'
+                }
+            };
+
+            const invalidCell = new NotebookCellData(NotebookCellKind.Code, 'not valid json {', 'python');
+            assert.doesNotThrow(() => converter.applyChangesToBlock(block, invalidCell));
+            assert.strictEqual(block.metadata?.deepnote_variable_name, 'original');
+            assert.deepStrictEqual(block.metadata?.deepnote_visualization_spec, { mark: 'original' });
+            assert.strictEqual(block.metadata?.other_field, 'preserved');
+
+            const emptyCell = new NotebookCellData(NotebookCellKind.Code, '', 'python');
+            converter.applyChangesToBlock(block, emptyCell);
+            assert.strictEqual(block.metadata?.deepnote_variable_name, '');
+            assert.deepStrictEqual(block.metadata?.deepnote_visualization_spec, {});
+            assert.deepStrictEqual(block.metadata?.deepnote_chart_filter?.advancedFilters, []);
+            assert.strictEqual(block.metadata?.other_field, 'preserved');
+
+            const undefinedCell = new NotebookCellData(NotebookCellKind.Code, '', 'python');
+            undefinedCell.value = undefined as unknown as string;
+            converter.applyChangesToBlock(block, undefinedCell);
+            assert.strictEqual(block.metadata?.deepnote_variable_name, '');
+            assert.deepStrictEqual(block.metadata?.deepnote_visualization_spec, {});
+            assert.deepStrictEqual(block.metadata?.deepnote_chart_filter?.advancedFilters, []);
+            assert.strictEqual(block.metadata?.other_field, 'preserved');
         });
     });
 
-    suite('round-trip conversion', () => {
-        test('preserves metadata through conversion cycle', () => {
+    suite('round trip conversion', () => {
+        test('block -> cell -> block preserves data', () => {
             const originalBlock: DeepnoteBlock = {
                 blockGroup: 'test-group',
-                content: '',
-                id: 'block-123',
-                sortingKey: 'a0',
+                id: 'viz1',
                 type: 'visualization',
+                content: '',
+                sortingKey: 'a0',
                 metadata: {
-                    deepnote_variable_name: 'sales_df',
+                    deepnote_variable_name: 'sales_data',
                     deepnote_visualization_spec: {
-                        layer: [{ mark: 'bar' }],
-                        config: { legend: { disable: false } }
+                        mark: 'bar',
+                        encoding: {
+                            x: { field: 'category', type: 'nominal' },
+                            y: { field: 'value', type: 'quantitative' }
+                        }
                     },
-                    execution_start: 1234567890,
-                    execution_millis: 42
+                    deepnote_chart_filter: {
+                        advancedFilters: [
+                            {
+                                column: 'status',
+                                operator: 'is-equal',
+                                comparativeValues: ['active']
+                            }
+                        ]
+                    },
+                    deepnote_chart_height: 400
                 }
             };
 
             const cell = converter.convertToCell(originalBlock);
 
-            const newBlock: DeepnoteBlock = {
+            const roundTripBlock: DeepnoteBlock = {
                 blockGroup: originalBlock.blockGroup,
-                content: 'temp',
                 id: originalBlock.id,
-                sortingKey: originalBlock.sortingKey,
                 type: originalBlock.type,
-                metadata: originalBlock.metadata
+                content: originalBlock.content,
+                sortingKey: originalBlock.sortingKey,
+                metadata: { ...originalBlock.metadata }
             };
 
-            converter.applyChangesToBlock(newBlock, cell);
+            converter.applyChangesToBlock(roundTripBlock, cell);
 
-            assert.strictEqual(newBlock.content, '');
-            assert.deepStrictEqual(newBlock.metadata, originalBlock.metadata);
+            assert.strictEqual(
+                roundTripBlock.metadata?.deepnote_variable_name,
+                originalBlock.metadata?.deepnote_variable_name
+            );
+            assert.deepStrictEqual(
+                roundTripBlock.metadata?.deepnote_visualization_spec,
+                originalBlock.metadata?.deepnote_visualization_spec
+            );
+            assert.deepStrictEqual(
+                roundTripBlock.metadata?.deepnote_chart_filter?.advancedFilters,
+                originalBlock.metadata?.deepnote_chart_filter?.advancedFilters
+            );
         });
     });
 });

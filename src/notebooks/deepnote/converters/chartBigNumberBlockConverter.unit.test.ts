@@ -444,7 +444,14 @@ suite('ChartBigNumberBlockConverter', () => {
                 id: 'block-123',
                 metadata: {
                     custom: 'value',
-                    deepnote_big_number_title: 'new title'
+                    deepnote_big_number_title: 'new title',
+                    deepnote_big_number_comparison_enabled: null,
+                    deepnote_big_number_comparison_format: null,
+                    deepnote_big_number_comparison_title: null,
+                    deepnote_big_number_comparison_type: null,
+                    deepnote_big_number_comparison_value: null,
+                    deepnote_big_number_format: null,
+                    deepnote_big_number_value: null
                 },
                 outputs: [],
                 sortingKey: 'a0',

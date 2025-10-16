@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { l10n } from 'vscode';
 
 import { BigQueryIntegrationConfig } from './types';
 
@@ -28,7 +27,7 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
 
     const validateCredentials = (value: string): boolean => {
         if (!value.trim()) {
-            setCredentialsError(l10n.t('Credentials are required'));
+            setCredentialsError('Credentials are required');
             return false;
         }
 
@@ -38,7 +37,7 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
             return true;
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Invalid JSON format';
-            setCredentialsError(l10n.t('Invalid JSON: {0}', errorMessage));
+            setCredentialsError(`Invalid JSON: ${errorMessage}`);
             return false;
         }
     };
@@ -59,7 +58,7 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
 
         const config: BigQueryIntegrationConfig = {
             id: integrationId,
-            name: name || l10n.t('Unnamed BigQuery Integration ({0})', integrationId),
+            name: name || `Unnamed BigQuery Integration (${integrationId})`,
             type: 'bigquery',
             projectId,
             credentials
@@ -71,7 +70,7 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
     return (
         <form onSubmit={handleSubmit}>
             <div className="form-group">
-                <label htmlFor="name">{l10n.t('Name (optional)')}</label>
+                <label htmlFor="name">Name (optional)</label>
                 <input
                     type="text"
                     id="name"
@@ -84,7 +83,7 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
 
             <div className="form-group">
                 <label htmlFor="projectId">
-                    {l10n.t('Project ID')} <span className="required">*</span>
+                    Project ID <span className="required">*</span>
                 </label>
                 <input
                     type="text"
@@ -99,7 +98,7 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
 
             <div className="form-group">
                 <label htmlFor="credentials">
-                    {l10n.t('Service Account Credentials (JSON)')} <span className="required">*</span>
+                    Service Account Credentials (JSON) <span className="required">*</span>
                 </label>
                 <textarea
                     id="credentials"
@@ -124,10 +123,10 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
 
             <div className="form-actions">
                 <button type="submit" className="primary">
-                    {l10n.t('Save')}
+                    Save
                 </button>
                 <button type="button" className="secondary" onClick={onCancel}>
-                    {l10n.t('Cancel')}
+                    Cancel
                 </button>
             </div>
         </form>

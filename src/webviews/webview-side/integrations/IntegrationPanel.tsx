@@ -3,7 +3,6 @@ import { IVsCodeApi } from '../react-common/postOffice';
 import { IntegrationList } from './IntegrationList';
 import { ConfigurationForm } from './ConfigurationForm';
 import { IntegrationWithStatus, WebviewMessage, IntegrationConfig } from './types';
-import { l10n } from 'vscode';
 
 export interface IIntegrationPanelProps {
     baseTheme: string;
@@ -130,7 +129,7 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
 
     return (
         <div className={`integration-panel theme-${baseTheme}`}>
-            <h1>{l10n.t('Deepnote Integrations')}</h1>
+            <h1>Deepnote Integrations</h1>
 
             {message && <div className={`message message-${message.type}`}>{message.text}</div>}
 
@@ -149,20 +148,20 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
                 <div className="configuration-form-overlay">
                     <div className="configuration-form-container" style={{ maxWidth: '400px' }}>
                         <div className="configuration-form-header">
-                            <h2>{l10n.t('Confirm Reset')}</h2>
+                            <h2>Confirm Reset</h2>
                         </div>
                         <div className="configuration-form-body">
-                            <p>{l10n.t('Are you sure you want to reset this integration configuration?')}</p>
+                            <p>Are you sure you want to reset this integration configuration?</p>
                             <p style={{ marginTop: '10px', fontSize: '0.9em', opacity: 0.8 }}>
-                                {l10n.t('This will remove the stored credentials. You can reconfigure it later.')}
+                                This will remove the stored credentials. You can reconfigure it later.
                             </p>
                         </div>
                         <div className="form-actions">
                             <button type="button" className="primary" onClick={handleConfirmDelete}>
-                                {l10n.t('Reset')}
+                                Reset
                             </button>
                             <button type="button" className="secondary" onClick={handleCancelDelete}>
-                                {l10n.t('Cancel')}
+                                Cancel
                             </button>
                         </div>
                     </div>

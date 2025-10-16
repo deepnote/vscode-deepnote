@@ -1,6 +1,5 @@
 import * as React from 'react';
 import { PostgresIntegrationConfig } from './types';
-import { l10n } from 'vscode';
 
 export interface IPostgresFormProps {
     integrationId: string;
@@ -36,7 +35,7 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, exis
 
         const config: PostgresIntegrationConfig = {
             id: integrationId,
-            name: name || l10n.t('Unnamed PostgreSQL Integration ({0})', integrationId),
+            name: name || `Unnamed PostgreSQL Integration (${integrationId})`,
             type: 'postgres',
             host,
             port: parseInt(port, 10),
@@ -52,7 +51,7 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, exis
     return (
         <form onSubmit={handleSubmit}>
             <div className="form-group">
-                <label htmlFor="name">{l10n.t('Name (optional)')}</label>
+                <label htmlFor="name">Name (optional)</label>
                 <input
                     type="text"
                     id="name"
@@ -65,7 +64,7 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, exis
 
             <div className="form-group">
                 <label htmlFor="host">
-                    {l10n.t('Host')} <span className="required">*</span>
+                    Host <span className="required">*</span>
                 </label>
                 <input
                     type="text"
@@ -80,7 +79,7 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, exis
 
             <div className="form-group">
                 <label htmlFor="port">
-                    {l10n.t('Port')} <span className="required">*</span>
+                    Port <span className="required">*</span>
                 </label>
                 <input
                     type="number"
@@ -98,7 +97,7 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, exis
 
             <div className="form-group">
                 <label htmlFor="database">
-                    {l10n.t('Database')} <span className="required">*</span>
+                    Database <span className="required">*</span>
                 </label>
                 <input
                     type="text"
@@ -113,7 +112,7 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, exis
 
             <div className="form-group">
                 <label htmlFor="username">
-                    {l10n.t('Username')} <span className="required">*</span>
+                    Username <span className="required">*</span>
                 </label>
                 <input
                     type="text"
@@ -128,7 +127,7 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, exis
 
             <div className="form-group">
                 <label htmlFor="password">
-                    {l10n.t('Password')} <span className="required">*</span>
+                    Password <span className="required">*</span>
                 </label>
                 <input
                     type="password"
@@ -144,16 +143,16 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, exis
             <div className="form-group checkbox-group">
                 <label>
                     <input type="checkbox" checked={ssl} onChange={(e) => setSsl(e.target.checked)} />
-                    {l10n.t('Use SSL')}
+                    Use SSL
                 </label>
             </div>
 
             <div className="form-actions">
                 <button type="submit" className="primary">
-                    {l10n.t('Save')}
+                    Save
                 </button>
                 <button type="button" className="secondary" onClick={onCancel}>
-                    {l10n.t('Cancel')}
+                    Cancel
                 </button>
             </div>
         </form>

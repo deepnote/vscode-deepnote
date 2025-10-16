@@ -249,6 +249,7 @@
     "deepnote.commands.openNotebook.title": "Open Notebook",
     "deepnote.commands.openFile.title": "Open File",
     "deepnote.commands.revealInExplorer.title": "Reveal in Explorer",
+    "deepnote.commands.manageIntegrations.title": "Manage Integrations",
     "deepnote.views.explorer.name": "Explorer",
     "deepnote.command.selectNotebook.title": "Select Notebook"
 }

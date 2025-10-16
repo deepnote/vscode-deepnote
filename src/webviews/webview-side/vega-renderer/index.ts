@@ -11,11 +11,10 @@ interface Metadata {
 }
 
 /**
- * Renderer for Vega/Vega-Lite charts (application/vnd.vega.v5+json).
- * Currently renders static text representation of the chart spec.
+ * Renderer for Vega charts (application/vnd.vega.v5+json).
  */
 export const activate: ActivationFunction = (_context: RendererContext<unknown>) => {
-    const elementsCache: Record<string, HTMLElement> = {};
+    const elementsCache: Record<string, HTMLElement | undefined> = {};
     return {
         renderOutputItem(outputItem: OutputItem, element: HTMLElement) {
             console.log(`Vega renderer - rendering output item: ${outputItem.id}`);
@@ -52,6 +51,7 @@ export const activate: ActivationFunction = (_context: RendererContext<unknown>)
         disposeOutputItem(id?: string) {
             if (id && elementsCache[id]) {
                 ReactDOM.unmountComponentAtNode(elementsCache[id]);
+                elementsCache[id] = undefined;
             }
         }
     };

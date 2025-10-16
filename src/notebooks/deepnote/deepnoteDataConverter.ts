@@ -61,7 +61,13 @@ export class DeepnoteDataConverter {
             // Only set outputs if the block has them (including empty arrays)
             // This preserves round-trip fidelity
             if (block.outputs !== undefined) {
-                cell.outputs = this.transformOutputsForVsCode(block.outputs, index, block.id, block.type, block.metadata);
+                cell.outputs = this.transformOutputsForVsCode(
+                    block.outputs,
+                    index,
+                    block.id,
+                    block.type,
+                    block.metadata
+                );
             }
 
             return cell;

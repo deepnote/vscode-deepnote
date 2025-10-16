@@ -174,16 +174,23 @@ export class IntegrationManager implements IIntegrationManager {
         const blocksWithIntegrations: BlockWithIntegration[] = [];
 
         for (const cell of notebook.getCells()) {
-            const deepnoteMetadata = cell.metadata?.deepnoteMetadata;
-            logger.trace(`IntegrationManager: Cell ${cell.index} metadata:`, deepnoteMetadata);
+            const metadata = cell.metadata;
+            logger.trace(`IntegrationManager: Cell ${cell.index} metadata:`, metadata);
 
-            if (deepnoteMetadata?.sql_integration_id) {
-                blocksWithIntegrations.push({
-                    id: `cell-${cell.index}`,
-                    sql_integration_id: deepnoteMetadata.sql_integration_id
-                });
+            // Check cell metadata for sql_integration_id
+            if (metadata && typeof metadata === 'object') {
+                const integrationId = (metadata as Record<string, unknown>).sql_integration_id;
+                if (typeof integrationId === 'string') {
+                    logger.debug(`IntegrationManager: Found integration ${integrationId} in cell ${cell.index}`);
+                    blocksWithIntegrations.push({
+                        id: `cell-${cell.index}`,
+                        sql_integration_id: integrationId
+                    });
+                }
             }
         }
+
+        logger.debug(`IntegrationManager: Found ${blocksWithIntegrations.length} cells with integrations`);
 
         // Use the shared utility to scan blocks and build the status map
         return scanBlocksForIntegrations(blocksWithIntegrations, this.integrationStorage, 'IntegrationManager');

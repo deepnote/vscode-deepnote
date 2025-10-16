@@ -1,7 +1,6 @@
 import { chartColors10, chartColors20, deepnoteBlues } from './colors'
 import React, { memo, useLayoutEffect } from 'react'
 import { Vega } from 'react-vega'
-// @ts-expect-error can't properly pull types due to moduleResolution setting in ts-config
 import { vega } from 'vega-embed'
 
 import { numberFormats } from './number-formats'

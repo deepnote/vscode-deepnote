@@ -3,6 +3,44 @@ import { NotebookCellData, NotebookCellKind } from 'vscode';
 import type { BlockConverter } from './blockConverter';
 import type { DeepnoteBlock } from '../deepnoteTypes';
 
+type DataframeFilter = {
+    column: string;
+    operator:
+        | 'is-equal'
+        | 'is-not-equal'
+        | 'is-one-of'
+        | 'is-not-one-of'
+        | 'is-not-null'
+        | 'is-null'
+        | 'text-contains'
+        | 'text-does-not-contain'
+        | 'greater-than'
+        | 'greater-than-or-equal'
+        | 'less-than'
+        | 'less-than-or-equal'
+        | 'between'
+        | 'outside-of'
+        | 'is-relative-today'
+        | 'is-after'
+        | 'is-before'
+        | 'is-on';
+    comparativeValues: string[];
+};
+
+interface FilterMetadata {
+    /** @deprecated Use advancedFilters instead */
+    filter?: unknown;
+    advancedFilters?: DataframeFilter[];
+}
+
+interface VisualizationCellMetadata {
+    deepnote_variable_name?: string;
+    deepnote_visualization_spec?: Record<string, unknown>;
+    deepnote_config_collapsed?: boolean;
+    deepnote_chart_height?: number;
+    deepnote_chart_filter?: FilterMetadata;
+}
+
 /**
  * Converter for Deepnote visualization blocks (chart blocks).
  * Displays blocks as editable JSON with variable name, spec, and filters.
@@ -45,9 +83,10 @@ export class VisualizationBlockConverter implements BlockConverter {
     }
 
     convertToCell(block: DeepnoteBlock): NotebookCellData {
-        const variableName = (block.metadata as any)?.deepnote_variable_name || 'df';
-        const spec = (block.metadata as any)?.deepnote_visualization_spec || {};
-        const filters = (block.metadata as any)?.deepnote_chart_filter?.advancedFilters || [];
+        const metadata = block.metadata as VisualizationCellMetadata | undefined;
+        const variableName = metadata?.deepnote_variable_name || 'df';
+        const spec = metadata?.deepnote_visualization_spec || {};
+        const filters = metadata?.deepnote_chart_filter?.advancedFilters || [];
 
         // Create a clean JSON representation that users can edit
         const config = {

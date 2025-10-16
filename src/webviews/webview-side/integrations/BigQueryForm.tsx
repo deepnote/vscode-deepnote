@@ -50,6 +50,7 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="My BigQuery Project"
+                    autoComplete="off"
                 />
             </div>
 
@@ -63,6 +64,7 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
                     value={projectId}
                     onChange={(e) => setProjectId(e.target.value)}
                     placeholder="my-project-id"
+                    autoComplete="off"
                     required
                 />
             </div>
@@ -77,6 +79,8 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
                     onChange={(e) => setCredentials(e.target.value)}
                     placeholder='{"type": "service_account", ...}'
                     rows={10}
+                    autoComplete="off"
+                    spellCheck={false}
                     required
                 />
             </div>

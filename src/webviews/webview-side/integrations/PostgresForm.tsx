@@ -59,6 +59,7 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, exis
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="My PostgreSQL Database"
+                    autoComplete="off"
                 />
             </div>
 
@@ -72,6 +73,7 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, exis
                     value={host}
                     onChange={(e) => setHost(e.target.value)}
                     placeholder="localhost"
+                    autoComplete="off"
                     required
                 />
             </div>
@@ -86,6 +88,10 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, exis
                     value={port}
                     onChange={(e) => setPort(e.target.value)}
                     placeholder="5432"
+                    min={1}
+                    max={65535}
+                    step={1}
+                    autoComplete="off"
                     required
                 />
             </div>
@@ -100,6 +106,7 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, exis
                     value={database}
                     onChange={(e) => setDatabase(e.target.value)}
                     placeholder="mydb"
+                    autoComplete="off"
                     required
                 />
             </div>
@@ -114,6 +121,7 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, exis
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="postgres"
+                    autoComplete="username"
                     required
                 />
             </div>
@@ -128,6 +136,7 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, exis
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
+                    autoComplete="current-password"
                     required
                 />
             </div>

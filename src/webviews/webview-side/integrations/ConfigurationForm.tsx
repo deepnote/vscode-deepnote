@@ -39,7 +39,7 @@ export const ConfigurationForm: React.FC<IConfigurationFormProps> = ({
             <div className="configuration-form-container">
                 <div className="configuration-form-header">
                     <h2>Configure Integration: {integrationId}</h2>
-                    <button className="close-button" onClick={onCancel}>
+                    <button type="button" className="close-button" onClick={onCancel}>
                         ×
                     </button>
                 </div>
@@ -48,18 +48,14 @@ export const ConfigurationForm: React.FC<IConfigurationFormProps> = ({
                     {integrationType === 'postgres' ? (
                         <PostgresForm
                             integrationId={integrationId}
-                            existingConfig={
-                                existingConfig?.type === 'postgres' ? existingConfig : null
-                            }
+                            existingConfig={existingConfig?.type === 'postgres' ? existingConfig : null}
                             onSave={onSave}
                             onCancel={onCancel}
                         />
                     ) : (
                         <BigQueryForm
                             integrationId={integrationId}
-                            existingConfig={
-                                existingConfig?.type === 'bigquery' ? existingConfig : null
-                            }
+                            existingConfig={existingConfig?.type === 'bigquery' ? existingConfig : null}
                             onSave={onSave}
                             onCancel={onCancel}
                         />
@@ -69,4 +65,3 @@ export const ConfigurationForm: React.FC<IConfigurationFormProps> = ({
         </div>
     );
 };
-

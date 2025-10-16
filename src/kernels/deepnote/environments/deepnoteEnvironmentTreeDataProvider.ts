@@ -72,9 +72,14 @@ export class DeepnoteEnvironmentTreeDataProvider implements TreeDataProvider<Dee
         const items: DeepnoteEnvironmentTreeItem[] = [];
         const statusInfo = this.environmentManager.getEnvironmentWithStatus(config.id);
 
-        // Server status and port
+        // Server status and ports
         if (statusInfo?.status === EnvironmentStatus.Running && config.serverInfo) {
-            items.push(DeepnoteEnvironmentTreeItem.createInfoItem(`Port: ${config.serverInfo.port}`, 'port'));
+            items.push(
+                DeepnoteEnvironmentTreeItem.createInfoItem(
+                    `Ports: jupyter=${config.serverInfo.jupyterPort}, lsp=${config.serverInfo.lspPort}`,
+                    'port'
+                )
+            );
             items.push(DeepnoteEnvironmentTreeItem.createInfoItem(`URL: ${config.serverInfo.url}`, 'globe'));
         }
 

@@ -150,20 +150,6 @@ export interface IDeepnoteServerStarter {
     stopServer(environmentId: string): Promise<void>;
 
     /**
-     * Legacy method: Starts or gets an existing deepnote-toolkit Jupyter server.
-     * File-based method (for backward compatibility).
-     * @param interpreter The Python interpreter to use
-     * @param deepnoteFileUri The URI of the .deepnote file (for server management per file)
-     * @param token Cancellation token to cancel the operation
-     * @returns Connection information (URL, port, etc.)
-     */
-    getOrStartServer(
-        interpreter: PythonEnvironment,
-        deepnoteFileUri: vscode.Uri,
-        token?: vscode.CancellationToken
-    ): Promise<DeepnoteServerInfo>;
-
-    /**
      * Disposes all server processes and resources.
      * Called when the extension is deactivated.
      */
@@ -172,7 +158,8 @@ export interface IDeepnoteServerStarter {
 
 export interface DeepnoteServerInfo {
     url: string;
-    port: number;
+    jupyterPort: number;
+    lspPort: number;
     token?: string;
 }
 

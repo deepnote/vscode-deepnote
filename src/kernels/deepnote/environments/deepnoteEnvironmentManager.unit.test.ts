@@ -23,7 +23,8 @@ suite('DeepnoteEnvironmentManager', () => {
 
     const testServerInfo: DeepnoteServerInfo = {
         url: 'http://localhost:8888',
-        port: 8888,
+        jupyterPort: 8888,
+        lspPort: 8889,
         token: 'test-token'
     };
 
@@ -340,7 +341,7 @@ suite('DeepnoteEnvironmentManager', () => {
             ).once();
         });
 
-        test('should not start if server is already running', async () => {
+        test('should always call serverStarter.startServer to ensure fresh serverInfo (UT-6)', async () => {
             when(mockStorage.saveEnvironments(anything())).thenResolve();
             when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
                 testInterpreter
@@ -357,8 +358,58 @@ suite('DeepnoteEnvironmentManager', () => {
             await manager.startServer(config.id);
             await manager.startServer(config.id);
 
-            // Should only call once
-            verify(mockServerStarter.startServer(anything(), anything(), anything(), anything())).once();
+            // IMPORTANT: Should call TWICE - this ensures we always get fresh serverInfo
+            // The serverStarter itself is idempotent and returns existing server if running
+            // But the environment manager always calls it to ensure config.serverInfo is updated
+            verify(mockServerStarter.startServer(anything(), anything(), anything(), anything())).twice();
+        });
+
+        test('should update environment.serverInfo even if server was already running (INV-10)', async () => {
+            // This test explicitly verifies INV-10: serverInfo must always reflect current server state
+            // This is critical for environment switching - prevents using stale serverInfo
+
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
+            when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
+                testInterpreter
+            );
+
+            // First call returns initial serverInfo
+            const initialServerInfo: DeepnoteServerInfo = {
+                url: 'http://localhost:8888',
+                jupyterPort: 8888,
+                lspPort: 8889,
+                token: 'initial-token'
+            };
+
+            // Second call returns updated serverInfo (simulating server restart or port change)
+            const updatedServerInfo: DeepnoteServerInfo = {
+                url: 'http://localhost:9999',
+                jupyterPort: 9999,
+                lspPort: 10000,
+                token: 'updated-token'
+            };
+
+            when(mockServerStarter.startServer(anything(), anything(), anything(), anything()))
+                .thenResolve(initialServerInfo)
+                .thenResolve(updatedServerInfo);
+
+            const config = await manager.createEnvironment({
+                name: 'Test',
+                pythonInterpreter: testInterpreter
+            });
+
+            // First startServer call
+            await manager.startServer(config.id);
+            let retrieved = manager.getEnvironment(config.id);
+            assert.deepStrictEqual(retrieved?.serverInfo, initialServerInfo, 'Should have initial serverInfo');
+
+            // Second startServer call - should update to new serverInfo
+            await manager.startServer(config.id);
+            retrieved = manager.getEnvironment(config.id);
+            assert.deepStrictEqual(retrieved?.serverInfo, updatedServerInfo, 'Should have updated serverInfo');
+
+            // This proves that getEnvironment() after startServer() always returns fresh data
+            // which is exactly what the kernel selector relies on (see deepnoteKernelAutoSelector.node.ts:454-467)
         });
 
         test('should update lastUsedAt timestamp', async () => {

@@ -36,7 +36,8 @@ suite('DeepnoteEnvironmentTreeDataProvider', () => {
         packages: ['numpy'],
         serverInfo: {
             url: 'http://localhost:8888',
-            port: 8888,
+            jupyterPort: 8888,
+            lspPort: 8889,
             token: 'test-token'
         }
     };

@@ -296,14 +296,22 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         const newController = this.notebookControllers.get(notebookKey);
         if (newController) {
             logger.info(`New controller ${newController.id} created and registered`);
+
+            // CRITICAL: Explicitly force the new controller to be selected BEFORE disposing the old one
+            // updateNotebookAffinity only sets preference, we need to ensure it's actually selected
+            newController.controller.updateNotebookAffinity(notebook, NotebookControllerAffinity.Preferred);
+            logger.info(`Explicitly set new controller ${newController.id} as preferred`);
         }
 
-        // IMPORTANT: Only dispose the old controller AFTER the new one is fully set up and selected
-        // This prevents "notebook controller is DISPOSED" errors during environment switching
+        // IMPORTANT: We do NOT dispose the old controller here
+        // Reason: VS Code may have queued cell executions that reference the old controller
+        // If we dispose it immediately, those queued executions will fail with "DISPOSED" error
+        // Instead, we let the old controller stay alive - it will be garbage collected eventually
+        // The new controller is now the preferred one, so new executions will use it
         if (existingController && newController && existingController.id !== newController.id) {
-            logger.info(`Disposing old controller ${existingController.id} after successful switch`);
-            existingController.dispose();
-            logger.info(`Old controller ${existingController.id} disposed`);
+            logger.info(
+                `Old controller ${existingController.id} will be left alive to handle any queued executions. New controller ${newController.id} is now preferred.`
+            );
         }
 
         logger.info(`Controller rebuilt successfully`);
@@ -502,26 +510,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             const kernelSpecs = await sessionManager.getKernelSpecs();
             logger.info(`Available kernel specs on Deepnote server: ${kernelSpecs.map((s) => s.name).join(', ')}`);
 
-            // Look for environment-specific kernel first
-            const expectedKernelName = `deepnote-${configuration.id}`;
-            logger.info(`Looking for environment-specific kernel: ${expectedKernelName}`);
-
-            kernelSpec = kernelSpecs.find((s) => s.name === expectedKernelName);
-
-            if (!kernelSpec) {
-                logger.warn(
-                    `Environment-specific kernel '${expectedKernelName}' not found! Falling back to generic Python kernel.`
-                );
-                // Fallback to any Python kernel
-                kernelSpec =
-                    kernelSpecs.find((s) => s.language === 'python') ||
-                    kernelSpecs.find((s) => s.name === 'python3') ||
-                    kernelSpecs[0];
-            }
-
-            if (!kernelSpec) {
-                throw new Error('No kernel specs available on Deepnote server');
-            }
+            // Use the extracted kernel selection logic
+            kernelSpec = this.selectKernelSpec(kernelSpecs, configuration.id);
 
             logger.info(`✓ Using kernel spec: ${kernelSpec.name} (${kernelSpec.display_name})`);
         } finally {
@@ -604,6 +594,44 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         logger.info(`Successfully set up kernel with configuration: ${configuration.name}`);
         progress.report({ message: 'Kernel ready!' });
+    }
+
+    /**
+     * Select the appropriate kernel spec for an environment.
+     * Extracted for testability.
+     * @param kernelSpecs Available kernel specs from the server
+     * @param environmentId The environment ID to find a kernel for
+     * @returns The selected kernel spec
+     * @throws Error if no suitable kernel spec is found
+     */
+    public selectKernelSpec(
+        kernelSpecs: import('../../kernels/types').IJupyterKernelSpec[],
+        environmentId: string
+    ): import('../../kernels/types').IJupyterKernelSpec {
+        // Look for environment-specific kernel first
+        const expectedKernelName = `deepnote-${environmentId}`;
+        logger.info(`Looking for environment-specific kernel: ${expectedKernelName}`);
+
+        const kernelSpec = kernelSpecs.find((s) => s.name === expectedKernelName);
+
+        if (!kernelSpec) {
+            logger.warn(
+                `Environment-specific kernel '${expectedKernelName}' not found! Falling back to generic Python kernel.`
+            );
+            // Fallback to any Python kernel
+            const fallbackKernel =
+                kernelSpecs.find((s) => s.language === 'python') ||
+                kernelSpecs.find((s) => s.name === 'python3') ||
+                kernelSpecs[0];
+
+            if (!fallbackKernel) {
+                throw new Error('No kernel specs available on Deepnote server');
+            }
+
+            return fallbackKernel;
+        }
+
+        return kernelSpec;
     }
 
     private createLoadingController(notebook: NotebookDocument, notebookKey: string): void {

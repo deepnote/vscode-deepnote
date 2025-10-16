@@ -18,7 +18,9 @@ suite('DeepnoteActivationService', () => {
 
         manager = new DeepnoteNotebookManager();
         mockIntegrationManager = {
-            activate: () => {}
+            activate: () => {
+                return;
+            }
         };
         activationService = new DeepnoteActivationService(mockExtensionContext, manager, mockIntegrationManager);
     });
@@ -80,8 +82,16 @@ suite('DeepnoteActivationService', () => {
 
             const manager1 = new DeepnoteNotebookManager();
             const manager2 = new DeepnoteNotebookManager();
-            const mockIntegrationManager1: IIntegrationManager = { activate: () => {} };
-            const mockIntegrationManager2: IIntegrationManager = { activate: () => {} };
+            const mockIntegrationManager1: IIntegrationManager = {
+                activate: () => {
+                    return;
+                }
+            };
+            const mockIntegrationManager2: IIntegrationManager = {
+                activate: () => {
+                    return;
+                }
+            };
             const service1 = new DeepnoteActivationService(context1, manager1, mockIntegrationManager1);
             const service2 = new DeepnoteActivationService(context2, manager2, mockIntegrationManager2);
 
@@ -108,8 +118,16 @@ suite('DeepnoteActivationService', () => {
 
             const manager1 = new DeepnoteNotebookManager();
             const manager2 = new DeepnoteNotebookManager();
-            const mockIntegrationManager1: IIntegrationManager = { activate: () => {} };
-            const mockIntegrationManager2: IIntegrationManager = { activate: () => {} };
+            const mockIntegrationManager1: IIntegrationManager = {
+                activate: () => {
+                    return;
+                }
+            };
+            const mockIntegrationManager2: IIntegrationManager = {
+                activate: () => {
+                    return;
+                }
+            };
             new DeepnoteActivationService(context1, manager1, mockIntegrationManager1);
             new DeepnoteActivationService(context2, manager2, mockIntegrationManager2);
 

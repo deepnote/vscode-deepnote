@@ -1,6 +1,3 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-
 import * as React from 'react';
 import { IVsCodeApi } from '../react-common/postOffice';
 import { IntegrationList } from './IntegrationList';

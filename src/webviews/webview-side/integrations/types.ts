@@ -1,6 +1,3 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-
 export type IntegrationType = 'postgres' | 'bigquery';
 
 export type IntegrationStatus = 'connected' | 'disconnected' | 'error';
@@ -58,4 +55,3 @@ export interface StatusMessage {
 }
 
 export type WebviewMessage = UpdateMessage | ShowFormMessage | StatusMessage;
-

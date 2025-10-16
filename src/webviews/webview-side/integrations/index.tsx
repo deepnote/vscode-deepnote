@@ -1,6 +1,3 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-
 // eslint-disable-next-line import/order
 import '../common/index.css';
 

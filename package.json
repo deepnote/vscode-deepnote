@@ -87,7 +87,7 @@
             },
             {
                 "command": "deepnote.manageIntegrations",
-                "title": "Manage Integrations",
+                "title": "%deepnote.commands.manageIntegrations.title%",
                 "category": "Deepnote",
                 "icon": "$(plug)"
             },

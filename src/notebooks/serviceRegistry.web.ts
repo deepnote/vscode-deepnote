@@ -38,6 +38,7 @@ import { INotebookEditorProvider, INotebookPythonEnvironmentService } from './ty
 import { DeepnoteActivationService } from './deepnote/deepnoteActivationService';
 import { DeepnoteNotebookManager } from './deepnote/deepnoteNotebookManager';
 import { IDeepnoteNotebookManager } from './types';
+import { DeepnoteNotebookCommandListener } from './deepnote/deepnoteNotebookCommandListener';
 
 export function registerTypes(serviceManager: IServiceManager, isDevMode: boolean) {
     registerControllerTypes(serviceManager, isDevMode);
@@ -90,6 +91,10 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
         DeepnoteActivationService
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        DeepnoteNotebookCommandListener
     );
     serviceManager.addSingleton<IDeepnoteNotebookManager>(IDeepnoteNotebookManager, DeepnoteNotebookManager);
 

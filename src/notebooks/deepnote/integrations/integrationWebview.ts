@@ -95,6 +95,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
      */
     private async updateWebview(): Promise<void> {
         if (!this.currentPanel) {
+            logger.debug('IntegrationWebviewProvider: No current panel, skipping update');
             return;
         }
 
@@ -103,6 +104,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             id,
             status: integration.status
         }));
+        logger.debug(`IntegrationWebviewProvider: Sending ${integrationsData.length} integrations to webview`);
+        logger.trace('IntegrationWebviewProvider: Integration data:', JSON.stringify(integrationsData, null, 2));
 
         await this.currentPanel.webview.postMessage({
             integrations: integrationsData,

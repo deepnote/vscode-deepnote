@@ -27,10 +27,26 @@ export class IntegrationManager implements IIntegrationManager {
     public activate(): void {
         // Register the manage integrations command
         // The command can optionally receive an integration ID to select/configure
+        // Note: When invoked from a notebook cell status bar, VSCode passes context object first,
+        // then the actual arguments from the command definition
         this.extensionContext.subscriptions.push(
-            commands.registerCommand(Commands.ManageIntegrations, (integrationId?: string) =>
-                this.showIntegrationsUI(integrationId)
-            )
+            commands.registerCommand(Commands.ManageIntegrations, (...args: unknown[]) => {
+                logger.debug(`IntegrationManager: Command invoked with args:`, args);
+
+                // Find the integration ID from the arguments
+                // It could be the first arg (if called directly) or in the args array (if called from UI)
+                let integrationId: string | undefined;
+
+                for (const arg of args) {
+                    if (typeof arg === 'string') {
+                        integrationId = arg;
+                        break;
+                    }
+                }
+
+                logger.debug(`IntegrationManager: Extracted integrationId: ${integrationId}`);
+                return this.showIntegrationsUI(integrationId);
+            })
         );
 
         // Listen for active notebook changes to update context
@@ -128,6 +144,17 @@ export class IntegrationManager implements IIntegrationManager {
         }
 
         logger.debug(`IntegrationManager: Found ${integrations.size} integrations`);
+
+        // If a specific integration was requested (e.g., from status bar click),
+        // ensure it's in the map even if not detected from the project
+        if (selectedIntegrationId && !integrations.has(selectedIntegrationId)) {
+            logger.debug(`IntegrationManager: Adding requested integration ${selectedIntegrationId} to the map`);
+            const config = await this.integrationStorage.get(selectedIntegrationId);
+            integrations.set(selectedIntegrationId, {
+                config: config || null,
+                status: config ? IntegrationStatus.Connected : IntegrationStatus.Disconnected
+            });
+        }
 
         if (integrations.size === 0) {
             void window.showInformationMessage(`No integrations found in this project.`);

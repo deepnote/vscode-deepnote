@@ -6,6 +6,7 @@ import { ConverterRegistry } from './converters/converterRegistry';
 import { CodeBlockConverter } from './converters/codeBlockConverter';
 import { addPocketToCellMetadata, createBlockFromPocket } from '../../platform/deepnote/pocket';
 import { TextBlockConverter } from './converters/textBlockConverter';
+import { SqlBlockConverter } from './converters/sqlBlockConverter';
 import { MarkdownBlockConverter } from './converters/markdownBlockConverter';
 import { ChartBigNumberBlockConverter } from './converters/chartBigNumberBlockConverter';
 import { CHART_BIG_NUMBER_MIME_TYPE } from '../../platform/deepnote/deepnoteConstants';
@@ -19,9 +20,10 @@ export class DeepnoteDataConverter {
 
     constructor() {
         this.registry.register(new CodeBlockConverter());
-        this.registry.register(new TextBlockConverter());
         this.registry.register(new MarkdownBlockConverter());
         this.registry.register(new ChartBigNumberBlockConverter());
+        this.registry.register(new SqlBlockConverter());
+        this.registry.register(new TextBlockConverter());
     }
 
     /**

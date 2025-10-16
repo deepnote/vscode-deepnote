@@ -41,8 +41,24 @@ export const activate: ActivationFunction = (_context: RendererContext<unknown>)
             }
         },
 
-        disposeOutputItem(_id?: string) {
+        disposeOutputItem(id?: string) {
             // Cleanup if needed
+            if (id == null) {
+                return;
+            }
+            const element = document.getElementById(id);
+            if (element == null) {
+                return;
+            }
+            const roots = element.getElementsByTagName('div');
+            for (let i = 0; i < roots.length; i++) {
+                const root = roots.item(i);
+                if (root == null) {
+                    continue;
+                }
+                ReactDOM.unmountComponentAtNode(root);
+                element.removeChild(root);
+            }
         }
     };
 };

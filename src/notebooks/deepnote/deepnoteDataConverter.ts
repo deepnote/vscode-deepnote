@@ -306,7 +306,7 @@ export class DeepnoteDataConverter {
                         // Plain text as fallback (always last)
                         if (data['text/plain']) {
                             let mimeType = 'text/plain';
-                            if (blockType === 'big-number') {
+                            if (blockType === 'big-number' && !(CHART_BIG_NUMBER_MIME_TYPE in data)) {
                                 mimeType = CHART_BIG_NUMBER_MIME_TYPE;
                             }
                             items.push(NotebookCellOutputItem.text(data['text/plain'] as string, mimeType));

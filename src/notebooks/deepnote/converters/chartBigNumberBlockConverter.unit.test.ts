@@ -394,7 +394,7 @@ suite('ChartBigNumberBlockConverter', () => {
             assert.strictEqual(block.content, '');
             assert.strictEqual(block.metadata?.deepnote_big_number_title, 'new title');
             assert.strictEqual(block.metadata?.existing, 'value');
-            assert.isUndefined(block.metadata?.[DEEPNOTE_VSCODE_RAW_CONTENT_KEY]);
+            assert.doesNotHaveAnyKeys(block.metadata, [DEEPNOTE_VSCODE_RAW_CONTENT_KEY]);
         });
 
         test('handles empty content', () => {

@@ -420,10 +420,18 @@ export class CellExecution implements ICellExecution, IDisposable {
         const deepnoteBlock = createBlockFromPocket(cellData, this.cell.index);
 
         if (deepnoteBlock.type === 'big-number') {
-            deepnoteBlock.metadata = {
-                ...deepnoteBlock.metadata,
-                ...DeepnoteBigNumberMetadataSchema.parse(JSON.parse(deepnoteBlock.content || '{}'))
-            };
+            try {
+                deepnoteBlock.metadata = {
+                    ...deepnoteBlock.metadata,
+                    ...DeepnoteBigNumberMetadataSchema.parse(JSON.parse(deepnoteBlock.content || '{}'))
+                };
+            } catch (ex) {
+                logger.error(
+                    `Cell execution failed to parse big number metadata, for cell Index ${this.cell.index}`,
+                    ex
+                );
+                return this.completedWithErrors(ex);
+            }
         }
 
         // Use createPythonCode to generate code with table state already included

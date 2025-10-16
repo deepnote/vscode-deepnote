@@ -10,21 +10,11 @@ export function ChartBigNumberOutputRenderer({
     metadata: DeepnoteBigNumberMetadata;
 }) {
     // TODO: either remove or handle here .. currently handled in the parent
-    const hasErrors = false;
-
     const title = useMemo(() => {
-        if (hasErrors) {
-            return 'Not defined';
-        }
-
         return output.title || 'Title';
-    }, [output.title, hasErrors]);
+    }, [output.title]);
 
     const value = useMemo(() => {
-        if (hasErrors) {
-            return 'N/A';
-        }
-
         if (!output.value) {
             return 'Value';
         }
@@ -36,13 +26,9 @@ export function ChartBigNumberOutputRenderer({
         }
 
         return formatValue(parsedValue, metadata.deepnote_big_number_format ?? 'number');
-    }, [hasErrors, output.value, metadata.deepnote_big_number_format]);
+    }, [output.value, metadata.deepnote_big_number_format]);
 
     const comparisonValue = useMemo(() => {
-        if (hasErrors) {
-            return undefined;
-        }
-
         if (!output.comparisonValue) {
             return undefined;
         }
@@ -75,13 +61,9 @@ export function ChartBigNumberOutputRenderer({
         }
 
         return parsedValue - parsedComparisonValue;
-    }, [hasErrors, metadata.deepnote_big_number_comparison_type, output.comparisonValue, output.value]);
+    }, [metadata.deepnote_big_number_comparison_type, output.comparisonValue, output.value]);
 
     const formattedComparisonValue = useMemo(() => {
-        if (hasErrors) {
-            return '-';
-        }
-
         if (comparisonValue == null) {
             return '-';
         }
@@ -93,7 +75,7 @@ export function ChartBigNumberOutputRenderer({
         }
 
         return formatValue(comparisonValue, metadata.deepnote_big_number_format ?? 'number');
-    }, [comparisonValue, metadata.deepnote_big_number_format, hasErrors, metadata.deepnote_big_number_comparison_type]);
+    }, [comparisonValue, metadata.deepnote_big_number_format, metadata.deepnote_big_number_comparison_type]);
 
     const changeDirection = useMemo(() => {
         if (comparisonValue == null) {

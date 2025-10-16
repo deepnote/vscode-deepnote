@@ -40,7 +40,7 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
             return true;
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Invalid JSON format';
-            setCredentialsError(`Invalid JSON: ${errorMessage}`);
+            setCredentialsError(l10n.t('Invalid JSON: {0}', errorMessage));
             return false;
         }
     };

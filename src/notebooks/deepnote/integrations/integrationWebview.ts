@@ -164,9 +164,10 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         } catch (error) {
             logger.error('Failed to save integration configuration', error);
             await this.currentPanel?.webview.postMessage({
-                message: `${l10n.t(`Failed to save configuration:`)} ${
+                message: l10n.t(
+                    'Failed to save configuration: {0}',
                     error instanceof Error ? error.message : 'Unknown error'
-                }`,
+                ),
                 type: 'error'
             });
         }
@@ -195,9 +196,10 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         } catch (error) {
             logger.error('Failed to delete integration configuration', error);
             await this.currentPanel?.webview.postMessage({
-                message: `${l10n.t('Failed to delete configuration:')} ${
+                message: l10n.t(
+                    'Failed to delete configuration: {0}',
                     error instanceof Error ? error.message : 'Unknown error'
-                }`,
+                ),
                 type: 'error'
             });
         }

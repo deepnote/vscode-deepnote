@@ -26,11 +26,10 @@ export const IntegrationItem: React.FC<IIntegrationItemProps> = ({ integration, 
                 <button onClick={() => onConfigure(integration.id)}>{configureText}</button>
                 {integration.config && (
                     <button className="secondary" onClick={() => onDelete(integration.id)}>
-                        Delete
+                        Reset
                     </button>
                 )}
             </div>
         </div>
     );
 };
-

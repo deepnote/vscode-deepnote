@@ -46,7 +46,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             {
                 enableScripts: true,
                 retainContextWhenHidden: true,
-                localResourceRoots: [this.extensionContext.extensionUri]
+                localResourceRoots: [this.extensionContext.extensionUri],
+                enableForms: true
             }
         );
 

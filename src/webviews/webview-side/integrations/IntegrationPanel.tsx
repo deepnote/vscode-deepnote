@@ -17,6 +17,7 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
     const [selectedIntegrationId, setSelectedIntegrationId] = React.useState<string | null>(null);
     const [selectedConfig, setSelectedConfig] = React.useState<IntegrationConfig | null>(null);
     const [message, setMessage] = React.useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [confirmDelete, setConfirmDelete] = React.useState<string | null>(null);
 
     // Handle messages from the extension
     React.useEffect(() => {
@@ -54,12 +55,21 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
     };
 
     const handleDelete = (integrationId: string) => {
-        if (confirm('Are you sure you want to delete this integration configuration?')) {
+        setConfirmDelete(integrationId);
+    };
+
+    const handleConfirmDelete = () => {
+        if (confirmDelete) {
             vscodeApi.postMessage({
                 type: 'delete',
-                integrationId
+                integrationId: confirmDelete
             });
+            setConfirmDelete(null);
         }
+    };
+
+    const handleCancelDelete = () => {
+        setConfirmDelete(null);
     };
 
     const handleSave = (config: IntegrationConfig) => {
@@ -101,7 +111,30 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
                     onCancel={handleCancel}
                 />
             )}
+
+            {confirmDelete && (
+                <div className="configuration-form-overlay">
+                    <div className="configuration-form-container" style={{ maxWidth: '400px' }}>
+                        <div className="configuration-form-header">
+                            <h2>Confirm Reset</h2>
+                        </div>
+                        <div className="configuration-form-body">
+                            <p>Are you sure you want to reset this integration configuration?</p>
+                            <p style={{ marginTop: '10px', fontSize: '0.9em', opacity: 0.8 }}>
+                                This will remove the stored credentials. You can reconfigure it later.
+                            </p>
+                        </div>
+                        <div className="form-actions">
+                            <button type="button" className="primary" onClick={handleConfirmDelete}>
+                                Reset
+                            </button>
+                            <button type="button" className="secondary" onClick={handleCancelDelete}>
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
-

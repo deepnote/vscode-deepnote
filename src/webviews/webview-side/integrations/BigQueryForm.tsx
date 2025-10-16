@@ -30,7 +30,7 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
 
     const validateCredentials = (value: string): boolean => {
         if (!value.trim()) {
-            setCredentialsError(null);
+            setCredentialsError(l10n.t('Credentials are required'));
             return false;
         }
 

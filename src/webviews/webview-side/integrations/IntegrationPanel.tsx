@@ -17,6 +17,23 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
     const [message, setMessage] = React.useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [confirmDelete, setConfirmDelete] = React.useState<string | null>(null);
 
+    const messageTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+    const confirmDeleteTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+
+    // Cleanup timers on unmount
+    React.useEffect(() => {
+        return () => {
+            if (messageTimerRef.current) {
+                clearTimeout(messageTimerRef.current);
+                messageTimerRef.current = null;
+            }
+            if (confirmDeleteTimerRef.current) {
+                clearTimeout(confirmDeleteTimerRef.current);
+                confirmDeleteTimerRef.current = null;
+            }
+        };
+    }, []);
+
     // Handle messages from the extension
     React.useEffect(() => {
         const handleMessage = (event: MessageEvent<WebviewMessage>) => {
@@ -35,8 +52,17 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
                 case 'success':
                 case 'error':
                     setMessage({ type: msg.type, text: msg.message });
+
+                    // Clear any existing message timer before creating a new one
+                    if (messageTimerRef.current) {
+                        clearTimeout(messageTimerRef.current);
+                    }
+
                     // Auto-hide message after 5 seconds
-                    setTimeout(() => setMessage(null), 5000);
+                    messageTimerRef.current = setTimeout(() => {
+                        setMessage(null);
+                        messageTimerRef.current = null;
+                    }, 5000);
                     break;
             }
         };
@@ -53,11 +79,22 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
     };
 
     const handleDelete = (integrationId: string) => {
+        // Clear any existing confirmDelete timer before creating a new one
+        if (confirmDeleteTimerRef.current) {
+            clearTimeout(confirmDeleteTimerRef.current);
+        }
+
         setConfirmDelete(integrationId);
     };
 
     const handleConfirmDelete = () => {
         if (confirmDelete) {
+            // Clear the timer when user confirms
+            if (confirmDeleteTimerRef.current) {
+                clearTimeout(confirmDeleteTimerRef.current);
+                confirmDeleteTimerRef.current = null;
+            }
+
             vscodeApi.postMessage({
                 type: 'delete',
                 integrationId: confirmDelete
@@ -67,6 +104,12 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
     };
 
     const handleCancelDelete = () => {
+        // Clear the timer when user cancels
+        if (confirmDeleteTimerRef.current) {
+            clearTimeout(confirmDeleteTimerRef.current);
+            confirmDeleteTimerRef.current = null;
+        }
+
         setConfirmDelete(null);
     };
 

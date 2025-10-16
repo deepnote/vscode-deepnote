@@ -8,7 +8,7 @@ import { addPocketToCellMetadata, createBlockFromPocket } from './pocket';
 import { TextBlockConverter } from './converters/textBlockConverter';
 import { MarkdownBlockConverter } from './converters/markdownBlockConverter';
 import { ChartBigNumberBlockConverter } from './converters/chartBigNumberBlockConverter';
-import { CHART_BIG_NUMBER_MIME_TYPE, OUTPUT_BLOCK_METADATA_KEY } from './deepnoteConstants';
+import { CHART_BIG_NUMBER_MIME_TYPE } from '../../platform/deepnote/deepnoteConstants';
 
 /**
  * Utility class for converting between Deepnote block structures and VS Code notebook cells.
@@ -219,14 +219,6 @@ export class DeepnoteDataConverter {
 
                 if (Object.keys(restMetadata).length > 0) {
                     (deepnoteOutput as DeepnoteOutput & { metadata?: Record<string, unknown> }).metadata = restMetadata;
-
-                    if (
-                        deepnoteOutput.metadata != null &&
-                        typeof deepnoteOutput.metadata === 'object' &&
-                        OUTPUT_BLOCK_METADATA_KEY in deepnoteOutput.metadata
-                    ) {
-                        delete deepnoteOutput.metadata[OUTPUT_BLOCK_METADATA_KEY];
-                    }
                 }
             }
 

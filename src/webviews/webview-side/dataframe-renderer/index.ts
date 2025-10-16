@@ -35,6 +35,7 @@ export const activate: ActivationFunction = (context: RendererContext<unknown>) 
                 console.log(`[DataframeRenderer] Extracted cellId: ${cellId}, cellIndex: ${cellIndex}`);
 
                 const root = document.createElement('div');
+
                 element.appendChild(root);
 
                 ReactDOM.render(

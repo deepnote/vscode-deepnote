@@ -8,8 +8,7 @@ import type { ActivationFunction, OutputItem, RendererContext } from 'vscode-not
 import { ChartBigNumberOutputRenderer } from './ChartBigNumberOutputRenderer';
 import {
     DeepnoteBigNumberMetadataSchema,
-    DeepnoteChartBigNumberOutputSchema,
-    getDeepnoteBlockMetadataSchema
+    DeepnoteChartBigNumberOutputSchema
 } from '../../../notebooks/deepnote/deepnoteSchemas';
 
 export const activate: ActivationFunction = (_context: RendererContext<unknown>) => {
@@ -18,9 +17,7 @@ export const activate: ActivationFunction = (_context: RendererContext<unknown>)
             try {
                 // Remove single quotes from start and end of string if present
                 const data = JSON.parse(outputItem.text().replace(/^'|'$/g, ''));
-                const { blockMetadata } = getDeepnoteBlockMetadataSchema(DeepnoteBigNumberMetadataSchema).parse(
-                    outputItem.metadata
-                );
+                const blockMetadata = DeepnoteBigNumberMetadataSchema.parse(outputItem.metadata);
 
                 const chartBigNumberOutput = DeepnoteChartBigNumberOutputSchema.parse(data);
 

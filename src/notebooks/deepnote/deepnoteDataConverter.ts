@@ -5,8 +5,9 @@ import { generateBlockId, generateSortingKey } from './dataConversionUtils';
 import { ConverterRegistry } from './converters/converterRegistry';
 import { CodeBlockConverter } from './converters/codeBlockConverter';
 import { addPocketToCellMetadata, createBlockFromPocket } from './pocket';
-import { TextBlockConverter } from './converters/textBlockConverter';
 import { MarkdownBlockConverter } from './converters/markdownBlockConverter';
+import { SqlBlockConverter } from './converters/sqlBlockConverter';
+import { TextBlockConverter } from './converters/textBlockConverter';
 
 /**
  * Utility class for converting between Deepnote block structures and VS Code notebook cells.
@@ -17,8 +18,9 @@ export class DeepnoteDataConverter {
 
     constructor() {
         this.registry.register(new CodeBlockConverter());
-        this.registry.register(new TextBlockConverter());
         this.registry.register(new MarkdownBlockConverter());
+        this.registry.register(new SqlBlockConverter());
+        this.registry.register(new TextBlockConverter());
     }
 
     /**

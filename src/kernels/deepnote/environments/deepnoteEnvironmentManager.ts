@@ -191,13 +191,8 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
             throw new Error(`Environment not found: ${id}`);
         }
 
-        if (config.serverInfo) {
-            logger.info(`Server already running for environment: ${config.name} (${id})`);
-            return;
-        }
-
         try {
-            logger.info(`Starting server for environment: ${config.name} (${id})`);
+            logger.info(`Ensuring server is running for environment: ${config.name} (${id})`);
 
             // First ensure venv is created and toolkit is installed
             await this.toolkitInstaller.ensureVenvAndToolkit(config.pythonInterpreter, config.venvPath, undefined);
@@ -207,7 +202,9 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
                 await this.toolkitInstaller.installAdditionalPackages(config.venvPath, config.packages, undefined);
             }
 
-            // Start the Jupyter server
+            // Start the Jupyter server (serverStarter is idempotent - returns existing if running)
+            // IMPORTANT: Always call this to ensure we get the current server info
+            // Don't return early based on config.serverInfo - it may be stale!
             const serverInfo = await this.serverStarter.startServer(
                 config.pythonInterpreter,
                 config.venvPath,
@@ -221,7 +218,7 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
             await this.persistEnvironments();
             this._onDidChangeEnvironments.fire();
 
-            logger.info(`Server started successfully for environment: ${config.name} (${id})`);
+            logger.info(`Server running for environment: ${config.name} (${id}) at ${serverInfo.url}`);
         } catch (error) {
             logger.error(`Failed to start server for environment: ${config.name} (${id})`, error);
             throw error;

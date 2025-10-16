@@ -95,7 +95,17 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         // Check if venv already exists with toolkit installed
         const existingVenv = await this.getVenvInterpreterByPath(venvPath);
         if (existingVenv && (await this.isToolkitInstalled(existingVenv))) {
-            logger.info(`deepnote-toolkit venv already exists and is ready at ${venvPath.fsPath}`);
+            logger.info(`deepnote-toolkit venv already exists at ${venvPath.fsPath}`);
+
+            // Ensure kernel spec is installed (may have been deleted or never installed)
+            try {
+                await this.installKernelSpec(existingVenv, venvPath);
+            } catch (ex) {
+                logger.warn(`Failed to ensure kernel spec installed: ${ex}`);
+                // Don't fail - continue with existing venv
+            }
+
+            logger.info(`Venv ready at ${venvPath.fsPath}`);
             return existingVenv;
         }
 
@@ -288,30 +298,8 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                 logger.info('deepnote-toolkit installed successfully in venv');
 
                 // Install kernel spec so the kernel uses this venv's Python
-                // Install into the venv itself (not --user) so the Deepnote server can discover it
-                logger.info('Installing kernel spec for venv...');
                 try {
-                    const kernelSpecName = this.getKernelSpecName(venvPath);
-                    const kernelDisplayName = this.getKernelDisplayName(venvPath);
-
-                    // Reuse the process service with system environment
-                    await venvProcessService.exec(
-                        venvInterpreter.uri.fsPath,
-                        [
-                            '-m',
-                            'ipykernel',
-                            'install',
-                            '--prefix',
-                            venvPath.fsPath,
-                            '--name',
-                            kernelSpecName,
-                            '--display-name',
-                            kernelDisplayName
-                        ],
-                        { throwOnStdErr: false }
-                    );
-                    const kernelSpecPath = Uri.joinPath(venvPath, 'share', 'jupyter', 'kernels', kernelSpecName);
-                    logger.info(`Kernel spec installed successfully to ${kernelSpecPath.fsPath}`);
+                    await this.installKernelSpec(venvInterpreter, venvPath);
                 } catch (ex) {
                     logger.warn(`Failed to install kernel spec: ${ex}`);
                     // Don't fail the entire installation if kernel spec creation fails
@@ -362,6 +350,43 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
     private getKernelDisplayName(venvPath: Uri): string {
         const venvDirName = venvPath.fsPath.split(/[/\\]/).filter(Boolean).pop() || 'venv';
         return `Deepnote (${venvDirName})`;
+    }
+
+    /**
+     * Install ipykernel kernel spec for a venv.
+     * This is idempotent - safe to call multiple times.
+     */
+    private async installKernelSpec(venvInterpreter: PythonEnvironment, venvPath: Uri): Promise<void> {
+        const kernelSpecName = this.getKernelSpecName(venvPath);
+        const kernelSpecPath = Uri.joinPath(venvPath, 'share', 'jupyter', 'kernels', kernelSpecName);
+
+        // Check if kernel spec already exists
+        if (await this.fs.exists(kernelSpecPath)) {
+            logger.info(`Kernel spec already exists at ${kernelSpecPath.fsPath}`);
+            return;
+        }
+
+        logger.info(`Installing kernel spec '${kernelSpecName}' for venv at ${venvPath.fsPath}...`);
+        const kernelDisplayName = this.getKernelDisplayName(venvPath);
+
+        const venvProcessService = await this.processServiceFactory.create(undefined);
+        await venvProcessService.exec(
+            venvInterpreter.uri.fsPath,
+            [
+                '-m',
+                'ipykernel',
+                'install',
+                '--prefix',
+                venvPath.fsPath,
+                '--name',
+                kernelSpecName,
+                '--display-name',
+                kernelDisplayName
+            ],
+            { throwOnStdErr: false }
+        );
+
+        logger.info(`Kernel spec installed successfully to ${kernelSpecPath.fsPath}`);
     }
 
     public getVenvHash(deepnoteFileUri: Uri): string {

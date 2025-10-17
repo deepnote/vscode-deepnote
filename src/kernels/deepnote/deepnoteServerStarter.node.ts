@@ -12,6 +12,7 @@ import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
 import { sleep } from '../../platform/common/utils/async';
 import { Cancellation, raceCancellationError } from '../../platform/common/cancellation';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
+import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
 import getPort from 'get-port';
 import * as fs from 'fs-extra';
 import * as os from 'os';
@@ -48,9 +49,9 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel,
         @inject(IHttpClient) private readonly httpClient: IHttpClient,
         @inject(IAsyncDisposableRegistry) asyncRegistry: IAsyncDisposableRegistry,
-        @inject(SqlIntegrationEnvironmentVariablesProvider)
+        @inject(ISqlIntegrationEnvVarsProvider)
         @optional()
-        private readonly sqlIntegrationEnvVars?: SqlIntegrationEnvironmentVariablesProvider
+        private readonly sqlIntegrationEnvVars?: ISqlIntegrationEnvVarsProvider
     ) {
         // Register for disposal when the extension deactivates
         asyncRegistry.push(this);

@@ -92,13 +92,14 @@ export class SqlIntegrationEnvironmentVariablesProvider {
     /**
      * Get environment variables for SQL integrations used in the given notebook.
      */
-    public async getEnvironmentVariables(
-        resource: Resource,
-        _token?: CancellationToken
-    ): Promise<EnvironmentVariables> {
+    public async getEnvironmentVariables(resource: Resource, token?: CancellationToken): Promise<EnvironmentVariables> {
         const envVars: EnvironmentVariables = {};
 
         if (!resource) {
+            return envVars;
+        }
+
+        if (token?.isCancellationRequested) {
             return envVars;
         }
 
@@ -133,6 +134,10 @@ export class SqlIntegrationEnvironmentVariablesProvider {
 
         // Get credentials for each integration and add to environment variables
         for (const integrationId of integrationIds) {
+            if (token?.isCancellationRequested) {
+                break;
+            }
+
             try {
                 const config = await this.integrationStorage.get(integrationId);
                 if (!config) {

@@ -1871,7 +1871,17 @@
                 "entrypoint": "./dist/webviews/webview-side/chartBigNumberRenderer/chartBigNumberRenderer.js",
                 "mimeTypes": [
                     "application/vnd.deepnote.chart.big-number+json"
-                ]
+                ],
+                "requiresMessaging": "optional"
+            },
+            {
+                "id": "deepnote-vega-renderer",
+                "displayName": "Deepnote Vega Chart Renderer",
+                "entrypoint": "./dist/webviews/webview-side/vegaRenderer/vegaRenderer.js",
+                "mimeTypes": [
+                    "application/vnd.vega.v5+json"
+                ],
+                "requiresMessaging": "optional"
             }
         ],
         "viewsContainers": {
@@ -2187,12 +2197,14 @@
         "bootstrap-less": "^3.3.8",
         "clsx": "^2.1.1",
         "cross-fetch": "^3.1.5",
+        "d3-format": "^3.1.0",
         "encoding": "^0.1.13",
         "fast-deep-equal": "^2.0.1",
         "format-util": "^1.0.5",
         "fs-extra": "^4.0.3",
         "glob": "^7.1.2",
         "iconv-lite": "^0.6.3",
+        "immer": "^10.1.3",
         "inversify": "^6.0.1",
         "isomorphic-ws": "^4.0.1",
         "jquery": "^3.6.0",
@@ -2212,6 +2224,7 @@
         "react-redux": "^7.1.1",
         "react-svg-pan-zoom": "3.9.0",
         "react-svgmt": "1.1.11",
+        "react-vega": "^7.7.1",
         "react-virtualized": "^9.21.1",
         "redux": "^4.0.4",
         "redux-logger": "^3.0.6",
@@ -2228,6 +2241,9 @@
         "tcp-port-used": "^1.0.1",
         "tmp": "^0.2.4",
         "url-parse": "^1.5.10",
+        "vega": "^5.33.0",
+        "vega-embed": "^6.25.0",
+        "vega-lite": "^5.21.0",
         "vscode-debugprotocol": "^1.41.0",
         "vscode-languageclient": "8.0.2-next.5",
         "vscode-tas-client": "^0.1.84",
@@ -2249,6 +2265,7 @@
         "@types/chai-arrays": "^2.0.1",
         "@types/chai-as-promised": "^7.1.6",
         "@types/cors": "^2.8.6",
+        "@types/d3-format": "^3.0.4",
         "@types/debug": "^4.1.5",
         "@types/dedent": "^0.7.0",
         "@types/del": "^4.0.0",

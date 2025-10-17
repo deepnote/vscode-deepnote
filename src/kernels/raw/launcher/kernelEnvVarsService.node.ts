@@ -36,10 +36,8 @@ export class KernelEnvironmentVariablesService {
         @optional()
         private readonly sqlIntegrationEnvVars?: SqlIntegrationEnvironmentVariablesProvider
     ) {
-        logger.info(
-            `KernelEnvironmentVariablesService: Constructor called, sqlIntegrationEnvVars is ${
-                sqlIntegrationEnvVars ? 'AVAILABLE' : 'UNDEFINED'
-            }`
+        logger.debug(
+            `KernelEnvironmentVariablesService: Constructor; SQL env provider present=${!!sqlIntegrationEnvVars}`
         );
     }
     /**
@@ -61,7 +59,7 @@ export class KernelEnvironmentVariablesService {
         kernelSpec: IJupyterKernelSpec,
         token?: CancellationToken
     ) {
-        logger.info(
+        logger.debug(
             `KernelEnvVarsService.getEnvironmentVariables: Called for resource ${
                 resource?.toString() || 'undefined'
             }, sqlIntegrationEnvVars is ${this.sqlIntegrationEnvVars ? 'AVAILABLE' : 'UNDEFINED'}`
@@ -103,7 +101,7 @@ export class KernelEnvironmentVariablesService {
                       .getEnvironmentVariables(resource, token)
                       .then((vars) => {
                           if (vars && Object.keys(vars).length > 0) {
-                              logger.info(
+                              logger.debug(
                                   `KernelEnvVarsService: Got ${
                                       Object.keys(vars).length
                                   } SQL integration env vars: ${Object.keys(vars).join(', ')}`
@@ -158,7 +156,7 @@ export class KernelEnvironmentVariablesService {
 
             // Merge SQL integration environment variables
             if (sqlIntegrationEnvVars) {
-                logger.info(
+                logger.debug(
                     `KernelEnvVarsService: Merging ${
                         Object.keys(sqlIntegrationEnvVars).length
                     } SQL integration env vars into kernel env`
@@ -184,7 +182,7 @@ export class KernelEnvironmentVariablesService {
 
             // Merge SQL integration environment variables
             if (sqlIntegrationEnvVars) {
-                logger.info(
+                logger.debug(
                     `KernelEnvVarsService: Merging ${
                         Object.keys(sqlIntegrationEnvVars).length
                     } SQL integration env vars into kernel env (non-python)`

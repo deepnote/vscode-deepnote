@@ -20,7 +20,7 @@ import { DeepnoteVenvCreationError, DeepnoteToolkitInstallError } from '../../pl
 export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
     private readonly venvPythonPaths: Map<string, Uri> = new Map();
     // Track in-flight installations per venv path to prevent concurrent installs
-    private readonly pendingInstallations: Map<string, Promise<PythonEnvironment | undefined>> = new Map();
+    private readonly pendingInstallations: Map<string, Promise<PythonEnvironment>> = new Map();
 
     constructor(
         @inject(IProcessServiceFactory) private readonly processServiceFactory: IProcessServiceFactory,
@@ -63,7 +63,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         baseInterpreter: PythonEnvironment,
         deepnoteFileUri: Uri,
         token?: CancellationToken
-    ): Promise<PythonEnvironment | undefined> {
+    ): Promise<PythonEnvironment> {
         const venvPath = this.getVenvPath(deepnoteFileUri);
         const venvKey = venvPath.fsPath;
 
@@ -120,7 +120,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         deepnoteFileUri: Uri,
         venvPath: Uri,
         token?: CancellationToken
-    ): Promise<PythonEnvironment | undefined> {
+    ): Promise<PythonEnvironment> {
         try {
             Cancellation.throwIfCanceled(token);
 
@@ -271,9 +271,9 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                 throw ex;
             }
 
-            // Otherwise, log and wrap in a generic toolkit install error
+            // Otherwise, log full details and wrap in a generic toolkit install error
             logger.error(`Failed to set up deepnote-toolkit: ${ex}`);
-            this.outputChannel.appendLine(`Error setting up deepnote-toolkit: ${ex}`);
+            this.outputChannel.appendLine('Failed to set up deepnote-toolkit; see logs for details');
 
             throw new DeepnoteToolkitInstallError(
                 baseInterpreter.uri.fsPath,

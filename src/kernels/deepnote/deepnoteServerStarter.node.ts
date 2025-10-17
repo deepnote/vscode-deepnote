@@ -117,12 +117,9 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
         Cancellation.throwIfCanceled(token);
 
-        // Ensure toolkit is installed
+        // Ensure toolkit is installed (will throw typed errors on failure)
         logger.info(`Ensuring deepnote-toolkit is installed for ${fileKey}...`);
-        const installed = await this.toolkitInstaller.ensureInstalled(interpreter, deepnoteFileUri, token);
-        if (!installed) {
-            throw new Error('Failed to install deepnote-toolkit. Please check the output for details.');
-        }
+        await this.toolkitInstaller.ensureInstalled(interpreter, deepnoteFileUri, token);
 
         Cancellation.throwIfCanceled(token);
 
@@ -227,22 +224,27 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                 throw new DeepnoteServerTimeoutError(serverInfo.url, 120000, output?.stderr || undefined);
             }
         } catch (error) {
-            // Clean up leaked server before rethrowing
-            await this.stopServerImpl(deepnoteFileUri);
-
-            // If this is already a DeepnoteKernelError, rethrow it
+            // If this is already a DeepnoteKernelError, clean up and rethrow it
             if (error instanceof DeepnoteServerTimeoutError || error instanceof DeepnoteServerStartupError) {
+                await this.stopServerImpl(deepnoteFileUri);
                 throw error;
             }
 
-            // Otherwise wrap in a generic server startup error
+            // Capture output BEFORE cleaning up (stopServerImpl deletes it)
             const output = this.serverOutputByFile.get(fileKey);
+            const capturedStdout = output?.stdout || '';
+            const capturedStderr = output?.stderr || '';
+
+            // Clean up leaked server after capturing output
+            await this.stopServerImpl(deepnoteFileUri);
+
+            // Wrap in a generic server startup error with captured output
             throw new DeepnoteServerStartupError(
                 interpreter.uri.fsPath,
                 port,
                 'unknown',
-                output?.stdout || '',
-                output?.stderr || '',
+                capturedStdout,
+                capturedStderr,
                 error instanceof Error ? error : undefined
             );
         }

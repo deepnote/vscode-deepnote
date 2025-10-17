@@ -35,7 +35,8 @@ function convertIntegrationConfigToJson(config: IntegrationConfig): string {
             // Format: postgresql://username:password@host:port/database
             const encodedUsername = encodeURIComponent(config.username);
             const encodedPassword = encodeURIComponent(config.password);
-            const url = `postgresql://${encodedUsername}:${encodedPassword}@${config.host}:${config.port}/${config.database}`;
+            const encodedDatabase = encodeURIComponent(config.database);
+            const url = `postgresql://${encodedUsername}:${encodedPassword}@${config.host}:${config.port}/${encodedDatabase}`;
 
             return JSON.stringify({
                 url: url,

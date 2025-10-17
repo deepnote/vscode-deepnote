@@ -354,7 +354,7 @@ User executes SQL cell
 2. **No Plaintext**: Credentials are never written to disk in plaintext
 3. **Scoped Access**: Storage is scoped to the VSCode extension
 4. **Environment Isolation**: Each notebook gets only the credentials it needs
-5. **No Logging**: Credential values are not logged (only first 100 chars for debugging)
+5. **No Logging**: Credential values are never logged; only non-sensitive metadata (key names, counts) is logged
 
 ## Adding New Integration Types
 

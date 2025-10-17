@@ -105,7 +105,7 @@ suite('Kernel Environment Variables Service', () => {
         });
         when(customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())).thenResolve();
         when(customVariablesService.getCustomEnvironmentVariables(anything(), anything())).thenResolve();
-        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve(undefined as any);
+        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
 
         const vars = await kernelVariablesService.getEnvironmentVariables(undefined, interpreter, kernelSpec);
 
@@ -122,7 +122,7 @@ suite('Kernel Environment Variables Service', () => {
         });
         when(customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())).thenResolve();
         when(customVariablesService.getCustomEnvironmentVariables(anything(), anything())).thenResolve();
-        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve(undefined as any);
+        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
 
         const vars = await kernelVariablesService.getEnvironmentVariables(undefined, interpreter, kernelSpec);
 
@@ -142,7 +142,7 @@ suite('Kernel Environment Variables Service', () => {
         when(customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())).thenResolve({
             HELLO_VAR: 'new'
         });
-        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve(undefined as any);
+        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
 
         const vars = await kernelVariablesService.getEnvironmentVariables(undefined, interpreter, kernelSpec);
 
@@ -158,7 +158,7 @@ suite('Kernel Environment Variables Service', () => {
         when(customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())).thenResolve({
             HELLO_VAR: 'new'
         });
-        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve(undefined as any);
+        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
 
         const vars = await kernelVariablesService.getEnvironmentVariables(undefined, undefined, kernelSpec);
 
@@ -173,7 +173,7 @@ suite('Kernel Environment Variables Service', () => {
     test('Returns process.env vars if no interpreter and no kernelspec.env', async () => {
         delete kernelSpec.interpreterPath;
         when(customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())).thenResolve();
-        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve(undefined as any);
+        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
 
         const vars = await kernelVariablesService.getEnvironmentVariables(undefined, undefined, kernelSpec);
 
@@ -187,7 +187,7 @@ suite('Kernel Environment Variables Service', () => {
         when(customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())).thenResolve({
             PATH: 'foobaz'
         });
-        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve(undefined as any);
+        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
 
         const vars = await kernelVariablesService.getEnvironmentVariables(undefined, interpreter, kernelSpec);
         assert.isOk(processPath);
@@ -205,7 +205,7 @@ suite('Kernel Environment Variables Service', () => {
         when(customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())).thenResolve({
             PATH: 'foobaz'
         });
-        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve(undefined as any);
+        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
 
         // undefined for interpreter here, interpreterPath from the spec should be used
         const vars = await kernelVariablesService.getEnvironmentVariables(undefined, undefined, kernelSpec);
@@ -271,7 +271,7 @@ suite('Kernel Environment Variables Service', () => {
         when(customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())).thenResolve({
             PATH: 'foobaz'
         });
-        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve(undefined as any);
+        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
         when(settings.excludeUserSitePackages).thenReturn(shouldBeSet);
 
         // undefined for interpreter here, interpreterPath from the spec should be used
@@ -356,7 +356,7 @@ suite('Kernel Environment Variables Service', () => {
             when(
                 customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())
             ).thenResolve();
-            when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve(undefined as any);
+            when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
 
             const vars = await kernelVariablesService.getEnvironmentVariables(resource, interpreter, kernelSpec);
 

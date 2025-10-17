@@ -27,13 +27,13 @@ export class SqlIntegrationStartupCodeProvider implements IStartupCodeProvider, 
     ) {}
 
     activate(): void {
-        logger.info('SqlIntegrationStartupCodeProvider: Activating and registering with JupyterNotebookView');
+        logger.debug('SqlIntegrationStartupCodeProvider: Activating and registering with JupyterNotebookView');
         this.registry.register(this, JupyterNotebookView);
-        logger.info('SqlIntegrationStartupCodeProvider: Successfully registered');
+        logger.debug('SqlIntegrationStartupCodeProvider: Successfully registered');
     }
 
     async getCode(kernel: IKernel): Promise<string[]> {
-        logger.info(
+        logger.debug(
             `SqlIntegrationStartupCodeProvider.getCode called for kernel ${
                 kernel.id
             }, resourceUri: ${kernel.resourceUri?.toString()}`
@@ -41,26 +41,26 @@ export class SqlIntegrationStartupCodeProvider implements IStartupCodeProvider, 
 
         // Only run for Python kernels on Deepnote notebooks
         if (!isPythonKernelConnection(kernel.kernelConnectionMetadata)) {
-            logger.info(`SqlIntegrationStartupCodeProvider: Not a Python kernel, skipping`);
+            logger.debug(`SqlIntegrationStartupCodeProvider: Not a Python kernel, skipping`);
             return [];
         }
 
         // Check if this is a Deepnote notebook
         if (!kernel.resourceUri) {
-            logger.info(`SqlIntegrationStartupCodeProvider: No resourceUri, skipping`);
+            logger.debug(`SqlIntegrationStartupCodeProvider: No resourceUri, skipping`);
             return [];
         }
 
         const notebook = workspace.notebookDocuments.find((nb) => nb.uri.toString() === kernel.resourceUri?.toString());
         if (!notebook) {
-            logger.info(`SqlIntegrationStartupCodeProvider: Notebook not found for ${kernel.resourceUri.toString()}`);
+            logger.debug(`SqlIntegrationStartupCodeProvider: Notebook not found for ${kernel.resourceUri.toString()}`);
             return [];
         }
 
-        logger.info(`SqlIntegrationStartupCodeProvider: Found notebook with type: ${notebook.notebookType}`);
+        logger.debug(`SqlIntegrationStartupCodeProvider: Found notebook with type: ${notebook.notebookType}`);
 
         if (notebook.notebookType !== DEEPNOTE_NOTEBOOK_TYPE) {
-            logger.info(`SqlIntegrationStartupCodeProvider: Not a Deepnote notebook, skipping`);
+            logger.debug(`SqlIntegrationStartupCodeProvider: Not a Deepnote notebook, skipping`);
             return [];
         }
 
@@ -75,7 +75,7 @@ export class SqlIntegrationStartupCodeProvider implements IStartupCodeProvider, 
                 return [];
             }
 
-            logger.info(
+            logger.debug(
                 `SqlIntegrationStartupCodeProvider: Injecting ${
                     Object.keys(envVars).length
                 } SQL integration env vars into kernel`
@@ -105,7 +105,7 @@ export class SqlIntegrationStartupCodeProvider implements IStartupCodeProvider, 
             code.push('    print(f"[SQL Integration] ERROR: Failed to set SQL integration env vars: {e}")');
             code.push('    traceback.print_exc()');
 
-            logger.info('SqlIntegrationStartupCodeProvider: Generated startup code');
+            logger.debug('SqlIntegrationStartupCodeProvider: Generated startup code');
 
             return code;
         } catch (error) {

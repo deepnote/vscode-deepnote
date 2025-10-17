@@ -6,11 +6,12 @@ import { ConverterRegistry } from './converters/converterRegistry';
 import { BlockConverter } from './converters/blockConverter';
 import { CodeBlockConverter } from './converters/codeBlockConverter';
 import { addPocketToCellMetadata, createBlockFromPocket } from './pocket';
-import { TextBlockConverter } from './converters/textBlockConverter';
 import { MarkdownBlockConverter } from './converters/markdownBlockConverter';
 import { VisualizationBlockConverter } from './converters/visualizationBlockConverter';
 import { compile as convertVegaLiteSpecToVega } from 'vega-lite';
 import { produce } from 'immer';
+import { SqlBlockConverter } from './converters/sqlBlockConverter';
+import { TextBlockConverter } from './converters/textBlockConverter';
 import type { Field } from 'vega-lite/build/src/channeldef';
 import type { LayerSpec, TopLevel } from 'vega-lite/build/src/spec';
 
@@ -23,8 +24,9 @@ export class DeepnoteDataConverter {
 
     constructor() {
         this.registry.register(new CodeBlockConverter());
-        this.registry.register(new TextBlockConverter());
         this.registry.register(new MarkdownBlockConverter());
+        this.registry.register(new SqlBlockConverter());
+        this.registry.register(new TextBlockConverter());
         this.registry.register(new VisualizationBlockConverter());
     }
 
@@ -96,10 +98,14 @@ export class DeepnoteDataConverter {
         // Outputs are managed by VS Code natively, not stored in the pocket
         // Preserve outputs when they exist (including newly produced outputs)
         // Only set if not already set to avoid overwriting converter-managed outputs
-        // Only set if the cell actually has outputs (non-empty array) or if the block originally had outputs
         const hadOutputs = cell.metadata?.__hadOutputs;
-        if (cell.outputs && !block.outputs && (cell.outputs.length > 0 || hadOutputs)) {
-            block.outputs = this.transformOutputsForDeepnote(cell.outputs);
+        if (!block.outputs) {
+            // Set outputs if:
+            // 1. The cell has non-empty outputs, OR
+            // 2. The block originally had outputs (even if empty)
+            if ((cell.outputs && cell.outputs.length > 0) || hadOutputs) {
+                block.outputs = cell.outputs ? this.transformOutputsForDeepnote(cell.outputs) : [];
+            }
         }
 
         // Clean up internal tracking flags from metadata

@@ -6,9 +6,10 @@ import { produce } from 'immer';
 
 import { numberFormats } from './number-formats';
 import { detectBaseTheme } from '../react-common/themeDetector';
+import { TopLevelSpec } from 'vega-lite';
 
 export interface VegaRendererProps {
-    spec: Record<string, unknown>;
+    spec: TopLevelSpec;
     renderer?: 'svg' | 'canvas';
 }
 
@@ -70,7 +71,7 @@ export const VegaRenderer = memo(function VegaRenderer(props: VegaRendererProps)
 
     const { backgroundColor, foregroundColor, isDark } = useThemeColors();
     const themedSpec = useMemo(() => {
-        const patchedSpec = produce(spec, (draft: any) => {
+        const patchedSpec = produce(spec, (draft) => {
             draft.background = backgroundColor;
 
             if (!draft.config) {

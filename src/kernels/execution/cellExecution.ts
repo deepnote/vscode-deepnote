@@ -417,21 +417,6 @@ export class CellExecution implements ICellExecution, IDisposable {
             outputs: [...(this.cell.outputs || [])]
         };
 
-        // if (deepnoteBlock.type === 'big-number') {
-        //     try {
-        //         deepnoteBlock.metadata = {
-        //             ...deepnoteBlock.metadata,
-        //             ...DeepnoteBigNumberMetadataSchema.parse(JSON.parse(deepnoteBlock.content || '{}'))
-        //         };
-        //     } catch (ex) {
-        //         logger.error(
-        //             `Cell execution failed to parse big number metadata, for cell Index ${this.cell.index}`,
-        //             ex
-        //         );
-        //         return this.completedWithErrors(ex);
-        //     }
-        // }
-
         const dataConverter = new DeepnoteDataConverter();
         const deepnoteBlock = dataConverter.convertCellToBlock(cellData, this.cell.index);
 

@@ -41,6 +41,9 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
                 this._onDidChangeCellStatusBarItems.fire();
             })
         );
+
+        // Dispose our emitter with the extension
+        this.disposables.push(this._onDidChangeCellStatusBarItems);
     }
 
     public provideCellStatusBarItems(

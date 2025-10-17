@@ -319,7 +319,7 @@ When a SQL block with `sql_integration_id: "my-postgres-db"` is executed:
 
 ### Configuration Flow
 
-```
+```text
 User → IntegrationPanel (UI)
   → vscodeApi.postMessage({ type: 'save', config })
   → IntegrationWebviewProvider.onMessage()
@@ -331,7 +331,7 @@ User → IntegrationPanel (UI)
 
 ### Execution Flow
 
-```
+```text
 User executes SQL cell
   → Kernel startup triggered
   → SqlIntegrationEnvironmentVariablesProvider.getEnvironmentVariables()

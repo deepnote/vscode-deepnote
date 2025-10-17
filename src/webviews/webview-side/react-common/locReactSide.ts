@@ -6,17 +6,17 @@ import { LocalizedMessages } from '../../../messageTypes';
 // The react code can't use the localize.ts module because it reads from
 // disk. This isn't allowed inside a browser, so we pass the collection
 // through the javascript.
-let loadedCollection: LocalizedMessages | undefined;
+let loadedCollection: Partial<LocalizedMessages> | undefined;
 
 export function getLocString(key: keyof LocalizedMessages, defValue: string): string {
     if (loadedCollection && loadedCollection.hasOwnProperty(key)) {
-        return loadedCollection[key];
+        return loadedCollection[key] ?? defValue;
     }
 
     return defValue;
 }
 
-export function storeLocStrings(collection: LocalizedMessages) {
+export function storeLocStrings(collection: Partial<LocalizedMessages>) {
     loadedCollection = collection;
 }
 

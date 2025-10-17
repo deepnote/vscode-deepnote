@@ -262,7 +262,6 @@ function translateDisplayDataOutput(
         }
     }
     */
-    // TODO - add DeepnotePocket zod schema validation
     const deepnotePocket = cellMetadata?.__deepnotePocket as Pocket | undefined;
     const deepnoteBlockType = deepnotePocket?.type;
 

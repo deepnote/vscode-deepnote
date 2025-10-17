@@ -9,7 +9,6 @@ export function ChartBigNumberOutputRenderer({
     output: DeepnoteChartBigNumberOutput;
     metadata: DeepnoteBigNumberMetadata;
 }) {
-    // TODO: either remove or handle here .. currently handled in the parent
     const title = useMemo(() => {
         return output.title || 'Title';
     }, [output.title]);

@@ -12,35 +12,35 @@ export const DeepnoteBigNumberMetadataSchema = z.object({
     deepnote_big_number_title: z
         .string()
         .nullish()
-        .transform((val) => val ?? null),
+        .transform((val) => val ?? ''),
     deepnote_big_number_value: z
         .string()
         .nullish()
-        .transform((val) => val ?? null),
+        .transform((val) => val ?? ''),
     deepnote_big_number_format: z
         .string()
         .nullish()
-        .transform((val) => val ?? null),
+        .transform((val) => val ?? 'number'),
     deepnote_big_number_comparison_type: z
         .string()
         .nullish()
-        .transform((val) => val ?? null),
+        .transform((val) => val ?? ''),
     deepnote_big_number_comparison_title: z
         .string()
         .nullish()
-        .transform((val) => val ?? null),
+        .transform((val) => val ?? ''),
     deepnote_big_number_comparison_value: z
         .string()
         .nullish()
-        .transform((val) => val ?? null),
+        .transform((val) => val ?? ''),
     deepnote_big_number_comparison_format: z
         .string()
         .nullish()
-        .transform((val) => val ?? null),
+        .transform((val) => val ?? ''),
     deepnote_big_number_comparison_enabled: z
         .boolean()
         .nullish()
-        .transform((val) => val ?? null)
+        .transform((val) => val ?? false)
 });
 
 export type DeepnoteChartBigNumberOutput = z.infer<typeof DeepnoteChartBigNumberOutputSchema>;

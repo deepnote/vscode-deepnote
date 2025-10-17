@@ -157,7 +157,7 @@ export class IntegrationManager implements IIntegrationManager {
         }
 
         if (integrations.size === 0) {
-            void window.showInformationMessage(l10n.t(`No integrations found in this project.`));
+            void window.showInformationMessage(l10n.t('No integrations found in this project.'));
             return;
         }
 

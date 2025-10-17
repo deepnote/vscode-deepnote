@@ -41,8 +41,7 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
 
             switch (msg.type) {
                 case 'loc_init':
-                    const locStrings = msg.locStrings;
-                    storeLocStrings(locStrings);
+                    storeLocStrings(msg.locStrings);
                     break;
 
                 case 'update':

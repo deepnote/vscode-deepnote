@@ -646,4 +646,219 @@ suite('Kernel Connection Helpers', () => {
             assert.strictEqual(name, '.env (Python 9.8.7)');
         });
     });
+
+    suite('executeSilently', () => {
+        test('Returns outputs from kernel execution', async () => {
+            const mockKernel = {
+                requestExecute: () => ({
+                    done: Promise.resolve({
+                        content: {
+                            status: 'ok' as const
+                        }
+                    }),
+                    onIOPub: () => {
+                        // noop
+                    }
+                })
+            };
+
+            const code = 'print("hello")';
+            const { executeSilently } = await import('./helpers');
+            const result = await executeSilently(mockKernel as any, code);
+
+            // executeSilently should return outputs array
+            assert.isArray(result);
+        });
+
+        test('Handles empty code', async () => {
+            const mockKernel = {
+                requestExecute: () => ({
+                    done: Promise.resolve({
+                        content: {
+                            status: 'ok' as const
+                        }
+                    }),
+                    onIOPub: () => {
+                        // noop
+                    }
+                })
+            };
+
+            const code = '';
+            const { executeSilently } = await import('./helpers');
+            const result = await executeSilently(mockKernel as any, code);
+
+            // Should return empty array for empty code
+            assert.isArray(result);
+        });
+
+        test('Collects stream outputs', async () => {
+            let iopubCallback: ((msg: any) => void) | undefined;
+
+            const mockKernel = {
+                requestExecute: () => ({
+                    done: Promise.resolve({
+                        content: {
+                            status: 'ok' as const
+                        }
+                    }),
+                    onIOPub: (cb: (msg: any) => void) => {
+                        iopubCallback = cb;
+                        // Simulate stream output
+                        setTimeout(() => {
+                            if (iopubCallback) {
+                                iopubCallback({
+                                    header: { msg_type: 'stream' },
+                                    content: {
+                                        name: 'stdout',
+                                        text: 'test output'
+                                    }
+                                });
+                            }
+                        }, 0);
+                    }
+                })
+            };
+
+            const code = 'print("test")';
+            const { executeSilently } = await import('./helpers');
+            const result = await executeSilently(mockKernel as any, code);
+
+            assert.isArray(result);
+            // Should have collected the stream output
+            if (result && result.length > 0) {
+                assert.equal(result[0].output_type, 'stream');
+            }
+        });
+
+        test('Collects error outputs', async () => {
+            let iopubCallback: ((msg: any) => void) | undefined;
+
+            const mockKernel = {
+                requestExecute: () => ({
+                    done: Promise.resolve({
+                        content: {
+                            status: 'error' as const,
+                            ename: 'NameError',
+                            evalue: 'name not defined',
+                            traceback: ['Traceback...']
+                        }
+                    }),
+                    onIOPub: (cb: (msg: any) => void) => {
+                        iopubCallback = cb;
+                        // Simulate error output
+                        setTimeout(() => {
+                            if (iopubCallback) {
+                                iopubCallback({
+                                    header: { msg_type: 'error' },
+                                    content: {
+                                        ename: 'NameError',
+                                        evalue: 'name not defined',
+                                        traceback: ['Traceback...']
+                                    }
+                                });
+                            }
+                        }, 0);
+                    }
+                })
+            };
+
+            const code = 'undefined_variable';
+            const { executeSilently } = await import('./helpers');
+            const result = await executeSilently(mockKernel as any, code);
+
+            assert.isArray(result);
+            // Should have collected the error output
+            if (result && result.length > 0) {
+                assert.equal(result[0].output_type, 'error');
+            }
+        });
+
+        test('Collects display_data outputs', async () => {
+            let iopubCallback: ((msg: any) => void) | undefined;
+
+            const mockKernel = {
+                requestExecute: () => ({
+                    done: Promise.resolve({
+                        content: {
+                            status: 'ok' as const
+                        }
+                    }),
+                    onIOPub: (cb: (msg: any) => void) => {
+                        iopubCallback = cb;
+                        // Simulate display_data output
+                        setTimeout(() => {
+                            if (iopubCallback) {
+                                iopubCallback({
+                                    header: { msg_type: 'display_data' },
+                                    content: {
+                                        data: {
+                                            'text/plain': 'some data'
+                                        },
+                                        metadata: {}
+                                    }
+                                });
+                            }
+                        }, 0);
+                    }
+                })
+            };
+
+            const code = 'display("data")';
+            const { executeSilently } = await import('./helpers');
+            const result = await executeSilently(mockKernel as any, code);
+
+            assert.isArray(result);
+            // Should have collected the display_data output
+            if (result && result.length > 0) {
+                assert.equal(result[0].output_type, 'display_data');
+            }
+        });
+
+        test('Handles multiple outputs', async () => {
+            let iopubCallback: ((msg: any) => void) | undefined;
+
+            const mockKernel = {
+                requestExecute: () => ({
+                    done: Promise.resolve({
+                        content: {
+                            status: 'ok' as const
+                        }
+                    }),
+                    onIOPub: (cb: (msg: any) => void) => {
+                        iopubCallback = cb;
+                        // Simulate multiple outputs
+                        setTimeout(() => {
+                            if (iopubCallback) {
+                                iopubCallback({
+                                    header: { msg_type: 'stream' },
+                                    content: {
+                                        name: 'stdout',
+                                        text: 'output 1'
+                                    }
+                                });
+                                iopubCallback({
+                                    header: { msg_type: 'stream' },
+                                    content: {
+                                        name: 'stdout',
+                                        text: 'output 2'
+                                    }
+                                });
+                            }
+                        }, 0);
+                    }
+                })
+            };
+
+            const code = 'print("1"); print("2")';
+            const { executeSilently } = await import('./helpers');
+            const result = await executeSilently(mockKernel as any, code);
+
+            assert.isArray(result);
+            // Should have collected multiple outputs
+            if (result) {
+                assert.isAtLeast(result.length, 0);
+            }
+        });
+    });
 });

@@ -4,7 +4,7 @@ import { CancellationToken, Event, EventEmitter, NotebookDocument, workspace } f
 import { IDisposableRegistry, Resource } from '../../common/types';
 import { EnvironmentVariables } from '../../common/variables/types';
 import { logger } from '../../logging';
-import { IIntegrationStorage } from './types';
+import { IIntegrationStorage, ISqlIntegrationEnvVarsProvider } from './types';
 import { DATAFRAME_SQL_INTEGRATION_ID, IntegrationConfig, IntegrationType } from './integrationTypes';
 
 /**
@@ -68,7 +68,7 @@ function convertIntegrationConfigToJson(config: IntegrationConfig): string {
  * as environment variables so they can be used during SQL block execution.
  */
 @injectable()
-export class SqlIntegrationEnvironmentVariablesProvider {
+export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrationEnvVarsProvider {
     private readonly _onDidChangeEnvironmentVariables = new EventEmitter<Resource>();
 
     public readonly onDidChangeEnvironmentVariables: Event<Resource> = this._onDidChangeEnvironmentVariables.event;

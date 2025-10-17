@@ -2,7 +2,7 @@ import { assert } from 'chai';
 import { instance, mock, when } from 'ts-mockito';
 import { EventEmitter, NotebookCell, NotebookCellKind, NotebookDocument, Uri } from 'vscode';
 
-import { IDisposableRegistry } from '../../../platform/common/types';
+import { IDisposableRegistry } from '../../common/types';
 import { IntegrationStorage } from './integrationStorage';
 import { SqlIntegrationEnvironmentVariablesProvider } from './sqlIntegrationEnvironmentVariablesProvider';
 import { IntegrationType, PostgresIntegrationConfig, BigQueryIntegrationConfig } from './integrationTypes';

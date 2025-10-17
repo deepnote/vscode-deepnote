@@ -5,7 +5,7 @@ import { inject, injectable } from 'inversify';
 import { IStartupCodeProvider, IStartupCodeProviders, StartupCodePriority, IKernel } from '../../../kernels/types';
 import { JupyterNotebookView } from '../../../platform/common/constants';
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
-import { SqlIntegrationEnvironmentVariablesProvider } from './sqlIntegrationEnvironmentVariablesProvider';
+import { SqlIntegrationEnvironmentVariablesProvider } from '../../../platform/notebooks/deepnote/sqlIntegrationEnvironmentVariablesProvider';
 import { logger } from '../../../platform/logging';
 import { isPythonKernelConnection } from '../../../kernels/helpers';
 import { DEEPNOTE_NOTEBOOK_TYPE } from '../../../kernels/deepnote/types';

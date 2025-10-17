@@ -1,6 +1,10 @@
 import { logger } from '../../../platform/logging';
 import { IIntegrationStorage } from './types';
-import { DATAFRAME_SQL_INTEGRATION_ID, IntegrationStatus, IntegrationWithStatus } from './integrationTypes';
+import {
+    DATAFRAME_SQL_INTEGRATION_ID,
+    IntegrationStatus,
+    IntegrationWithStatus
+} from '../../../platform/notebooks/deepnote/integrationTypes';
 
 /**
  * Represents a block with SQL integration metadata

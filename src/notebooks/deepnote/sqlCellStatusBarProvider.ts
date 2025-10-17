@@ -15,7 +15,7 @@ import { IExtensionSyncActivationService } from '../../platform/activation/types
 import { IDisposableRegistry } from '../../platform/common/types';
 import { Commands } from '../../platform/common/constants';
 import { IIntegrationStorage } from './integrations/types';
-import { DATAFRAME_SQL_INTEGRATION_ID } from './integrations/integrationTypes';
+import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
 
 /**
  * Provides status bar items for SQL cells showing the integration name

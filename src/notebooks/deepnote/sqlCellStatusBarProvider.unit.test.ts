@@ -13,7 +13,7 @@ import {
 import { IDisposableRegistry } from '../../platform/common/types';
 import { IIntegrationStorage } from './integrations/types';
 import { SqlCellStatusBarProvider } from './sqlCellStatusBarProvider';
-import { DATAFRAME_SQL_INTEGRATION_ID, IntegrationType } from './integrations/integrationTypes';
+import { DATAFRAME_SQL_INTEGRATION_ID, IntegrationType } from '../../platform/notebooks/deepnote/integrationTypes';
 
 suite('SqlCellStatusBarProvider', () => {
     let provider: SqlCellStatusBarProvider;

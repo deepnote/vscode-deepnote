@@ -1,9 +1,9 @@
 import { inject, injectable } from 'inversify';
 import { CancellationToken, Event, EventEmitter, NotebookDocument, workspace } from 'vscode';
 
-import { IDisposableRegistry, Resource } from '../../../platform/common/types';
-import { EnvironmentVariables } from '../../../platform/common/variables/types';
-import { logger } from '../../../platform/logging';
+import { IDisposableRegistry, Resource } from '../../common/types';
+import { EnvironmentVariables } from '../../common/variables/types';
+import { logger } from '../../logging';
 import { IIntegrationStorage } from './types';
 import { DATAFRAME_SQL_INTEGRATION_ID, IntegrationConfig, IntegrationType } from './integrationTypes';
 

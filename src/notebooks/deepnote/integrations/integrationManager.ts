@@ -5,7 +5,7 @@ import { IExtensionContext } from '../../../platform/common/types';
 import { Commands } from '../../../platform/common/constants';
 import { logger } from '../../../platform/logging';
 import { IIntegrationDetector, IIntegrationManager, IIntegrationStorage, IIntegrationWebviewProvider } from './types';
-import { IntegrationStatus, IntegrationWithStatus } from './integrationTypes';
+import { IntegrationStatus, IntegrationWithStatus } from '../../../platform/notebooks/deepnote/integrationTypes';
 import { BlockWithIntegration, scanBlocksForIntegrations } from './integrationUtils';
 
 /**

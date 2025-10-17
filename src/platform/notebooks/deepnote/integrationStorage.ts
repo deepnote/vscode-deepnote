@@ -1,9 +1,9 @@
 import { inject, injectable } from 'inversify';
 import { EventEmitter } from 'vscode';
 
-import { IEncryptedStorage } from '../../../platform/common/application/types';
-import { IAsyncDisposableRegistry } from '../../../platform/common/types';
-import { logger } from '../../../platform/logging';
+import { IEncryptedStorage } from '../../common/application/types';
+import { IAsyncDisposableRegistry } from '../../common/types';
+import { logger } from '../../logging';
 import { IntegrationConfig, IntegrationType } from './integrationTypes';
 import { IIntegrationStorage } from './types';
 

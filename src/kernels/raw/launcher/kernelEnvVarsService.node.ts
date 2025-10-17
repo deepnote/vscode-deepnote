@@ -18,7 +18,7 @@ import { IJupyterKernelSpec } from '../../types';
 import { CancellationToken, Uri } from 'vscode';
 import { PYTHON_LANGUAGE } from '../../../platform/common/constants';
 import { trackKernelResourceInformation } from '../../telemetry/helper';
-import { SqlIntegrationEnvironmentVariablesProvider } from '../../../notebooks/deepnote/integrations/sqlIntegrationEnvironmentVariablesProvider';
+import { SqlIntegrationEnvironmentVariablesProvider } from '../../../platform/notebooks/deepnote/sqlIntegrationEnvironmentVariablesProvider';
 
 /**
  * Class used to fetch environment variables for a kernel.

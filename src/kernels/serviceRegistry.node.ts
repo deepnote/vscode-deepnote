@@ -48,7 +48,7 @@ import { LastCellExecutionTracker } from './execution/lastCellExecutionTracker';
 import { ClearJupyterServersCommand } from './jupyter/clearJupyterServersCommand';
 import { KernelChatStartupCodeProvider } from './chat/kernelStartupCodeProvider';
 import { KernelWorkingDirectory } from './raw/session/kernelWorkingDirectory.node';
-import { SqlIntegrationEnvironmentVariablesProvider } from '../notebooks/deepnote/integrations/sqlIntegrationEnvironmentVariablesProvider';
+import { SqlIntegrationEnvironmentVariablesProvider } from '../platform/notebooks/deepnote/sqlIntegrationEnvironmentVariablesProvider';
 
 export function registerTypes(serviceManager: IServiceManager, isDevMode: boolean) {
     serviceManager.addSingleton<IExtensionSyncActivationService>(IExtensionSyncActivationService, Activation);

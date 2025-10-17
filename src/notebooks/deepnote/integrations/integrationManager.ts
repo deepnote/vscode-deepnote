@@ -1,5 +1,5 @@
 import { inject, injectable } from 'inversify';
-import { commands, NotebookDocument, window, workspace } from 'vscode';
+import { commands, l10n, NotebookDocument, window, workspace } from 'vscode';
 
 import { IExtensionContext } from '../../../platform/common/types';
 import { Commands } from '../../../platform/common/constants';
@@ -120,13 +120,13 @@ export class IntegrationManager implements IIntegrationManager {
         const activeNotebook = window.activeNotebookEditor?.notebook;
 
         if (!activeNotebook || activeNotebook.notebookType !== 'deepnote') {
-            void window.showErrorMessage('No active Deepnote notebook');
+            void window.showErrorMessage(l10n.t('No active Deepnote notebook'));
             return;
         }
 
         const projectId = activeNotebook.metadata?.deepnoteProjectId;
         if (!projectId) {
-            void window.showErrorMessage('Cannot determine project ID');
+            void window.showErrorMessage(l10n.t('Cannot determine project ID'));
             return;
         }
 
@@ -157,7 +157,7 @@ export class IntegrationManager implements IIntegrationManager {
         }
 
         if (integrations.size === 0) {
-            void window.showInformationMessage(`No integrations found in this project.`);
+            void window.showInformationMessage(l10n.t(`No integrations found in this project.`));
             return;
         }
 

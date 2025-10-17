@@ -56,7 +56,7 @@ export interface StatusMessage {
 
 export interface LocInitMessage {
     type: 'loc_init';
-    locStrings: string;
+    locStrings: Partial<import('../../../messageTypes').LocalizedMessages>;
 }
 
 export type WebviewMessage = UpdateMessage | ShowFormMessage | StatusMessage | LocInitMessage;

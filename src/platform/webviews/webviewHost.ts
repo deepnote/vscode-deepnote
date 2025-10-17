@@ -221,7 +221,7 @@ export abstract class WebviewHost<IMapping> implements IDisposable {
     }
 
     protected async sendLocStrings() {
-        const locStrings: LocalizedMessages = {
+        const locStrings: Partial<LocalizedMessages> = {
             collapseSingle: localize.WebViews.collapseSingle,
             expandSingle: localize.WebViews.expandSingle,
             openExportFileYes: localize.DataScience.openExportFileYes,
@@ -265,43 +265,7 @@ export abstract class WebviewHost<IMapping> implements IDisposable {
             dataframeNextPage: localize.WebViews.dataframeNextPage,
             dataframePageOf: localize.WebViews.dataframePageOf,
             dataframeCopyTable: localize.WebViews.dataframeCopyTable,
-            dataframeExportTable: localize.WebViews.dataframeExportTable,
-            // Integration panel strings (not used in this webview, but required by type)
-            integrationsTitle: '',
-            integrationsNoIntegrationsFound: '',
-            integrationsConnected: '',
-            integrationsNotConfigured: '',
-            integrationsConfigure: '',
-            integrationsReconfigure: '',
-            integrationsReset: '',
-            integrationsConfirmResetTitle: '',
-            integrationsConfirmResetMessage: '',
-            integrationsConfirmResetDetails: '',
-            integrationsConfigureTitle: '',
-            integrationsCancel: '',
-            integrationsSave: '',
-            integrationsPostgresNameLabel: '',
-            integrationsPostgresNamePlaceholder: '',
-            integrationsPostgresHostLabel: '',
-            integrationsPostgresHostPlaceholder: '',
-            integrationsPostgresPortLabel: '',
-            integrationsPostgresPortPlaceholder: '',
-            integrationsPostgresDatabaseLabel: '',
-            integrationsPostgresDatabasePlaceholder: '',
-            integrationsPostgresUsernameLabel: '',
-            integrationsPostgresUsernamePlaceholder: '',
-            integrationsPostgresPasswordLabel: '',
-            integrationsPostgresPasswordPlaceholder: '',
-            integrationsPostgresSslLabel: '',
-            integrationsBigQueryNameLabel: '',
-            integrationsBigQueryNamePlaceholder: '',
-            integrationsBigQueryProjectIdLabel: '',
-            integrationsBigQueryProjectIdPlaceholder: '',
-            integrationsBigQueryCredentialsLabel: '',
-            integrationsBigQueryCredentialsPlaceholder: '',
-            integrationsBigQueryCredentialsRequired: '',
-            integrationsRequiredField: '',
-            integrationsOptionalField: ''
+            dataframeExportTable: localize.WebViews.dataframeExportTable
         };
         this.postMessageInternal(SharedMessages.LocInit, JSON.stringify(locStrings)).catch(noop);
     }

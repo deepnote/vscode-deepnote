@@ -141,7 +141,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
 
         await this.currentPanel.webview.postMessage({
             type: SharedMessages.LocInit,
-            locStrings: JSON.stringify(locStrings)
+            locStrings: locStrings
         });
     }
 

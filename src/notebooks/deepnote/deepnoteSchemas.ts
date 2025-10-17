@@ -43,5 +43,215 @@ export const DeepnoteBigNumberMetadataSchema = z.object({
         .transform((val) => val ?? null)
 });
 
+export const DeepnoteTextInputMetadataSchema = z.object({
+    deepnote_variable_name: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_variable_value: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_variable_default_value: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_input_label: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null)
+});
+
+export const DeepnoteTextareaInputMetadataSchema = z.object({
+    deepnote_variable_name: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_variable_value: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_input_label: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null)
+});
+
+export const DeepnoteSelectInputMetadataSchema = z.object({
+    deepnote_input_label: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_variable_name: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_variable_value: z
+        .union([z.string(), z.array(z.string())])
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_variable_options: z
+        .array(z.string())
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_variable_custom_options: z
+        .array(z.string())
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_variable_select_type: z
+        // .enum(['from-options', 'from-variable'])
+        .string()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_allow_multiple_values: z
+        .boolean()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_allow_empty_values: z
+        .boolean()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_variable_default_value: z
+        .union([z.string(), z.array(z.string())])
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_variable_selected_variable: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null)
+});
+
+export const DeepnoteSliderInputMetadataSchema = z.object({
+    deepnote_input_label: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_variable_name: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_variable_value: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_slider_min_value: z
+        .number()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_slider_max_value: z
+        .number()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_slider_step: z
+        .number()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_variable_default_value: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null)
+});
+
+export const DeepnoteCheckboxInputMetadataSchema = z.object({
+    deepnote_input_label: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_variable_name: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_variable_value: z
+        .boolean()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_variable_default_value: z
+        .boolean()
+        .nullish()
+        .transform((val) => val ?? null)
+});
+
+export const DeepnoteDateInputMetadataSchema = z.object({
+    deepnote_input_label: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_variable_name: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_variable_value: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_variable_default_value: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_input_date_version: z
+        .number()
+        .nullish()
+        .transform((val) => val ?? null)
+});
+
+export const DeepnoteDateRangeInputMetadataSchema = z.object({
+    deepnote_input_label: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_variable_name: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_variable_value: z
+        .union([z.string(), z.tuple([z.string(), z.string()])])
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_variable_default_value: z
+        .union([z.string(), z.tuple([z.string(), z.string()])])
+        .nullish()
+        .transform((val) => val ?? null)
+});
+
+export const DeepnoteFileInputMetadataSchema = z.object({
+    deepnote_input_label: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_variable_name: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_variable_value: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_allowed_file_extensions: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null)
+});
+
+export const DeepnoteButtonMetadataSchema = z.object({
+    deepnote_button_title: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_variable_name: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_button_behavior: z
+        // .enum(['run', 'set_variable'])
+        .string()
+        .nullish()
+        .transform((val) => val ?? null),
+    deepnote_button_color_scheme: z
+        // .enum(['blue', 'red', 'neutral', 'green', 'yellow'])
+        .string()
+        .nullish()
+        .transform((val) => val ?? null)
+});
+
 export type DeepnoteChartBigNumberOutput = z.infer<typeof DeepnoteChartBigNumberOutputSchema>;
 export type DeepnoteBigNumberMetadata = z.infer<typeof DeepnoteBigNumberMetadataSchema>;

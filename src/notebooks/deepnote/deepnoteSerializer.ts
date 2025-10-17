@@ -63,7 +63,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 throw new Error(l10n.t('No notebook selected or found'));
             }
 
-            const cells = this.converter.convertBlocksToCells(selectedNotebook.blocks);
+            const cells = this.converter.convertBlocksToCells(selectedNotebook.blocks ?? []);
 
             logger.debug(`DeepnoteSerializer: Converted ${cells.length} cells from notebook blocks`);
 

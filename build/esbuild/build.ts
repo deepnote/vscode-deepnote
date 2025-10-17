@@ -48,6 +48,8 @@ const commonExternals = [
     'vscode',
     'commonjs',
     'node:crypto',
+    'node:fs/promises',
+    'node:path',
     'vscode-jsonrpc', // Used by a few modules, might as well pull this out, instead of duplicating it in separate bundles.
     // Ignore telemetry specific packages that are not required.
     'applicationinsights-native-metrics',

@@ -89,6 +89,13 @@ export function initialize() {
         if (request === '@vscode/extension-telemetry') {
             return { default: vscMockTelemetryReporter as any };
         }
+        if (request === '@deepnote/convert') {
+            return {
+                convertIpynbFilesToDeepnoteFile: async () => {
+                    // Mock implementation - does nothing in tests
+                }
+            };
+        }
         // less files need to be in import statements to be converted to css
         // But we don't want to try to load them in the mock vscode
         if (/\.less$/.test(request)) {

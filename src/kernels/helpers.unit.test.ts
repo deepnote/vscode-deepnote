@@ -651,7 +651,7 @@ suite('Kernel Connection Helpers', () => {
         interface MockKernelOptions {
             status: 'ok' | 'error';
             messages?: Array<{
-                msg_type: 'stream' | 'error' | 'display_data';
+                msg_type: 'stream' | 'error' | 'display_data' | 'execute_result';
                 content: any;
             }>;
             errorContent?: {
@@ -815,6 +815,146 @@ suite('Kernel Connection Helpers', () => {
             assert.equal(result[0].output_type, 'stream');
             assert.equal((result[0] as any).name, 'stdout');
             assert.equal((result[0] as any).text, 'output 1output 2');
+        });
+
+        test('Collects execute_result outputs', async () => {
+            const mockKernel = createMockKernel({
+                status: 'ok',
+                messages: [
+                    {
+                        msg_type: 'execute_result',
+                        content: {
+                            data: {
+                                'text/plain': '42'
+                            },
+                            metadata: {},
+                            execution_count: 1
+                        }
+                    }
+                ]
+            });
+
+            const code = '42';
+            const { executeSilently } = await import('./helpers');
+            const result = await executeSilently(mockKernel as any, code);
+
+            assert.isArray(result);
+            assert.equal(result.length, 1);
+            assert.equal(result[0].output_type, 'execute_result');
+            assert.deepStrictEqual((result[0] as any).data, { 'text/plain': '42' });
+            assert.deepStrictEqual((result[0] as any).metadata, {});
+            assert.equal((result[0] as any).execution_count, 1);
+        });
+
+        test('Stream messages with different names produce separate outputs', async () => {
+            const mockKernel = createMockKernel({
+                status: 'ok',
+                messages: [
+                    {
+                        msg_type: 'stream',
+                        content: {
+                            name: 'stdout',
+                            text: 'standard output'
+                        }
+                    },
+                    {
+                        msg_type: 'stream',
+                        content: {
+                            name: 'stderr',
+                            text: 'error output'
+                        }
+                    },
+                    {
+                        msg_type: 'stream',
+                        content: {
+                            name: 'stdout',
+                            text: ' more stdout'
+                        }
+                    }
+                ]
+            });
+
+            const code = 'print("test")';
+            const { executeSilently } = await import('./helpers');
+            const result = await executeSilently(mockKernel as any, code);
+
+            assert.isArray(result);
+            // Should have 3 outputs: stdout, stderr, stdout (not concatenated because stderr is in between)
+            assert.equal(result.length, 3);
+            assert.equal(result[0].output_type, 'stream');
+            assert.equal((result[0] as any).name, 'stdout');
+            assert.equal((result[0] as any).text, 'standard output');
+            assert.equal(result[1].output_type, 'stream');
+            assert.equal((result[1] as any).name, 'stderr');
+            assert.equal((result[1] as any).text, 'error output');
+            assert.equal(result[2].output_type, 'stream');
+            assert.equal((result[2] as any).name, 'stdout');
+            assert.equal((result[2] as any).text, ' more stdout');
+        });
+
+        test('errorOptions with traceErrors logs errors', async () => {
+            const mockKernel = createMockKernel({
+                status: 'error',
+                errorContent: {
+                    ename: 'ValueError',
+                    evalue: 'invalid value',
+                    traceback: ['Traceback (most recent call last):', '  File "<stdin>", line 1']
+                },
+                messages: [
+                    {
+                        msg_type: 'error',
+                        content: {
+                            ename: 'ValueError',
+                            evalue: 'invalid value',
+                            traceback: ['Traceback (most recent call last):', '  File "<stdin>", line 1']
+                        }
+                    }
+                ]
+            });
+
+            const code = 'raise ValueError("invalid value")';
+            const { executeSilently } = await import('./helpers');
+            const result = await executeSilently(mockKernel as any, code, {
+                traceErrors: true,
+                traceErrorsMessage: 'Custom error message'
+            });
+
+            assert.isArray(result);
+            assert.equal(result.length, 1);
+            assert.equal(result[0].output_type, 'error');
+            assert.equal((result[0] as any).ename, 'ValueError');
+        });
+
+        test('errorOptions without traceErrors still collects errors', async () => {
+            const mockKernel = createMockKernel({
+                status: 'error',
+                errorContent: {
+                    ename: 'RuntimeError',
+                    evalue: 'runtime issue',
+                    traceback: ['Traceback...']
+                },
+                messages: [
+                    {
+                        msg_type: 'error',
+                        content: {
+                            ename: 'RuntimeError',
+                            evalue: 'runtime issue',
+                            traceback: ['Traceback...']
+                        }
+                    }
+                ]
+            });
+
+            const code = 'raise RuntimeError("runtime issue")';
+            const { executeSilently } = await import('./helpers');
+            const result = await executeSilently(mockKernel as any, code, {
+                traceErrors: false
+            });
+
+            assert.isArray(result);
+            assert.equal(result.length, 1);
+            assert.equal(result[0].output_type, 'error');
+            assert.equal((result[0] as any).ename, 'RuntimeError');
         });
     });
 });

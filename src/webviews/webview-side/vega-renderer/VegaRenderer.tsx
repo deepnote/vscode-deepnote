@@ -6,10 +6,10 @@ import { produce } from 'immer';
 
 import { numberFormats } from './number-formats';
 import { detectBaseTheme } from '../react-common/themeDetector';
-import { TopLevelSpec } from 'vega-lite';
+import type { Spec as VegaSpec } from 'vega';
 
 export interface VegaRendererProps {
-    spec: TopLevelSpec;
+    spec: VegaSpec;
     renderer?: 'svg' | 'canvas';
 }
 
@@ -80,6 +80,16 @@ export const VegaRenderer = memo(function VegaRenderer(props: VegaRendererProps)
 
             draft.config.background = backgroundColor;
 
+            if (!draft.config.style) {
+                draft.config.style = {};
+            }
+            if (!draft.config.style.cell) {
+                draft.config.style.cell = {};
+            }
+            draft.config.style.cell = {
+                stroke: backgroundColor
+            };
+
             if (!draft.config.axis) {
                 draft.config.axis = {};
             }
@@ -103,7 +113,7 @@ export const VegaRenderer = memo(function VegaRenderer(props: VegaRendererProps)
             if (!draft.config.text) {
                 draft.config.text = {};
             }
-            draft.config.text.color = foregroundColor;
+            draft.config.text.fill = foregroundColor;
         });
         return structuredClone(patchedSpec); // Immer freezes the spec, which doesn't play well with Vega
     }, [spec, backgroundColor, foregroundColor, isDark]);

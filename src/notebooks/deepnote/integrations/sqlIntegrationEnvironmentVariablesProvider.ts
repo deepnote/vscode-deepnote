@@ -21,26 +21,40 @@ function getSqlEnvVarName(integrationId: string): string {
 
 /**
  * Converts integration configuration to the JSON format expected by the SQL execution code.
+ * The format must match what deepnote_toolkit expects:
+ * {
+ *   "url": "sqlalchemy_connection_url",
+ *   "params": {},
+ *   "param_style": "qmark" | "format" | etc.
+ * }
  */
 function convertIntegrationConfigToJson(config: IntegrationConfig): string {
     switch (config.type) {
-        case IntegrationType.Postgres:
-            return JSON.stringify({
-                type: 'postgres',
-                host: config.host,
-                port: config.port,
-                database: config.database,
-                username: config.username,
-                password: config.password,
-                ssl: config.ssl ?? false
-            });
+        case IntegrationType.Postgres: {
+            // Build PostgreSQL connection URL
+            // Format: postgresql://username:password@host:port/database
+            const encodedUsername = encodeURIComponent(config.username);
+            const encodedPassword = encodeURIComponent(config.password);
+            const url = `postgresql://${encodedUsername}:${encodedPassword}@${config.host}:${config.port}/${config.database}`;
 
-        case IntegrationType.BigQuery:
             return JSON.stringify({
-                type: 'bigquery',
-                project_id: config.projectId,
-                credentials: JSON.parse(config.credentials) // Parse the JSON string to an object
+                url: url,
+                params: config.ssl ? { sslmode: 'require' } : {},
+                param_style: 'format'
             });
+        }
+
+        case IntegrationType.BigQuery: {
+            // BigQuery uses a special URL format
+            return JSON.stringify({
+                url: 'bigquery://?user_supplied_client=true',
+                params: {
+                    project_id: config.projectId,
+                    credentials: JSON.parse(config.credentials)
+                },
+                param_style: 'format'
+            });
+        }
 
         default:
             throw new Error(`Unsupported integration type: ${(config as IntegrationConfig).type}`);

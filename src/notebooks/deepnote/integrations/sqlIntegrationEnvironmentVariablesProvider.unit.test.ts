@@ -107,15 +107,9 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         // Check that the environment variable is set
         assert.property(envVars, 'SQL_MY_POSTGRES_DB');
         const credentialsJson = JSON.parse(envVars['SQL_MY_POSTGRES_DB']!);
-        assert.deepStrictEqual(credentialsJson, {
-            type: 'postgres',
-            host: 'localhost',
-            port: 5432,
-            database: 'mydb',
-            username: 'user',
-            password: 'pass',
-            ssl: true
-        });
+        assert.strictEqual(credentialsJson.url, 'postgresql://user:pass@localhost:5432/mydb');
+        assert.deepStrictEqual(credentialsJson.params, { sslmode: 'require' });
+        assert.strictEqual(credentialsJson.param_style, 'format');
     });
 
     test('Returns environment variable for BigQuery integration', async () => {
@@ -144,11 +138,12 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         // Check that the environment variable is set
         assert.property(envVars, 'SQL_MY_BIGQUERY');
         const credentialsJson = JSON.parse(envVars['SQL_MY_BIGQUERY']!);
-        assert.deepStrictEqual(credentialsJson, {
-            type: 'bigquery',
+        assert.strictEqual(credentialsJson.url, 'bigquery://?user_supplied_client=true');
+        assert.deepStrictEqual(credentialsJson.params, {
             project_id: 'my-project',
             credentials: { type: 'service_account', project_id: 'my-project' }
         });
+        assert.strictEqual(credentialsJson.param_style, 'format');
     });
 
     test('Handles multiple SQL cells with same integration', async () => {

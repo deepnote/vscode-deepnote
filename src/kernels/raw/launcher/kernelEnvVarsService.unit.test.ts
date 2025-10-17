@@ -57,14 +57,6 @@ suite('Kernel Environment Variables Service', () => {
         settings = mock(JupyterSettings);
         sqlIntegrationEnvVars = mock<SqlIntegrationEnvironmentVariablesProvider>();
         when(configService.getSettings(anything())).thenReturn(instance(settings));
-        kernelVariablesService = new KernelEnvironmentVariablesService(
-            instance(interpreterService),
-            instance(envActivation),
-            variablesService,
-            instance(customVariablesService),
-            instance(configService),
-            instance(sqlIntegrationEnvVars)
-        );
         if (process.platform === 'win32') {
             // Win32 will generate upper case all the time
             const entries = Object.entries(process.env);
@@ -76,8 +68,33 @@ suite('Kernel Environment Variables Service', () => {
             processEnv = process.env;
         }
         processPath = Object.keys(processEnv).find((k) => k.toLowerCase() == 'path');
+        kernelVariablesService = buildKernelEnvVarsService();
     });
+
     teardown(() => Object.assign(process.env, originalEnvVars));
+
+    /**
+     * Helper factory function to build KernelEnvironmentVariablesService with optional overrides.
+     * @param overrides Optional overrides for the service dependencies
+     * @returns A new instance of KernelEnvironmentVariablesService
+     */
+    function buildKernelEnvVarsService(overrides?: {
+        sqlIntegrationEnvVars?: SqlIntegrationEnvironmentVariablesProvider | undefined;
+    }): KernelEnvironmentVariablesService {
+        const sqlProvider =
+            overrides && 'sqlIntegrationEnvVars' in overrides
+                ? overrides.sqlIntegrationEnvVars
+                : instance(sqlIntegrationEnvVars);
+
+        return new KernelEnvironmentVariablesService(
+            instance(interpreterService),
+            instance(envActivation),
+            variablesService,
+            instance(customVariablesService),
+            instance(configService),
+            sqlProvider
+        );
+    }
 
     test('Python Interpreter path trumps process', async () => {
         when(envActivation.getActivatedEnvironmentVariables(anything(), anything(), anything())).thenResolve({
@@ -381,14 +398,7 @@ suite('Kernel Environment Variables Service', () => {
             ).thenResolve();
 
             // Create service without SQL integration provider
-            const serviceWithoutSql = new KernelEnvironmentVariablesService(
-                instance(interpreterService),
-                instance(envActivation),
-                variablesService,
-                instance(customVariablesService),
-                instance(configService),
-                undefined
-            );
+            const serviceWithoutSql = buildKernelEnvVarsService({ sqlIntegrationEnvVars: undefined });
 
             const vars = await serviceWithoutSql.getEnvironmentVariables(resource, interpreter, kernelSpec);
 

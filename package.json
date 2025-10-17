@@ -2126,7 +2126,7 @@
         "lint-fix": "eslint --fix --ext .ts,.js src build pythonExtensionApi gulpfile.js",
         "lint": "eslint --ext .ts,.js src",
         "openInBrowser": "vscode-test-web --extensionDevelopmentPath=. ./src/test/datascience",
-        "package": "gulp clean && npm run build && vsce package -o ms-toolsai-jupyter-insiders.vsix",
+        "package": "gulp clean && npm run build && vsce package -o vscode-deepnote-insiders.vsix",
         "postdownload-api": "npx vscode-dts main",
         "postinstall": "npm run download-api && node ./build/ci/postInstall.js",
         "prepare": "husky",

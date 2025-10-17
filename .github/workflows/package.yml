@@ -72,9 +72,9 @@ jobs:
 
       - name: Rename VSIX file
         run: |
-          # The package script creates ms-toolsai-jupyter-insiders.vsix
+          # The package script creates vscode-deepnote-insiders.vsix
           # Rename it to include version and branch
-          mv ms-toolsai-jupyter-insiders.vsix "vscode-deepnote-${{ steps.package-version.outputs.version }}-${{ steps.branch-name.outputs.branch }}.vsix"
+          mv vscode-deepnote-insiders.vsix "vscode-deepnote-${{ steps.package-version.outputs.version }}-${{ steps.branch-name.outputs.branch }}.vsix"
           ls -lh *.vsix
 
       - name: Upload VSIX artifact

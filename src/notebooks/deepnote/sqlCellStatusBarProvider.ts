@@ -6,6 +6,7 @@ import {
     NotebookCellStatusBarItemProvider,
     NotebookDocument,
     ProviderResult,
+    l10n,
     notebooks
 } from 'vscode';
 import { inject, injectable } from 'inversify';
@@ -99,9 +100,9 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         return {
             text: `$(database) ${displayName}`,
             alignment: 1, // NotebookCellStatusBarAlignment.Left
-            tooltip: `SQL Integration: ${displayName}\nClick to configure`,
+            tooltip: l10n.t('SQL Integration: {0}\nClick to configure', displayName),
             command: {
-                title: 'Configure Integration',
+                title: l10n.t('Configure Integration'),
                 command: Commands.ManageIntegrations,
                 arguments: [integrationId]
             }

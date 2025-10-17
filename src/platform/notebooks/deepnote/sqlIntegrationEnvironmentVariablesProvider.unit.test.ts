@@ -1,6 +1,6 @@
 import { assert } from 'chai';
 import { instance, mock, when } from 'ts-mockito';
-import { EventEmitter, NotebookCell, NotebookCellKind, NotebookDocument, Uri } from 'vscode';
+import { CancellationTokenSource, EventEmitter, NotebookCell, NotebookCellKind, NotebookDocument, Uri } from 'vscode';
 
 import { IDisposableRegistry } from '../../common/types';
 import { IntegrationStorage } from './integrationStorage';
@@ -348,6 +348,23 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         assert.property(envVars, 'SQL_MY_DB_2024_');
         const credentialsJson = JSON.parse(envVars['SQL_MY_DB_2024_']!);
         assert.strictEqual(credentialsJson.url, 'postgresql://user:pass@localhost:5432/testdb');
+    });
+
+    test('Honors CancellationToken (returns empty when cancelled early)', async () => {
+        const uri = Uri.file('/test/notebook.deepnote');
+        const integrationId = 'cancel-me';
+        const notebook = createMockNotebook(uri, [
+            createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT 1', { sql_integration_id: integrationId })
+        ]);
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+        // Return a slow promise to ensure cancellation path is hit
+        when(integrationStorage.getIntegrationConfig(integrationId)).thenCall(
+            () => new Promise((resolve) => setTimeout(() => resolve(undefined), 50))
+        );
+        const cts = new CancellationTokenSource();
+        cts.cancel();
+        const envVars = await provider.getEnvironmentVariables(uri, cts.token);
+        assert.deepStrictEqual(envVars, {});
     });
 });
 

@@ -44,8 +44,12 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
     public provideCellStatusBarItems(
         cell: NotebookCell,
-        _token: CancellationToken
+        token: CancellationToken
     ): ProviderResult<NotebookCellStatusBarItem | NotebookCellStatusBarItem[]> {
+        if (token?.isCancellationRequested) {
+            return undefined;
+        }
+
         // Only show status bar for SQL cells
         if (cell.document.languageId !== 'sql') {
             return undefined;

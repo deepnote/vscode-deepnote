@@ -3,11 +3,17 @@ import { NotebookCellData, NotebookCellKind, NotebookCellOutput, NotebookCellOut
 import type { DeepnoteBlock, DeepnoteOutput } from './deepnoteTypes';
 import { generateBlockId, generateSortingKey } from './dataConversionUtils';
 import { ConverterRegistry } from './converters/converterRegistry';
+import { BlockConverter } from './converters/blockConverter';
 import { CodeBlockConverter } from './converters/codeBlockConverter';
 import { addPocketToCellMetadata, createBlockFromPocket } from './pocket';
 import { MarkdownBlockConverter } from './converters/markdownBlockConverter';
+import { VisualizationBlockConverter } from './converters/visualizationBlockConverter';
+import { compile as convertVegaLiteSpecToVega } from 'vega-lite';
+import { produce } from 'immer';
 import { SqlBlockConverter } from './converters/sqlBlockConverter';
 import { TextBlockConverter } from './converters/textBlockConverter';
+import type { Field } from 'vega-lite/build/src/channeldef';
+import type { LayerSpec, TopLevel } from 'vega-lite/build/src/spec';
 
 /**
  * Utility class for converting between Deepnote block structures and VS Code notebook cells.
@@ -21,6 +27,16 @@ export class DeepnoteDataConverter {
         this.registry.register(new MarkdownBlockConverter());
         this.registry.register(new SqlBlockConverter());
         this.registry.register(new TextBlockConverter());
+        this.registry.register(new VisualizationBlockConverter());
+    }
+
+    /**
+     * Finds a converter for the given block type.
+     * @param blockType The type of block to find a converter for
+     * @returns The converter if found, undefined otherwise
+     */
+    public findConverter(blockType: string): BlockConverter | undefined {
+        return this.registry.findConverter(blockType);
     }
 
     /**
@@ -67,6 +83,39 @@ export class DeepnoteDataConverter {
         });
     }
 
+    convertCellToBlock(cell: NotebookCellData, index: number): DeepnoteBlock {
+        const block = createBlockFromPocket(cell, index);
+
+        const converter = this.registry.findConverter(block.type);
+
+        if (!converter) {
+            return this.createFallbackBlock(cell, index);
+        }
+
+        converter.applyChangesToBlock(block, cell);
+
+        // Convert VS Code outputs to Deepnote format
+        // Outputs are managed by VS Code natively, not stored in the pocket
+        // Preserve outputs when they exist (including newly produced outputs)
+        // Only set if not already set to avoid overwriting converter-managed outputs
+        const hadOutputs = cell.metadata?.__hadOutputs;
+        if (!block.outputs) {
+            // Set outputs if:
+            // 1. The cell has non-empty outputs, OR
+            // 2. The block originally had outputs (even if empty)
+            if ((cell.outputs && cell.outputs.length > 0) || hadOutputs) {
+                block.outputs = cell.outputs ? this.transformOutputsForDeepnote(cell.outputs) : [];
+            }
+        }
+
+        // Clean up internal tracking flags from metadata
+        if (block.metadata && '__hadOutputs' in block.metadata) {
+            delete block.metadata.__hadOutputs;
+        }
+
+        return block;
+    }
+
     /**
      * Converts VS Code notebook cells back to Deepnote blocks.
      * Generates missing IDs and sorting keys as needed.
@@ -74,38 +123,7 @@ export class DeepnoteDataConverter {
      * @returns Array of Deepnote blocks
      */
     convertCellsToBlocks(cells: NotebookCellData[]): DeepnoteBlock[] {
-        return cells.map((cell, index) => {
-            const block = createBlockFromPocket(cell, index);
-
-            const converter = this.registry.findConverter(block.type);
-
-            if (!converter) {
-                return this.createFallbackBlock(cell, index);
-            }
-
-            converter.applyChangesToBlock(block, cell);
-
-            // Convert VS Code outputs to Deepnote format
-            // Outputs are managed by VS Code natively, not stored in the pocket
-            // Preserve outputs when they exist (including newly produced outputs)
-            // Only set if not already set to avoid overwriting converter-managed outputs
-            const hadOutputs = cell.metadata?.__hadOutputs;
-            if (!block.outputs) {
-                // Set outputs if:
-                // 1. The cell has non-empty outputs, OR
-                // 2. The block originally had outputs (even if empty)
-                if ((cell.outputs && cell.outputs.length > 0) || hadOutputs) {
-                    block.outputs = cell.outputs ? this.transformOutputsForDeepnote(cell.outputs) : [];
-                }
-            }
-
-            // Clean up internal tracking flags from metadata
-            if (block.metadata && '__hadOutputs' in block.metadata) {
-                delete block.metadata.__hadOutputs;
-            }
-
-            return block;
-        });
+        return cells.map((cell, index) => this.convertCellToBlock(cell, index));
     }
 
     private base64ToUint8Array(base64: string): Uint8Array {
@@ -200,6 +218,8 @@ export class DeepnoteDataConverter {
                     data['application/vnd.deepnote.dataframe.v3+json'] = JSON.parse(
                         new TextDecoder().decode(item.data)
                     );
+                } else if (item.mime === 'application/vnd.vega.v5+json') {
+                    data['application/vnd.vega.v5+json'] = JSON.parse(new TextDecoder().decode(item.data));
                 }
             }
 
@@ -274,6 +294,35 @@ export class DeepnoteDataConverter {
                                     'application/vnd.deepnote.dataframe.v3+json'
                                 )
                             );
+                        }
+
+                        if (data['application/vnd.vega.v5+json']) {
+                            items.push(
+                                NotebookCellOutputItem.json(
+                                    data['application/vnd.vega.v5+json'],
+                                    'application/vnd.vega.v5+json'
+                                )
+                            );
+                        }
+
+                        if (data['application/vnd.vegalite.v5+json']) {
+                            const patchedVegaLiteSpec = produce(
+                                data['application/vnd.vegalite.v5+json'] as TopLevel<LayerSpec<Field>>,
+                                (draft) => {
+                                    draft.height = 'container';
+                                    draft.width = 'container';
+
+                                    draft.autosize = {
+                                        type: 'fit'
+                                    };
+                                    if (!draft.config) {
+                                        draft.config = {};
+                                    }
+                                    draft.config.customFormatTypes = true;
+                                }
+                            );
+                            const vegaSpec = convertVegaLiteSpecToVega(patchedVegaLiteSpec).spec;
+                            items.push(NotebookCellOutputItem.json(vegaSpec, 'application/vnd.vega.v5+json'));
                         }
 
                         if (data['application/json']) {

@@ -1184,6 +1184,8 @@ export class CellExecutionMessageHandler implements IDisposable {
         );
 
         const data = msg.content.data;
+        // deepnote-toolkit returns the text/plain mime type for big number outputs
+        // and for the custom renderer to be used, we need to return the application/vnd.deepnote.chart.big-number+json mime type
         if (outputToBeUpdated.cell.metadata['__deepnotePocket']?.['type'] === 'big-number') {
             data[CHART_BIG_NUMBER_MIME_TYPE] = data['text/plain'];
             delete data['text/plain'];

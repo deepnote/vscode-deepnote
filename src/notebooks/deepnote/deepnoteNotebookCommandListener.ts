@@ -42,18 +42,20 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         // Determine the index where to insert the new cell (below current selection or at the end)
         const insertIndex = selection ? selection.end : document.cellCount;
 
-        const integrationName = 'some-integration-name'; // TODO: fetch this from integrations
-
         chainWithPendingUpdates(document, (edit) => {
-            const newCell = new NotebookCellData(
-                NotebookCellKind.Code,
-                `%%sql ${integrationName}\n\nSELECT `,
-                'python'
-            );
+            // Create a SQL cell with SQL language for syntax highlighting
+            // This matches the SqlBlockConverter representation
+            const newCell = new NotebookCellData(NotebookCellKind.Code, '', 'sql');
+            newCell.metadata = {
+                __deepnotePocket: {
+                    type: 'sql'
+                }
+            };
             const nbEdit = NotebookEdit.insertCells(insertIndex, [newCell]);
             edit.set(document.uri, [nbEdit]);
+        }).then(() => {
             editor.selection = new NotebookRange(insertIndex, insertIndex + 1);
-        }).then(noop, noop);
+        }, noop);
     }
 
     private addBigNumberChartBlock(): void {
@@ -73,7 +75,6 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         const metadata = {
             __deepnotePocket: {
                 type: 'big-number'
-                // sortingKey: '001', // TODO: generate sortingKey
             }
         };
 
@@ -86,7 +87,8 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             newCell.metadata = metadata;
             const nbEdit = NotebookEdit.insertCells(insertIndex, [newCell]);
             edit.set(document.uri, [nbEdit]);
+        }).then(() => {
             editor.selection = new NotebookRange(insertIndex, insertIndex + 1);
-        }).then(noop, noop);
+        }, noop);
     }
 }

@@ -111,13 +111,13 @@
             },
             {
                 "command": "deepnote.addSqlBlock",
-                "title": "Add SQL block",
+                "title": "%deepnote.commands.addSqlBlock.title%",
                 "category": "Deepnote",
-                "icon": "$(add)"
+                "icon": "$(database)"
             },
             {
                 "command": "deepnote.addBigNumberChartBlock",
-                "title": "Add Big Number chart block",
+                "title": "%deepnote.commands.addBigNumberChartBlock.title%",
                 "category": "Deepnote",
                 "icon": "$(graph)"
             },
@@ -746,6 +746,11 @@
                 {
                     "command": "deepnote.manageIntegrations",
                     "group": "navigation@0",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addSqlBlock",
+                    "group": "navigation@1",
                     "when": "notebookType == 'deepnote'"
                 },
                 {

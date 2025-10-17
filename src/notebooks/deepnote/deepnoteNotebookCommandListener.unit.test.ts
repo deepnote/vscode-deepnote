@@ -20,12 +20,12 @@ suite('DeepnoteNotebookCommandListener', () => {
 
     suite('activate', () => {
         test('should register commands when activated', () => {
-            const initialLength = disposables.length;
+            assert.isEmpty(disposables, 'Disposables should be empty');
 
             commandListener.activate();
 
             // Verify that at least one command was registered (AddSqlBlock)
-            assert.isAtLeast(disposables.length, initialLength + 1, 'Should register at least one command');
+            assert.isAtLeast(disposables.length, 1, 'Should register at least one command');
         });
 
         test('should handle activation without errors', () => {
@@ -49,13 +49,6 @@ suite('DeepnoteNotebookCommandListener', () => {
     });
 
     suite('command registration', () => {
-        test('should register AddSqlBlock command', () => {
-            commandListener.activate();
-
-            // Verify at least one disposable was registered
-            assert.isAtLeast(disposables.length, 1, 'Should register command disposables');
-        });
-
         test('should not register duplicate commands on multiple activations', () => {
             commandListener.activate();
             const firstActivationCount = disposables.length;

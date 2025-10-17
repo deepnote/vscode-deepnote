@@ -185,4 +185,6 @@ export interface ICommandNameArgumentTypeMapping {
     [DSCommands.InstallPythonExtensionViaKernelPicker]: [];
     [DSCommands.InstallPythonViaKernelPicker]: [];
     [DSCommands.ContinueEditSessionInCodespace]: [];
+    [DSCommands.AddSqlBlock]: [];
+    [DSCommands.AddBigNumberChartBlock]: [];
 }

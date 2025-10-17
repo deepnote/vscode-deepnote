@@ -2195,6 +2195,7 @@
         "react": "^16.5.2",
         "react-data-grid": "^6.0.2-0",
         "react-dom": "^16.5.2",
+        "react-error-boundary": "^6.0.0",
         "react-redux": "^7.1.1",
         "react-svg-pan-zoom": "3.9.0",
         "react-svgmt": "1.1.11",

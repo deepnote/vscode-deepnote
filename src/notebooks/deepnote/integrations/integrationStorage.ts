@@ -5,6 +5,7 @@ import { IEncryptedStorage } from '../../../platform/common/application/types';
 import { IAsyncDisposableRegistry } from '../../../platform/common/types';
 import { logger } from '../../../platform/logging';
 import { IntegrationConfig, IntegrationType } from './integrationTypes';
+import { IIntegrationStorage } from './types';
 
 const INTEGRATION_SERVICE_NAME = 'deepnote-integrations';
 
@@ -14,7 +15,7 @@ const INTEGRATION_SERVICE_NAME = 'deepnote-integrations';
  * Storage is scoped to the user's machine and shared across all deepnote projects.
  */
 @injectable()
-export class IntegrationStorage {
+export class IntegrationStorage implements IIntegrationStorage {
     private readonly cache: Map<string, IntegrationConfig> = new Map();
 
     private cacheLoaded = false;

@@ -5,7 +5,7 @@ import { inject, injectable } from 'inversify';
 import { IStartupCodeProvider, IStartupCodeProviders, StartupCodePriority, IKernel } from '../../../kernels/types';
 import { JupyterNotebookView } from '../../../platform/common/constants';
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
-import { SqlIntegrationEnvironmentVariablesProvider } from '../../../platform/notebooks/deepnote/sqlIntegrationEnvironmentVariablesProvider';
+import { ISqlIntegrationEnvVarsProvider } from '../../../platform/notebooks/deepnote/types';
 import { logger } from '../../../platform/logging';
 import { isPythonKernelConnection } from '../../../kernels/helpers';
 import { DEEPNOTE_NOTEBOOK_TYPE } from '../../../kernels/deepnote/types';
@@ -22,8 +22,8 @@ export class SqlIntegrationStartupCodeProvider implements IStartupCodeProvider, 
 
     constructor(
         @inject(IStartupCodeProviders) private readonly registry: IStartupCodeProviders,
-        @inject(SqlIntegrationEnvironmentVariablesProvider)
-        private readonly envVarsProvider: SqlIntegrationEnvironmentVariablesProvider
+        @inject(ISqlIntegrationEnvVarsProvider)
+        private readonly envVarsProvider: ISqlIntegrationEnvVarsProvider
     ) {}
 
     activate(): void {

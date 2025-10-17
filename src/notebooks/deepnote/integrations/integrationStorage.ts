@@ -129,6 +129,9 @@ export class IntegrationStorage implements IIntegrationStorage {
 
         // Clear cache
         this.cache.clear();
+
+        // Notify listeners
+        this._onDidChangeIntegrations.fire();
     }
 
     /**

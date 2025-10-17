@@ -33,7 +33,6 @@ function useThemeColors(): ThemeColors {
 
     useEffect(() => {
         const observer = new MutationObserver(() => {
-            console.log('Observed body change');
             setThemeColors(getThemeColors());
         });
 

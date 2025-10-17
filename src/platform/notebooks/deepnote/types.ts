@@ -1,5 +1,6 @@
-import { Event } from 'vscode';
-import { IDisposable } from '../../common/types';
+import { CancellationToken, Event } from 'vscode';
+import { IDisposable, Resource } from '../../common/types';
+import { EnvironmentVariables } from '../../common/variables/types';
 import { IntegrationConfig } from './integrationTypes';
 
 export const IIntegrationStorage = Symbol('IIntegrationStorage');
@@ -23,3 +24,15 @@ export interface IIntegrationStorage extends IDisposable {
     clear(): Promise<void>;
 }
 
+export const ISqlIntegrationEnvVarsProvider = Symbol('ISqlIntegrationEnvVarsProvider');
+export interface ISqlIntegrationEnvVarsProvider {
+    /**
+     * Event fired when environment variables change
+     */
+    readonly onDidChangeEnvironmentVariables: Event<Resource>;
+
+    /**
+     * Get environment variables for SQL integrations used in the given notebook.
+     */
+    getEnvironmentVariables(resource: Resource, token?: CancellationToken): Promise<EnvironmentVariables>;
+}

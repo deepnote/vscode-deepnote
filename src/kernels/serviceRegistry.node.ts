@@ -49,6 +49,7 @@ import { ClearJupyterServersCommand } from './jupyter/clearJupyterServersCommand
 import { KernelChatStartupCodeProvider } from './chat/kernelStartupCodeProvider';
 import { KernelWorkingDirectory } from './raw/session/kernelWorkingDirectory.node';
 import { SqlIntegrationEnvironmentVariablesProvider } from '../platform/notebooks/deepnote/sqlIntegrationEnvironmentVariablesProvider';
+import { ISqlIntegrationEnvVarsProvider } from '../platform/notebooks/deepnote/types';
 
 export function registerTypes(serviceManager: IServiceManager, isDevMode: boolean) {
     serviceManager.addSingleton<IExtensionSyncActivationService>(IExtensionSyncActivationService, Activation);
@@ -63,8 +64,8 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     );
     serviceManager.addSingleton<IRawKernelSessionFactory>(IRawKernelSessionFactory, RawKernelSessionFactory);
     serviceManager.addSingleton<IKernelLauncher>(IKernelLauncher, KernelLauncher);
-    serviceManager.addSingleton<SqlIntegrationEnvironmentVariablesProvider>(
-        SqlIntegrationEnvironmentVariablesProvider,
+    serviceManager.addSingleton<ISqlIntegrationEnvVarsProvider>(
+        ISqlIntegrationEnvVarsProvider,
         SqlIntegrationEnvironmentVariablesProvider
     );
     serviceManager.addSingleton<KernelEnvironmentVariablesService>(

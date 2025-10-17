@@ -1,0 +1,187 @@
+import { inject, injectable } from 'inversify';
+import { CancellationToken, Event, EventEmitter, NotebookDocument, workspace } from 'vscode';
+
+import { IDisposableRegistry, Resource } from '../../../platform/common/types';
+import { EnvironmentVariables } from '../../../platform/common/variables/types';
+import { logger } from '../../../platform/logging';
+import { IIntegrationStorage } from './types';
+import { DATAFRAME_SQL_INTEGRATION_ID, IntegrationConfig, IntegrationType } from './integrationTypes';
+
+/**
+ * Converts an integration ID to the environment variable name format expected by SQL blocks.
+ * Example: 'my-postgres-db' -> 'SQL_MY_POSTGRES_DB'
+ */
+function convertToEnvironmentVariableName(str: string): string {
+    return (/^\d/.test(str) ? `_${str}` : str).toUpperCase().replace(/[^\w]/g, '_');
+}
+
+function getSqlEnvVarName(integrationId: string): string {
+    return `SQL_${integrationId}`;
+}
+
+/**
+ * Converts integration configuration to the JSON format expected by the SQL execution code.
+ */
+function convertIntegrationConfigToJson(config: IntegrationConfig): string {
+    switch (config.type) {
+        case IntegrationType.Postgres:
+            return JSON.stringify({
+                type: 'postgres',
+                host: config.host,
+                port: config.port,
+                database: config.database,
+                username: config.username,
+                password: config.password,
+                ssl: config.ssl ?? false
+            });
+
+        case IntegrationType.BigQuery:
+            return JSON.stringify({
+                type: 'bigquery',
+                project_id: config.projectId,
+                credentials: JSON.parse(config.credentials) // Parse the JSON string to an object
+            });
+
+        default:
+            throw new Error(`Unsupported integration type: ${(config as IntegrationConfig).type}`);
+    }
+}
+
+/**
+ * Provides environment variables for SQL integrations.
+ * This service scans notebooks for SQL blocks and injects the necessary credentials
+ * as environment variables so they can be used during SQL block execution.
+ */
+@injectable()
+export class SqlIntegrationEnvironmentVariablesProvider {
+    private readonly _onDidChangeEnvironmentVariables = new EventEmitter<Resource>();
+
+    public readonly onDidChangeEnvironmentVariables: Event<Resource> = this._onDidChangeEnvironmentVariables.event;
+
+    constructor(
+        @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
+        @inject(IDisposableRegistry) disposables: IDisposableRegistry
+    ) {
+        logger.info('SqlIntegrationEnvironmentVariablesProvider: Constructor called - provider is being instantiated');
+        // Listen for changes to integration storage and fire change event
+        disposables.push(
+            this.integrationStorage.onDidChangeIntegrations(() => {
+                // Fire change event for all notebooks
+                this._onDidChangeEnvironmentVariables.fire(undefined);
+            })
+        );
+    }
+
+    /**
+     * Get environment variables for SQL integrations used in the given notebook.
+     */
+    public async getEnvironmentVariables(
+        resource: Resource,
+        _token?: CancellationToken
+    ): Promise<EnvironmentVariables> {
+        const envVars: EnvironmentVariables = {};
+
+        if (!resource) {
+            return envVars;
+        }
+
+        logger.info(`SqlIntegrationEnvironmentVariablesProvider: Getting env vars for resource ${resource.toString()}`);
+        logger.info(
+            `SqlIntegrationEnvironmentVariablesProvider: Available notebooks: ${workspace.notebookDocuments
+                .map((nb) => nb.uri.toString())
+                .join(', ')}`
+        );
+
+        // Find the notebook document for this resource
+        const notebook = workspace.notebookDocuments.find((nb) => nb.uri.toString() === resource.toString());
+        if (!notebook) {
+            logger.warn(`SqlIntegrationEnvironmentVariablesProvider: No notebook found for ${resource.toString()}`);
+            return envVars;
+        }
+
+        // Scan all cells for SQL integration IDs
+        const integrationIds = this.scanNotebookForIntegrations(notebook);
+        if (integrationIds.size === 0) {
+            logger.info(
+                `SqlIntegrationEnvironmentVariablesProvider: No SQL integrations found in ${resource.toString()}`
+            );
+            return envVars;
+        }
+
+        logger.info(
+            `SqlIntegrationEnvironmentVariablesProvider: Found ${integrationIds.size} SQL integrations: ${Array.from(
+                integrationIds
+            ).join(', ')}`
+        );
+
+        // Get credentials for each integration and add to environment variables
+        for (const integrationId of integrationIds) {
+            try {
+                const config = await this.integrationStorage.get(integrationId);
+                if (!config) {
+                    logger.warn(
+                        `SqlIntegrationEnvironmentVariablesProvider: No configuration found for integration ${integrationId}`
+                    );
+                    continue;
+                }
+
+                // Convert integration config to JSON and add as environment variable
+                const envVarName = convertToEnvironmentVariableName(getSqlEnvVarName(integrationId));
+                const credentialsJson = convertIntegrationConfigToJson(config);
+
+                envVars[envVarName] = credentialsJson;
+                logger.info(
+                    `SqlIntegrationEnvironmentVariablesProvider: Added env var ${envVarName} for integration ${integrationId}`
+                );
+                logger.info(
+                    `SqlIntegrationEnvironmentVariablesProvider: Env var value: ${credentialsJson.substring(0, 100)}...`
+                );
+            } catch (error) {
+                logger.error(
+                    `SqlIntegrationEnvironmentVariablesProvider: Failed to get credentials for integration ${integrationId}`,
+                    error
+                );
+            }
+        }
+
+        logger.info(
+            `SqlIntegrationEnvironmentVariablesProvider: Returning ${
+                Object.keys(envVars).length
+            } env vars: ${Object.keys(envVars).join(', ')}`
+        );
+
+        return envVars;
+    }
+
+    /**
+     * Scan a notebook for SQL integration IDs.
+     */
+    private scanNotebookForIntegrations(notebook: NotebookDocument): Set<string> {
+        const integrationIds = new Set<string>();
+
+        for (const cell of notebook.getCells()) {
+            // Only check SQL cells
+            if (cell.document.languageId !== 'sql') {
+                continue;
+            }
+
+            const metadata = cell.metadata;
+            if (metadata && typeof metadata === 'object') {
+                const integrationId = (metadata as Record<string, unknown>).sql_integration_id;
+                if (typeof integrationId === 'string') {
+                    // Skip the internal DuckDB integration
+                    if (integrationId === DATAFRAME_SQL_INTEGRATION_ID) {
+                        continue;
+                    }
+
+                    integrationIds.add(integrationId);
+                    logger.trace(
+                        `SqlIntegrationEnvironmentVariablesProvider: Found integration ${integrationId} in cell ${cell.index}`
+                    );
+                }
+            }
+        }
+
+        return integrationIds;
+    }
+}

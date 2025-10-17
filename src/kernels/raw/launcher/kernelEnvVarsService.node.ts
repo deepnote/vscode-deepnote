@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { inject, injectable } from 'inversify';
+import { inject, injectable, optional } from 'inversify';
 import { logger } from '../../../platform/logging';
 import { getDisplayPath } from '../../../platform/common/platform/fs-paths';
 import { IConfigurationService, Resource, type ReadWrite } from '../../../platform/common/types';
@@ -18,6 +18,7 @@ import { IJupyterKernelSpec } from '../../types';
 import { CancellationToken, Uri } from 'vscode';
 import { PYTHON_LANGUAGE } from '../../../platform/common/constants';
 import { trackKernelResourceInformation } from '../../telemetry/helper';
+import { SqlIntegrationEnvironmentVariablesProvider } from '../../../notebooks/deepnote/integrations/sqlIntegrationEnvironmentVariablesProvider';
 
 /**
  * Class used to fetch environment variables for a kernel.
@@ -30,8 +31,17 @@ export class KernelEnvironmentVariablesService {
         @inject(IEnvironmentVariablesService) private readonly envVarsService: IEnvironmentVariablesService,
         @inject(ICustomEnvironmentVariablesProvider)
         private readonly customEnvVars: ICustomEnvironmentVariablesProvider,
-        @inject(IConfigurationService) private readonly configService: IConfigurationService
-    ) {}
+        @inject(IConfigurationService) private readonly configService: IConfigurationService,
+        @inject(SqlIntegrationEnvironmentVariablesProvider)
+        @optional()
+        private readonly sqlIntegrationEnvVars?: SqlIntegrationEnvironmentVariablesProvider
+    ) {
+        logger.info(
+            `KernelEnvironmentVariablesService: Constructor called, sqlIntegrationEnvVars is ${
+                sqlIntegrationEnvVars ? 'AVAILABLE' : 'UNDEFINED'
+            }`
+        );
+    }
     /**
      * Generates the environment variables for the kernel.
      *
@@ -51,6 +61,11 @@ export class KernelEnvironmentVariablesService {
         kernelSpec: IJupyterKernelSpec,
         token?: CancellationToken
     ) {
+        logger.info(
+            `KernelEnvVarsService.getEnvironmentVariables: Called for resource ${
+                resource?.toString() || 'undefined'
+            }, sqlIntegrationEnvVars is ${this.sqlIntegrationEnvVars ? 'AVAILABLE' : 'UNDEFINED'}`
+        );
         let kernelEnv =
             kernelSpec.env && Object.keys(kernelSpec.env).length > 0
                 ? (Object.assign({}, kernelSpec.env) as ReadWrite<NodeJS.ProcessEnv>)
@@ -68,7 +83,7 @@ export class KernelEnvironmentVariablesService {
         if (token?.isCancellationRequested) {
             return;
         }
-        let [customEnvVars, interpreterEnv] = await Promise.all([
+        let [customEnvVars, interpreterEnv, sqlIntegrationEnvVars] = await Promise.all([
             this.customEnvVars
                 .getCustomEnvironmentVariables(resource, isPythonKernel ? 'RunPythonCode' : 'RunNonPythonCode', token)
                 .catch(noop),
@@ -80,6 +95,24 @@ export class KernelEnvironmentVariablesService {
                               'Failed to get env variables for interpreter, hence no variables for Kernel',
                               ex
                           );
+                          return undefined;
+                      })
+                : undefined,
+            this.sqlIntegrationEnvVars
+                ? this.sqlIntegrationEnvVars
+                      .getEnvironmentVariables(resource, token)
+                      .then((vars) => {
+                          if (vars && Object.keys(vars).length > 0) {
+                              logger.info(
+                                  `KernelEnvVarsService: Got ${
+                                      Object.keys(vars).length
+                                  } SQL integration env vars: ${Object.keys(vars).join(', ')}`
+                              );
+                          }
+                          return vars;
+                      })
+                      .catch<undefined>((ex) => {
+                          logger.error('Failed to get SQL integration env variables for Kernel', ex);
                           return undefined;
                       })
                 : undefined
@@ -123,6 +156,16 @@ export class KernelEnvironmentVariablesService {
 
             Object.assign(mergedVars, interpreterEnv, kernelEnv); // kernels vars win over interpreter.
 
+            // Merge SQL integration environment variables
+            if (sqlIntegrationEnvVars) {
+                logger.info(
+                    `KernelEnvVarsService: Merging ${
+                        Object.keys(sqlIntegrationEnvVars).length
+                    } SQL integration env vars into kernel env`
+                );
+                Object.assign(mergedVars, sqlIntegrationEnvVars);
+            }
+
             // If user asks us to, set PYTHONNOUSERSITE
             // For more details see here https://github.com/microsoft/vscode-jupyter/issues/8553#issuecomment-997144591
             // https://docs.python.org/3/library/site.html#site.ENABLE_USER_SITE
@@ -138,6 +181,16 @@ export class KernelEnvironmentVariablesService {
             // We can support this, however since this has not been requested, lets not do it.'
             this.envVarsService.mergeVariables(kernelEnv, mergedVars); // kernels vars win over interpreter.
             this.envVarsService.mergeVariables(customEnvVars, mergedVars); // custom vars win over all.
+
+            // Merge SQL integration environment variables
+            if (sqlIntegrationEnvVars) {
+                logger.info(
+                    `KernelEnvVarsService: Merging ${
+                        Object.keys(sqlIntegrationEnvVars).length
+                    } SQL integration env vars into kernel env (non-python)`
+                );
+                this.envVarsService.mergeVariables(sqlIntegrationEnvVars, mergedVars);
+            }
         }
 
         // env variables in kernelSpecs can contain variables that need to be substituted

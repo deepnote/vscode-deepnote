@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { inject, injectable, named } from 'inversify';
+import { inject, injectable, named, optional } from 'inversify';
 import { CancellationToken, Uri } from 'vscode';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { IDeepnoteServerStarter, IDeepnoteToolkitInstaller, DeepnoteServerInfo, DEEPNOTE_DEFAULT_PORT } from './types';
@@ -17,6 +17,7 @@ import * as fs from 'fs-extra';
 import * as os from 'os';
 import * as path from '../../platform/vscode-path/path';
 import { generateUuid } from '../../platform/common/uuid';
+import { SqlIntegrationEnvironmentVariablesProvider } from '../../notebooks/deepnote/integrations/sqlIntegrationEnvironmentVariablesProvider';
 
 /**
  * Lock file data structure for tracking server ownership
@@ -47,7 +48,10 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         @inject(IDeepnoteToolkitInstaller) private readonly toolkitInstaller: IDeepnoteToolkitInstaller,
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel,
         @inject(IHttpClient) private readonly httpClient: IHttpClient,
-        @inject(IAsyncDisposableRegistry) asyncRegistry: IAsyncDisposableRegistry
+        @inject(IAsyncDisposableRegistry) asyncRegistry: IAsyncDisposableRegistry,
+        @inject(SqlIntegrationEnvironmentVariablesProvider)
+        @optional()
+        private readonly sqlIntegrationEnvVars?: SqlIntegrationEnvironmentVariablesProvider
     ) {
         // Register for disposal when the extension deactivates
         asyncRegistry.push(this);
@@ -149,9 +153,37 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
         // Detached mode ensures no requests are made to the backend (directly, or via proxy)
         // as there is no backend running in the extension, therefore:
-        // 1. integration environment variables won't work / be injected
+        // 1. integration environment variables are injected here instead
         // 2. post start hooks won't work / are not executed
         env.DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE = 'true';
+
+        // Inject SQL integration environment variables
+        if (this.sqlIntegrationEnvVars) {
+            logger.info(`DeepnoteServerStarter: Injecting SQL integration env vars for ${deepnoteFileUri.toString()}`);
+            try {
+                const sqlEnvVars = await this.sqlIntegrationEnvVars.getEnvironmentVariables(deepnoteFileUri, token);
+                if (sqlEnvVars && Object.keys(sqlEnvVars).length > 0) {
+                    logger.info(
+                        `DeepnoteServerStarter: Injecting ${
+                            Object.keys(sqlEnvVars).length
+                        } SQL integration env vars: ${Object.keys(sqlEnvVars).join(', ')}`
+                    );
+                    Object.assign(env, sqlEnvVars);
+                    // Log the first 100 chars of each env var value for debugging
+                    for (const [key, value] of Object.entries(sqlEnvVars)) {
+                        if (value) {
+                            logger.info(`DeepnoteServerStarter: ${key} = ${value.substring(0, 100)}...`);
+                        }
+                    }
+                } else {
+                    logger.info('DeepnoteServerStarter: No SQL integration env vars to inject');
+                }
+            } catch (error) {
+                logger.error('DeepnoteServerStarter: Failed to get SQL integration env vars', error);
+            }
+        } else {
+            logger.info('DeepnoteServerStarter: SqlIntegrationEnvironmentVariablesProvider not available');
+        }
 
         // Remove PYTHONHOME if it exists (can interfere with venv)
         delete env.PYTHONHOME;

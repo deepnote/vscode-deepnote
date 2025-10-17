@@ -66,6 +66,7 @@ import { DeepnoteKernelAutoSelector } from './deepnote/deepnoteKernelAutoSelecto
 import { DeepnoteServerProvider } from '../kernels/deepnote/deepnoteServerProvider.node';
 import { DeepnoteInitNotebookRunner, IDeepnoteInitNotebookRunner } from './deepnote/deepnoteInitNotebookRunner.node';
 import { DeepnoteRequirementsHelper, IDeepnoteRequirementsHelper } from './deepnote/deepnoteRequirementsHelper.node';
+import { SqlIntegrationStartupCodeProvider } from './deepnote/integrations/sqlIntegrationStartupCodeProvider';
 
 export function registerTypes(serviceManager: IServiceManager, isDevMode: boolean) {
     registerControllerTypes(serviceManager, isDevMode);
@@ -146,6 +147,10 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
         SqlCellStatusBarProvider
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        SqlIntegrationStartupCodeProvider
     );
 
     // Deepnote kernel services

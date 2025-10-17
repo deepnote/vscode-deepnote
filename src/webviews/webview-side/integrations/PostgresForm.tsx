@@ -28,6 +28,14 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, exis
             setUsername(existingConfig.username || '');
             setPassword(existingConfig.password || '');
             setSsl(existingConfig.ssl || false);
+        } else {
+            setName('');
+            setHost('');
+            setPort('5432');
+            setDatabase('');
+            setUsername('');
+            setPassword('');
+            setSsl(false);
         }
     }, [existingConfig]);
 

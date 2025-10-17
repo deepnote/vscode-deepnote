@@ -22,6 +22,11 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
             setProjectId(existingConfig.projectId || '');
             setCredentials(existingConfig.credentials || '');
             setCredentialsError(null);
+        } else {
+            setName('');
+            setProjectId('');
+            setCredentials('');
+            setCredentialsError(null);
         }
     }, [existingConfig]);
 

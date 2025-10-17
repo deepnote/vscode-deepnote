@@ -78,6 +78,8 @@ export class SqlIntegrationEnvironmentVariablesProvider {
         @inject(IDisposableRegistry) disposables: IDisposableRegistry
     ) {
         logger.info('SqlIntegrationEnvironmentVariablesProvider: Constructor called - provider is being instantiated');
+        // Dispose emitter when extension deactivates
+        disposables.push(this._onDidChangeEnvironmentVariables);
         // Listen for changes to integration storage and fire change event
         disposables.push(
             this.integrationStorage.onDidChangeIntegrations(() => {

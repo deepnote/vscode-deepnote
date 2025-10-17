@@ -105,7 +105,6 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             status: integration.status
         }));
         logger.debug(`IntegrationWebviewProvider: Sending ${integrationsData.length} integrations to webview`);
-        logger.trace('IntegrationWebviewProvider: Integration data:', JSON.stringify(integrationsData, null, 2));
 
         await this.currentPanel.webview.postMessage({
             integrations: integrationsData,

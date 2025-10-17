@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { getLocString } from '../react-common/locReactSide';
+import { format, getLocString } from '../react-common/locReactSide';
 import { PostgresIntegrationConfig } from './types';
 
 export interface IPostgresFormProps {
@@ -34,10 +34,7 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, exis
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        const unnamedIntegration = getLocString(
-            'integrationsPostgresUnnamedIntegration',
-            'Unnamed PostgreSQL Integration ({0})'
-        ).replace('{0}', integrationId);
+        const unnamedIntegration = format('Unnamed PostgreSQL Integration ({0})', integrationId);
 
         const config: PostgresIntegrationConfig = {
             id: integrationId,

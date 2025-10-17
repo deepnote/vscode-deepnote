@@ -293,7 +293,6 @@ export abstract class WebviewHost<IMapping> implements IDisposable {
             integrationsPostgresPasswordLabel: '',
             integrationsPostgresPasswordPlaceholder: '',
             integrationsPostgresSslLabel: '',
-            integrationsPostgresUnnamedIntegration: '',
             integrationsBigQueryNameLabel: '',
             integrationsBigQueryNamePlaceholder: '',
             integrationsBigQueryProjectIdLabel: '',
@@ -301,8 +300,6 @@ export abstract class WebviewHost<IMapping> implements IDisposable {
             integrationsBigQueryCredentialsLabel: '',
             integrationsBigQueryCredentialsPlaceholder: '',
             integrationsBigQueryCredentialsRequired: '',
-            integrationsBigQueryInvalidJson: '',
-            integrationsBigQueryUnnamedIntegration: '',
             integrationsRequiredField: '',
             integrationsOptionalField: ''
         };

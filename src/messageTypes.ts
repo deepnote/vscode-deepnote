@@ -193,7 +193,6 @@ export type LocalizedMessages = {
     integrationsPostgresPasswordLabel: string;
     integrationsPostgresPasswordPlaceholder: string;
     integrationsPostgresSslLabel: string;
-    integrationsPostgresUnnamedIntegration: string;
     // BigQuery form strings
     integrationsBigQueryNameLabel: string;
     integrationsBigQueryNamePlaceholder: string;
@@ -202,8 +201,6 @@ export type LocalizedMessages = {
     integrationsBigQueryCredentialsLabel: string;
     integrationsBigQueryCredentialsPlaceholder: string;
     integrationsBigQueryCredentialsRequired: string;
-    integrationsBigQueryInvalidJson: string;
-    integrationsBigQueryUnnamedIntegration: string;
     // Common form strings
     integrationsRequiredField: string;
     integrationsOptionalField: string;

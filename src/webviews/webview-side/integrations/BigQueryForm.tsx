@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { getLocString } from '../react-common/locReactSide';
+import { format, getLocString } from '../react-common/locReactSide';
 import { BigQueryIntegrationConfig } from './types';
 
 export interface IBigQueryFormProps {
@@ -37,10 +37,7 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
             return true;
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Invalid JSON format';
-            const invalidJsonMsg = getLocString('integrationsBigQueryInvalidJson', 'Invalid JSON: {0}').replace(
-                '{0}',
-                errorMessage
-            );
+            const invalidJsonMsg = format('Invalid JSON: {0}', errorMessage);
             setCredentialsError(invalidJsonMsg);
             return false;
         }
@@ -60,10 +57,7 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
             return;
         }
 
-        const unnamedIntegration = getLocString(
-            'integrationsBigQueryUnnamedIntegration',
-            'Unnamed BigQuery Integration ({0})'
-        ).replace('{0}', integrationId);
+        const unnamedIntegration = format('Unnamed BigQuery Integration ({0})', integrationId);
 
         const config: BigQueryIntegrationConfig = {
             id: integrationId,

@@ -130,16 +130,13 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsPostgresPasswordLabel: localize.Integrations.postgresPasswordLabel,
             integrationsPostgresPasswordPlaceholder: localize.Integrations.postgresPasswordPlaceholder,
             integrationsPostgresSslLabel: localize.Integrations.postgresSslLabel,
-            integrationsPostgresUnnamedIntegration: '', // Will be formatted on the client side
             integrationsBigQueryNameLabel: localize.Integrations.bigQueryNameLabel,
             integrationsBigQueryNamePlaceholder: localize.Integrations.bigQueryNamePlaceholder,
             integrationsBigQueryProjectIdLabel: localize.Integrations.bigQueryProjectIdLabel,
             integrationsBigQueryProjectIdPlaceholder: localize.Integrations.bigQueryProjectIdPlaceholder,
             integrationsBigQueryCredentialsLabel: localize.Integrations.bigQueryCredentialsLabel,
             integrationsBigQueryCredentialsPlaceholder: localize.Integrations.bigQueryCredentialsPlaceholder,
-            integrationsBigQueryCredentialsRequired: localize.Integrations.bigQueryCredentialsRequired,
-            integrationsBigQueryInvalidJson: '', // Will be formatted on the client side
-            integrationsBigQueryUnnamedIntegration: '' // Will be formatted on the client side
+            integrationsBigQueryCredentialsRequired: localize.Integrations.bigQueryCredentialsRequired
         };
 
         await this.currentPanel.webview.postMessage({

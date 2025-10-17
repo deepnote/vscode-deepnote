@@ -43,6 +43,16 @@ import { INotebookEditorProvider, INotebookPythonEnvironmentService } from './ty
 import { DeepnoteActivationService } from './deepnote/deepnoteActivationService';
 import { DeepnoteNotebookManager } from './deepnote/deepnoteNotebookManager';
 import { IDeepnoteNotebookManager } from './types';
+import { IntegrationStorage } from './deepnote/integrations/integrationStorage';
+import { IntegrationDetector } from './deepnote/integrations/integrationDetector';
+import { IntegrationManager } from './deepnote/integrations/integrationManager';
+import { IntegrationWebviewProvider } from './deepnote/integrations/integrationWebview';
+import {
+    IIntegrationDetector,
+    IIntegrationManager,
+    IIntegrationStorage,
+    IIntegrationWebviewProvider
+} from './deepnote/integrations/types';
 import {
     IDeepnoteToolkitInstaller,
     IDeepnoteServerStarter,
@@ -128,6 +138,10 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
         DeepnoteActivationService
     );
     serviceManager.addSingleton<IDeepnoteNotebookManager>(IDeepnoteNotebookManager, DeepnoteNotebookManager);
+    serviceManager.addSingleton<IIntegrationStorage>(IIntegrationStorage, IntegrationStorage);
+    serviceManager.addSingleton<IIntegrationDetector>(IIntegrationDetector, IntegrationDetector);
+    serviceManager.addSingleton<IIntegrationWebviewProvider>(IIntegrationWebviewProvider, IntegrationWebviewProvider);
+    serviceManager.addSingleton<IIntegrationManager>(IIntegrationManager, IntegrationManager);
 
     // Deepnote kernel services
     serviceManager.addSingleton<IDeepnoteToolkitInstaller>(IDeepnoteToolkitInstaller, DeepnoteToolkitInstaller);

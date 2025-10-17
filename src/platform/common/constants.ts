@@ -125,6 +125,7 @@ export const LanguagesSupportedByPythonkernel = [
     'sql', // %%sql
     'perl', // %%perl
     'qsharp', // %%qsharp
+    'JSON', //JSON cells for custom block types
     'raw' // raw cells (no formatting)
 ];
 export const jupyterLanguageToMonacoLanguageMapping = new Map([
@@ -222,6 +223,7 @@ export namespace Commands {
     export const OpenDeepnoteNotebook = 'deepnote.openNotebook';
     export const OpenDeepnoteFile = 'deepnote.openFile';
     export const RevealInDeepnoteExplorer = 'deepnote.revealInExplorer';
+    export const ManageIntegrations = 'deepnote.manageIntegrations';
     export const ExportAsPythonScript = 'jupyter.exportAsPythonScript';
     export const ExportToHTML = 'jupyter.exportToHTML';
     export const ExportToPDF = 'jupyter.exportToPDF';

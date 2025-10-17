@@ -4,7 +4,7 @@
 import { inject, injectable, named } from 'inversify';
 import { CancellationToken, Uri, workspace } from 'vscode';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
-import { IDeepnoteToolkitInstaller, DEEPNOTE_TOOLKIT_WHEEL_URL } from './types';
+import { IDeepnoteToolkitInstaller, DEEPNOTE_TOOLKIT_WHEEL_URL, DEEPNOTE_TOOLKIT_VERSION } from './types';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { logger } from '../../platform/logging';
 import { IOutputChannel, IExtensionContext } from '../../platform/common/types';
@@ -29,10 +29,11 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
     ) {}
 
     private getVenvPath(deepnoteFileUri: Uri): Uri {
-        // Create a unique venv name based on the file path using a hash
+        // Create a unique venv name based on the file path and toolkit version using a hash
         // This avoids Windows MAX_PATH issues and prevents directory structure leakage
+        // Including the version ensures a new venv is created when the toolkit version changes
         const hash = this.getVenvHash(deepnoteFileUri);
-        return Uri.joinPath(this.context.globalStorageUri, 'deepnote-venvs', hash);
+        return Uri.joinPath(this.context.globalStorageUri, 'deepnote-venvs', `${hash}-${DEEPNOTE_TOOLKIT_VERSION}`);
     }
 
     public async getVenvInterpreter(deepnoteFileUri: Uri): Promise<PythonEnvironment | undefined> {
@@ -64,6 +65,8 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
     ): Promise<PythonEnvironment | undefined> {
         const venvPath = this.getVenvPath(deepnoteFileUri);
         const venvKey = venvPath.fsPath;
+
+        logger.info(`Ensuring virtual environment at ${venvKey}`);
 
         // Wait for any pending installation for this venv to complete
         const pendingInstall = this.pendingInstallations.get(venvKey);
@@ -210,6 +213,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                 logger.info('deepnote-toolkit installed successfully in venv');
 
                 // Install kernel spec so the kernel uses this venv's Python
+                // Install into the venv itself (not --user) so the Deepnote server can discover it
                 logger.info('Installing kernel spec for venv...');
                 try {
                     // Reuse the process service with system environment
@@ -219,7 +223,8 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                             '-m',
                             'ipykernel',
                             'install',
-                            '--user',
+                            '--prefix',
+                            venvPath.fsPath,
                             '--name',
                             `deepnote-venv-${this.getVenvHash(deepnoteFileUri)}`,
                             '--display-name',
@@ -227,7 +232,14 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                         ],
                         { throwOnStdErr: false }
                     );
-                    logger.info('Kernel spec installed successfully');
+                    const kernelSpecPath = Uri.joinPath(
+                        venvPath,
+                        'share',
+                        'jupyter',
+                        'kernels',
+                        `deepnote-venv-${this.getVenvHash(deepnoteFileUri)}`
+                    );
+                    logger.info(`Kernel spec installed successfully to ${kernelSpecPath.fsPath}`);
                 } catch (ex) {
                     logger.warn(`Failed to install kernel spec: ${ex}`);
                     // Don't fail the entire installation if kernel spec creation fails
@@ -262,7 +274,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         }
     }
 
-    private getVenvHash(deepnoteFileUri: Uri): string {
+    public getVenvHash(deepnoteFileUri: Uri): string {
         // Create a short hash from the file path for kernel naming and venv directory
         // This provides better uniqueness and prevents directory structure leakage
         const path = deepnoteFileUri.fsPath;

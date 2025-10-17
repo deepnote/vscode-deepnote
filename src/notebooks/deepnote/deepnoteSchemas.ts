@@ -1,7 +1,5 @@
 import { z } from 'zod';
 
-import { OUTPUT_BLOCK_METADATA_KEY } from './deepnoteConstants';
-
 export const DeepnoteChartBigNumberOutputSchema = z.object({
     title: z.string().nullish(),
     value: z.string().nullish(),
@@ -24,7 +22,7 @@ export const DeepnoteBigNumberMetadataSchema = z.object({
         .nullish()
         .transform((val) => val ?? null),
     deepnote_big_number_comparison_type: z
-        .enum(['absolute-value', 'percentage-change', 'absolute-change'])
+        .string()
         .nullish()
         .transform((val) => val ?? null),
     deepnote_big_number_comparison_title: z
@@ -101,7 +99,8 @@ export const DeepnoteSelectInputMetadataSchema = z.object({
         .nullish()
         .transform((val) => val ?? null),
     deepnote_variable_select_type: z
-        .enum(['from-options', 'from-variable'])
+        // .enum(['from-options', 'from-variable'])
+        .string()
         .nullish()
         .transform((val) => val ?? null),
     deepnote_allow_multiple_values: z
@@ -243,20 +242,16 @@ export const DeepnoteButtonMetadataSchema = z.object({
         .nullish()
         .transform((val) => val ?? null),
     deepnote_button_behavior: z
-        .enum(['run', 'set_variable'])
+        // .enum(['run', 'set_variable'])
+        .string()
         .nullish()
         .transform((val) => val ?? null),
     deepnote_button_color_scheme: z
-        .enum(['blue', 'red', 'neutral', 'green', 'yellow'])
+        // .enum(['blue', 'red', 'neutral', 'green', 'yellow'])
+        .string()
         .nullish()
         .transform((val) => val ?? null)
 });
-
-export function getDeepnoteBlockMetadataSchema<T extends z.ZodTypeAny>(schema: T) {
-    return z.object({
-        [OUTPUT_BLOCK_METADATA_KEY]: schema
-    });
-}
 
 export type DeepnoteChartBigNumberOutput = z.infer<typeof DeepnoteChartBigNumberOutputSchema>;
 export type DeepnoteBigNumberMetadata = z.infer<typeof DeepnoteBigNumberMetadataSchema>;

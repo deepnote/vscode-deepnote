@@ -1,7 +1,7 @@
 import { assert } from 'chai';
 import { NotebookCellData, NotebookCellKind } from 'vscode';
 
-import type { DeepnoteBlock } from '../deepnoteTypes';
+import type { DeepnoteBlock } from '../../../platform/deepnote/deepnoteTypes';
 import { ChartBigNumberBlockConverter } from './chartBigNumberBlockConverter';
 import { DEEPNOTE_VSCODE_RAW_CONTENT_KEY } from './constants';
 
@@ -394,7 +394,7 @@ suite('ChartBigNumberBlockConverter', () => {
             assert.strictEqual(block.content, '');
             assert.strictEqual(block.metadata?.deepnote_big_number_title, 'new title');
             assert.strictEqual(block.metadata?.existing, 'value');
-            assert.isUndefined(block.metadata?.[DEEPNOTE_VSCODE_RAW_CONTENT_KEY]);
+            assert.doesNotHaveAnyKeys(block.metadata, [DEEPNOTE_VSCODE_RAW_CONTENT_KEY]);
         });
 
         test('handles empty content', () => {
@@ -444,7 +444,14 @@ suite('ChartBigNumberBlockConverter', () => {
                 id: 'block-123',
                 metadata: {
                     custom: 'value',
-                    deepnote_big_number_title: 'new title'
+                    deepnote_big_number_title: 'new title',
+                    deepnote_big_number_comparison_enabled: null,
+                    deepnote_big_number_comparison_format: null,
+                    deepnote_big_number_comparison_title: null,
+                    deepnote_big_number_comparison_type: null,
+                    deepnote_big_number_comparison_value: null,
+                    deepnote_big_number_format: null,
+                    deepnote_big_number_value: null
                 },
                 outputs: [],
                 sortingKey: 'a0',

@@ -43,6 +43,16 @@ import { INotebookEditorProvider, INotebookPythonEnvironmentService } from './ty
 import { DeepnoteActivationService } from './deepnote/deepnoteActivationService';
 import { DeepnoteNotebookManager } from './deepnote/deepnoteNotebookManager';
 import { IDeepnoteNotebookManager } from './types';
+import { IntegrationStorage } from './deepnote/integrations/integrationStorage';
+import { IntegrationDetector } from './deepnote/integrations/integrationDetector';
+import { IntegrationManager } from './deepnote/integrations/integrationManager';
+import { IntegrationWebviewProvider } from './deepnote/integrations/integrationWebview';
+import {
+    IIntegrationDetector,
+    IIntegrationManager,
+    IIntegrationStorage,
+    IIntegrationWebviewProvider
+} from './deepnote/integrations/types';
 import {
     IDeepnoteToolkitInstaller,
     IDeepnoteServerStarter,
@@ -53,6 +63,8 @@ import { DeepnoteToolkitInstaller } from '../kernels/deepnote/deepnoteToolkitIns
 import { DeepnoteServerStarter } from '../kernels/deepnote/deepnoteServerStarter.node';
 import { DeepnoteKernelAutoSelector } from './deepnote/deepnoteKernelAutoSelector.node';
 import { DeepnoteServerProvider } from '../kernels/deepnote/deepnoteServerProvider.node';
+import { DeepnoteInitNotebookRunner, IDeepnoteInitNotebookRunner } from './deepnote/deepnoteInitNotebookRunner.node';
+import { DeepnoteRequirementsHelper, IDeepnoteRequirementsHelper } from './deepnote/deepnoteRequirementsHelper.node';
 
 export function registerTypes(serviceManager: IServiceManager, isDevMode: boolean) {
     registerControllerTypes(serviceManager, isDevMode);
@@ -126,6 +138,10 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
         DeepnoteActivationService
     );
     serviceManager.addSingleton<IDeepnoteNotebookManager>(IDeepnoteNotebookManager, DeepnoteNotebookManager);
+    serviceManager.addSingleton<IIntegrationStorage>(IIntegrationStorage, IntegrationStorage);
+    serviceManager.addSingleton<IIntegrationDetector>(IIntegrationDetector, IntegrationDetector);
+    serviceManager.addSingleton<IIntegrationWebviewProvider>(IIntegrationWebviewProvider, IntegrationWebviewProvider);
+    serviceManager.addSingleton<IIntegrationManager>(IIntegrationManager, IntegrationManager);
 
     // Deepnote kernel services
     serviceManager.addSingleton<IDeepnoteToolkitInstaller>(IDeepnoteToolkitInstaller, DeepnoteToolkitInstaller);
@@ -135,6 +151,8 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addBinding(IDeepnoteServerProvider, IExtensionSyncActivationService);
     serviceManager.addSingleton<IDeepnoteKernelAutoSelector>(IDeepnoteKernelAutoSelector, DeepnoteKernelAutoSelector);
     serviceManager.addBinding(IDeepnoteKernelAutoSelector, IExtensionSyncActivationService);
+    serviceManager.addSingleton<IDeepnoteInitNotebookRunner>(IDeepnoteInitNotebookRunner, DeepnoteInitNotebookRunner);
+    serviceManager.addSingleton<IDeepnoteRequirementsHelper>(IDeepnoteRequirementsHelper, DeepnoteRequirementsHelper);
 
     // File export/import
     serviceManager.addSingleton<IFileConverter>(IFileConverter, FileConverter);

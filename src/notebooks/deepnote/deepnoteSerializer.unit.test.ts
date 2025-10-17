@@ -3,7 +3,7 @@ import { assert } from 'chai';
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
 import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
-import type { DeepnoteProject } from './deepnoteTypes';
+import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 
 suite('DeepnoteNotebookSerializer', () => {
     let serializer: DeepnoteNotebookSerializer;

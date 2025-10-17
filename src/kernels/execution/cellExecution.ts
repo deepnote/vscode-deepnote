@@ -4,6 +4,7 @@
 import type * as KernelMessage from '@jupyterlab/services/lib/kernel/messages';
 import { NotebookCell, NotebookCellExecution, workspace, NotebookCellOutput } from 'vscode';
 
+import { createPythonCode } from '@deepnote/blocks';
 import type { Kernel } from '@jupyterlab/services';
 import { CellExecutionCreator } from './cellExecutionCreator';
 import { analyzeKernelErrors, createOutputWithErrorMessageForDisplay } from '../../platform/errors/errorUtils';
@@ -32,6 +33,8 @@ import { KernelError } from '../errors/kernelError';
 import { getCachedSysPrefix } from '../../platform/interpreter/helpers';
 import { getCellMetadata } from '../../platform/common/utils';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
+import { createBlockFromPocket } from '../../platform/deepnote/pocket';
+import { DeepnoteBigNumberMetadataSchema } from '../../notebooks/deepnote/deepnoteSchemas';
 
 /**
  * Factory for CellExecution objects.
@@ -406,9 +409,34 @@ export class CellExecution implements ICellExecution, IDisposable {
             return this.completedSuccessfully();
         }
 
-        // Prepend initialization code
-        const prependCode = 'print("Hello world")';
-        code = prependCode + '\n' + code;
+        // Convert NotebookCell to Deepnote block for further operations
+        const cellData = {
+            kind: this.cell.kind,
+            value: this.cell.document.getText(),
+            languageId: this.cell.document.languageId,
+            metadata: this.cell.metadata,
+            outputs: [...(this.cell.outputs || [])]
+        };
+        const deepnoteBlock = createBlockFromPocket(cellData, this.cell.index);
+
+        if (deepnoteBlock.type === 'big-number') {
+            try {
+                deepnoteBlock.metadata = {
+                    ...deepnoteBlock.metadata,
+                    ...DeepnoteBigNumberMetadataSchema.parse(JSON.parse(deepnoteBlock.content || '{}'))
+                };
+            } catch (ex) {
+                logger.error(
+                    `Cell execution failed to parse big number metadata, for cell Index ${this.cell.index}`,
+                    ex
+                );
+                return this.completedWithErrors(ex);
+            }
+        }
+
+        // Use createPythonCode to generate code with table state already included
+        logger.info(`Cell ${this.cell.index}: Using createPythonCode to generate execution code with table state`);
+        code = createPythonCode(deepnoteBlock);
 
         // Generate metadata from our cell (some kernels expect this.)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

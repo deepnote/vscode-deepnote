@@ -18,12 +18,13 @@ suite('Pocket', () => {
 
             addPocketToCellMetadata(cell);
 
+            // id should remain at top level, not moved to pocket
             assert.deepStrictEqual(cell.metadata.__deepnotePocket, {
-                id: 'block-123',
                 type: 'code',
                 sortingKey: 'a0',
                 executionCount: 5
             });
+            assert.strictEqual(cell.metadata.id, 'block-123');
             assert.strictEqual(cell.metadata.other, 'value');
         });
 
@@ -57,10 +58,11 @@ suite('Pocket', () => {
 
             addPocketToCellMetadata(cell);
 
+            // id should remain at top level, not moved to pocket
             assert.deepStrictEqual(cell.metadata.__deepnotePocket, {
-                id: 'block-123',
                 type: 'code'
             });
+            assert.strictEqual(cell.metadata.id, 'block-123');
         });
     });
 
@@ -70,18 +72,18 @@ suite('Pocket', () => {
 
             cell.metadata = {
                 __deepnotePocket: {
-                    id: 'block-123',
                     type: 'code',
                     sortingKey: 'a0',
                     executionCount: 5
                 },
+                id: 'block-123',
                 other: 'value'
             };
 
             const pocket = extractPocketFromCellMetadata(cell);
 
+            // id is not in the pocket anymore
             assert.deepStrictEqual(pocket, {
-                id: 'block-123',
                 type: 'code',
                 sortingKey: 'a0',
                 executionCount: 5
@@ -115,11 +117,11 @@ suite('Pocket', () => {
 
             cell.metadata = {
                 __deepnotePocket: {
-                    id: 'block-123',
                     type: 'code',
                     sortingKey: 'a0',
                     executionCount: 5
                 },
+                id: 'block-123',
                 custom: 'value'
             };
 
@@ -149,15 +151,16 @@ suite('Pocket', () => {
 
             cell.metadata = {
                 __deepnotePocket: {
-                    id: 'block-123',
                     type: 'code'
                 },
+                id: 'block-123',
                 custom: 'value'
             };
 
             const block = createBlockFromPocket(cell, 0);
 
             assert.isUndefined(block.metadata?.__deepnotePocket);
+            assert.isUndefined(block.metadata?.id);
             assert.strictEqual(block.metadata?.custom, 'value');
         });
 
@@ -166,9 +169,9 @@ suite('Pocket', () => {
 
             cell.metadata = {
                 __deepnotePocket: {
-                    id: 'block-123',
                     type: 'code'
                 },
+                id: 'block-123',
                 custom: 'value',
                 slideshow: { slide_type: 'slide' }
             };
@@ -191,9 +194,8 @@ suite('Pocket', () => {
             const cell = new NotebookCellData(NotebookCellKind.Code, 'print("hello")', 'python');
 
             cell.metadata = {
-                __deepnotePocket: {
-                    id: 'block-123'
-                }
+                __deepnotePocket: {},
+                id: 'block-123'
             };
 
             const block = createBlockFromPocket(cell, 3);

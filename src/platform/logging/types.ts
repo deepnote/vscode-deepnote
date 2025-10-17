@@ -6,6 +6,7 @@
 
 export type Arguments = unknown[];
 
+export const ILogger = Symbol('ILogger');
 export interface ILogger {
     error(message: string, ...data: Arguments): void;
     warn(message: string, ...data: Arguments): void;

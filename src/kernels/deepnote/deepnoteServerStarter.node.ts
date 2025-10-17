@@ -163,15 +163,15 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             try {
                 const sqlEnvVars = await this.sqlIntegrationEnvVars.getEnvironmentVariables(deepnoteFileUri, token);
                 if (sqlEnvVars && Object.keys(sqlEnvVars).length > 0) {
-                    logger.info(
+                    logger.debug(
                         `DeepnoteServerStarter: Injecting ${
                             Object.keys(sqlEnvVars).length
                         } SQL integration env vars: ${Object.keys(sqlEnvVars).join(', ')}`
                     );
                     Object.assign(env, sqlEnvVars);
-                    logger.info(`DeepnoteServerStarter: Injected SQL env vars: ${Object.keys(sqlEnvVars).join(', ')}`);
+                    logger.debug(`DeepnoteServerStarter: Injected SQL env vars: ${Object.keys(sqlEnvVars).join(', ')}`);
                 } else {
-                    logger.info('DeepnoteServerStarter: No SQL integration env vars to inject');
+                    logger.debug('DeepnoteServerStarter: No SQL integration env vars to inject');
                 }
             } catch (error) {
                 logger.error('DeepnoteServerStarter: Failed to get SQL integration env vars', error);

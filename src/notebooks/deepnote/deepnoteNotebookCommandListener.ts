@@ -2,13 +2,119 @@
 // Licensed under the MIT License.
 
 import { injectable, inject } from 'inversify';
-import { commands, window, NotebookCellData, NotebookCellKind, NotebookEdit, NotebookRange } from 'vscode';
+import {
+    commands,
+    window,
+    NotebookCellData,
+    NotebookCellKind,
+    NotebookEdit,
+    NotebookRange,
+    NotebookCell
+} from 'vscode';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { Commands } from '../../platform/common/constants';
 import { noop } from '../../platform/common/utils/misc';
 import { chainWithPendingUpdates } from '../../kernels/execution/notebookUpdater';
-import { DeepnoteBigNumberMetadataSchema } from './deepnoteSchemas';
+import {
+    DeepnoteBigNumberMetadataSchema,
+    DeepnoteTextInputMetadataSchema,
+    DeepnoteTextareaInputMetadataSchema,
+    DeepnoteSelectInputMetadataSchema,
+    DeepnoteSliderInputMetadataSchema,
+    DeepnoteCheckboxInputMetadataSchema,
+    DeepnoteDateInputMetadataSchema,
+    DeepnoteDateRangeInputMetadataSchema,
+    DeepnoteFileInputMetadataSchema,
+    DeepnoteButtonMetadataSchema
+} from './deepnoteSchemas';
+import z from 'zod';
+
+type InputBlockType =
+    | 'input-text'
+    | 'input-textarea'
+    | 'input-select'
+    | 'input-slider'
+    | 'input-checkbox'
+    | 'input-date'
+    | 'input-date-range'
+    | 'input-file'
+    | 'button';
+
+export function getInputBlockMetadata(blockType: InputBlockType, variableName: string) {
+    const defaultInput = {
+        deepnote_variable_name: variableName
+    };
+
+    switch (blockType) {
+        case 'input-text':
+            return DeepnoteTextInputMetadataSchema.parse(defaultInput);
+        case 'input-textarea':
+            return DeepnoteTextareaInputMetadataSchema.parse(defaultInput);
+        case 'input-select':
+            return DeepnoteSelectInputMetadataSchema.parse(defaultInput);
+        case 'input-slider':
+            return DeepnoteSliderInputMetadataSchema.parse(defaultInput);
+        case 'input-checkbox':
+            return DeepnoteCheckboxInputMetadataSchema.parse(defaultInput);
+        case 'input-date':
+            return DeepnoteDateInputMetadataSchema.parse(defaultInput);
+        case 'input-date-range':
+            return DeepnoteDateRangeInputMetadataSchema.parse(defaultInput);
+        case 'input-file':
+            return DeepnoteFileInputMetadataSchema.parse(defaultInput);
+        case 'button':
+            return DeepnoteButtonMetadataSchema.parse(defaultInput);
+        default: {
+            const exhaustiveCheck: never = blockType;
+            throw new Error(`Unhandled block type: ${exhaustiveCheck satisfies never}`);
+        }
+    }
+}
+
+export function safeParseDeepnoteVariableNameFromContentJson(content: string): string | undefined {
+    try {
+        return JSON.parse(content)['deepnote_variable_name'];
+    } catch (error) {
+        return undefined;
+    }
+}
+
+export function getNextDeepnoteVariableName(cells: NotebookCell[], prefix: 'df' | 'query' | 'input'): string {
+    const deepnoteVariableNames = cells.reduce<string[]>((acc, cell) => {
+        const contentValue = safeParseDeepnoteVariableNameFromContentJson(cell.document.getText());
+
+        if (contentValue != null) {
+            acc.push(contentValue);
+        }
+
+        const parsedMetadataValue = z.string().safeParse(cell.metadata.__deepnotePocket?.variableName);
+
+        if (parsedMetadataValue.success) {
+            acc.push(parsedMetadataValue.data);
+        }
+
+        return acc;
+    }, []);
+
+    const maxDeepnoteVariableNamesSuffixNumber =
+        deepnoteVariableNames.reduce<number | null>((acc, name) => {
+            const m = name.match(new RegExp(`^${prefix}_(\\d+)$`));
+            if (m == null) {
+                return acc;
+            }
+
+            const suffixNumber = parseInt(m[1]);
+
+            if (isNaN(suffixNumber)) {
+                return acc;
+            }
+
+            return acc == null || suffixNumber > acc ? suffixNumber : acc;
+        }, null) ?? 0;
+
+    return `${prefix}_${maxDeepnoteVariableNamesSuffixNumber + 1}`;
+}
 
 /**
  * Service responsible for registering and handling Deepnote-specific notebook commands.
@@ -28,6 +134,33 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         this.disposableRegistry.push(commands.registerCommand(Commands.AddSqlBlock, () => this.addSqlBlock()));
         this.disposableRegistry.push(
             commands.registerCommand(Commands.AddBigNumberChartBlock, () => this.addBigNumberChartBlock())
+        );
+        this.disposableRegistry.push(
+            commands.registerCommand(Commands.AddInputTextBlock, () => this.addInputBlock('input-text'))
+        );
+        this.disposableRegistry.push(
+            commands.registerCommand(Commands.AddInputTextareaBlock, () => this.addInputBlock('input-textarea'))
+        );
+        this.disposableRegistry.push(
+            commands.registerCommand(Commands.AddInputSelectBlock, () => this.addInputBlock('input-select'))
+        );
+        this.disposableRegistry.push(
+            commands.registerCommand(Commands.AddInputSliderBlock, () => this.addInputBlock('input-slider'))
+        );
+        this.disposableRegistry.push(
+            commands.registerCommand(Commands.AddInputCheckboxBlock, () => this.addInputBlock('input-checkbox'))
+        );
+        this.disposableRegistry.push(
+            commands.registerCommand(Commands.AddInputDateBlock, () => this.addInputBlock('input-date'))
+        );
+        this.disposableRegistry.push(
+            commands.registerCommand(Commands.AddInputDateRangeBlock, () => this.addInputBlock('input-date-range'))
+        );
+        this.disposableRegistry.push(
+            commands.registerCommand(Commands.AddInputFileBlock, () => this.addInputBlock('input-file'))
+        );
+        this.disposableRegistry.push(
+            commands.registerCommand(Commands.AddButtonBlock, () => this.addInputBlock('button'))
         );
     }
 
@@ -82,6 +215,43 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             const newCell = new NotebookCellData(
                 NotebookCellKind.Code,
                 JSON.stringify(bigNumberMetadata, null, 2),
+                'json'
+            );
+            newCell.metadata = metadata;
+            const nbEdit = NotebookEdit.insertCells(insertIndex, [newCell]);
+            edit.set(document.uri, [nbEdit]);
+        }).then(() => {
+            editor.selection = new NotebookRange(insertIndex, insertIndex + 1);
+        }, noop);
+    }
+
+    private addInputBlock(blockType: InputBlockType): void {
+        const editor = window.activeNotebookEditor;
+        if (!editor) {
+            return;
+        }
+        const document = editor.notebook;
+        const selection = editor.selection;
+        const cells = editor.notebook.getCells();
+        const deepnoteVariableName = getNextDeepnoteVariableName(cells, 'input');
+
+        // Determine the index where to insert the new cell (below current selection or at the end)
+        const insertIndex = selection ? selection.end : document.cellCount;
+
+        // Get the appropriate schema and parse default metadata based on block type
+        let defaultMetadata = getInputBlockMetadata(blockType, deepnoteVariableName);
+
+        const metadata = {
+            __deepnotePocket: {
+                type: blockType,
+                ...defaultMetadata
+            }
+        };
+
+        chainWithPendingUpdates(document, (edit) => {
+            const newCell = new NotebookCellData(
+                NotebookCellKind.Code,
+                JSON.stringify(defaultMetadata, null, 2),
                 'json'
             );
             newCell.metadata = metadata;

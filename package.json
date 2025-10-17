@@ -122,6 +122,60 @@
                 "icon": "$(graph)"
             },
             {
+                "command": "deepnote.addInputTextBlock",
+                "title": "%deepnote.commands.addInputTextBlock.title%",
+                "category": "Deepnote",
+                "icon": "$(symbol-text)"
+            },
+            {
+                "command": "deepnote.addInputTextareaBlock",
+                "title": "%deepnote.commands.addInputTextareaBlock.title%",
+                "category": "Deepnote",
+                "icon": "$(note)"
+            },
+            {
+                "command": "deepnote.addInputSelectBlock",
+                "title": "%deepnote.commands.addInputSelectBlock.title%",
+                "category": "Deepnote",
+                "icon": "$(list-selection)"
+            },
+            {
+                "command": "deepnote.addInputSliderBlock",
+                "title": "%deepnote.commands.addInputSliderBlock.title%",
+                "category": "Deepnote",
+                "icon": "$(settings-more-action)"
+            },
+            {
+                "command": "deepnote.addInputCheckboxBlock",
+                "title": "%deepnote.commands.addInputCheckboxBlock.title%",
+                "category": "Deepnote",
+                "icon": "$(check)"
+            },
+            {
+                "command": "deepnote.addInputDateBlock",
+                "title": "%deepnote.commands.addInputDateBlock.title%",
+                "category": "Deepnote",
+                "icon": "$(calendar)"
+            },
+            {
+                "command": "deepnote.addInputDateRangeBlock",
+                "title": "%deepnote.commands.addInputDateRangeBlock.title%",
+                "category": "Deepnote",
+                "icon": "$(calendar)"
+            },
+            {
+                "command": "deepnote.addInputFileBlock",
+                "title": "%deepnote.commands.addInputFileBlock.title%",
+                "category": "Deepnote",
+                "icon": "$(file)"
+            },
+            {
+                "command": "deepnote.addButtonBlock",
+                "title": "%deepnote.commands.addButtonBlock.title%",
+                "category": "Deepnote",
+                "icon": "$(add)"
+            },
+            {
                 "command": "dataScience.ClearCache",
                 "title": "%jupyter.command.dataScience.clearCache.title%",
                 "category": "Jupyter (Dev)",

@@ -37,11 +37,9 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
     React.useEffect(() => {
         const handleMessage = (event: MessageEvent<WebviewMessage>) => {
             const msg = event.data;
-            console.log('IntegrationPanel: Received message:', msg);
 
             switch (msg.type) {
                 case 'update':
-                    console.log('IntegrationPanel: Updating integrations:', msg.integrations);
                     setIntegrations(msg.integrations);
                     break;
 
@@ -68,7 +66,6 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
             }
         };
 
-        console.log('IntegrationPanel: Component mounted, adding message listener');
         window.addEventListener('message', handleMessage);
         return () => window.removeEventListener('message', handleMessage);
     }, []);

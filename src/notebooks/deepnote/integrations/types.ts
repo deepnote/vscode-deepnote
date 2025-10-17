@@ -1,8 +1,9 @@
 import { Event } from 'vscode';
+import { IDisposable } from '../../../platform/common/types';
 import { IntegrationConfig, IntegrationWithStatus } from './integrationTypes';
 
 export const IIntegrationStorage = Symbol('IIntegrationStorage');
-export interface IIntegrationStorage {
+export interface IIntegrationStorage extends IDisposable {
     /**
      * Event fired when integrations change
      */

@@ -2,6 +2,7 @@ import { inject, injectable } from 'inversify';
 import { EventEmitter } from 'vscode';
 
 import { IEncryptedStorage } from '../../../platform/common/application/types';
+import { IAsyncDisposableRegistry } from '../../../platform/common/types';
 import { logger } from '../../../platform/logging';
 import { IntegrationConfig, IntegrationType } from './integrationTypes';
 
@@ -22,7 +23,13 @@ export class IntegrationStorage {
 
     public readonly onDidChangeIntegrations = this._onDidChangeIntegrations.event;
 
-    constructor(@inject(IEncryptedStorage) private readonly encryptedStorage: IEncryptedStorage) {}
+    constructor(
+        @inject(IEncryptedStorage) private readonly encryptedStorage: IEncryptedStorage,
+        @inject(IAsyncDisposableRegistry) asyncRegistry: IAsyncDisposableRegistry
+    ) {
+        // Register for disposal when the extension deactivates
+        asyncRegistry.push(this);
+    }
 
     /**
      * Get all stored integration configurations
@@ -167,5 +174,12 @@ export class IntegrationStorage {
         const integrationIds = Array.from(this.cache.keys());
         const indexJson = JSON.stringify(integrationIds);
         await this.encryptedStorage.store(INTEGRATION_SERVICE_NAME, 'index', indexJson);
+    }
+
+    /**
+     * Dispose of resources to prevent memory leaks
+     */
+    public dispose(): void {
+        this._onDidChangeIntegrations.dispose();
     }
 }

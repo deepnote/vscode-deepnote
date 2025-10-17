@@ -35,4 +35,3 @@ export function ErrorFallback({ error }: FallbackProps) {
         </div>
     );
 }
-

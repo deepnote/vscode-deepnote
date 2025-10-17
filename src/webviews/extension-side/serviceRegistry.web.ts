@@ -27,6 +27,7 @@ import { PlotSaveHandler } from './plotView/plotSaveHandler';
 import { PlotViewHandler } from './plotView/plotViewHandler';
 import { RendererCommunication } from './plotView/rendererCommunication';
 import { IPlotSaveHandler } from './plotView/types';
+import { DataframeController } from './dataframe/dataframeController';
 import { IPyWidgetRendererComms } from './ipywidgets/rendererComms';
 import { DataViewerDelegator } from './dataviewer/dataViewerDelegator';
 
@@ -65,6 +66,7 @@ export function registerTypes(serviceManager: IServiceManager) {
         IExtensionSyncActivationService,
         IPyWidgetRendererComms
     );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(IExtensionSyncActivationService, DataframeController);
     serviceManager.addSingleton<IVariableViewProvider>(IVariableViewProvider, VariableViewProvider);
     serviceManager.add<IJupyterVariableDataProvider>(IJupyterVariableDataProvider, JupyterVariableDataProvider);
     serviceManager.addSingleton<IJupyterVariableDataProviderFactory>(

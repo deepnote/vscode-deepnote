@@ -4,7 +4,7 @@
 import { inject, injectable, named } from 'inversify';
 import { CancellationToken, Uri, workspace } from 'vscode';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
-import { IDeepnoteToolkitInstaller, DEEPNOTE_TOOLKIT_WHEEL_URL } from './types';
+import { IDeepnoteToolkitInstaller, DEEPNOTE_TOOLKIT_WHEEL_URL, DEEPNOTE_TOOLKIT_VERSION } from './types';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { logger } from '../../platform/logging';
 import { IOutputChannel, IExtensionContext } from '../../platform/common/types';
@@ -29,10 +29,11 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
     ) {}
 
     private getVenvPath(deepnoteFileUri: Uri): Uri {
-        // Create a unique venv name based on the file path using a hash
+        // Create a unique venv name based on the file path and toolkit version using a hash
         // This avoids Windows MAX_PATH issues and prevents directory structure leakage
+        // Including the version ensures a new venv is created when the toolkit version changes
         const hash = this.getVenvHash(deepnoteFileUri);
-        return Uri.joinPath(this.context.globalStorageUri, 'deepnote-venvs', hash);
+        return Uri.joinPath(this.context.globalStorageUri, 'deepnote-venvs', `${hash}-${DEEPNOTE_TOOLKIT_VERSION}`);
     }
 
     public async getVenvInterpreter(deepnoteFileUri: Uri): Promise<PythonEnvironment | undefined> {

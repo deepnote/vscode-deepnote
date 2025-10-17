@@ -664,22 +664,27 @@ suite('Kernel Connection Helpers', () => {
         function createMockKernel(options: MockKernelOptions) {
             return {
                 requestExecute: () => {
-                    let iopubCallback: ((msg: any) => void) | undefined;
+                    let resolvePromise: (value: any) => void;
 
-                    // Create a promise that resolves after IOPub messages are dispatched
+                    // Create a promise that will be resolved after IOPub messages are dispatched
                     const donePromise = new Promise<any>((resolve) => {
-                        // Dispatch messages asynchronously to preserve async behavior
-                        setTimeout(() => {
-                            if (iopubCallback && options.messages && options.messages.length > 0) {
+                        resolvePromise = resolve;
+                    });
+
+                    return {
+                        done: donePromise,
+                        set onIOPub(cb: (msg: any) => void) {
+                            // Invoke IOPub callback synchronously with all messages
+                            if (options.messages && options.messages.length > 0) {
                                 options.messages.forEach((msg) => {
-                                    iopubCallback!({
+                                    cb({
                                         header: { msg_type: msg.msg_type },
                                         content: msg.content
                                     });
                                 });
                             }
                             // Resolve the done promise after messages are dispatched
-                            resolve({
+                            resolvePromise({
                                 content:
                                     options.status === 'ok'
                                         ? { status: 'ok' as const }
@@ -688,13 +693,6 @@ suite('Kernel Connection Helpers', () => {
                                               ...options.errorContent
                                           }
                             });
-                        }, 0);
-                    });
-
-                    return {
-                        done: donePromise,
-                        set onIOPub(cb: (msg: any) => void) {
-                            iopubCallback = cb;
                         }
                     };
                 }

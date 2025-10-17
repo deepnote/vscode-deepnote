@@ -57,8 +57,10 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
+        const trimmedCredentials = credentials.trim();
+
         // Validate credentials before submitting
-        if (!validateCredentials(credentials)) {
+        if (!validateCredentials(trimmedCredentials)) {
             return;
         }
 
@@ -66,10 +68,10 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
 
         const config: BigQueryIntegrationConfig = {
             id: integrationId,
-            name: name || unnamedIntegration,
+            name: (name || unnamedIntegration).trim(),
             type: 'bigquery',
-            projectId,
-            credentials
+            projectId: projectId.trim(),
+            credentials: trimmedCredentials
         };
 
         onSave(config);

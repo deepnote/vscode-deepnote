@@ -268,14 +268,14 @@ suite('ChartBigNumberBlockConverter', () => {
 
             const config = JSON.parse(cell.value);
             assert.deepStrictEqual(config, {
-                deepnote_big_number_title: null,
-                deepnote_big_number_value: null,
-                deepnote_big_number_format: null,
-                deepnote_big_number_comparison_type: null,
-                deepnote_big_number_comparison_title: null,
-                deepnote_big_number_comparison_value: null,
-                deepnote_big_number_comparison_format: null,
-                deepnote_big_number_comparison_enabled: null
+                deepnote_big_number_title: '',
+                deepnote_big_number_value: '',
+                deepnote_big_number_format: 'number',
+                deepnote_big_number_comparison_type: '',
+                deepnote_big_number_comparison_title: '',
+                deepnote_big_number_comparison_value: '',
+                deepnote_big_number_comparison_format: '',
+                deepnote_big_number_comparison_enabled: false
             });
         });
 
@@ -296,14 +296,14 @@ suite('ChartBigNumberBlockConverter', () => {
 
             const config = JSON.parse(cell.value);
             assert.deepStrictEqual(config, {
-                deepnote_big_number_title: null,
-                deepnote_big_number_value: null,
-                deepnote_big_number_format: null,
-                deepnote_big_number_comparison_type: null,
-                deepnote_big_number_comparison_title: null,
-                deepnote_big_number_comparison_value: null,
-                deepnote_big_number_comparison_format: null,
-                deepnote_big_number_comparison_enabled: null
+                deepnote_big_number_title: '',
+                deepnote_big_number_value: '',
+                deepnote_big_number_format: 'number',
+                deepnote_big_number_comparison_type: '',
+                deepnote_big_number_comparison_title: '',
+                deepnote_big_number_comparison_value: '',
+                deepnote_big_number_comparison_format: '',
+                deepnote_big_number_comparison_enabled: false
             });
         });
     });
@@ -445,13 +445,13 @@ suite('ChartBigNumberBlockConverter', () => {
                 metadata: {
                     custom: 'value',
                     deepnote_big_number_title: 'new title',
-                    deepnote_big_number_comparison_enabled: null,
-                    deepnote_big_number_comparison_format: null,
-                    deepnote_big_number_comparison_title: null,
-                    deepnote_big_number_comparison_type: null,
-                    deepnote_big_number_comparison_value: null,
-                    deepnote_big_number_format: null,
-                    deepnote_big_number_value: null
+                    deepnote_big_number_comparison_enabled: false,
+                    deepnote_big_number_comparison_format: '',
+                    deepnote_big_number_comparison_title: '',
+                    deepnote_big_number_comparison_type: '',
+                    deepnote_big_number_comparison_value: '',
+                    deepnote_big_number_format: 'number',
+                    deepnote_big_number_value: ''
                 },
                 outputs: [],
                 sortingKey: 'a0',

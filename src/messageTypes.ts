@@ -158,13 +158,6 @@ export type LocalizedMessages = {
     selectedImageListLabel: string;
     selectedImageLabel: string;
     dvDeprecationWarning: string;
-    dataframeRowsColumns: string;
-    dataframePerPage: string;
-    dataframePreviousPage: string;
-    dataframeNextPage: string;
-    dataframePageOf: string;
-    dataframeCopyTable: string;
-    dataframeExportTable: string;
 };
 // Map all messages to specific payloads
 export class IInteractiveWindowMapping {

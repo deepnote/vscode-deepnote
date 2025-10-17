@@ -4,7 +4,6 @@
 import { NotebookDocument, NotebookEditor, Uri, type Event } from 'vscode';
 import { Resource } from '../platform/common/types';
 import type { EnvironmentPath } from '@vscode/python-extension';
-import { DeepnoteProject } from './deepnote/deepnoteTypes';
 
 export interface IEmbedNotebookEditorProvider {
     findNotebookEditor(resource: Resource): NotebookEditor | undefined;
@@ -28,10 +27,10 @@ export interface INotebookPythonEnvironmentService {
 export const IDeepnoteNotebookManager = Symbol('IDeepnoteNotebookManager');
 export interface IDeepnoteNotebookManager {
     getCurrentNotebookId(projectId: string): string | undefined;
-    getOriginalProject(projectId: string): DeepnoteProject | undefined;
+    getOriginalProject(projectId: string): unknown | undefined;
     getTheSelectedNotebookForAProject(projectId: string): string | undefined;
     selectNotebookForProject(projectId: string, notebookId: string): void;
-    storeOriginalProject(projectId: string, project: DeepnoteProject, notebookId: string): void;
+    storeOriginalProject(projectId: string, project: unknown, notebookId: string): void;
     updateCurrentNotebookId(projectId: string, notebookId: string): void;
     hasInitNotebookBeenRun(projectId: string): boolean;
     markInitNotebookAsRun(projectId: string): void;

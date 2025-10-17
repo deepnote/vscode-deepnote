@@ -805,13 +805,6 @@ export namespace WebViews {
     export const dvDeprecationWarning = l10n.t(
         'The built-in data viewer will be deprecated and no longer usable starting with Visual Studio Code 1.92. Please <a href="command:workbench.extensions.search?%22@tag:jupyterVariableViewers%22">install other data viewing extensions</a> to continue inspecting data'
     );
-    export const dataframeRowsColumns = l10n.t('{0} rows, {1} columns');
-    export const dataframePerPage = l10n.t('/ page');
-    export const dataframePreviousPage = l10n.t('Previous page');
-    export const dataframeNextPage = l10n.t('Next page');
-    export const dataframePageOf = l10n.t('Page {0} of {1}');
-    export const dataframeCopyTable = l10n.t('Copy table');
-    export const dataframeExportTable = l10n.t('Export table');
 }
 
 export namespace Deprecated {

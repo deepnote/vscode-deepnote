@@ -1,16 +1,8 @@
 import { inject, injectable } from 'inversify';
-import {
-    type NotebookDocument,
-    ProgressLocation,
-    window,
-    CancellationTokenSource,
-    type CancellationToken,
-    l10n
-} from 'vscode';
-
+import { NotebookDocument, ProgressLocation, window, CancellationTokenSource, CancellationToken } from 'vscode';
 import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
-import type { DeepnoteProject, DeepnoteNotebook } from './deepnoteTypes';
+import { DeepnoteProject, DeepnoteNotebook } from './deepnoteTypes';
 import { IKernelProvider } from '../../kernels/types';
 import { getDisplayPath } from '../../platform/common/platform/fs-paths';
 
@@ -142,14 +134,14 @@ export class DeepnoteInitNotebookRunner {
             return window.withProgress(
                 {
                     location: ProgressLocation.Notification,
-                    title: l10n.t(`🚀 Initializing project environment`),
+                    title: `🚀 Initializing project environment`,
                     cancellable: false
                 },
                 async (notificationProgress) => {
                     return window.withProgress(
                         {
                             location: ProgressLocation.Window,
-                            title: l10n.t(`Init: "${initNotebook.name}"`),
+                            title: `Init: "${initNotebook.name}"`,
                             cancellable: false
                         },
                         async (windowProgress) => {
@@ -242,7 +234,7 @@ export class DeepnoteInitNotebookRunner {
                 }
 
                 const block = codeBlocks[i];
-                const percentComplete = Math.min(100, Math.floor(((i + 1) / codeBlocks.length) * 100));
+                const percentComplete = Math.floor((i / codeBlocks.length) * 100);
 
                 // Show more detailed progress with percentage
                 progress(

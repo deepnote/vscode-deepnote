@@ -30,8 +30,7 @@ suite('DeepnoteDataConverter', () => {
             assert.strictEqual(cells[0].kind, NotebookCellKind.Code);
             assert.strictEqual(cells[0].value, 'print("hello")');
             assert.strictEqual(cells[0].languageId, 'python');
-            // id should be at top level, not in pocket
-            assert.strictEqual(cells[0].metadata?.id, 'block1');
+            assert.strictEqual(cells[0].metadata?.__deepnotePocket?.id, 'block1');
             assert.strictEqual(cells[0].metadata?.__deepnotePocket?.type, 'code');
             assert.strictEqual(cells[0].metadata?.__deepnotePocket?.sortingKey, 'a0');
             assert.strictEqual(cells[0].metadata?.custom, 'data');
@@ -54,36 +53,8 @@ suite('DeepnoteDataConverter', () => {
             assert.strictEqual(cells[0].kind, NotebookCellKind.Markup);
             assert.strictEqual(cells[0].value, '# Title');
             assert.strictEqual(cells[0].languageId, 'markdown');
-            // id should be at top level, not in pocket
-            assert.strictEqual(cells[0].metadata?.id, 'block2');
+            assert.strictEqual(cells[0].metadata?.__deepnotePocket?.id, 'block2');
             assert.strictEqual(cells[0].metadata?.__deepnotePocket?.type, 'markdown');
-        });
-
-        test('converts SQL block to cell with sql language', () => {
-            const blocks: DeepnoteBlock[] = [
-                {
-                    blockGroup: 'test-group',
-                    id: 'block3',
-                    type: 'sql',
-                    content: 'SELECT * FROM users WHERE id = 1',
-                    sortingKey: 'a2',
-                    metadata: {
-                        sql_integration_id: 'postgres-123'
-                    }
-                }
-            ];
-
-            const cells = converter.convertBlocksToCells(blocks);
-
-            assert.strictEqual(cells.length, 1);
-            assert.strictEqual(cells[0].kind, NotebookCellKind.Code);
-            assert.strictEqual(cells[0].value, 'SELECT * FROM users WHERE id = 1');
-            assert.strictEqual(cells[0].languageId, 'sql');
-            // id should be at top level, not in pocket
-            assert.strictEqual(cells[0].metadata?.id, 'block3');
-            assert.strictEqual(cells[0].metadata?.__deepnotePocket?.type, 'sql');
-            assert.strictEqual(cells[0].metadata?.__deepnotePocket?.sortingKey, 'a2');
-            assert.strictEqual(cells[0].metadata?.sql_integration_id, 'postgres-123');
         });
 
         test('handles execution count', () => {
@@ -137,10 +108,10 @@ suite('DeepnoteDataConverter', () => {
                     languageId: 'python',
                     metadata: {
                         __deepnotePocket: {
+                            id: 'existing-id',
                             type: 'code',
                             sortingKey: 'a5'
                         },
-                        id: 'existing-id',
                         original: 'metadata'
                     }
                 }

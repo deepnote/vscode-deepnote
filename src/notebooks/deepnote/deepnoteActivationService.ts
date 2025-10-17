@@ -5,7 +5,6 @@ import { IExtensionContext } from '../../platform/common/types';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
 import { DeepnoteExplorerView } from './deepnoteExplorerView';
-import { IIntegrationManager } from './integrations/types';
 
 /**
  * Service responsible for activating and configuring Deepnote notebook support in VS Code.
@@ -14,18 +13,12 @@ import { IIntegrationManager } from './integrations/types';
 @injectable()
 export class DeepnoteActivationService implements IExtensionSyncActivationService {
     private explorerView: DeepnoteExplorerView;
-
-    private integrationManager: IIntegrationManager;
-
     private serializer: DeepnoteNotebookSerializer;
 
     constructor(
         @inject(IExtensionContext) private extensionContext: IExtensionContext,
-        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
-        @inject(IIntegrationManager) integrationManager: IIntegrationManager
-    ) {
-        this.integrationManager = integrationManager;
-    }
+        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager
+    ) {}
 
     /**
      * Activates Deepnote support by registering serializers and commands.
@@ -38,6 +31,5 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
         this.extensionContext.subscriptions.push(workspace.registerNotebookSerializer('deepnote', this.serializer));
 
         this.explorerView.activate();
-        this.integrationManager.activate();
     }
 }

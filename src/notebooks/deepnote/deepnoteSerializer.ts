@@ -2,7 +2,6 @@ import { injectable, inject } from 'inversify';
 import { l10n, type CancellationToken, type NotebookData, type NotebookSerializer, workspace } from 'vscode';
 import * as yaml from 'js-yaml';
 
-import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
 import type { DeepnoteProject } from './deepnoteTypes';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
@@ -36,7 +35,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
      * @returns Promise resolving to notebook data
      */
     async deserializeNotebook(content: Uint8Array, token: CancellationToken): Promise<NotebookData> {
-        logger.debug('DeepnoteSerializer: Deserializing Deepnote notebook');
+        console.log('Deserializing Deepnote notebook');
 
         if (token?.isCancellationRequested) {
             throw new Error('Serialization cancelled');
@@ -53,7 +52,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             const projectId = deepnoteProject.project.id;
             const notebookId = this.findCurrentNotebookId(projectId);
 
-            logger.debug(`DeepnoteSerializer: Project ID: ${projectId}, Selected notebook ID: ${notebookId}`);
+            console.log(`Selected notebook ID: ${notebookId}.`);
 
             const selectedNotebook = notebookId
                 ? deepnoteProject.project.notebooks.find((nb) => nb.id === notebookId)
@@ -63,12 +62,11 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 throw new Error(l10n.t('No notebook selected or found'));
             }
 
-            const cells = this.converter.convertBlocksToCells(selectedNotebook.blocks ?? []);
+            const cells = this.converter.convertBlocksToCells(selectedNotebook.blocks);
 
-            logger.debug(`DeepnoteSerializer: Converted ${cells.length} cells from notebook blocks`);
+            console.log(`Converted ${cells.length} cells from notebook blocks.`);
 
             this.notebookManager.storeOriginalProject(deepnoteProject.project.id, deepnoteProject, selectedNotebook.id);
-            logger.debug(`DeepnoteSerializer: Stored project ${projectId} in notebook manager`);
 
             return {
                 cells,
@@ -83,7 +81,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 }
             };
         } catch (error) {
-            logger.error('DeepnoteSerializer: Error deserializing Deepnote notebook', error);
+            console.error('Error deserializing Deepnote notebook:', error);
 
             throw new Error(
                 `Failed to parse Deepnote file: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -150,7 +148,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
             return new TextEncoder().encode(yamlString);
         } catch (error) {
-            logger.error('DeepnoteSerializer: Error serializing Deepnote notebook', error);
+            console.error('Error serializing Deepnote notebook:', error);
             throw new Error(
                 `Failed to save Deepnote file: ${error instanceof Error ? error.message : 'Unknown error'}`
             );

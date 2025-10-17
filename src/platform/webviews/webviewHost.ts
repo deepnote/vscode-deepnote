@@ -258,14 +258,7 @@ export abstract class WebviewHost<IMapping> implements IDisposable {
             deletePlot: localize.WebViews.deletePlot,
             selectedImageListLabel: localize.WebViews.selectedImageListLabel,
             selectedImageLabel: localize.WebViews.selectedImageLabel,
-            dvDeprecationWarning: localize.WebViews.dvDeprecationWarning,
-            dataframeRowsColumns: localize.WebViews.dataframeRowsColumns,
-            dataframePerPage: localize.WebViews.dataframePerPage,
-            dataframePreviousPage: localize.WebViews.dataframePreviousPage,
-            dataframeNextPage: localize.WebViews.dataframeNextPage,
-            dataframePageOf: localize.WebViews.dataframePageOf,
-            dataframeCopyTable: localize.WebViews.dataframeCopyTable,
-            dataframeExportTable: localize.WebViews.dataframeExportTable
+            dvDeprecationWarning: localize.WebViews.dvDeprecationWarning
         };
         this.postMessageInternal(SharedMessages.LocInit, JSON.stringify(locStrings)).catch(noop);
     }

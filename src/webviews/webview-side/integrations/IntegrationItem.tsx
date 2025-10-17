@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { getLocString } from '../react-common/locReactSide';
 import { IntegrationWithStatus } from './types';
 
 export interface IIntegrationItemProps {
@@ -9,8 +10,13 @@ export interface IIntegrationItemProps {
 
 export const IntegrationItem: React.FC<IIntegrationItemProps> = ({ integration, onConfigure, onDelete }) => {
     const statusClass = integration.status === 'connected' ? 'status-connected' : 'status-disconnected';
-    const statusText = integration.status === 'connected' ? 'Connected' : 'Not Configured';
-    const configureText = integration.config ? 'Reconfigure' : 'Configure';
+    const statusText =
+        integration.status === 'connected'
+            ? getLocString('integrationsConnected', 'Connected')
+            : getLocString('integrationsNotConfigured', 'Not Configured');
+    const configureText = integration.config
+        ? getLocString('integrationsReconfigure', 'Reconfigure')
+        : getLocString('integrationsConfigure', 'Configure');
     const displayName = integration.config?.name || integration.id;
 
     return (
@@ -25,7 +31,7 @@ export const IntegrationItem: React.FC<IIntegrationItemProps> = ({ integration, 
                 </button>
                 {integration.config && (
                     <button type="button" className="secondary" onClick={() => onDelete(integration.id)}>
-                        Reset
+                        {getLocString('integrationsReset', 'Reset')}
                     </button>
                 )}
             </div>

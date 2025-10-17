@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { getLocString } from '../react-common/locReactSide';
 import { PostgresIntegrationConfig } from './types';
 
 export interface IPostgresFormProps {
@@ -33,9 +34,14 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, exis
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
+        const unnamedIntegration = getLocString(
+            'integrationsPostgresUnnamedIntegration',
+            'Unnamed PostgreSQL Integration ({0})'
+        ).replace('{0}', integrationId);
+
         const config: PostgresIntegrationConfig = {
             id: integrationId,
-            name: name || `Unnamed PostgreSQL Integration (${integrationId})`,
+            name: name || unnamedIntegration,
             type: 'postgres',
             host,
             port: parseInt(port, 10),
@@ -51,27 +57,28 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, exis
     return (
         <form onSubmit={handleSubmit}>
             <div className="form-group">
-                <label htmlFor="name">Name (optional)</label>
+                <label htmlFor="name">{getLocString('integrationsPostgresNameLabel', 'Name (optional)')}</label>
                 <input
                     type="text"
                     id="name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="My PostgreSQL Database"
+                    placeholder={getLocString('integrationsPostgresNamePlaceholder', 'My PostgreSQL Database')}
                     autoComplete="off"
                 />
             </div>
 
             <div className="form-group">
                 <label htmlFor="host">
-                    Host <span className="required">*</span>
+                    {getLocString('integrationsPostgresHostLabel', 'Host')}{' '}
+                    <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
                     type="text"
                     id="host"
                     value={host}
                     onChange={(e) => setHost(e.target.value)}
-                    placeholder="localhost"
+                    placeholder={getLocString('integrationsPostgresHostPlaceholder', 'localhost')}
                     autoComplete="off"
                     required
                 />
@@ -79,14 +86,15 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, exis
 
             <div className="form-group">
                 <label htmlFor="port">
-                    Port <span className="required">*</span>
+                    {getLocString('integrationsPostgresPortLabel', 'Port')}{' '}
+                    <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
                     type="number"
                     id="port"
                     value={port}
                     onChange={(e) => setPort(e.target.value)}
-                    placeholder="5432"
+                    placeholder={getLocString('integrationsPostgresPortPlaceholder', '5432')}
                     min={1}
                     max={65535}
                     step={1}
@@ -97,14 +105,15 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, exis
 
             <div className="form-group">
                 <label htmlFor="database">
-                    Database <span className="required">*</span>
+                    {getLocString('integrationsPostgresDatabaseLabel', 'Database')}{' '}
+                    <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
                     type="text"
                     id="database"
                     value={database}
                     onChange={(e) => setDatabase(e.target.value)}
-                    placeholder="mydb"
+                    placeholder={getLocString('integrationsPostgresDatabasePlaceholder', 'mydb')}
                     autoComplete="off"
                     required
                 />
@@ -112,14 +121,15 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, exis
 
             <div className="form-group">
                 <label htmlFor="username">
-                    Username <span className="required">*</span>
+                    {getLocString('integrationsPostgresUsernameLabel', 'Username')}{' '}
+                    <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
                     type="text"
                     id="username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder="postgres"
+                    placeholder={getLocString('integrationsPostgresUsernamePlaceholder', 'postgres')}
                     autoComplete="username"
                     required
                 />
@@ -127,14 +137,15 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, exis
 
             <div className="form-group">
                 <label htmlFor="password">
-                    Password <span className="required">*</span>
+                    {getLocString('integrationsPostgresPasswordLabel', 'Password')}{' '}
+                    <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
                     type="password"
                     id="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
+                    placeholder={getLocString('integrationsPostgresPasswordPlaceholder', '••••••••')}
                     autoComplete="current-password"
                     required
                 />
@@ -143,16 +154,16 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({ integrationId, exis
             <div className="form-group checkbox-group">
                 <label>
                     <input type="checkbox" checked={ssl} onChange={(e) => setSsl(e.target.checked)} />
-                    Use SSL
+                    {getLocString('integrationsPostgresSslLabel', 'Use SSL')}
                 </label>
             </div>
 
             <div className="form-actions">
                 <button type="submit" className="primary">
-                    Save
+                    {getLocString('integrationsSave', 'Save')}
                 </button>
                 <button type="button" className="secondary" onClick={onCancel}>
-                    Cancel
+                    {getLocString('integrationsCancel', 'Cancel')}
                 </button>
             </div>
         </form>

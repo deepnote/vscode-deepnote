@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { IVsCodeApi } from '../react-common/postOffice';
+import { getLocString, storeLocStrings } from '../react-common/locReactSide';
 import { IntegrationList } from './IntegrationList';
 import { ConfigurationForm } from './ConfigurationForm';
 import { IntegrationWithStatus, WebviewMessage, IntegrationConfig } from './types';
@@ -39,6 +40,13 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
             const msg = event.data;
 
             switch (msg.type) {
+                case 'loc_init':
+                    if (msg.type === 'loc_init') {
+                        const locStrings = JSON.parse(msg.locStrings);
+                        storeLocStrings(locStrings);
+                    }
+                    break;
+
                 case 'update':
                     setIntegrations(msg.integrations);
                     break;
@@ -129,7 +137,7 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
 
     return (
         <div className={`integration-panel theme-${baseTheme}`}>
-            <h1>Deepnote Integrations</h1>
+            <h1>{getLocString('integrationsTitle', 'Deepnote Integrations')}</h1>
 
             {message && <div className={`message message-${message.type}`}>{message.text}</div>}
 
@@ -148,20 +156,28 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
                 <div className="configuration-form-overlay">
                     <div className="configuration-form-container" style={{ maxWidth: '400px' }}>
                         <div className="configuration-form-header">
-                            <h2>Confirm Reset</h2>
+                            <h2>{getLocString('integrationsConfirmResetTitle', 'Confirm Reset')}</h2>
                         </div>
                         <div className="configuration-form-body">
-                            <p>Are you sure you want to reset this integration configuration?</p>
+                            <p>
+                                {getLocString(
+                                    'integrationsConfirmResetMessage',
+                                    'Are you sure you want to reset this integration configuration?'
+                                )}
+                            </p>
                             <p style={{ marginTop: '10px', fontSize: '0.9em', opacity: 0.8 }}>
-                                This will remove the stored credentials. You can reconfigure it later.
+                                {getLocString(
+                                    'integrationsConfirmResetDetails',
+                                    'This will remove the stored credentials. You can reconfigure it later.'
+                                )}
                             </p>
                         </div>
                         <div className="form-actions">
                             <button type="button" className="primary" onClick={handleConfirmDelete}>
-                                Reset
+                                {getLocString('integrationsReset', 'Reset')}
                             </button>
                             <button type="button" className="secondary" onClick={handleCancelDelete}>
-                                Cancel
+                                {getLocString('integrationsCancel', 'Cancel')}
                             </button>
                         </div>
                     </div>

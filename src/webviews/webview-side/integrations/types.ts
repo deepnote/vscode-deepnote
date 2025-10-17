@@ -54,4 +54,9 @@ export interface StatusMessage {
     message: string;
 }
 
-export type WebviewMessage = UpdateMessage | ShowFormMessage | StatusMessage;
+export interface LocInitMessage {
+    type: 'loc_init';
+    locStrings: string;
+}
+
+export type WebviewMessage = UpdateMessage | ShowFormMessage | StatusMessage | LocInitMessage;

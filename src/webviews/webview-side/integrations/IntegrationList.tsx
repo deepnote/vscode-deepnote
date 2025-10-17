@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { getLocString } from '../react-common/locReactSide';
 import { IntegrationItem } from './IntegrationItem';
 import { IntegrationWithStatus } from './types';
 
@@ -10,7 +11,11 @@ export interface IIntegrationListProps {
 
 export const IntegrationList: React.FC<IIntegrationListProps> = ({ integrations, onConfigure, onDelete }) => {
     if (integrations.length === 0) {
-        return <p className="no-integrations">No integrations found in this project.</p>;
+        return (
+            <p className="no-integrations">
+                {getLocString('integrationsNoIntegrationsFound', 'No integrations found in this project.')}
+            </p>
+        );
     }
 
     return (

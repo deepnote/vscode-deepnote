@@ -48,6 +48,8 @@ const commonExternals = [
     'vscode',
     'commonjs',
     'node:crypto',
+    'node:fs/promises',
+    'node:path',
     'vscode-jsonrpc', // Used by a few modules, might as well pull this out, instead of duplicating it in separate bundles.
     // Ignore telemetry specific packages that are not required.
     'applicationinsights-native-metrics',
@@ -354,6 +356,11 @@ async function buildAll() {
         build(
             path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'data-explorer', 'index.tsx'),
             path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'viewers', 'dataExplorer.js'),
+            { target: 'web', watch: watchAll }
+        ),
+        build(
+            path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'integrations', 'index.tsx'),
+            path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'integrations', 'index.js'),
             { target: 'web', watch: watchAll }
         )
     );

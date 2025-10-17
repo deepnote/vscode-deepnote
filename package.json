@@ -92,6 +92,24 @@
                 "icon": "$(plug)"
             },
             {
+                "command": "deepnote.newProject",
+                "title": "New project",
+                "category": "Deepnote",
+                "icon": "$(new-file)"
+            },
+            {
+                "command": "deepnote.importNotebook",
+                "title": "Import notebook",
+                "category": "Deepnote",
+                "icon": "$(folder-opened)"
+            },
+            {
+                "command": "deepnote.importJupyterNotebook",
+                "title": "Import Jupyter notebook",
+                "category": "Deepnote",
+                "icon": "$(notebook)"
+            },
+            {
                 "command": "deepnote.addSqlBlock",
                 "title": "Add SQL block",
                 "category": "Deepnote",
@@ -725,6 +743,11 @@
                 }
             ],
             "notebook/toolbar": [
+                {
+                    "command": "deepnote.manageIntegrations",
+                    "group": "navigation@0",
+                    "when": "notebookType == 'deepnote'"
+                },
                 {
                     "command": "jupyter.restartkernel",
                     "group": "navigation/execute@5",
@@ -1868,7 +1891,6 @@
                 {
                     "id": "deepnoteExplorer",
                     "name": "%deepnote.views.explorer.name%",
-                    "when": "workspaceFolderCount != 0",
                     "iconPath": {
                         "light": "./resources/light/deepnote-icon.svg",
                         "dark": "./resources/dark/deepnote-icon.svg"
@@ -1876,6 +1898,12 @@
                 }
             ]
         },
+        "viewsWelcome": [
+            {
+                "view": "deepnoteExplorer",
+                "contents": "Welcome to Deepnote for VS Code!\nExplore your data with SQL and Python. Build interactive notebooks, collaborate with your team, and share your insights.\n\n\n\n[$(new-file) New Project](command:deepnote.newProject)\n[$(folder-opened) Import Notebook](command:deepnote.importNotebook)"
+            }
+        ],
         "debuggers": [
             {
                 "type": "Python Kernel Debug Adapter",
@@ -2137,6 +2165,7 @@
     "dependencies": {
         "@c4312/evt": "^0.1.1",
         "@deepnote/blocks": "^1.2.0",
+        "@deepnote/convert": "^1.1.0",
         "@enonic/fnv-plus": "^1.3.0",
         "@jupyter-widgets/base": "^6.0.8",
         "@jupyter-widgets/controls": "^5.0.9",

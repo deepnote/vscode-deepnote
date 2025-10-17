@@ -21,15 +21,12 @@ export const activate: ActivationFunction = (_context: RendererContext<unknown>)
 
                 const chartBigNumberOutput = DeepnoteChartBigNumberOutputSchema.parse(data);
 
-                const root = document.createElement('div');
-                element.appendChild(root);
-
                 ReactDOM.render(
                     React.createElement(ChartBigNumberOutputRenderer, {
                         output: chartBigNumberOutput,
                         metadata: blockMetadata
                     }),
-                    root
+                    element
                 );
             } catch (error) {
                 console.error('Error rendering chart big number:', error);
@@ -41,8 +38,24 @@ export const activate: ActivationFunction = (_context: RendererContext<unknown>)
             }
         },
 
-        disposeOutputItem(_id?: string) {
-            // Cleanup if needed
+        disposeOutputItem(id?: string) {
+            // If undefined, all cells are being removed.
+            if (id == null) {
+                for (let i = 0; i < document.children.length; i++) {
+                    const child = document.children.item(i);
+                    if (child == null) {
+                        continue;
+                    }
+                    ReactDOM.unmountComponentAtNode(child);
+                }
+                return;
+            }
+
+            const element = document.getElementById(id);
+            if (element == null) {
+                return;
+            }
+            ReactDOM.unmountComponentAtNode(element);
         }
     };
 };

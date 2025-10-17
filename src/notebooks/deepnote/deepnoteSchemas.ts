@@ -22,7 +22,7 @@ export const DeepnoteBigNumberMetadataSchema = z.object({
         .nullish()
         .transform((val) => val ?? null),
     deepnote_big_number_comparison_type: z
-        .enum(['absolute-value', 'percentage-change', 'absolute-change'])
+        .string()
         .nullish()
         .transform((val) => val ?? null),
     deepnote_big_number_comparison_title: z

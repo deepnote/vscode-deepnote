@@ -223,8 +223,7 @@ export namespace Commands {
     export const OpenDeepnoteNotebook = 'deepnote.openNotebook';
     export const OpenDeepnoteFile = 'deepnote.openFile';
     export const RevealInDeepnoteExplorer = 'deepnote.revealInExplorer';
-    export const AddSqlBlock = 'deepnote.addSqlBlock';
-    export const AddBigNumberChartBlock = 'deepnote.addBigNumberChartBlock';
+    export const ManageIntegrations = 'deepnote.manageIntegrations';
     export const ExportAsPythonScript = 'jupyter.exportAsPythonScript';
     export const ExportToHTML = 'jupyter.exportToHTML';
     export const ExportToPDF = 'jupyter.exportToPDF';

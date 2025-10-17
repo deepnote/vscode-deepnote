@@ -103,11 +103,9 @@ export class SqlIntegrationEnvironmentVariablesProvider {
             return envVars;
         }
 
-        logger.info(`SqlIntegrationEnvironmentVariablesProvider: Getting env vars for resource ${resource.toString()}`);
-        logger.info(
-            `SqlIntegrationEnvironmentVariablesProvider: Available notebooks: ${workspace.notebookDocuments
-                .map((nb) => nb.uri.toString())
-                .join(', ')}`
+        logger.trace(`SqlIntegrationEnvironmentVariablesProvider: Getting env vars for resource`);
+        logger.trace(
+            `SqlIntegrationEnvironmentVariablesProvider: Available notebooks count: ${workspace.notebookDocuments.length}`
         );
 
         // Find the notebook document for this resource
@@ -126,11 +124,7 @@ export class SqlIntegrationEnvironmentVariablesProvider {
             return envVars;
         }
 
-        logger.info(
-            `SqlIntegrationEnvironmentVariablesProvider: Found ${integrationIds.size} SQL integrations: ${Array.from(
-                integrationIds
-            ).join(', ')}`
-        );
+        logger.trace(`SqlIntegrationEnvironmentVariablesProvider: Found ${integrationIds.size} SQL integrations`);
 
         // Get credentials for each integration and add to environment variables
         for (const integrationId of integrationIds) {
@@ -163,11 +157,7 @@ export class SqlIntegrationEnvironmentVariablesProvider {
             }
         }
 
-        logger.info(
-            `SqlIntegrationEnvironmentVariablesProvider: Returning ${
-                Object.keys(envVars).length
-            } env vars: ${Object.keys(envVars).join(', ')}`
-        );
+        logger.trace(`SqlIntegrationEnvironmentVariablesProvider: Returning ${Object.keys(envVars).length} env vars`);
 
         return envVars;
     }

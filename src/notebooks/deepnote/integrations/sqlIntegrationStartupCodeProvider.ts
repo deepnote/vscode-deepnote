@@ -78,7 +78,7 @@ export class SqlIntegrationStartupCodeProvider implements IStartupCodeProvider, 
             logger.info(
                 `SqlIntegrationStartupCodeProvider: Injecting ${
                     Object.keys(envVars).length
-                } SQL integration env vars into kernel: ${Object.keys(envVars).join(', ')}`
+                } SQL integration env vars into kernel`
             );
 
             // Generate Python code to set environment variables directly in os.environ

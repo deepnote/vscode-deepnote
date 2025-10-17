@@ -648,19 +648,57 @@ suite('Kernel Connection Helpers', () => {
     });
 
     suite('executeSilently', () => {
-        test('Returns outputs from kernel execution', async () => {
-            const mockKernel = {
+        interface MockKernelOptions {
+            status: 'ok' | 'error';
+            messages?: Array<{
+                msg_type: 'stream' | 'error' | 'display_data';
+                content: any;
+            }>;
+            errorContent?: {
+                ename: string;
+                evalue: string;
+                traceback: string[];
+            };
+        }
+
+        function createMockKernel(options: MockKernelOptions) {
+            let iopubCallback: ((msg: any) => void) | undefined;
+
+            return {
                 requestExecute: () => ({
                     done: Promise.resolve({
-                        content: {
-                            status: 'ok' as const
-                        }
+                        content:
+                            options.status === 'ok'
+                                ? { status: 'ok' as const }
+                                : {
+                                      status: 'error' as const,
+                                      ...options.errorContent
+                                  }
                     }),
-                    onIOPub: () => {
-                        // noop
+                    onIOPub: (cb: (msg: any) => void) => {
+                        iopubCallback = cb;
+                        // Dispatch messages asynchronously to preserve async behavior
+                        if (options.messages && options.messages.length > 0) {
+                            setTimeout(() => {
+                                if (iopubCallback) {
+                                    options.messages!.forEach((msg) => {
+                                        iopubCallback!({
+                                            header: { msg_type: msg.msg_type },
+                                            content: msg.content
+                                        });
+                                    });
+                                }
+                            }, 0);
+                        }
                     }
                 })
             };
+        }
+
+        test('Returns outputs from kernel execution', async () => {
+            const mockKernel = createMockKernel({
+                status: 'ok'
+            });
 
             const code = 'print("hello")';
             const { executeSilently } = await import('./helpers');
@@ -671,18 +709,9 @@ suite('Kernel Connection Helpers', () => {
         });
 
         test('Handles empty code', async () => {
-            const mockKernel = {
-                requestExecute: () => ({
-                    done: Promise.resolve({
-                        content: {
-                            status: 'ok' as const
-                        }
-                    }),
-                    onIOPub: () => {
-                        // noop
-                    }
-                })
-            };
+            const mockKernel = createMockKernel({
+                status: 'ok'
+            });
 
             const code = '';
             const { executeSilently } = await import('./helpers');
@@ -693,32 +722,18 @@ suite('Kernel Connection Helpers', () => {
         });
 
         test('Collects stream outputs', async () => {
-            let iopubCallback: ((msg: any) => void) | undefined;
-
-            const mockKernel = {
-                requestExecute: () => ({
-                    done: Promise.resolve({
+            const mockKernel = createMockKernel({
+                status: 'ok',
+                messages: [
+                    {
+                        msg_type: 'stream',
                         content: {
-                            status: 'ok' as const
+                            name: 'stdout',
+                            text: 'test output'
                         }
-                    }),
-                    onIOPub: (cb: (msg: any) => void) => {
-                        iopubCallback = cb;
-                        // Simulate stream output
-                        setTimeout(() => {
-                            if (iopubCallback) {
-                                iopubCallback({
-                                    header: { msg_type: 'stream' },
-                                    content: {
-                                        name: 'stdout',
-                                        text: 'test output'
-                                    }
-                                });
-                            }
-                        }, 0);
                     }
-                })
-            };
+                ]
+            });
 
             const code = 'print("test")';
             const { executeSilently } = await import('./helpers');
@@ -732,36 +747,24 @@ suite('Kernel Connection Helpers', () => {
         });
 
         test('Collects error outputs', async () => {
-            let iopubCallback: ((msg: any) => void) | undefined;
-
-            const mockKernel = {
-                requestExecute: () => ({
-                    done: Promise.resolve({
+            const mockKernel = createMockKernel({
+                status: 'error',
+                errorContent: {
+                    ename: 'NameError',
+                    evalue: 'name not defined',
+                    traceback: ['Traceback...']
+                },
+                messages: [
+                    {
+                        msg_type: 'error',
                         content: {
-                            status: 'error' as const,
                             ename: 'NameError',
                             evalue: 'name not defined',
                             traceback: ['Traceback...']
                         }
-                    }),
-                    onIOPub: (cb: (msg: any) => void) => {
-                        iopubCallback = cb;
-                        // Simulate error output
-                        setTimeout(() => {
-                            if (iopubCallback) {
-                                iopubCallback({
-                                    header: { msg_type: 'error' },
-                                    content: {
-                                        ename: 'NameError',
-                                        evalue: 'name not defined',
-                                        traceback: ['Traceback...']
-                                    }
-                                });
-                            }
-                        }, 0);
                     }
-                })
-            };
+                ]
+            });
 
             const code = 'undefined_variable';
             const { executeSilently } = await import('./helpers');
@@ -775,34 +778,20 @@ suite('Kernel Connection Helpers', () => {
         });
 
         test('Collects display_data outputs', async () => {
-            let iopubCallback: ((msg: any) => void) | undefined;
-
-            const mockKernel = {
-                requestExecute: () => ({
-                    done: Promise.resolve({
+            const mockKernel = createMockKernel({
+                status: 'ok',
+                messages: [
+                    {
+                        msg_type: 'display_data',
                         content: {
-                            status: 'ok' as const
+                            data: {
+                                'text/plain': 'some data'
+                            },
+                            metadata: {}
                         }
-                    }),
-                    onIOPub: (cb: (msg: any) => void) => {
-                        iopubCallback = cb;
-                        // Simulate display_data output
-                        setTimeout(() => {
-                            if (iopubCallback) {
-                                iopubCallback({
-                                    header: { msg_type: 'display_data' },
-                                    content: {
-                                        data: {
-                                            'text/plain': 'some data'
-                                        },
-                                        metadata: {}
-                                    }
-                                });
-                            }
-                        }, 0);
                     }
-                })
-            };
+                ]
+            });
 
             const code = 'display("data")';
             const { executeSilently } = await import('./helpers');
@@ -816,39 +805,25 @@ suite('Kernel Connection Helpers', () => {
         });
 
         test('Handles multiple outputs', async () => {
-            let iopubCallback: ((msg: any) => void) | undefined;
-
-            const mockKernel = {
-                requestExecute: () => ({
-                    done: Promise.resolve({
+            const mockKernel = createMockKernel({
+                status: 'ok',
+                messages: [
+                    {
+                        msg_type: 'stream',
                         content: {
-                            status: 'ok' as const
+                            name: 'stdout',
+                            text: 'output 1'
                         }
-                    }),
-                    onIOPub: (cb: (msg: any) => void) => {
-                        iopubCallback = cb;
-                        // Simulate multiple outputs
-                        setTimeout(() => {
-                            if (iopubCallback) {
-                                iopubCallback({
-                                    header: { msg_type: 'stream' },
-                                    content: {
-                                        name: 'stdout',
-                                        text: 'output 1'
-                                    }
-                                });
-                                iopubCallback({
-                                    header: { msg_type: 'stream' },
-                                    content: {
-                                        name: 'stdout',
-                                        text: 'output 2'
-                                    }
-                                });
-                            }
-                        }, 0);
+                    },
+                    {
+                        msg_type: 'stream',
+                        content: {
+                            name: 'stdout',
+                            text: 'output 2'
+                        }
                     }
-                })
-            };
+                ]
+            });
 
             const code = 'print("1"); print("2")';
             const { executeSilently } = await import('./helpers');

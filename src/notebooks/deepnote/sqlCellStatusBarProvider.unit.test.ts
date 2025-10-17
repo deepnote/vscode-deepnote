@@ -5,6 +5,7 @@ import {
     CancellationTokenSource,
     NotebookCell,
     NotebookCellKind,
+    NotebookCellStatusBarAlignment,
     NotebookDocument,
     TextDocument,
     Uri
@@ -83,7 +84,7 @@ suite('SqlCellStatusBarProvider', () => {
 
         assert.isDefined(result);
         assert.strictEqual((result as any).text, '$(database) My Postgres DB');
-        assert.strictEqual((result as any).alignment, 1); // NotebookCellStatusBarAlignment.Left
+        assert.strictEqual((result as any).alignment, NotebookCellStatusBarAlignment.Left);
         assert.isDefined((result as any).command);
         assert.strictEqual((result as any).command.command, 'deepnote.manageIntegrations');
         assert.deepStrictEqual((result as any).command.arguments, [integrationId]);

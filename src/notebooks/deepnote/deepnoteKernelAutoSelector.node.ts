@@ -79,7 +79,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         @inject(IDeepnoteEnvironmentManager) private readonly configurationManager: IDeepnoteEnvironmentManager,
         @inject(IDeepnoteEnvironmentPicker) private readonly configurationPicker: IDeepnoteEnvironmentPicker,
         @inject(IDeepnoteNotebookEnvironmentMapper)
-        private readonly notebookConfigurationMapper: IDeepnoteNotebookEnvironmentMapper
+        private readonly notebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper
     ) {}
 
     public activate() {
@@ -252,20 +252,18 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     }
 
     /**
-     * Force rebuild the controller for a notebook by clearing cached controller and metadata.
-     * This is used when switching environments to ensure a new controller is created.
+     * Switch controller to use a different environment by updating the existing controller's connection.
+     * Because we use notebook-based controller IDs (not environment-based), the controller ID stays the same
+     * and addOrUpdate will call updateConnection() on the existing controller instead of creating a new one.
+     * This keeps VS Code bound to the same controller object, avoiding DISPOSED errors.
      */
     public async rebuildController(notebook: NotebookDocument, token?: CancellationToken): Promise<void> {
         const baseFileUri = notebook.uri.with({ query: '', fragment: '' });
         const notebookKey = baseFileUri.fsPath;
 
-        logger.info(`Rebuilding controller for ${getDisplayPath(notebook.uri)}`);
-
-        // Save reference to old controller (but don't dispose it yet!)
-        const existingController = this.notebookControllers.get(notebookKey);
+        logger.info(`Switching controller environment for ${getDisplayPath(notebook.uri)}`);
 
         // Check if any cells are executing and log a warning
-        // We cannot interrupt them - this is why we show a warning to users beforehand
         const kernel = this.kernelProvider.get(notebook);
         if (kernel) {
             const pendingCells = this.kernelProvider.getKernelExecution(kernel).pendingCells;
@@ -276,45 +274,23 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             }
         }
 
-        // Clear cached state so ensureKernelSelected creates fresh metadata
-        // Note: We do NOT dispose the old controller yet - it stays alive during the transition
-        this.notebookControllers.delete(notebookKey);
+        // Clear cached metadata so ensureKernelSelected creates fresh metadata with new environment
+        // The controller will stay alive - it will just get updated via updateConnection()
         this.notebookConnectionMetadata.delete(notebookKey);
 
-        // Unregister old server from the provider
-        // Note: We don't stop the old server - it can continue running for other notebooks
+        // Clear old server handle - new environment will register a new handle
         const oldServerHandle = this.notebookServerHandles.get(notebookKey);
         if (oldServerHandle) {
-            logger.info(`Unregistering old server: ${oldServerHandle}`);
-            this.serverProvider.unregisterServer(oldServerHandle);
+            logger.info(`Clearing old server handle from tracking: ${oldServerHandle}`);
             this.notebookServerHandles.delete(notebookKey);
         }
 
-        // Create new controller with new environment
+        // Update the controller with new environment's metadata
+        // Because we use notebook-based controller IDs, addOrUpdate will call updateConnection()
+        // on the existing controller instead of creating a new one
         await this.ensureKernelSelected(notebook, token);
 
-        const newController = this.notebookControllers.get(notebookKey);
-        if (newController) {
-            logger.info(`New controller ${newController.id} created and registered`);
-
-            // CRITICAL: Explicitly force the new controller to be selected BEFORE disposing the old one
-            // updateNotebookAffinity only sets preference, we need to ensure it's actually selected
-            newController.controller.updateNotebookAffinity(notebook, NotebookControllerAffinity.Preferred);
-            logger.info(`Explicitly set new controller ${newController.id} as preferred`);
-        }
-
-        // IMPORTANT: We do NOT dispose the old controller here
-        // Reason: VS Code may have queued cell executions that reference the old controller
-        // If we dispose it immediately, those queued executions will fail with "DISPOSED" error
-        // Instead, we let the old controller stay alive - it will be garbage collected eventually
-        // The new controller is now the preferred one, so new executions will use it
-        if (existingController && newController && existingController.id !== newController.id) {
-            logger.info(
-                `Old controller ${existingController.id} will be left alive to handle any queued executions. New controller ${newController.id} is now preferred.`
-            );
-        }
-
-        logger.info(`Controller rebuilt successfully`);
+        logger.info(`Controller successfully switched to new environment`);
     }
 
     public async ensureKernelSelected(notebook: NotebookDocument, _token?: CancellationToken): Promise<void> {
@@ -385,7 +361,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
                     // No existing controller - check if user has selected a configuration for this notebook
                     logger.info(`Checking for configuration selection for ${getDisplayPath(baseFileUri)}`);
-                    let selectedConfigId = this.notebookConfigurationMapper.getEnvironmentForNotebook(baseFileUri);
+                    let selectedConfigId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri);
                     let selectedConfig = selectedConfigId
                         ? this.configurationManager.getEnvironment(selectedConfigId)
                         : undefined;
@@ -411,10 +387,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                         }
 
                         // Save the selection
-                        await this.notebookConfigurationMapper.setEnvironmentForNotebook(
-                            baseFileUri,
-                            selectedConfig.id
-                        );
+                        await this.notebookEnvironmentMapper.setEnvironmentForNotebook(baseFileUri, selectedConfig.id);
                         logger.info(`Saved configuration selection: ${selectedConfig.name} (${selectedConfig.id})`);
                     } else {
                         logger.info(`Using mapped configuration: ${selectedConfig.name} (${selectedConfig.id})`);
@@ -526,11 +499,17 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 ? Uri.joinPath(configuration.venvPath, 'Scripts', 'python.exe')
                 : Uri.joinPath(configuration.venvPath, 'bin', 'python');
 
+        // CRITICAL: Use notebook-based ID instead of environment-based ID
+        // This ensures that when switching environments, addOrUpdate will call updateConnection()
+        // on the existing controller instead of creating a new one. This keeps VS Code bound to
+        // the same controller object, avoiding the DISPOSED error.
+        const controllerId = `deepnote-notebook-${notebookKey}`;
+
         const newConnectionMetadata = DeepnoteKernelConnectionMetadata.create({
             interpreter: { uri: venvInterpreter, id: venvInterpreter.fsPath },
             kernelSpec,
             baseUrl: serverInfo.url,
-            id: `deepnote-config-kernel-${configuration.id}`,
+            id: controllerId,
             serverProviderHandle,
             serverInfo,
             environmentName: configuration.name
@@ -576,8 +555,18 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         // Listen to controller disposal
         controller.onDidDispose(() => {
-            logger.info(`Deepnote controller ${controller!.id} disposed, removing from tracking`);
-            this.notebookControllers.delete(notebookKey);
+            logger.info(`Deepnote controller ${controller!.id} disposed, checking if we should remove from tracking`);
+            // Only remove from map if THIS controller is still the one mapped to this notebookKey
+            // This prevents old controllers from deleting newer controllers during environment switching
+            const currentController = this.notebookControllers.get(notebookKey);
+            if (currentController?.id === controller.id) {
+                logger.info(`Removing controller ${controller.id} from tracking map`);
+                this.notebookControllers.delete(notebookKey);
+            } else {
+                logger.info(
+                    `Not removing controller ${controller.id} from tracking - a newer controller ${currentController?.id} has replaced it`
+                );
+            }
         });
 
         // Dispose the loading controller BEFORE selecting the real one

@@ -290,8 +290,40 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
         this.disposables.push(disposeAnyHandler);
     }
     public updateConnection(kernelConnection: KernelConnectionMetadata) {
+        // Check if the connection actually changed by comparing connection properties
+        // (not just IDs, since Deepnote uses notebook-based IDs that stay the same)
+        const oldConnection = this.kernelConnection;
+        const hasChanged = !areKernelConnectionsEqual(oldConnection, kernelConnection);
+
+        logger.info(
+            `Updating controller ${this.id} connection. Changed: ${hasChanged}. ` +
+            `Old interpreter: ${oldConnection.interpreter ? getDisplayPath(oldConnection.interpreter.uri) : 'none'}, ` +
+            `New interpreter: ${kernelConnection.interpreter ? getDisplayPath(kernelConnection.interpreter.uri) : 'none'}`
+        );
+
+        // Update the stored connection metadata
+        this.kernelConnection = kernelConnection;
+
+        // Update display name
         if (kernelConnection.kind !== 'connectToLiveRemoteKernel') {
             this.controller.label = getDisplayNameOrNameOfKernelConnection(kernelConnection);
+        }
+
+        // Only dispose kernels if the connection actually changed
+        // This avoids unnecessary kernel restarts when just reopening the same notebook
+        if (hasChanged) {
+            logger.info(`Connection changed - disposing old kernels to force reconnection`);
+
+            // Dispose any existing kernels using the old connection for all associated notebooks
+            // This forces a fresh kernel connection when cells are next executed
+            const notebooksToUpdate = workspace.notebookDocuments.filter(doc => this.associatedDocuments.has(doc));
+            notebooksToUpdate.forEach(notebook => {
+                const existingKernel = this.kernelProvider.get(notebook);
+                if (existingKernel) {
+                    logger.info(`Disposing old kernel for notebook ${getDisplayPath(notebook.uri)} due to connection update`);
+                    existingKernel.dispose().catch(noop);
+                }
+            });
         }
     }
     public asWebviewUri(localResource: Uri): Uri {

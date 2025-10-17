@@ -1,6 +1,3 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-
 import { ThemeIcon, TreeItem, TreeItemCollapsibleState } from 'vscode';
 import { DeepnoteEnvironment, EnvironmentStatus } from './deepnoteEnvironment';
 

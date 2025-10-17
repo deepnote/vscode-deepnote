@@ -1,0 +1,258 @@
+Visual Studio Code (1.105.0, undefined, desktop)
+Jupyter Extension Version: 0.1.0.
+Python Extension Version: 2025.16.0.
+Python Environment Extension Version: 1.10.0.
+Pylance Extension Version: 2025.8.3.
+Platform: darwin (arm64).
+Home = /Users/hannesprobst
+Temp Storage folder ~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/version-0.1.0
+Workspace folder ~/deepnote
+12:11:59.175 [warn] Exception while attempting zmq : No compatible zeromq.js addon found
+12:11:59.175 [warn] Exception while attempting zmq (fallback) : No native build was found for platform=darwin arch=arm64 runtime=electron abi=136 uv=1 armv=8 libc=glibc node=22.19.0 electron=37.6.0
+    loaded from: ~/deepnote/vscode-deepnote/dist/node_modules/zeromqold
+
+12:11:59.220 [info] Loaded 1 notebook-environment mappings
+12:11:59.224 [info] Attempting to start a server because of preload conditions ...
+12:11:59.228 [info] Checking for orphaned deepnote-toolkit processes...
+12:11:59.230 [info] Deepnote server provider registered
+12:11:59.230 [info] Loaded 3 environments from storage
+12:11:59.230 [info] Activating Deepnote kernel environments view
+12:11:59.230 [info] Loaded 3 environments from storage
+12:11:59.234 [error] Error in activating extension, failed in IPyWidgetRendererComms [Error: Extensions may only call createRendererMessaging() for renderers they contribute (got jupyter-ipywidget-renderer)
+	at xG.createRendererMessaging (file:///Applications/Visual%20Studio%20Code.app/Contents/Resources/app/out/vs/workbench/api/node/extensionHostProcess.js:201:30750)
+	at Object.createRendererMessaging (file:///Applications/Visual%20Studio%20Code.app/Contents/Resources/app/out/vs/workbench/api/node/extensionHostProcess.js:201:127951)
+	at IPyWidgetRendererComms.activate (~/deepnote/vscode-deepnote/dist/extension.node.js:108634:46)
+	at ~/deepnote/vscode-deepnote/dist/extension.node.js:103129:14
+	at Array.map (<anonymous>)
+	at ExtensionActivationManager.activate (~/deepnote/vscode-deepnote/dist/extension.node.js:103127:33)
+	at postActivateLegacy (~/deepnote/vscode-deepnote/dist/extension.node.js:111633:53)
+	at async activateLegacy (~/deepnote/vscode-deepnote/dist/extension.node.js:111789:3)]
+12:11:59.237 [info] Initialized environment manager with 3 environments
+12:11:59.237 [info] Initialized environment manager with 3 environments
+12:11:59.238 [info] Deepnote kernel environments initialized
+12:11:59.252 [info] Process Execution: /ps aux
+12:11:59.457 [info] Lock file directory initialized at /var/folders/37/f92530_12sz9rv72pqnmsyvr0000gn/T/vscode-deepnote-locks with session ID ea21245f-3aa5-4d7a-8fac-aee2cf067b8b
+12:11:59.514 [info] Deepnote notebook opened: ~/deepnote/SSO-and-directory-sync-V2.deepnote
+12:11:59.515 [info] Created loading controller for ~/deepnote/SSO-and-directory-sync-V2.deepnote
+12:11:59.515 [info] Ensuring Deepnote kernel is selected for ~/deepnote/SSO-and-directory-sync-V2.deepnote
+12:11:59.515 [info] Base Deepnote file: ~/deepnote/SSO-and-directory-sync-V2.deepnote
+12:11:59.515 [info] Checking for configuration selection for ~/deepnote/SSO-and-directory-sync-V2.deepnote
+12:11:59.515 [info] Using mapped configuration: Python 3.10 (66d42d77-df96-4fd2-a73e-f5c9c78995f0)
+12:11:59.516 [info] Setting up kernel using configuration: Python 3.10 (66d42d77-df96-4fd2-a73e-f5c9c78995f0)
+12:11:59.516 [info] Ensuring server is running for configuration 66d42d77-df96-4fd2-a73e-f5c9c78995f0
+12:11:59.516 [info] Ensuring server is running for environment: Python 3.10 (66d42d77-df96-4fd2-a73e-f5c9c78995f0)
+12:11:59.516 [info] Ensuring virtual environment at ~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/66d42d77-df96-4fd2-a73e-f5c9c78995f0
+12:11:59.530 [info] Process Execution: ~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/66d42d77-df96-4fd2-a73e-f5c9c78995f0/bin/python -c "import deepnote_toolkit; print('installed')"
+12:11:59.826 [info] No deepnote-toolkit server processes found
+12:11:59.902 [warn] No interpreter with path ~/deepnote/experiments/jupyter/.env/bin/python3 found in Python API, will convert Uri path to string as Id ~/deepnote/experiments/jupyter/.env/bin/python3
+12:12:15.052 [info] deepnote-toolkit venv already exists at ~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/66d42d77-df96-4fd2-a73e-f5c9c78995f0
+12:12:15.077 [info] Kernel spec already exists at ~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/66d42d77-df96-4fd2-a73e-f5c9c78995f0/share/jupyter/kernels/deepnote-66d42d77-df96-4fd2-a73e-f5c9c78995f0
+12:12:15.077 [info] Venv ready at ~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/66d42d77-df96-4fd2-a73e-f5c9c78995f0
+12:12:15.077 [info] Ensuring deepnote-toolkit is installed in venv for environment 66d42d77-df96-4fd2-a73e-f5c9c78995f0...
+12:12:15.077 [info] Ensuring virtual environment at ~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/66d42d77-df96-4fd2-a73e-f5c9c78995f0
+12:12:15.079 [info] Process Execution: ~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/66d42d77-df96-4fd2-a73e-f5c9c78995f0/bin/python -c "import deepnote_toolkit; print('installed')"
+12:12:23.554 [info] deepnote-toolkit venv already exists at ~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/66d42d77-df96-4fd2-a73e-f5c9c78995f0
+12:12:24.473 [info] Kernel spec already exists at ~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/66d42d77-df96-4fd2-a73e-f5c9c78995f0/share/jupyter/kernels/deepnote-66d42d77-df96-4fd2-a73e-f5c9c78995f0
+12:12:24.473 [info] Venv ready at ~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/66d42d77-df96-4fd2-a73e-f5c9c78995f0
+12:12:24.639 [info] Allocated ports for 66d42d77-df96-4fd2-a73e-f5c9c78995f0: jupyter=8888, lsp=8889 (excluded: none)
+12:12:24.640 [info] Starting deepnote-toolkit server on jupyter port 8888 and lsp port 8889 for environment 66d42d77-df96-4fd2-a73e-f5c9c78995f0
+Starting Deepnote server on jupyter port 8888 and lsp port 8889...
+12:12:24.641 [info] Process Execution: ~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/66d42d77-df96-4fd2-a73e-f5c9c78995f0/bin/python -m deepnote_toolkit server --jupyter-port 8888 --ls-port 8889
+12:12:27.087 [info] Created lock file for PID 14241 with session ID ea21245f-3aa5-4d7a-8fac-aee2cf067b8b
+12:12:38.866 [warn] Deepnote server stderr (66d42d77-df96-4fd2-a73e-f5c9c78995f0): 2025-10-17 12:12:38,864 - deepnote_toolkit.runtime.executor - INFO - Jupyter terminals extension enabled
+
+2025-10-17 12:12:38,864 - deepnote_toolkit.runtime.executor - INFO - Jupyter terminals extension enabled
+
+12:12:38.866 [warn] Deepnote server stderr (66d42d77-df96-4fd2-a73e-f5c9c78995f0): 2025-10-17 12:12:38,866 - deepnote_toolkit.runtime.executor - INFO - Starting Jupyter server on 0.0.0.0:8888
+
+2025-10-17 12:12:38,866 - deepnote_toolkit.runtime.executor - INFO - Starting Jupyter server on 0.0.0.0:8888
+
+12:12:38.879 [warn] Deepnote server stderr (66d42d77-df96-4fd2-a73e-f5c9c78995f0): 2025-10-17 12:12:38,879 - deepnote_toolkit.runtime.executor - INFO - Starting Python LSP server on 0.0.0.0:8889
+
+2025-10-17 12:12:38,879 - deepnote_toolkit.runtime.executor - INFO - Starting Python LSP server on 0.0.0.0:8889
+
+12:12:38.884 [warn] Deepnote server stderr (66d42d77-df96-4fd2-a73e-f5c9c78995f0): 2025-10-17 12:12:38,884 - deepnote_toolkit.runtime.process_manager - INFO - Managing process 23290
+
+2025-10-17 12:12:38,884 - deepnote_toolkit.runtime.process_manager - INFO - Managing process 23290
+
+12:12:38.985 [warn] Deepnote server stderr (66d42d77-df96-4fd2-a73e-f5c9c78995f0): 2025-10-17 12:12:38,985 - deepnote_toolkit.runtime.process_manager - INFO - Managing process 23291
+
+2025-10-17 12:12:38,985 - deepnote_toolkit.runtime.process_manager - INFO - Managing process 23291
+
+12:12:39.070 [warn] Deepnote server stderr (66d42d77-df96-4fd2-a73e-f5c9c78995f0): 2025-10-17 12:12:39,070 CEST - INFO - pylsp.python_lsp - Serving PythonLSPServer on (0.0.0.0, 8889)
+
+2025-10-17 12:12:39,070 CEST - INFO - pylsp.python_lsp - Serving PythonLSPServer on (0.0.0.0, 8889)
+
+12:12:39.086 [warn] Deepnote server stderr (66d42d77-df96-4fd2-a73e-f5c9c78995f0): 2025-10-17 12:12:39,086 - deepnote_toolkit.cli.server - INFO - Started 2 server(s). Press Ctrl+C to stop.
+
+2025-10-17 12:12:39,086 - deepnote_toolkit.cli.server - INFO - Started 2 server(s). Press Ctrl+C to stop.
+
+    	/etc/jupyter/jupyter_server_config.json
+
+    	/etc/jupyter/jupyter_server_config.json
+
+    	/usr/local/etc/jupyter/jupyter_server_config.json
+    	~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/66d42d77-df96-4fd2-a73e-f5c9c78995f0/etc/jupyter/jupyter_server_config.d/jupyter_server_terminals.json
+    	~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/66d42d77-df96-4fd2-a73e-f5c9c78995f0/etc/jupyter/jupyter_server_config.json
+
+    	/usr/local/etc/jupyter/jupyter_server_config.json
+    	/Users/hannesprobst/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/66d42d77-df96-4fd2-a73e-f5c9c78995f0/etc/jupyter/jupyter_server_config.d/jupyter_server_terminals.json
+    	/Users/hannesprobst/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/66d42d77-df96-4fd2-a73e-f5c9c78995f0/etc/jupyter/jupyter_server_config.json
+
+    	~/.local/share/deepnote-toolkit/resources/jupyter/jupyter_server_config.json
+
+    	/Users/hannesprobst/.local/share/deepnote-toolkit/resources/jupyter/jupyter_server_config.json
+
+12:12:40.783 [info] Deepnote server started successfully at http://localhost:8888 for environment 66d42d77-df96-4fd2-a73e-f5c9c78995f0
+✓ Deepnote server running at http://localhost:8888
+
+12:12:40.786 [info] Saved 3 environments to storage
+12:12:40.786 [info] Server running for environment: Python 3.10 (66d42d77-df96-4fd2-a73e-f5c9c78995f0) at http://localhost:8888
+12:12:40.787 [info] Server running at http://localhost:8888
+12:12:40.788 [info] Saved 3 environments to storage
+12:12:40.788 [info] Registering Deepnote server: deepnote-config-server-66d42d77-df96-4fd2-a73e-f5c9c78995f0 -> http://localhost:8888
+
+12:12:41.372 [info] Available kernel specs on Deepnote server: .env, python3, deepnote-66d42d77-df96-4fd2-a73e-f5c9c78995f0
+12:12:41.372 [info] Looking for environment-specific kernel: deepnote-66d42d77-df96-4fd2-a73e-f5c9c78995f0
+12:12:41.372 [info] ✓ Using kernel spec: deepnote-66d42d77-df96-4fd2-a73e-f5c9c78995f0 (Deepnote (66d42d77-df96-4fd2-a73e-f5c9c78995f0))
+12:12:41.373 [info] Created Deepnote kernel controller: deepnote-config-kernel-66d42d77-df96-4fd2-a73e-f5c9c78995f0
+12:12:41.374 [info] No requirements found in project 7d592ed8-9678-4800-819a-eebda6b0a6b7
+12:12:41.374 [info] Created requirements.txt for project 7d592ed8-9678-4800-819a-eebda6b0a6b7
+12:12:41.374 [info] Marked Deepnote controller as protected from automatic disposal
+12:12:41.374 [info] Disposed loading controller for ~/deepnote/SSO-and-directory-sync-V2.deepnote
+12:12:41.374 [info] Successfully set up kernel with configuration: Python 3.10
+
+12:12:44.653 [info] Starting Kernel (Python Path: ~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/66d42d77-df96-4fd2-a73e-f5c9c78995f0/bin/python, Venv, 3.10.0) for '~/deepnote/SSO-and-directory-sync-V2.deepnote' (disableUI=false)
+
+12:12:44.786 [info] http://localhost:8888/: Kernel started: 94a1eca3-e520-4206-8c1e-58a252815670
+
+    Setting websocket_ping_timeout=30000
+
+    Setting websocket_ping_timeout=30000
+
+12:12:46.243 [info] Started session for kernel startUsingDeepnoteKernel:deepnote-config-kernel-66d42d77-df96-4fd2-a73e-f5c9c78995f0
+
+12:12:46.295 [info] Kernel successfully started
+
+12:12:47.361 [warn] Disposing old controller startUsingDeepnoteKernel:'deepnote-config-kernel-66d42d77-df96-4fd2-a73e-f5c9c78995f0 (Interactive)' for view = 'interactive'
+
+12:12:50.953 [info] Switching notebook ~/deepnote/SSO-and-directory-sync-V2.deepnote to environment 59f4d12e-242e-4967-a62c-7b90f13d64e3
+12:12:50.972 [info] Mapped notebook ~/deepnote/SSO-and-directory-sync-V2.deepnote to environment 59f4d12e-242e-4967-a62c-7b90f13d64e3
+12:12:50.972 [info] Rebuilding controller for ~/deepnote/SSO-and-directory-sync-V2.deepnote
+12:12:50.972 [info] Clearing old server handle from tracking: deepnote-config-server-66d42d77-df96-4fd2-a73e-f5c9c78995f0 (leaving it registered to avoid disposing controller prematurely)
+12:12:50.972 [info] Ensuring Deepnote kernel is selected for ~/deepnote/SSO-and-directory-sync-V2.deepnote
+12:12:50.972 [info] Base Deepnote file: ~/deepnote/SSO-and-directory-sync-V2.deepnote
+12:12:50.972 [info] Checking for configuration selection for ~/deepnote/SSO-and-directory-sync-V2.deepnote
+12:12:50.972 [info] Using mapped configuration: Python 3.9 (59f4d12e-242e-4967-a62c-7b90f13d64e3)
+12:12:50.972 [info] Setting up kernel using configuration: Python 3.9 (59f4d12e-242e-4967-a62c-7b90f13d64e3)
+12:12:50.972 [info] Ensuring server is running for configuration 59f4d12e-242e-4967-a62c-7b90f13d64e3
+12:12:50.973 [info] Ensuring server is running for environment: Python 3.9 (59f4d12e-242e-4967-a62c-7b90f13d64e3)
+12:12:50.973 [info] Ensuring virtual environment at ~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/59f4d12e-242e-4967-a62c-7b90f13d64e3
+12:12:50.975 [info] Process Execution: ~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/59f4d12e-242e-4967-a62c-7b90f13d64e3/bin/python -c "import deepnote_toolkit; print('installed')"
+12:12:52.714 [info] deepnote-toolkit venv already exists at ~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/59f4d12e-242e-4967-a62c-7b90f13d64e3
+12:12:52.715 [info] Kernel spec already exists at ~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/59f4d12e-242e-4967-a62c-7b90f13d64e3/share/jupyter/kernels/deepnote-59f4d12e-242e-4967-a62c-7b90f13d64e3
+12:12:52.715 [info] Venv ready at ~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/59f4d12e-242e-4967-a62c-7b90f13d64e3
+12:12:52.715 [info] Ensuring deepnote-toolkit is installed in venv for environment 59f4d12e-242e-4967-a62c-7b90f13d64e3...
+12:12:52.715 [info] Ensuring virtual environment at ~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/59f4d12e-242e-4967-a62c-7b90f13d64e3
+12:12:52.716 [info] Process Execution: ~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/59f4d12e-242e-4967-a62c-7b90f13d64e3/bin/python -c "import deepnote_toolkit; print('installed')"
+12:12:53.703 [info] deepnote-toolkit venv already exists at ~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/59f4d12e-242e-4967-a62c-7b90f13d64e3
+12:12:53.703 [info] Kernel spec already exists at ~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/59f4d12e-242e-4967-a62c-7b90f13d64e3/share/jupyter/kernels/deepnote-59f4d12e-242e-4967-a62c-7b90f13d64e3
+12:12:53.703 [info] Venv ready at ~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/59f4d12e-242e-4967-a62c-7b90f13d64e3
+12:12:53.705 [info] Allocated ports for 59f4d12e-242e-4967-a62c-7b90f13d64e3: jupyter=8890, lsp=8891 (excluded: 8888, 8889)
+12:12:53.705 [info] Starting deepnote-toolkit server on jupyter port 8890 and lsp port 8891 for environment 59f4d12e-242e-4967-a62c-7b90f13d64e3
+Starting Deepnote server on jupyter port 8890 and lsp port 8891...
+12:12:53.706 [info] Process Execution: ~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/59f4d12e-242e-4967-a62c-7b90f13d64e3/bin/python -m deepnote_toolkit server --jupyter-port 8890 --ls-port 8891
+12:12:53.707 [info] Created lock file for PID 23319 with session ID ea21245f-3aa5-4d7a-8fac-aee2cf067b8b
+
+12:12:56.883 [warn] Deepnote server stderr (59f4d12e-242e-4967-a62c-7b90f13d64e3): 2025-10-17 12:12:56,882 - deepnote_toolkit.runtime.executor - INFO - Jupyter terminals extension enabled
+
+2025-10-17 12:12:56,882 - deepnote_toolkit.runtime.executor - INFO - Jupyter terminals extension enabled
+
+12:12:56.883 [warn] Deepnote server stderr (59f4d12e-242e-4967-a62c-7b90f13d64e3): 2025-10-17 12:12:56,883 - deepnote_toolkit.runtime.executor - INFO - Starting Jupyter server on 0.0.0.0:8890
+
+2025-10-17 12:12:56,883 - deepnote_toolkit.runtime.executor - INFO - Starting Jupyter server on 0.0.0.0:8890
+
+12:12:56.892 [warn] Deepnote server stderr (59f4d12e-242e-4967-a62c-7b90f13d64e3): 2025-10-17 12:12:56,892 - deepnote_toolkit.runtime.executor - INFO - Starting Python LSP server on 0.0.0.0:8891
+
+2025-10-17 12:12:56,892 - deepnote_toolkit.runtime.executor - INFO - Starting Python LSP server on 0.0.0.0:8891
+
+12:12:56.895 [warn] Deepnote server stderr (59f4d12e-242e-4967-a62c-7b90f13d64e3): 2025-10-17 12:12:56,895 - deepnote_toolkit.runtime.process_manager - INFO - Managing process 23324
+
+2025-10-17 12:12:56,895 - deepnote_toolkit.runtime.process_manager - INFO - Managing process 23324
+
+12:12:56.980 [warn] Deepnote server stderr (59f4d12e-242e-4967-a62c-7b90f13d64e3): 2025-10-17 12:12:56,980 CEST - INFO - pylsp.python_lsp - Serving PythonLSPServer on (0.0.0.0, 8891)
+
+2025-10-17 12:12:56,980 CEST - INFO - pylsp.python_lsp - Serving PythonLSPServer on (0.0.0.0, 8891)
+
+12:12:56.999 [warn] Deepnote server stderr (59f4d12e-242e-4967-a62c-7b90f13d64e3): 2025-10-17 12:12:56,999 - deepnote_toolkit.runtime.process_manager - INFO - Managing process 23325
+
+2025-10-17 12:12:56,999 - deepnote_toolkit.runtime.process_manager - INFO - Managing process 23325
+
+12:12:57.104 [warn] Deepnote server stderr (59f4d12e-242e-4967-a62c-7b90f13d64e3): 2025-10-17 12:12:57,104 - deepnote_toolkit.cli.server - INFO - Started 2 server(s). Press Ctrl+C to stop.
+
+2025-10-17 12:12:57,104 - deepnote_toolkit.cli.server - INFO - Started 2 server(s). Press Ctrl+C to stop.
+
+    	/etc/jupyter/jupyter_server_config.json
+
+    	/etc/jupyter/jupyter_server_config.json
+
+    	/usr/local/etc/jupyter/jupyter_server_config.json
+
+    	/usr/local/etc/jupyter/jupyter_server_config.json
+
+    	~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/59f4d12e-242e-4967-a62c-7b90f13d64e3/etc/jupyter/jupyter_server_config.d/jupyter_server_terminals.json
+    	~/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/59f4d12e-242e-4967-a62c-7b90f13d64e3/etc/jupyter/jupyter_server_config.json
+
+    	/Users/hannesprobst/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/59f4d12e-242e-4967-a62c-7b90f13d64e3/etc/jupyter/jupyter_server_config.d/jupyter_server_terminals.json
+    	/Users/hannesprobst/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/59f4d12e-242e-4967-a62c-7b90f13d64e3/etc/jupyter/jupyter_server_config.json
+
+    	~/.local/share/deepnote-toolkit/resources/jupyter/jupyter_server_config.json
+
+    	/Users/hannesprobst/.local/share/deepnote-toolkit/resources/jupyter/jupyter_server_config.json
+
+12:12:58.259 [info] Deepnote server started successfully at http://localhost:8890 for environment 59f4d12e-242e-4967-a62c-7b90f13d64e3
+✓ Deepnote server running at http://localhost:8890
+
+12:12:58.263 [info] Saved 3 environments to storage
+12:12:58.263 [info] Server running for environment: Python 3.9 (59f4d12e-242e-4967-a62c-7b90f13d64e3) at http://localhost:8890
+12:12:58.263 [info] Server running at http://localhost:8890
+12:12:58.270 [info] Saved 3 environments to storage
+12:12:58.270 [info] Registering Deepnote server: deepnote-config-server-59f4d12e-242e-4967-a62c-7b90f13d64e3 -> http://localhost:8890
+
+12:12:58.434 [info] Available kernel specs on Deepnote server: .env, python3, deepnote-59f4d12e-242e-4967-a62c-7b90f13d64e3
+12:12:58.434 [info] Looking for environment-specific kernel: deepnote-59f4d12e-242e-4967-a62c-7b90f13d64e3
+12:12:58.434 [info] ✓ Using kernel spec: deepnote-59f4d12e-242e-4967-a62c-7b90f13d64e3 (Deepnote (59f4d12e-242e-4967-a62c-7b90f13d64e3))
+12:12:58.435 [info] Created Deepnote kernel controller: deepnote-config-kernel-59f4d12e-242e-4967-a62c-7b90f13d64e3
+12:12:58.435 [info] No requirements found in project 7d592ed8-9678-4800-819a-eebda6b0a6b7
+12:12:58.435 [info] Created requirements.txt for project 7d592ed8-9678-4800-819a-eebda6b0a6b7
+12:12:58.435 [info] Marked Deepnote controller as protected from automatic disposal
+12:12:58.435 [info] Successfully set up kernel with configuration: Python 3.9
+12:12:58.435 [info] New controller deepnote-config-kernel-59f4d12e-242e-4967-a62c-7b90f13d64e3 created and registered
+12:12:58.435 [info] Explicitly set new controller deepnote-config-kernel-59f4d12e-242e-4967-a62c-7b90f13d64e3 as preferred
+12:12:58.435 [info] Preparing to dispose old controller deepnote-config-kernel-66d42d77-df96-4fd2-a73e-f5c9c78995f0 and switch to new controller deepnote-config-kernel-59f4d12e-242e-4967-a62c-7b90f13d64e3
+12:12:58.435 [info] Controller rebuilt successfully
+12:12:58.435 [info] Successfully switched to environment 59f4d12e-242e-4967-a62c-7b90f13d64e3
+
+12:12:58.940 [info] Disposing old controller deepnote-config-kernel-66d42d77-df96-4fd2-a73e-f5c9c78995f0
+12:12:59.442 [info] After disposal, VS Code selected controller: NONE (expected: deepnote-config-kernel-59f4d12e-242e-4967-a62c-7b90f13d64e3)
+
+12:13:19.201 [error] Error in notebook cell execution Error: notebook controller is DISPOSED
+    at Object.createNotebookCellExecution (file:///Applications/Visual%20Studio%20Code.app/Contents/Resources/app/out/vs/workbench/api/node/extensionHostProcess.js:201:21174)
+    at _CellExecutionCreator.create (~/deepnote/vscode-deepnote/src/kernels/execution/cellExecutionCreator.ts:154:24)
+    at _CellExecutionCreator.getOrCreate (~/deepnote/vscode-deepnote/src/kernels/execution/cellExecutionCreator.ts:129:50)
+    at _VSCodeNotebookController.createCellExecutionIfNecessary (~/deepnote/vscode-deepnote/src/notebooks/controllers/vscodeNotebookController.ts:529:53)
+    at ~/deepnote/vscode-deepnote/src/notebooks/controllers/vscodeNotebookController.ts:578:57
+    at Array.forEach (<anonymous>)
+    at _VSCodeNotebookController.executeQueuedCells (~/deepnote/vscode-deepnote/src/notebooks/controllers/vscodeNotebookController.ts:577:27)
+    at _VSCodeNotebookController.handleExecution (~/deepnote/vscode-deepnote/src/notebooks/controllers/vscodeNotebookController.ts:393:9)
+    at r4.$executeCells (file:///Applications/Visual%20Studio%20Code.app/Contents/Resources/app/out/vs/workbench/api/node/extensionHostProcess.js:201:24241)
+12:13:21.231 [error] Error in notebook cell execution Error: notebook controller is DISPOSED
+    at Object.createNotebookCellExecution (file:///Applications/Visual%20Studio%20Code.app/Contents/Resources/app/out/vs/workbench/api/node/extensionHostProcess.js:201:21174)
+    at _CellExecutionCreator.create (~/deepnote/vscode-deepnote/src/kernels/execution/cellExecutionCreator.ts:154:24)
+    at _CellExecutionCreator.getOrCreate (~/deepnote/vscode-deepnote/src/kernels/execution/cellExecutionCreator.ts:129:50)
+    at _VSCodeNotebookController.createCellExecutionIfNecessary (~/deepnote/vscode-deepnote/src/notebooks/controllers/vscodeNotebookController.ts:529:53)
+    at ~/deepnote/vscode-deepnote/src/notebooks/controllers/vscodeNotebookController.ts:578:57
+    at Array.forEach (<anonymous>)
+    at _VSCodeNotebookController.executeQueuedCells (~/deepnote/vscode-deepnote/src/notebooks/controllers/vscodeNotebookController.ts:577:27)
+    at _VSCodeNotebookController.handleExecution (~/deepnote/vscode-deepnote/src/notebooks/controllers/vscodeNotebookController.ts:393:9)
+    at r4.$executeCells (file:///Applications/Visual%20Studio%20Code.app/Contents/Resources/app/out/vs/workbench/api/node/extensionHostProcess.js:201:24241)

@@ -17,7 +17,6 @@ import * as fs from 'fs-extra';
 import * as os from 'os';
 import * as path from '../../platform/vscode-path/path';
 import { generateUuid } from '../../platform/common/uuid';
-import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
 
 /**
  * Lock file data structure for tracking server ownership

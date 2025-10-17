@@ -68,7 +68,7 @@ suite('SqlCellStatusBarProvider', () => {
             }
         );
 
-        when(integrationStorage.getIntegrationConfig(anything(), anything())).thenResolve({
+        when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve({
             id: integrationId,
             name: 'My Postgres DB',
             type: IntegrationType.Postgres,
@@ -101,7 +101,7 @@ suite('SqlCellStatusBarProvider', () => {
             }
         );
 
-        when(integrationStorage.getIntegrationConfig(anything(), anything())).thenResolve(undefined);
+        when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve(undefined);
 
         const result = await provider.provideCellStatusBarItems(cell, cancellationToken);
 

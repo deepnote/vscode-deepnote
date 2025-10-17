@@ -52,7 +52,7 @@ export async function scanBlocksForIntegrations(
         logger.debug(`${logContext}: Found integration: ${integrationId} in block ${block.id}`);
 
         // Check if the integration is configured
-        const config = await integrationStorage.get(integrationId);
+        const config = await integrationStorage.getIntegrationConfig(integrationId);
 
         const status: IntegrationWithStatus = {
             config: config || null,

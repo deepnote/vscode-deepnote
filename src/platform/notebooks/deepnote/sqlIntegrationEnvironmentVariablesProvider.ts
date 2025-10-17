@@ -133,7 +133,7 @@ export class SqlIntegrationEnvironmentVariablesProvider {
             }
 
             try {
-                const config = await this.integrationStorage.get(integrationId);
+                const config = await this.integrationStorage.getIntegrationConfig(integrationId);
                 if (!config) {
                     logger.warn(
                         `SqlIntegrationEnvironmentVariablesProvider: No configuration found for integration ${integrationId}`

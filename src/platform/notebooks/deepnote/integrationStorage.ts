@@ -43,7 +43,7 @@ export class IntegrationStorage implements IIntegrationStorage {
     /**
      * Get a specific integration configuration by ID
      */
-    async get(integrationId: string): Promise<IntegrationConfig | undefined> {
+    async getIntegrationConfig(integrationId: string): Promise<IntegrationConfig | undefined> {
         await this.ensureCacheLoaded();
         return this.cache.get(integrationId);
     }
@@ -53,8 +53,11 @@ export class IntegrationStorage implements IIntegrationStorage {
      * Note: Currently integrations are stored globally, not per-project,
      * so this method ignores the projectId parameter
      */
-    async getIntegrationConfig(_projectId: string, integrationId: string): Promise<IntegrationConfig | undefined> {
-        return this.get(integrationId);
+    async getProjectIntegrationConfig(
+        _projectId: string,
+        integrationId: string
+    ): Promise<IntegrationConfig | undefined> {
+        return this.getIntegrationConfig(integrationId);
     }
 
     /**

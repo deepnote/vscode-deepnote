@@ -149,7 +149,7 @@ export class IntegrationManager implements IIntegrationManager {
         // ensure it's in the map even if not detected from the project
         if (selectedIntegrationId && !integrations.has(selectedIntegrationId)) {
             logger.debug(`IntegrationManager: Adding requested integration ${selectedIntegrationId} to the map`);
-            const config = await this.integrationStorage.get(selectedIntegrationId);
+            const config = await this.integrationStorage.getIntegrationConfig(selectedIntegrationId);
             integrations.set(selectedIntegrationId, {
                 config: config || null,
                 status: config ? IntegrationStatus.Connected : IntegrationStatus.Disconnected

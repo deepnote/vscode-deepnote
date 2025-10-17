@@ -100,7 +100,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         ]);
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(integrationStorage.get(integrationId)).thenResolve(config);
+        when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -131,7 +131,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         ]);
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(integrationStorage.get(integrationId)).thenResolve(config);
+        when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -170,7 +170,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         ]);
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(integrationStorage.get(integrationId)).thenResolve(config);
+        when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -213,8 +213,8 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         ]);
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(integrationStorage.get(postgresId)).thenResolve(postgresConfig);
-        when(integrationStorage.get(bigqueryId)).thenResolve(bigqueryConfig);
+        when(integrationStorage.getIntegrationConfig(postgresId)).thenResolve(postgresConfig);
+        when(integrationStorage.getIntegrationConfig(bigqueryId)).thenResolve(bigqueryConfig);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -235,7 +235,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         ]);
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(integrationStorage.get(integrationId)).thenResolve(undefined);
+        when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(undefined);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -265,7 +265,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         ]);
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(integrationStorage.get(integrationId)).thenResolve(config);
+        when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -304,7 +304,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         ]);
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(integrationStorage.get(integrationId)).thenResolve(config);
+        when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -339,7 +339,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         ]);
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(integrationStorage.get(integrationId)).thenResolve(config);
+        when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 

@@ -11,12 +11,12 @@ export interface IIntegrationStorage extends IDisposable {
     readonly onDidChangeIntegrations: Event<void>;
 
     getAll(): Promise<IntegrationConfig[]>;
-    get(integrationId: string): Promise<IntegrationConfig | undefined>;
+    getIntegrationConfig(integrationId: string): Promise<IntegrationConfig | undefined>;
 
     /**
      * Get integration configuration for a specific project and integration
      */
-    getIntegrationConfig(projectId: string, integrationId: string): Promise<IntegrationConfig | undefined>;
+    getProjectIntegrationConfig(projectId: string, integrationId: string): Promise<IntegrationConfig | undefined>;
 
     save(config: IntegrationConfig): Promise<void>;
     delete(integrationId: string): Promise<void>;

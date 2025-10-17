@@ -9,6 +9,10 @@ import { addPocketToCellMetadata, createBlockFromPocket } from './pocket';
 import { TextBlockConverter } from './converters/textBlockConverter';
 import { MarkdownBlockConverter } from './converters/markdownBlockConverter';
 import { VisualizationBlockConverter } from './converters/visualizationBlockConverter';
+import { compile as convertVegaLiteSpecToVega } from 'vega-lite';
+import { produce } from 'immer';
+import type { Field } from 'vega-lite/build/src/channeldef';
+import type { LayerSpec, TopLevel } from 'vega-lite/build/src/spec';
 
 /**
  * Utility class for converting between Deepnote block structures and VS Code notebook cells.
@@ -293,6 +297,26 @@ export class DeepnoteDataConverter {
                                     'application/vnd.vega.v5+json'
                                 )
                             );
+                        }
+
+                        if (data['application/vnd.vegalite.v5+json']) {
+                            const patchedVegaLiteSpec = produce(
+                                data['application/vnd.vegalite.v5+json'] as TopLevel<LayerSpec<Field>>,
+                                (draft) => {
+                                    draft.height = 'container';
+                                    draft.width = 'container';
+
+                                    draft.autosize = {
+                                        type: 'fit'
+                                    };
+                                    if (!draft.config) {
+                                        draft.config = {};
+                                    }
+                                    draft.config.customFormatTypes = true;
+                                }
+                            );
+                            const vegaSpec = convertVegaLiteSpecToVega(patchedVegaLiteSpec).spec;
+                            items.push(NotebookCellOutputItem.json(vegaSpec, 'application/vnd.vega.v5+json'));
                         }
 
                         if (data['application/json']) {

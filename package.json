@@ -86,6 +86,24 @@
                 "icon": "$(reveal)"
             },
             {
+                "command": "deepnote.manageIntegrations",
+                "title": "%deepnote.commands.manageIntegrations.title%",
+                "category": "Deepnote",
+                "icon": "$(plug)"
+            },
+            {
+                "command": "deepnote.addSqlBlock",
+                "title": "Add SQL block",
+                "category": "Deepnote",
+                "icon": "$(add)"
+            },
+            {
+                "command": "deepnote.addBigNumberChartBlock",
+                "title": "Add Big Number chart block",
+                "category": "Deepnote",
+                "icon": "$(graph)"
+            },
+            {
                 "command": "dataScience.ClearCache",
                 "title": "%jupyter.command.dataScience.clearCache.title%",
                 "category": "Jupyter (Dev)",

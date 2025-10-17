@@ -662,63 +662,69 @@ suite('Kernel Connection Helpers', () => {
         }
 
         function createMockKernel(options: MockKernelOptions) {
-            let iopubCallback: ((msg: any) => void) | undefined;
-
             return {
-                requestExecute: () => ({
-                    done: Promise.resolve({
-                        content:
-                            options.status === 'ok'
-                                ? { status: 'ok' as const }
-                                : {
-                                      status: 'error' as const,
-                                      ...options.errorContent
-                                  }
-                    }),
-                    onIOPub: (cb: (msg: any) => void) => {
-                        iopubCallback = cb;
+                requestExecute: () => {
+                    let iopubCallback: ((msg: any) => void) | undefined;
+
+                    // Create a promise that resolves after IOPub messages are dispatched
+                    const donePromise = new Promise<any>((resolve) => {
                         // Dispatch messages asynchronously to preserve async behavior
-                        if (options.messages && options.messages.length > 0) {
-                            setTimeout(() => {
-                                if (iopubCallback) {
-                                    options.messages!.forEach((msg) => {
-                                        iopubCallback!({
-                                            header: { msg_type: msg.msg_type },
-                                            content: msg.content
-                                        });
+                        setTimeout(() => {
+                            if (iopubCallback && options.messages && options.messages.length > 0) {
+                                options.messages.forEach((msg) => {
+                                    iopubCallback!({
+                                        header: { msg_type: msg.msg_type },
+                                        content: msg.content
                                     });
-                                }
-                            }, 0);
+                                });
+                            }
+                            // Resolve the done promise after messages are dispatched
+                            resolve({
+                                content:
+                                    options.status === 'ok'
+                                        ? { status: 'ok' as const }
+                                        : {
+                                              status: 'error' as const,
+                                              ...options.errorContent
+                                          }
+                            });
+                        }, 0);
+                    });
+
+                    return {
+                        done: donePromise,
+                        set onIOPub(cb: (msg: any) => void) {
+                            iopubCallback = cb;
                         }
-                    }
-                })
+                    };
+                }
             };
         }
 
         test('Returns outputs from kernel execution', async () => {
             const mockKernel = createMockKernel({
-                status: 'ok'
+                status: 'ok',
+                messages: [
+                    {
+                        msg_type: 'stream',
+                        content: {
+                            name: 'stdout',
+                            text: 'hello\n'
+                        }
+                    }
+                ]
             });
 
             const code = 'print("hello")';
             const { executeSilently } = await import('./helpers');
             const result = await executeSilently(mockKernel as any, code);
 
-            // executeSilently should return outputs array
+            // executeSilently should return outputs array with collected stream output
             assert.isArray(result);
-        });
-
-        test('Handles empty code', async () => {
-            const mockKernel = createMockKernel({
-                status: 'ok'
-            });
-
-            const code = '';
-            const { executeSilently } = await import('./helpers');
-            const result = await executeSilently(mockKernel as any, code);
-
-            // Should return empty array for empty code
-            assert.isArray(result);
+            assert.equal(result.length, 1);
+            assert.equal(result[0].output_type, 'stream');
+            assert.equal((result[0] as any).name, 'stdout');
+            assert.equal((result[0] as any).text, 'hello\n');
         });
 
         test('Collects stream outputs', async () => {
@@ -740,10 +746,10 @@ suite('Kernel Connection Helpers', () => {
             const result = await executeSilently(mockKernel as any, code);
 
             assert.isArray(result);
-            // Should have collected the stream output
-            if (result && result.length > 0) {
-                assert.equal(result[0].output_type, 'stream');
-            }
+            assert.equal(result.length, 1);
+            assert.equal(result[0].output_type, 'stream');
+            assert.equal((result[0] as any).name, 'stdout');
+            assert.equal((result[0] as any).text, 'test output');
         });
 
         test('Collects error outputs', async () => {
@@ -771,10 +777,11 @@ suite('Kernel Connection Helpers', () => {
             const result = await executeSilently(mockKernel as any, code);
 
             assert.isArray(result);
-            // Should have collected the error output
-            if (result && result.length > 0) {
-                assert.equal(result[0].output_type, 'error');
-            }
+            assert.equal(result.length, 1);
+            assert.equal(result[0].output_type, 'error');
+            assert.equal((result[0] as any).ename, 'NameError');
+            assert.equal((result[0] as any).evalue, 'name not defined');
+            assert.deepStrictEqual((result[0] as any).traceback, ['Traceback...']);
         });
 
         test('Collects display_data outputs', async () => {
@@ -798,10 +805,10 @@ suite('Kernel Connection Helpers', () => {
             const result = await executeSilently(mockKernel as any, code);
 
             assert.isArray(result);
-            // Should have collected the display_data output
-            if (result && result.length > 0) {
-                assert.equal(result[0].output_type, 'display_data');
-            }
+            assert.equal(result.length, 1);
+            assert.equal(result[0].output_type, 'display_data');
+            assert.deepStrictEqual((result[0] as any).data, { 'text/plain': 'some data' });
+            assert.deepStrictEqual((result[0] as any).metadata, {});
         });
 
         test('Handles multiple outputs', async () => {
@@ -830,10 +837,11 @@ suite('Kernel Connection Helpers', () => {
             const result = await executeSilently(mockKernel as any, code);
 
             assert.isArray(result);
-            // Should have collected multiple outputs
-            if (result) {
-                assert.isAtLeast(result.length, 0);
-            }
+            // Consecutive stream messages with the same name are concatenated
+            assert.equal(result.length, 1);
+            assert.equal(result[0].output_type, 'stream');
+            assert.equal((result[0] as any).name, 'stdout');
+            assert.equal((result[0] as any).text, 'output 1output 2');
         });
     });
 });

@@ -33,8 +33,7 @@ import { KernelError } from '../errors/kernelError';
 import { getCachedSysPrefix } from '../../platform/interpreter/helpers';
 import { getCellMetadata } from '../../platform/common/utils';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
-import { createBlockFromPocket } from '../../platform/deepnote/pocket';
-import { DeepnoteBigNumberMetadataSchema } from '../../notebooks/deepnote/deepnoteSchemas';
+import { DeepnoteDataConverter } from '../../notebooks/deepnote/deepnoteDataConverter';
 
 /**
  * Factory for CellExecution objects.
@@ -417,25 +416,26 @@ export class CellExecution implements ICellExecution, IDisposable {
             metadata: this.cell.metadata,
             outputs: [...(this.cell.outputs || [])]
         };
-        const deepnoteBlock = createBlockFromPocket(cellData, this.cell.index);
 
-        if (deepnoteBlock.type === 'big-number') {
-            try {
-                deepnoteBlock.metadata = {
-                    ...deepnoteBlock.metadata,
-                    ...DeepnoteBigNumberMetadataSchema.parse(JSON.parse(deepnoteBlock.content || '{}'))
-                };
-            } catch (ex) {
-                logger.error(
-                    `Cell execution failed to parse big number metadata, for cell Index ${this.cell.index}`,
-                    ex
-                );
-                return this.completedWithErrors(ex);
-            }
-        }
+        // if (deepnoteBlock.type === 'big-number') {
+        //     try {
+        //         deepnoteBlock.metadata = {
+        //             ...deepnoteBlock.metadata,
+        //             ...DeepnoteBigNumberMetadataSchema.parse(JSON.parse(deepnoteBlock.content || '{}'))
+        //         };
+        //     } catch (ex) {
+        //         logger.error(
+        //             `Cell execution failed to parse big number metadata, for cell Index ${this.cell.index}`,
+        //             ex
+        //         );
+        //         return this.completedWithErrors(ex);
+        //     }
+        // }
 
-        // Use createPythonCode to generate code with table state already included
-        logger.info(`Cell ${this.cell.index}: Using createPythonCode to generate execution code with table state`);
+        const dataConverter = new DeepnoteDataConverter();
+        const deepnoteBlock = dataConverter.convertCellToBlock(cellData, this.cell.index);
+
+        logger.info(`Cell ${this.cell.index}: Using createPythonCode for ${deepnoteBlock.type} block`);
         code = createPythonCode(deepnoteBlock);
 
         // Generate metadata from our cell (some kernels expect this.)

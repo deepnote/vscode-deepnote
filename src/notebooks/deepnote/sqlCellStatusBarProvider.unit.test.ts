@@ -89,7 +89,7 @@ suite('SqlCellStatusBarProvider', () => {
         assert.deepStrictEqual((result as any).command.arguments, [integrationId]);
     });
 
-    test('uses integration ID as display name when config not found', async () => {
+    test('shows "Unknown integration (configure)" when config not found', async () => {
         const integrationId = 'postgres-123';
         const cell = createMockCell(
             'sql',
@@ -106,7 +106,7 @@ suite('SqlCellStatusBarProvider', () => {
         const result = await provider.provideCellStatusBarItems(cell, cancellationToken);
 
         assert.isDefined(result);
-        assert.strictEqual((result as any).text, '$(database) postgres-123');
+        assert.strictEqual((result as any).text, '$(database) Unknown integration (configure)');
     });
 
     test('returns undefined when notebook has no project ID', async () => {

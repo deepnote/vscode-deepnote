@@ -97,7 +97,7 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
         // Get integration configuration to display the name
         const config = await this.integrationStorage.getIntegrationConfig(projectId, integrationId);
-        const displayName = config?.name || integrationId;
+        const displayName = config?.name || l10n.t('Unknown integration (configure)');
 
         // Create a status bar item that opens the integration management UI
         return {

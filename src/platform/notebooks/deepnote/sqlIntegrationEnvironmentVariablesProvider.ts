@@ -147,9 +147,6 @@ export class SqlIntegrationEnvironmentVariablesProvider {
                 logger.info(
                     `SqlIntegrationEnvironmentVariablesProvider: Added env var ${envVarName} for integration ${integrationId}`
                 );
-                logger.info(
-                    `SqlIntegrationEnvironmentVariablesProvider: Env var value: ${credentialsJson.substring(0, 100)}...`
-                );
             } catch (error) {
                 logger.error(
                     `SqlIntegrationEnvironmentVariablesProvider: Failed to get credentials for integration ${integrationId}`,

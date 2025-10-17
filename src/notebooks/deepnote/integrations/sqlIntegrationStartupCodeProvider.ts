@@ -105,9 +105,7 @@ export class SqlIntegrationStartupCodeProvider implements IStartupCodeProvider, 
             code.push('    print(f"[SQL Integration] ERROR: Failed to set SQL integration env vars: {e}")');
             code.push('    traceback.print_exc()');
 
-            const fullCode = code.join('\n');
-            logger.info(`SqlIntegrationStartupCodeProvider: Generated startup code (${fullCode.length} chars):`);
-            logger.info(fullCode);
+            logger.info('SqlIntegrationStartupCodeProvider: Generated startup code');
 
             return code;
         } catch (error) {

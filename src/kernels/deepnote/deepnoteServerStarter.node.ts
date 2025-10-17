@@ -169,12 +169,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                         } SQL integration env vars: ${Object.keys(sqlEnvVars).join(', ')}`
                     );
                     Object.assign(env, sqlEnvVars);
-                    // Log the first 100 chars of each env var value for debugging
-                    for (const [key, value] of Object.entries(sqlEnvVars)) {
-                        if (value) {
-                            logger.info(`DeepnoteServerStarter: ${key} = ${value.substring(0, 100)}...`);
-                        }
-                    }
+                    logger.info(`DeepnoteServerStarter: Injected SQL env vars: ${Object.keys(sqlEnvVars).join(', ')}`);
                 } else {
                     logger.info('DeepnoteServerStarter: No SQL integration env vars to inject');
                 }

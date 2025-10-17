@@ -853,22 +853,22 @@ abstract class BaseKernel implements IBaseKernel {
 
                 // Gather all of the startup code at one time and execute as one cell
                 const startupCode = await this.gatherInternalStartupCode();
-                logger.info(`Executing startup code with ${startupCode.length} lines`);
+                logger.trace(`Executing startup code with ${startupCode.length} lines`);
+
                 const outputs = await this.executeSilently(session, startupCode, {
                     traceErrors: true,
                     traceErrorsMessage: 'Error executing jupyter extension internal startup code'
                 });
-                logger.info(`Startup code execution completed with ${outputs?.length || 0} outputs`);
+                logger.trace(`Startup code execution completed with ${outputs?.length || 0} outputs`);
                 if (outputs && outputs.length > 0) {
-                    outputs.forEach((output, idx) => {
-                        logger.info(
-                            `Startup code output ${idx}: ${output.output_type} - ${JSON.stringify(output).substring(
-                                0,
-                                200
-                            )}`
-                        );
-                    });
+                    // Avoid logging content; output types only.
+                    logger.trace(
+                        `Startup code produced ${outputs.length} output(s): ${outputs
+                            .map((o) => o.output_type)
+                            .join(', ')}`
+                    );
                 }
+
                 // Run user specified startup commands
                 await this.executeSilently(session, this.getUserStartupCommands(), { traceErrors: false });
             }

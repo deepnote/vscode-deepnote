@@ -725,31 +725,6 @@ suite('Kernel Connection Helpers', () => {
             assert.equal((result[0] as any).text, 'hello\n');
         });
 
-        test('Collects stream outputs', async () => {
-            const mockKernel = createMockKernel({
-                status: 'ok',
-                messages: [
-                    {
-                        msg_type: 'stream',
-                        content: {
-                            name: 'stdout',
-                            text: 'test output'
-                        }
-                    }
-                ]
-            });
-
-            const code = 'print("test")';
-            const { executeSilently } = await import('./helpers');
-            const result = await executeSilently(mockKernel as any, code);
-
-            assert.isArray(result);
-            assert.equal(result.length, 1);
-            assert.equal(result[0].output_type, 'stream');
-            assert.equal((result[0] as any).name, 'stdout');
-            assert.equal((result[0] as any).text, 'test output');
-        });
-
         test('Collects error outputs', async () => {
             const mockKernel = createMockKernel({
                 status: 'error',

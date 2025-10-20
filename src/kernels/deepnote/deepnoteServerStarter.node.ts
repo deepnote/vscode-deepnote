@@ -159,22 +159,20 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
         // Inject SQL integration environment variables
         if (this.sqlIntegrationEnvVars) {
-            logger.info(`DeepnoteServerStarter: Injecting SQL integration env vars for ${deepnoteFileUri.toString()}`);
+            logger.debug(`DeepnoteServerStarter: Injecting SQL integration env vars for ${deepnoteFileUri.toString()}`);
             try {
                 const sqlEnvVars = await this.sqlIntegrationEnvVars.getEnvironmentVariables(deepnoteFileUri, token);
                 if (sqlEnvVars && Object.keys(sqlEnvVars).length > 0) {
-                    logger.debug(
-                        `DeepnoteServerStarter: Injecting SQL env vars: ${Object.keys(sqlEnvVars).join(', ')}`
-                    );
+                    logger.debug(`DeepnoteServerStarter: Injecting ${Object.keys(sqlEnvVars).length} SQL env vars`);
                     Object.assign(env, sqlEnvVars);
                 } else {
                     logger.debug('DeepnoteServerStarter: No SQL integration env vars to inject');
                 }
             } catch (error) {
-                logger.error('DeepnoteServerStarter: Failed to get SQL integration env vars', error);
+                logger.error('DeepnoteServerStarter: Failed to get SQL integration env vars', error.message);
             }
         } else {
-            logger.info('DeepnoteServerStarter: SqlIntegrationEnvironmentVariablesProvider not available');
+            logger.debug('DeepnoteServerStarter: SqlIntegrationEnvironmentVariablesProvider not available');
         }
 
         // Remove PYTHONHOME if it exists (can interfere with venv)

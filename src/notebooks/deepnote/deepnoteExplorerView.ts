@@ -8,6 +8,7 @@ import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteTreeDataProvider } from './deepnoteTreeDataProvider';
 import { type DeepnoteTreeItem, DeepnoteTreeItemType, type DeepnoteTreeItemContext } from './deepnoteTreeItem';
 import { generateUuid } from '../../platform/common/uuid';
+import type { DeepnoteFile, DeepnoteNotebook, DeepnoteBlock } from '../../platform/deepnote/deepnoteTypes';
 
 /**
  * Manages the Deepnote explorer tree view and related commands
@@ -67,6 +68,163 @@ export class DeepnoteExplorerView {
         this.extensionContext.subscriptions.push(
             commands.registerCommand('deepnote.importJupyterNotebook', () => this.importJupyterNotebook())
         );
+
+        this.extensionContext.subscriptions.push(
+            commands.registerCommand('deepnote.newNotebook', () => this.newNotebook())
+        );
+
+        // Context menu commands for tree items
+        this.extensionContext.subscriptions.push(
+            commands.registerCommand('deepnote.renameProject', (treeItem: DeepnoteTreeItem) =>
+                this.renameProject(treeItem)
+            )
+        );
+
+        this.extensionContext.subscriptions.push(
+            commands.registerCommand('deepnote.deleteProject', (treeItem: DeepnoteTreeItem) =>
+                this.deleteProject(treeItem)
+            )
+        );
+
+        this.extensionContext.subscriptions.push(
+            commands.registerCommand('deepnote.renameNotebook', (treeItem: DeepnoteTreeItem) =>
+                this.renameNotebook(treeItem)
+            )
+        );
+
+        this.extensionContext.subscriptions.push(
+            commands.registerCommand('deepnote.deleteNotebook', (treeItem: DeepnoteTreeItem) =>
+                this.deleteNotebook(treeItem)
+            )
+        );
+
+        this.extensionContext.subscriptions.push(
+            commands.registerCommand('deepnote.duplicateNotebook', (treeItem: DeepnoteTreeItem) =>
+                this.duplicateNotebook(treeItem)
+            )
+        );
+
+        this.extensionContext.subscriptions.push(
+            commands.registerCommand('deepnote.addNotebookToProject', (treeItem: DeepnoteTreeItem) =>
+                this.addNotebookToProject(treeItem)
+            )
+        );
+    }
+
+    /**
+     * Reads and parses a Deepnote project file from the given URI
+     * @param fileUri The URI of the .deepnote file to read
+     * @returns The parsed DeepnoteFile data
+     */
+    private async readDeepnoteProjectFile(fileUri: Uri): Promise<DeepnoteFile> {
+        const fileContent = await workspace.fs.readFile(fileUri);
+        const yamlContent = new TextDecoder().decode(fileContent);
+        const projectData = yaml.load(yamlContent) as DeepnoteFile;
+        return projectData;
+    }
+
+    /**
+     * Generates a suggested unique notebook name based on existing notebooks
+     * @param projectData The project data containing existing notebooks
+     * @returns A unique suggested notebook name
+     */
+    private generateSuggestedNotebookName(projectData: DeepnoteFile): string {
+        const notebookCount = projectData.project.notebooks?.length || 0;
+        const existingNames = new Set(
+            projectData.project.notebooks?.map((nb: DeepnoteNotebook) => nb.name.toLowerCase()) || []
+        );
+
+        let nextNumber = notebookCount + 1;
+        let suggestedName = `Notebook ${nextNumber}`;
+        while (existingNames.has(suggestedName.toLowerCase())) {
+            nextNumber++;
+            suggestedName = `Notebook ${nextNumber}`;
+        }
+
+        return suggestedName;
+    }
+
+    /**
+     * Prompts the user for a notebook name with validation
+     * @param suggestedName The default suggested name
+     * @returns The entered notebook name, or undefined if cancelled
+     */
+    private async promptForNotebookName(suggestedName: string): Promise<string | undefined> {
+        return await window.showInputBox({
+            prompt: l10n.t('Enter a name for the new notebook'),
+            placeHolder: suggestedName,
+            value: suggestedName,
+            validateInput: (value) => {
+                if (!value || value.trim().length === 0) {
+                    return l10n.t('Notebook name cannot be empty');
+                }
+                return null;
+            }
+        });
+    }
+
+    /**
+     * Creates a new notebook with an initial empty code block
+     * @param notebookName The name for the new notebook
+     * @returns The created notebook with a unique ID and initial block
+     */
+    private createNotebookWithFirstBlock(notebookName: string): DeepnoteNotebook {
+        const notebookId = generateUuid();
+        const firstBlock: DeepnoteBlock = {
+            blockGroup: generateUuid(),
+            content: '',
+            executionCount: undefined,
+            id: generateUuid(),
+            metadata: {},
+            outputs: [],
+            sortingKey: '0',
+            type: 'code',
+            version: 1
+        };
+
+        return {
+            blocks: [firstBlock],
+            executionMode: 'block',
+            id: notebookId,
+            name: notebookName
+        };
+    }
+
+    /**
+     * Saves the project data to file and opens the specified notebook
+     * @param fileUri The URI of the project file
+     * @param projectData The project data to save
+     * @param projectId The project ID
+     * @param notebookId The notebook ID to open
+     */
+    private async saveProjectAndOpenNotebook(
+        fileUri: Uri,
+        projectData: DeepnoteFile,
+        projectId: string,
+        notebookId: string
+    ): Promise<void> {
+        // Update metadata timestamp
+        if (!projectData.metadata) {
+            projectData.metadata = { createdAt: new Date().toISOString() };
+        }
+        projectData.metadata.modifiedAt = new Date().toISOString();
+
+        // Write the updated YAML
+        const updatedYaml = yaml.dump(projectData);
+        const encoder = new TextEncoder();
+        await workspace.fs.writeFile(fileUri, encoder.encode(updatedYaml));
+
+        // Refresh the tree view
+        this.treeDataProvider.refresh();
+
+        // Open the new notebook
+        this.manager.selectNotebookForProject(projectId, notebookId);
+        const notebookUri = fileUri.with({ query: `notebook=${notebookId}` });
+        const document = await workspace.openNotebookDocument(notebookUri);
+        await window.showNotebookDocument(document, {
+            preserveFocus: false,
+            preview: false
+        });
     }
 
     private refreshExplorer(): void {
@@ -268,6 +426,65 @@ export class DeepnoteExplorerView {
         }
     }
 
+    private async newNotebook(): Promise<void> {
+        const activeEditor = window.activeNotebookEditor;
+        if (!activeEditor || activeEditor.notebook.notebookType !== 'deepnote') {
+            await window.showErrorMessage(l10n.t('No active Deepnote file opened. Please open a Deepnote file first.'));
+            return;
+        }
+
+        const document = activeEditor.notebook;
+        const metadata = document.metadata;
+
+        // Get project information from notebook metadata
+        const projectId = metadata?.deepnoteProjectId as string | undefined;
+        if (!projectId) {
+            await window.showErrorMessage(l10n.t('Could not determine project ID'));
+            return;
+        }
+
+        // Get the file URI (strip query params if present)
+        let fileUri = document.uri;
+        if (fileUri.query) {
+            fileUri = fileUri.with({ query: '' });
+        }
+
+        try {
+            // Read the current file
+            const projectData = await this.readDeepnoteProjectFile(fileUri);
+
+            if (!projectData?.project) {
+                await window.showErrorMessage(l10n.t('Invalid Deepnote file format'));
+                return;
+            }
+
+            // Generate suggested name and prompt user
+            const suggestedName = this.generateSuggestedNotebookName(projectData);
+            const notebookName = await this.promptForNotebookName(suggestedName);
+
+            if (!notebookName) {
+                return;
+            }
+
+            // Create new notebook with initial block
+            const newNotebook = this.createNotebookWithFirstBlock(notebookName);
+
+            // Add new notebook to the project
+            if (!projectData.project.notebooks) {
+                projectData.project.notebooks = [];
+            }
+            projectData.project.notebooks.push(newNotebook);
+
+            // Save and open the new notebook
+            await this.saveProjectAndOpenNotebook(fileUri, projectData, projectId, newNotebook.id);
+
+            await window.showInformationMessage(l10n.t('Created new notebook: {0}', notebookName));
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            await window.showErrorMessage(l10n.t('Failed to add notebook: {0}', errorMessage));
+        }
+    }
+
     private async importNotebook(): Promise<void> {
         if (!workspace.workspaceFolders || workspace.workspaceFolders.length === 0) {
             const selection = await window.showInformationMessage(
@@ -449,6 +666,317 @@ export class DeepnoteExplorerView {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
             await window.showErrorMessage(l10n.t(`Failed to import Jupyter notebook: {0}`, errorMessage));
+        }
+    }
+
+    // Context menu command implementations
+
+    private async renameProject(treeItem: DeepnoteTreeItem): Promise<void> {
+        if (treeItem.type !== DeepnoteTreeItemType.ProjectFile) {
+            return;
+        }
+
+        const project = treeItem.data as DeepnoteFile;
+        const currentName = project.project.name;
+
+        const newName = await window.showInputBox({
+            prompt: l10n.t('Enter new project name'),
+            value: currentName,
+            validateInput: (value) => {
+                if (!value || value.trim().length === 0) {
+                    return l10n.t('Project name cannot be empty');
+                }
+                return null;
+            }
+        });
+
+        if (!newName || newName === currentName) {
+            return;
+        }
+
+        try {
+            const fileUri = Uri.file(treeItem.context.filePath);
+            const projectData = await this.readDeepnoteProjectFile(fileUri);
+
+            if (!projectData?.project) {
+                await window.showErrorMessage(l10n.t('Invalid Deepnote file format'));
+                return;
+            }
+
+            projectData.project.name = newName;
+
+            if (!projectData.metadata) {
+                projectData.metadata = { createdAt: new Date().toISOString() };
+            }
+            projectData.metadata.modifiedAt = new Date().toISOString();
+
+            const updatedYaml = yaml.dump(projectData);
+            const encoder = new TextEncoder();
+            await workspace.fs.writeFile(fileUri, encoder.encode(updatedYaml));
+
+            this.treeDataProvider.refresh();
+            await window.showInformationMessage(l10n.t('Project renamed to: {0}', newName));
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            await window.showErrorMessage(l10n.t('Failed to rename project: {0}', errorMessage));
+        }
+    }
+
+    private async deleteProject(treeItem: DeepnoteTreeItem): Promise<void> {
+        if (treeItem.type !== DeepnoteTreeItemType.ProjectFile) {
+            return;
+        }
+
+        const project = treeItem.data as DeepnoteFile;
+        const projectName = project.project.name;
+
+        const confirmation = await window.showWarningMessage(
+            l10n.t('Are you sure you want to delete project "{0}"?', projectName),
+            { modal: true },
+            l10n.t('Delete')
+        );
+
+        if (confirmation !== l10n.t('Delete')) {
+            return;
+        }
+
+        try {
+            const fileUri = Uri.file(treeItem.context.filePath);
+            await workspace.fs.delete(fileUri);
+            this.treeDataProvider.refresh();
+            await window.showInformationMessage(l10n.t('Project deleted: {0}', projectName));
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            await window.showErrorMessage(l10n.t('Failed to delete project: {0}', errorMessage));
+        }
+    }
+
+    private async renameNotebook(treeItem: DeepnoteTreeItem): Promise<void> {
+        if (treeItem.type !== DeepnoteTreeItemType.Notebook) {
+            return;
+        }
+
+        const notebook = treeItem.data as DeepnoteNotebook;
+        const currentName = notebook.name;
+
+        const newName = await window.showInputBox({
+            prompt: l10n.t('Enter new notebook name'),
+            value: currentName,
+            validateInput: (value) => {
+                if (!value || value.trim().length === 0) {
+                    return l10n.t('Notebook name cannot be empty');
+                }
+                return null;
+            }
+        });
+
+        if (!newName || newName === currentName) {
+            return;
+        }
+
+        try {
+            const fileUri = Uri.file(treeItem.context.filePath);
+            const projectData = await this.readDeepnoteProjectFile(fileUri);
+
+            if (!projectData?.project?.notebooks) {
+                await window.showErrorMessage(l10n.t('Invalid Deepnote file format'));
+                return;
+            }
+
+            const targetNotebook = projectData.project.notebooks.find(
+                (nb: DeepnoteNotebook) => nb.id === treeItem.context.notebookId
+            );
+
+            if (!targetNotebook) {
+                await window.showErrorMessage(l10n.t('Notebook not found'));
+                return;
+            }
+
+            targetNotebook.name = newName;
+
+            if (!projectData.metadata) {
+                projectData.metadata = { createdAt: new Date().toISOString() };
+            }
+            projectData.metadata.modifiedAt = new Date().toISOString();
+
+            const updatedYaml = yaml.dump(projectData);
+            const encoder = new TextEncoder();
+            await workspace.fs.writeFile(fileUri, encoder.encode(updatedYaml));
+
+            this.treeDataProvider.refresh();
+            await window.showInformationMessage(l10n.t('Notebook renamed to: {0}', newName));
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            await window.showErrorMessage(l10n.t('Failed to rename notebook: {0}', errorMessage));
+        }
+    }
+
+    private async deleteNotebook(treeItem: DeepnoteTreeItem): Promise<void> {
+        if (treeItem.type !== DeepnoteTreeItemType.Notebook) {
+            return;
+        }
+
+        const notebook = treeItem.data as DeepnoteNotebook;
+        const notebookName = notebook.name;
+
+        const confirmation = await window.showWarningMessage(
+            l10n.t('Are you sure you want to delete notebook "{0}"?', notebookName),
+            { modal: true },
+            l10n.t('Delete')
+        );
+
+        if (confirmation !== l10n.t('Delete')) {
+            return;
+        }
+
+        try {
+            const fileUri = Uri.file(treeItem.context.filePath);
+            const projectData = await this.readDeepnoteProjectFile(fileUri);
+
+            if (!projectData?.project?.notebooks) {
+                await window.showErrorMessage(l10n.t('Invalid Deepnote file format'));
+                return;
+            }
+
+            projectData.project.notebooks = projectData.project.notebooks.filter(
+                (nb: DeepnoteNotebook) => nb.id !== treeItem.context.notebookId
+            );
+
+            if (!projectData.metadata) {
+                projectData.metadata = { createdAt: new Date().toISOString() };
+            }
+            projectData.metadata.modifiedAt = new Date().toISOString();
+
+            const updatedYaml = yaml.dump(projectData);
+            const encoder = new TextEncoder();
+            await workspace.fs.writeFile(fileUri, encoder.encode(updatedYaml));
+
+            this.treeDataProvider.refresh();
+            await window.showInformationMessage(l10n.t('Notebook deleted: {0}', notebookName));
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            await window.showErrorMessage(l10n.t('Failed to delete notebook: {0}', errorMessage));
+        }
+    }
+
+    private async duplicateNotebook(treeItem: DeepnoteTreeItem): Promise<void> {
+        if (treeItem.type !== DeepnoteTreeItemType.Notebook) {
+            return;
+        }
+
+        const notebook = treeItem.data as DeepnoteNotebook;
+        const originalName = notebook.name;
+
+        try {
+            const fileUri = Uri.file(treeItem.context.filePath);
+            const projectData = await this.readDeepnoteProjectFile(fileUri);
+
+            if (!projectData?.project?.notebooks) {
+                await window.showErrorMessage(l10n.t('Invalid Deepnote file format'));
+                return;
+            }
+
+            const targetNotebook = projectData.project.notebooks.find(
+                (nb: DeepnoteNotebook) => nb.id === treeItem.context.notebookId
+            );
+
+            if (!targetNotebook) {
+                await window.showErrorMessage(l10n.t('Notebook not found'));
+                return;
+            }
+
+            // Generate new name
+            const existingNames = new Set(projectData.project.notebooks.map((nb: DeepnoteNotebook) => nb.name));
+            let copyNumber = 1;
+            let newName = `${originalName} (Copy)`;
+            while (existingNames.has(newName)) {
+                copyNumber++;
+                newName = `${originalName} (Copy ${copyNumber})`;
+            }
+
+            // Deep clone the notebook and generate new IDs
+            const newNotebook: DeepnoteNotebook = {
+                ...targetNotebook,
+                id: generateUuid(),
+                name: newName,
+                blocks: targetNotebook.blocks.map((block: DeepnoteBlock) => ({
+                    ...block,
+                    id: generateUuid(),
+                    blockGroup: generateUuid(),
+                    executionCount: undefined
+                }))
+            };
+
+            projectData.project.notebooks.push(newNotebook);
+
+            if (!projectData.metadata) {
+                projectData.metadata = { createdAt: new Date().toISOString() };
+            }
+            projectData.metadata.modifiedAt = new Date().toISOString();
+
+            const updatedYaml = yaml.dump(projectData);
+            const encoder = new TextEncoder();
+            await workspace.fs.writeFile(fileUri, encoder.encode(updatedYaml));
+
+            this.treeDataProvider.refresh();
+
+            // Optionally open the duplicated notebook
+            this.manager.selectNotebookForProject(treeItem.context.projectId, newNotebook.id);
+            const notebookUri = fileUri.with({ query: `notebook=${newNotebook.id}` });
+            const document = await workspace.openNotebookDocument(notebookUri);
+            await window.showNotebookDocument(document, {
+                preserveFocus: false,
+                preview: false
+            });
+
+            await window.showInformationMessage(l10n.t('Notebook duplicated: {0}', newName));
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            await window.showErrorMessage(l10n.t('Failed to duplicate notebook: {0}', errorMessage));
+        }
+    }
+
+    private async addNotebookToProject(treeItem: DeepnoteTreeItem): Promise<void> {
+        if (treeItem.type !== DeepnoteTreeItemType.ProjectFile) {
+            return;
+        }
+
+        const project = treeItem.data as DeepnoteFile;
+        const projectId = project.project.id;
+
+        try {
+            const fileUri = Uri.file(treeItem.context.filePath);
+            const projectData = await this.readDeepnoteProjectFile(fileUri);
+
+            if (!projectData?.project) {
+                await window.showErrorMessage(l10n.t('Invalid Deepnote file format'));
+                return;
+            }
+
+            // Generate suggested name and prompt user
+            const suggestedName = this.generateSuggestedNotebookName(projectData);
+            const notebookName = await this.promptForNotebookName(suggestedName);
+
+            if (!notebookName) {
+                return;
+            }
+
+            // Create new notebook with initial block
+            const newNotebook = this.createNotebookWithFirstBlock(notebookName);
+
+            // Add new notebook to the project
+            if (!projectData.project.notebooks) {
+                projectData.project.notebooks = [];
+            }
+            projectData.project.notebooks.push(newNotebook);
+
+            // Save and open the new notebook
+            await this.saveProjectAndOpenNotebook(fileUri, projectData, projectId, newNotebook.id);
+
+            await window.showInformationMessage(l10n.t('Created new notebook: {0}', notebookName));
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            await window.showErrorMessage(l10n.t('Failed to add notebook: {0}', errorMessage));
         }
     }
 }

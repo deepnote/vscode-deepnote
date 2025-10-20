@@ -176,6 +176,48 @@
                 "icon": "$(add)"
             },
             {
+                "command": "deepnote.newNotebook",
+                "title": "%deepnote.commands.newNotebook.title%",
+                "category": "Deepnote",
+                "icon": "$(notebook)"
+            },
+            {
+                "command": "deepnote.renameProject",
+                "title": "Rename Project",
+                "category": "Deepnote",
+                "icon": "$(edit)"
+            },
+            {
+                "command": "deepnote.deleteProject",
+                "title": "Delete Project",
+                "category": "Deepnote",
+                "icon": "$(trash)"
+            },
+            {
+                "command": "deepnote.renameNotebook",
+                "title": "Rename Notebook",
+                "category": "Deepnote",
+                "icon": "$(edit)"
+            },
+            {
+                "command": "deepnote.deleteNotebook",
+                "title": "Delete Notebook",
+                "category": "Deepnote",
+                "icon": "$(trash)"
+            },
+            {
+                "command": "deepnote.duplicateNotebook",
+                "title": "Duplicate Notebook",
+                "category": "Deepnote",
+                "icon": "$(copy)"
+            },
+            {
+                "command": "deepnote.addNotebookToProject",
+                "title": "Add Notebook",
+                "category": "Deepnote",
+                "icon": "$(add)"
+            },
+            {
                 "command": "dataScience.ClearCache",
                 "title": "%jupyter.command.dataScience.clearCache.title%",
                 "category": "Jupyter (Dev)",
@@ -803,8 +845,13 @@
                     "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "deepnote.addSqlBlock",
+                    "command": "deepnote.newNotebook",
                     "group": "navigation@1",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addSqlBlock",
+                    "group": "navigation@2",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
@@ -1331,6 +1378,36 @@
                     "command": "deepnote.revealInExplorer",
                     "when": "view == deepnoteExplorer",
                     "group": "inline@2"
+                },
+                {
+                    "command": "deepnote.addNotebookToProject",
+                    "when": "view == deepnoteExplorer && viewItem == projectFile",
+                    "group": "1_project@1"
+                },
+                {
+                    "command": "deepnote.renameProject",
+                    "when": "view == deepnoteExplorer && viewItem == projectFile",
+                    "group": "2_edit@1"
+                },
+                {
+                    "command": "deepnote.deleteProject",
+                    "when": "view == deepnoteExplorer && viewItem == projectFile",
+                    "group": "3_delete@1"
+                },
+                {
+                    "command": "deepnote.renameNotebook",
+                    "when": "view == deepnoteExplorer && viewItem == notebook",
+                    "group": "2_edit@1"
+                },
+                {
+                    "command": "deepnote.duplicateNotebook",
+                    "when": "view == deepnoteExplorer && viewItem == notebook",
+                    "group": "2_edit@2"
+                },
+                {
+                    "command": "deepnote.deleteNotebook",
+                    "when": "view == deepnoteExplorer && viewItem == notebook",
+                    "group": "3_delete@1"
                 }
             ]
         },

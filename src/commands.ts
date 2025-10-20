@@ -187,4 +187,5 @@ export interface ICommandNameArgumentTypeMapping {
     [DSCommands.ContinueEditSessionInCodespace]: [];
     [DSCommands.AddSqlBlock]: [];
     [DSCommands.AddBigNumberChartBlock]: [];
+    [DSCommands.NewNotebook]: [];
 }

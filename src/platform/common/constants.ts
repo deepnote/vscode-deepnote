@@ -235,6 +235,7 @@ export namespace Commands {
     export const AddInputDateRangeBlock = 'deepnote.addInputDateRangeBlock';
     export const AddInputFileBlock = 'deepnote.addInputFileBlock';
     export const AddButtonBlock = 'deepnote.addButtonBlock';
+    export const NewNotebook = 'deepnote.newNotebook';
     export const ExportAsPythonScript = 'jupyter.exportAsPythonScript';
     export const ExportToHTML = 'jupyter.exportToHTML';
     export const ExportToPDF = 'jupyter.exportToPDF';

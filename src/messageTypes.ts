@@ -158,6 +158,52 @@ export type LocalizedMessages = {
     selectedImageListLabel: string;
     selectedImageLabel: string;
     dvDeprecationWarning: string;
+    dataframeRowsColumns: string;
+    dataframePerPage: string;
+    dataframePreviousPage: string;
+    dataframeNextPage: string;
+    dataframePageOf: string;
+    dataframeCopyTable: string;
+    dataframeExportTable: string;
+    // Integration panel strings
+    integrationsTitle: string;
+    integrationsNoIntegrationsFound: string;
+    integrationsConnected: string;
+    integrationsNotConfigured: string;
+    integrationsConfigure: string;
+    integrationsReconfigure: string;
+    integrationsReset: string;
+    integrationsConfirmResetTitle: string;
+    integrationsConfirmResetMessage: string;
+    integrationsConfirmResetDetails: string;
+    integrationsConfigureTitle: string;
+    integrationsCancel: string;
+    integrationsSave: string;
+    // PostgreSQL form strings
+    integrationsPostgresNameLabel: string;
+    integrationsPostgresNamePlaceholder: string;
+    integrationsPostgresHostLabel: string;
+    integrationsPostgresHostPlaceholder: string;
+    integrationsPostgresPortLabel: string;
+    integrationsPostgresPortPlaceholder: string;
+    integrationsPostgresDatabaseLabel: string;
+    integrationsPostgresDatabasePlaceholder: string;
+    integrationsPostgresUsernameLabel: string;
+    integrationsPostgresUsernamePlaceholder: string;
+    integrationsPostgresPasswordLabel: string;
+    integrationsPostgresPasswordPlaceholder: string;
+    integrationsPostgresSslLabel: string;
+    // BigQuery form strings
+    integrationsBigQueryNameLabel: string;
+    integrationsBigQueryNamePlaceholder: string;
+    integrationsBigQueryProjectIdLabel: string;
+    integrationsBigQueryProjectIdPlaceholder: string;
+    integrationsBigQueryCredentialsLabel: string;
+    integrationsBigQueryCredentialsPlaceholder: string;
+    integrationsBigQueryCredentialsRequired: string;
+    // Common form strings
+    integrationsRequiredField: string;
+    integrationsOptionalField: string;
 };
 // Map all messages to specific payloads
 export class IInteractiveWindowMapping {

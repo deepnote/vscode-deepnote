@@ -1,0 +1,55 @@
+import { Event } from 'vscode';
+import { IDisposable } from '../../../platform/common/types';
+import { IntegrationConfig, IntegrationWithStatus } from './integrationTypes';
+
+export const IIntegrationStorage = Symbol('IIntegrationStorage');
+export interface IIntegrationStorage extends IDisposable {
+    /**
+     * Event fired when integrations change
+     */
+    readonly onDidChangeIntegrations: Event<void>;
+
+    getAll(): Promise<IntegrationConfig[]>;
+    get(integrationId: string): Promise<IntegrationConfig | undefined>;
+
+    /**
+     * Get integration configuration for a specific project and integration
+     */
+    getIntegrationConfig(projectId: string, integrationId: string): Promise<IntegrationConfig | undefined>;
+
+    save(config: IntegrationConfig): Promise<void>;
+    delete(integrationId: string): Promise<void>;
+    exists(integrationId: string): Promise<boolean>;
+    clear(): Promise<void>;
+}
+
+export const IIntegrationDetector = Symbol('IIntegrationDetector');
+export interface IIntegrationDetector {
+    /**
+     * Detect all integrations used in the given project
+     */
+    detectIntegrations(projectId: string): Promise<Map<string, IntegrationWithStatus>>;
+
+    /**
+     * Check if a project has any unconfigured integrations
+     */
+    hasUnconfiguredIntegrations(projectId: string): Promise<boolean>;
+}
+
+export const IIntegrationWebviewProvider = Symbol('IIntegrationWebviewProvider');
+export interface IIntegrationWebviewProvider {
+    /**
+     * Show the integration management webview
+     * @param integrations Map of integration IDs to their status
+     * @param selectedIntegrationId Optional integration ID to select/configure immediately
+     */
+    show(integrations: Map<string, IntegrationWithStatus>, selectedIntegrationId?: string): Promise<void>;
+}
+
+export const IIntegrationManager = Symbol('IIntegrationManager');
+export interface IIntegrationManager {
+    /**
+     * Activate the integration manager by registering commands and event listeners
+     */
+    activate(): void;
+}

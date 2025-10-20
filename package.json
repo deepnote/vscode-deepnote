@@ -2150,7 +2150,9 @@
         "typecheck": "tsc -p ./ --noEmit",
         "updatePackageJsonForBundle": "gulp updatePackageJsonForBundle",
         "watch-all": "concurrently \"tsc --watch -p ./\" \"npx tsx build/esbuild/build.ts --watch-all\"",
-        "watch": "concurrently \"tsc --watch -p ./\" \"npx tsx build/esbuild/build.ts --watch\""
+        "watch": "concurrently \"tsc --watch -p ./\" \"npx tsx build/esbuild/build.ts --watch\"",
+        "spell-check": "cspell",
+        "spell-check:fix": "cspell --no-exit-code --show-suggestions"
     },
     "dependencies": {
         "@c4312/evt": "^0.1.1",
@@ -2298,6 +2300,7 @@
         "colors": "^1.4.0",
         "concurrently": "^8.2.2",
         "cross-env": "^7.0.3",
+        "cspell": "9.2.1",
         "dedent": "^0.7.0",
         "del": "^3.0.0",
         "es-abstract": "^1.19.1",

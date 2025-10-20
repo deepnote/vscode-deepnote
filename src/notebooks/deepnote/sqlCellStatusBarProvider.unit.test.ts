@@ -56,7 +56,7 @@ suite('SqlCellStatusBarProvider', () => {
         assert.strictEqual(variableItem.command.command, 'deepnote.updateSqlVariableName');
     });
 
-    test('returns only variable status bar item for SQL cells with dataframe integration ID', async () => {
+    test('returns status bar items for SQL cells with dataframe integration ID', async () => {
         const cell = createMockCell('sql', {
             sql_integration_id: DATAFRAME_SQL_INTEGRATION_ID
         });
@@ -66,10 +66,17 @@ suite('SqlCellStatusBarProvider', () => {
         assert.isDefined(result);
         assert.isArray(result);
         const items = result as any[];
-        assert.strictEqual(items.length, 1);
+        assert.strictEqual(items.length, 2);
+
+        // Check integration status bar item
+        const integrationItem = items[0];
+        assert.strictEqual(integrationItem.text, '$(database) DataFrame SQL (DuckDB)');
+        assert.strictEqual(integrationItem.alignment, 1);
+        assert.strictEqual(integrationItem.tooltip, 'Internal DuckDB integration for querying DataFrames');
+        assert.isUndefined(integrationItem.command);
 
         // Check variable status bar item
-        const variableItem = items[0];
+        const variableItem = items[1];
         assert.strictEqual(variableItem.text, 'Variable: df');
         assert.strictEqual(variableItem.alignment, 1);
         assert.isDefined(variableItem.command);

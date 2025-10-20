@@ -91,7 +91,7 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
         // Add integration status bar item if integration ID is present
         const integrationId = this.getIntegrationId(cell);
-        if (integrationId && integrationId !== DATAFRAME_SQL_INTEGRATION_ID) {
+        if (integrationId) {
             const integrationItem = await this.createIntegrationStatusBarItem(cell, integrationId);
             if (integrationItem) {
                 items.push(integrationItem);
@@ -108,6 +108,15 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         cell: NotebookCell,
         integrationId: string
     ): Promise<NotebookCellStatusBarItem | undefined> {
+        // Handle internal DuckDB integration specially
+        if (integrationId === DATAFRAME_SQL_INTEGRATION_ID) {
+            return {
+                text: `$(database) ${l10n.t('DataFrame SQL (DuckDB)')}`,
+                alignment: 1, // NotebookCellStatusBarAlignment.Left
+                tooltip: l10n.t('Internal DuckDB integration for querying DataFrames')
+            };
+        }
+
         const projectId = cell.notebook.metadata?.deepnoteProjectId;
         if (!projectId) {
             return undefined;

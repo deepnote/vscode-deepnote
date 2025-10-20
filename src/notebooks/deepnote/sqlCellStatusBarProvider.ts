@@ -169,7 +169,7 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         const variableName = this.getVariableName(cell);
 
         return {
-            text: `Variable: ${variableName}`,
+            text: l10n.t('Variable: {0}', variableName),
             alignment: 1, // NotebookCellStatusBarAlignment.Left
             tooltip: l10n.t('Variable name for SQL query result\nClick to change'),
             command: {

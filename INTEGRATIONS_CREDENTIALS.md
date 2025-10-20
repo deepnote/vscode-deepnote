@@ -34,7 +34,8 @@ Manages persistent storage of integration configurations using VSCode's encrypte
 **Key Methods:**
 
 - `getAll()`: Retrieve all stored integration configurations
-- `get(integrationId)`: Get a specific integration by ID
+- `getIntegrationConfig(integrationId)`: Get a specific integration by ID
+- `getProjectIntegrationConfig(projectId, integrationId)`: Get the effective project-scoped config
 - `save(config)`: Save or update an integration configuration
 - `delete(integrationId)`: Remove an integration configuration
 - `exists(integrationId)`: Check if an integration is configured

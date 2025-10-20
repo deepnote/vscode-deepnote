@@ -3,9 +3,25 @@ import { CancellationToken, Event, EventEmitter, NotebookDocument, workspace } f
 
 import { IDisposableRegistry, Resource } from '../../common/types';
 import { EnvironmentVariables } from '../../common/variables/types';
+import { BaseError } from '../../errors/types';
 import { logger } from '../../logging';
 import { IIntegrationStorage, ISqlIntegrationEnvVarsProvider } from './types';
 import { DATAFRAME_SQL_INTEGRATION_ID, IntegrationConfig, IntegrationType } from './integrationTypes';
+
+/**
+ * Error thrown when an unsupported integration type is encountered.
+ *
+ * Cause:
+ * An integration configuration has a type that is not supported by the SQL integration system.
+ *
+ * Handled by:
+ * Callers should handle this error and inform the user that the integration type is not supported.
+ */
+class UnsupportedIntegrationError extends BaseError {
+    constructor(public readonly integrationType: string) {
+        super('unknown', `Unsupported integration type: ${integrationType}`);
+    }
+}
 
 /**
  * Converts an integration ID to the environment variable name format expected by SQL blocks.
@@ -58,7 +74,7 @@ function convertIntegrationConfigToJson(config: IntegrationConfig): string {
         }
 
         default:
-            throw new Error(`Unsupported integration type: ${(config as IntegrationConfig).type}`);
+            throw new UnsupportedIntegrationError((config as IntegrationConfig).type);
     }
 }
 

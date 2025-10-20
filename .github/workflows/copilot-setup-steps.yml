@@ -12,7 +12,6 @@ on:
       - .github/workflows/copilot-setup-steps.yml
 
 env:
-  NODE_VERSION: 22.15.1
   NPM_VERSION: 10.9.2
   PYTHON_VERSION: 3.12
   DENO_VERSION: '~1.37'
@@ -39,10 +38,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
 
-      - name: Use Node ${{env.NODE_VERSION}}
+      - name: Setup Node.js
         uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v5
         with:
-          node-version: ${{env.NODE_VERSION}}
+          node-version-file: '.nvmrc'
           registry-url: 'https://npm.pkg.github.com'
           scope: '@deepnote'
 

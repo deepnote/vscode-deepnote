@@ -224,7 +224,7 @@ suite('Kernel Environment Variables Service', () => {
         when(customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())).thenResolve({
             PATH: 'foobaz'
         });
-        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve(undefined as any);
+        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
         kernelSpec.env = {
             ONE: '1',
             TWO: '2'
@@ -245,7 +245,7 @@ suite('Kernel Environment Variables Service', () => {
         when(customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())).thenResolve({
             PATH: 'foobaz'
         });
-        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve(undefined as any);
+        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
         kernelSpec.env = {
             ONE: '1',
             TWO: '2',

@@ -21,6 +21,7 @@ Thank you for your interest in contributing to the Deepnote VS Code extension! T
 <summary><b>📦Or use these commands to install the prerequisites</b></summary>
 
 #### macOS (using Homebrew)
+
 ```bash
 # Install Node.js
 brew install node@22
@@ -39,6 +40,7 @@ code --install-extension ms-python.python
 ```
 
 #### macOS/Linux (using nvm for Node.js)
+
 ```bash
 # Install nvm (if not already installed)
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
@@ -65,6 +67,7 @@ code --install-extension esbenp.prettier-vscode
 code --install-extension EditorConfig.EditorConfig
 code --install-extension ms-python.python
 ```
+
 </details>
 
 ### Setup
@@ -166,6 +169,7 @@ After completing the setup steps, you can run the Deepnote extension in developm
 #### Quick Start
 
 1. **Open the project in VS Code**
+
    ```bash
    code .
    ```
@@ -208,7 +212,9 @@ The project includes several launch configurations in `.vscode/launch.json`:
 <summary>Click to expand debugging tips</summary>
 
 **Enable detailed logging:**
+
 Edit `.vscode/launch.json` and add environment variables:
+
 ```json
 "env": {
     "VSC_JUPYTER_FORCE_LOGGING": "1",

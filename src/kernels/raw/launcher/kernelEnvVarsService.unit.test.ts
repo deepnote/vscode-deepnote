@@ -17,7 +17,7 @@ import { IJupyterKernelSpec } from '../../types';
 import { Uri } from 'vscode';
 import { IConfigurationService, IWatchableJupyterSettings, type ReadWrite } from '../../../platform/common/types';
 import { JupyterSettings } from '../../../platform/common/configSettings';
-import { SqlIntegrationEnvironmentVariablesProvider } from '../../../platform/notebooks/deepnote/sqlIntegrationEnvironmentVariablesProvider';
+import { ISqlIntegrationEnvVarsProvider } from '../../../platform/notebooks/deepnote/types';
 
 use(chaiAsPromised);
 
@@ -30,7 +30,7 @@ suite('Kernel Environment Variables Service', () => {
     let interpreterService: IInterpreterService;
     let configService: IConfigurationService;
     let settings: IWatchableJupyterSettings;
-    let sqlIntegrationEnvVars: SqlIntegrationEnvironmentVariablesProvider;
+    let sqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider;
     const pathFile = Uri.joinPath(Uri.file('foobar'), 'bar');
     const interpreter: PythonEnvironment = {
         uri: pathFile,
@@ -55,7 +55,7 @@ suite('Kernel Environment Variables Service', () => {
         variablesService = new EnvironmentVariablesService(instance(fs));
         configService = mock<IConfigurationService>();
         settings = mock(JupyterSettings);
-        sqlIntegrationEnvVars = mock<SqlIntegrationEnvironmentVariablesProvider>();
+        sqlIntegrationEnvVars = mock<ISqlIntegrationEnvVarsProvider>();
         when(configService.getSettings(anything())).thenReturn(instance(settings));
         if (process.platform === 'win32') {
             // Win32 will generate upper case all the time
@@ -79,7 +79,7 @@ suite('Kernel Environment Variables Service', () => {
      * @returns A new instance of KernelEnvironmentVariablesService
      */
     function buildKernelEnvVarsService(overrides?: {
-        sqlIntegrationEnvVars?: SqlIntegrationEnvironmentVariablesProvider | undefined;
+        sqlIntegrationEnvVars?: ISqlIntegrationEnvVarsProvider | undefined;
     }): KernelEnvironmentVariablesService {
         const sqlProvider =
             overrides && 'sqlIntegrationEnvVars' in overrides

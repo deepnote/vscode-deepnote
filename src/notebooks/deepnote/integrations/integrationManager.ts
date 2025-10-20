@@ -1,5 +1,5 @@
 import { inject, injectable } from 'inversify';
-import { commands, NotebookDocument, window, workspace } from 'vscode';
+import { commands, l10n, NotebookDocument, window, workspace } from 'vscode';
 
 import { IExtensionContext } from '../../../platform/common/types';
 import { Commands } from '../../../platform/common/constants';
@@ -26,8 +26,27 @@ export class IntegrationManager implements IIntegrationManager {
 
     public activate(): void {
         // Register the manage integrations command
+        // The command can optionally receive an integration ID to select/configure
+        // Note: When invoked from a notebook cell status bar, VSCode passes context object first,
+        // then the actual arguments from the command definition
         this.extensionContext.subscriptions.push(
-            commands.registerCommand(Commands.ManageIntegrations, () => this.showIntegrationsUI())
+            commands.registerCommand(Commands.ManageIntegrations, (...args: unknown[]) => {
+                logger.debug(`IntegrationManager: Command invoked with args:`, args);
+
+                // Find the integration ID from the arguments
+                // It could be the first arg (if called directly) or in the args array (if called from UI)
+                let integrationId: string | undefined;
+
+                for (const arg of args) {
+                    if (typeof arg === 'string') {
+                        integrationId = arg;
+                        break;
+                    }
+                }
+
+                logger.debug(`IntegrationManager: Extracted integrationId: ${integrationId}`);
+                return this.showIntegrationsUI(integrationId);
+            })
         );
 
         // Listen for active notebook changes to update context
@@ -95,18 +114,19 @@ export class IntegrationManager implements IIntegrationManager {
 
     /**
      * Show the integrations management UI
+     * @param selectedIntegrationId Optional integration ID to select/configure immediately
      */
-    private async showIntegrationsUI(): Promise<void> {
+    private async showIntegrationsUI(selectedIntegrationId?: string): Promise<void> {
         const activeNotebook = window.activeNotebookEditor?.notebook;
 
         if (!activeNotebook || activeNotebook.notebookType !== 'deepnote') {
-            void window.showErrorMessage('No active Deepnote notebook');
+            void window.showErrorMessage(l10n.t('No active Deepnote notebook'));
             return;
         }
 
         const projectId = activeNotebook.metadata?.deepnoteProjectId;
         if (!projectId) {
-            void window.showErrorMessage('Cannot determine project ID');
+            void window.showErrorMessage(l10n.t('Cannot determine project ID'));
             return;
         }
 
@@ -125,13 +145,24 @@ export class IntegrationManager implements IIntegrationManager {
 
         logger.debug(`IntegrationManager: Found ${integrations.size} integrations`);
 
+        // If a specific integration was requested (e.g., from status bar click),
+        // ensure it's in the map even if not detected from the project
+        if (selectedIntegrationId && !integrations.has(selectedIntegrationId)) {
+            logger.debug(`IntegrationManager: Adding requested integration ${selectedIntegrationId} to the map`);
+            const config = await this.integrationStorage.get(selectedIntegrationId);
+            integrations.set(selectedIntegrationId, {
+                config: config || null,
+                status: config ? IntegrationStatus.Connected : IntegrationStatus.Disconnected
+            });
+        }
+
         if (integrations.size === 0) {
-            void window.showInformationMessage(`No integrations found in this project.`);
+            void window.showInformationMessage(l10n.t('No integrations found in this project.'));
             return;
         }
 
-        // Show the webview
-        await this.webviewProvider.show(integrations);
+        // Show the webview with optional selected integration
+        await this.webviewProvider.show(integrations, selectedIntegrationId);
     }
 
     /**
@@ -143,16 +174,23 @@ export class IntegrationManager implements IIntegrationManager {
         const blocksWithIntegrations: BlockWithIntegration[] = [];
 
         for (const cell of notebook.getCells()) {
-            const deepnoteMetadata = cell.metadata?.deepnoteMetadata;
-            logger.trace(`IntegrationManager: Cell ${cell.index} metadata:`, deepnoteMetadata);
+            const metadata = cell.metadata;
+            logger.trace(`IntegrationManager: Cell ${cell.index} metadata:`, metadata);
 
-            if (deepnoteMetadata?.sql_integration_id) {
-                blocksWithIntegrations.push({
-                    id: `cell-${cell.index}`,
-                    sql_integration_id: deepnoteMetadata.sql_integration_id
-                });
+            // Check cell metadata for sql_integration_id
+            if (metadata && typeof metadata === 'object') {
+                const integrationId = (metadata as Record<string, unknown>).sql_integration_id;
+                if (typeof integrationId === 'string') {
+                    logger.debug(`IntegrationManager: Found integration ${integrationId} in cell ${cell.index}`);
+                    blocksWithIntegrations.push({
+                        id: `cell-${cell.index}`,
+                        sql_integration_id: integrationId
+                    });
+                }
             }
         }
+
+        logger.debug(`IntegrationManager: Found ${blocksWithIntegrations.length} cells with integrations`);
 
         // Use the shared utility to scan blocks and build the status map
         return scanBlocksForIntegrations(blocksWithIntegrations, this.integrationStorage, 'IntegrationManager');

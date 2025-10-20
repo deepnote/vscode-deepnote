@@ -102,9 +102,7 @@ export class KernelEnvironmentVariablesService {
                       .then((vars) => {
                           if (vars && Object.keys(vars).length > 0) {
                               logger.debug(
-                                  `KernelEnvVarsService: Got ${
-                                      Object.keys(vars).length
-                                  } SQL integration env vars: ${Object.keys(vars).join(', ')}`
+                                  `KernelEnvVarsService: Got ${Object.keys(vars).length} SQL integration env vars`
                               );
                           }
                           return vars;

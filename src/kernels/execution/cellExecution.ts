@@ -32,8 +32,8 @@ import { KernelError } from '../errors/kernelError';
 import { getCachedSysPrefix } from '../../platform/interpreter/helpers';
 import { getCellMetadata } from '../../platform/common/utils';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
-import { createBlockFromPocket } from '../../notebooks/deepnote/pocket';
 import { createPythonCode } from '@deepnote/blocks';
+import { DeepnoteDataConverter } from '../../notebooks/deepnote/deepnoteDataConverter';
 
 /**
  * Factory for CellExecution objects.
@@ -416,10 +416,11 @@ export class CellExecution implements ICellExecution, IDisposable {
             metadata: this.cell.metadata,
             outputs: [...(this.cell.outputs || [])]
         };
-        const deepnoteBlock = createBlockFromPocket(cellData, this.cell.index);
 
-        // Use createPythonCode to generate code with table state already included
-        logger.info(`Cell ${this.cell.index}: Using createPythonCode to generate execution code with table state`);
+        const dataConverter = new DeepnoteDataConverter();
+        const deepnoteBlock = dataConverter.convertCellToBlock(cellData, this.cell.index);
+
+        logger.info(`Cell ${this.cell.index}: Using createPythonCode for ${deepnoteBlock.type} block`);
         code = createPythonCode(deepnoteBlock);
 
         // Generate metadata from our cell (some kernels expect this.)

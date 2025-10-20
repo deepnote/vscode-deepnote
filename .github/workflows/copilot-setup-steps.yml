@@ -57,10 +57,10 @@ jobs:
           path: ./out
           key: ${{runner.os}}-${{env.CACHE_OUT_DIRECTORY}}-${{hashFiles('src/**')}}
 
-      # This is faster than running `npm ci`, we do not want to build zmq, etc.
+      # This is faster than running `npm install`, we do not want to build zmq, etc.
       # Let that happen in other jobs, this job needs to be fast
-      - name: npm ci
-        run: npm ci --ignore-scripts --prefer-offline --no-audit
+      - name: npm install
+        run: npm install --ignore-scripts --prefer-offline --no-audit
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

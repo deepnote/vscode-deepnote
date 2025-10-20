@@ -53,6 +53,7 @@ import {
     IIntegrationStorage,
     IIntegrationWebviewProvider
 } from './deepnote/integrations/types';
+import { SqlCellStatusBarProvider } from './deepnote/sqlCellStatusBarProvider';
 import {
     IDeepnoteToolkitInstaller,
     IDeepnoteServerStarter,
@@ -147,6 +148,10 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IIntegrationDetector>(IIntegrationDetector, IntegrationDetector);
     serviceManager.addSingleton<IIntegrationWebviewProvider>(IIntegrationWebviewProvider, IntegrationWebviewProvider);
     serviceManager.addSingleton<IIntegrationManager>(IIntegrationManager, IntegrationManager);
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        SqlCellStatusBarProvider
+    );
 
     // Deepnote kernel services
     serviceManager.addSingleton<IDeepnoteToolkitInstaller>(IDeepnoteToolkitInstaller, DeepnoteToolkitInstaller);

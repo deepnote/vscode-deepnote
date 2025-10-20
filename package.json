@@ -2158,17 +2158,6 @@
         "watch-all": "concurrently \"tsc --watch -p ./\" \"npx tsx build/esbuild/build.ts --watch-all\"",
         "watch": "concurrently \"tsc --watch -p ./\" \"npx tsx build/esbuild/build.ts --watch\""
     },
-    "lint-staged": {
-        "**/*.{ts,tsx,html,json,jsonc}": [
-            "biome check --write"
-        ],
-        "**/*.{md,yml,yaml}": [
-            "prettier --write"
-        ],
-        ".gitignore": [
-            "sort -o .gitignore .gitignore"
-        ]
-    },
     "dependencies": {
         "@c4312/evt": "^0.1.1",
         "@deepnote/blocks": "^1.2.0",
@@ -2380,9 +2369,14 @@
         "util": "^0.12.4"
     },
     "lint-staged": {
-        "src/**/*.{ts,tsx}": [
-            "eslint --cache --fix",
+        "**/*.{ts,tsx,html,json,jsonc}": [
+            "biome check --write"
+        ],
+        "**/*.{md,yml,yaml}": [
             "prettier --write"
+        ],
+        ".gitignore": [
+            "sort -o .gitignore .gitignore"
         ]
     },
     "optionalDependencies": {

@@ -65,9 +65,9 @@ suite('InputTextBlockConverter', () => {
             assert.strictEqual(cell.languageId, 'json');
 
             const parsed = JSON.parse(cell.value);
-            assert.isNull(parsed.deepnote_input_label);
-            assert.isNull(parsed.deepnote_variable_name);
-            assert.isNull(parsed.deepnote_variable_value);
+            assert.strictEqual(parsed.deepnote_input_label, '');
+            assert.strictEqual(parsed.deepnote_variable_name, '');
+            assert.strictEqual(parsed.deepnote_variable_value, '');
             assert.isNull(parsed.deepnote_variable_default_value);
         });
 
@@ -223,9 +223,9 @@ suite('InputTextareaBlockConverter', () => {
             const cell = converter.convertToCell(block);
 
             const parsed = JSON.parse(cell.value);
-            assert.isNull(parsed.deepnote_variable_name);
-            assert.isNull(parsed.deepnote_variable_value);
-            assert.isNull(parsed.deepnote_input_label);
+            assert.strictEqual(parsed.deepnote_variable_name, '');
+            assert.strictEqual(parsed.deepnote_variable_value, '');
+            assert.strictEqual(parsed.deepnote_input_label, '');
         });
     });
 
@@ -371,8 +371,8 @@ suite('InputSelectBlockConverter', () => {
             const cell = converter.convertToCell(block);
 
             const parsed = JSON.parse(cell.value);
-            assert.isNull(parsed.deepnote_variable_name);
-            assert.isNull(parsed.deepnote_variable_value);
+            assert.strictEqual(parsed.deepnote_variable_name, '');
+            assert.strictEqual(parsed.deepnote_variable_value, 'Option 1');
         });
     });
 
@@ -513,9 +513,9 @@ suite('InputSliderBlockConverter', () => {
             const cell = converter.convertToCell(block);
 
             const parsed = JSON.parse(cell.value);
-            assert.isNull(parsed.deepnote_variable_name);
-            assert.isNull(parsed.deepnote_slider_min_value);
-            assert.isNull(parsed.deepnote_slider_max_value);
+            assert.strictEqual(parsed.deepnote_variable_name, '');
+            assert.strictEqual(parsed.deepnote_slider_min_value, 0);
+            assert.strictEqual(parsed.deepnote_slider_max_value, 10);
         });
     });
 
@@ -561,7 +561,8 @@ suite('InputSliderBlockConverter', () => {
 
             converter.applyChangesToBlock(block, cell);
 
-            assert.strictEqual(block.metadata?.deepnote_variable_value, 42);
+            // Numeric values fail string schema validation, so stored in raw content
+            assert.strictEqual(block.metadata?.[DEEPNOTE_VSCODE_RAW_CONTENT_KEY], cellValue);
         });
 
         test('handles invalid JSON', () => {
@@ -645,8 +646,8 @@ suite('InputCheckboxBlockConverter', () => {
             const cell = converter.convertToCell(block);
 
             const parsed = JSON.parse(cell.value);
-            assert.isNull(parsed.deepnote_variable_name);
-            assert.isNull(parsed.deepnote_variable_value);
+            assert.strictEqual(parsed.deepnote_variable_name, '');
+            assert.strictEqual(parsed.deepnote_variable_value, false);
         });
     });
 
@@ -755,8 +756,9 @@ suite('InputDateBlockConverter', () => {
             const cell = converter.convertToCell(block);
 
             const parsed = JSON.parse(cell.value);
-            assert.isNull(parsed.deepnote_variable_name);
-            assert.isNull(parsed.deepnote_variable_value);
+            assert.strictEqual(parsed.deepnote_variable_name, '');
+            // Default value should be an ISO date string
+            assert.match(parsed.deepnote_variable_value, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
         });
     });
 
@@ -865,8 +867,8 @@ suite('InputDateRangeBlockConverter', () => {
             const cell = converter.convertToCell(block);
 
             const parsed = JSON.parse(cell.value);
-            assert.isNull(parsed.deepnote_variable_name);
-            assert.isNull(parsed.deepnote_variable_value);
+            assert.strictEqual(parsed.deepnote_variable_name, '');
+            assert.strictEqual(parsed.deepnote_variable_value, '');
         });
     });
 
@@ -973,7 +975,7 @@ suite('InputFileBlockConverter', () => {
             const cell = converter.convertToCell(block);
 
             const parsed = JSON.parse(cell.value);
-            assert.isNull(parsed.deepnote_variable_name);
+            assert.strictEqual(parsed.deepnote_variable_name, '');
             assert.isNull(parsed.deepnote_allowed_file_extensions);
         });
     });
@@ -1085,8 +1087,8 @@ suite('ButtonBlockConverter', () => {
             const cell = converter.convertToCell(block);
 
             const parsed = JSON.parse(cell.value);
-            assert.isNull(parsed.deepnote_button_title);
-            assert.isNull(parsed.deepnote_button_behavior);
+            assert.strictEqual(parsed.deepnote_button_title, 'Run');
+            assert.strictEqual(parsed.deepnote_button_behavior, 'set_variable');
         });
     });
 

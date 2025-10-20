@@ -378,9 +378,10 @@ export class DeepnoteDataConverter {
                             );
                         }
 
-                        // Plain text as fallback (always last)
                         if (data['text/plain']) {
                             let mimeType = 'text/plain';
+                            // deepnote-toolkit returns the text/plain mime type for big number outputs
+                            // and for the custom renderer to be used, we need to return the application/vnd.deepnote.chart.big-number+json mime type
                             if (blockType === 'big-number' && !(CHART_BIG_NUMBER_MIME_TYPE in data)) {
                                 mimeType = CHART_BIG_NUMBER_MIME_TYPE;
                             }

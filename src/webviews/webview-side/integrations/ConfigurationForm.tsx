@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { getLocString } from '../react-common/locReactSide';
 import { PostgresForm } from './PostgresForm';
 import { BigQueryForm } from './BigQueryForm';
 import { IntegrationConfig } from './types';
@@ -34,11 +35,16 @@ export const ConfigurationForm: React.FC<IConfigurationFormProps> = ({
 
     const integrationType = getIntegrationType();
 
+    const title = getLocString('integrationsConfigureTitle', 'Configure Integration: {0}').replace(
+        '{0}',
+        integrationId
+    );
+
     return (
         <div className="configuration-form-overlay">
             <div className="configuration-form-container">
                 <div className="configuration-form-header">
-                    <h2>Configure Integration: {integrationId}</h2>
+                    <h2>{title}</h2>
                     <button type="button" className="close-button" onClick={onCancel}>
                         ×
                     </button>

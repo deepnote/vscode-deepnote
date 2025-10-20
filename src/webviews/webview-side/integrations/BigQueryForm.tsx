@@ -1,6 +1,5 @@
 import * as React from 'react';
-import { l10n } from 'vscode';
-
+import { format, getLocString } from '../react-common/locReactSide';
 import { BigQueryIntegrationConfig } from './types';
 
 export interface IBigQueryFormProps {
@@ -23,12 +22,17 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
             setProjectId(existingConfig.projectId || '');
             setCredentials(existingConfig.credentials || '');
             setCredentialsError(null);
+        } else {
+            setName('');
+            setProjectId('');
+            setCredentials('');
+            setCredentialsError(null);
         }
     }, [existingConfig]);
 
     const validateCredentials = (value: string): boolean => {
         if (!value.trim()) {
-            setCredentialsError(l10n.t('Credentials are required'));
+            setCredentialsError(getLocString('integrationsBigQueryCredentialsRequired', 'Credentials are required'));
             return false;
         }
 
@@ -38,7 +42,8 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
             return true;
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Invalid JSON format';
-            setCredentialsError(l10n.t('Invalid JSON: {0}', errorMessage));
+            const invalidJsonMsg = format('Invalid JSON: {0}', errorMessage);
+            setCredentialsError(invalidJsonMsg);
             return false;
         }
     };
@@ -52,17 +57,21 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
+        const trimmedCredentials = credentials.trim();
+
         // Validate credentials before submitting
-        if (!validateCredentials(credentials)) {
+        if (!validateCredentials(trimmedCredentials)) {
             return;
         }
 
+        const unnamedIntegration = format('Unnamed BigQuery Integration ({0})', integrationId);
+
         const config: BigQueryIntegrationConfig = {
             id: integrationId,
-            name: name || l10n.t('Unnamed BigQuery Integration ({0})', integrationId),
+            name: (name || unnamedIntegration).trim(),
             type: 'bigquery',
-            projectId,
-            credentials
+            projectId: projectId.trim(),
+            credentials: trimmedCredentials
         };
 
         onSave(config);
@@ -71,27 +80,28 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
     return (
         <form onSubmit={handleSubmit}>
             <div className="form-group">
-                <label htmlFor="name">{l10n.t('Name (optional)')}</label>
+                <label htmlFor="name">{getLocString('integrationsBigQueryNameLabel', 'Name (optional)')}</label>
                 <input
                     type="text"
                     id="name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="My BigQuery Project"
+                    placeholder={getLocString('integrationsBigQueryNamePlaceholder', 'My BigQuery Project')}
                     autoComplete="off"
                 />
             </div>
 
             <div className="form-group">
                 <label htmlFor="projectId">
-                    {l10n.t('Project ID')} <span className="required">*</span>
+                    {getLocString('integrationsBigQueryProjectIdLabel', 'Project ID')}{' '}
+                    <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
                     type="text"
                     id="projectId"
                     value={projectId}
                     onChange={(e) => setProjectId(e.target.value)}
-                    placeholder="my-project-id"
+                    placeholder={getLocString('integrationsBigQueryProjectIdPlaceholder', 'my-project-id')}
                     autoComplete="off"
                     required
                 />
@@ -99,13 +109,17 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
 
             <div className="form-group">
                 <label htmlFor="credentials">
-                    {l10n.t('Service Account Credentials (JSON)')} <span className="required">*</span>
+                    {getLocString('integrationsBigQueryCredentialsLabel', 'Service Account Credentials (JSON)')}{' '}
+                    <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <textarea
                     id="credentials"
                     value={credentials}
                     onChange={handleCredentialsChange}
-                    placeholder='{"type": "service_account", ...}'
+                    placeholder={getLocString(
+                        'integrationsBigQueryCredentialsPlaceholder',
+                        '{"type": "service_account", ...}'
+                    )}
                     rows={10}
                     autoComplete="off"
                     spellCheck={false}
@@ -124,10 +138,10 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({ integrationId, exis
 
             <div className="form-actions">
                 <button type="submit" className="primary">
-                    {l10n.t('Save')}
+                    {getLocString('integrationsSave', 'Save')}
                 </button>
                 <button type="button" className="secondary" onClick={onCancel}>
-                    {l10n.t('Cancel')}
+                    {getLocString('integrationsCancel', 'Cancel')}
                 </button>
             </div>
         </form>

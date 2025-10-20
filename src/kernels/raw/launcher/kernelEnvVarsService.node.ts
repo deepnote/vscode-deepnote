@@ -61,7 +61,7 @@ export class KernelEnvironmentVariablesService {
     ) {
         logger.debug(
             `KernelEnvVarsService.getEnvironmentVariables: Called for resource ${
-                resource?.toString() || 'undefined'
+                resource ? getDisplayPath(resource) : 'undefined'
             }, sqlIntegrationEnvVars is ${this.sqlIntegrationEnvVars ? 'AVAILABLE' : 'UNDEFINED'}`
         );
         let kernelEnv =

@@ -11,6 +11,23 @@ export interface IIntegrationStorage extends IDisposable {
     readonly onDidChangeIntegrations: Event<void>;
 
     getAll(): Promise<IntegrationConfig[]>;
+
+    /**
+     * Retrieves the global (non-project-scoped) integration configuration by integration ID.
+     *
+     * This method returns integration configurations that are stored globally and shared
+     * across all projects. These configurations are stored in VSCode's SecretStorage and
+     * are scoped to the user's machine.
+     *
+     * This differs from `getProjectIntegrationConfig()` which returns project-scoped
+     * configurations that are specific to a particular Deepnote project and stored
+     * within the project's YAML file.
+     *
+     * @param integrationId - The unique identifier of the integration to retrieve
+     * @returns A Promise that resolves to:
+     *          - The `IntegrationConfig` object if a global configuration exists for the given ID
+     *          - `undefined` if no global configuration exists for the given integration ID
+     */
     getIntegrationConfig(integrationId: string): Promise<IntegrationConfig | undefined>;
 
     /**

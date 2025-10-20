@@ -4,10 +4,14 @@ import {
     NotebookCell,
     NotebookCellStatusBarItem,
     NotebookCellStatusBarItemProvider,
-    NotebookDocument,
+    NotebookEdit,
     ProviderResult,
+    WorkspaceEdit,
+    commands,
     l10n,
-    notebooks
+    notebooks,
+    window,
+    workspace
 } from 'vscode';
 import { inject, injectable } from 'inversify';
 
@@ -18,7 +22,7 @@ import { IIntegrationStorage } from './integrations/types';
 import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
 
 /**
- * Provides status bar items for SQL cells showing the integration name
+ * Provides status bar items for SQL cells showing the integration name and variable name
  */
 @injectable()
 export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvider, IExtensionSyncActivationService {
@@ -42,6 +46,13 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
             })
         );
 
+        // Register command to update SQL variable name
+        this.disposables.push(
+            commands.registerCommand('deepnote.updateSqlVariableName', async (cell: NotebookCell) => {
+                await this.updateVariableName(cell);
+            })
+        );
+
         // Dispose our emitter with the extension
         this.disposables.push(this._onDidChangeCellStatusBarItems);
     }
@@ -59,18 +70,7 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
             return undefined;
         }
 
-        // Get the integration ID from cell metadata
-        const integrationId = this.getIntegrationId(cell);
-        if (!integrationId) {
-            return undefined;
-        }
-
-        // Don't show status bar for the internal DuckDB integration
-        if (integrationId === DATAFRAME_SQL_INTEGRATION_ID) {
-            return undefined;
-        }
-
-        return this.createStatusBarItem(cell.notebook, integrationId);
+        return this.createStatusBarItems(cell);
     }
 
     private getIntegrationId(cell: NotebookCell): string | undefined {
@@ -86,11 +86,29 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         return undefined;
     }
 
-    private async createStatusBarItem(
-        notebook: NotebookDocument,
+    private async createStatusBarItems(cell: NotebookCell): Promise<NotebookCellStatusBarItem[]> {
+        const items: NotebookCellStatusBarItem[] = [];
+
+        // Add integration status bar item if integration ID is present
+        const integrationId = this.getIntegrationId(cell);
+        if (integrationId && integrationId !== DATAFRAME_SQL_INTEGRATION_ID) {
+            const integrationItem = await this.createIntegrationStatusBarItem(cell, integrationId);
+            if (integrationItem) {
+                items.push(integrationItem);
+            }
+        }
+
+        // Always add variable status bar item for SQL cells
+        items.push(this.createVariableStatusBarItem(cell));
+
+        return items;
+    }
+
+    private async createIntegrationStatusBarItem(
+        cell: NotebookCell,
         integrationId: string
     ): Promise<NotebookCellStatusBarItem | undefined> {
-        const projectId = notebook.metadata?.deepnoteProjectId;
+        const projectId = cell.notebook.metadata?.deepnoteProjectId;
         if (!projectId) {
             return undefined;
         }
@@ -110,5 +128,68 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
                 arguments: [integrationId]
             }
         };
+    }
+
+    private createVariableStatusBarItem(cell: NotebookCell): NotebookCellStatusBarItem {
+        const variableName = this.getVariableName(cell);
+
+        return {
+            text: `Variable: ${variableName}`,
+            alignment: 1, // NotebookCellStatusBarAlignment.Left
+            tooltip: l10n.t('Variable name for SQL query result\nClick to change'),
+            command: {
+                title: l10n.t('Change Variable Name'),
+                command: 'deepnote.updateSqlVariableName',
+                arguments: [cell]
+            }
+        };
+    }
+
+    private getVariableName(cell: NotebookCell): string {
+        const metadata = cell.metadata;
+        if (metadata && typeof metadata === 'object') {
+            const variableName = (metadata as Record<string, unknown>).deepnote_variable_name;
+            if (typeof variableName === 'string' && variableName) {
+                return variableName;
+            }
+        }
+
+        return 'df';
+    }
+
+    private async updateVariableName(cell: NotebookCell): Promise<void> {
+        const currentVariableName = this.getVariableName(cell);
+
+        const newVariableName = await window.showInputBox({
+            prompt: l10n.t('Enter variable name for SQL query result'),
+            value: currentVariableName,
+            validateInput: (value) => {
+                if (!value) {
+                    return l10n.t('Variable name cannot be empty');
+                }
+                if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value)) {
+                    return l10n.t('Variable name must be a valid Python identifier');
+                }
+                return undefined;
+            }
+        });
+
+        if (newVariableName === undefined || newVariableName === currentVariableName) {
+            return;
+        }
+
+        // Update cell metadata
+        const edit = new WorkspaceEdit();
+        const updatedMetadata = {
+            ...cell.metadata,
+            deepnote_variable_name: newVariableName
+        };
+
+        edit.set(cell.notebook.uri, [NotebookEdit.updateCellMetadata(cell.index, updatedMetadata)]);
+
+        await workspace.applyEdit(edit);
+
+        // Trigger status bar update
+        this._onDidChangeCellStatusBarItems.fire();
     }
 }

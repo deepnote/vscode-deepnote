@@ -142,7 +142,7 @@ export class KernelEnvironmentVariablesService {
         // Keep a list of the kernelSpec variables that need to be substituted.
         const kernelSpecVariablesRequiringSubstitution: Record<string, string> = {};
         for (const [key, value] of Object.entries(kernelEnv || {})) {
-            if (typeof value === 'string' && substituteEnvVars(key, value, process.env) !== value) {
+            if (typeof value === 'string' && substituteEnvVars(value, process.env) !== value) {
                 kernelSpecVariablesRequiringSubstitution[key] = value;
                 delete kernelEnv[key];
             }
@@ -193,7 +193,7 @@ export class KernelEnvironmentVariablesService {
 
         // env variables in kernelSpecs can contain variables that need to be substituted
         for (const [key, value] of Object.entries(kernelSpecVariablesRequiringSubstitution)) {
-            mergedVars[key] = substituteEnvVars(key, value, mergedVars);
+            mergedVars[key] = substituteEnvVars(value, mergedVars);
         }
 
         return mergedVars;
@@ -202,7 +202,7 @@ export class KernelEnvironmentVariablesService {
 
 const SUBST_REGEX = /\${([a-zA-Z]\w*)?([^}\w].*)?}/g;
 
-function substituteEnvVars(key: string, value: string, globalVars: EnvironmentVariables): string {
+function substituteEnvVars(value: string, globalVars: EnvironmentVariables): string {
     if (!value.includes('$')) {
         return value;
     }
@@ -222,7 +222,6 @@ function substituteEnvVars(key: string, value: string, globalVars: EnvironmentVa
         return globalVars[substName] || '';
     });
     if (!invalid && replacement !== value) {
-        logger.debug(`${key} value in kernelSpec updated from ${value} to ${replacement}`);
         value = replacement;
     }
 

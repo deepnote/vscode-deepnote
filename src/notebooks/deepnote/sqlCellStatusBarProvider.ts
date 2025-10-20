@@ -6,6 +6,8 @@ import {
     NotebookCellStatusBarItemProvider,
     NotebookEdit,
     ProviderResult,
+    QuickPickItem,
+    QuickPickItemKind,
     WorkspaceEdit,
     commands,
     l10n,
@@ -17,9 +19,9 @@ import { inject, injectable } from 'inversify';
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
-import { Commands } from '../../platform/common/constants';
 import { IIntegrationStorage } from './integrations/types';
-import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
+import { Commands } from '../../platform/common/constants';
+import { DATAFRAME_SQL_INTEGRATION_ID, IntegrationType } from '../../platform/notebooks/deepnote/integrationTypes';
 
 /**
  * Provides status bar items for SQL cells showing the integration name and variable name
@@ -50,6 +52,13 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         this.disposables.push(
             commands.registerCommand('deepnote.updateSqlVariableName', async (cell: NotebookCell) => {
                 await this.updateVariableName(cell);
+            })
+        );
+
+        // Register command to switch SQL integration
+        this.disposables.push(
+            commands.registerCommand('deepnote.switchSqlIntegration', async (cell: NotebookCell) => {
+                await this.switchIntegration(cell);
             })
         );
 
@@ -113,7 +122,12 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
             return {
                 text: `$(database) ${l10n.t('DataFrame SQL (DuckDB)')}`,
                 alignment: 1, // NotebookCellStatusBarAlignment.Left
-                tooltip: l10n.t('Internal DuckDB integration for querying DataFrames')
+                tooltip: l10n.t('Internal DuckDB integration for querying DataFrames\nClick to switch'),
+                command: {
+                    title: l10n.t('Switch Integration'),
+                    command: 'deepnote.switchSqlIntegration',
+                    arguments: [cell]
+                }
             };
         }
 
@@ -126,15 +140,15 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         const config = await this.integrationStorage.getProjectIntegrationConfig(projectId, integrationId);
         const displayName = config?.name || l10n.t('Unknown integration (configure)');
 
-        // Create a status bar item that opens the integration management UI
+        // Create a status bar item that opens the integration picker
         return {
             text: `$(database) ${displayName}`,
             alignment: 1, // NotebookCellStatusBarAlignment.Left
-            tooltip: l10n.t('SQL Integration: {0}\nClick to configure', displayName),
+            tooltip: l10n.t('SQL Integration: {0}\nClick to switch or configure', displayName),
             command: {
-                title: l10n.t('Configure Integration'),
-                command: Commands.ManageIntegrations,
-                arguments: [integrationId]
+                title: l10n.t('Switch Integration'),
+                command: 'deepnote.switchSqlIntegration',
+                arguments: [cell]
             }
         };
     }
@@ -200,5 +214,107 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
         // Trigger status bar update
         this._onDidChangeCellStatusBarItems.fire();
+    }
+
+    private async switchIntegration(cell: NotebookCell): Promise<void> {
+        const currentIntegrationId = this.getIntegrationId(cell);
+
+        // Get all available integrations
+        const allIntegrations = await this.integrationStorage.getAll();
+
+        // Build quick pick items
+        const items: QuickPickItem[] = [];
+
+        // Check if current integration is unknown (not in the list)
+        const isCurrentIntegrationUnknown =
+            currentIntegrationId &&
+            currentIntegrationId !== DATAFRAME_SQL_INTEGRATION_ID &&
+            !allIntegrations.some((i) => i.id === currentIntegrationId);
+
+        // Add current unknown integration first if it exists
+        if (isCurrentIntegrationUnknown && currentIntegrationId) {
+            items.push({
+                label: l10n.t('Unknown integration (configure)'),
+                description: currentIntegrationId,
+                detail: l10n.t('Currently selected'),
+                id: currentIntegrationId
+            } as QuickPickItem & { id: string });
+        }
+
+        // Add all configured integrations
+        for (const integration of allIntegrations) {
+            const typeLabel = this.getIntegrationTypeLabel(integration.type);
+            items.push({
+                label: integration.name || integration.id,
+                description: typeLabel,
+                detail: integration.id === currentIntegrationId ? l10n.t('Currently selected') : undefined,
+                // Store the integration ID in a custom property
+                id: integration.id
+            } as QuickPickItem & { id: string });
+        }
+
+        // Add DuckDB integration
+        items.push({
+            label: l10n.t('DataFrame SQL (DuckDB)'),
+            description: l10n.t('DuckDB'),
+            detail: currentIntegrationId === DATAFRAME_SQL_INTEGRATION_ID ? l10n.t('Currently selected') : undefined,
+            id: DATAFRAME_SQL_INTEGRATION_ID
+        } as QuickPickItem & { id: string });
+
+        // Add separator
+        items.push({
+            label: '',
+            kind: QuickPickItemKind.Separator
+        });
+
+        // Add "Configure current integration" option
+        if (currentIntegrationId && currentIntegrationId !== DATAFRAME_SQL_INTEGRATION_ID) {
+            items.push({
+                label: l10n.t('Configure current integration'),
+                id: '__configure__'
+            } as QuickPickItem & { id: string });
+        }
+
+        const selected = await window.showQuickPick(items, {
+            placeHolder: l10n.t('Select SQL integration'),
+            matchOnDescription: true
+        });
+
+        if (!selected) {
+            return;
+        }
+
+        const selectedId = (selected as QuickPickItem & { id: string }).id;
+
+        // Handle "Configure current integration" option
+        if (selectedId === '__configure__' && currentIntegrationId) {
+            await commands.executeCommand(Commands.ManageIntegrations, currentIntegrationId);
+            return;
+        }
+
+        // Update cell metadata with new integration ID
+        const edit = new WorkspaceEdit();
+        const updatedMetadata = {
+            ...cell.metadata,
+            sql_integration_id: selectedId
+        };
+
+        edit.set(cell.notebook.uri, [NotebookEdit.updateCellMetadata(cell.index, updatedMetadata)]);
+
+        await workspace.applyEdit(edit);
+
+        // Trigger status bar update
+        this._onDidChangeCellStatusBarItems.fire();
+    }
+
+    private getIntegrationTypeLabel(type: IntegrationType): string {
+        switch (type) {
+            case IntegrationType.Postgres:
+                return l10n.t('PostgreSQL');
+            case IntegrationType.BigQuery:
+                return l10n.t('BigQuery');
+            default:
+                return type;
+        }
     }
 }

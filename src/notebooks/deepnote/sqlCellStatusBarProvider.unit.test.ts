@@ -72,8 +72,12 @@ suite('SqlCellStatusBarProvider', () => {
         const integrationItem = items[0];
         assert.strictEqual(integrationItem.text, '$(database) DataFrame SQL (DuckDB)');
         assert.strictEqual(integrationItem.alignment, 1);
-        assert.strictEqual(integrationItem.tooltip, 'Internal DuckDB integration for querying DataFrames');
-        assert.isUndefined(integrationItem.command);
+        assert.strictEqual(
+            integrationItem.tooltip,
+            'Internal DuckDB integration for querying DataFrames\nClick to switch'
+        );
+        assert.isDefined(integrationItem.command);
+        assert.strictEqual(integrationItem.command.command, 'deepnote.switchSqlIntegration');
 
         // Check variable status bar item
         const variableItem = items[1];
@@ -118,8 +122,8 @@ suite('SqlCellStatusBarProvider', () => {
         assert.strictEqual(integrationItem.text, '$(database) My Postgres DB');
         assert.strictEqual(integrationItem.alignment, 1);
         assert.isDefined(integrationItem.command);
-        assert.strictEqual(integrationItem.command.command, 'deepnote.manageIntegrations');
-        assert.deepStrictEqual(integrationItem.command.arguments, [integrationId]);
+        assert.strictEqual(integrationItem.command.command, 'deepnote.switchSqlIntegration');
+        assert.deepStrictEqual(integrationItem.command.arguments, [cell]);
 
         // Check variable status bar item
         const variableItem = items[1];

@@ -1,13 +1,6 @@
-# Contributing to the Jupyter extension for Visual Studio Code
+# Contributing to the Deepnote Extension for Visual Studio Code
 
----
-
-| `main` branch |
-| ------------- |
-
-## | ![Main Build](https://github.com/microsoft/vscode-jupyter/actions/workflows/build-test.yml/badge.svg?branch=main)
-
-[For contributing to the [Microsoft Python Language Server](https://github.com/Microsoft/python-language-server) see its own repo; for [Pylance](https://github.com/microsoft/pylance-release) see its own repo; for [debugpy](https://github.com/microsoft/debugpy) see its own repo]
+Thank you for your interest in contributing to the Deepnote VS Code extension! This guide will help you set up your development environment and understand the contribution workflow.
 
 ## Contributing a pull request
 
@@ -24,12 +17,61 @@
     - [EditorConfig for VS Code](https://marketplace.visualstudio.com/items?itemName=EditorConfig.EditorConfig)
     - [Python Extension for VS Code](https://marketplace.visualstudio.com/items?itemName=ms-python.python)
 
+<details>
+<summary><b>📦Or use these commands to install the prerequisites</b></summary>
+
+#### macOS (using Homebrew)
+```bash
+# Install Node.js
+brew install node@22
+
+# Install Python
+brew install python3
+
+# Install VS Code
+brew install --cask visual-studio-code
+
+# Install VS Code extensions
+code --install-extension dbaeumer.vscode-eslint
+code --install-extension esbenp.prettier-vscode
+code --install-extension EditorConfig.EditorConfig
+code --install-extension ms-python.python
+```
+
+#### macOS/Linux (using nvm for Node.js)
+```bash
+# Install nvm (if not already installed)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+
+# Install Node.js
+nvm install 22.15.1
+nvm use 22.15.1
+
+# Update npm
+npm install -g npm@10.9.2
+
+# Install Python (Ubuntu/Debian)
+sudo apt update && sudo apt install python3 python3-pip python3-venv
+
+# Install Python (Fedora)
+sudo dnf install python3 python3-pip
+
+# Install VS Code (Ubuntu/Debian)
+sudo snap install code --classic
+
+# Install VS Code extensions
+code --install-extension dbaeumer.vscode-eslint
+code --install-extension esbenp.prettier-vscode
+code --install-extension EditorConfig.EditorConfig
+code --install-extension ms-python.python
+```
+</details>
+
 ### Setup
 
 ```shell
-git clone https://github.com/microsoft/vscode-jupyter
-cd vscode-jupyter
-
+git clone https://github.com/deepnote/vscode-deepnote
+cd vscode-deepnote
 ```
 
 #### Install Recommended Extensions
@@ -116,6 +158,81 @@ npm run watch-all
 
 Sometimes you will need to run `npm run clean` and even `rm -r out dist`.
 This is especially true if you have added or removed files.
+
+### Running the Extension
+
+After completing the setup steps, you can run the Deepnote extension in development mode:
+
+#### Quick Start
+
+1. **Open the project in VS Code**
+   ```bash
+   code .
+   ```
+
+2. **Start the watch task** (for automatic recompilation)
+   - Press `Ctrl+Shift+B` (Windows/Linux) or `⇧⌘B` (macOS)
+   - Select `watch` from the task list
+   - This will continuously compile your changes in the background
+
+3. **Launch the Extension Development Host**
+   - Press `F5` or click the Run and Debug icon in the sidebar
+   - Select `Extension` from the dropdown menu
+   - Click the green play button
+   - A new VS Code window will open with `[Extension Development Host]` in the title
+
+4. **Test your changes**
+   - The Extension Development Host has the Deepnote extension loaded
+   - Open a Deepnote project or notebook file (`.deepnote`)
+   - Test the functionality you're working on
+   - Check the Debug Console in your main VS Code window for logs
+
+5. **Reload after making changes**
+   - The watch task automatically recompiles when you save files
+   - In the Extension Development Host window, press `Ctrl+R` (Windows/Linux) or `Cmd+R` (macOS) to reload
+   - Or restart the debug session with `Ctrl+Shift+F5` / `Cmd+Shift+F5`
+
+#### Available Debug Configurations
+
+The project includes several launch configurations in `.vscode/launch.json`:
+
+- **Extension** - Run the extension in a new VS Code window (most common for development)
+- **Extension (web)** - Test the web version of the extension
+- **Extension inside container** - Test in a containerized environment
+- **Unit Tests** - Run unit tests without VS Code
+- **Tests (Jupyter+Python Extension installed)** - Run integration tests
+
+#### Debugging Tips
+
+<details>
+<summary>Click to expand debugging tips</summary>
+
+**Enable detailed logging:**
+Edit `.vscode/launch.json` and add environment variables:
+```json
+"env": {
+    "VSC_JUPYTER_FORCE_LOGGING": "1",
+    "VSC_JUPYTER_LOG_TELEMETRY": "1",
+    "VSC_JUPYTER_LOG_IPYWIDGETS": "1"
+}
+```
+
+**Set breakpoints:**
+- Click in the gutter next to line numbers in your TypeScript code
+- Breakpoints will pause execution in the Extension Development Host
+- Inspect variables in the Debug sidebar
+
+**View logs:**
+- Debug Console: Shows console.log output and errors
+- Output panel: Select "Deepnote" from the dropdown to see extension-specific logs
+- Terminal: Shows build output from the watch task
+
+**Common issues:**
+- If changes don't appear, try `npm run clean` and restart the watch task
+- If breakpoints don't work, ensure source maps are enabled (they are by default)
+- If the extension doesn't load, check the Debug Console for errors
+
+</details>
 
 ### Errors and Warnings
 

@@ -2151,8 +2151,7 @@
         "updatePackageJsonForBundle": "gulp updatePackageJsonForBundle",
         "watch-all": "concurrently \"tsc --watch -p ./\" \"npx tsx build/esbuild/build.ts --watch-all\"",
         "watch": "concurrently \"tsc --watch -p ./\" \"npx tsx build/esbuild/build.ts --watch\"",
-        "spell-check": "cspell",
-        "spell-check:fix": "cspell --no-exit-code --show-suggestions"
+        "spell-check": "cspell --config cspell.json"
     },
     "dependencies": {
         "@c4312/evt": "^0.1.1",

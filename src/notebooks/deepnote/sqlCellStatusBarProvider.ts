@@ -98,13 +98,25 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
     private async createStatusBarItems(cell: NotebookCell): Promise<NotebookCellStatusBarItem[]> {
         const items: NotebookCellStatusBarItem[] = [];
 
-        // Add integration status bar item if integration ID is present
+        // Add integration status bar item
         const integrationId = this.getIntegrationId(cell);
         if (integrationId) {
             const integrationItem = await this.createIntegrationStatusBarItem(cell, integrationId);
             if (integrationItem) {
                 items.push(integrationItem);
             }
+        } else {
+            // Show "No integration connected" when no integration is selected
+            items.push({
+                text: `$(database) ${l10n.t('No integration connected')}`,
+                alignment: 1, // NotebookCellStatusBarAlignment.Left
+                tooltip: l10n.t('No SQL integration connected\nClick to select an integration'),
+                command: {
+                    title: l10n.t('Switch Integration'),
+                    command: 'deepnote.switchSqlIntegration',
+                    arguments: [cell]
+                }
+            });
         }
 
         // Always add variable status bar item for SQL cells

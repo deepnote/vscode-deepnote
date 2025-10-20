@@ -38,7 +38,7 @@ suite('SqlCellStatusBarProvider', () => {
         assert.isUndefined(result);
     });
 
-    test('returns only variable status bar item for SQL cells without integration ID', async () => {
+    test('returns status bar items for SQL cells without integration ID', async () => {
         const cell = createMockCell('sql', {});
 
         const result = await provider.provideCellStatusBarItems(cell, cancellationToken);
@@ -46,10 +46,17 @@ suite('SqlCellStatusBarProvider', () => {
         assert.isDefined(result);
         assert.isArray(result);
         const items = result as any[];
-        assert.strictEqual(items.length, 1);
+        assert.strictEqual(items.length, 2);
+
+        // Check "No integration connected" status bar item
+        const integrationItem = items[0];
+        assert.strictEqual(integrationItem.text, '$(database) No integration connected');
+        assert.strictEqual(integrationItem.alignment, 1);
+        assert.isDefined(integrationItem.command);
+        assert.strictEqual(integrationItem.command.command, 'deepnote.switchSqlIntegration');
 
         // Check variable status bar item
-        const variableItem = items[0];
+        const variableItem = items[1];
         assert.strictEqual(variableItem.text, 'Variable: df');
         assert.strictEqual(variableItem.alignment, 1);
         assert.isDefined(variableItem.command);

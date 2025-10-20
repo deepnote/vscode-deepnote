@@ -159,7 +159,7 @@ export class KernelEnvironmentVariablesService {
                         Object.keys(sqlIntegrationEnvVars).length
                     } SQL integration env vars into kernel env`
                 );
-                Object.assign(mergedVars, sqlIntegrationEnvVars);
+                this.envVarsService.mergeVariables(sqlIntegrationEnvVars, mergedVars);
             }
 
             // If user asks us to, set PYTHONNOUSERSITE

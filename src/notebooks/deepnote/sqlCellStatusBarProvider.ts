@@ -222,7 +222,11 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
         edit.set(cell.notebook.uri, [NotebookEdit.updateCellMetadata(cell.index, updatedMetadata)]);
 
-        await workspace.applyEdit(edit);
+        const success = await workspace.applyEdit(edit);
+        if (!success) {
+            void window.showErrorMessage(l10n.t('Failed to update variable name'));
+            return;
+        }
 
         // Trigger status bar update
         this._onDidChangeCellStatusBarItems.fire();
@@ -313,7 +317,11 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
         edit.set(cell.notebook.uri, [NotebookEdit.updateCellMetadata(cell.index, updatedMetadata)]);
 
-        await workspace.applyEdit(edit);
+        const success = await workspace.applyEdit(edit);
+        if (!success) {
+            void window.showErrorMessage(l10n.t('Failed to select integration'));
+            return;
+        }
 
         // Trigger status bar update
         this._onDidChangeCellStatusBarItems.fire();

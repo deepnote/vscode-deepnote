@@ -140,7 +140,8 @@ export class KernelEnvironmentVariablesService {
         // Keep a list of the kernelSpec variables that need to be substituted.
         const kernelSpecVariablesRequiringSubstitution: Record<string, string> = {};
         for (const [key, value] of Object.entries(kernelEnv || {})) {
-            if (typeof value === 'string' && substituteEnvVars(value, process.env) !== value) {
+            // Detect placeholders regardless of current process.env; we'll resolve after merges.
+            if (typeof value === 'string' && /\${[A-Za-z]\w*(?:[^}\w].*)?}/.test(value)) {
                 kernelSpecVariablesRequiringSubstitution[key] = value;
                 delete kernelEnv[key];
             }

@@ -67,7 +67,7 @@ export class DeepnoteCellCopyHandler implements IExtensionSyncActivationService 
         if (editor && editor.notebook && editor.notebook.notebookType === 'deepnote') {
             await this.copyCellDown();
         } else {
-            logger.warn('notebook.cell.copyDown intercepted for non-Deepnote notebook - using fallback');
+            await commands.executeCommand('default:notebook.cell.copyDown');
         }
     }
 
@@ -80,7 +80,7 @@ export class DeepnoteCellCopyHandler implements IExtensionSyncActivationService 
         if (editor && editor.notebook && editor.notebook.notebookType === 'deepnote') {
             await this.copyCellUp();
         } else {
-            logger.warn('notebook.cell.copyUp intercepted for non-Deepnote notebook - using fallback');
+            await commands.executeCommand('default:notebook.cell.copyUp');
         }
     }
 
@@ -93,7 +93,7 @@ export class DeepnoteCellCopyHandler implements IExtensionSyncActivationService 
         if (editor && editor.notebook && editor.notebook.notebookType === 'deepnote') {
             await this.copyCellToClipboard({ isCut: false });
         } else {
-            logger.warn('notebook.cell.copy intercepted for non-Deepnote notebook - using fallback');
+            await commands.executeCommand('default:notebook.cell.copy');
         }
     }
 
@@ -106,7 +106,7 @@ export class DeepnoteCellCopyHandler implements IExtensionSyncActivationService 
         if (editor && editor.notebook && editor.notebook.notebookType === 'deepnote') {
             await this.copyCellToClipboard({ isCut: true });
         } else {
-            logger.warn('notebook.cell.cut intercepted for non-Deepnote notebook - using fallback');
+            await commands.executeCommand('default:notebook.cell.cut');
         }
     }
 
@@ -119,7 +119,7 @@ export class DeepnoteCellCopyHandler implements IExtensionSyncActivationService 
         if (editor && editor.notebook && editor.notebook.notebookType === 'deepnote') {
             await this.pasteCellFromClipboard();
         } else {
-            logger.warn('notebook.cell.paste intercepted for non-Deepnote notebook - using fallback');
+            await commands.executeCommand('default:notebook.cell.paste');
         }
     }
 

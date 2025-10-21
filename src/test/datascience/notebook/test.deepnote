@@ -1,0 +1,39 @@
+metadata:
+  createdAt: '2025-01-01T00:00:00.000Z'
+  modifiedAt: '2025-01-01T00:00:00.000Z'
+project:
+  id: test-project-id
+  name: Test Project
+  initNotebookId: init-notebook-id
+  notebooks:
+    - id: init-notebook-id
+      name: Init Notebook
+      blocks:
+        - id: init-block-1
+          type: code
+          content: |
+            # This is the init notebook
+            import sys
+            print("Init notebook executed")
+          sortingKey: '0001'
+    - id: main-notebook-id
+      name: Main Notebook
+      blocks:
+        - id: block-1
+          type: code
+          content: |
+            print("Hello World")
+          sortingKey: '0001'
+        - id: block-2
+          type: code
+          content: |
+            x = 42
+            print(f"The answer is {x}")
+          sortingKey: '0002'
+        - id: block-3
+          type: markdown
+          content: |
+            # Test Markdown
+            This is a test markdown block.
+          sortingKey: '0003'
+version: '1.0'

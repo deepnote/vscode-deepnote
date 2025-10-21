@@ -381,7 +381,7 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
             case IntegrationType.BigQuery:
                 return l10n.t('BigQuery');
             default:
-                return type;
+                return String(type);
         }
     }
 }

@@ -50,14 +50,22 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
         // Register command to update SQL variable name
         this.disposables.push(
-            commands.registerCommand('deepnote.updateSqlVariableName', async (cell: NotebookCell) => {
+            commands.registerCommand('deepnote.updateSqlVariableName', async (cell?: NotebookCell) => {
+                if (!cell) {
+                    void window.showErrorMessage(l10n.t('No active notebook cell'));
+                    return;
+                }
                 await this.updateVariableName(cell);
             })
         );
 
         // Register command to switch SQL integration
         this.disposables.push(
-            commands.registerCommand('deepnote.switchSqlIntegration', async (cell: NotebookCell) => {
+            commands.registerCommand('deepnote.switchSqlIntegration', async (cell?: NotebookCell) => {
+                if (!cell) {
+                    void window.showErrorMessage(l10n.t('No active notebook cell'));
+                    return;
+                }
                 await this.switchIntegration(cell);
             })
         );

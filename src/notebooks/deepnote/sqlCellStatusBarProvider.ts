@@ -15,7 +15,7 @@ import { IExtensionSyncActivationService } from '../../platform/activation/types
 import { IDisposableRegistry } from '../../platform/common/types';
 import { Commands } from '../../platform/common/constants';
 import { IIntegrationStorage } from './integrations/types';
-import { DATAFRAME_SQL_INTEGRATION_ID } from './integrations/integrationTypes';
+import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
 
 /**
  * Provides status bar items for SQL cells showing the integration name
@@ -96,7 +96,7 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         }
 
         // Get integration configuration to display the name
-        const config = await this.integrationStorage.getIntegrationConfig(projectId, integrationId);
+        const config = await this.integrationStorage.getProjectIntegrationConfig(projectId, integrationId);
         const displayName = config?.name || l10n.t('Unknown integration (configure)');
 
         // Create a status bar item that opens the integration management UI

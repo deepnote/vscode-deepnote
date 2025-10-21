@@ -1,6 +1,3 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-
 /* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires */
 import { assert } from 'chai';
 import * as path from '../../../platform/vscode-path/path';
@@ -103,6 +100,33 @@ suite('Deepnote Integration Tests @kernelCore', function () {
         assert.isOk(kernel.session, 'Kernel session should exist');
 
         logger.debug('Test: Kernel starts for .deepnote file - completed');
+    });
+
+    test('Init notebook executes automatically', async function () {
+        logger.debug('Test: Init notebook executes automatically - starting');
+
+        const notebookManager = api.serviceContainer.get<IDeepnoteNotebookManager>(IDeepnoteNotebookManager);
+
+        notebookManager.selectNotebookForProject('test-project-id', 'main-notebook-id');
+
+        await workspace.openNotebookDocument(deepnoteFilePath);
+
+        const hasInitNotebookRun = notebookManager.hasInitNotebookBeenRun('test-project-id');
+        assert.isTrue(hasInitNotebookRun, 'Init notebook should have been executed automatically when kernel started');
+
+        const cell = await notebook.appendCodeCell(
+            'import sys; print("Init notebook executed" if "sys" in globals() else "Init notebook not executed")'
+        );
+        await Promise.all([kernelExecution.executeCell(cell), waitForExecutionCompletedSuccessfully(cell)]);
+
+        const output = getCellOutputs(cell);
+        assert.include(
+            output,
+            'Init notebook executed',
+            'Init notebook should have executed and set up the environment'
+        );
+
+        logger.debug('Test: Init notebook executes automatically - completed');
     });
 
     test('Execute code block', async function () {

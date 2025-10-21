@@ -207,20 +207,22 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
     private async updateVariableName(cell: NotebookCell): Promise<void> {
         const currentVariableName = this.getVariableName(cell);
 
-        const newVariableName = await window.showInputBox({
+        const newVariableNameInput = await window.showInputBox({
             prompt: l10n.t('Enter variable name for SQL query result'),
             value: currentVariableName,
             validateInput: (value) => {
-                if (!value) {
+                const trimmed = value.trim();
+                if (!trimmed) {
                     return l10n.t('Variable name cannot be empty');
                 }
-                if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value)) {
+                if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed)) {
                     return l10n.t('Variable name must be a valid Python identifier');
                 }
                 return undefined;
             }
         });
 
+        const newVariableName = newVariableNameInput?.trim();
         if (newVariableName === undefined || newVariableName === currentVariableName) {
             return;
         }

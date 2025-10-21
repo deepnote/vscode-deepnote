@@ -322,6 +322,11 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
             return;
         }
 
+        // No change
+        if (selectedId === currentIntegrationId) {
+            return;
+        }
+
         // Update cell metadata with new integration ID
         const edit = new WorkspaceEdit();
         const updatedMetadata = {

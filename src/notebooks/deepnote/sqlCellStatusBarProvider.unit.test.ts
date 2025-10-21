@@ -58,6 +58,8 @@ suite('SqlCellStatusBarProvider', () => {
         assert.strictEqual(integrationItem.alignment, 1);
         assert.isDefined(integrationItem.command);
         assert.strictEqual(integrationItem.command.command, 'deepnote.switchSqlIntegration');
+        assert.deepStrictEqual(integrationItem.command.arguments, [cell]);
+        assert.strictEqual(integrationItem.priority, 100);
 
         // Check variable status bar item
         const variableItem = items[1];
@@ -65,6 +67,8 @@ suite('SqlCellStatusBarProvider', () => {
         assert.strictEqual(variableItem.alignment, 1);
         assert.isDefined(variableItem.command);
         assert.strictEqual(variableItem.command.command, 'deepnote.updateSqlVariableName');
+        assert.deepStrictEqual(variableItem.command.arguments, [cell]);
+        assert.strictEqual(variableItem.priority, 90);
     });
 
     test('returns status bar items for SQL cells with dataframe integration ID', async () => {
@@ -89,6 +93,8 @@ suite('SqlCellStatusBarProvider', () => {
         );
         assert.isDefined(integrationItem.command);
         assert.strictEqual(integrationItem.command.command, 'deepnote.switchSqlIntegration');
+        assert.deepStrictEqual(integrationItem.command.arguments, [cell]);
+        assert.strictEqual(integrationItem.priority, 100);
 
         // Check variable status bar item
         const variableItem = items[1];
@@ -96,6 +102,8 @@ suite('SqlCellStatusBarProvider', () => {
         assert.strictEqual(variableItem.alignment, 1);
         assert.isDefined(variableItem.command);
         assert.strictEqual(variableItem.command.command, 'deepnote.updateSqlVariableName');
+        assert.deepStrictEqual(variableItem.command.arguments, [cell]);
+        assert.strictEqual(variableItem.priority, 90);
     });
 
     test('returns status bar items for SQL cell with integration ID', async () => {
@@ -135,6 +143,7 @@ suite('SqlCellStatusBarProvider', () => {
         assert.isDefined(integrationItem.command);
         assert.strictEqual(integrationItem.command.command, 'deepnote.switchSqlIntegration');
         assert.deepStrictEqual(integrationItem.command.arguments, [cell]);
+        assert.strictEqual(integrationItem.priority, 100);
 
         // Check variable status bar item
         const variableItem = items[1];
@@ -142,6 +151,8 @@ suite('SqlCellStatusBarProvider', () => {
         assert.strictEqual(variableItem.alignment, 1);
         assert.isDefined(variableItem.command);
         assert.strictEqual(variableItem.command.command, 'deepnote.updateSqlVariableName');
+        assert.deepStrictEqual(variableItem.command.arguments, [cell]);
+        assert.strictEqual(variableItem.priority, 90);
     });
 
     test('shows "Unknown integration (configure)" when config not found', async () => {
@@ -165,7 +176,13 @@ suite('SqlCellStatusBarProvider', () => {
         const items = result as any[];
         assert.strictEqual(items.length, 2);
         assert.strictEqual(items[0].text, '$(database) Unknown integration (configure)');
+        assert.strictEqual(items[0].alignment, 1);
+        assert.strictEqual(items[0].command.command, 'deepnote.switchSqlIntegration');
+        assert.deepStrictEqual(items[0].command.arguments, [cell]);
         assert.strictEqual(items[1].text, 'Variable: df');
+        assert.strictEqual(items[1].alignment, 1);
+        assert.strictEqual(items[1].command.command, 'deepnote.updateSqlVariableName');
+        assert.strictEqual(items[1].priority, 90);
     });
 
     test('returns only variable item when notebook has no project ID', async () => {
@@ -185,6 +202,9 @@ suite('SqlCellStatusBarProvider', () => {
         const variableItem = items[0];
         assert.strictEqual(variableItem.text, 'Variable: df');
         assert.strictEqual(variableItem.alignment, 1);
+        assert.strictEqual(variableItem.command.command, 'deepnote.updateSqlVariableName');
+        assert.deepStrictEqual(variableItem.command.arguments, [cell]);
+        assert.strictEqual(variableItem.priority, 90);
     });
 
     test('shows custom variable name when set in metadata', async () => {
@@ -221,6 +241,8 @@ suite('SqlCellStatusBarProvider', () => {
         // Check variable status bar item shows custom name
         const variableItem = items[1];
         assert.strictEqual(variableItem.text, 'Variable: my_results');
+        assert.strictEqual(variableItem.alignment, 1);
+        assert.strictEqual(variableItem.command.command, 'deepnote.updateSqlVariableName');
     });
 
     suite('activate', () => {

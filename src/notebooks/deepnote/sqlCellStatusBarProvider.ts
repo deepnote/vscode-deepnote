@@ -118,6 +118,7 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
             items.push({
                 text: `$(database) ${l10n.t('No integration connected')}`,
                 alignment: 1, // NotebookCellStatusBarAlignment.Left
+                priority: 100,
                 tooltip: l10n.t('No SQL integration connected\nClick to select an integration'),
                 command: {
                     title: l10n.t('Switch Integration'),
@@ -142,6 +143,7 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
             return {
                 text: `$(database) ${l10n.t('DataFrame SQL (DuckDB)')}`,
                 alignment: 1, // NotebookCellStatusBarAlignment.Left
+                priority: 100,
                 tooltip: l10n.t('Internal DuckDB integration for querying DataFrames\nClick to switch'),
                 command: {
                     title: l10n.t('Switch Integration'),
@@ -164,6 +166,7 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         return {
             text: `$(database) ${displayName}`,
             alignment: 1, // NotebookCellStatusBarAlignment.Left
+            priority: 100,
             tooltip: l10n.t('SQL Integration: {0}\nClick to switch or configure', displayName),
             command: {
                 title: l10n.t('Switch Integration'),
@@ -179,6 +182,7 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         return {
             text: l10n.t('Variable: {0}', variableName),
             alignment: 1, // NotebookCellStatusBarAlignment.Left
+            priority: 90,
             tooltip: l10n.t('Variable name for SQL query result\nClick to change'),
             command: {
                 title: l10n.t('Change Variable Name'),

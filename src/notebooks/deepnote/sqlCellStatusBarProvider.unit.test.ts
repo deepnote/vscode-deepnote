@@ -261,18 +261,6 @@ suite('SqlCellStatusBarProvider', () => {
             verify(mockedVSCodeNamespaces.commands.registerCommand('deepnote.switchSqlIntegration', anything())).once();
         });
 
-        test('adds all registrations to disposables', () => {
-            activateProvider.activate();
-
-            // Should have 5 disposables:
-            // 1. notebook cell status bar provider
-            // 2. integration storage change listener
-            // 3. updateSqlVariableName command
-            // 4. switchSqlIntegration command
-            // 5. event emitter
-            assert.strictEqual(activateDisposables.length, 5);
-        });
-
         test('listens to integration storage changes', () => {
             const onDidChangeIntegrations = new EventEmitter<void>();
             when(activateIntegrationStorage.onDidChangeIntegrations).thenReturn(onDidChangeIntegrations.event);

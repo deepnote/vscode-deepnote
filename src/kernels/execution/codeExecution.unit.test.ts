@@ -21,7 +21,7 @@ import {
 } from '@jupyterlab/services/lib/kernel/messages';
 import { Deferred, createDeferred } from '../../platform/common/utils/async';
 import { NotebookCellOutput, NotebookCellOutputItem } from 'vscode';
-import { JVSC_EXTENSION_ID_FOR_TESTS } from '../../test/constants';
+import { JVSC_EXTENSION_ID } from '../../platform/common/constants';
 
 suite('Code Execution', () => {
     let disposables: IDisposable[] = [];
@@ -318,7 +318,7 @@ suite('Code Execution', () => {
     });
     test('Cancelling pending Internal Jupyter execution code should not interrupt the kernel', async () => {
         const code = `print('Hello World')`;
-        const execution = createExecution(code, JVSC_EXTENSION_ID_FOR_TESTS);
+        const execution = createExecution(code, JVSC_EXTENSION_ID);
 
         const outputs: NotebookCellOutput[] = [];
         disposables.push(execution.onDidEmitOutput((output) => outputs.push(output)));

@@ -31,7 +31,7 @@ import { createMockedNotebookDocument } from '../../../test/datascience/editor-i
 import { IControllerRegistration, IVSCodeNotebookController } from '../../../notebooks/controllers/types';
 import { createKernelApiForExtension } from './kernel';
 import { noop } from '../../../test/core';
-import { JVSC_EXTENSION_ID_FOR_TESTS } from '../../../test/constants';
+import { JVSC_EXTENSION_ID } from '../../../platform/common/constants';
 import { IKernelConnection } from '@jupyterlab/services/lib/kernel/kernel';
 import { NotebookCellOutput } from 'vscode';
 
@@ -127,7 +127,7 @@ suite('Kernel Api', () => {
         when(kernel.shutdown()).thenResolve();
         when(kernel.dispose()).thenCall(() => when(kernel.status).thenReturn('dead'));
 
-        const { api } = createKernelApiForExtension(JVSC_EXTENSION_ID_FOR_TESTS, instance(kernel));
+        const { api } = createKernelApiForExtension(JVSC_EXTENSION_ID, instance(kernel));
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         for await (const _ of api.executeCode('bogus', token)) {
             //

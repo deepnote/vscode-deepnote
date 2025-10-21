@@ -27,7 +27,7 @@ import { IFileSystem } from '../../../platform/common/platform/types';
 import { RemoteKernelFinderController } from './remoteKernelFinderController';
 import { JupyterServerCollection, JupyterServerProvider } from '../../../api';
 import { UserJupyterServerPickerProviderId } from '../../../platform/constants';
-import { JVSC_EXTENSION_ID_FOR_TESTS } from '../../../test/constants';
+import { JVSC_EXTENSION_ID } from '../../../platform/common/constants';
 
 suite(`Remote Kernel Finder Controller`, () => {
     let disposables: Disposable[] = [];
@@ -50,7 +50,7 @@ suite(`Remote Kernel Finder Controller`, () => {
         provider: {
             id: UserJupyterServerPickerProviderId,
             handle: '2',
-            extensionId: JVSC_EXTENSION_ID_FOR_TESTS
+            extensionId: JVSC_EXTENSION_ID
         }
     };
     let serverUriStorage: IJupyterServerUriStorage;
@@ -127,7 +127,7 @@ suite(`Remote Kernel Finder Controller`, () => {
         const collectionForRemote = mock<JupyterServerCollection>();
         when(collectionForRemote.id).thenReturn(UserJupyterServerPickerProviderId);
         when(collectionForRemote.label).thenReturn('Quick Label');
-        when(collectionForRemote.extensionId).thenReturn(JVSC_EXTENSION_ID_FOR_TESTS);
+        when(collectionForRemote.extensionId).thenReturn(JVSC_EXTENSION_ID);
         const serverProvider = mock<JupyterServerProvider>();
         when(serverProvider.provideJupyterServers(anything())).thenResolve();
         when(collectionForRemote.serverProvider).thenReturn(instance(serverProvider));

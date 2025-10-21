@@ -16,7 +16,7 @@ export const EXTENSION_TEST_DIR_FOR_FILES = path.join(
     'datascience',
     'temp'
 );
-export const JVSC_EXTENSION_ID_FOR_TESTS = 'ms-toolsai.jupyter';
+export const JVSC_EXTENSION_ID_FOR_TESTS = 'Deepnote.vscode-deepnote';
 
 export const SMOKE_TEST_EXTENSIONS_DIR = path.join(
     EXTENSION_ROOT_DIR_FOR_TESTS,

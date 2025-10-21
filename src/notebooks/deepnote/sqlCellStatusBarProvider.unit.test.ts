@@ -184,6 +184,7 @@ suite('SqlCellStatusBarProvider', () => {
         // Check variable status bar item is still shown
         const variableItem = items[0];
         assert.strictEqual(variableItem.text, 'Variable: df');
+        assert.strictEqual(variableItem.alignment, 1);
     });
 
     test('shows custom variable name when set in metadata', async () => {

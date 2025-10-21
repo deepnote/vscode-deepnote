@@ -356,7 +356,7 @@ export class DeepnoteExplorerView {
                 const outputFileName = `${projectName}.deepnote`;
                 const outputPath = Uri.joinPath(workspaceFolder.uri, outputFileName).path;
 
-                const { convertIpynbFilesToDeepnoteFile } = await import('@deepnote/convert');
+                const convertIpynbFilesToDeepnoteFile = await this.getConverter();
                 await convertIpynbFilesToDeepnoteFile(inputFilePaths, {
                     outputPath: outputPath,
                     projectName: projectName
@@ -377,6 +377,11 @@ export class DeepnoteExplorerView {
 
             await window.showErrorMessage(`Failed to import notebook: ${errorMessage}`);
         }
+    }
+
+    private async getConverter() {
+        const { convertIpynbFilesToDeepnoteFile } = await import('@deepnote/convert');
+        return convertIpynbFilesToDeepnoteFile;
     }
 
     private async importJupyterNotebook(): Promise<void> {
@@ -429,7 +434,7 @@ export class DeepnoteExplorerView {
                 // File doesn't exist, continue
             }
 
-            const { convertIpynbFilesToDeepnoteFile } = await import('@deepnote/convert');
+            const convertIpynbFilesToDeepnoteFile = await this.getConverter();
             await convertIpynbFilesToDeepnoteFile(inputFilePaths, {
                 outputPath: outputUri.path,
                 projectName: projectName

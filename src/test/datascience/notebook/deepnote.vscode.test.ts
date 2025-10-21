@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires */
 import { assert } from 'chai';
-import * as path from '../../../platform/vscode-path/path';
 import { Uri, workspace } from 'vscode';
 import { IDisposable } from '../../../platform/common/types';
 import { captureScreenShot, IExtensionTestApi } from '../../common.node';
@@ -13,8 +12,13 @@ import { IDeepnoteNotebookManager } from '../../../notebooks/types';
 suite('Deepnote Integration Tests @kernelCore', function () {
     let api: IExtensionTestApi;
     const disposables: IDisposable[] = [];
-    const deepnoteFilePath = Uri.file(
-        path.join(EXTENSION_ROOT_DIR_FOR_TESTS, 'src', 'test', 'datascience', 'notebook', 'test.deepnote')
+    const deepnoteFilePath = Uri.joinPath(
+        Uri.file(EXTENSION_ROOT_DIR_FOR_TESTS),
+        'src',
+        'test',
+        'datascience',
+        'notebook',
+        'test.deepnote'
     );
     this.timeout(240_000);
 
@@ -57,7 +61,7 @@ suite('Deepnote Integration Tests @kernelCore', function () {
         logger.debug(`Opened notebook with type: ${nbDocument.notebookType}, cells: ${nbDocument.cellCount}`);
 
         assert.equal(nbDocument.notebookType, 'deepnote', 'Notebook type should be deepnote');
-        assert.isTrue(nbDocument.cellCount > 0, 'Notebook should have cells');
+        assert.equal(nbDocument.cellCount, 3, 'Notebook should have 3 cells');
 
         assert.equal(nbDocument.metadata?.deepnoteProjectId, 'test-project-id', 'Project ID should match');
         assert.equal(nbDocument.metadata?.deepnoteNotebookId, 'main-notebook-id', 'Notebook ID should match');

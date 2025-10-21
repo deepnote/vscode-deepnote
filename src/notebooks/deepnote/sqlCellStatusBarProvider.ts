@@ -4,6 +4,7 @@ import {
     NotebookCell,
     NotebookCellStatusBarItem,
     NotebookCellStatusBarItemProvider,
+    NotebookDocumentChangeEvent,
     NotebookEdit,
     ProviderResult,
     QuickPickItem,
@@ -52,6 +53,15 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         this.disposables.push(
             this.integrationStorage.onDidChangeIntegrations(() => {
                 this._onDidChangeCellStatusBarItems.fire();
+            })
+        );
+
+        // Refresh when any Deepnote notebook changes (e.g., metadata updated externally)
+        this.disposables.push(
+            workspace.onDidChangeNotebookDocument((e: NotebookDocumentChangeEvent) => {
+                if (e.notebook.notebookType === 'deepnote') {
+                    this._onDidChangeCellStatusBarItems.fire();
+                }
             })
         );
 

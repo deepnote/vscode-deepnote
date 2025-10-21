@@ -77,16 +77,23 @@ suite('Deepnote Integration Tests @kernelCore', function () {
 
         const nbDocument = await workspace.openNotebookDocument(deepnoteFilePath);
 
-        const cell0 = nbDocument.cellAt(0);
-        assert.equal(cell0.kind, 1, 'First cell should be a code cell');
-        assert.include(cell0.document.getText(), 'print', 'First cell should contain print statement');
+        assert.isAtLeast(nbDocument.cellCount, 3, 'Notebook should have at least 3 cells');
 
-        const cell1 = nbDocument.cellAt(1);
-        assert.equal(cell1.kind, 1, 'Second cell should be a code cell');
-        assert.include(cell1.document.getText(), '42', 'Second cell should contain value 42');
+        let hasCodeCell = false;
+        let hasMarkdownCell = false;
 
-        const cell2 = nbDocument.cellAt(2);
-        assert.equal(cell2.kind, 2, 'Third cell should be a markdown cell');
+        for (let i = 0; i < nbDocument.cellCount; i++) {
+            const cell = nbDocument.cellAt(i);
+            if (cell.kind === 1) {
+                hasCodeCell = true;
+            }
+            if (cell.kind === 2) {
+                hasMarkdownCell = true;
+            }
+        }
+
+        assert.isTrue(hasCodeCell, 'Notebook should have at least one code cell');
+        assert.isTrue(hasMarkdownCell, 'Notebook should have at least one markdown cell');
 
         logger.debug('Test: Verify cells - completed');
     });

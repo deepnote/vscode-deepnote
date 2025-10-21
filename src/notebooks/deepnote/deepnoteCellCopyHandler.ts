@@ -47,10 +47,6 @@ export class DeepnoteCellCopyHandler implements IExtensionSyncActivationService 
     constructor(@inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry) {}
 
     public activate(): void {
-        // Register custom copy commands that preserve metadata
-        this.disposables.push(commands.registerCommand('deepnote.copyCellDown', () => this.copyCellDown()));
-        this.disposables.push(commands.registerCommand('deepnote.copyCellUp', () => this.copyCellUp()));
-
         // Override built-in notebook copy/cut commands to preserve metadata for Deepnote notebooks
         this.disposables.push(commands.registerCommand('notebook.cell.copyDown', () => this.copyCellDownInterceptor()));
         this.disposables.push(commands.registerCommand('notebook.cell.copyUp', () => this.copyCellUpInterceptor()));

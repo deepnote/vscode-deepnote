@@ -70,12 +70,6 @@
                 "key": "escape",
                 "when": "isCompositeNotebook && !editorHoverVisible && !suggestWidgetVisible && !isComposing && !inSnippetMode && !exceptionWidgetVisible && !selectionAnchorSet && !LinkedEditingInputVisible && !renameInputVisible && !editorHasSelection && !accessibilityHelpWidgetVisible && !breakpointWidgetVisible && !findWidgetVisible && !markersNavigationVisible && !parameterHintsVisible && !editorHasMultipleSelections && !notificationToastsVisible && !notebookEditorFocused && !inlineChatVisible",
                 "command": "interactive.input.clear"
-            },
-            {
-                "key": "shift+alt+down",
-                "mac": "shift+alt+down",
-                "when": "notebookType == deepnote && notebookEditorFocused && !inputFocus",
-                "command": "deepnote.copyCellDown"
             }
         ],
         "commands": [

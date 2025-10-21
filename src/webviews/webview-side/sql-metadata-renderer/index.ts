@@ -10,16 +10,16 @@ import { SqlMetadataRenderer } from './SqlMetadataRenderer';
  * query size, and other metadata.
  */
 export const activate: ActivationFunction = (_context: RendererContext<unknown>) => {
+    const roots = new Map<string, HTMLElement>();
+
     return {
         renderOutputItem(outputItem: OutputItem, element: HTMLElement) {
-            console.log(`SQL metadata renderer - rendering output item: ${outputItem.id}`);
             try {
                 const data = outputItem.json();
 
-                console.log(`SQL metadata renderer - received data:`, data);
-
                 const root = document.createElement('div');
                 element.appendChild(root);
+                roots.set(outputItem.id, root);
 
                 ReactDOM.render(React.createElement(SqlMetadataRenderer, { data }), root);
             } catch (error) {
@@ -32,8 +32,14 @@ export const activate: ActivationFunction = (_context: RendererContext<unknown>)
             }
         },
 
-        disposeOutputItem(_id?: string) {
-            // Cleanup if needed
+        disposeOutputItem(id?: string) {
+            if (id) {
+                const root = roots.get(id);
+                if (root) {
+                    ReactDOM.unmountComponentAtNode(root);
+                    roots.delete(id);
+                }
+            }
         }
     };
 };

@@ -11,50 +11,50 @@ export interface SqlMetadataRendererProps {
     };
 }
 
+const getStatusMessage = (status: string) => {
+    switch (status) {
+        case 'read_from_cache_success':
+            return {
+                icon: '✓',
+                text: 'Query result loaded from cache',
+                color: 'var(--vscode-testing-iconPassed)'
+            };
+        case 'success_no_cache':
+            return {
+                icon: 'ℹ',
+                text: 'Query executed successfully',
+                color: 'var(--vscode-notificationsInfoIcon-foreground)'
+            };
+        case 'cache_not_supported_for_query':
+            return {
+                icon: 'ℹ',
+                text: 'Caching not supported for this query type',
+                color: 'var(--vscode-notificationsInfoIcon-foreground)'
+            };
+        default:
+            return {
+                icon: 'ℹ',
+                text: `Status: ${status}`,
+                color: 'var(--vscode-foreground)'
+            };
+    }
+};
+
+const formatBytes = (bytes: number) => {
+    if (bytes < 1024) {
+        return `${bytes} B`;
+    }
+    if (bytes < 1024 * 1024) {
+        return `${(bytes / 1024).toFixed(2)} KB`;
+    }
+    if (bytes < 1024 * 1024 * 1024) {
+        return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+    }
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+};
+
 export const SqlMetadataRenderer = memo(function SqlMetadataRenderer({ data }: SqlMetadataRendererProps) {
-    const getStatusMessage = () => {
-        switch (data.status) {
-            case 'read_from_cache_success':
-                return {
-                    icon: '✓',
-                    text: 'Query result loaded from cache',
-                    color: 'var(--vscode-testing-iconPassed)'
-                };
-            case 'success_no_cache':
-                return {
-                    icon: 'ℹ',
-                    text: 'Query executed successfully',
-                    color: 'var(--vscode-notificationsInfoIcon-foreground)'
-                };
-            case 'cache_not_supported_for_query':
-                return {
-                    icon: 'ℹ',
-                    text: 'Caching not supported for this query type',
-                    color: 'var(--vscode-notificationsInfoIcon-foreground)'
-                };
-            default:
-                return {
-                    icon: 'ℹ',
-                    text: `Status: ${data.status}`,
-                    color: 'var(--vscode-foreground)'
-                };
-        }
-    };
-
-    const statusInfo = getStatusMessage();
-
-    const formatBytes = (bytes: number) => {
-        if (bytes < 1024) {
-            return `${bytes} B`;
-        }
-        if (bytes < 1024 * 1024) {
-            return `${(bytes / 1024).toFixed(2)} KB`;
-        }
-        if (bytes < 1024 * 1024 * 1024) {
-            return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-        }
-        return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-    };
+    const statusInfo = getStatusMessage(data.status);
 
     return (
         <div

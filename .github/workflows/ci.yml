@@ -168,9 +168,6 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install Jupyter
-        run: python3 -m pip install jupyter ipykernel
-
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
         env:

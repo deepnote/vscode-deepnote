@@ -20,16 +20,22 @@ Thank you for your interest in contributing to the Deepnote VS Code extension! T
 <details>
 <summary><b>📦Or use these commands to install the prerequisites</b></summary>
 
-#### macOS (using Homebrew)
+#### macOS (with brew)
 
 ```bash
-# Install Node.js
-brew install node@22
+# Install nvm (if not already installed)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
 
-# Install Python
+# Install and use Node.js from .nvmrc
+nvm use $(cat .nvmrc)
+
+# Update npm
+npm install -g $(cat .npmrc)
+
+# Install Python (using Homebrew)
 brew install python3
 
-# Install VS Code
+# Install VS Code (using Homebrew)
 brew install --cask visual-studio-code
 
 # Install VS Code extensions
@@ -39,18 +45,18 @@ code --install-extension EditorConfig.EditorConfig
 code --install-extension ms-python.python
 ```
 
-#### macOS/Linux (using nvm for Node.js)
+#### macOS/Linux
 
 ```bash
 # Install nvm (if not already installed)
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
 
 # Install Node.js
-nvm install 22.15.1
-nvm use 22.15.1
+nvm install $(cat .nvmrc)
+nvm use $(cat .nvmrc)
 
 # Update npm
-npm install -g npm@10.9.2
+npm install -g $(cat .npmrc)
 
 # Install Python (Ubuntu/Debian)
 sudo apt update && sudo apt install python3 python3-pip python3-venv

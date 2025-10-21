@@ -143,6 +143,44 @@ jobs:
       - name: Check licenses
         run: npm run check-licenses
 
+  integration-tests:
+    name: Integration Tests - Deepnote
+    runs-on: ubicloud-standard-2
+    timeout-minutes: 30
+    permissions:
+      id-token: write
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          cache: 'npm'
+          node-version-file: '.nvmrc'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@deepnote'
+
+      - name: Setup Python
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compile TypeScript
+        run: npm run compile
+
+      - name: Run Deepnote integration tests
+        run: xvfb-run -a npm test
+        env:
+          VSC_JUPYTER_CI_TEST_GREP: 'Deepnote Integration Tests'
+
   check_licenses:
     name: Check Licenses
     runs-on: ubuntu-latest

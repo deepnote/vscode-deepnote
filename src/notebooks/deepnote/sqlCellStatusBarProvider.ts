@@ -24,6 +24,13 @@ import { Commands } from '../../platform/common/constants';
 import { DATAFRAME_SQL_INTEGRATION_ID, IntegrationType } from '../../platform/notebooks/deepnote/integrationTypes';
 
 /**
+ * QuickPick item with an integration ID
+ */
+interface LocalQuickPickItem extends QuickPickItem {
+    id: string;
+}
+
+/**
  * Provides status bar items for SQL cells showing the integration name and variable name
  */
 @injectable()
@@ -253,7 +260,7 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         const allIntegrations = await this.integrationStorage.getAll();
 
         // Build quick pick items
-        const items: QuickPickItem[] = [];
+        const items: (QuickPickItem | LocalQuickPickItem)[] = [];
 
         // Check if current integration is unknown (not in the list)
         const isCurrentIntegrationUnknown =
@@ -263,46 +270,51 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
         // Add current unknown integration first if it exists
         if (isCurrentIntegrationUnknown && currentIntegrationId) {
-            items.push({
+            const item: LocalQuickPickItem = {
                 label: l10n.t('Unknown integration (configure)'),
                 description: currentIntegrationId,
                 detail: l10n.t('Currently selected'),
                 id: currentIntegrationId
-            } as QuickPickItem & { id: string });
+            };
+            items.push(item);
         }
 
         // Add all configured integrations
         for (const integration of allIntegrations) {
             const typeLabel = this.getIntegrationTypeLabel(integration.type);
-            items.push({
+            const item: LocalQuickPickItem = {
                 label: integration.name || integration.id,
                 description: typeLabel,
                 detail: integration.id === currentIntegrationId ? l10n.t('Currently selected') : undefined,
                 // Store the integration ID in a custom property
                 id: integration.id
-            } as QuickPickItem & { id: string });
+            };
+            items.push(item);
         }
 
         // Add DuckDB integration
-        items.push({
+        const duckDbItem: LocalQuickPickItem = {
             label: l10n.t('DataFrame SQL (DuckDB)'),
             description: l10n.t('DuckDB'),
             detail: currentIntegrationId === DATAFRAME_SQL_INTEGRATION_ID ? l10n.t('Currently selected') : undefined,
             id: DATAFRAME_SQL_INTEGRATION_ID
-        } as QuickPickItem & { id: string });
+        };
+        items.push(duckDbItem);
 
         // Add "Configure current integration" option (with separator)
         if (currentIntegrationId && currentIntegrationId !== DATAFRAME_SQL_INTEGRATION_ID) {
             // Add separator
-            items.push({
+            const separator: QuickPickItem = {
                 label: '',
                 kind: QuickPickItemKind.Separator
-            });
+            };
+            items.push(separator);
 
-            items.push({
+            const configureItem: LocalQuickPickItem = {
                 label: l10n.t('Configure current integration'),
                 id: '__configure__'
-            } as QuickPickItem & { id: string });
+            };
+            items.push(configureItem);
         }
 
         const selected = await window.showQuickPick(items, {
@@ -314,7 +326,13 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
             return;
         }
 
-        const selectedId = (selected as QuickPickItem & { id: string }).id;
+        // Type guard to check if selected item has an id property
+        if (!('id' in selected)) {
+            return;
+        }
+
+        const selectedItem = selected as LocalQuickPickItem;
+        const selectedId = selectedItem.id;
 
         // Handle "Configure current integration" option
         if (selectedId === '__configure__' && currentIntegrationId) {

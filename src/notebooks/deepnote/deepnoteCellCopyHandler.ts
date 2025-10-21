@@ -66,7 +66,7 @@ export class DeepnoteCellCopyHandler implements IExtensionSyncActivationService 
      */
     private async copyCellDownInterceptor(): Promise<void> {
         const editor = window.activeNotebookEditor;
-        if (editor && editor.notebook.uri.path.endsWith('.deepnote')) {
+        if (editor && editor.notebook && editor.notebook.notebookType === 'deepnote') {
             await this.copyCellDown();
         } else {
             logger.warn('notebook.cell.copyDown intercepted for non-Deepnote notebook - using fallback');
@@ -79,7 +79,7 @@ export class DeepnoteCellCopyHandler implements IExtensionSyncActivationService 
      */
     private async copyCellUpInterceptor(): Promise<void> {
         const editor = window.activeNotebookEditor;
-        if (editor && editor.notebook.uri.path.endsWith('.deepnote')) {
+        if (editor && editor.notebook && editor.notebook.notebookType === 'deepnote') {
             await this.copyCellUp();
         } else {
             logger.warn('notebook.cell.copyUp intercepted for non-Deepnote notebook - using fallback');
@@ -92,7 +92,7 @@ export class DeepnoteCellCopyHandler implements IExtensionSyncActivationService 
      */
     private async copyCellInterceptor(): Promise<void> {
         const editor = window.activeNotebookEditor;
-        if (editor && editor.notebook.uri.path.endsWith('.deepnote')) {
+        if (editor && editor.notebook && editor.notebook.notebookType === 'deepnote') {
             await this.copyCellToClipboard(false);
         } else {
             logger.warn('notebook.cell.copy intercepted for non-Deepnote notebook - using fallback');
@@ -105,7 +105,7 @@ export class DeepnoteCellCopyHandler implements IExtensionSyncActivationService 
      */
     private async cutCellInterceptor(): Promise<void> {
         const editor = window.activeNotebookEditor;
-        if (editor && editor.notebook.uri.path.endsWith('.deepnote')) {
+        if (editor && editor.notebook && editor.notebook.notebookType === 'deepnote') {
             await this.copyCellToClipboard(true);
         } else {
             logger.warn('notebook.cell.cut intercepted for non-Deepnote notebook - using fallback');
@@ -118,7 +118,7 @@ export class DeepnoteCellCopyHandler implements IExtensionSyncActivationService 
      */
     private async pasteCellInterceptor(): Promise<void> {
         const editor = window.activeNotebookEditor;
-        if (editor && editor.notebook.uri.path.endsWith('.deepnote')) {
+        if (editor && editor.notebook && editor.notebook.notebookType === 'deepnote') {
             await this.pasteCellFromClipboard();
         } else {
             logger.warn('notebook.cell.paste intercepted for non-Deepnote notebook - using fallback');
@@ -140,7 +140,7 @@ export class DeepnoteCellCopyHandler implements IExtensionSyncActivationService 
     private async copyCellAtOffset(offset: number): Promise<void> {
         const editor = window.activeNotebookEditor;
 
-        if (!editor || !editor.notebook.uri.path.endsWith('.deepnote')) {
+        if (!editor || !editor.notebook || editor.notebook.notebookType !== 'deepnote') {
             logger.warn(`copyCellAtOffset called for non-Deepnote notebook`);
             return;
         }
@@ -210,7 +210,7 @@ export class DeepnoteCellCopyHandler implements IExtensionSyncActivationService 
 
     private async onDidChangeNotebookDocument(e: NotebookDocumentChangeEvent): Promise<void> {
         // Only process Deepnote notebooks
-        if (!e.notebook.uri.path.endsWith('.deepnote')) {
+        if (e.notebook.notebookType !== 'deepnote') {
             return;
         }
 
@@ -321,7 +321,7 @@ export class DeepnoteCellCopyHandler implements IExtensionSyncActivationService 
     private async copyCellToClipboard(isCut: boolean): Promise<void> {
         const editor = window.activeNotebookEditor;
 
-        if (!editor || !editor.notebook.uri.path.endsWith('.deepnote')) {
+        if (!editor || !editor.notebook || editor.notebook.notebookType !== 'deepnote') {
             logger.warn(`copyCellToClipboard called for non-Deepnote notebook`);
             return;
         }
@@ -370,7 +370,7 @@ export class DeepnoteCellCopyHandler implements IExtensionSyncActivationService 
     private async pasteCellFromClipboard(): Promise<void> {
         const editor = window.activeNotebookEditor;
 
-        if (!editor || !editor.notebook.uri.path.endsWith('.deepnote')) {
+        if (!editor || !editor.notebook || editor.notebook.notebookType !== 'deepnote') {
             logger.warn(`pasteCellFromClipboard called for non-Deepnote notebook`);
             return;
         }

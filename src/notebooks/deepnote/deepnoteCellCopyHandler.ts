@@ -8,7 +8,9 @@ import {
     window,
     NotebookCellData,
     NotebookRange,
-    env
+    env,
+    NotebookCellOutputItem,
+    NotebookCellOutput
 } from 'vscode';
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
@@ -169,7 +171,9 @@ export class DeepnoteCellCopyHandler implements IExtensionSyncActivationService 
 
         // Copy outputs if present
         if (cellToCopy.outputs.length > 0) {
-            newCell.outputs = cellToCopy.outputs.map((output) => output);
+            newCell.outputs = cellToCopy.outputs.map(
+                (o) => new NotebookCellOutput(o.items.map((i) => new NotebookCellOutputItem(i.data, i.mime)))
+            );
         }
 
         // Insert the new cell

@@ -291,14 +291,14 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
             id: DATAFRAME_SQL_INTEGRATION_ID
         } as QuickPickItem & { id: string });
 
-        // Add separator
-        items.push({
-            label: '',
-            kind: QuickPickItemKind.Separator
-        });
-
-        // Add "Configure current integration" option
+        // Add "Configure current integration" option (with separator)
         if (currentIntegrationId && currentIntegrationId !== DATAFRAME_SQL_INTEGRATION_ID) {
+            // Add separator
+            items.push({
+                label: '',
+                kind: QuickPickItemKind.Separator
+            });
+
             items.push({
                 label: l10n.t('Configure current integration'),
                 id: '__configure__'

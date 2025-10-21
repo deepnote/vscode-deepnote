@@ -58,6 +58,7 @@ export interface ICommandNameArgumentTypeMapping {
     [DSCommands.RestartKernelAndRunUpToSelectedCell]: [{ notebookEditor: { notebookUri: Uri } } | undefined];
     [DSCommands.NotebookEditorRemoveAllCells]: [];
     [DSCommands.NotebookEditorRunAllCells]: [];
+    [DSCommands.NotebookEditorRunFocusedCell]: [];
     [DSCommands.NotebookEditorAddCellBelow]: [];
     [DSCommands.ExpandAllCells]: [];
     [DSCommands.CollapseAllCells]: [];

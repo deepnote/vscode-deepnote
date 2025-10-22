@@ -139,7 +139,7 @@ export class DeepnoteCellCopyHandler implements IExtensionSyncActivationService 
         const editor = window.activeNotebookEditor;
 
         if (!editor || !editor.notebook || editor.notebook.notebookType !== 'deepnote') {
-            logger.warn(`copyCellAtOffset called for non-Deepnote notebook`);
+            logger.debug(`copyCellAtOffset called for non-Deepnote notebook`);
             return;
         }
 
@@ -303,7 +303,7 @@ export class DeepnoteCellCopyHandler implements IExtensionSyncActivationService 
         const editor = window.activeNotebookEditor;
 
         if (!editor || !editor.notebook || editor.notebook.notebookType !== 'deepnote') {
-            logger.warn(`copyCellToClipboard called for non-Deepnote notebook`);
+            logger.debug(`copyCellToClipboard called for non-Deepnote notebook`);
             return;
         }
 
@@ -346,7 +346,7 @@ export class DeepnoteCellCopyHandler implements IExtensionSyncActivationService 
         const editor = window.activeNotebookEditor;
 
         if (!editor || !editor.notebook || editor.notebook.notebookType !== 'deepnote') {
-            logger.warn(`pasteCellFromClipboard called for non-Deepnote notebook`);
+            logger.debug(`pasteCellFromClipboard called for non-Deepnote notebook`);
             return;
         }
 

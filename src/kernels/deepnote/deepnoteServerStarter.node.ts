@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { inject, injectable, named } from 'inversify';
+import { inject, injectable, named, optional } from 'inversify';
 import { CancellationToken, Uri } from 'vscode';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { IDeepnoteServerStarter, IDeepnoteToolkitInstaller, DeepnoteServerInfo, DEEPNOTE_DEFAULT_PORT } from './types';
@@ -12,6 +12,7 @@ import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
 import { sleep } from '../../platform/common/utils/async';
 import { Cancellation, raceCancellationError } from '../../platform/common/cancellation';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
+import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
 import getPort from 'get-port';
 import * as fs from 'fs-extra';
 import * as os from 'os';
@@ -50,7 +51,10 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         @inject(IDeepnoteToolkitInstaller) private readonly toolkitInstaller: IDeepnoteToolkitInstaller,
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel,
         @inject(IHttpClient) private readonly httpClient: IHttpClient,
-        @inject(IAsyncDisposableRegistry) asyncRegistry: IAsyncDisposableRegistry
+        @inject(IAsyncDisposableRegistry) asyncRegistry: IAsyncDisposableRegistry,
+        @inject(ISqlIntegrationEnvVarsProvider)
+        @optional()
+        private readonly sqlIntegrationEnvVars?: ISqlIntegrationEnvVarsProvider
     ) {
         // Register for disposal when the extension deactivates
         asyncRegistry.push(this);
@@ -149,9 +153,27 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
         // Detached mode ensures no requests are made to the backend (directly, or via proxy)
         // as there is no backend running in the extension, therefore:
-        // 1. integration environment variables won't work / be injected
+        // 1. integration environment variables are injected here instead
         // 2. post start hooks won't work / are not executed
         env.DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE = 'true';
+
+        // Inject SQL integration environment variables
+        if (this.sqlIntegrationEnvVars) {
+            logger.debug(`DeepnoteServerStarter: Injecting SQL integration env vars for ${deepnoteFileUri.toString()}`);
+            try {
+                const sqlEnvVars = await this.sqlIntegrationEnvVars.getEnvironmentVariables(deepnoteFileUri, token);
+                if (sqlEnvVars && Object.keys(sqlEnvVars).length > 0) {
+                    logger.debug(`DeepnoteServerStarter: Injecting ${Object.keys(sqlEnvVars).length} SQL env vars`);
+                    Object.assign(env, sqlEnvVars);
+                } else {
+                    logger.debug('DeepnoteServerStarter: No SQL integration env vars to inject');
+                }
+            } catch (error) {
+                logger.error('DeepnoteServerStarter: Failed to get SQL integration env vars', error.message);
+            }
+        } else {
+            logger.debug('DeepnoteServerStarter: SqlIntegrationEnvironmentVariablesProvider not available');
+        }
 
         // Remove PYTHONHOME if it exists (can interfere with venv)
         delete env.PYTHONHOME;

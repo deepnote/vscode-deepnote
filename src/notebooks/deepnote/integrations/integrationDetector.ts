@@ -2,7 +2,7 @@ import { inject, injectable } from 'inversify';
 
 import { logger } from '../../../platform/logging';
 import { IDeepnoteNotebookManager } from '../../types';
-import { IntegrationStatus, IntegrationWithStatus } from './integrationTypes';
+import { IntegrationStatus, IntegrationWithStatus } from '../../../platform/notebooks/deepnote/integrationTypes';
 import { IIntegrationDetector, IIntegrationStorage } from './types';
 import { BlockWithIntegration, scanBlocksForIntegrations } from './integrationUtils';
 

@@ -69,9 +69,18 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         this.disposables.push(
             commands.registerCommand('deepnote.updateSqlVariableName', async (cell?: NotebookCell) => {
                 if (!cell) {
+                    // Fall back to the active notebook cell
+                    const activeEditor = window.activeNotebookEditor;
+                    if (activeEditor && activeEditor.selection) {
+                        cell = activeEditor.notebook.cellAt(activeEditor.selection.start);
+                    }
+                }
+
+                if (!cell) {
                     void window.showErrorMessage(l10n.t('No active notebook cell'));
                     return;
                 }
+
                 await this.updateVariableName(cell);
             })
         );
@@ -80,9 +89,18 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         this.disposables.push(
             commands.registerCommand('deepnote.switchSqlIntegration', async (cell?: NotebookCell) => {
                 if (!cell) {
+                    // Fall back to the active notebook cell
+                    const activeEditor = window.activeNotebookEditor;
+                    if (activeEditor && activeEditor.selection) {
+                        cell = activeEditor.notebook.cellAt(activeEditor.selection.start);
+                    }
+                }
+
+                if (!cell) {
                     void window.showErrorMessage(l10n.t('No active notebook cell'));
                     return;
                 }
+
                 await this.switchIntegration(cell);
             })
         );

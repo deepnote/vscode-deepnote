@@ -18,6 +18,7 @@ import * as fs from 'fs-extra';
 import * as os from 'os';
 import * as path from '../../platform/vscode-path/path';
 import { generateUuid } from '../../platform/common/uuid';
+import { DeepnoteServerStartupError, DeepnoteServerTimeoutError } from '../../platform/errors/deepnoteKernelErrors';
 
 /**
  * Lock file data structure for tracking server ownership
@@ -42,6 +43,8 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
     private readonly sessionId: string = generateUuid();
     // Directory for lock files
     private readonly lockFileDir: string = path.join(os.tmpdir(), 'vscode-deepnote-locks');
+    // Track server output for error reporting
+    private readonly serverOutputByFile: Map<string, { stdout: string; stderr: string }> = new Map();
 
     constructor(
         @inject(IProcessServiceFactory) private readonly processServiceFactory: IProcessServiceFactory,
@@ -118,12 +121,9 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
         Cancellation.throwIfCanceled(token);
 
-        // Ensure toolkit is installed
+        // Ensure toolkit is installed (will throw typed errors on failure)
         logger.info(`Ensuring deepnote-toolkit is installed for ${fileKey}...`);
-        const installed = await this.toolkitInstaller.ensureInstalled(interpreter, deepnoteFileUri, token);
-        if (!installed) {
-            throw new Error('Failed to install deepnote-toolkit. Please check the output for details.');
-        }
+        await this.toolkitInstaller.ensureInstalled(interpreter, deepnoteFileUri, token);
 
         Cancellation.throwIfCanceled(token);
 
@@ -197,15 +197,27 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         const disposables: IDisposable[] = [];
         this.disposablesByFile.set(fileKey, disposables);
 
+        // Initialize output tracking for error reporting
+        this.serverOutputByFile.set(fileKey, { stdout: '', stderr: '' });
+
         // Monitor server output
         serverProcess.out.onDidChange(
             (output) => {
+                const outputTracking = this.serverOutputByFile.get(fileKey);
                 if (output.source === 'stdout') {
                     logger.trace(`Deepnote server (${fileKey}): ${output.out}`);
                     this.outputChannel.appendLine(output.out);
+                    if (outputTracking) {
+                        // Keep last 5000 characters of output for error reporting
+                        outputTracking.stdout = (outputTracking.stdout + output.out).slice(-5000);
+                    }
                 } else if (output.source === 'stderr') {
                     logger.warn(`Deepnote server stderr (${fileKey}): ${output.out}`);
                     this.outputChannel.appendLine(output.out);
+                    if (outputTracking) {
+                        // Keep last 5000 characters of error output for error reporting
+                        outputTracking.stderr = (outputTracking.stderr + output.out).slice(-5000);
+                    }
                 }
             },
             this,
@@ -228,13 +240,35 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         try {
             const serverReady = await this.waitForServer(serverInfo, 120000, token);
             if (!serverReady) {
+                const output = this.serverOutputByFile.get(fileKey);
                 await this.stopServerImpl(deepnoteFileUri);
-                throw new Error('Deepnote server failed to start within timeout period');
+
+                throw new DeepnoteServerTimeoutError(serverInfo.url, 120000, output?.stderr || undefined);
             }
         } catch (error) {
-            // Clean up leaked server before rethrowing
+            // If this is already a DeepnoteKernelError, clean up and rethrow it
+            if (error instanceof DeepnoteServerTimeoutError || error instanceof DeepnoteServerStartupError) {
+                await this.stopServerImpl(deepnoteFileUri);
+                throw error;
+            }
+
+            // Capture output BEFORE cleaning up (stopServerImpl deletes it)
+            const output = this.serverOutputByFile.get(fileKey);
+            const capturedStdout = output?.stdout || '';
+            const capturedStderr = output?.stderr || '';
+
+            // Clean up leaked server after capturing output
             await this.stopServerImpl(deepnoteFileUri);
-            throw error;
+
+            // Wrap in a generic server startup error with captured output
+            throw new DeepnoteServerStartupError(
+                interpreter.uri.fsPath,
+                port,
+                'unknown',
+                capturedStdout,
+                capturedStderr,
+                error instanceof Error ? error : undefined
+            );
         }
 
         logger.info(`Deepnote server started successfully at ${url} for ${fileKey}`);
@@ -283,6 +317,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                 serverProcess.proc?.kill();
                 this.serverProcesses.delete(fileKey);
                 this.serverInfos.delete(fileKey);
+                this.serverOutputByFile.delete(fileKey);
                 this.outputChannel.appendLine(`Deepnote server stopped for ${fileKey}`);
 
                 // Clean up lock file after stopping the server
@@ -403,6 +438,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         this.serverInfos.clear();
         this.disposablesByFile.clear();
         this.pendingOperations.clear();
+        this.serverOutputByFile.clear();
 
         logger.info('DeepnoteServerStarter disposed successfully');
     }

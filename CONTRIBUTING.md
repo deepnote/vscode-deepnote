@@ -58,7 +58,7 @@ The `@deepnote/blocks` package is published on GitHub Packages. To install it, y
    ```
    Replace `YOUR_TOKEN_HERE` with your actual token.
 
-After completing these steps, you can install dependencies normally with `npm ci`. The project's `.npmrc` file is already configured to use GitHub Packages for the `@deepnote` scope.
+After completing these steps, you can install dependencies normally with `npm install`. The project's `.npmrc` file is already configured to use GitHub Packages for the `@deepnote` scope.
 
 On Apple Silicon, you will have to use system versions of `libsodium` and `libzmq` instead of the bundled ones:
 
@@ -78,7 +78,7 @@ npm_config_build_from_source=true npm install zeromq@
 Install the dependecies:
 
 ```shell
-npm ci
+npm install
 # Run this to setup the necessary pre-commit hooks.
 npm run setup-precommit-hook
 python3 -m venv .venv
@@ -277,7 +277,7 @@ Here's an example of a typical workflow:
 
 1. Sync to main (get your fork's main to match vscode-jupyter's main)
 1. Create branch
-1. `npm ci`
+1. `npm install`
 1. `npm run clean`
 1. Start VS code Insiders root
 1. CTRL+SHIFT+B (run the task `compile`)
@@ -354,7 +354,7 @@ Steps to build the extension on your machine once you've cloned the repo:
 ```bash
 > npm install -g @vscode/vsce
 # Perform the next steps in the vscode-jupyter folder.
-> npm ci
+> npm install
 > npm run clean
 > npm run package # This step takes around 10 minutes.
 ```

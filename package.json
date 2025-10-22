@@ -487,7 +487,7 @@
             },
             {
                 "command": "jupyter.notebookeditor.runfocusedcell",
-                "title": "Run Focused Cell",
+                "title": "%jupyter.command.jupyter.notebookeditor.runfocusedcell.title%",
                 "category": "Notebook",
                 "enablement": "notebookEditorFocused"
             },

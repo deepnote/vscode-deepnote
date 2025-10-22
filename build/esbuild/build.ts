@@ -337,6 +337,18 @@ async function buildAll() {
             { target: 'web', watch: isWatchMode }
         ),
         build(
+            path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'sql-metadata-renderer', 'index.ts'),
+            path.join(
+                extensionFolder,
+                'dist',
+                'webviews',
+                'webview-side',
+                'sqlMetadataRenderer',
+                'sqlMetadataRenderer.js'
+            ),
+            { target: 'web', watch: isWatchMode }
+        ),
+        build(
             path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'variable-view', 'index.tsx'),
             path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'viewers', 'variableView.js'),
             { target: 'web', watch: watchAll }

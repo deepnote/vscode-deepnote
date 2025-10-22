@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { inject, injectable, optional } from 'inversify';
+import { inject, injectable, optional, named } from 'inversify';
 import {
     CancellationToken,
     NotebookDocument,
@@ -13,7 +13,8 @@ import {
     NotebookController,
     CancellationTokenSource,
     Disposable,
-    l10n
+    l10n,
+    env
 } from 'vscode';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
@@ -42,6 +43,9 @@ import { IDeepnoteNotebookManager } from '../types';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
 import { DeepnoteProject } from './deepnoteTypes';
 import { IKernelProvider, IKernel } from '../../kernels/types';
+import { DeepnoteKernelError } from '../../platform/errors/deepnoteKernelErrors';
+import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
+import { IOutputChannel } from '../../platform/common/types';
 
 /**
  * Automatically selects and starts Deepnote kernel for .deepnote notebooks
@@ -78,7 +82,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         @inject(IDeepnoteInitNotebookRunner) private readonly initNotebookRunner: IDeepnoteInitNotebookRunner,
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
         @inject(IKernelProvider) private readonly kernelProvider: IKernelProvider,
-        @inject(IDeepnoteRequirementsHelper) private readonly requirementsHelper: IDeepnoteRequirementsHelper
+        @inject(IDeepnoteRequirementsHelper) private readonly requirementsHelper: IDeepnoteRequirementsHelper,
+        @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel
     ) {}
 
     public activate() {
@@ -129,9 +134,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         // Don't await - let it happen in background so notebook opens quickly
         void this.ensureKernelSelected(notebook).catch((error) => {
             logger.error(`Failed to auto-select Deepnote kernel for ${getDisplayPath(notebook.uri)}`, error);
-            void window.showErrorMessage(
-                l10n.t('Failed to load Deepnote kernel. Please check the output for details.')
-            );
+            void this.handleKernelSelectionError(error);
         });
     }
 
@@ -342,16 +345,13 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                     logger.info(`Using base interpreter: ${getDisplayPath(interpreter.uri)}`);
 
                     // Ensure deepnote-toolkit is installed in a venv and get the venv interpreter
+                    // Will throw typed errors on failure (DeepnoteVenvCreationError or DeepnoteToolkitInstallError)
                     progress.report({ message: l10n.t('Installing Deepnote toolkit...') });
                     const venvInterpreter = await this.toolkitInstaller.ensureInstalled(
                         interpreter,
                         baseFileUri,
                         progressToken
                     );
-                    if (!venvInterpreter) {
-                        logger.error('Failed to set up Deepnote toolkit environment');
-                        return; // Exit gracefully
-                    }
 
                     logger.info(`Deepnote toolkit venv ready at: ${getDisplayPath(venvInterpreter.uri)}`);
 
@@ -552,5 +552,62 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         // Store it so we can dispose it later
         this.loadingControllers.set(notebookKey, loadingController);
         logger.info(`Created loading controller for ${notebookKey}`);
+    }
+
+    /**
+     * Handle kernel selection errors with user-friendly messages and actions
+     */
+    private async handleKernelSelectionError(error: unknown): Promise<void> {
+        // Handle DeepnoteKernelError types with specific guidance
+        if (error instanceof DeepnoteKernelError) {
+            // Log the technical details
+            logger.error(error.getErrorReport());
+
+            // Show user-friendly error with actions
+            const showOutputAction = l10n.t('Show Output');
+            const copyErrorAction = l10n.t('Copy Error Details');
+            const actions: string[] = [showOutputAction, copyErrorAction];
+
+            const troubleshootingHeader = l10n.t('Troubleshooting:');
+            const troubleshootingSteps = error.troubleshootingSteps
+                .slice(0, 3)
+                .map((step, i) => `${i + 1}. ${step}`)
+                .join('\n');
+
+            const selectedAction = await window.showErrorMessage(
+                `${error.userMessage}\n\n${troubleshootingHeader}\n${troubleshootingSteps}`,
+                { modal: false },
+                ...actions
+            );
+
+            if (selectedAction === showOutputAction) {
+                this.outputChannel.show();
+            } else if (selectedAction === copyErrorAction) {
+                try {
+                    await env.clipboard.writeText(error.getErrorReport());
+                    void window.showInformationMessage(l10n.t('Error details copied to clipboard'));
+                } catch (clipboardError) {
+                    logger.error('Failed to copy error details to clipboard', clipboardError);
+                    void window.showErrorMessage(l10n.t('Failed to copy error details to clipboard'));
+                }
+            }
+
+            return;
+        }
+
+        // Handle generic errors
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger.error(`Deepnote kernel error: ${errorMessage}`);
+
+        const showOutputAction = l10n.t('Show Output');
+        const selectedAction = await window.showErrorMessage(
+            l10n.t('Failed to load Deepnote kernel: {0}', errorMessage),
+            { modal: false },
+            showOutputAction
+        );
+
+        if (selectedAction === showOutputAction) {
+            this.outputChannel.show();
+        }
     }
 }

@@ -2,9 +2,15 @@ import { inject, injectable } from 'inversify';
 import { Disposable, l10n, Uri, ViewColumn, WebviewPanel, window } from 'vscode';
 
 import { IExtensionContext } from '../../../platform/common/types';
+import * as localize from '../../../platform/common/utils/localize';
 import { logger } from '../../../platform/logging';
+import { LocalizedMessages, SharedMessages } from '../../../messageTypes';
 import { IIntegrationStorage, IIntegrationWebviewProvider } from './types';
-import { IntegrationConfig, IntegrationStatus, IntegrationWithStatus } from './integrationTypes';
+import {
+    IntegrationConfig,
+    IntegrationStatus,
+    IntegrationWithStatus
+} from '../../../platform/notebooks/deepnote/integrationTypes';
 
 /**
  * Manages the webview panel for integration configuration
@@ -24,8 +30,10 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
 
     /**
      * Show the integration management webview
+     * @param integrations Map of integration IDs to their status
+     * @param selectedIntegrationId Optional integration ID to select/configure immediately
      */
-    public async show(integrations: Map<string, IntegrationWithStatus>): Promise<void> {
+    public async show(integrations: Map<string, IntegrationWithStatus>, selectedIntegrationId?: string): Promise<void> {
         // Update the stored integrations with the latest data
         this.integrations = integrations;
 
@@ -35,6 +43,11 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         if (this.currentPanel) {
             this.currentPanel.reveal(column);
             await this.updateWebview();
+
+            // If a specific integration was requested, show its configuration form
+            if (selectedIntegrationId) {
+                await this.showConfigurationForm(selectedIntegrationId);
+            }
             return;
         }
 
@@ -75,7 +88,65 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             this.disposables
         );
 
+        await this.sendLocStrings();
         await this.updateWebview();
+
+        // If a specific integration was requested, show its configuration form
+        if (selectedIntegrationId) {
+            await this.showConfigurationForm(selectedIntegrationId);
+        }
+    }
+
+    /**
+     * Send localization strings to the webview
+     */
+    private async sendLocStrings(): Promise<void> {
+        if (!this.currentPanel) {
+            return;
+        }
+
+        const locStrings: Partial<LocalizedMessages> = {
+            integrationsTitle: localize.Integrations.title,
+            integrationsNoIntegrationsFound: localize.Integrations.noIntegrationsFound,
+            integrationsConnected: localize.Integrations.connected,
+            integrationsNotConfigured: localize.Integrations.notConfigured,
+            integrationsConfigure: localize.Integrations.configure,
+            integrationsReconfigure: localize.Integrations.reconfigure,
+            integrationsReset: localize.Integrations.reset,
+            integrationsConfirmResetTitle: localize.Integrations.confirmResetTitle,
+            integrationsConfirmResetMessage: localize.Integrations.confirmResetMessage,
+            integrationsConfirmResetDetails: localize.Integrations.confirmResetDetails,
+            integrationsConfigureTitle: localize.Integrations.configureTitle,
+            integrationsCancel: localize.Integrations.cancel,
+            integrationsSave: localize.Integrations.save,
+            integrationsRequiredField: localize.Integrations.requiredField,
+            integrationsOptionalField: localize.Integrations.optionalField,
+            integrationsPostgresNameLabel: localize.Integrations.postgresNameLabel,
+            integrationsPostgresNamePlaceholder: localize.Integrations.postgresNamePlaceholder,
+            integrationsPostgresHostLabel: localize.Integrations.postgresHostLabel,
+            integrationsPostgresHostPlaceholder: localize.Integrations.postgresHostPlaceholder,
+            integrationsPostgresPortLabel: localize.Integrations.postgresPortLabel,
+            integrationsPostgresPortPlaceholder: localize.Integrations.postgresPortPlaceholder,
+            integrationsPostgresDatabaseLabel: localize.Integrations.postgresDatabaseLabel,
+            integrationsPostgresDatabasePlaceholder: localize.Integrations.postgresDatabasePlaceholder,
+            integrationsPostgresUsernameLabel: localize.Integrations.postgresUsernameLabel,
+            integrationsPostgresUsernamePlaceholder: localize.Integrations.postgresUsernamePlaceholder,
+            integrationsPostgresPasswordLabel: localize.Integrations.postgresPasswordLabel,
+            integrationsPostgresPasswordPlaceholder: localize.Integrations.postgresPasswordPlaceholder,
+            integrationsPostgresSslLabel: localize.Integrations.postgresSslLabel,
+            integrationsBigQueryNameLabel: localize.Integrations.bigQueryNameLabel,
+            integrationsBigQueryNamePlaceholder: localize.Integrations.bigQueryNamePlaceholder,
+            integrationsBigQueryProjectIdLabel: localize.Integrations.bigQueryProjectIdLabel,
+            integrationsBigQueryProjectIdPlaceholder: localize.Integrations.bigQueryProjectIdPlaceholder,
+            integrationsBigQueryCredentialsLabel: localize.Integrations.bigQueryCredentialsLabel,
+            integrationsBigQueryCredentialsPlaceholder: localize.Integrations.bigQueryCredentialsPlaceholder,
+            integrationsBigQueryCredentialsRequired: localize.Integrations.bigQueryCredentialsRequired
+        };
+
+        await this.currentPanel.webview.postMessage({
+            type: SharedMessages.LocInit,
+            locStrings: locStrings
+        });
     }
 
     /**
@@ -83,6 +154,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
      */
     private async updateWebview(): Promise<void> {
         if (!this.currentPanel) {
+            logger.debug('IntegrationWebviewProvider: No current panel, skipping update');
             return;
         }
 
@@ -91,6 +163,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             id,
             status: integration.status
         }));
+        logger.debug(`IntegrationWebviewProvider: Sending ${integrationsData.length} integrations to webview`);
 
         await this.currentPanel.webview.postMessage({
             integrations: integrationsData,

@@ -38,7 +38,7 @@ import { INotebookEditorProvider, INotebookPythonEnvironmentService } from './ty
 import { DeepnoteActivationService } from './deepnote/deepnoteActivationService';
 import { DeepnoteNotebookManager } from './deepnote/deepnoteNotebookManager';
 import { IDeepnoteNotebookManager } from './types';
-import { IntegrationStorage } from './deepnote/integrations/integrationStorage';
+import { IntegrationStorage } from '../platform/notebooks/deepnote/integrationStorage';
 import { IntegrationDetector } from './deepnote/integrations/integrationDetector';
 import { IntegrationManager } from './deepnote/integrations/integrationManager';
 import { IntegrationWebviewProvider } from './deepnote/integrations/integrationWebview';
@@ -49,6 +49,7 @@ import {
     IIntegrationWebviewProvider
 } from './deepnote/integrations/types';
 import { DeepnoteInputBlockCellStatusBarItemProvider } from './deepnote/deepnoteInputBlockCellStatusBarProvider';
+import { SqlCellStatusBarProvider } from './deepnote/sqlCellStatusBarProvider';
 
 export function registerTypes(serviceManager: IServiceManager, isDevMode: boolean) {
     registerControllerTypes(serviceManager, isDevMode);
@@ -110,6 +111,10 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
         DeepnoteInputBlockCellStatusBarItemProvider
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        SqlCellStatusBarProvider
     );
 
     serviceManager.addSingleton<IExportBase>(IExportBase, ExportBase);

@@ -221,7 +221,7 @@ export abstract class WebviewHost<IMapping> implements IDisposable {
     }
 
     protected async sendLocStrings() {
-        const locStrings: LocalizedMessages = {
+        const locStrings: Partial<LocalizedMessages> = {
             collapseSingle: localize.WebViews.collapseSingle,
             expandSingle: localize.WebViews.expandSingle,
             openExportFileYes: localize.DataScience.openExportFileYes,

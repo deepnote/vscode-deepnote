@@ -1,27 +1,7 @@
-import { Event } from 'vscode';
-import { IDisposable } from '../../../platform/common/types';
-import { IntegrationConfig, IntegrationWithStatus } from './integrationTypes';
+import { IntegrationWithStatus } from '../../../platform/notebooks/deepnote/integrationTypes';
 
-export const IIntegrationStorage = Symbol('IIntegrationStorage');
-export interface IIntegrationStorage extends IDisposable {
-    /**
-     * Event fired when integrations change
-     */
-    readonly onDidChangeIntegrations: Event<void>;
-
-    getAll(): Promise<IntegrationConfig[]>;
-    get(integrationId: string): Promise<IntegrationConfig | undefined>;
-
-    /**
-     * Get integration configuration for a specific project and integration
-     */
-    getIntegrationConfig(projectId: string, integrationId: string): Promise<IntegrationConfig | undefined>;
-
-    save(config: IntegrationConfig): Promise<void>;
-    delete(integrationId: string): Promise<void>;
-    exists(integrationId: string): Promise<boolean>;
-    clear(): Promise<void>;
-}
+// Re-export IIntegrationStorage from platform layer
+export { IIntegrationStorage } from '../../../platform/notebooks/deepnote/types';
 
 export const IIntegrationDetector = Symbol('IIntegrationDetector');
 export interface IIntegrationDetector {

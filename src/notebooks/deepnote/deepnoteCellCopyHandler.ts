@@ -168,7 +168,11 @@ export class DeepnoteCellCopyHandler implements IExtensionSyncActivationService 
         // Copy outputs if present
         if (cellToCopy.outputs.length > 0) {
             newCell.outputs = cellToCopy.outputs.map(
-                (o) => new NotebookCellOutput(o.items.map((i) => new NotebookCellOutputItem(i.data, i.mime)))
+                (o) =>
+                    new NotebookCellOutput(
+                        o.items.map((i) => new NotebookCellOutputItem(i.data, i.mime)),
+                        o.metadata
+                    )
             );
         }
 

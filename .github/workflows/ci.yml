@@ -7,9 +7,6 @@ on:
     branches: [main]
   workflow_dispatch:
 
-env:
-  NODE_VERSION: 22.x
-
 permissions:
   actions: read
   contents: read
@@ -32,7 +29,7 @@ jobs:
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           cache: 'npm'
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: '.nvmrc'
           registry-url: 'https://npm.pkg.github.com'
           scope: '@deepnote'
 
@@ -59,7 +56,7 @@ jobs:
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           cache: 'npm'
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: '.nvmrc'
           registry-url: 'https://npm.pkg.github.com'
           scope: '@deepnote'
 
@@ -78,10 +75,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@ff7abcd0c3c05ccf6adc123a8cd1fd4fb30fb493
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        with:
+          fetch-depth: 0
 
       - name: Install qlty
-        uses: qltysh/qlty-action/install@a19242102d17e497f437d7466aa01b528537e899
+        uses: qltysh/qlty-action/install@6bbb1add7432c45a3fd35a824ea69dc5bef27967
 
       - name: Run qlty check
         run: qlty check
@@ -105,7 +104,7 @@ jobs:
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           cache: 'npm'
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: '.nvmrc'
           registry-url: 'https://npm.pkg.github.com'
           scope: '@deepnote'
 
@@ -155,7 +154,7 @@ jobs:
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           cache: 'npm'
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: '.nvmrc'
           registry-url: 'https://npm.pkg.github.com'
           scope: '@deepnote'
 
@@ -166,6 +165,30 @@ jobs:
 
       - name: Check Licenses
         run: npm run check-licenses
+
+  spell-check:
+    name: Spell Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          cache: 'npm'
+          node-version-file: '.nvmrc'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@deepnote'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run spell check
+        run: npm run spell-check
 
   audit-prod:
     name: Audit - Production
@@ -179,7 +202,7 @@ jobs:
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           cache: 'npm'
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: '.nvmrc'
           registry-url: 'https://npm.pkg.github.com'
           scope: '@deepnote'
 
@@ -203,7 +226,7 @@ jobs:
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           cache: 'npm'
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: '.nvmrc'
           registry-url: 'https://npm.pkg.github.com'
           scope: '@deepnote'
 

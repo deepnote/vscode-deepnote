@@ -1,8 +1,11 @@
 import { inject, injectable } from 'inversify';
+import { EventEmitter } from 'vscode';
 
-import { IEncryptedStorage } from '../../../platform/common/application/types';
-import { logger } from '../../../platform/logging';
+import { IEncryptedStorage } from '../../common/application/types';
+import { IAsyncDisposableRegistry } from '../../common/types';
+import { logger } from '../../logging';
 import { IntegrationConfig, IntegrationType } from './integrationTypes';
+import { IIntegrationStorage } from './types';
 
 const INTEGRATION_SERVICE_NAME = 'deepnote-integrations';
 
@@ -12,12 +15,22 @@ const INTEGRATION_SERVICE_NAME = 'deepnote-integrations';
  * Storage is scoped to the user's machine and shared across all deepnote projects.
  */
 @injectable()
-export class IntegrationStorage {
+export class IntegrationStorage implements IIntegrationStorage {
     private readonly cache: Map<string, IntegrationConfig> = new Map();
 
     private cacheLoaded = false;
 
-    constructor(@inject(IEncryptedStorage) private readonly encryptedStorage: IEncryptedStorage) {}
+    private readonly _onDidChangeIntegrations = new EventEmitter<void>();
+
+    public readonly onDidChangeIntegrations = this._onDidChangeIntegrations.event;
+
+    constructor(
+        @inject(IEncryptedStorage) private readonly encryptedStorage: IEncryptedStorage,
+        @inject(IAsyncDisposableRegistry) asyncRegistry: IAsyncDisposableRegistry
+    ) {
+        // Register for disposal when the extension deactivates
+        asyncRegistry.push(this);
+    }
 
     /**
      * Get all stored integration configurations
@@ -30,9 +43,21 @@ export class IntegrationStorage {
     /**
      * Get a specific integration configuration by ID
      */
-    async get(integrationId: string): Promise<IntegrationConfig | undefined> {
+    async getIntegrationConfig(integrationId: string): Promise<IntegrationConfig | undefined> {
         await this.ensureCacheLoaded();
         return this.cache.get(integrationId);
+    }
+
+    /**
+     * Get integration configuration for a specific project and integration
+     * Note: Currently integrations are stored globally, not per-project,
+     * so this method ignores the projectId parameter
+     */
+    async getProjectIntegrationConfig(
+        _projectId: string,
+        integrationId: string
+    ): Promise<IntegrationConfig | undefined> {
+        return this.getIntegrationConfig(integrationId);
     }
 
     /**
@@ -58,6 +83,9 @@ export class IntegrationStorage {
 
         // Update the index
         await this.updateIndex();
+
+        // Fire change event
+        this._onDidChangeIntegrations.fire();
     }
 
     /**
@@ -74,6 +102,9 @@ export class IntegrationStorage {
 
         // Update the index
         await this.updateIndex();
+
+        // Fire change event
+        this._onDidChangeIntegrations.fire();
     }
 
     /**
@@ -101,6 +132,9 @@ export class IntegrationStorage {
 
         // Clear cache
         this.cache.clear();
+
+        // Notify listeners
+        this._onDidChangeIntegrations.fire();
     }
 
     /**
@@ -147,5 +181,12 @@ export class IntegrationStorage {
         const integrationIds = Array.from(this.cache.keys());
         const indexJson = JSON.stringify(integrationIds);
         await this.encryptedStorage.store(INTEGRATION_SERVICE_NAME, 'index', indexJson);
+    }
+
+    /**
+     * Dispose of resources to prevent memory leaks
+     */
+    public dispose(): void {
+        this._onDidChangeIntegrations.dispose();
     }
 }

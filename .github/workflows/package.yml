@@ -1,0 +1,104 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Build & Package Extension
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          cache: 'npm'
+          node-version-file: '.nvmrc'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@deepnote'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install vsce
+        run: npm install -g @vscode/vsce
+
+      - name: Extract version from package.json
+        id: package-version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extension version: $VERSION"
+
+      - name: Extract and sanitize branch name
+        id: branch-name
+        env:
+          UNTRUSTED_HEAD_REF: ${{ github.head_ref }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          # Get branch name from ref (use env vars to avoid direct interpolation)
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            BRANCH="$UNTRUSTED_HEAD_REF"
+          else
+            BRANCH="${GITHUB_REF#refs/heads/}"
+          fi
+          # Sanitize branch name for filename (replace / with -)
+          SAFE_BRANCH=$(printf '%s' "$BRANCH" | sed 's/\//-/g')
+          printf 'branch=%s\n' "$SAFE_BRANCH" >> "$GITHUB_OUTPUT"
+          printf 'Branch name: %s (sanitized: %s)\n' "$BRANCH" "$SAFE_BRANCH"
+
+      - name: Package extension
+        run: npm run package
+
+      - name: Rename VSIX file
+        run: |
+          # The package script creates vscode-deepnote-insiders.vsix
+          # Rename it to include version and branch
+          mv vscode-deepnote-insiders.vsix "vscode-deepnote-${{ steps.package-version.outputs.version }}-${{ steps.branch-name.outputs.branch }}.vsix"
+          ls -lh *.vsix
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: vscode-deepnote-${{ steps.package-version.outputs.version }}-${{ steps.branch-name.outputs.branch }}
+          path: vscode-deepnote-*.vsix
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Add summary
+        run: |
+          echo "## 📦 Extension Packaged Successfully" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ steps.package-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ steps.branch-name.outputs.branch }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Installation Instructions" >> $GITHUB_STEP_SUMMARY
+          echo "1. Download the artifact from the Actions tab" >> $GITHUB_STEP_SUMMARY
+          echo "2. Extract the .vsix file from the zip" >> $GITHUB_STEP_SUMMARY
+          echo "3. Install in VS Code:" >> $GITHUB_STEP_SUMMARY
+          echo "   - Open VS Code" >> $GITHUB_STEP_SUMMARY
+          echo "   - Go to Extensions view (Ctrl+Shift+X / Cmd+Shift+X)" >> $GITHUB_STEP_SUMMARY
+          echo "   - Click the '...' menu → 'Install from VSIX...'" >> $GITHUB_STEP_SUMMARY
+          echo "   - Select the downloaded .vsix file" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Alternatively, use the command line:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "code --install-extension vscode-deepnote-${{ steps.package-version.outputs.version }}-${{ steps.branch-name.outputs.branch }}.vsix" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

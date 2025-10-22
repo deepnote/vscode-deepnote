@@ -6,7 +6,11 @@ import * as localize from '../../../platform/common/utils/localize';
 import { logger } from '../../../platform/logging';
 import { LocalizedMessages, SharedMessages } from '../../../messageTypes';
 import { IIntegrationStorage, IIntegrationWebviewProvider } from './types';
-import { IntegrationConfig, IntegrationStatus, IntegrationWithStatus } from './integrationTypes';
+import {
+    IntegrationConfig,
+    IntegrationStatus,
+    IntegrationWithStatus
+} from '../../../platform/notebooks/deepnote/integrationTypes';
 
 /**
  * Manages the webview panel for integration configuration

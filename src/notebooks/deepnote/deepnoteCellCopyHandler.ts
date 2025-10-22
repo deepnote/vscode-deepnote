@@ -171,7 +171,7 @@ export class DeepnoteCellCopyHandler implements IExtensionSyncActivationService 
                 (o) =>
                     new NotebookCellOutput(
                         o.items.map((i) => new NotebookCellOutputItem(i.data, i.mime)),
-                        o.metadata
+                        o.metadata ? { ...o.metadata } : undefined
                     )
             );
         }
@@ -360,7 +360,7 @@ export class DeepnoteCellCopyHandler implements IExtensionSyncActivationService 
 
         // Check if clipboard contains our metadata marker
         if (!clipboardText.startsWith(CLIPBOARD_MARKER)) {
-            logger.debug('DeepnoteCellCopyHandler: Clipboard does not contain Deepnote cell metadata, skipping');
+            await commands.executeCommand('default:notebook.cell.paste');
             return;
         }
 
@@ -395,6 +395,7 @@ export class DeepnoteCellCopyHandler implements IExtensionSyncActivationService 
             }
         } catch (error) {
             logger.error('DeepnoteCellCopyHandler: Error parsing clipboard data', error);
+            await commands.executeCommand('default:notebook.cell.paste');
         }
     }
 }

@@ -245,6 +245,7 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         const newVariableNameInput = await window.showInputBox({
             prompt: l10n.t('Enter variable name for SQL query result'),
             value: currentVariableName,
+            ignoreFocusOut: true,
             validateInput: (value) => {
                 const trimmed = value.trim();
                 if (!trimmed) {

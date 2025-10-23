@@ -5,7 +5,7 @@ import { IExtensionContext } from '../../../platform/common/types';
 import * as localize from '../../../platform/common/utils/localize';
 import { logger } from '../../../platform/logging';
 import { LocalizedMessages, SharedMessages } from '../../../messageTypes';
-import { IDeepnoteNotebookManager } from '../../types';
+import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
 import { IIntegrationStorage, IIntegrationWebviewProvider } from './types';
 import {
     INTEGRATION_TYPE_TO_DEEPNOTE,
@@ -311,7 +311,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         }
 
         // Build the integrations list from current integrations
-        const projectIntegrations = Array.from(this.integrations.entries())
+        const projectIntegrations: ProjectIntegration[] = Array.from(this.integrations.entries())
             .map(([id, integration]) => {
                 // Get the integration type from config or integration metadata
                 const type = integration.config?.type || integration.integrationType;
@@ -333,14 +333,23 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                     type: deepnoteType
                 };
             })
-            .filter((integration): integration is { id: string; name: string; type: string } => integration !== null);
+            .filter((integration): integration is ProjectIntegration => integration !== null);
 
         logger.debug(
             `IntegrationWebviewProvider: Updating project ${this.projectId} with ${projectIntegrations.length} integrations`
         );
 
         // Update the project in the notebook manager
-        this.notebookManager.updateProjectIntegrations(this.projectId, projectIntegrations);
+        const success = this.notebookManager.updateProjectIntegrations(this.projectId, projectIntegrations);
+
+        if (!success) {
+            logger.error(
+                `IntegrationWebviewProvider: Failed to update integrations for project ${this.projectId} - project not found`
+            );
+            void window.showErrorMessage(
+                l10n.t('Failed to update integrations: project not found. Please reopen the notebook and try again.')
+            );
+        }
     }
 
     /**

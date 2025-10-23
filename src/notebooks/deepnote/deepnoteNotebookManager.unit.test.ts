@@ -184,7 +184,7 @@ suite('DeepnoteNotebookManager', () => {
     });
 
     suite('updateProjectIntegrations', () => {
-        test('should update integrations list for existing project', () => {
+        test('should update integrations list for existing project and return true', () => {
             manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
 
             const integrations = [
@@ -192,13 +192,15 @@ suite('DeepnoteNotebookManager', () => {
                 { id: 'int-2', name: 'BigQuery', type: 'big-query' }
             ];
 
-            manager.updateProjectIntegrations('project-123', integrations);
+            const result = manager.updateProjectIntegrations('project-123', integrations);
+
+            assert.strictEqual(result, true);
 
             const updatedProject = manager.getOriginalProject('project-123');
             assert.deepStrictEqual(updatedProject?.project.integrations, integrations);
         });
 
-        test('should replace existing integrations list', () => {
+        test('should replace existing integrations list and return true', () => {
             const projectWithIntegrations: DeepnoteProject = {
                 ...mockProject,
                 project: {
@@ -214,13 +216,15 @@ suite('DeepnoteNotebookManager', () => {
                 { id: 'new-int-2', name: 'New Integration 2', type: 'big-query' }
             ];
 
-            manager.updateProjectIntegrations('project-123', newIntegrations);
+            const result = manager.updateProjectIntegrations('project-123', newIntegrations);
+
+            assert.strictEqual(result, true);
 
             const updatedProject = manager.getOriginalProject('project-123');
             assert.deepStrictEqual(updatedProject?.project.integrations, newIntegrations);
         });
 
-        test('should handle empty integrations array', () => {
+        test('should handle empty integrations array and return true', () => {
             const projectWithIntegrations: DeepnoteProject = {
                 ...mockProject,
                 project: {
@@ -231,26 +235,33 @@ suite('DeepnoteNotebookManager', () => {
 
             manager.storeOriginalProject('project-123', projectWithIntegrations, 'notebook-456');
 
-            manager.updateProjectIntegrations('project-123', []);
+            const result = manager.updateProjectIntegrations('project-123', []);
+
+            assert.strictEqual(result, true);
 
             const updatedProject = manager.getOriginalProject('project-123');
             assert.deepStrictEqual(updatedProject?.project.integrations, []);
         });
 
-        test('should do nothing for unknown project', () => {
-            // Should not throw an error
-            manager.updateProjectIntegrations('unknown-project', [{ id: 'int-1', name: 'Integration', type: 'pgsql' }]);
+        test('should return false for unknown project', () => {
+            const result = manager.updateProjectIntegrations('unknown-project', [
+                { id: 'int-1', name: 'Integration', type: 'pgsql' }
+            ]);
+
+            assert.strictEqual(result, false);
 
             const project = manager.getOriginalProject('unknown-project');
             assert.strictEqual(project, undefined);
         });
 
-        test('should preserve other project properties', () => {
+        test('should preserve other project properties and return true', () => {
             manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
 
             const integrations = [{ id: 'int-1', name: 'PostgreSQL', type: 'pgsql' }];
 
-            manager.updateProjectIntegrations('project-123', integrations);
+            const result = manager.updateProjectIntegrations('project-123', integrations);
+
+            assert.strictEqual(result, true);
 
             const updatedProject = manager.getOriginalProject('project-123');
             assert.strictEqual(updatedProject?.project.id, mockProject.project.id);

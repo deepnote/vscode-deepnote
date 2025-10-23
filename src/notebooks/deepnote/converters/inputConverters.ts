@@ -82,6 +82,37 @@ export class InputTextBlockConverter extends BaseInputBlockConverter<typeof Deep
     defaultConfig() {
         return this.DEFAULT_INPUT_TEXT_CONFIG;
     }
+
+    override convertToCell(block: DeepnoteBlock): NotebookCellData {
+        const deepnoteMetadataResult = this.schema().safeParse(block.metadata);
+        const value = deepnoteMetadataResult.success
+            ? (deepnoteMetadataResult.data.deepnote_variable_value as string) || ''
+            : '';
+
+        // Use plaintext language for text input
+        const cell = new NotebookCellData(NotebookCellKind.Code, value, 'plaintext');
+        return cell;
+    }
+
+    override applyChangesToBlock(block: DeepnoteBlock, cell: NotebookCellData): void {
+        block.content = '';
+
+        // The cell value contains the text value
+        const value = cell.value;
+
+        const existingMetadata = this.schema().safeParse(block.metadata);
+        const baseMetadata = existingMetadata.success ? existingMetadata.data : this.defaultConfig();
+
+        if (block.metadata != null) {
+            delete block.metadata[DEEPNOTE_VSCODE_RAW_CONTENT_KEY];
+        }
+
+        block.metadata = {
+            ...(block.metadata ?? {}),
+            ...baseMetadata,
+            deepnote_variable_value: value
+        };
+    }
 }
 
 export class InputTextareaBlockConverter extends BaseInputBlockConverter<typeof DeepnoteTextareaInputMetadataSchema> {
@@ -95,6 +126,37 @@ export class InputTextareaBlockConverter extends BaseInputBlockConverter<typeof 
     }
     defaultConfig() {
         return this.DEFAULT_INPUT_TEXTAREA_CONFIG;
+    }
+
+    override convertToCell(block: DeepnoteBlock): NotebookCellData {
+        const deepnoteMetadataResult = this.schema().safeParse(block.metadata);
+        const value = deepnoteMetadataResult.success
+            ? (deepnoteMetadataResult.data.deepnote_variable_value as string) || ''
+            : '';
+
+        // Use plaintext language for textarea input
+        const cell = new NotebookCellData(NotebookCellKind.Code, value, 'plaintext');
+        return cell;
+    }
+
+    override applyChangesToBlock(block: DeepnoteBlock, cell: NotebookCellData): void {
+        block.content = '';
+
+        // The cell value contains the text value
+        const value = cell.value;
+
+        const existingMetadata = this.schema().safeParse(block.metadata);
+        const baseMetadata = existingMetadata.success ? existingMetadata.data : this.defaultConfig();
+
+        if (block.metadata != null) {
+            delete block.metadata[DEEPNOTE_VSCODE_RAW_CONTENT_KEY];
+        }
+
+        block.metadata = {
+            ...(block.metadata ?? {}),
+            ...baseMetadata,
+            deepnote_variable_value: value
+        };
     }
 }
 
@@ -110,6 +172,57 @@ export class InputSelectBlockConverter extends BaseInputBlockConverter<typeof De
     defaultConfig() {
         return this.DEFAULT_INPUT_SELECT_CONFIG;
     }
+
+    override convertToCell(block: DeepnoteBlock): NotebookCellData {
+        const deepnoteMetadataResult = this.schema().safeParse(block.metadata);
+        const value = deepnoteMetadataResult.success ? deepnoteMetadataResult.data.deepnote_variable_value : '';
+
+        let cellValue = '';
+        if (Array.isArray(value)) {
+            // Multi-select: show as array of quoted strings
+            cellValue = `[${value.map((v) => `"${v}"`).join(', ')}]`;
+        } else if (typeof value === 'string') {
+            // Single select: show as quoted string
+            cellValue = `"${value}"`;
+        }
+
+        const cell = new NotebookCellData(NotebookCellKind.Code, cellValue, 'python');
+        return cell;
+    }
+
+    override applyChangesToBlock(block: DeepnoteBlock, cell: NotebookCellData): void {
+        block.content = '';
+
+        // Parse the cell value to extract the selection
+        const cellValue = cell.value.trim();
+        let value: string | string[];
+
+        if (cellValue.startsWith('[') && cellValue.endsWith(']')) {
+            // Multi-select: parse array
+            const arrayContent = cellValue.slice(1, -1);
+            value = arrayContent
+                .split(',')
+                .map((v) => v.trim())
+                .filter((v) => v)
+                .map((v) => v.replace(/^["']|["']$/g, ''));
+        } else {
+            // Single select: remove quotes
+            value = cellValue.replace(/^["']|["']$/g, '');
+        }
+
+        const existingMetadata = this.schema().safeParse(block.metadata);
+        const baseMetadata = existingMetadata.success ? existingMetadata.data : this.defaultConfig();
+
+        if (block.metadata != null) {
+            delete block.metadata[DEEPNOTE_VSCODE_RAW_CONTENT_KEY];
+        }
+
+        block.metadata = {
+            ...(block.metadata ?? {}),
+            ...baseMetadata,
+            deepnote_variable_value: value
+        };
+    }
 }
 
 export class InputSliderBlockConverter extends BaseInputBlockConverter<typeof DeepnoteSliderInputMetadataSchema> {
@@ -123,6 +236,37 @@ export class InputSliderBlockConverter extends BaseInputBlockConverter<typeof De
     }
     defaultConfig() {
         return this.DEFAULT_INPUT_SLIDER_CONFIG;
+    }
+
+    override convertToCell(block: DeepnoteBlock): NotebookCellData {
+        const deepnoteMetadataResult = this.schema().safeParse(block.metadata);
+        const value = deepnoteMetadataResult.success
+            ? (deepnoteMetadataResult.data.deepnote_variable_value as string) || '5'
+            : '5';
+
+        // Show the numeric value
+        const cell = new NotebookCellData(NotebookCellKind.Code, value, 'python');
+        return cell;
+    }
+
+    override applyChangesToBlock(block: DeepnoteBlock, cell: NotebookCellData): void {
+        block.content = '';
+
+        // The cell value contains the numeric value as a string
+        const value = cell.value.trim();
+
+        const existingMetadata = this.schema().safeParse(block.metadata);
+        const baseMetadata = existingMetadata.success ? existingMetadata.data : this.defaultConfig();
+
+        if (block.metadata != null) {
+            delete block.metadata[DEEPNOTE_VSCODE_RAW_CONTENT_KEY];
+        }
+
+        block.metadata = {
+            ...(block.metadata ?? {}),
+            ...baseMetadata,
+            deepnote_variable_value: value
+        };
     }
 }
 
@@ -138,6 +282,38 @@ export class InputCheckboxBlockConverter extends BaseInputBlockConverter<typeof 
     defaultConfig() {
         return this.DEFAULT_INPUT_CHECKBOX_CONFIG;
     }
+
+    override convertToCell(block: DeepnoteBlock): NotebookCellData {
+        const deepnoteMetadataResult = this.schema().safeParse(block.metadata);
+        const value = deepnoteMetadataResult.success
+            ? (deepnoteMetadataResult.data.deepnote_variable_value as boolean) ?? false
+            : false;
+
+        // Show true/false
+        const cell = new NotebookCellData(NotebookCellKind.Code, value ? 'True' : 'False', 'python');
+        return cell;
+    }
+
+    override applyChangesToBlock(block: DeepnoteBlock, cell: NotebookCellData): void {
+        block.content = '';
+
+        // Parse the cell value to get boolean
+        const cellValue = cell.value.trim();
+        const value = cellValue === 'True' || cellValue === 'true';
+
+        const existingMetadata = this.schema().safeParse(block.metadata);
+        const baseMetadata = existingMetadata.success ? existingMetadata.data : this.defaultConfig();
+
+        if (block.metadata != null) {
+            delete block.metadata[DEEPNOTE_VSCODE_RAW_CONTENT_KEY];
+        }
+
+        block.metadata = {
+            ...(block.metadata ?? {}),
+            ...baseMetadata,
+            deepnote_variable_value: value
+        };
+    }
 }
 
 export class InputDateBlockConverter extends BaseInputBlockConverter<typeof DeepnoteDateInputMetadataSchema> {
@@ -151,6 +327,38 @@ export class InputDateBlockConverter extends BaseInputBlockConverter<typeof Deep
     }
     defaultConfig() {
         return this.DEFAULT_INPUT_DATE_CONFIG;
+    }
+
+    override convertToCell(block: DeepnoteBlock): NotebookCellData {
+        const deepnoteMetadataResult = this.schema().safeParse(block.metadata);
+        const value = deepnoteMetadataResult.success
+            ? (deepnoteMetadataResult.data.deepnote_variable_value as string) || ''
+            : '';
+
+        // Show date as quoted string
+        const cellValue = value ? `"${value}"` : '""';
+        const cell = new NotebookCellData(NotebookCellKind.Code, cellValue, 'python');
+        return cell;
+    }
+
+    override applyChangesToBlock(block: DeepnoteBlock, cell: NotebookCellData): void {
+        block.content = '';
+
+        // Remove quotes from the cell value
+        const value = cell.value.trim().replace(/^["']|["']$/g, '');
+
+        const existingMetadata = this.schema().safeParse(block.metadata);
+        const baseMetadata = existingMetadata.success ? existingMetadata.data : this.defaultConfig();
+
+        if (block.metadata != null) {
+            delete block.metadata[DEEPNOTE_VSCODE_RAW_CONTENT_KEY];
+        }
+
+        block.metadata = {
+            ...(block.metadata ?? {}),
+            ...baseMetadata,
+            deepnote_variable_value: value
+        };
     }
 }
 
@@ -166,6 +374,49 @@ export class InputDateRangeBlockConverter extends BaseInputBlockConverter<typeof
     defaultConfig() {
         return this.DEFAULT_INPUT_DATE_RANGE_CONFIG;
     }
+
+    override convertToCell(block: DeepnoteBlock): NotebookCellData {
+        const deepnoteMetadataResult = this.schema().safeParse(block.metadata);
+        const value = deepnoteMetadataResult.success ? deepnoteMetadataResult.data.deepnote_variable_value : '';
+
+        let cellValue = '';
+        if (Array.isArray(value) && value.length === 2) {
+            // Show as tuple of quoted strings
+            cellValue = `("${value[0]}", "${value[1]}")`;
+        } else {
+            cellValue = '("", "")';
+        }
+
+        const cell = new NotebookCellData(NotebookCellKind.Code, cellValue, 'python');
+        return cell;
+    }
+
+    override applyChangesToBlock(block: DeepnoteBlock, cell: NotebookCellData): void {
+        block.content = '';
+
+        // Parse the cell value to extract the date range
+        const cellValue = cell.value.trim();
+        let value: [string, string] | string = '';
+
+        // Try to parse as tuple
+        const tupleMatch = cellValue.match(/\(\s*["']([^"']*)["']\s*,\s*["']([^"']*)["']\s*\)/);
+        if (tupleMatch) {
+            value = [tupleMatch[1], tupleMatch[2]];
+        }
+
+        const existingMetadata = this.schema().safeParse(block.metadata);
+        const baseMetadata = existingMetadata.success ? existingMetadata.data : this.defaultConfig();
+
+        if (block.metadata != null) {
+            delete block.metadata[DEEPNOTE_VSCODE_RAW_CONTENT_KEY];
+        }
+
+        block.metadata = {
+            ...(block.metadata ?? {}),
+            ...baseMetadata,
+            deepnote_variable_value: value
+        };
+    }
 }
 
 export class InputFileBlockConverter extends BaseInputBlockConverter<typeof DeepnoteFileInputMetadataSchema> {
@@ -180,6 +431,38 @@ export class InputFileBlockConverter extends BaseInputBlockConverter<typeof Deep
     defaultConfig() {
         return this.DEFAULT_INPUT_FILE_CONFIG;
     }
+
+    override convertToCell(block: DeepnoteBlock): NotebookCellData {
+        const deepnoteMetadataResult = this.schema().safeParse(block.metadata);
+        const value = deepnoteMetadataResult.success
+            ? (deepnoteMetadataResult.data.deepnote_variable_value as string) || ''
+            : '';
+
+        // Show file path as quoted string
+        const cellValue = value ? `"${value}"` : '""';
+        const cell = new NotebookCellData(NotebookCellKind.Code, cellValue, 'python');
+        return cell;
+    }
+
+    override applyChangesToBlock(block: DeepnoteBlock, cell: NotebookCellData): void {
+        block.content = '';
+
+        // Remove quotes from the cell value
+        const value = cell.value.trim().replace(/^["']|["']$/g, '');
+
+        const existingMetadata = this.schema().safeParse(block.metadata);
+        const baseMetadata = existingMetadata.success ? existingMetadata.data : this.defaultConfig();
+
+        if (block.metadata != null) {
+            delete block.metadata[DEEPNOTE_VSCODE_RAW_CONTENT_KEY];
+        }
+
+        block.metadata = {
+            ...(block.metadata ?? {}),
+            ...baseMetadata,
+            deepnote_variable_value: value
+        };
+    }
 }
 
 export class ButtonBlockConverter extends BaseInputBlockConverter<typeof DeepnoteButtonMetadataSchema> {
@@ -193,5 +476,28 @@ export class ButtonBlockConverter extends BaseInputBlockConverter<typeof Deepnot
     }
     defaultConfig() {
         return this.DEFAULT_BUTTON_CONFIG;
+    }
+
+    override convertToCell(_block: DeepnoteBlock): NotebookCellData {
+        // Button blocks have no content
+        const cell = new NotebookCellData(NotebookCellKind.Code, '', 'python');
+        return cell;
+    }
+
+    override applyChangesToBlock(block: DeepnoteBlock, _cell: NotebookCellData): void {
+        block.content = '';
+
+        // Button blocks don't store any value from the cell content
+        const existingMetadata = this.schema().safeParse(block.metadata);
+        const baseMetadata = existingMetadata.success ? existingMetadata.data : this.defaultConfig();
+
+        if (block.metadata != null) {
+            delete block.metadata[DEEPNOTE_VSCODE_RAW_CONTENT_KEY];
+        }
+
+        block.metadata = {
+            ...(block.metadata ?? {}),
+            ...baseMetadata
+        };
     }
 }

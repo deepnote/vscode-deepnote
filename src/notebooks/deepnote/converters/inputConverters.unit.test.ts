@@ -23,7 +23,7 @@ suite('InputTextBlockConverter', () => {
     });
 
     suite('convertToCell', () => {
-        test('converts input-text block with metadata to Python cell with variable name', () => {
+        test('converts input-text block with metadata to plaintext cell with value', () => {
             const block: DeepnoteBlock = {
                 blockGroup: '92f21410c8c54ac0be7e4d2a544552ee',
                 content: '',
@@ -41,8 +41,8 @@ suite('InputTextBlockConverter', () => {
             const cell = converter.convertToCell(block);
 
             assert.strictEqual(cell.kind, NotebookCellKind.Code);
-            assert.strictEqual(cell.languageId, 'python');
-            assert.strictEqual(cell.value, '# input_1');
+            assert.strictEqual(cell.languageId, 'plaintext');
+            assert.strictEqual(cell.value, 'some text input');
         });
 
         test('handles missing metadata with default config', () => {
@@ -57,11 +57,11 @@ suite('InputTextBlockConverter', () => {
             const cell = converter.convertToCell(block);
 
             assert.strictEqual(cell.kind, NotebookCellKind.Code);
-            assert.strictEqual(cell.languageId, 'python');
-            assert.strictEqual(cell.value, '# ');
+            assert.strictEqual(cell.languageId, 'plaintext');
+            assert.strictEqual(cell.value, '');
         });
 
-        test('handles missing variable name', () => {
+        test('handles missing variable value', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
                 content: '',
@@ -75,54 +75,55 @@ suite('InputTextBlockConverter', () => {
 
             const cell = converter.convertToCell(block);
 
-            assert.strictEqual(cell.value, '# ');
+            assert.strictEqual(cell.value, '');
         });
     });
 
     suite('applyChangesToBlock', () => {
-        test('applies variable name from cell value to block metadata', () => {
+        test('applies text value from cell to block metadata', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
                 content: 'old content',
                 id: 'block-123',
                 metadata: {
                     deepnote_input_label: 'existing label',
-                    deepnote_variable_value: 'existing value'
+                    deepnote_variable_name: 'input_1',
+                    deepnote_variable_value: 'old value'
                 },
                 sortingKey: 'a0',
                 type: 'input-text'
             };
-            const cell = new NotebookCellData(NotebookCellKind.Code, 'new_var', 'python');
+            const cell = new NotebookCellData(NotebookCellKind.Code, 'new text value', 'plaintext');
 
             converter.applyChangesToBlock(block, cell);
 
             assert.strictEqual(block.content, '');
-            assert.strictEqual(block.metadata?.deepnote_variable_name, 'new_var');
+            assert.strictEqual(block.metadata?.deepnote_variable_value, 'new text value');
             // Other metadata should be preserved
             assert.strictEqual(block.metadata?.deepnote_input_label, 'existing label');
-            assert.strictEqual(block.metadata?.deepnote_variable_value, 'existing value');
+            assert.strictEqual(block.metadata?.deepnote_variable_name, 'input_1');
         });
 
-        test('handles empty variable name', () => {
+        test('handles empty value', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
                 content: 'old content',
                 id: 'block-123',
                 metadata: {
-                    deepnote_variable_name: 'old_var'
+                    deepnote_variable_value: 'old value'
                 },
                 sortingKey: 'a0',
                 type: 'input-text'
             };
-            const cell = new NotebookCellData(NotebookCellKind.Code, '', 'python');
+            const cell = new NotebookCellData(NotebookCellKind.Code, '', 'plaintext');
 
             converter.applyChangesToBlock(block, cell);
 
             assert.strictEqual(block.content, '');
-            assert.strictEqual(block.metadata?.deepnote_variable_name, '');
+            assert.strictEqual(block.metadata?.deepnote_variable_value, '');
         });
 
-        test('trims whitespace from variable name', () => {
+        test('preserves whitespace in value', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
                 content: '',
@@ -130,11 +131,11 @@ suite('InputTextBlockConverter', () => {
                 sortingKey: 'a0',
                 type: 'input-text'
             };
-            const cell = new NotebookCellData(NotebookCellKind.Code, '  my_var  \n', 'python');
+            const cell = new NotebookCellData(NotebookCellKind.Code, '  text with spaces  \n', 'plaintext');
 
             converter.applyChangesToBlock(block, cell);
 
-            assert.strictEqual(block.metadata?.deepnote_variable_name, 'my_var');
+            assert.strictEqual(block.metadata?.deepnote_variable_value, '  text with spaces  \n');
         });
 
         test('clears raw content key when variable name is applied', () => {

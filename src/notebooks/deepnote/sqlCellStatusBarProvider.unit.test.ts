@@ -701,6 +701,72 @@ suite('SqlCellStatusBarProvider', () => {
             assert.isDefined(currentItem, 'Current integration should be in quick pick items');
             assert.strictEqual(currentItem.detail, 'Currently selected');
         });
+
+        test('shows error message when project ID is missing', async () => {
+            const cell = createMockCell('sql', {}, {}); // No notebook metadata
+
+            await switchIntegrationHandler(cell);
+
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
+        });
+
+        test('shows error message when project is not found', async () => {
+            const notebookMetadata = { deepnoteProjectId: 'missing-project' };
+            const cell = createMockCell('sql', {}, notebookMetadata);
+
+            when(commandNotebookManager.getOriginalProject('missing-project')).thenReturn(undefined);
+
+            await switchIntegrationHandler(cell);
+
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
+        });
+
+        test('skips DATAFRAME_SQL_INTEGRATION_ID from project integrations list', async () => {
+            const notebookMetadata = { deepnoteProjectId: 'project-1' };
+            const cell = createMockCell('sql', {}, notebookMetadata);
+            let quickPickItems: any[] = [];
+
+            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+                project: {
+                    integrations: [
+                        {
+                            id: DATAFRAME_SQL_INTEGRATION_ID,
+                            name: 'Should be skipped',
+                            type: 'duckdb'
+                        },
+                        {
+                            id: 'postgres-integration',
+                            name: 'PostgreSQL',
+                            type: 'pgsql'
+                        }
+                    ]
+                }
+            } as any);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenCall((items) => {
+                quickPickItems = items;
+                return Promise.resolve(undefined);
+            });
+
+            await switchIntegrationHandler(cell);
+
+            // Should have 2 items: postgres-integration and DuckDB (added separately)
+            const projectIntegrationItems = quickPickItems.filter(
+                (item) => item.id && item.id !== DATAFRAME_SQL_INTEGRATION_ID
+            );
+            assert.strictEqual(
+                projectIntegrationItems.length,
+                1,
+                'Should have only 1 project integration (DATAFRAME_SQL_INTEGRATION_ID should be skipped)'
+            );
+            assert.strictEqual(projectIntegrationItems[0].id, 'postgres-integration');
+
+            // DuckDB should still be in the list (added separately)
+            const duckDbItem = quickPickItems.find((item) => item.id === DATAFRAME_SQL_INTEGRATION_ID);
+            assert.isDefined(duckDbItem, 'DuckDB should still be in the list');
+        });
     });
 
     function createMockCell(

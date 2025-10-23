@@ -23,7 +23,7 @@ suite('InputTextBlockConverter', () => {
     });
 
     suite('convertToCell', () => {
-        test('converts input-text block with metadata to JSON cell', () => {
+        test('converts input-text block with metadata to Python cell with variable name', () => {
             const block: DeepnoteBlock = {
                 blockGroup: '92f21410c8c54ac0be7e4d2a544552ee',
                 content: '',
@@ -41,13 +41,8 @@ suite('InputTextBlockConverter', () => {
             const cell = converter.convertToCell(block);
 
             assert.strictEqual(cell.kind, NotebookCellKind.Code);
-            assert.strictEqual(cell.languageId, 'json');
-
-            const parsed = JSON.parse(cell.value);
-            assert.strictEqual(parsed.deepnote_input_label, 'some display name');
-            assert.strictEqual(parsed.deepnote_variable_name, 'input_1');
-            assert.strictEqual(parsed.deepnote_variable_value, 'some text input');
-            assert.strictEqual(parsed.deepnote_variable_default_value, 'some default value');
+            assert.strictEqual(cell.languageId, 'python');
+            assert.strictEqual(cell.value, '# input_1');
         });
 
         test('handles missing metadata with default config', () => {
@@ -62,23 +57,17 @@ suite('InputTextBlockConverter', () => {
             const cell = converter.convertToCell(block);
 
             assert.strictEqual(cell.kind, NotebookCellKind.Code);
-            assert.strictEqual(cell.languageId, 'json');
-
-            const parsed = JSON.parse(cell.value);
-            assert.strictEqual(parsed.deepnote_input_label, '');
-            assert.strictEqual(parsed.deepnote_variable_name, '');
-            assert.strictEqual(parsed.deepnote_variable_value, '');
-            assert.isNull(parsed.deepnote_variable_default_value);
+            assert.strictEqual(cell.languageId, 'python');
+            assert.strictEqual(cell.value, '# ');
         });
 
-        test('uses raw content when available', () => {
-            const rawContent = '{"deepnote_variable_name": "custom"}';
+        test('handles missing variable name', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
                 metadata: {
-                    [DEEPNOTE_VSCODE_RAW_CONTENT_KEY]: rawContent
+                    deepnote_input_label: 'some label'
                 },
                 sortingKey: 'a0',
                 type: 'input-text'
@@ -86,58 +75,69 @@ suite('InputTextBlockConverter', () => {
 
             const cell = converter.convertToCell(block);
 
-            assert.strictEqual(cell.value, rawContent);
+            assert.strictEqual(cell.value, '# ');
         });
     });
 
     suite('applyChangesToBlock', () => {
-        test('applies valid JSON to block metadata', () => {
+        test('applies variable name from cell value to block metadata', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
                 content: 'old content',
                 id: 'block-123',
-                sortingKey: 'a0',
-                type: 'input-text'
-            };
-            const cellValue = JSON.stringify(
-                {
-                    deepnote_input_label: 'new label',
-                    deepnote_variable_name: 'new_var',
-                    deepnote_variable_value: 'new value',
-                    deepnote_variable_default_value: 'new default'
+                metadata: {
+                    deepnote_input_label: 'existing label',
+                    deepnote_variable_value: 'existing value'
                 },
-                null,
-                2
-            );
-            const cell = new NotebookCellData(NotebookCellKind.Code, cellValue, 'json');
+                sortingKey: 'a0',
+                type: 'input-text'
+            };
+            const cell = new NotebookCellData(NotebookCellKind.Code, 'new_var', 'python');
 
             converter.applyChangesToBlock(block, cell);
 
             assert.strictEqual(block.content, '');
-            assert.strictEqual(block.metadata?.deepnote_input_label, 'new label');
             assert.strictEqual(block.metadata?.deepnote_variable_name, 'new_var');
-            assert.strictEqual(block.metadata?.deepnote_variable_value, 'new value');
-            assert.strictEqual(block.metadata?.deepnote_variable_default_value, 'new default');
+            // Other metadata should be preserved
+            assert.strictEqual(block.metadata?.deepnote_input_label, 'existing label');
+            assert.strictEqual(block.metadata?.deepnote_variable_value, 'existing value');
         });
 
-        test('handles invalid JSON by storing in raw content key', () => {
+        test('handles empty variable name', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
                 content: 'old content',
                 id: 'block-123',
+                metadata: {
+                    deepnote_variable_name: 'old_var'
+                },
                 sortingKey: 'a0',
                 type: 'input-text'
             };
-            const invalidJson = '{invalid json}';
-            const cell = new NotebookCellData(NotebookCellKind.Code, invalidJson, 'json');
+            const cell = new NotebookCellData(NotebookCellKind.Code, '', 'python');
 
             converter.applyChangesToBlock(block, cell);
 
             assert.strictEqual(block.content, '');
-            assert.strictEqual(block.metadata?.[DEEPNOTE_VSCODE_RAW_CONTENT_KEY], invalidJson);
+            assert.strictEqual(block.metadata?.deepnote_variable_name, '');
         });
 
-        test('clears raw content key when valid JSON is applied', () => {
+        test('trims whitespace from variable name', () => {
+            const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
+                content: '',
+                id: 'block-123',
+                sortingKey: 'a0',
+                type: 'input-text'
+            };
+            const cell = new NotebookCellData(NotebookCellKind.Code, '  my_var  \n', 'python');
+
+            converter.applyChangesToBlock(block, cell);
+
+            assert.strictEqual(block.metadata?.deepnote_variable_name, 'my_var');
+        });
+
+        test('clears raw content key when variable name is applied', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
                 content: '',
@@ -148,10 +148,7 @@ suite('InputTextBlockConverter', () => {
                 sortingKey: 'a0',
                 type: 'input-text'
             };
-            const cellValue = JSON.stringify({
-                deepnote_variable_name: 'var1'
-            });
-            const cell = new NotebookCellData(NotebookCellKind.Code, cellValue, 'json');
+            const cell = new NotebookCellData(NotebookCellKind.Code, 'var1', 'python');
 
             converter.applyChangesToBlock(block, cell);
 
@@ -167,8 +164,7 @@ suite('InputTextBlockConverter', () => {
                 sortingKey: 'a0',
                 type: 'input-text'
             };
-            const cellValue = JSON.stringify({ deepnote_variable_name: 'var' });
-            const cell = new NotebookCellData(NotebookCellKind.Code, cellValue, 'json');
+            const cell = new NotebookCellData(NotebookCellKind.Code, 'var', 'python');
 
             converter.applyChangesToBlock(block, cell);
 
@@ -188,7 +184,7 @@ suite('InputTextareaBlockConverter', () => {
     });
 
     suite('convertToCell', () => {
-        test('converts input-textarea block with multiline value to JSON cell', () => {
+        test('converts input-textarea block to Python cell with variable name', () => {
             const block: DeepnoteBlock = {
                 blockGroup: '2b5f9340349f4baaa5a3237331214352',
                 content: '',
@@ -204,11 +200,8 @@ suite('InputTextareaBlockConverter', () => {
             const cell = converter.convertToCell(block);
 
             assert.strictEqual(cell.kind, NotebookCellKind.Code);
-            assert.strictEqual(cell.languageId, 'json');
-
-            const parsed = JSON.parse(cell.value);
-            assert.strictEqual(parsed.deepnote_variable_name, 'input_2');
-            assert.strictEqual(parsed.deepnote_variable_value, 'some multiline\ntext input');
+            assert.strictEqual(cell.languageId, 'python');
+            assert.strictEqual(cell.value, '# input_2');
         });
 
         test('handles missing metadata with default config', () => {
@@ -222,36 +215,33 @@ suite('InputTextareaBlockConverter', () => {
 
             const cell = converter.convertToCell(block);
 
-            const parsed = JSON.parse(cell.value);
-            assert.strictEqual(parsed.deepnote_variable_name, '');
-            assert.strictEqual(parsed.deepnote_variable_value, '');
-            assert.strictEqual(parsed.deepnote_input_label, '');
+            assert.strictEqual(cell.value, '# ');
         });
     });
 
     suite('applyChangesToBlock', () => {
-        test('applies valid JSON with multiline value to block metadata', () => {
+        test('applies variable name from cell value', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
+                metadata: {
+                    deepnote_variable_value: 'line1\nline2\nline3'
+                },
                 sortingKey: 'a0',
                 type: 'input-textarea'
             };
-            const cellValue = JSON.stringify({
-                deepnote_variable_name: 'textarea_var',
-                deepnote_variable_value: 'line1\nline2\nline3'
-            });
-            const cell = new NotebookCellData(NotebookCellKind.Code, cellValue, 'json');
+            const cell = new NotebookCellData(NotebookCellKind.Code, 'textarea_var', 'python');
 
             converter.applyChangesToBlock(block, cell);
 
             assert.strictEqual(block.content, '');
             assert.strictEqual(block.metadata?.deepnote_variable_name, 'textarea_var');
+            // Other metadata should be preserved
             assert.strictEqual(block.metadata?.deepnote_variable_value, 'line1\nline2\nline3');
         });
 
-        test('handles invalid JSON', () => {
+        test('handles empty variable name', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
                 content: '',
@@ -259,12 +249,11 @@ suite('InputTextareaBlockConverter', () => {
                 sortingKey: 'a0',
                 type: 'input-textarea'
             };
-            const invalidJson = 'not json';
-            const cell = new NotebookCellData(NotebookCellKind.Code, invalidJson, 'json');
+            const cell = new NotebookCellData(NotebookCellKind.Code, '', 'python');
 
             converter.applyChangesToBlock(block, cell);
 
-            assert.strictEqual(block.metadata?.[DEEPNOTE_VSCODE_RAW_CONTENT_KEY], invalidJson);
+            assert.strictEqual(block.metadata?.deepnote_variable_name, '');
         });
     });
 });
@@ -277,7 +266,7 @@ suite('InputSelectBlockConverter', () => {
     });
 
     suite('convertToCell', () => {
-        test('converts input-select block with single value', () => {
+        test('converts input-select block to Python cell with variable name', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'ba248341bdd94b93a234777968bfedcf',
                 content: '',
@@ -298,65 +287,8 @@ suite('InputSelectBlockConverter', () => {
             const cell = converter.convertToCell(block);
 
             assert.strictEqual(cell.kind, NotebookCellKind.Code);
-            assert.strictEqual(cell.languageId, 'json');
-
-            const parsed = JSON.parse(cell.value);
-            assert.strictEqual(parsed.deepnote_variable_name, 'input_3');
-            assert.strictEqual(parsed.deepnote_variable_value, 'Option 1');
-            assert.deepStrictEqual(parsed.deepnote_variable_options, ['Option 1', 'Option 2']);
-        });
-
-        test('converts input-select block with multiple values', () => {
-            const block: DeepnoteBlock = {
-                blockGroup: '9f77387639cd432bb913890dea32b6c3',
-                content: '',
-                id: '748548e64442416bb9f3a9c5ec22c4de',
-                metadata: {
-                    deepnote_input_label: 'some select display name',
-                    deepnote_variable_name: 'input_4',
-                    deepnote_variable_value: ['Option 1'],
-                    deepnote_variable_options: ['Option 1', 'Option 2'],
-                    deepnote_variable_select_type: 'from-options',
-                    deepnote_allow_multiple_values: true,
-                    deepnote_variable_custom_options: ['Option 1', 'Option 2'],
-                    deepnote_variable_selected_variable: ''
-                },
-                sortingKey: 'y',
-                type: 'input-select'
-            };
-
-            const cell = converter.convertToCell(block);
-
-            const parsed = JSON.parse(cell.value);
-            assert.strictEqual(parsed.deepnote_allow_multiple_values, true);
-            assert.deepStrictEqual(parsed.deepnote_variable_value, ['Option 1']);
-        });
-
-        test('converts input-select block with allow empty values', () => {
-            const block: DeepnoteBlock = {
-                blockGroup: '146c4af1efb2448fa2d3b7cfbd30da77',
-                content: '',
-                id: 'a3521dd942d2407693b0202b55c935a7',
-                metadata: {
-                    deepnote_input_label: 'allows empty value',
-                    deepnote_variable_name: 'input_5',
-                    deepnote_variable_value: 'Option 1',
-                    deepnote_variable_options: ['Option 1', 'Option 2'],
-                    deepnote_allow_empty_values: true,
-                    deepnote_variable_select_type: 'from-options',
-                    deepnote_variable_default_value: '',
-                    deepnote_variable_custom_options: ['Option 1', 'Option 2'],
-                    deepnote_variable_selected_variable: ''
-                },
-                sortingKey: 'yU',
-                type: 'input-select'
-            };
-
-            const cell = converter.convertToCell(block);
-
-            const parsed = JSON.parse(cell.value);
-            assert.strictEqual(parsed.deepnote_allow_empty_values, true);
-            assert.strictEqual(parsed.deepnote_variable_default_value, '');
+            assert.strictEqual(cell.languageId, 'python');
+            assert.strictEqual(cell.value, '# input_3');
         });
 
         test('handles missing metadata with default config', () => {
@@ -370,69 +302,32 @@ suite('InputSelectBlockConverter', () => {
 
             const cell = converter.convertToCell(block);
 
-            const parsed = JSON.parse(cell.value);
-            assert.strictEqual(parsed.deepnote_variable_name, '');
-            assert.strictEqual(parsed.deepnote_variable_value, 'Option 1');
+            assert.strictEqual(cell.value, '# ');
         });
     });
 
     suite('applyChangesToBlock', () => {
-        test('applies valid JSON with single value', () => {
+        test('applies variable name from cell value', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
+                metadata: {
+                    deepnote_variable_value: 'Option A',
+                    deepnote_variable_options: ['Option A', 'Option B']
+                },
                 sortingKey: 'a0',
                 type: 'input-select'
             };
-            const cellValue = JSON.stringify({
-                deepnote_variable_name: 'select_var',
-                deepnote_variable_value: 'Option A',
-                deepnote_variable_options: ['Option A', 'Option B']
-            });
-            const cell = new NotebookCellData(NotebookCellKind.Code, cellValue, 'json');
+            const cell = new NotebookCellData(NotebookCellKind.Code, 'select_var', 'python');
 
             converter.applyChangesToBlock(block, cell);
 
             assert.strictEqual(block.content, '');
+            assert.strictEqual(block.metadata?.deepnote_variable_name, 'select_var');
+            // Other metadata should be preserved
             assert.strictEqual(block.metadata?.deepnote_variable_value, 'Option A');
             assert.deepStrictEqual(block.metadata?.deepnote_variable_options, ['Option A', 'Option B']);
-        });
-
-        test('applies valid JSON with array value', () => {
-            const block: DeepnoteBlock = {
-                blockGroup: 'test-group',
-                content: '',
-                id: 'block-123',
-                sortingKey: 'a0',
-                type: 'input-select'
-            };
-            const cellValue = JSON.stringify({
-                deepnote_variable_value: ['Option 1', 'Option 2'],
-                deepnote_allow_multiple_values: true
-            });
-            const cell = new NotebookCellData(NotebookCellKind.Code, cellValue, 'json');
-
-            converter.applyChangesToBlock(block, cell);
-
-            assert.deepStrictEqual(block.metadata?.deepnote_variable_value, ['Option 1', 'Option 2']);
-            assert.strictEqual(block.metadata?.deepnote_allow_multiple_values, true);
-        });
-
-        test('handles invalid JSON', () => {
-            const block: DeepnoteBlock = {
-                blockGroup: 'test-group',
-                content: '',
-                id: 'block-123',
-                sortingKey: 'a0',
-                type: 'input-select'
-            };
-            const invalidJson = '{broken';
-            const cell = new NotebookCellData(NotebookCellKind.Code, invalidJson, 'json');
-
-            converter.applyChangesToBlock(block, cell);
-
-            assert.strictEqual(block.metadata?.[DEEPNOTE_VSCODE_RAW_CONTENT_KEY], invalidJson);
         });
     });
 });

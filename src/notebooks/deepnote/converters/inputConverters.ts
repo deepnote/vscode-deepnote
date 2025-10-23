@@ -14,7 +14,6 @@ import {
     DeepnoteFileInputMetadataSchema,
     DeepnoteButtonMetadataSchema
 } from '../deepnoteSchemas';
-import { parseJsonWithFallback } from '../dataConversionUtils';
 import { DEEPNOTE_VSCODE_RAW_CONTENT_KEY } from './constants';
 
 export abstract class BaseInputBlockConverter<T extends z.ZodObject> implements BlockConverter {
@@ -25,15 +24,12 @@ export abstract class BaseInputBlockConverter<T extends z.ZodObject> implements 
     applyChangesToBlock(block: DeepnoteBlock, cell: NotebookCellData): void {
         block.content = '';
 
-        const config = this.schema().safeParse(parseJsonWithFallback(cell.value));
+        // The cell value now contains just the variable name
+        const variableName = cell.value.trim();
 
-        if (config.success !== true) {
-            block.metadata = {
-                ...(block.metadata ?? {}),
-                [DEEPNOTE_VSCODE_RAW_CONTENT_KEY]: cell.value
-            };
-            return;
-        }
+        // Preserve existing metadata and update only the variable name
+        const existingMetadata = this.schema().safeParse(block.metadata);
+        const baseMetadata = existingMetadata.success ? existingMetadata.data : this.defaultConfig();
 
         if (block.metadata != null) {
             delete block.metadata[DEEPNOTE_VSCODE_RAW_CONTENT_KEY];
@@ -41,7 +37,8 @@ export abstract class BaseInputBlockConverter<T extends z.ZodObject> implements 
 
         block.metadata = {
             ...(block.metadata ?? {}),
-            ...config.data
+            ...baseMetadata,
+            deepnote_variable_name: variableName
         };
     }
 
@@ -50,7 +47,6 @@ export abstract class BaseInputBlockConverter<T extends z.ZodObject> implements 
     }
 
     convertToCell(block: DeepnoteBlock): NotebookCellData {
-        const deepnoteJupyterRawContentResult = z.string().safeParse(block.metadata?.[DEEPNOTE_VSCODE_RAW_CONTENT_KEY]);
         const deepnoteMetadataResult = this.schema().safeParse(block.metadata);
 
         if (deepnoteMetadataResult.error != null) {
@@ -58,13 +54,13 @@ export abstract class BaseInputBlockConverter<T extends z.ZodObject> implements 
             console.debug('Metadata:', JSON.stringify(block.metadata));
         }
 
-        const configStr = deepnoteJupyterRawContentResult.success
-            ? deepnoteJupyterRawContentResult.data
-            : deepnoteMetadataResult.success
-            ? JSON.stringify(deepnoteMetadataResult.data, null, 2)
-            : JSON.stringify(this.defaultConfig(), null, 2);
+        // Extract the variable name from metadata
+        const variableName = deepnoteMetadataResult.success
+            ? (deepnoteMetadataResult.data as { deepnote_variable_name?: string }).deepnote_variable_name || ''
+            : '';
 
-        const cell = new NotebookCellData(NotebookCellKind.Code, configStr, 'json');
+        // Create a code cell with Python language showing just the variable name
+        const cell = new NotebookCellData(NotebookCellKind.Code, `# ${variableName}`, 'python');
 
         return cell;
     }

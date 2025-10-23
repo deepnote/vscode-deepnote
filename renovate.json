@@ -1,6 +1,7 @@
 {
     "$schema": "https://docs.renovatebot.com/renovate-schema.json",
     "configMigration": true,
+    "draftPR": true,
     "enabledManagers": ["npm", "nvm", "github-actions"],
     "github-actions": {
         "enabled": true,

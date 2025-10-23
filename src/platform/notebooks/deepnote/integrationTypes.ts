@@ -15,7 +15,7 @@ export enum IntegrationType {
 /**
  * Map Deepnote integration type strings to our IntegrationType enum
  */
-export const DEEPNOTE_TO_INTEGRATION_TYPE: Record<string, IntegrationType> = {
+export const DEEPNOTE_TO_INTEGRATION_TYPE: { [type: string]: IntegrationType } = {
     pgsql: IntegrationType.Postgres,
     'big-query': IntegrationType.BigQuery
 };
@@ -23,7 +23,7 @@ export const DEEPNOTE_TO_INTEGRATION_TYPE: Record<string, IntegrationType> = {
 /**
  * Map our IntegrationType enum to Deepnote integration type strings
  */
-export const INTEGRATION_TYPE_TO_DEEPNOTE: Record<IntegrationType, string> = {
+export const INTEGRATION_TYPE_TO_DEEPNOTE: { [type in IntegrationType]: string } = {
     [IntegrationType.Postgres]: 'pgsql',
     [IntegrationType.BigQuery]: 'big-query'
 };

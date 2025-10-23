@@ -11,7 +11,8 @@ import {
     INTEGRATION_TYPE_TO_DEEPNOTE,
     IntegrationConfig,
     IntegrationStatus,
-    IntegrationWithStatus
+    IntegrationWithStatus,
+    RawIntegrationType
 } from '../../../platform/notebooks/deepnote/integrationTypes';
 
 /**
@@ -312,7 +313,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
 
         // Build the integrations list from current integrations
         const projectIntegrations: ProjectIntegration[] = Array.from(this.integrations.entries())
-            .map(([id, integration]) => {
+            .map(([id, integration]): ProjectIntegration | null => {
                 // Get the integration type from config or integration metadata
                 const type = integration.config?.type || integration.integrationType;
                 if (!type) {
@@ -321,7 +322,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 }
 
                 // Map to Deepnote integration type
-                const deepnoteType = INTEGRATION_TYPE_TO_DEEPNOTE[type];
+                const deepnoteType: RawIntegrationType | undefined = INTEGRATION_TYPE_TO_DEEPNOTE[type];
                 if (!deepnoteType) {
                     logger.warn(`IntegrationWebviewProvider: Cannot map type ${type} for integration ${id}, skipping`);
                     return null;

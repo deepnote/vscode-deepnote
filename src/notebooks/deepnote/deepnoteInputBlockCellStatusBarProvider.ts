@@ -20,6 +20,7 @@ import {
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { injectable } from 'inversify';
 import type { Pocket } from '../../platform/deepnote/pocket';
+import { formatInputBlockCellContent } from './inputBlockContentFormatter';
 
 /**
  * Provides status bar items for Deepnote input block cells to display their block type.
@@ -877,102 +878,13 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
     private formatCellContent(_cell: NotebookCell, metadata: Record<string, unknown>): string | null {
         const pocket = metadata.__deepnotePocket as Pocket | undefined;
         const blockType = pocket?.type;
-        const value = metadata.deepnote_variable_value;
 
         if (!blockType) {
             return null;
         }
 
-        switch (blockType) {
-            case 'input-text':
-            case 'input-textarea':
-                // Plain text value
-                return typeof value === 'string' ? value : '';
-
-            case 'input-select':
-                // Quoted string or array of quoted strings
-                if (Array.isArray(value)) {
-                    return `[${value.map((v) => `"${v}"`).join(', ')}]`;
-                } else if (typeof value === 'string') {
-                    return `"${value}"`;
-                }
-                return '""';
-
-            case 'input-slider':
-                // Numeric value
-                return typeof value === 'string' ? value : String(value ?? '5');
-
-            case 'input-checkbox':
-                // Boolean value
-                return value ? 'True' : 'False';
-
-            case 'input-date': {
-                // Quoted date string (format as YYYY-MM-DD)
-                let dateStr = '';
-                if (value) {
-                    if (typeof value === 'string') {
-                        dateStr = value;
-                    } else if (value instanceof Date) {
-                        dateStr = value.toISOString().split('T')[0];
-                    } else {
-                        dateStr = String(value);
-                    }
-                }
-                return dateStr ? `"${dateStr}"` : '""';
-            }
-
-            case 'input-date-range': {
-                // Tuple of quoted date strings
-                // Helper to format date value (could be string or Date object)
-                const formatDateValue = (val: unknown): string => {
-                    if (!val) {
-                        return '';
-                    }
-                    if (typeof val === 'string') {
-                        return val;
-                    }
-                    if (val instanceof Date) {
-                        // Convert Date to YYYY-MM-DD format
-                        return val.toISOString().split('T')[0];
-                    }
-                    return String(val);
-                };
-
-                if (Array.isArray(value) && value.length === 2) {
-                    const start = formatDateValue(value[0]);
-                    const end = formatDateValue(value[1]);
-                    if (start || end) {
-                        return `("${start}", "${end}")`;
-                    }
-                } else {
-                    // Check for default value
-                    const defaultValue = metadata.deepnote_variable_default_value;
-                    if (Array.isArray(defaultValue) && defaultValue.length === 2) {
-                        const start = formatDateValue(defaultValue[0]);
-                        const end = formatDateValue(defaultValue[1]);
-                        if (start || end) {
-                            return `("${start}", "${end}")`;
-                        }
-                    } else if (typeof value === 'string' && value) {
-                        // Single date string (shouldn't happen but handle it)
-                        return `"${value}"`;
-                    }
-                }
-                // No value, return empty string
-                return '';
-            }
-
-            case 'input-file':
-                // Quoted file path
-                return typeof value === 'string' && value ? `"${value}"` : '""';
-
-            case 'button':
-                // No content
-                return '';
-
-            default:
-                return null;
-        }
+        // Use shared formatter
+        return formatInputBlockCellContent(blockType, metadata);
     }
 
     dispose(): void {

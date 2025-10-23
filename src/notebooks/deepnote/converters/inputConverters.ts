@@ -15,6 +15,7 @@ import {
     DeepnoteButtonMetadataSchema
 } from '../deepnoteSchemas';
 import { DEEPNOTE_VSCODE_RAW_CONTENT_KEY } from './constants';
+import { formatInputBlockCellContent } from '../inputBlockContentFormatter';
 
 export abstract class BaseInputBlockConverter<T extends z.ZodObject> implements BlockConverter {
     abstract schema(): T;
@@ -84,13 +85,8 @@ export class InputTextBlockConverter extends BaseInputBlockConverter<typeof Deep
     }
 
     override convertToCell(block: DeepnoteBlock): NotebookCellData {
-        const deepnoteMetadataResult = this.schema().safeParse(block.metadata);
-        const value = deepnoteMetadataResult.success
-            ? (deepnoteMetadataResult.data.deepnote_variable_value as string) || ''
-            : '';
-
-        // Use plaintext language for text input
-        const cell = new NotebookCellData(NotebookCellKind.Code, value, 'plaintext');
+        const cellValue = formatInputBlockCellContent('input-text', block.metadata ?? {});
+        const cell = new NotebookCellData(NotebookCellKind.Code, cellValue, 'plaintext');
         return cell;
     }
 
@@ -129,13 +125,8 @@ export class InputTextareaBlockConverter extends BaseInputBlockConverter<typeof 
     }
 
     override convertToCell(block: DeepnoteBlock): NotebookCellData {
-        const deepnoteMetadataResult = this.schema().safeParse(block.metadata);
-        const value = deepnoteMetadataResult.success
-            ? (deepnoteMetadataResult.data.deepnote_variable_value as string) || ''
-            : '';
-
-        // Use plaintext language for textarea input
-        const cell = new NotebookCellData(NotebookCellKind.Code, value, 'plaintext');
+        const cellValue = formatInputBlockCellContent('input-textarea', block.metadata ?? {});
+        const cell = new NotebookCellData(NotebookCellKind.Code, cellValue, 'plaintext');
         return cell;
     }
 
@@ -174,18 +165,7 @@ export class InputSelectBlockConverter extends BaseInputBlockConverter<typeof De
     }
 
     override convertToCell(block: DeepnoteBlock): NotebookCellData {
-        const deepnoteMetadataResult = this.schema().safeParse(block.metadata);
-        const value = deepnoteMetadataResult.success ? deepnoteMetadataResult.data.deepnote_variable_value : '';
-
-        let cellValue = '';
-        if (Array.isArray(value)) {
-            // Multi-select: show as array of quoted strings
-            cellValue = `[${value.map((v) => `"${v}"`).join(', ')}]`;
-        } else if (typeof value === 'string') {
-            // Single select: show as quoted string
-            cellValue = `"${value}"`;
-        }
-
+        const cellValue = formatInputBlockCellContent('input-select', block.metadata ?? {});
         const cell = new NotebookCellData(NotebookCellKind.Code, cellValue, 'python');
         return cell;
     }
@@ -239,13 +219,8 @@ export class InputSliderBlockConverter extends BaseInputBlockConverter<typeof De
     }
 
     override convertToCell(block: DeepnoteBlock): NotebookCellData {
-        const deepnoteMetadataResult = this.schema().safeParse(block.metadata);
-        const value = deepnoteMetadataResult.success
-            ? (deepnoteMetadataResult.data.deepnote_variable_value as string) || '5'
-            : '5';
-
-        // Show the numeric value
-        const cell = new NotebookCellData(NotebookCellKind.Code, value, 'python');
+        const cellValue = formatInputBlockCellContent('input-slider', block.metadata ?? {});
+        const cell = new NotebookCellData(NotebookCellKind.Code, cellValue, 'python');
         return cell;
     }
 
@@ -284,13 +259,8 @@ export class InputCheckboxBlockConverter extends BaseInputBlockConverter<typeof 
     }
 
     override convertToCell(block: DeepnoteBlock): NotebookCellData {
-        const deepnoteMetadataResult = this.schema().safeParse(block.metadata);
-        const value = deepnoteMetadataResult.success
-            ? (deepnoteMetadataResult.data.deepnote_variable_value as boolean) ?? false
-            : false;
-
-        // Show true/false
-        const cell = new NotebookCellData(NotebookCellKind.Code, value ? 'True' : 'False', 'python');
+        const cellValue = formatInputBlockCellContent('input-checkbox', block.metadata ?? {});
+        const cell = new NotebookCellData(NotebookCellKind.Code, cellValue, 'python');
         return cell;
     }
 
@@ -330,24 +300,7 @@ export class InputDateBlockConverter extends BaseInputBlockConverter<typeof Deep
     }
 
     override convertToCell(block: DeepnoteBlock): NotebookCellData {
-        // Get value directly from metadata to avoid Date object conversion
-        const rawValue = block.metadata?.deepnote_variable_value;
-
-        // Format date value (could be string or Date object)
-        let value = '';
-        if (rawValue) {
-            if (typeof rawValue === 'string') {
-                value = rawValue;
-            } else if (rawValue instanceof Date) {
-                // Convert Date to YYYY-MM-DD format
-                value = rawValue.toISOString().split('T')[0];
-            } else {
-                value = String(rawValue);
-            }
-        }
-
-        // Show date as quoted string
-        const cellValue = value ? `"${value}"` : '""';
+        const cellValue = formatInputBlockCellContent('input-date', block.metadata ?? {});
         const cell = new NotebookCellData(NotebookCellKind.Code, cellValue, 'python');
         return cell;
     }
@@ -387,48 +340,7 @@ export class InputDateRangeBlockConverter extends BaseInputBlockConverter<typeof
     }
 
     override convertToCell(block: DeepnoteBlock): NotebookCellData {
-        // Get value directly from metadata first, then try schema parsing
-        const rawValue = block.metadata?.deepnote_variable_value;
-        const rawDefaultValue = block.metadata?.deepnote_variable_default_value;
-
-        let cellValue = '';
-
-        // Helper to format date value (could be string or Date object)
-        const formatDateValue = (val: unknown): string => {
-            if (!val) {
-                return '';
-            }
-            if (typeof val === 'string') {
-                return val;
-            }
-            if (val instanceof Date) {
-                // Convert Date to YYYY-MM-DD format
-                return val.toISOString().split('T')[0];
-            }
-            return String(val);
-        };
-
-        // Check raw value first (before schema transformation)
-        if (Array.isArray(rawValue) && rawValue.length === 2) {
-            // Show as tuple of quoted strings
-            const start = formatDateValue(rawValue[0]);
-            const end = formatDateValue(rawValue[1]);
-            if (start || end) {
-                cellValue = `("${start}", "${end}")`;
-            }
-        } else if (Array.isArray(rawDefaultValue) && rawDefaultValue.length === 2) {
-            // Use default value if available
-            const start = formatDateValue(rawDefaultValue[0]);
-            const end = formatDateValue(rawDefaultValue[1]);
-            if (start || end) {
-                cellValue = `("${start}", "${end}")`;
-            }
-        } else if (typeof rawValue === 'string' && rawValue) {
-            // Single date string (shouldn't happen but handle it)
-            cellValue = `"${rawValue}"`;
-        }
-        // If no value, cellValue remains empty string
-
+        const cellValue = formatInputBlockCellContent('input-date-range', block.metadata ?? {});
         const cell = new NotebookCellData(NotebookCellKind.Code, cellValue, 'python');
         return cell;
     }
@@ -475,13 +387,7 @@ export class InputFileBlockConverter extends BaseInputBlockConverter<typeof Deep
     }
 
     override convertToCell(block: DeepnoteBlock): NotebookCellData {
-        const deepnoteMetadataResult = this.schema().safeParse(block.metadata);
-        const value = deepnoteMetadataResult.success
-            ? (deepnoteMetadataResult.data.deepnote_variable_value as string) || ''
-            : '';
-
-        // Show file path as quoted string
-        const cellValue = value ? `"${value}"` : '""';
+        const cellValue = formatInputBlockCellContent('input-file', block.metadata ?? {});
         const cell = new NotebookCellData(NotebookCellKind.Code, cellValue, 'python');
         return cell;
     }
@@ -520,9 +426,9 @@ export class ButtonBlockConverter extends BaseInputBlockConverter<typeof Deepnot
         return this.DEFAULT_BUTTON_CONFIG;
     }
 
-    override convertToCell(_block: DeepnoteBlock): NotebookCellData {
-        // Button blocks have no content
-        const cell = new NotebookCellData(NotebookCellKind.Code, '', 'python');
+    override convertToCell(block: DeepnoteBlock): NotebookCellData {
+        const cellValue = formatInputBlockCellContent('button', block.metadata ?? {});
+        const cell = new NotebookCellData(NotebookCellKind.Code, cellValue, 'python');
         return cell;
     }
 

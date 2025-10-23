@@ -13,6 +13,32 @@ export enum IntegrationType {
 }
 
 /**
+ * Map Deepnote integration type strings to our IntegrationType enum
+ */
+export function mapDeepnoteIntegrationType(deepnoteType: string): IntegrationType | undefined {
+    switch (deepnoteType) {
+        case 'pgsql':
+            return IntegrationType.Postgres;
+        case 'big-query':
+            return IntegrationType.BigQuery;
+        default:
+            return undefined;
+    }
+}
+
+/**
+ * Map our IntegrationType enum to Deepnote integration type strings
+ */
+export function mapToDeepnoteIntegrationType(type: IntegrationType): string {
+    switch (type) {
+        case IntegrationType.Postgres:
+            return 'pgsql';
+        case IntegrationType.BigQuery:
+            return 'big-query';
+    }
+}
+
+/**
  * Base interface for all integration configurations
  */
 export interface BaseIntegrationConfig {
@@ -64,4 +90,12 @@ export interface IntegrationWithStatus {
     config: IntegrationConfig | null;
     status: IntegrationStatus;
     error?: string;
+    /**
+     * Name from the project's integrations list (used for prefilling when config is null)
+     */
+    projectName?: string;
+    /**
+     * Type from the project's integrations list (used for prefilling when config is null)
+     */
+    projectType?: IntegrationType;
 }

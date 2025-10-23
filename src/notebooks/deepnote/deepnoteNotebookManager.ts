@@ -76,6 +76,32 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
     }
 
     /**
+     * Updates the integrations list in the project data.
+     * This modifies the stored project to reflect changes in configured integrations.
+     * @param projectId Project identifier
+     * @param integrations Array of integration metadata to store in the project
+     */
+    updateProjectIntegrations(
+        projectId: string,
+        integrations: Array<{ id: string; name: string; type: string }>
+    ): void {
+        const project = this.originalProjects.get(projectId);
+
+        if (!project) {
+            return;
+        }
+
+        const updatedProject = JSON.parse(JSON.stringify(project)) as DeepnoteProject;
+        updatedProject.project.integrations = integrations;
+
+        const currentNotebookId = this.currentNotebookId.get(projectId);
+
+        if (currentNotebookId) {
+            this.storeOriginalProject(projectId, updatedProject, currentNotebookId);
+        }
+    }
+
+    /**
      * Checks if the init notebook has already been run for a project.
      * @param projectId Project identifier
      * @returns True if init notebook has been run, false otherwise

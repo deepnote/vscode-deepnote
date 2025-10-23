@@ -33,6 +33,7 @@ export interface IDeepnoteNotebookManager {
     selectNotebookForProject(projectId: string, notebookId: string): void;
     storeOriginalProject(projectId: string, project: DeepnoteProject, notebookId: string): void;
     updateCurrentNotebookId(projectId: string, notebookId: string): void;
+    updateProjectIntegrations(projectId: string, integrations: Array<{ id: string; name: string; type: string }>): void;
     hasInitNotebookBeenRun(projectId: string): boolean;
     markInitNotebookAsRun(projectId: string): void;
 }

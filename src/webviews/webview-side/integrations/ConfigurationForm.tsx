@@ -2,11 +2,13 @@ import * as React from 'react';
 import { getLocString } from '../react-common/locReactSide';
 import { PostgresForm } from './PostgresForm';
 import { BigQueryForm } from './BigQueryForm';
-import { IntegrationConfig } from './types';
+import { IntegrationConfig, IntegrationType } from './types';
 
 export interface IConfigurationFormProps {
     integrationId: string;
     existingConfig: IntegrationConfig | null;
+    projectName?: string;
+    projectType?: IntegrationType;
     onSave: (config: IntegrationConfig) => void;
     onCancel: () => void;
 }
@@ -14,13 +16,19 @@ export interface IConfigurationFormProps {
 export const ConfigurationForm: React.FC<IConfigurationFormProps> = ({
     integrationId,
     existingConfig,
+    projectName,
+    projectType,
     onSave,
     onCancel
 }) => {
-    // Determine integration type from ID or existing config
+    // Determine integration type from existing config, project metadata, or ID
     const getIntegrationType = (): 'postgres' | 'bigquery' => {
         if (existingConfig) {
             return existingConfig.type;
+        }
+        // Use project type if available
+        if (projectType) {
+            return projectType;
         }
         // Infer from integration ID
         if (integrationId.includes('postgres')) {
@@ -55,6 +63,7 @@ export const ConfigurationForm: React.FC<IConfigurationFormProps> = ({
                         <PostgresForm
                             integrationId={integrationId}
                             existingConfig={existingConfig?.type === 'postgres' ? existingConfig : null}
+                            projectName={projectName}
                             onSave={onSave}
                             onCancel={onCancel}
                         />
@@ -62,6 +71,7 @@ export const ConfigurationForm: React.FC<IConfigurationFormProps> = ({
                         <BigQueryForm
                             integrationId={integrationId}
                             existingConfig={existingConfig?.type === 'bigquery' ? existingConfig : null}
+                            projectName={projectName}
                             onSave={onSave}
                             onCancel={onCancel}
                         />

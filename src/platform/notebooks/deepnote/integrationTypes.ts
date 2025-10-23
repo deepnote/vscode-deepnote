@@ -15,26 +15,18 @@ export enum IntegrationType {
 /**
  * Map Deepnote integration type strings to our IntegrationType enum
  */
-const DEEPNOTE_TO_INTEGRATION_TYPE: Record<string, IntegrationType> = {
+export const DEEPNOTE_TO_INTEGRATION_TYPE: Record<string, IntegrationType> = {
     pgsql: IntegrationType.Postgres,
     'big-query': IntegrationType.BigQuery
 };
 
-export function mapDeepnoteIntegrationType(deepnoteType: string): IntegrationType | undefined {
-    return DEEPNOTE_TO_INTEGRATION_TYPE[deepnoteType];
-}
-
 /**
  * Map our IntegrationType enum to Deepnote integration type strings
  */
-const INTEGRATION_TYPE_TO_DEEPNOTE: Record<IntegrationType, string> = {
+export const INTEGRATION_TYPE_TO_DEEPNOTE: Record<IntegrationType, string> = {
     [IntegrationType.Postgres]: 'pgsql',
     [IntegrationType.BigQuery]: 'big-query'
 };
-
-export function mapToDeepnoteIntegrationType(type: IntegrationType): string {
-    return INTEGRATION_TYPE_TO_DEEPNOTE[type];
-}
 
 /**
  * Base interface for all integration configurations

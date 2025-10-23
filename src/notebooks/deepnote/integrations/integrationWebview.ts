@@ -8,10 +8,10 @@ import { LocalizedMessages, SharedMessages } from '../../../messageTypes';
 import { IDeepnoteNotebookManager } from '../../types';
 import { IIntegrationStorage, IIntegrationWebviewProvider } from './types';
 import {
+    INTEGRATION_TYPE_TO_DEEPNOTE,
     IntegrationConfig,
     IntegrationStatus,
-    IntegrationWithStatus,
-    mapToDeepnoteIntegrationType
+    IntegrationWithStatus
 } from '../../../platform/notebooks/deepnote/integrationTypes';
 
 /**
@@ -321,7 +321,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 }
 
                 // Map to Deepnote integration type
-                const deepnoteType = mapToDeepnoteIntegrationType(type);
+                const deepnoteType = INTEGRATION_TYPE_TO_DEEPNOTE[type];
                 if (!deepnoteType) {
                     logger.warn(`IntegrationWebviewProvider: Cannot map type ${type} for integration ${id}, skipping`);
                     return null;

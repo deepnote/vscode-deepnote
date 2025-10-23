@@ -4,9 +4,9 @@ import { logger } from '../../../platform/logging';
 import { IDeepnoteNotebookManager } from '../../types';
 import {
     DATAFRAME_SQL_INTEGRATION_ID,
+    DEEPNOTE_TO_INTEGRATION_TYPE,
     IntegrationStatus,
-    IntegrationWithStatus,
-    mapDeepnoteIntegrationType
+    IntegrationWithStatus
 } from '../../../platform/notebooks/deepnote/integrationTypes';
 import { IIntegrationDetector, IIntegrationStorage } from './types';
 
@@ -56,7 +56,7 @@ export class IntegrationDetector implements IIntegrationDetector {
             const config = await this.integrationStorage.getIntegrationConfig(integrationId);
 
             // Map the Deepnote integration type to our IntegrationType
-            const integrationType = mapDeepnoteIntegrationType(projectIntegration.type);
+            const integrationType = DEEPNOTE_TO_INTEGRATION_TYPE[projectIntegration.type];
 
             const status: IntegrationWithStatus = {
                 config: config || null,

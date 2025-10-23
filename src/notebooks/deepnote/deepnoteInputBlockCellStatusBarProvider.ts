@@ -834,7 +834,7 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
     }
 
     /**
-     * Helper method to update cell metadata
+     * Helper method to update cell metadata and cell content
      */
     private async updateCellMetadata(cell: NotebookCell, updates: Record<string, unknown>): Promise<void> {
         const edit = new WorkspaceEdit();
@@ -843,7 +843,23 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
             ...updates
         };
 
+        // Update cell metadata
         edit.set(cell.notebook.uri, [NotebookEdit.updateCellMetadata(cell.index, updatedMetadata)]);
+
+        // Update cell content if the value changed
+        if ('deepnote_variable_value' in updates) {
+            const newCellContent = this.formatCellContent(cell, updatedMetadata);
+            if (newCellContent !== null) {
+                const fullRange = new Range(
+                    new Position(0, 0),
+                    new Position(
+                        cell.document.lineCount - 1,
+                        cell.document.lineAt(cell.document.lineCount - 1).text.length
+                    )
+                );
+                edit.replace(cell.document.uri, fullRange, newCellContent);
+            }
+        }
 
         const success = await workspace.applyEdit(edit);
         if (!success) {
@@ -853,6 +869,65 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
 
         // Trigger status bar update
         this._onDidChangeCellStatusBarItems.fire();
+    }
+
+    /**
+     * Formats the cell content based on the block type and value
+     */
+    private formatCellContent(_cell: NotebookCell, metadata: Record<string, unknown>): string | null {
+        const pocket = metadata.__deepnotePocket as Pocket | undefined;
+        const blockType = pocket?.type;
+        const value = metadata.deepnote_variable_value;
+
+        if (!blockType) {
+            return null;
+        }
+
+        switch (blockType) {
+            case 'input-text':
+            case 'input-textarea':
+                // Plain text value
+                return typeof value === 'string' ? value : '';
+
+            case 'input-select':
+                // Quoted string or array of quoted strings
+                if (Array.isArray(value)) {
+                    return `[${value.map((v) => `"${v}"`).join(', ')}]`;
+                } else if (typeof value === 'string') {
+                    return `"${value}"`;
+                }
+                return '""';
+
+            case 'input-slider':
+                // Numeric value
+                return typeof value === 'string' ? value : String(value ?? '5');
+
+            case 'input-checkbox':
+                // Boolean value
+                return value ? 'True' : 'False';
+
+            case 'input-date':
+                // Quoted ISO date string
+                return typeof value === 'string' && value ? `"${value}"` : '""';
+
+            case 'input-date-range':
+                // Tuple of quoted ISO date strings
+                if (Array.isArray(value) && value.length === 2) {
+                    return `("${value[0]}", "${value[1]}")`;
+                }
+                return '("", "")';
+
+            case 'input-file':
+                // Quoted file path
+                return typeof value === 'string' && value ? `"${value}"` : '""';
+
+            case 'button':
+                // No content
+                return '';
+
+            default:
+                return null;
+        }
     }
 
     dispose(): void {

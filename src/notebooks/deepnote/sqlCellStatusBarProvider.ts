@@ -334,7 +334,8 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
                 continue;
             }
 
-            const integrationType = DEEPNOTE_TO_INTEGRATION_TYPE[projectIntegration.type];
+            const integrationType =
+                DEEPNOTE_TO_INTEGRATION_TYPE[projectIntegration.type as keyof typeof DEEPNOTE_TO_INTEGRATION_TYPE];
             const typeLabel = integrationType ? this.getIntegrationTypeLabel(integrationType) : projectIntegration.type;
 
             const item: LocalQuickPickItem = {

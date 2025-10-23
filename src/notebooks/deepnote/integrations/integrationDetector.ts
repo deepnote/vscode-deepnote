@@ -53,7 +53,8 @@ export class IntegrationDetector implements IIntegrationDetector {
             logger.debug(`IntegrationDetector: Found integration: ${integrationId} (${projectIntegration.type})`);
 
             // Map the Deepnote integration type to our IntegrationType
-            const integrationType = DEEPNOTE_TO_INTEGRATION_TYPE[projectIntegration.type];
+            const integrationType =
+                DEEPNOTE_TO_INTEGRATION_TYPE[projectIntegration.type as keyof typeof DEEPNOTE_TO_INTEGRATION_TYPE];
 
             // Skip unknown integration types
             if (!integrationType) {

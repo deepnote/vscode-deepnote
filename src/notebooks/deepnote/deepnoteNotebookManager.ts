@@ -97,6 +97,8 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
 
         if (currentNotebookId) {
             this.storeOriginalProject(projectId, updatedProject, currentNotebookId);
+        } else {
+            this.originalProjects.set(projectId, updatedProject);
         }
 
         return true;

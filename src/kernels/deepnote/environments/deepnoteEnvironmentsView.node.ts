@@ -7,16 +7,16 @@ import { IDisposableRegistry } from '../../../platform/common/types';
 import { logger } from '../../../platform/logging';
 import { IPythonApiProvider } from '../../../platform/api/types';
 import { IDeepnoteEnvironmentManager, IDeepnoteKernelAutoSelector, IDeepnoteNotebookEnvironmentMapper } from '../types';
-import { DeepnoteEnvironmentTreeDataProvider } from './deepnoteEnvironmentTreeDataProvider';
-import { DeepnoteEnvironmentTreeItem } from './deepnoteEnvironmentTreeItem';
-import { CreateEnvironmentOptions } from './deepnoteEnvironment';
+import { DeepnoteEnvironmentTreeDataProvider } from './deepnoteEnvironmentTreeDataProvider.node';
+import { DeepnoteEnvironmentTreeItem } from './deepnoteEnvironmentTreeItem.node';
+import { CreateDeepnoteEnvironmentOptions } from './deepnoteEnvironment';
 import {
     getCachedEnvironment,
     resolvedPythonEnvToJupyterEnv,
     getPythonEnvironmentName
 } from '../../../platform/interpreter/helpers';
 import { getDisplayPath } from '../../../platform/common/platform/fs-paths';
-import { IKernelProvider } from '../../../kernels/types';
+import { IKernelProvider } from '../../types';
 
 /**
  * View controller for the Deepnote kernel environments tree view.
@@ -236,7 +236,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 async (progress: { report: (value: { message?: string; increment?: number }) => void }) => {
                     progress.report({ message: 'Setting up virtual environment...' });
 
-                    const options: CreateEnvironmentOptions = {
+                    const options: CreateDeepnoteEnvironmentOptions = {
                         name: name.trim(),
                         pythonInterpreter: selectedInterpreter.interpreter,
                         packages,

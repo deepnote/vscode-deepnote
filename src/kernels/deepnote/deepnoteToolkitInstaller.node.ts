@@ -185,19 +185,6 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
     }
 
     /**
-     * Legacy file-based method (for backward compatibility).
-     * @deprecated Use ensureVenvAndToolkit instead
-     */
-    public async ensureInstalled(
-        baseInterpreter: PythonEnvironment,
-        deepnoteFileUri: Uri,
-        token?: CancellationToken
-    ): Promise<PythonEnvironment | undefined> {
-        const venvPath = this.getVenvPath(deepnoteFileUri);
-        return this.ensureVenvAndToolkit(baseInterpreter, venvPath, token);
-    }
-
-    /**
      * Install venv and toolkit at a specific path (environment-based).
      */
     private async installVenvAndToolkit(

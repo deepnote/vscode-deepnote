@@ -78,7 +78,7 @@ export interface DeepnoteEnvironmentState {
 /**
  * Options for creating a new kernel environment
  */
-export interface CreateEnvironmentOptions {
+export interface CreateDeepnoteEnvironmentOptions {
     name: string;
     pythonInterpreter: PythonEnvironment;
     packages?: string[];

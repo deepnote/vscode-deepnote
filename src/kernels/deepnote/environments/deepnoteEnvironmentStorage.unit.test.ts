@@ -1,7 +1,7 @@
 import { assert } from 'chai';
 import { anything, instance, mock, when, verify, deepEqual } from 'ts-mockito';
 import { Memento, Uri } from 'vscode';
-import { DeepnoteEnvironmentStorage } from './deepnoteEnvironmentStorage';
+import { DeepnoteEnvironmentStorage } from './deepnoteEnvironmentStorage.node';
 import { IExtensionContext } from '../../../platform/common/types';
 import { IInterpreterService } from '../../../platform/interpreter/contracts';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';

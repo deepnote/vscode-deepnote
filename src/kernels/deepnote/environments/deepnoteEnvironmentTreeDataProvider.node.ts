@@ -3,7 +3,7 @@
 
 import { Event, EventEmitter, TreeDataProvider, TreeItem } from 'vscode';
 import { IDeepnoteEnvironmentManager } from '../types';
-import { EnvironmentTreeItemType, DeepnoteEnvironmentTreeItem } from './deepnoteEnvironmentTreeItem';
+import { EnvironmentTreeItemType, DeepnoteEnvironmentTreeItem } from './deepnoteEnvironmentTreeItem.node';
 import { EnvironmentStatus } from './deepnoteEnvironment';
 
 /**
@@ -52,7 +52,12 @@ export class DeepnoteEnvironmentTreeDataProvider implements TreeDataProvider<Dee
             const statusInfo = this.environmentManager.getEnvironmentWithStatus(config.id);
             const status = statusInfo?.status || EnvironmentStatus.Stopped;
 
-            const item = new DeepnoteEnvironmentTreeItem(EnvironmentTreeItemType.Environment, config, status);
+            const item = new DeepnoteEnvironmentTreeItem(
+                EnvironmentTreeItemType.Environment,
+                // deepnoteEnvironmentToView(config),
+                config,
+                status
+            );
 
             items.push(item);
         }

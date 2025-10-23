@@ -7,6 +7,11 @@ import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { JupyterServerProviderHandle } from '../jupyter/types';
 import { serializePythonEnvironment } from '../../platform/api/pythonApi';
 import { getTelemetrySafeHashedString } from '../../platform/telemetry/helpers';
+import {
+    CreateDeepnoteEnvironmentOptions,
+    DeepnoteEnvironment,
+    DeepnoteEnvironmentWithStatus
+} from './environments/deepnoteEnvironment';
 
 /**
  * Connection metadata for Deepnote Toolkit Kernels.
@@ -96,20 +101,6 @@ export interface IDeepnoteToolkitInstaller {
         packages: string[],
         token?: vscode.CancellationToken
     ): Promise<void>;
-
-    /**
-     * Legacy method: Ensures deepnote-toolkit is installed in a dedicated virtual environment.
-     * File-based method (for backward compatibility).
-     * @param baseInterpreter The base Python interpreter to use for creating the venv
-     * @param deepnoteFileUri The URI of the .deepnote file (used to create a unique venv per file)
-     * @param token Cancellation token to cancel the operation
-     * @returns The Python interpreter from the venv if installed successfully, undefined otherwise
-     */
-    ensureInstalled(
-        baseInterpreter: PythonEnvironment,
-        deepnoteFileUri: vscode.Uri,
-        token?: vscode.CancellationToken
-    ): Promise<PythonEnvironment | undefined>;
 
     /**
      * Gets the venv Python interpreter if toolkit is installed, undefined otherwise.
@@ -212,35 +203,29 @@ export interface IDeepnoteEnvironmentManager {
     /**
      * Create a new kernel environment
      */
-    createEnvironment(
-        options: import('./environments/deepnoteEnvironment').CreateEnvironmentOptions
-    ): Promise<import('./environments/deepnoteEnvironment').DeepnoteEnvironment>;
+    createEnvironment(options: CreateDeepnoteEnvironmentOptions): Promise<DeepnoteEnvironment>;
 
     /**
      * Get all environments
      */
-    listEnvironments(): import('./environments/deepnoteEnvironment').DeepnoteEnvironment[];
+    listEnvironments(): DeepnoteEnvironment[];
 
     /**
      * Get a specific environment by ID
      */
-    getEnvironment(id: string): import('./environments/deepnoteEnvironment').DeepnoteEnvironment | undefined;
+    getEnvironment(id: string): DeepnoteEnvironment | undefined;
 
     /**
      * Get environment with status information
      */
-    getEnvironmentWithStatus(
-        id: string
-    ): import('./environments/deepnoteEnvironment').DeepnoteEnvironmentWithStatus | undefined;
+    getEnvironmentWithStatus(id: string): DeepnoteEnvironmentWithStatus | undefined;
 
     /**
      * Update an environment's metadata
      */
     updateEnvironment(
         id: string,
-        updates: Partial<
-            Pick<import('./environments/deepnoteEnvironment').DeepnoteEnvironment, 'name' | 'packages' | 'description'>
-        >
+        updates: Partial<Pick<DeepnoteEnvironment, 'name' | 'packages' | 'description'>>
     ): Promise<void>;
 
     /**
@@ -286,9 +271,7 @@ export interface IDeepnoteEnvironmentPicker {
      * @param notebookUri The notebook URI (for context in messages)
      * @returns Selected environment, or undefined if cancelled
      */
-    pickEnvironment(
-        notebookUri: vscode.Uri
-    ): Promise<import('./environments/deepnoteEnvironment').DeepnoteEnvironment | undefined>;
+    pickEnvironment(notebookUri: vscode.Uri): Promise<DeepnoteEnvironment | undefined>;
 }
 
 export const IDeepnoteNotebookEnvironmentMapper = Symbol('IDeepnoteNotebookEnvironmentMapper');

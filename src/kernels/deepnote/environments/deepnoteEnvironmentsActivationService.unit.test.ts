@@ -2,7 +2,7 @@ import { assert } from 'chai';
 import { instance, mock, when, verify } from 'ts-mockito';
 import { DeepnoteEnvironmentsActivationService } from './deepnoteEnvironmentsActivationService';
 import { IDeepnoteEnvironmentManager } from '../types';
-import { DeepnoteEnvironmentsView } from './deepnoteEnvironmentsView';
+import { DeepnoteEnvironmentsView } from './deepnoteEnvironmentsView.node';
 
 suite('DeepnoteEnvironmentsActivationService', () => {
     let activationService: DeepnoteEnvironmentsActivationService;

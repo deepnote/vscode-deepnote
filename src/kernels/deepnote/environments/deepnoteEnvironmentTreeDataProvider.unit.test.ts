@@ -1,11 +1,11 @@
 import { assert } from 'chai';
 import { instance, mock, when } from 'ts-mockito';
 import { Uri, EventEmitter } from 'vscode';
-import { DeepnoteEnvironmentTreeDataProvider } from './deepnoteEnvironmentTreeDataProvider';
+import { DeepnoteEnvironmentTreeDataProvider } from './deepnoteEnvironmentTreeDataProvider.node';
 import { IDeepnoteEnvironmentManager } from '../types';
 import { DeepnoteEnvironment, DeepnoteEnvironmentWithStatus, EnvironmentStatus } from './deepnoteEnvironment';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
-import { EnvironmentTreeItemType } from './deepnoteEnvironmentTreeItem';
+import { EnvironmentTreeItemType } from './deepnoteEnvironmentTreeItem.node';
 
 suite('DeepnoteEnvironmentTreeDataProvider', () => {
     let provider: DeepnoteEnvironmentTreeDataProvider;

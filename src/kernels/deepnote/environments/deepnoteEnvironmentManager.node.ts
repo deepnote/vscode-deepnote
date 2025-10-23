@@ -4,9 +4,9 @@ import { generateUuid as uuid } from '../../../platform/common/uuid';
 import { IExtensionContext } from '../../../platform/common/types';
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
 import { logger } from '../../../platform/logging';
-import { DeepnoteEnvironmentStorage } from './deepnoteEnvironmentStorage';
+import { DeepnoteEnvironmentStorage } from './deepnoteEnvironmentStorage.node';
 import {
-    CreateEnvironmentOptions,
+    CreateDeepnoteEnvironmentOptions,
     DeepnoteEnvironment,
     DeepnoteEnvironmentWithStatus,
     EnvironmentStatus
@@ -74,7 +74,7 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
     /**
      * Create a new kernel environment
      */
-    public async createEnvironment(options: CreateEnvironmentOptions): Promise<DeepnoteEnvironment> {
+    public async createEnvironment(options: CreateDeepnoteEnvironmentOptions): Promise<DeepnoteEnvironment> {
         const id = uuid();
         const venvPath = Uri.joinPath(this.context.globalStorageUri, 'deepnote-venvs', id);
 

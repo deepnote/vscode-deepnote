@@ -41,7 +41,8 @@ import { IDeepnoteInitNotebookRunner } from './deepnoteInitNotebookRunner.node';
 import { IDeepnoteNotebookManager } from '../types';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
 import { DeepnoteProject } from './deepnoteTypes';
-import { IKernelProvider, IKernel } from '../../kernels/types';
+import { IKernelProvider, IKernel, IJupyterKernelSpec } from '../../kernels/types';
+import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnoteEnvironment';
 
 /**
  * Automatically selects and starts Deepnote kernel for .deepnote notebooks
@@ -412,7 +413,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
     private async ensureKernelSelectedWithConfiguration(
         notebook: NotebookDocument,
-        configuration: import('./../../kernels/deepnote/environments/deepnoteEnvironment').DeepnoteEnvironment,
+        // configuration: import('./../../kernels/deepnote/environments/deepnoteEnvironment').DeepnoteEnvironment,
+        configuration: DeepnoteEnvironment,
         baseFileUri: Uri,
         notebookKey: string,
         progress: { report(value: { message?: string; increment?: number }): void },
@@ -593,10 +595,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
      * @returns The selected kernel spec
      * @throws Error if no suitable kernel spec is found
      */
-    public selectKernelSpec(
-        kernelSpecs: import('../../kernels/types').IJupyterKernelSpec[],
-        environmentId: string
-    ): import('../../kernels/types').IJupyterKernelSpec {
+    public selectKernelSpec(kernelSpecs: IJupyterKernelSpec[], environmentId: string): IJupyterKernelSpec {
         // Look for environment-specific kernel first
         const expectedKernelName = `deepnote-${environmentId}`;
         logger.info(`Looking for environment-specific kernel: ${expectedKernelName}`);

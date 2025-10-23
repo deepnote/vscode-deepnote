@@ -1,8 +1,8 @@
 import { assert } from 'chai';
 import { anything, instance, mock, when, verify, deepEqual } from 'ts-mockito';
 import { Uri } from 'vscode';
-import { DeepnoteEnvironmentManager } from './deepnoteEnvironmentManager';
-import { DeepnoteEnvironmentStorage } from './deepnoteEnvironmentStorage';
+import { DeepnoteEnvironmentManager } from './deepnoteEnvironmentManager.node';
+import { DeepnoteEnvironmentStorage } from './deepnoteEnvironmentStorage.node';
 import { IExtensionContext } from '../../../platform/common/types';
 import { IDeepnoteServerStarter, IDeepnoteToolkitInstaller, DeepnoteServerInfo } from '../types';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';

@@ -2,11 +2,57 @@
 // Licensed under the MIT License.
 
 import { inject, injectable } from 'inversify';
-import { QuickPickItem, window, Uri, commands } from 'vscode';
+import { QuickPickItem, window, Uri, commands, ThemeColor } from 'vscode';
 import { logger } from '../../../platform/logging';
 import { IDeepnoteEnvironmentManager } from '../types';
-import { DeepnoteEnvironment } from './deepnoteEnvironment';
+import { DeepnoteEnvironment, EnvironmentStatus } from './deepnoteEnvironment';
 import { getDisplayPath } from '../../../platform/common/platform/fs-paths';
+
+export function getDeepnoteEnvironmentStatusVisual(status: EnvironmentStatus): {
+    icon: string;
+    text: string;
+    themeColor: ThemeColor;
+    contextValue: string;
+} {
+    switch (status) {
+        case EnvironmentStatus.Running:
+            return {
+                icon: 'vm-running',
+                text: 'Running',
+                contextValue: 'deepnoteEnvironment.running',
+                themeColor: { id: 'charts.green' }
+            };
+        case EnvironmentStatus.Starting:
+            return {
+                icon: 'vm-outline',
+                text: 'Starting',
+                contextValue: 'deepnoteEnvironment.starting',
+                themeColor: { id: 'charts.yellow' }
+            };
+        case EnvironmentStatus.Stopped:
+            return {
+                icon: 'vm-outline',
+                text: 'Stopped',
+                contextValue: 'deepnoteEnvironment.stopped',
+                themeColor: { id: 'charts.gray' }
+            };
+        case EnvironmentStatus.Error:
+            return {
+                icon: 'vm-outline',
+                text: 'Error',
+                contextValue: 'deepnoteEnvironment.stopped',
+                themeColor: { id: 'charts.gray' }
+            };
+        default:
+            status satisfies never;
+            return {
+                icon: 'vm-outline',
+                text: 'Unknown',
+                contextValue: 'deepnoteEnvironment.stopped',
+                themeColor: { id: 'charts.gray' }
+            };
+    }
+}
 
 /**
  * Handles showing environment picker UI for notebook selection
@@ -56,11 +102,12 @@ export class DeepnoteEnvironmentPicker {
         // Build quick pick items
         const items: (QuickPickItem & { environment?: DeepnoteEnvironment })[] = environments.map((env) => {
             const envWithStatus = this.environmentManager.getEnvironmentWithStatus(env.id);
-            const statusIcon = envWithStatus?.status === 'running' ? '$(vm-running)' : '$(vm-outline)';
-            const statusText = envWithStatus?.status === 'running' ? '[Running]' : '[Stopped]';
+            const { icon, text } = getDeepnoteEnvironmentStatusVisual(
+                envWithStatus?.status || EnvironmentStatus.Stopped
+            );
 
             return {
-                label: `${statusIcon} ${env.name} ${statusText}`,
+                label: `$(${icon}) ${env.name} [${text}]`,
                 description: getDisplayPath(env.pythonInterpreter.uri),
                 detail: env.packages?.length ? `Packages: ${env.packages.join(', ')}` : 'No additional packages',
                 environment: env

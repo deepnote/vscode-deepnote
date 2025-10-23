@@ -1,7 +1,7 @@
 import { assert } from 'chai';
 import { anything, instance, mock, when, verify } from 'ts-mockito';
 import { Disposable } from 'vscode';
-import { DeepnoteEnvironmentsView } from './deepnoteEnvironmentsView';
+import { DeepnoteEnvironmentsView } from './deepnoteEnvironmentsView.node';
 import { IDeepnoteEnvironmentManager, IDeepnoteKernelAutoSelector, IDeepnoteNotebookEnvironmentMapper } from '../types';
 import { IPythonApiProvider } from '../../../platform/api/types';
 import { IDisposableRegistry } from '../../../platform/common/types';

@@ -1,5 +1,6 @@
 import { ThemeIcon, TreeItem, TreeItemCollapsibleState } from 'vscode';
 import { DeepnoteEnvironment, EnvironmentStatus } from './deepnoteEnvironment';
+import { getDeepnoteEnvironmentStatusVisual } from './deepnoteEnvironmentPicker';
 
 /**
  * Type of tree item in the environments view
@@ -37,28 +38,11 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
             return;
         }
 
-        const isRunning = this.status === EnvironmentStatus.Running;
-        const isStarting = this.status === EnvironmentStatus.Starting;
+        const statusVisual = getDeepnoteEnvironmentStatusVisual(this.status);
 
-        // Set label with status indicator
-        const statusText = isRunning ? '[Running]' : isStarting ? '[Starting...]' : '[Stopped]';
-        this.label = `${this.environment.name} ${statusText}`;
-
-        // Set icon based on status
-        if (isRunning) {
-            this.iconPath = new ThemeIcon('vm-running', { id: 'charts.green' });
-        } else if (isStarting) {
-            this.iconPath = new ThemeIcon('loading~spin', { id: 'charts.yellow' });
-        } else {
-            this.iconPath = new ThemeIcon('vm-outline', { id: 'charts.gray' });
-        }
-
-        // Set context value for command filtering
-        this.contextValue = isRunning
-            ? 'deepnoteEnvironment.running'
-            : isStarting
-            ? 'deepnoteEnvironment.starting'
-            : 'deepnoteEnvironment.stopped';
+        this.label = `${this.environment.name} [${statusVisual.text}]`;
+        this.iconPath = new ThemeIcon(statusVisual.icon, { id: statusVisual.themeColor.id });
+        this.contextValue = statusVisual.contextValue;
 
         // Make it collapsible to show info items
         this.collapsibleState = TreeItemCollapsibleState.Collapsed;
@@ -99,6 +83,8 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
         lines.push(`Status: ${this.status}`);
         lines.push(`Python: ${this.environment.pythonInterpreter.uri.fsPath}`);
         lines.push(`Venv: ${this.environment.venvPath.fsPath}`);
+        // lines.push(`Python: ${this.environment.pythonInterpreter.uriFsPath}`);
+        // lines.push(`Venv: ${this.environment.venvPathFsPath}`);
 
         if (this.environment.packages && this.environment.packages.length > 0) {
             lines.push(`Packages: ${this.environment.packages.join(', ')}`);

@@ -4,7 +4,7 @@
 import { inject, injectable } from 'inversify';
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
 import { IDeepnoteEnvironmentManager } from '../types';
-import { DeepnoteEnvironmentsView } from './deepnoteEnvironmentsView';
+import { DeepnoteEnvironmentsView } from './deepnoteEnvironmentsView.node';
 import { logger } from '../../../platform/logging';
 
 /**

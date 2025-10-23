@@ -1,0 +1,54 @@
+.deepnote-big-number-container {
+    display: flex;
+    flex-direction: row;
+}
+
+.deepnote-big-number-card {
+    display: flex;
+    flex-shrink: 0;
+    padding: 16px;
+    border-radius: 6px;
+    border: 1px solid var(--vscode-panel-border);
+    font-size: 13px;
+}
+
+.deepnote-big-number-content {
+    width: 200px;
+}
+
+.deepnote-big-number-title {
+    word-wrap: break-word;
+    margin: 0;
+}
+
+.deepnote-big-number-value {
+    font-size: 24px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.deepnote-big-number-comparison {
+    display: flex;
+    column-gap: 0.5rem;
+}
+
+.deepnote-comparison-text {
+    margin: 0;
+}
+
+.deepnote-comparison-title {
+    margin: 0;
+}
+
+/* Conditional comparison colors */
+.deepnote-comparison-positive {
+    color: var(--vscode-charts-green);
+}
+
+.deepnote-comparison-negative {
+    color: var(--vscode-errorForeground);
+}
+
+.deepnote-comparison-neutral {
+    color: var(--vscode-foreground);
+}

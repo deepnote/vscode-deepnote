@@ -1849,11 +1849,29 @@
                 "requiresMessaging": "optional"
             },
             {
+                "id": "deepnote-chart-big-number-renderer",
+                "displayName": "Deepnote Chart Big Number Renderer",
+                "entrypoint": "./dist/webviews/webview-side/chartBigNumberRenderer/chartBigNumberRenderer.js",
+                "mimeTypes": [
+                    "application/vnd.deepnote.chart.big-number+json"
+                ],
+                "requiresMessaging": "optional"
+            },
+            {
                 "id": "deepnote-vega-renderer",
                 "displayName": "Deepnote Vega Chart Renderer",
                 "entrypoint": "./dist/webviews/webview-side/vegaRenderer/vegaRenderer.js",
                 "mimeTypes": [
                     "application/vnd.vega.v5+json"
+                ],
+                "requiresMessaging": "optional"
+            },
+            {
+                "id": "deepnote-sql-metadata-renderer",
+                "displayName": "Deepnote SQL Metadata Renderer",
+                "entrypoint": "./dist/webviews/webview-side/sqlMetadataRenderer/sqlMetadataRenderer.js",
+                "mimeTypes": [
+                    "application/vnd.deepnote.sql-output-metadata+json"
                 ],
                 "requiresMessaging": "optional"
             }
@@ -2197,6 +2215,7 @@
         "react": "^16.5.2",
         "react-data-grid": "^6.0.2-0",
         "react-dom": "^16.5.2",
+        "react-error-boundary": "^6.0.0",
         "react-redux": "^7.1.1",
         "react-svg-pan-zoom": "3.9.0",
         "react-svgmt": "1.1.11",
@@ -2225,7 +2244,8 @@
         "vscode-tas-client": "^0.1.84",
         "ws": "^6.2.3",
         "zeromq": "^6.5.0",
-        "zeromqold": "npm:zeromq@^6.0.0-beta.6"
+        "zeromqold": "npm:zeromq@^6.0.0-beta.6",
+        "zod": "^4.1.12"
     },
     "devDependencies": {
         "@actions/core": "^1.11.1",

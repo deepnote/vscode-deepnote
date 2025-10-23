@@ -24,6 +24,7 @@ import {
     window,
     extensions
 } from 'vscode';
+import { coerce, SemVer } from 'semver';
 
 import type { Kernel } from '@jupyterlab/services';
 import { CellExecutionCreator } from './cellExecutionCreator';
@@ -45,7 +46,7 @@ import { handleTensorBoardDisplayDataOutput } from './executionHelpers';
 import { Identifiers, RendererExtension, WIDGET_MIMETYPE } from '../../platform/common/constants';
 import { CellOutputDisplayIdTracker } from './cellDisplayIdTracker';
 import { createDeferred } from '../../platform/common/utils/async';
-import { coerce, SemVer } from 'semver';
+import { CHART_BIG_NUMBER_MIME_TYPE } from '../../platform/deepnote/deepnoteConstants';
 
 // Helper interface for the set_next_input execute reply payload
 interface ISetNextInputPayload {
@@ -1181,6 +1182,15 @@ export class CellExecutionMessageHandler implements IDisposable {
         const output = translateCellDisplayOutput(
             new NotebookCellOutput(outputToBeUpdated.outputItems, outputToBeUpdated.outputContainer.metadata)
         );
+
+        const data = msg.content.data;
+        // deepnote-toolkit returns the text/plain mime type for big number outputs
+        // and for the custom renderer to be used, we need to return the application/vnd.deepnote.chart.big-number+json mime type
+        if (outputToBeUpdated.cell.metadata['__deepnotePocket']?.['type'] === 'big-number') {
+            data[CHART_BIG_NUMBER_MIME_TYPE] = data['text/plain'];
+            delete data['text/plain'];
+        }
+
         const newOutput = cellOutputToVSCCellOutput(
             {
                 ...output,

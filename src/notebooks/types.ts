@@ -4,7 +4,7 @@
 import { NotebookDocument, NotebookEditor, Uri, type Event } from 'vscode';
 import { Resource } from '../platform/common/types';
 import type { EnvironmentPath } from '@vscode/python-extension';
-import { DeepnoteProject } from './deepnote/deepnoteTypes';
+import { DeepnoteProject } from '../platform/deepnote/deepnoteTypes';
 
 export interface IEmbedNotebookEditorProvider {
     findNotebookEditor(resource: Resource): NotebookEditor | undefined;

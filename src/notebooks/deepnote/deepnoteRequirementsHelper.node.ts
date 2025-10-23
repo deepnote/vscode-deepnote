@@ -2,7 +2,7 @@ import { inject, injectable } from 'inversify';
 import { workspace, CancellationToken, window, Uri, l10n } from 'vscode';
 import * as fs from 'fs';
 
-import type { DeepnoteProject } from './deepnoteTypes';
+import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 import { ILogger } from '../../platform/logging/types';
 import { IPersistentStateFactory } from '../../platform/common/types';
 

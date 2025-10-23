@@ -5,7 +5,7 @@ import { PostgresIntegrationConfig } from './types';
 export interface IPostgresFormProps {
     integrationId: string;
     existingConfig: PostgresIntegrationConfig | null;
-    projectName?: string;
+    integrationName?: string;
     onSave: (config: PostgresIntegrationConfig) => void;
     onCancel: () => void;
 }
@@ -13,11 +13,11 @@ export interface IPostgresFormProps {
 export const PostgresForm: React.FC<IPostgresFormProps> = ({
     integrationId,
     existingConfig,
-    projectName,
+    integrationName,
     onSave,
     onCancel
 }) => {
-    const [name, setName] = React.useState(existingConfig?.name || projectName || '');
+    const [name, setName] = React.useState(existingConfig?.name || integrationName || '');
     const [host, setHost] = React.useState(existingConfig?.host || '');
     const [port, setPort] = React.useState(existingConfig?.port?.toString() || '5432');
     const [database, setDatabase] = React.useState(existingConfig?.database || '');
@@ -25,7 +25,7 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({
     const [password, setPassword] = React.useState(existingConfig?.password || '');
     const [ssl, setSsl] = React.useState(existingConfig?.ssl || false);
 
-    // Update form fields when existingConfig or projectName changes
+    // Update form fields when existingConfig or integrationName changes
     React.useEffect(() => {
         if (existingConfig) {
             setName(existingConfig.name || '');
@@ -36,7 +36,7 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({
             setPassword(existingConfig.password || '');
             setSsl(existingConfig.ssl || false);
         } else {
-            setName(projectName || '');
+            setName(integrationName || '');
             setHost('');
             setPort('5432');
             setDatabase('');
@@ -44,7 +44,7 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({
             setPassword('');
             setSsl(false);
         }
-    }, [existingConfig, projectName]);
+    }, [existingConfig, integrationName]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();

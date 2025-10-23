@@ -174,8 +174,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         const integrationsData = Array.from(this.integrations.entries()).map(([id, integration]) => ({
             config: integration.config,
             id,
-            projectName: integration.projectName,
-            projectType: integration.projectType,
+            integrationName: integration.integrationName,
+            integrationType: integration.integrationType,
             status: integration.status
         }));
         logger.debug(`IntegrationWebviewProvider: Sending ${integrationsData.length} integrations to webview`);
@@ -225,8 +225,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         await this.currentPanel?.webview.postMessage({
             config: integration.config,
             integrationId,
-            projectName: integration.projectName,
-            projectType: integration.projectType,
+            integrationName: integration.integrationName,
+            integrationType: integration.integrationType,
             type: 'showForm'
         });
     }
@@ -313,8 +313,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         // Build the integrations list from current integrations
         const projectIntegrations = Array.from(this.integrations.entries())
             .map(([id, integration]) => {
-                // Get the integration type from config or project metadata
-                const type = integration.config?.type || integration.projectType;
+                // Get the integration type from config or integration metadata
+                const type = integration.config?.type || integration.integrationType;
                 if (!type) {
                     logger.warn(`IntegrationWebviewProvider: No type found for integration ${id}, skipping`);
                     return null;
@@ -329,7 +329,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
 
                 return {
                     id,
-                    name: integration.config?.name || integration.projectName || id,
+                    name: integration.config?.name || integration.integrationName || id,
                     type: deepnoteType
                 };
             })

@@ -5,7 +5,7 @@ import { BigQueryIntegrationConfig } from './types';
 export interface IBigQueryFormProps {
     integrationId: string;
     existingConfig: BigQueryIntegrationConfig | null;
-    projectName?: string;
+    integrationName?: string;
     onSave: (config: BigQueryIntegrationConfig) => void;
     onCancel: () => void;
 }
@@ -13,16 +13,16 @@ export interface IBigQueryFormProps {
 export const BigQueryForm: React.FC<IBigQueryFormProps> = ({
     integrationId,
     existingConfig,
-    projectName,
+    integrationName,
     onSave,
     onCancel
 }) => {
-    const [name, setName] = React.useState(existingConfig?.name || projectName || '');
+    const [name, setName] = React.useState(existingConfig?.name || integrationName || '');
     const [projectId, setProjectId] = React.useState(existingConfig?.projectId || '');
     const [credentials, setCredentials] = React.useState(existingConfig?.credentials || '');
     const [credentialsError, setCredentialsError] = React.useState<string | null>(null);
 
-    // Update form fields when existingConfig or projectName changes
+    // Update form fields when existingConfig or integrationName changes
     React.useEffect(() => {
         if (existingConfig) {
             setName(existingConfig.name || '');
@@ -30,12 +30,12 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({
             setCredentials(existingConfig.credentials || '');
             setCredentialsError(null);
         } else {
-            setName(projectName || '');
+            setName(integrationName || '');
             setProjectId('');
             setCredentials('');
             setCredentialsError(null);
         }
-    }, [existingConfig, projectName]);
+    }, [existingConfig, integrationName]);
 
     const validateCredentials = (value: string): boolean => {
         if (!value.trim()) {

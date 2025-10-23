@@ -61,9 +61,9 @@ export class IntegrationDetector implements IIntegrationDetector {
             const status: IntegrationWithStatus = {
                 config: config || null,
                 status: config ? IntegrationStatus.Connected : IntegrationStatus.Disconnected,
-                // Include project metadata for prefilling when config is null
-                projectName: projectIntegration.name,
-                projectType: integrationType
+                // Include integration metadata from project for prefilling when config is null
+                integrationName: projectIntegration.name,
+                integrationType: integrationType
             };
 
             integrations.set(integrationId, status);

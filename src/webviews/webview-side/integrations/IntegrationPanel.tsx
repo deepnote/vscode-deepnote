@@ -14,8 +14,10 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
     const [integrations, setIntegrations] = React.useState<IntegrationWithStatus[]>([]);
     const [selectedIntegrationId, setSelectedIntegrationId] = React.useState<string | null>(null);
     const [selectedConfig, setSelectedConfig] = React.useState<IntegrationConfig | null>(null);
-    const [selectedProjectName, setSelectedProjectName] = React.useState<string | undefined>(undefined);
-    const [selectedProjectType, setSelectedProjectType] = React.useState<IntegrationType | undefined>(undefined);
+    const [selectedIntegrationName, setSelectedIntegrationName] = React.useState<string | undefined>(undefined);
+    const [selectedIntegrationType, setSelectedIntegrationType] = React.useState<IntegrationType | undefined>(
+        undefined
+    );
     const [message, setMessage] = React.useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [confirmDelete, setConfirmDelete] = React.useState<string | null>(null);
 
@@ -53,8 +55,8 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
                 case 'showForm':
                     setSelectedIntegrationId(msg.integrationId);
                     setSelectedConfig(msg.config);
-                    setSelectedProjectName(msg.projectName);
-                    setSelectedProjectType(msg.projectType);
+                    setSelectedIntegrationName(msg.integrationName);
+                    setSelectedIntegrationType(msg.integrationType);
                     break;
 
                 case 'success':
@@ -148,8 +150,8 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
                 <ConfigurationForm
                     integrationId={selectedIntegrationId}
                     existingConfig={selectedConfig}
-                    projectName={selectedProjectName}
-                    projectType={selectedProjectType}
+                    integrationName={selectedIntegrationName}
+                    integrationType={selectedIntegrationType}
                     onSave={handleSave}
                     onCancel={handleCancel}
                 />

@@ -29,11 +29,11 @@ export const IntegrationItem: React.FC<IIntegrationItemProps> = ({ integration, 
         ? getLocString('integrationsReconfigure', 'Reconfigure')
         : getLocString('integrationsConfigure', 'Configure');
 
-    // Get the name: prefer config name, then project name, then ID
-    const name = integration.config?.name || integration.projectName || integration.id;
+    // Get the name: prefer config name, then integration name from project, then ID
+    const name = integration.config?.name || integration.integrationName || integration.id;
 
-    // Get the type: prefer config type, then project type
-    const type = integration.config?.type || integration.projectType;
+    // Get the type: prefer config type, then integration type from project
+    const type = integration.config?.type || integration.integrationType;
 
     // Build display name with type
     const displayName = type ? `${name} (${getIntegrationTypeLabel(type)})` : name;

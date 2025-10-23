@@ -30,8 +30,8 @@ export interface IntegrationWithStatus {
     id: string;
     config: IntegrationConfig | null;
     status: IntegrationStatus;
-    projectName?: string;
-    projectType?: IntegrationType;
+    integrationName?: string;
+    integrationType?: IntegrationType;
 }
 
 export interface IVsCodeMessage {
@@ -49,8 +49,8 @@ export interface ShowFormMessage {
     type: 'showForm';
     integrationId: string;
     config: IntegrationConfig | null;
-    projectName?: string;
-    projectType?: IntegrationType;
+    integrationName?: string;
+    integrationType?: IntegrationType;
 }
 
 export interface StatusMessage {

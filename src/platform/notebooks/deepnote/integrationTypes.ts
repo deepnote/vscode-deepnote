@@ -93,9 +93,9 @@ export interface IntegrationWithStatus {
     /**
      * Name from the project's integrations list (used for prefilling when config is null)
      */
-    projectName?: string;
+    integrationName?: string;
     /**
      * Type from the project's integrations list (used for prefilling when config is null)
      */
-    projectType?: IntegrationType;
+    integrationType?: IntegrationType;
 }

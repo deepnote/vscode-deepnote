@@ -249,6 +249,10 @@ export class DeepnoteDataConverter {
                     );
                 } else if (item.mime === 'application/vnd.vega.v5+json') {
                     data['application/vnd.vega.v5+json'] = JSON.parse(new TextDecoder().decode(item.data));
+                } else if (item.mime === 'application/vnd.deepnote.sql-output-metadata+json') {
+                    data['application/vnd.deepnote.sql-output-metadata+json'] = JSON.parse(
+                        new TextDecoder().decode(item.data)
+                    );
                 }
             }
 
@@ -331,6 +335,15 @@ export class DeepnoteDataConverter {
                                 NotebookCellOutputItem.json(
                                     data['application/vnd.vega.v5+json'],
                                     'application/vnd.vega.v5+json'
+                                )
+                            );
+                        }
+
+                        if (data['application/vnd.deepnote.sql-output-metadata+json']) {
+                            items.push(
+                                NotebookCellOutputItem.json(
+                                    data['application/vnd.deepnote.sql-output-metadata+json'],
+                                    'application/vnd.deepnote.sql-output-metadata+json'
                                 )
                             );
                         }

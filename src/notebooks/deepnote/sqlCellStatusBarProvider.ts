@@ -202,7 +202,19 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
         // Get integration configuration to display the name
         const config = await this.integrationStorage.getProjectIntegrationConfig(projectId, integrationId);
-        const displayName = config?.name || l10n.t('Unknown integration (configure)');
+
+        // Determine the display name
+        let displayName: string;
+        if (config?.name) {
+            // Integration is configured, use the config name
+            displayName = config.name;
+        } else {
+            // Integration is not configured, try to get the name from the project's integration list
+            const project = this.notebookManager.getOriginalProject(projectId);
+            const projectIntegration = project?.project.integrations?.find((i) => i.id === integrationId);
+            const baseName = projectIntegration?.name || l10n.t('Unknown integration');
+            displayName = l10n.t('{0} (configure)', baseName);
+        }
 
         // Create a status bar item that opens the integration picker
         return {

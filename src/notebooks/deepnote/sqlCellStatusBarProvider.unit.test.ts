@@ -158,7 +158,7 @@ suite('SqlCellStatusBarProvider', () => {
         assert.strictEqual(variableItem.priority, 90);
     });
 
-    test('shows "Unknown integration (configure)" when config not found', async () => {
+    test('shows "Unknown integration (configure)" when config not found and not in project list', async () => {
         const integrationId = 'postgres-123';
         const cell = createMockCell(
             'sql',
@@ -171,6 +171,11 @@ suite('SqlCellStatusBarProvider', () => {
         );
 
         when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve(undefined);
+        when(notebookManager.getOriginalProject('project-1')).thenReturn({
+            project: {
+                integrations: []
+            }
+        } as any);
 
         const result = await provider.provideCellStatusBarItems(cell, cancellationToken);
 
@@ -179,6 +184,47 @@ suite('SqlCellStatusBarProvider', () => {
         const items = result as any[];
         assert.strictEqual(items.length, 2);
         assert.strictEqual(items[0].text, '$(database) Unknown integration (configure)');
+        assert.strictEqual(items[0].alignment, 1);
+        assert.strictEqual(items[0].command.command, 'deepnote.switchSqlIntegration');
+        assert.deepStrictEqual(items[0].command.arguments, [cell]);
+        assert.strictEqual(items[1].text, 'Variable: df');
+        assert.strictEqual(items[1].alignment, 1);
+        assert.strictEqual(items[1].command.command, 'deepnote.updateSqlVariableName');
+        assert.strictEqual(items[1].priority, 90);
+    });
+
+    test('shows integration name from project list with (configure) suffix when config not found but integration is in project', async () => {
+        const integrationId = 'postgres-123';
+        const cell = createMockCell(
+            'sql',
+            {
+                sql_integration_id: integrationId
+            },
+            {
+                deepnoteProjectId: 'project-1'
+            }
+        );
+
+        when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve(undefined);
+        when(notebookManager.getOriginalProject('project-1')).thenReturn({
+            project: {
+                integrations: [
+                    {
+                        id: integrationId,
+                        name: 'Production Database',
+                        type: 'pgsql'
+                    }
+                ]
+            }
+        } as any);
+
+        const result = await provider.provideCellStatusBarItems(cell, cancellationToken);
+
+        assert.isDefined(result);
+        assert.isArray(result);
+        const items = result as any[];
+        assert.strictEqual(items.length, 2);
+        assert.strictEqual(items[0].text, '$(database) Production Database (configure)');
         assert.strictEqual(items[0].alignment, 1);
         assert.strictEqual(items[0].command.command, 'deepnote.switchSqlIntegration');
         assert.deepStrictEqual(items[0].command.arguments, [cell]);

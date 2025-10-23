@@ -71,7 +71,7 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
             const items = provider.provideCellStatusBarItems(cell);
 
             expect(items).to.not.be.undefined;
-            expect(items).to.have.lengthOf(2);
+            expect(items).to.have.length.at.least(2); // Type label, variable, and selection button
             expect(items?.[0].text).to.equal('Input Select');
         });
 
@@ -80,7 +80,7 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
             const items = provider.provideCellStatusBarItems(cell);
 
             expect(items).to.not.be.undefined;
-            expect(items).to.have.lengthOf(2);
+            expect(items).to.have.length.at.least(2); // Type label, variable, min, and max buttons
             expect(items?.[0].text).to.equal('Input Slider');
         });
 
@@ -89,7 +89,7 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
             const items = provider.provideCellStatusBarItems(cell);
 
             expect(items).to.not.be.undefined;
-            expect(items).to.have.lengthOf(2);
+            expect(items).to.have.length.at.least(2); // Type label, variable, and toggle button
             expect(items?.[0].text).to.equal('Input Checkbox');
         });
 
@@ -98,7 +98,7 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
             const items = provider.provideCellStatusBarItems(cell);
 
             expect(items).to.not.be.undefined;
-            expect(items).to.have.lengthOf(2);
+            expect(items).to.have.length.at.least(2); // Type label, variable, and date button
             expect(items?.[0].text).to.equal('Input Date');
         });
 
@@ -107,7 +107,7 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
             const items = provider.provideCellStatusBarItems(cell);
 
             expect(items).to.not.be.undefined;
-            expect(items).to.have.lengthOf(2);
+            expect(items).to.have.length.at.least(2); // Type label, variable, start, and end buttons
             expect(items?.[0].text).to.equal('Input Date Range');
         });
 

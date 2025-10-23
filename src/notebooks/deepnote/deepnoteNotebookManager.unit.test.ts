@@ -269,6 +269,29 @@ suite('DeepnoteNotebookManager', () => {
             assert.strictEqual(updatedProject?.version, mockProject.version);
             assert.deepStrictEqual(updatedProject?.metadata, mockProject.metadata);
         });
+
+        test('should update integrations when currentNotebookId is undefined and return true', () => {
+            // Store project with a notebook ID, then clear it to simulate the edge case
+            manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
+            manager.updateCurrentNotebookId('project-123', undefined as any);
+
+            const integrations = [
+                { id: 'int-1', name: 'PostgreSQL', type: 'pgsql' },
+                { id: 'int-2', name: 'BigQuery', type: 'big-query' }
+            ];
+
+            const result = manager.updateProjectIntegrations('project-123', integrations);
+
+            assert.strictEqual(result, true);
+
+            const updatedProject = manager.getOriginalProject('project-123');
+            assert.deepStrictEqual(updatedProject?.project.integrations, integrations);
+            // Verify other properties remain unchanged
+            assert.strictEqual(updatedProject?.project.id, mockProject.project.id);
+            assert.strictEqual(updatedProject?.project.name, mockProject.project.name);
+            assert.strictEqual(updatedProject?.version, mockProject.version);
+            assert.deepStrictEqual(updatedProject?.metadata, mockProject.metadata);
+        });
     });
 
     suite('integration scenarios', () => {

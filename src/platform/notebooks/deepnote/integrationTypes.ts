@@ -20,7 +20,7 @@ export const INTEGRATION_TYPE_TO_DEEPNOTE = {
     [IntegrationType.BigQuery]: 'big-query'
 } as const satisfies { [type in IntegrationType]: string };
 
-type RawIntegrationType = (typeof INTEGRATION_TYPE_TO_DEEPNOTE)[keyof typeof INTEGRATION_TYPE_TO_DEEPNOTE];
+export type RawIntegrationType = (typeof INTEGRATION_TYPE_TO_DEEPNOTE)[keyof typeof INTEGRATION_TYPE_TO_DEEPNOTE];
 
 /**
  * Map Deepnote integration type strings to our IntegrationType enum

@@ -6,7 +6,8 @@ import {
     DATAFRAME_SQL_INTEGRATION_ID,
     DEEPNOTE_TO_INTEGRATION_TYPE,
     IntegrationStatus,
-    IntegrationWithStatus
+    IntegrationWithStatus,
+    RawIntegrationType
 } from '../../../platform/notebooks/deepnote/integrationTypes';
 import { IIntegrationDetector, IIntegrationStorage } from './types';
 
@@ -53,8 +54,7 @@ export class IntegrationDetector implements IIntegrationDetector {
             logger.debug(`IntegrationDetector: Found integration: ${integrationId} (${projectIntegration.type})`);
 
             // Map the Deepnote integration type to our IntegrationType
-            const integrationType =
-                DEEPNOTE_TO_INTEGRATION_TYPE[projectIntegration.type as keyof typeof DEEPNOTE_TO_INTEGRATION_TYPE];
+            const integrationType = DEEPNOTE_TO_INTEGRATION_TYPE[projectIntegration.type as RawIntegrationType];
 
             // Skip unknown integration types
             if (!integrationType) {

@@ -1865,6 +1865,15 @@
                     "application/vnd.vega.v5+json"
                 ],
                 "requiresMessaging": "optional"
+            },
+            {
+                "id": "deepnote-sql-metadata-renderer",
+                "displayName": "Deepnote SQL Metadata Renderer",
+                "entrypoint": "./dist/webviews/webview-side/sqlMetadataRenderer/sqlMetadataRenderer.js",
+                "mimeTypes": [
+                    "application/vnd.deepnote.sql-output-metadata+json"
+                ],
+                "requiresMessaging": "optional"
             }
         ],
         "viewsContainers": {

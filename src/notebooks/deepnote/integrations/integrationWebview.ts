@@ -128,6 +128,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsConfirmResetMessage: localize.Integrations.confirmResetMessage,
             integrationsConfirmResetDetails: localize.Integrations.confirmResetDetails,
             integrationsConfigureTitle: localize.Integrations.configureTitle,
+            integrationsPostgresTypeLabel: localize.Integrations.postgresTypeLabel,
+            integrationsBigQueryTypeLabel: localize.Integrations.bigQueryTypeLabel,
             integrationsCancel: localize.Integrations.cancel,
             integrationsSave: localize.Integrations.save,
             integrationsRequiredField: localize.Integrations.requiredField,

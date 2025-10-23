@@ -52,11 +52,19 @@ export class IntegrationDetector implements IIntegrationDetector {
 
             logger.debug(`IntegrationDetector: Found integration: ${integrationId} (${projectIntegration.type})`);
 
-            // Check if the integration is configured
-            const config = await this.integrationStorage.getIntegrationConfig(integrationId);
-
             // Map the Deepnote integration type to our IntegrationType
             const integrationType = DEEPNOTE_TO_INTEGRATION_TYPE[projectIntegration.type];
+
+            // Skip unknown integration types
+            if (!integrationType) {
+                logger.warn(
+                    `IntegrationDetector: Unknown integration type '${projectIntegration.type}' for integration ID '${integrationId}'. Skipping.`
+                );
+                continue;
+            }
+
+            // Check if the integration is configured
+            const config = await this.integrationStorage.getIntegrationConfig(integrationId);
 
             const status: IntegrationWithStatus = {
                 config: config || null,

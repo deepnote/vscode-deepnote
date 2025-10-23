@@ -1,7 +1,7 @@
 import { injectable } from 'inversify';
 
 import { IDeepnoteNotebookManager, ProjectIntegration } from '../types';
-import type { DeepnoteProject } from './deepnoteTypes';
+import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 
 /**
  * Centralized manager for tracking Deepnote notebook selections and project state.

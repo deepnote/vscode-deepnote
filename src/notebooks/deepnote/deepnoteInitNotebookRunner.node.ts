@@ -10,7 +10,7 @@ import {
 
 import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
-import type { DeepnoteProject, DeepnoteNotebook } from './deepnoteTypes';
+import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { IKernelProvider } from '../../kernels/types';
 import { getDisplayPath } from '../../platform/common/platform/fs-paths';
 

@@ -332,6 +332,18 @@ async function buildAll() {
             { target: 'web', watch: isWatchMode }
         ),
         build(
+            path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'chart-big-number-renderer', 'index.ts'),
+            path.join(
+                extensionFolder,
+                'dist',
+                'webviews',
+                'webview-side',
+                'chartBigNumberRenderer',
+                'chartBigNumberRenderer.js'
+            ),
+            { target: 'web', watch: isWatchMode }
+        ),
+        build(
             path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'vega-renderer', 'index.ts'),
             path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'vegaRenderer', 'vegaRenderer.js'),
             { target: 'web', watch: isWatchMode }

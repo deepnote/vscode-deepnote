@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 
 import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
-import type { DeepnoteProject } from './deepnoteTypes';
+import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 
 suite('DeepnoteNotebookManager', () => {
     let manager: DeepnoteNotebookManager;

@@ -1849,6 +1849,15 @@
                 "requiresMessaging": "optional"
             },
             {
+                "id": "deepnote-chart-big-number-renderer",
+                "displayName": "Deepnote Chart Big Number Renderer",
+                "entrypoint": "./dist/webviews/webview-side/chartBigNumberRenderer/chartBigNumberRenderer.js",
+                "mimeTypes": [
+                    "application/vnd.deepnote.chart.big-number+json"
+                ],
+                "requiresMessaging": "optional"
+            },
+            {
                 "id": "deepnote-vega-renderer",
                 "displayName": "Deepnote Vega Chart Renderer",
                 "entrypoint": "./dist/webviews/webview-side/vegaRenderer/vegaRenderer.js",
@@ -2235,7 +2244,8 @@
         "vscode-tas-client": "^0.1.84",
         "ws": "^6.2.3",
         "zeromq": "^6.5.0",
-        "zeromqold": "npm:zeromq@^6.0.0-beta.6"
+        "zeromqold": "npm:zeromq@^6.0.0-beta.6",
+        "zod": "^4.1.12"
     },
     "devDependencies": {
         "@actions/core": "^1.11.1",

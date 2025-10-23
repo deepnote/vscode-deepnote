@@ -125,7 +125,7 @@ export const LanguagesSupportedByPythonkernel = [
     'sql', // %%sql
     'perl', // %%perl
     'qsharp', // %%qsharp
-    'JSON', //JSON cells for custom block types
+    'json', // JSON cells for custom block types
     'raw' // raw cells (no formatting)
 ];
 export const jupyterLanguageToMonacoLanguageMapping = new Map([

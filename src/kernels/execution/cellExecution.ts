@@ -4,6 +4,7 @@
 import type * as KernelMessage from '@jupyterlab/services/lib/kernel/messages';
 import { NotebookCell, NotebookCellExecution, workspace, NotebookCellOutput } from 'vscode';
 
+import { createPythonCode } from '@deepnote/blocks';
 import type { Kernel } from '@jupyterlab/services';
 import { CellExecutionCreator } from './cellExecutionCreator';
 import { analyzeKernelErrors, createOutputWithErrorMessageForDisplay } from '../../platform/errors/errorUtils';
@@ -32,7 +33,6 @@ import { KernelError } from '../errors/kernelError';
 import { getCachedSysPrefix } from '../../platform/interpreter/helpers';
 import { getCellMetadata } from '../../platform/common/utils';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
-import { createPythonCode } from '@deepnote/blocks';
 import { DeepnoteDataConverter } from '../../notebooks/deepnote/deepnoteDataConverter';
 
 /**

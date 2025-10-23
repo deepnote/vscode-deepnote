@@ -1,13 +1,13 @@
-import { injectable, inject } from 'inversify';
-import { l10n, type CancellationToken, type NotebookData, type NotebookSerializer, workspace } from 'vscode';
+import { inject, injectable } from 'inversify';
 import * as yaml from 'js-yaml';
+import { l10n, workspace, type CancellationToken, type NotebookData, type NotebookSerializer } from 'vscode';
 
 import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
-import type { DeepnoteProject } from './deepnoteTypes';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
+import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 
-export { DeepnoteProject, DeepnoteNotebook, DeepnoteOutput } from './deepnoteTypes';
+export { DeepnoteBlock, DeepnoteNotebook, DeepnoteOutput, DeepnoteFile } from '../../platform/deepnote/deepnoteTypes';
 
 /**
  * Serializer for converting between Deepnote YAML files and VS Code notebook format.

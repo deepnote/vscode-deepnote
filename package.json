@@ -73,6 +73,7 @@
             },
             {
                 "key": "cmd+enter",
+                "mac": "cmd+enter",
                 "win": "ctrl+enter",
                 "linux": "ctrl+enter",
                 "when": "notebookEditorFocused && !findInputFocussed && !replaceInputFocussed",

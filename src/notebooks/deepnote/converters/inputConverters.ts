@@ -330,10 +330,21 @@ export class InputDateBlockConverter extends BaseInputBlockConverter<typeof Deep
     }
 
     override convertToCell(block: DeepnoteBlock): NotebookCellData {
-        const deepnoteMetadataResult = this.schema().safeParse(block.metadata);
-        const value = deepnoteMetadataResult.success
-            ? (deepnoteMetadataResult.data.deepnote_variable_value as string) || ''
-            : '';
+        // Get value directly from metadata to avoid Date object conversion
+        const rawValue = block.metadata?.deepnote_variable_value;
+
+        // Format date value (could be string or Date object)
+        let value = '';
+        if (rawValue) {
+            if (typeof rawValue === 'string') {
+                value = rawValue;
+            } else if (rawValue instanceof Date) {
+                // Convert Date to YYYY-MM-DD format
+                value = rawValue.toISOString().split('T')[0];
+            } else {
+                value = String(rawValue);
+            }
+        }
 
         // Show date as quoted string
         const cellValue = value ? `"${value}"` : '""';
@@ -376,16 +387,47 @@ export class InputDateRangeBlockConverter extends BaseInputBlockConverter<typeof
     }
 
     override convertToCell(block: DeepnoteBlock): NotebookCellData {
-        const deepnoteMetadataResult = this.schema().safeParse(block.metadata);
-        const value = deepnoteMetadataResult.success ? deepnoteMetadataResult.data.deepnote_variable_value : '';
+        // Get value directly from metadata first, then try schema parsing
+        const rawValue = block.metadata?.deepnote_variable_value;
+        const rawDefaultValue = block.metadata?.deepnote_variable_default_value;
 
         let cellValue = '';
-        if (Array.isArray(value) && value.length === 2) {
+
+        // Helper to format date value (could be string or Date object)
+        const formatDateValue = (val: unknown): string => {
+            if (!val) {
+                return '';
+            }
+            if (typeof val === 'string') {
+                return val;
+            }
+            if (val instanceof Date) {
+                // Convert Date to YYYY-MM-DD format
+                return val.toISOString().split('T')[0];
+            }
+            return String(val);
+        };
+
+        // Check raw value first (before schema transformation)
+        if (Array.isArray(rawValue) && rawValue.length === 2) {
             // Show as tuple of quoted strings
-            cellValue = `("${value[0]}", "${value[1]}")`;
-        } else {
-            cellValue = '("", "")';
+            const start = formatDateValue(rawValue[0]);
+            const end = formatDateValue(rawValue[1]);
+            if (start || end) {
+                cellValue = `("${start}", "${end}")`;
+            }
+        } else if (Array.isArray(rawDefaultValue) && rawDefaultValue.length === 2) {
+            // Use default value if available
+            const start = formatDateValue(rawDefaultValue[0]);
+            const end = formatDateValue(rawDefaultValue[1]);
+            if (start || end) {
+                cellValue = `("${start}", "${end}")`;
+            }
+        } else if (typeof rawValue === 'string' && rawValue) {
+            // Single date string (shouldn't happen but handle it)
+            cellValue = `"${rawValue}"`;
         }
+        // If no value, cellValue remains empty string
 
         const cell = new NotebookCellData(NotebookCellKind.Code, cellValue, 'python');
         return cell;

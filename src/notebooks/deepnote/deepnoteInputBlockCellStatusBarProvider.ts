@@ -906,16 +906,61 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
                 // Boolean value
                 return value ? 'True' : 'False';
 
-            case 'input-date':
-                // Quoted ISO date string
-                return typeof value === 'string' && value ? `"${value}"` : '""';
-
-            case 'input-date-range':
-                // Tuple of quoted ISO date strings
-                if (Array.isArray(value) && value.length === 2) {
-                    return `("${value[0]}", "${value[1]}")`;
+            case 'input-date': {
+                // Quoted date string (format as YYYY-MM-DD)
+                let dateStr = '';
+                if (value) {
+                    if (typeof value === 'string') {
+                        dateStr = value;
+                    } else if (value instanceof Date) {
+                        dateStr = value.toISOString().split('T')[0];
+                    } else {
+                        dateStr = String(value);
+                    }
                 }
-                return '("", "")';
+                return dateStr ? `"${dateStr}"` : '""';
+            }
+
+            case 'input-date-range': {
+                // Tuple of quoted date strings
+                // Helper to format date value (could be string or Date object)
+                const formatDateValue = (val: unknown): string => {
+                    if (!val) {
+                        return '';
+                    }
+                    if (typeof val === 'string') {
+                        return val;
+                    }
+                    if (val instanceof Date) {
+                        // Convert Date to YYYY-MM-DD format
+                        return val.toISOString().split('T')[0];
+                    }
+                    return String(val);
+                };
+
+                if (Array.isArray(value) && value.length === 2) {
+                    const start = formatDateValue(value[0]);
+                    const end = formatDateValue(value[1]);
+                    if (start || end) {
+                        return `("${start}", "${end}")`;
+                    }
+                } else {
+                    // Check for default value
+                    const defaultValue = metadata.deepnote_variable_default_value;
+                    if (Array.isArray(defaultValue) && defaultValue.length === 2) {
+                        const start = formatDateValue(defaultValue[0]);
+                        const end = formatDateValue(defaultValue[1]);
+                        if (start || end) {
+                            return `("${start}", "${end}")`;
+                        }
+                    } else if (typeof value === 'string' && value) {
+                        // Single date string (shouldn't happen but handle it)
+                        return `"${value}"`;
+                    }
+                }
+                // No value, return empty string
+                return '';
+            }
 
             case 'input-file':
                 // Quoted file path

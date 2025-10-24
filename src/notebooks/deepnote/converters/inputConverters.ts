@@ -23,13 +23,14 @@ export abstract class BaseInputBlockConverter<T extends z.ZodObject> implements 
     abstract getSupportedType(): string;
     abstract defaultConfig(): z.infer<T>;
 
-    applyChangesToBlock(block: DeepnoteBlock, cell: NotebookCellData): void {
+    /**
+     * Helper method to update block metadata with common logic.
+     * Clears block.content, parses schema, deletes DEEPNOTE_VSCODE_RAW_CONTENT_KEY,
+     * and merges metadata with updates.
+     */
+    protected updateBlockMetadata(block: DeepnoteBlock, updates: Record<string, unknown>): void {
         block.content = '';
 
-        // The cell value now contains just the variable name
-        const variableName = cell.value.trim();
-
-        // Preserve existing metadata and update only the variable name
         const existingMetadata = this.schema().safeParse(block.metadata);
         const baseMetadata = existingMetadata.success ? existingMetadata.data : this.defaultConfig();
 
@@ -40,8 +41,15 @@ export abstract class BaseInputBlockConverter<T extends z.ZodObject> implements 
         block.metadata = {
             ...(block.metadata ?? {}),
             ...baseMetadata,
-            deepnote_variable_name: variableName
+            ...updates
         };
+    }
+
+    applyChangesToBlock(block: DeepnoteBlock, _cell: NotebookCellData): void {
+        // Default implementation: preserve existing metadata
+        // Readonly blocks (select, checkbox, date, date-range, button) use this default behavior
+        // Editable blocks override this method to update specific metadata fields
+        this.updateBlockMetadata(block, {});
     }
 
     canConvert(blockType: string): boolean {
@@ -86,23 +94,12 @@ export class InputTextBlockConverter extends BaseInputBlockConverter<typeof Deep
     }
 
     override applyChangesToBlock(block: DeepnoteBlock, cell: NotebookCellData): void {
-        block.content = '';
-
         // The cell value contains the text value
         const value = cell.value;
 
-        const existingMetadata = this.schema().safeParse(block.metadata);
-        const baseMetadata = existingMetadata.success ? existingMetadata.data : this.defaultConfig();
-
-        if (block.metadata != null) {
-            delete block.metadata[DEEPNOTE_VSCODE_RAW_CONTENT_KEY];
-        }
-
-        block.metadata = {
-            ...(block.metadata ?? {}),
-            ...baseMetadata,
+        this.updateBlockMetadata(block, {
             deepnote_variable_value: value
-        };
+        });
     }
 }
 
@@ -126,23 +123,12 @@ export class InputTextareaBlockConverter extends BaseInputBlockConverter<typeof 
     }
 
     override applyChangesToBlock(block: DeepnoteBlock, cell: NotebookCellData): void {
-        block.content = '';
-
         // The cell value contains the text value
         const value = cell.value;
 
-        const existingMetadata = this.schema().safeParse(block.metadata);
-        const baseMetadata = existingMetadata.success ? existingMetadata.data : this.defaultConfig();
-
-        if (block.metadata != null) {
-            delete block.metadata[DEEPNOTE_VSCODE_RAW_CONTENT_KEY];
-        }
-
-        block.metadata = {
-            ...(block.metadata ?? {}),
-            ...baseMetadata,
+        this.updateBlockMetadata(block, {
             deepnote_variable_value: value
-        };
+        });
     }
 }
 
@@ -165,23 +151,8 @@ export class InputSelectBlockConverter extends BaseInputBlockConverter<typeof De
         return cell;
     }
 
-    override applyChangesToBlock(block: DeepnoteBlock, _cell: NotebookCellData): void {
-        block.content = '';
-
-        // Select blocks are readonly - edits are reverted by DeepnoteInputBlockEditProtection
-        // Just preserve existing metadata
-        const existingMetadata = this.schema().safeParse(block.metadata);
-        const baseMetadata = existingMetadata.success ? existingMetadata.data : this.defaultConfig();
-
-        if (block.metadata != null) {
-            delete block.metadata[DEEPNOTE_VSCODE_RAW_CONTENT_KEY];
-        }
-
-        block.metadata = {
-            ...(block.metadata ?? {}),
-            ...baseMetadata
-        };
-    }
+    // Select blocks are readonly - edits are reverted by DeepnoteInputBlockEditProtection
+    // Uses base class applyChangesToBlock which preserves existing metadata
 }
 
 export class InputSliderBlockConverter extends BaseInputBlockConverter<typeof DeepnoteSliderInputMetadataSchema> {
@@ -204,14 +175,11 @@ export class InputSliderBlockConverter extends BaseInputBlockConverter<typeof De
     }
 
     override applyChangesToBlock(block: DeepnoteBlock, cell: NotebookCellData): void {
-        block.content = '';
-
         // Parse numeric value; fall back to existing/default
         const str = cell.value.trim();
         const parsed = Number(str);
 
         const existingMetadata = this.schema().safeParse(block.metadata);
-        const baseMetadata = existingMetadata.success ? existingMetadata.data : this.defaultConfig();
 
         let value: number;
         if (Number.isFinite(parsed)) {
@@ -227,15 +195,9 @@ export class InputSliderBlockConverter extends BaseInputBlockConverter<typeof De
             value = Number.isFinite(defaultParsed) ? defaultParsed : 0;
         }
 
-        if (block.metadata != null) {
-            delete block.metadata[DEEPNOTE_VSCODE_RAW_CONTENT_KEY];
-        }
-
-        block.metadata = {
-            ...(block.metadata ?? {}),
-            ...baseMetadata,
+        this.updateBlockMetadata(block, {
             deepnote_variable_value: value
-        };
+        });
     }
 }
 
@@ -258,23 +220,8 @@ export class InputCheckboxBlockConverter extends BaseInputBlockConverter<typeof 
         return cell;
     }
 
-    override applyChangesToBlock(block: DeepnoteBlock, _cell: NotebookCellData): void {
-        block.content = '';
-
-        // Checkbox blocks are readonly - edits are reverted by DeepnoteInputBlockEditProtection
-        // Just preserve existing metadata
-        const existingMetadata = this.schema().safeParse(block.metadata);
-        const baseMetadata = existingMetadata.success ? existingMetadata.data : this.defaultConfig();
-
-        if (block.metadata != null) {
-            delete block.metadata[DEEPNOTE_VSCODE_RAW_CONTENT_KEY];
-        }
-
-        block.metadata = {
-            ...(block.metadata ?? {}),
-            ...baseMetadata
-        };
-    }
+    // Checkbox blocks are readonly - edits are reverted by DeepnoteInputBlockEditProtection
+    // Uses base class applyChangesToBlock which preserves existing metadata
 }
 
 export class InputDateBlockConverter extends BaseInputBlockConverter<typeof DeepnoteDateInputMetadataSchema> {
@@ -296,23 +243,8 @@ export class InputDateBlockConverter extends BaseInputBlockConverter<typeof Deep
         return cell;
     }
 
-    override applyChangesToBlock(block: DeepnoteBlock, _cell: NotebookCellData): void {
-        block.content = '';
-
-        // Date blocks are readonly - edits are reverted by DeepnoteInputBlockEditProtection
-        // Just preserve existing metadata
-        const existingMetadata = this.schema().safeParse(block.metadata);
-        const baseMetadata = existingMetadata.success ? existingMetadata.data : this.defaultConfig();
-
-        if (block.metadata != null) {
-            delete block.metadata[DEEPNOTE_VSCODE_RAW_CONTENT_KEY];
-        }
-
-        block.metadata = {
-            ...(block.metadata ?? {}),
-            ...baseMetadata
-        };
-    }
+    // Date blocks are readonly - edits are reverted by DeepnoteInputBlockEditProtection
+    // Uses base class applyChangesToBlock which preserves existing metadata
 }
 
 export class InputDateRangeBlockConverter extends BaseInputBlockConverter<typeof DeepnoteDateRangeInputMetadataSchema> {
@@ -334,23 +266,8 @@ export class InputDateRangeBlockConverter extends BaseInputBlockConverter<typeof
         return cell;
     }
 
-    override applyChangesToBlock(block: DeepnoteBlock, _cell: NotebookCellData): void {
-        block.content = '';
-
-        // Date range blocks are readonly - edits are reverted by DeepnoteInputBlockEditProtection
-        // Just preserve existing metadata
-        const existingMetadata = this.schema().safeParse(block.metadata);
-        const baseMetadata = existingMetadata.success ? existingMetadata.data : this.defaultConfig();
-
-        if (block.metadata != null) {
-            delete block.metadata[DEEPNOTE_VSCODE_RAW_CONTENT_KEY];
-        }
-
-        block.metadata = {
-            ...(block.metadata ?? {}),
-            ...baseMetadata
-        };
-    }
+    // Date range blocks are readonly - edits are reverted by DeepnoteInputBlockEditProtection
+    // Uses base class applyChangesToBlock which preserves existing metadata
 }
 
 export class InputFileBlockConverter extends BaseInputBlockConverter<typeof DeepnoteFileInputMetadataSchema> {
@@ -373,23 +290,12 @@ export class InputFileBlockConverter extends BaseInputBlockConverter<typeof Deep
     }
 
     override applyChangesToBlock(block: DeepnoteBlock, cell: NotebookCellData): void {
-        block.content = '';
-
         // Remove quotes from the cell value
         const value = cell.value.trim().replace(/^["']|["']$/g, '');
 
-        const existingMetadata = this.schema().safeParse(block.metadata);
-        const baseMetadata = existingMetadata.success ? existingMetadata.data : this.defaultConfig();
-
-        if (block.metadata != null) {
-            delete block.metadata[DEEPNOTE_VSCODE_RAW_CONTENT_KEY];
-        }
-
-        block.metadata = {
-            ...(block.metadata ?? {}),
-            ...baseMetadata,
+        this.updateBlockMetadata(block, {
             deepnote_variable_value: value
-        };
+        });
     }
 }
 
@@ -412,20 +318,6 @@ export class ButtonBlockConverter extends BaseInputBlockConverter<typeof Deepnot
         return cell;
     }
 
-    override applyChangesToBlock(block: DeepnoteBlock, _cell: NotebookCellData): void {
-        block.content = '';
-
-        // Button blocks don't store any value from the cell content
-        const existingMetadata = this.schema().safeParse(block.metadata);
-        const baseMetadata = existingMetadata.success ? existingMetadata.data : this.defaultConfig();
-
-        if (block.metadata != null) {
-            delete block.metadata[DEEPNOTE_VSCODE_RAW_CONTENT_KEY];
-        }
-
-        block.metadata = {
-            ...(block.metadata ?? {}),
-            ...baseMetadata
-        };
-    }
+    // Button blocks don't store any value from the cell content
+    // Uses base class applyChangesToBlock which preserves existing metadata
 }

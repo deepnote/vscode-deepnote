@@ -2,9 +2,9 @@
 // Licensed under the MIT License.
 
 import { expect } from 'chai';
-import { anything, instance, mock, verify, when } from 'ts-mockito';
+import { anything, verify, when } from 'ts-mockito';
 import { DeepnoteInputBlockCellStatusBarItemProvider } from './deepnoteInputBlockCellStatusBarProvider';
-import { NotebookCell, NotebookCellKind, NotebookDocument, NotebookEdit, WorkspaceEdit } from 'vscode';
+import { NotebookCell, NotebookCellKind, NotebookDocument } from 'vscode';
 import { Uri } from 'vscode';
 import type { IExtensionContext } from '../../platform/common/types';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';

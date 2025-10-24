@@ -142,8 +142,9 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
                             handleSelectTypeChange('from-options');
                         }
                     }}
-                    role="button"
+                    role="radio"
                     tabIndex={0}
+                    aria-checked={settings.selectType === 'from-options'}
                 >
                     <input
                         type="radio"
@@ -214,8 +215,9 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
                             handleSelectTypeChange('from-variable');
                         }
                     }}
-                    role="button"
+                    role="radio"
                     tabIndex={0}
+                    aria-checked={settings.selectType === 'from-variable'}
                 >
                     <input
                         type="radio"

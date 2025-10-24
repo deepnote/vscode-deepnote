@@ -55,13 +55,8 @@ export abstract class BaseInputBlockConverter<T extends z.ZodObject> implements 
             logger.error('Error parsing deepnote input metadata', deepnoteMetadataResult.error);
         }
 
-        // Extract the variable name from metadata
-        const variableName = deepnoteMetadataResult.success
-            ? (deepnoteMetadataResult.data as { deepnote_variable_name?: string }).deepnote_variable_name || ''
-            : '';
-
         // Create a code cell with Python language showing just the variable name
-        const cell = new NotebookCellData(NotebookCellKind.Code, `# ${variableName}`, 'python');
+        const cell = new NotebookCellData(NotebookCellKind.Code, '', 'plaintext');
 
         return cell;
     }

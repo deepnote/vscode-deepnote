@@ -6,6 +6,17 @@ import { IExtensionContext } from '../../platform/common/types';
 import { ILogger } from '../../platform/logging/types';
 import { IIntegrationManager } from './integrations/types';
 
+function createMockLogger(): ILogger {
+    return {
+        error: () => void 0,
+        warn: () => void 0,
+        info: () => void 0,
+        debug: () => void 0,
+        trace: () => void 0,
+        ci: () => void 0
+    } as ILogger;
+}
+
 suite('DeepnoteActivationService', () => {
     let activationService: DeepnoteActivationService;
     let mockExtensionContext: IExtensionContext;
@@ -24,14 +35,7 @@ suite('DeepnoteActivationService', () => {
                 return;
             }
         };
-        mockLogger = {
-            error: () => {},
-            warn: () => {},
-            info: () => {},
-            debug: () => {},
-            trace: () => {},
-            ci: () => {}
-        } as ILogger;
+        mockLogger = createMockLogger();
         activationService = new DeepnoteActivationService(
             mockExtensionContext,
             manager,
@@ -107,22 +111,8 @@ suite('DeepnoteActivationService', () => {
                     return;
                 }
             };
-            const mockLogger1: ILogger = {
-                error: () => {},
-                warn: () => {},
-                info: () => {},
-                debug: () => {},
-                trace: () => {},
-                ci: () => {}
-            } as ILogger;
-            const mockLogger2: ILogger = {
-                error: () => {},
-                warn: () => {},
-                info: () => {},
-                debug: () => {},
-                trace: () => {},
-                ci: () => {}
-            } as ILogger;
+            const mockLogger1 = createMockLogger();
+            const mockLogger2 = createMockLogger();
             const service1 = new DeepnoteActivationService(context1, manager1, mockIntegrationManager1, mockLogger1);
             const service2 = new DeepnoteActivationService(context2, manager2, mockIntegrationManager2, mockLogger2);
 
@@ -159,22 +149,8 @@ suite('DeepnoteActivationService', () => {
                     return;
                 }
             };
-            const mockLogger3: ILogger = {
-                error: () => {},
-                warn: () => {},
-                info: () => {},
-                debug: () => {},
-                trace: () => {},
-                ci: () => {}
-            } as ILogger;
-            const mockLogger4: ILogger = {
-                error: () => {},
-                warn: () => {},
-                info: () => {},
-                debug: () => {},
-                trace: () => {},
-                ci: () => {}
-            } as ILogger;
+            const mockLogger3 = createMockLogger();
+            const mockLogger4 = createMockLogger();
             new DeepnoteActivationService(context1, manager1, mockIntegrationManager1, mockLogger3);
             new DeepnoteActivationService(context2, manager2, mockIntegrationManager2, mockLogger4);
 

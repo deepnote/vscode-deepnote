@@ -8,12 +8,12 @@ import { IIntegrationManager } from './integrations/types';
 
 function createMockLogger(): ILogger {
     return {
-        error: () => void 0,
-        warn: () => void 0,
-        info: () => void 0,
-        debug: () => void 0,
-        trace: () => void 0,
-        ci: () => void 0
+        error: () => undefined,
+        warn: () => undefined,
+        info: () => undefined,
+        debug: () => undefined,
+        trace: () => undefined,
+        ci: () => undefined
     } as ILogger;
 }
 

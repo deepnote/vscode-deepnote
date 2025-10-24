@@ -10,6 +10,7 @@ import {
     NotebookEdit,
     Position,
     Range,
+    ThemeIcon,
     WorkspaceEdit,
     commands,
     l10n,
@@ -708,38 +709,31 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
         if (allowMultiple) {
             // Multi-select using QuickPick with custom behavior for clear selection
             const currentSelection = Array.isArray(currentValue) ? currentValue : [];
-            const clearSelectionLabel = l10n.t('$(circle-slash) Clear selection');
 
-            // Create quick pick items
+            // Create quick pick items (only actual options, not "Clear selection")
             const optionItems = options.map((opt) => ({
                 label: opt,
                 picked: currentSelection.includes(opt)
             }));
-
-            // Add empty option if allowed
-            if (allowEmpty) {
-                optionItems.unshift({
-                    label: clearSelectionLabel,
-                    picked: false
-                });
-            }
 
             // Use createQuickPick for more control
             const quickPick = window.createQuickPick();
             quickPick.items = optionItems;
             quickPick.selectedItems = optionItems.filter((item) => item.picked);
             quickPick.canSelectMany = true;
-            quickPick.placeholder = allowEmpty
-                ? l10n.t('Select one or more options (or clear selection)')
-                : l10n.t('Select one or more options');
+            quickPick.placeholder = l10n.t('Select one or more options');
 
-            // Listen for selection changes to handle "Clear selection" specially
+            // Add "Clear selection" as a button if empty values are allowed
             if (allowEmpty) {
-                quickPick.onDidChangeSelection((selectedItems) => {
-                    const hasClearSelection = selectedItems.some((item) => item.label === clearSelectionLabel);
-                    if (hasClearSelection) {
-                        // If "Clear selection" is selected, immediately clear and close
-                        quickPick.selectedItems = [];
+                const clearButton = {
+                    iconPath: new ThemeIcon('clear-all'),
+                    tooltip: l10n.t('Clear selection')
+                };
+                quickPick.buttons = [clearButton];
+
+                quickPick.onDidTriggerButton((button) => {
+                    if (button === clearButton) {
+                        // Clear selection and close
                         quickPick.hide();
                         void this.updateCellMetadata(cell, { deepnote_variable_value: [] });
                     }
@@ -748,12 +742,8 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
 
             quickPick.onDidAccept(() => {
                 const selected = quickPick.selectedItems;
-                const hasClearSelection = selected.some((item) => item.label === clearSelectionLabel);
-
-                if (!hasClearSelection) {
-                    const newValue = selected.map((item) => item.label);
-                    void this.updateCellMetadata(cell, { deepnote_variable_value: newValue });
-                }
+                const newValue = selected.map((item) => item.label);
+                void this.updateCellMetadata(cell, { deepnote_variable_value: newValue });
                 quickPick.hide();
             });
 

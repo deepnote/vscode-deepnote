@@ -5,12 +5,17 @@ import { expect } from 'chai';
 import { DeepnoteInputBlockCellStatusBarItemProvider } from './deepnoteInputBlockCellStatusBarProvider';
 import { NotebookCell, NotebookCellKind, NotebookDocument } from 'vscode';
 import { Uri } from 'vscode';
+import type { IExtensionContext } from '../../platform/common/types';
 
 suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
     let provider: DeepnoteInputBlockCellStatusBarItemProvider;
+    let mockExtensionContext: IExtensionContext;
 
     setup(() => {
-        provider = new DeepnoteInputBlockCellStatusBarItemProvider();
+        mockExtensionContext = {
+            subscriptions: []
+        } as any;
+        provider = new DeepnoteInputBlockCellStatusBarItemProvider(mockExtensionContext);
     });
 
     teardown(() => {

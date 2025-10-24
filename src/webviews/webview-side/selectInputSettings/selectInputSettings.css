@@ -39,6 +39,11 @@
     height: 24px;
 }
 
+.toggle-switch input:focus-visible + .toggle-slider {
+    outline: 2px solid var(--vscode-focusBorder);
+    outline-offset: 2px;
+}
+
 .toggle-switch input {
     opacity: 0;
     width: 0;
@@ -109,6 +114,11 @@
     margin-top: 2px;
 }
 
+.radio-option input[type='radio']:focus-visible {
+    outline: 2px solid var(--vscode-focusBorder);
+    outline-offset: 2px;
+}
+
 .radio-content {
     flex: 1;
 }
@@ -152,6 +162,11 @@
 
 .option-tag button:hover {
     opacity: 0.7;
+}
+
+.option-tag button:focus-visible {
+    outline: 2px solid var(--vscode-focusBorder);
+    outline-offset: 2px;
 }
 
 .add-option-form {
@@ -208,6 +223,11 @@
     font-size: 13px;
 }
 
+.actions button:focus-visible {
+    outline: 2px solid var(--vscode-focusBorder);
+    outline-offset: 2px;
+}
+
 .btn-primary {
     background-color: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
@@ -225,4 +245,3 @@
 .btn-secondary:hover {
     background-color: var(--vscode-button-secondaryHoverBackground);
 }
-

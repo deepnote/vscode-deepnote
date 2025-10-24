@@ -187,4 +187,13 @@ export interface ICommandNameArgumentTypeMapping {
     [DSCommands.ContinueEditSessionInCodespace]: [];
     [DSCommands.AddSqlBlock]: [];
     [DSCommands.AddBigNumberChartBlock]: [];
+    [DSCommands.AddInputTextBlock]: [];
+    [DSCommands.AddInputTextareaBlock]: [];
+    [DSCommands.AddInputSelectBlock]: [];
+    [DSCommands.AddInputSliderBlock]: [];
+    [DSCommands.AddInputCheckboxBlock]: [];
+    [DSCommands.AddInputDateBlock]: [];
+    [DSCommands.AddInputDateRangeBlock]: [];
+    [DSCommands.AddInputFileBlock]: [];
+    [DSCommands.AddButtonBlock]: [];
 }

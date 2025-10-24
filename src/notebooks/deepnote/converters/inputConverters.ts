@@ -1,6 +1,7 @@
 import { NotebookCellData, NotebookCellKind } from 'vscode';
 import { z } from 'zod';
 
+import { logger } from '../../../platform/logging';
 import type { BlockConverter } from './blockConverter';
 import type { DeepnoteBlock } from '../../../platform/deepnote/deepnoteTypes';
 import {
@@ -51,8 +52,7 @@ export abstract class BaseInputBlockConverter<T extends z.ZodObject> implements 
         const deepnoteMetadataResult = this.schema().safeParse(block.metadata);
 
         if (deepnoteMetadataResult.error != null) {
-            console.error('Error parsing deepnote input metadata:', deepnoteMetadataResult.error);
-            console.debug('Metadata:', JSON.stringify(block.metadata));
+            logger.error('Error parsing deepnote input metadata', deepnoteMetadataResult.error);
         }
 
         // Extract the variable name from metadata
@@ -175,10 +175,10 @@ export class InputSelectBlockConverter extends BaseInputBlockConverter<typeof De
 
         // Parse the cell value to extract the selection
         const cellValue = cell.value.trim();
-        let value: string | string[];
+        let value: string | string[] | null;
 
         if (cellValue.startsWith('[') && cellValue.endsWith(']')) {
-            // Multi-select: parse array
+            // Multi-select: parse array, map 'None' to null
             const arrayContent = cellValue.slice(1, -1);
             value = arrayContent
                 .split(',')
@@ -186,8 +186,14 @@ export class InputSelectBlockConverter extends BaseInputBlockConverter<typeof De
                 .filter((v) => v)
                 .map((v) => v.replace(/^["']|["']$/g, ''));
         } else {
-            // Single select: remove quotes
-            value = cellValue.replace(/^["']|["']$/g, '');
+            // Single select: 'None' => null, else strip quotes
+            const stripped = cellValue.replace(/^["']|["']$/g, '');
+            if (stripped === 'None') {
+                // Represent empty selection
+                value = null;
+            } else {
+                value = stripped;
+            }
         }
 
         const existingMetadata = this.schema().safeParse(block.metadata);

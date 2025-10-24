@@ -1,6 +1,3 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-
 import { assert } from 'chai';
 import { DeepnoteNotebookCommandListener, getNextDeepnoteVariableName } from './deepnoteNotebookCommandListener';
 import { IDisposable } from '../../platform/common/types';

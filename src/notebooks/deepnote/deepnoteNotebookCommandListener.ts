@@ -1,6 +1,3 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-
 import { injectable, inject } from 'inversify';
 import {
     commands,
@@ -17,7 +14,6 @@ import { logger } from '../../platform/logging';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { Commands } from '../../platform/common/constants';
-import { noop } from '../../platform/common/utils/misc';
 import { chainWithPendingUpdates } from '../../kernels/execution/notebookUpdater';
 import {
     DeepnoteBigNumberMetadataSchema,
@@ -102,7 +98,11 @@ export function getNextDeepnoteVariableName(cells: NotebookCell[], prefix: 'df' 
 
     const maxDeepnoteVariableNamesSuffixNumber =
         deepnoteVariableNames.reduce<number | null>((acc, name) => {
-            const m = name.match(new RegExp(`^${prefix}_(\\d+)$`));
+            if (!name.startsWith(prefix)) {
+                return acc;
+            }
+
+            const m = name.match(/_(\d+)$/);
             if (m == null) {
                 return acc;
             }
@@ -189,9 +189,14 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             };
             const nbEdit = NotebookEdit.insertCells(insertIndex, [newCell]);
             edit.set(document.uri, [nbEdit]);
-        }).then(() => {
-            editor.selection = new NotebookRange(insertIndex, insertIndex + 1);
-        }, noop);
+        }).then(
+            () => {
+                editor.selection = new NotebookRange(insertIndex, insertIndex + 1);
+            },
+            (error) => {
+                logger.error('Error inserting SQL block', error);
+            }
+        );
     }
 
     private addBigNumberChartBlock(): void {
@@ -223,9 +228,14 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             newCell.metadata = metadata;
             const nbEdit = NotebookEdit.insertCells(insertIndex, [newCell]);
             edit.set(document.uri, [nbEdit]);
-        }).then(() => {
-            editor.selection = new NotebookRange(insertIndex, insertIndex + 1);
-        }, noop);
+        }).then(
+            () => {
+                editor.selection = new NotebookRange(insertIndex, insertIndex + 1);
+            },
+            (error) => {
+                logger.error('Error inserting big number chart block', error);
+            }
+        );
     }
 
     private addInputBlock(blockType: InputBlockType): void {
@@ -260,8 +270,13 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             newCell.metadata = metadata;
             const nbEdit = NotebookEdit.insertCells(insertIndex, [newCell]);
             edit.set(document.uri, [nbEdit]);
-        }).then(() => {
-            editor.selection = new NotebookRange(insertIndex, insertIndex + 1);
-        }, noop);
+        }).then(
+            () => {
+                editor.selection = new NotebookRange(insertIndex, insertIndex + 1);
+            },
+            (error) => {
+                logger.error('Error inserting input block', error);
+            }
+        );
     }
 }

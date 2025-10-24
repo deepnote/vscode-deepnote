@@ -1,3 +1,4 @@
+import { injectable, inject } from 'inversify';
 import {
     Disposable,
     NotebookCell,
@@ -10,6 +11,7 @@ import {
     workspace,
     WorkspaceEdit
 } from 'vscode';
+import { ILogger } from '../../platform/logging/types';
 import { formatInputBlockCellContent } from './inputBlockContentFormatter';
 
 /**
@@ -17,6 +19,7 @@ import { formatInputBlockCellContent } from './inputBlockContentFormatter';
  * Also protects the language ID of all input blocks.
  * This is needed because VSCode doesn't support the `editable: false` metadata property.
  */
+@injectable()
 export class DeepnoteInputBlockEditProtection implements Disposable {
     private readonly disposables: Disposable[] = [];
 
@@ -55,7 +58,7 @@ export class DeepnoteInputBlockEditProtection implements Disposable {
         ['button', 'python']
     ]);
 
-    constructor() {
+    constructor(@inject(ILogger) private readonly logger: ILogger) {
         // Listen for notebook document changes
         this.disposables.push(
             workspace.onDidChangeNotebookDocument((e) => {
@@ -125,7 +128,14 @@ export class DeepnoteInputBlockEditProtection implements Disposable {
                 new Position(lastLine, cell.document.lineAt(lastLine).text.length)
             );
             edit.replace(cell.document.uri, fullRange, correctContent);
-            await workspace.applyEdit(edit);
+            const success = await workspace.applyEdit(edit);
+            if (!success) {
+                this.logger.error(
+                    `Failed to revert cell content for input block type '${blockType}' at cell index ${
+                        cell.index
+                    } in notebook ${cell.notebook.uri.toString()}`
+                );
+            }
         }
     }
 
@@ -168,7 +178,15 @@ export class DeepnoteInputBlockEditProtection implements Disposable {
             workspaceEdit.set(uri, edits);
         }
 
-        await workspace.applyEdit(workspaceEdit);
+        const success = await workspace.applyEdit(workspaceEdit);
+        if (!success) {
+            const cellInfo = cellsToFix
+                .map(({ cell, blockType }) => `cell ${cell.index} (type: ${blockType})`)
+                .join(', ');
+            this.logger.error(
+                `Failed to protect cell languages for ${cellsToFix.length} cell(s): ${cellInfo} in notebook(s)`
+            );
+        }
     }
 
     dispose(): void {

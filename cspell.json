@@ -39,6 +39,7 @@
         "jupyter",
         "jupyterlab",
         "JVSC",
+        "matplotlib",
         "millis",
         "nbformat",
         "numpy",

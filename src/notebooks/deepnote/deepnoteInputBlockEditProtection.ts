@@ -119,9 +119,10 @@ export class DeepnoteInputBlockEditProtection implements Disposable {
         // Only revert if content actually changed
         if (cell.document.getText() !== correctContent) {
             const edit = new WorkspaceEdit();
+            const lastLine = Math.max(0, cell.document.lineCount - 1);
             const fullRange = new Range(
                 new Position(0, 0),
-                new Position(cell.document.lineCount - 1, cell.document.lineAt(cell.document.lineCount - 1).text.length)
+                new Position(lastLine, cell.document.lineAt(lastLine).text.length)
             );
             edit.replace(cell.document.uri, fullRange, correctContent);
             await workspace.applyEdit(edit);

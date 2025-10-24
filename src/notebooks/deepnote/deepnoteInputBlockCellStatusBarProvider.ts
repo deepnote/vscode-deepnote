@@ -961,12 +961,35 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
     }
 
     /**
+     * Convert a date value to YYYY-MM-DD format without timezone shifts.
+     * If the value already matches YYYY-MM-DD, use it directly.
+     * Otherwise, use local date components to construct the string.
+     */
+    private formatDateToYYYYMMDD(dateValue: string): string {
+        if (!dateValue) {
+            return '';
+        }
+
+        // If already in YYYY-MM-DD format, use it directly
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+            return dateValue;
+        }
+
+        // Otherwise, construct from local date components
+        const date = new Date(dateValue);
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    /**
      * Handler for date input: choose date
      */
     private async dateInputChooseDate(cell: NotebookCell): Promise<void> {
         const metadata = cell.metadata as Record<string, unknown> | undefined;
         const currentValue = metadata?.deepnote_variable_value as string | undefined;
-        const currentDate = currentValue ? new Date(currentValue).toISOString().split('T')[0] : '';
+        const currentDate = currentValue ? this.formatDateToYYYYMMDD(currentValue) : '';
 
         const input = await window.showInputBox({
             prompt: l10n.t('Enter date (YYYY-MM-DD)'),
@@ -1004,8 +1027,8 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
         let currentEnd = '';
 
         if (Array.isArray(currentValue) && currentValue.length === 2) {
-            currentStart = new Date(currentValue[0]).toISOString().split('T')[0];
-            currentEnd = new Date(currentValue[1]).toISOString().split('T')[0];
+            currentStart = this.formatDateToYYYYMMDD(currentValue[0]);
+            currentEnd = this.formatDateToYYYYMMDD(currentValue[1]);
         }
 
         const input = await window.showInputBox({
@@ -1049,8 +1072,8 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
         let currentEnd = '';
 
         if (Array.isArray(currentValue) && currentValue.length === 2) {
-            currentStart = new Date(currentValue[0]).toISOString().split('T')[0];
-            currentEnd = new Date(currentValue[1]).toISOString().split('T')[0];
+            currentStart = this.formatDateToYYYYMMDD(currentValue[0]);
+            currentEnd = this.formatDateToYYYYMMDD(currentValue[1]);
         }
 
         const input = await window.showInputBox({

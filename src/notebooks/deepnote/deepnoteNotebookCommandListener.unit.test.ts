@@ -143,7 +143,7 @@ suite('DeepnoteNotebookCommandListener', () => {
                 description: 'should extract variable name from metadata',
                 cells: [
                     createMockCell('{}', {
-                        __deepnotePocket: { variableName: 'input_7' }
+                        __deepnotePocket: { deepnote_variable_name: 'input_7' }
                     })
                 ],
                 prefix: 'input',
@@ -154,7 +154,7 @@ suite('DeepnoteNotebookCommandListener', () => {
                 cells: [
                     createMockCell('{ "deepnote_variable_name": "input_2" }'),
                     createMockCell('{}', {
-                        __deepnotePocket: { variableName: 'input_5' }
+                        __deepnotePocket: { deepnote_variable_name: 'input_5' }
                     }),
                     createMockCell('{ "deepnote_variable_name": "input_3" }')
                 ],
@@ -181,7 +181,7 @@ suite('DeepnoteNotebookCommandListener', () => {
                 description: 'should handle cells with both content and metadata, preferring the highest',
                 cells: [
                     createMockCell('{ "deepnote_variable_name": "input_2" }', {
-                        __deepnotePocket: { variableName: 'input_8' }
+                        __deepnotePocket: { deepnote_variable_name: 'input_8' }
                     })
                 ],
                 prefix: 'input',
@@ -285,7 +285,7 @@ suite('DeepnoteNotebookCommandListener', () => {
                 description: 'should handle metadata with different prefix',
                 cells: [
                     createMockCell('{}', {
-                        __deepnotePocket: { variableName: 'df_15' }
+                        __deepnotePocket: { deepnote_variable_name: 'df_15' }
                     }),
                     createMockCell('{ "deepnote_variable_name": "df_20" }')
                 ],

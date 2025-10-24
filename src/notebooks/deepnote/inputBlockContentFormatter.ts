@@ -82,7 +82,7 @@ export function formatInputBlockCellContent(blockType: string, metadata: Record<
         }
 
         case 'button': {
-            return '';
+            return '# Buttons only work in Deepnote apps';
         }
 
         default:

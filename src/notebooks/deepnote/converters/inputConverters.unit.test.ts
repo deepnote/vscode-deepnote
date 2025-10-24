@@ -923,7 +923,7 @@ suite('ButtonBlockConverter', () => {
     });
 
     suite('convertToCell', () => {
-        test('converts button block with set_variable behavior', () => {
+        test('converts button block to Python cell with comment', () => {
             const block: DeepnoteBlock = {
                 blockGroup: '22e563550e734e75b35252e4975c3110',
                 content: '',
@@ -941,15 +941,11 @@ suite('ButtonBlockConverter', () => {
             const cell = converter.convertToCell(block);
 
             assert.strictEqual(cell.kind, NotebookCellKind.Code);
-            assert.strictEqual(cell.languageId, 'json');
-
-            const parsed = JSON.parse(cell.value);
-            assert.strictEqual(parsed.deepnote_button_title, 'Run');
-            assert.strictEqual(parsed.deepnote_button_behavior, 'set_variable');
-            assert.strictEqual(parsed.deepnote_button_color_scheme, 'blue');
+            assert.strictEqual(cell.languageId, 'python');
+            assert.strictEqual(cell.value, '# Buttons only work in Deepnote apps');
         });
 
-        test('converts button block with run behavior', () => {
+        test('converts button block with run behavior to Python cell with comment', () => {
             const block: DeepnoteBlock = {
                 blockGroup: '2a1e97120eb24494adff278264625a4f',
                 content: '',
@@ -966,9 +962,9 @@ suite('ButtonBlockConverter', () => {
 
             const cell = converter.convertToCell(block);
 
-            const parsed = JSON.parse(cell.value);
-            assert.strictEqual(parsed.deepnote_button_title, 'Run notebook button');
-            assert.strictEqual(parsed.deepnote_button_behavior, 'run');
+            assert.strictEqual(cell.kind, NotebookCellKind.Code);
+            assert.strictEqual(cell.languageId, 'python');
+            assert.strictEqual(cell.value, '# Buttons only work in Deepnote apps');
         });
 
         test('handles missing metadata with default config', () => {
@@ -982,27 +978,27 @@ suite('ButtonBlockConverter', () => {
 
             const cell = converter.convertToCell(block);
 
-            const parsed = JSON.parse(cell.value);
-            assert.strictEqual(parsed.deepnote_button_title, 'Run');
-            assert.strictEqual(parsed.deepnote_button_behavior, 'set_variable');
+            assert.strictEqual(cell.kind, NotebookCellKind.Code);
+            assert.strictEqual(cell.languageId, 'python');
+            assert.strictEqual(cell.value, '# Buttons only work in Deepnote apps');
         });
     });
 
     suite('applyChangesToBlock', () => {
-        test('applies valid JSON with button configuration', () => {
+        test('preserves existing metadata and ignores cell content', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
+                metadata: {
+                    deepnote_button_title: 'Click Me',
+                    deepnote_button_behavior: 'run',
+                    deepnote_button_color_scheme: 'red'
+                },
                 sortingKey: 'a0',
                 type: 'button'
             };
-            const cellValue = JSON.stringify({
-                deepnote_button_title: 'Click Me',
-                deepnote_button_behavior: 'run',
-                deepnote_button_color_scheme: 'red'
-            });
-            const cell = new NotebookCellData(NotebookCellKind.Code, cellValue, 'json');
+            const cell = new NotebookCellData(NotebookCellKind.Code, '# Buttons only work in Deepnote apps', 'python');
 
             converter.applyChangesToBlock(block, cell);
 
@@ -1012,7 +1008,7 @@ suite('ButtonBlockConverter', () => {
             assert.strictEqual(block.metadata?.deepnote_button_color_scheme, 'red');
         });
 
-        test('applies different color schemes', () => {
+        test('applies default config when metadata is missing', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
                 content: '',
@@ -1020,30 +1016,33 @@ suite('ButtonBlockConverter', () => {
                 sortingKey: 'a0',
                 type: 'button'
             };
-            const cellValue = JSON.stringify({
-                deepnote_button_color_scheme: 'green'
-            });
-            const cell = new NotebookCellData(NotebookCellKind.Code, cellValue, 'json');
+            const cell = new NotebookCellData(NotebookCellKind.Code, '# Buttons only work in Deepnote apps', 'python');
 
             converter.applyChangesToBlock(block, cell);
 
-            assert.strictEqual(block.metadata?.deepnote_button_color_scheme, 'green');
+            assert.strictEqual(block.content, '');
+            assert.strictEqual(block.metadata?.deepnote_button_title, 'Run');
+            assert.strictEqual(block.metadata?.deepnote_button_behavior, 'set_variable');
+            assert.strictEqual(block.metadata?.deepnote_button_color_scheme, 'blue');
         });
 
-        test('handles invalid JSON', () => {
+        test('removes raw content key from metadata', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
+                metadata: {
+                    [DEEPNOTE_VSCODE_RAW_CONTENT_KEY]: 'some raw content',
+                    deepnote_button_title: 'Test'
+                },
                 sortingKey: 'a0',
                 type: 'button'
             };
-            const invalidJson = '}{';
-            const cell = new NotebookCellData(NotebookCellKind.Code, invalidJson, 'json');
+            const cell = new NotebookCellData(NotebookCellKind.Code, '# Buttons only work in Deepnote apps', 'python');
 
             converter.applyChangesToBlock(block, cell);
 
-            assert.strictEqual(block.metadata?.[DEEPNOTE_VSCODE_RAW_CONTENT_KEY], invalidJson);
+            assert.strictEqual(block.metadata?.[DEEPNOTE_VSCODE_RAW_CONTENT_KEY], undefined);
         });
     });
 });

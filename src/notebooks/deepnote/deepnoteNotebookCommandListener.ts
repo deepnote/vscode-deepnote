@@ -72,7 +72,8 @@ export function getInputBlockMetadata(blockType: InputBlockType, variableName: s
 
 export function safeParseDeepnoteVariableNameFromContentJson(content: string): string | undefined {
     try {
-        return JSON.parse(content)['deepnote_variable_name'];
+        const variableNameResult = z.string().safeParse(JSON.parse(content)['deepnote_variable_name']);
+        return variableNameResult.success ? variableNameResult.data : undefined;
     } catch (error) {
         logger.error('Error parsing deepnote variable name from content JSON', error);
         return undefined;

@@ -2,6 +2,7 @@ import { injectable, inject } from 'inversify';
 import {
     Disposable,
     NotebookCell,
+    NotebookCellData,
     NotebookDocumentChangeEvent,
     NotebookEdit,
     NotebookRange,
@@ -160,16 +161,12 @@ export class DeepnoteInputBlockEditProtection implements Disposable {
             }
 
             // Add the cell replacement edit
-            editsByNotebook.get(notebookUriStr)!.edits.push(
-                NotebookEdit.replaceCells(new NotebookRange(cell.index, cell.index + 1), [
-                    {
-                        kind: cell.kind,
-                        languageId: expectedLanguage,
-                        value: cell.document.getText(),
-                        metadata: cell.metadata
-                    }
-                ])
-            );
+            const cellData = new NotebookCellData(cell.kind, cell.document.getText(), expectedLanguage);
+            cellData.metadata = cell.metadata;
+
+            editsByNotebook
+                .get(notebookUriStr)!
+                .edits.push(NotebookEdit.replaceCells(new NotebookRange(cell.index, cell.index + 1), [cellData]));
         }
 
         // Apply all edits in a single workspace edit to minimize flickering

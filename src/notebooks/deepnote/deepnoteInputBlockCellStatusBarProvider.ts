@@ -129,6 +129,16 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
             })
         );
 
+        // File input: choose file
+        this.disposables.push(
+            commands.registerCommand('deepnote.fileInputChooseFile', async (cell?: NotebookCell) => {
+                const activeCell = cell || this.getActiveCell();
+                if (activeCell) {
+                    await this.fileInputChooseFile(activeCell);
+                }
+            })
+        );
+
         // Checkbox: toggle value
         this.disposables.push(
             commands.registerCommand('deepnote.checkboxToggle', async (cell?: NotebookCell) => {
@@ -268,7 +278,11 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
                 this.addDateRangeInputStatusBarItems(items, cell, metadata);
                 break;
 
-            // input-text, input-textarea, input-file, and button don't have additional buttons
+            case 'input-file':
+                this.addFileInputStatusBarItems(items, cell, metadata);
+                break;
+
+            // input-text, input-textarea, and button don't have additional buttons
         }
     }
 
@@ -377,6 +391,24 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
             command: {
                 title: l10n.t('Toggle'),
                 command: 'deepnote.checkboxToggle',
+                arguments: [cell]
+            }
+        });
+    }
+
+    private addFileInputStatusBarItems(
+        items: NotebookCellStatusBarItem[],
+        cell: NotebookCell,
+        _metadata: Record<string, unknown>
+    ): void {
+        items.push({
+            text: l10n.t('$(folder-opened) Choose File'),
+            alignment: 1,
+            priority: 80,
+            tooltip: l10n.t('Choose a file\nClick to browse'),
+            command: {
+                title: l10n.t('Choose File'),
+                command: 'deepnote.fileInputChooseFile',
                 arguments: [cell]
             }
         });
@@ -769,6 +801,48 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
         const currentValue = (metadata?.deepnote_variable_value as boolean) ?? false;
 
         await this.updateCellMetadata(cell, { deepnote_variable_value: !currentValue });
+    }
+
+    /**
+     * Handler for file input: choose file
+     */
+    private async fileInputChooseFile(cell: NotebookCell): Promise<void> {
+        const metadata = cell.metadata as Record<string, unknown> | undefined;
+        const allowedExtensions = metadata?.deepnote_allowed_file_extensions as string | undefined;
+
+        // Parse allowed extensions if provided
+        const filters: { [name: string]: string[] } = {};
+        if (allowedExtensions) {
+            // Split by comma and clean up
+            const extensions = allowedExtensions
+                .split(',')
+                .map((ext) => ext.trim())
+                .filter((ext) => ext.length > 0);
+
+            if (extensions.length > 0) {
+                filters['Allowed Files'] = extensions;
+            }
+        }
+
+        // Add "All Files" option
+        filters['All Files'] = ['*'];
+
+        const uris = await window.showOpenDialog({
+            canSelectFiles: true,
+            canSelectFolders: false,
+            canSelectMany: false,
+            filters: Object.keys(filters).length > 1 ? filters : undefined,
+            openLabel: l10n.t('Select File')
+        });
+
+        if (!uris || uris.length === 0) {
+            return;
+        }
+
+        // Get the file path
+        const filePath = uris[0].path;
+
+        await this.updateCellMetadata(cell, { deepnote_variable_value: filePath });
     }
 
     /**

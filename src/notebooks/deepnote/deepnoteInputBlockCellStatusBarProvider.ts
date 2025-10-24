@@ -921,7 +921,7 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
             // Split by comma and clean up
             const extensions = allowedExtensions
                 .split(',')
-                .map((ext) => ext.trim())
+                .map((ext) => ext.trim().replace(/^\./, ''))
                 .filter((ext) => ext.length > 0);
 
             if (extensions.length > 0) {

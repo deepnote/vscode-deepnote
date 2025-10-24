@@ -63,7 +63,7 @@ export abstract class BaseInputBlockConverter<T extends z.ZodObject> implements 
             logger.error('Error parsing deepnote input metadata', deepnoteMetadataResult.error);
         }
 
-        // Create a code cell with Python language showing just the variable name
+        // Default fallback: empty plaintext cell; subclasses render content/language
         const cell = new NotebookCellData(NotebookCellKind.Code, '', 'plaintext');
 
         return cell;

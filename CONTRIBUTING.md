@@ -27,7 +27,8 @@ Thank you for your interest in contributing to the Deepnote VS Code extension! T
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
 
 # Install and use Node.js from .nvmrc
-nvm use $(cat .nvmrc)
+nvm install
+nvm use
 
 # Update npm
 npm install -g $(cat .npmrc)
@@ -52,8 +53,8 @@ code --install-extension ms-python.python
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
 
 # Install Node.js
-nvm install $(cat .nvmrc)
-nvm use $(cat .nvmrc)
+nvm install
+nvm use
 
 # Update npm
 npm install -g $(cat .npmrc)

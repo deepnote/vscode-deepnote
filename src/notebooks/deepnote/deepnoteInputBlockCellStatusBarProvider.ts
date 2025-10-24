@@ -582,8 +582,10 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
     private createVariableStatusBarItem(cell: NotebookCell): NotebookCellStatusBarItem {
         const variableName = this.getVariableName(cell);
 
+        const text = variableName ? l10n.t('Variable: {0}', variableName) : l10n.t('$(edit) Set variable name');
+
         return {
-            text: l10n.t('Variable: {0}', variableName),
+            text,
             alignment: 1, // NotebookCellStatusBarAlignment.Left
             priority: 90,
             tooltip: l10n.t('Variable name for input block\nClick to change'),

@@ -170,32 +170,11 @@ export class InputSelectBlockConverter extends BaseInputBlockConverter<typeof De
         return cell;
     }
 
-    override applyChangesToBlock(block: DeepnoteBlock, cell: NotebookCellData): void {
+    override applyChangesToBlock(block: DeepnoteBlock, _cell: NotebookCellData): void {
         block.content = '';
 
-        // Parse the cell value to extract the selection
-        const cellValue = cell.value.trim();
-        let value: string | string[] | null;
-
-        if (cellValue.startsWith('[') && cellValue.endsWith(']')) {
-            // Multi-select: parse array, map 'None' to null
-            const arrayContent = cellValue.slice(1, -1);
-            value = arrayContent
-                .split(',')
-                .map((v) => v.trim())
-                .filter((v) => v)
-                .map((v) => v.replace(/^["']|["']$/g, ''));
-        } else {
-            // Single select: 'None' => null, else strip quotes
-            const stripped = cellValue.replace(/^["']|["']$/g, '');
-            if (stripped === 'None') {
-                // Represent empty selection
-                value = null;
-            } else {
-                value = stripped;
-            }
-        }
-
+        // Select blocks are readonly - edits are reverted by DeepnoteInputBlockEditProtection
+        // Just preserve existing metadata
         const existingMetadata = this.schema().safeParse(block.metadata);
         const baseMetadata = existingMetadata.success ? existingMetadata.data : this.defaultConfig();
 
@@ -205,8 +184,7 @@ export class InputSelectBlockConverter extends BaseInputBlockConverter<typeof De
 
         block.metadata = {
             ...(block.metadata ?? {}),
-            ...baseMetadata,
-            deepnote_variable_value: value
+            ...baseMetadata
         };
     }
 }
@@ -285,13 +263,11 @@ export class InputCheckboxBlockConverter extends BaseInputBlockConverter<typeof 
         return cell;
     }
 
-    override applyChangesToBlock(block: DeepnoteBlock, cell: NotebookCellData): void {
+    override applyChangesToBlock(block: DeepnoteBlock, _cell: NotebookCellData): void {
         block.content = '';
 
-        // Parse the cell value to get boolean
-        const cellValue = cell.value.trim();
-        const value = cellValue === 'True' || cellValue === 'true';
-
+        // Checkbox blocks are readonly - edits are reverted by DeepnoteInputBlockEditProtection
+        // Just preserve existing metadata
         const existingMetadata = this.schema().safeParse(block.metadata);
         const baseMetadata = existingMetadata.success ? existingMetadata.data : this.defaultConfig();
 
@@ -301,8 +277,7 @@ export class InputCheckboxBlockConverter extends BaseInputBlockConverter<typeof 
 
         block.metadata = {
             ...(block.metadata ?? {}),
-            ...baseMetadata,
-            deepnote_variable_value: value
+            ...baseMetadata
         };
     }
 }
@@ -326,12 +301,11 @@ export class InputDateBlockConverter extends BaseInputBlockConverter<typeof Deep
         return cell;
     }
 
-    override applyChangesToBlock(block: DeepnoteBlock, cell: NotebookCellData): void {
+    override applyChangesToBlock(block: DeepnoteBlock, _cell: NotebookCellData): void {
         block.content = '';
 
-        // Remove quotes from the cell value
-        const value = cell.value.trim().replace(/^["']|["']$/g, '');
-
+        // Date blocks are readonly - edits are reverted by DeepnoteInputBlockEditProtection
+        // Just preserve existing metadata
         const existingMetadata = this.schema().safeParse(block.metadata);
         const baseMetadata = existingMetadata.success ? existingMetadata.data : this.defaultConfig();
 
@@ -341,8 +315,7 @@ export class InputDateBlockConverter extends BaseInputBlockConverter<typeof Deep
 
         block.metadata = {
             ...(block.metadata ?? {}),
-            ...baseMetadata,
-            deepnote_variable_value: value
+            ...baseMetadata
         };
     }
 }
@@ -366,19 +339,11 @@ export class InputDateRangeBlockConverter extends BaseInputBlockConverter<typeof
         return cell;
     }
 
-    override applyChangesToBlock(block: DeepnoteBlock, cell: NotebookCellData): void {
+    override applyChangesToBlock(block: DeepnoteBlock, _cell: NotebookCellData): void {
         block.content = '';
 
-        // Parse the cell value to extract the date range
-        const cellValue = cell.value.trim();
-        let value: [string, string] | null = null;
-
-        // Try to parse as tuple
-        const tupleMatch = cellValue.match(/\(\s*["']([^"']*)["']\s*,\s*["']([^"']*)["']\s*\)/);
-        if (tupleMatch) {
-            value = [tupleMatch[1], tupleMatch[2]];
-        }
-
+        // Date range blocks are readonly - edits are reverted by DeepnoteInputBlockEditProtection
+        // Just preserve existing metadata
         const existingMetadata = this.schema().safeParse(block.metadata);
         const baseMetadata = existingMetadata.success ? existingMetadata.data : this.defaultConfig();
 
@@ -388,9 +353,7 @@ export class InputDateRangeBlockConverter extends BaseInputBlockConverter<typeof
 
         block.metadata = {
             ...(block.metadata ?? {}),
-            ...baseMetadata,
-            deepnote_variable_value:
-                value !== null ? value : existingMetadata.success ? existingMetadata.data.deepnote_variable_value : null
+            ...baseMetadata
         };
     }
 }

@@ -308,25 +308,27 @@ suite('InputSelectBlockConverter', () => {
     });
 
     suite('applyChangesToBlock', () => {
-        test('applies selected value from cell', () => {
+        test('preserves existing metadata (select blocks are readonly)', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
                 metadata: {
                     deepnote_variable_name: 'input_3',
-                    deepnote_variable_options: ['Option A', 'Option B']
+                    deepnote_variable_options: ['Option A', 'Option B'],
+                    deepnote_variable_value: 'Option A'
                 },
                 sortingKey: 'a0',
                 type: 'input-select'
             };
+            // Cell content is ignored since select blocks are readonly
             const cell = new NotebookCellData(NotebookCellKind.Code, '"Option B"', 'python');
 
             converter.applyChangesToBlock(block, cell);
 
             assert.strictEqual(block.content, '');
-            assert.strictEqual(block.metadata?.deepnote_variable_value, 'Option B');
-            // Variable name should be preserved
+            // Value should be preserved from metadata, not parsed from cell
+            assert.strictEqual(block.metadata?.deepnote_variable_value, 'Option A');
             assert.strictEqual(block.metadata?.deepnote_variable_name, 'input_3');
             assert.deepStrictEqual(block.metadata?.deepnote_variable_options, ['Option A', 'Option B']);
         });
@@ -534,34 +536,37 @@ suite('InputCheckboxBlockConverter', () => {
     });
 
     suite('applyChangesToBlock', () => {
-        test('applies True value from cell', () => {
-            const block: DeepnoteBlock = {
-                blockGroup: 'test-group',
-                content: '',
-                id: 'block-123',
-                metadata: {
-                    deepnote_variable_name: 'checkbox1'
-                },
-                sortingKey: 'a0',
-                type: 'input-checkbox'
-            };
-            const cell = new NotebookCellData(NotebookCellKind.Code, 'True', 'python');
-
-            converter.applyChangesToBlock(block, cell);
-
-            assert.strictEqual(block.content, '');
-            assert.strictEqual(block.metadata?.deepnote_variable_value, true);
-            // Variable name should be preserved
-            assert.strictEqual(block.metadata?.deepnote_variable_name, 'checkbox1');
-        });
-
-        test('applies False value', () => {
+        test('preserves existing metadata (checkbox blocks are readonly)', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
                 metadata: {
                     deepnote_variable_name: 'checkbox1',
+                    deepnote_variable_value: false
+                },
+                sortingKey: 'a0',
+                type: 'input-checkbox'
+            };
+            // Cell content is ignored since checkbox blocks are readonly
+            const cell = new NotebookCellData(NotebookCellKind.Code, 'True', 'python');
+
+            converter.applyChangesToBlock(block, cell);
+
+            assert.strictEqual(block.content, '');
+            // Value should be preserved from metadata, not parsed from cell
+            assert.strictEqual(block.metadata?.deepnote_variable_value, false);
+            assert.strictEqual(block.metadata?.deepnote_variable_name, 'checkbox1');
+        });
+
+        test('preserves default value', () => {
+            const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
+                content: '',
+                id: 'block-123',
+                metadata: {
+                    deepnote_variable_name: 'checkbox1',
+                    deepnote_variable_value: true,
                     deepnote_variable_default_value: true
                 },
                 sortingKey: 'a0',
@@ -571,23 +576,8 @@ suite('InputCheckboxBlockConverter', () => {
 
             converter.applyChangesToBlock(block, cell);
 
-            assert.strictEqual(block.metadata?.deepnote_variable_value, false);
-            assert.strictEqual(block.metadata?.deepnote_variable_default_value, true);
-        });
-
-        test('handles lowercase true', () => {
-            const block: DeepnoteBlock = {
-                blockGroup: 'test-group',
-                content: '',
-                id: 'block-123',
-                sortingKey: 'a0',
-                type: 'input-checkbox'
-            };
-            const cell = new NotebookCellData(NotebookCellKind.Code, 'true', 'python');
-
-            converter.applyChangesToBlock(block, cell);
-
             assert.strictEqual(block.metadata?.deepnote_variable_value, true);
+            assert.strictEqual(block.metadata?.deepnote_variable_default_value, true);
         });
     });
 });
@@ -638,45 +628,29 @@ suite('InputDateBlockConverter', () => {
     });
 
     suite('applyChangesToBlock', () => {
-        test('applies date value from cell', () => {
+        test('preserves existing metadata (date blocks are readonly)', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
                 metadata: {
                     deepnote_variable_name: 'date1',
-                    deepnote_input_date_version: 2
+                    deepnote_input_date_version: 2,
+                    deepnote_variable_value: '2025-01-01T00:00:00.000Z'
                 },
                 sortingKey: 'a0',
                 type: 'input-date'
             };
+            // Cell content is ignored since date blocks are readonly
             const cell = new NotebookCellData(NotebookCellKind.Code, '"2025-12-31T00:00:00.000Z"', 'python');
 
             converter.applyChangesToBlock(block, cell);
 
             assert.strictEqual(block.content, '');
-            assert.strictEqual(block.metadata?.deepnote_variable_value, '2025-12-31T00:00:00.000Z');
-            // Other metadata should be preserved
+            // Value should be preserved from metadata, not parsed from cell
+            assert.strictEqual(block.metadata?.deepnote_variable_value, '2025-01-01T00:00:00.000Z');
             assert.strictEqual(block.metadata?.deepnote_variable_name, 'date1');
             assert.strictEqual(block.metadata?.deepnote_input_date_version, 2);
-        });
-
-        test('handles unquoted date value', () => {
-            const block: DeepnoteBlock = {
-                blockGroup: 'test-group',
-                content: '',
-                id: 'block-123',
-                metadata: {
-                    deepnote_variable_name: 'date1'
-                },
-                sortingKey: 'a0',
-                type: 'input-date'
-            };
-            const cell = new NotebookCellData(NotebookCellKind.Code, '2025-12-31', 'python');
-
-            converter.applyChangesToBlock(block, cell);
-
-            assert.strictEqual(block.metadata?.deepnote_variable_value, '2025-12-31');
         });
     });
 });
@@ -745,65 +719,27 @@ suite('InputDateRangeBlockConverter', () => {
     });
 
     suite('applyChangesToBlock', () => {
-        test('applies date range tuple from cell', () => {
+        test('preserves existing metadata (date range blocks are readonly)', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
                 metadata: {
-                    deepnote_variable_name: 'range1'
+                    deepnote_variable_name: 'range1',
+                    deepnote_variable_value: ['2025-06-01', '2025-06-30']
                 },
                 sortingKey: 'a0',
                 type: 'input-date-range'
             };
+            // Cell content is ignored since date range blocks are readonly
             const cell = new NotebookCellData(NotebookCellKind.Code, '("2025-01-01", "2025-12-31")', 'python');
 
             converter.applyChangesToBlock(block, cell);
 
             assert.strictEqual(block.content, '');
-            assert.deepStrictEqual(block.metadata?.deepnote_variable_value, ['2025-01-01', '2025-12-31']);
-            // Variable name should be preserved
+            // Value should be preserved from metadata, not parsed from cell
+            assert.deepStrictEqual(block.metadata?.deepnote_variable_value, ['2025-06-01', '2025-06-30']);
             assert.strictEqual(block.metadata?.deepnote_variable_name, 'range1');
-        });
-
-        test('handles invalid tuple format', () => {
-            const block: DeepnoteBlock = {
-                blockGroup: 'test-group',
-                content: '',
-                id: 'block-123',
-                metadata: {
-                    deepnote_variable_name: 'range1',
-                    deepnote_variable_value: ['2025-01-01', '2025-12-31']
-                },
-                sortingKey: 'a0',
-                type: 'input-date-range'
-            };
-            const cell = new NotebookCellData(NotebookCellKind.Code, 'invalid', 'python');
-
-            converter.applyChangesToBlock(block, cell);
-
-            // Should preserve existing value when parse fails
-            assert.deepStrictEqual(block.metadata?.deepnote_variable_value, ['2025-01-01', '2025-12-31']);
-        });
-
-        test('handles empty value', () => {
-            const block: DeepnoteBlock = {
-                blockGroup: 'test-group',
-                content: '',
-                id: 'block-123',
-                metadata: {
-                    deepnote_variable_name: 'range1',
-                    deepnote_variable_value: ['2025-01-01', '2025-12-31']
-                },
-                sortingKey: 'a0',
-                type: 'input-date-range'
-            };
-            const cell = new NotebookCellData(NotebookCellKind.Code, '', 'python');
-
-            converter.applyChangesToBlock(block, cell);
-
-            // Should preserve existing value when cell is empty
-            assert.deepStrictEqual(block.metadata?.deepnote_variable_value, ['2025-01-01', '2025-12-31']);
         });
     });
 });

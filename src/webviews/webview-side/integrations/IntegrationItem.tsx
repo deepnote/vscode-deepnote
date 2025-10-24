@@ -1,12 +1,23 @@
 import * as React from 'react';
 import { getLocString } from '../react-common/locReactSide';
-import { IntegrationWithStatus } from './types';
+import { IntegrationWithStatus, IntegrationType } from './types';
 
 export interface IIntegrationItemProps {
     integration: IntegrationWithStatus;
     onConfigure: (integrationId: string) => void;
     onDelete: (integrationId: string) => void;
 }
+
+const getIntegrationTypeLabel = (type: IntegrationType): string => {
+    switch (type) {
+        case 'postgres':
+            return getLocString('integrationsPostgresTypeLabel', 'PostgreSQL');
+        case 'bigquery':
+            return getLocString('integrationsBigQueryTypeLabel', 'BigQuery');
+        default:
+            return type;
+    }
+};
 
 export const IntegrationItem: React.FC<IIntegrationItemProps> = ({ integration, onConfigure, onDelete }) => {
     const statusClass = integration.status === 'connected' ? 'status-connected' : 'status-disconnected';
@@ -17,7 +28,15 @@ export const IntegrationItem: React.FC<IIntegrationItemProps> = ({ integration, 
     const configureText = integration.config
         ? getLocString('integrationsReconfigure', 'Reconfigure')
         : getLocString('integrationsConfigure', 'Configure');
-    const displayName = integration.config?.name || integration.id;
+
+    // Get the name: prefer config name, then integration name from project, then ID
+    const name = integration.config?.name || integration.integrationName || integration.id;
+
+    // Get the type: prefer config type, then integration type from project
+    const type = integration.config?.type || integration.integrationType;
+
+    // Build display name with type
+    const displayName = type ? `${name} (${getIntegrationTypeLabel(type)})` : name;
 
     return (
         <div className="integration-item">

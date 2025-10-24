@@ -20,10 +20,15 @@ export const IIntegrationWebviewProvider = Symbol('IIntegrationWebviewProvider')
 export interface IIntegrationWebviewProvider {
     /**
      * Show the integration management webview
+     * @param projectId The Deepnote project ID
      * @param integrations Map of integration IDs to their status
      * @param selectedIntegrationId Optional integration ID to select/configure immediately
      */
-    show(integrations: Map<string, IntegrationWithStatus>, selectedIntegrationId?: string): Promise<void>;
+    show(
+        projectId: string,
+        integrations: Map<string, IntegrationWithStatus>,
+        selectedIntegrationId?: string
+    ): Promise<void>;
 }
 
 export const IIntegrationManager = Symbol('IIntegrationManager');

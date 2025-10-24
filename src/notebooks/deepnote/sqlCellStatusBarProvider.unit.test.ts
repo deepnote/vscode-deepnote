@@ -18,17 +18,20 @@ import { DATAFRAME_SQL_INTEGRATION_ID, IntegrationType } from '../../platform/no
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { createEventHandler } from '../../test/common';
 import { Commands } from '../../platform/common/constants';
+import { IDeepnoteNotebookManager } from '../types';
 
 suite('SqlCellStatusBarProvider', () => {
     let provider: SqlCellStatusBarProvider;
     let disposables: IDisposableRegistry;
     let integrationStorage: IIntegrationStorage;
+    let notebookManager: IDeepnoteNotebookManager;
     let cancellationToken: CancellationToken;
 
     setup(() => {
         disposables = [];
         integrationStorage = mock<IIntegrationStorage>();
-        provider = new SqlCellStatusBarProvider(disposables, instance(integrationStorage));
+        notebookManager = mock<IDeepnoteNotebookManager>();
+        provider = new SqlCellStatusBarProvider(disposables, instance(integrationStorage), instance(notebookManager));
 
         const tokenSource = new CancellationTokenSource();
         cancellationToken = tokenSource.token;
@@ -155,7 +158,7 @@ suite('SqlCellStatusBarProvider', () => {
         assert.strictEqual(variableItem.priority, 90);
     });
 
-    test('shows "Unknown integration (configure)" when config not found', async () => {
+    test('shows "Unknown integration (configure)" when config not found and not in project list', async () => {
         const integrationId = 'postgres-123';
         const cell = createMockCell(
             'sql',
@@ -168,6 +171,11 @@ suite('SqlCellStatusBarProvider', () => {
         );
 
         when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve(undefined);
+        when(notebookManager.getOriginalProject('project-1')).thenReturn({
+            project: {
+                integrations: []
+            }
+        } as any);
 
         const result = await provider.provideCellStatusBarItems(cell, cancellationToken);
 
@@ -176,6 +184,47 @@ suite('SqlCellStatusBarProvider', () => {
         const items = result as any[];
         assert.strictEqual(items.length, 2);
         assert.strictEqual(items[0].text, '$(database) Unknown integration (configure)');
+        assert.strictEqual(items[0].alignment, 1);
+        assert.strictEqual(items[0].command.command, 'deepnote.switchSqlIntegration');
+        assert.deepStrictEqual(items[0].command.arguments, [cell]);
+        assert.strictEqual(items[1].text, 'Variable: df');
+        assert.strictEqual(items[1].alignment, 1);
+        assert.strictEqual(items[1].command.command, 'deepnote.updateSqlVariableName');
+        assert.strictEqual(items[1].priority, 90);
+    });
+
+    test('shows integration name from project list with (configure) suffix when config not found but integration is in project', async () => {
+        const integrationId = 'postgres-123';
+        const cell = createMockCell(
+            'sql',
+            {
+                sql_integration_id: integrationId
+            },
+            {
+                deepnoteProjectId: 'project-1'
+            }
+        );
+
+        when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve(undefined);
+        when(notebookManager.getOriginalProject('project-1')).thenReturn({
+            project: {
+                integrations: [
+                    {
+                        id: integrationId,
+                        name: 'Production Database',
+                        type: 'pgsql'
+                    }
+                ]
+            }
+        } as any);
+
+        const result = await provider.provideCellStatusBarItems(cell, cancellationToken);
+
+        assert.isDefined(result);
+        assert.isArray(result);
+        const items = result as any[];
+        assert.strictEqual(items.length, 2);
+        assert.strictEqual(items[0].text, '$(database) Production Database (configure)');
         assert.strictEqual(items[0].alignment, 1);
         assert.strictEqual(items[0].command.command, 'deepnote.switchSqlIntegration');
         assert.deepStrictEqual(items[0].command.arguments, [cell]);
@@ -249,12 +298,18 @@ suite('SqlCellStatusBarProvider', () => {
         let activateDisposables: IDisposableRegistry;
         let activateProvider: SqlCellStatusBarProvider;
         let activateIntegrationStorage: IIntegrationStorage;
+        let activateNotebookManager: IDeepnoteNotebookManager;
 
         setup(() => {
             resetVSCodeMocks();
             activateDisposables = [];
             activateIntegrationStorage = mock<IIntegrationStorage>();
-            activateProvider = new SqlCellStatusBarProvider(activateDisposables, instance(activateIntegrationStorage));
+            activateNotebookManager = mock<IDeepnoteNotebookManager>();
+            activateProvider = new SqlCellStatusBarProvider(
+                activateDisposables,
+                instance(activateIntegrationStorage),
+                instance(activateNotebookManager)
+            );
         });
 
         teardown(() => {
@@ -298,11 +353,17 @@ suite('SqlCellStatusBarProvider', () => {
         let eventDisposables: IDisposableRegistry;
         let eventProvider: SqlCellStatusBarProvider;
         let eventIntegrationStorage: IIntegrationStorage;
+        let eventNotebookManager: IDeepnoteNotebookManager;
 
         setup(() => {
             eventDisposables = [];
             eventIntegrationStorage = mock<IIntegrationStorage>();
-            eventProvider = new SqlCellStatusBarProvider(eventDisposables, instance(eventIntegrationStorage));
+            eventNotebookManager = mock<IDeepnoteNotebookManager>();
+            eventProvider = new SqlCellStatusBarProvider(
+                eventDisposables,
+                instance(eventIntegrationStorage),
+                instance(eventNotebookManager)
+            );
         });
 
         test('fires onDidChangeCellStatusBarItems when integration storage changes', () => {
@@ -352,13 +413,19 @@ suite('SqlCellStatusBarProvider', () => {
         let commandDisposables: IDisposableRegistry;
         let commandProvider: SqlCellStatusBarProvider;
         let commandIntegrationStorage: IIntegrationStorage;
+        let commandNotebookManager: IDeepnoteNotebookManager;
         let updateVariableNameHandler: Function;
 
         setup(() => {
             resetVSCodeMocks();
             commandDisposables = [];
             commandIntegrationStorage = mock<IIntegrationStorage>();
-            commandProvider = new SqlCellStatusBarProvider(commandDisposables, instance(commandIntegrationStorage));
+            commandNotebookManager = mock<IDeepnoteNotebookManager>();
+            commandProvider = new SqlCellStatusBarProvider(
+                commandDisposables,
+                instance(commandIntegrationStorage),
+                instance(commandNotebookManager)
+            );
 
             // Capture the command handler
             when(
@@ -473,13 +540,19 @@ suite('SqlCellStatusBarProvider', () => {
         let commandDisposables: IDisposableRegistry;
         let commandProvider: SqlCellStatusBarProvider;
         let commandIntegrationStorage: IIntegrationStorage;
+        let commandNotebookManager: IDeepnoteNotebookManager;
         let switchIntegrationHandler: Function;
 
         setup(() => {
             resetVSCodeMocks();
             commandDisposables = [];
             commandIntegrationStorage = mock<IIntegrationStorage>();
-            commandProvider = new SqlCellStatusBarProvider(commandDisposables, instance(commandIntegrationStorage));
+            commandNotebookManager = mock<IDeepnoteNotebookManager>();
+            commandProvider = new SqlCellStatusBarProvider(
+                commandDisposables,
+                instance(commandIntegrationStorage),
+                instance(commandNotebookManager)
+            );
 
             // Capture the command handler
             when(mockedVSCodeNamespaces.commands.registerCommand('deepnote.switchSqlIntegration', anything())).thenCall(
@@ -501,24 +574,23 @@ suite('SqlCellStatusBarProvider', () => {
         });
 
         test('updates cell metadata with selected integration', async () => {
-            const cell = createMockCell('sql', { sql_integration_id: 'old-integration' });
+            const notebookMetadata = { deepnoteProjectId: 'project-1' };
+            const cell = createMockCell('sql', { sql_integration_id: 'old-integration' }, notebookMetadata);
             const newIntegrationId = 'new-integration';
 
-            when(commandIntegrationStorage.getAll()).thenReturn(
-                Promise.resolve([
-                    {
-                        id: newIntegrationId,
-                        name: 'New Integration',
-                        type: IntegrationType.Postgres,
-                        host: 'localhost',
-                        port: 5432,
-                        database: 'test',
-                        username: 'user',
-                        password: 'pass'
-                    }
-                ])
-            );
+            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+                project: {
+                    integrations: [
+                        {
+                            id: newIntegrationId,
+                            name: 'New Integration',
+                            type: 'pgsql'
+                        }
+                    ]
+                }
+            } as any);
 
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
                 Promise.resolve({ id: newIntegrationId, label: 'New Integration' } as any)
             );
@@ -531,9 +603,15 @@ suite('SqlCellStatusBarProvider', () => {
         });
 
         test('does not update if user cancels quick pick', async () => {
-            const cell = createMockCell('sql', { sql_integration_id: 'old-integration' });
+            const notebookMetadata = { deepnoteProjectId: 'project-1' };
+            const cell = createMockCell('sql', { sql_integration_id: 'old-integration' }, notebookMetadata);
 
-            when(commandIntegrationStorage.getAll()).thenReturn(Promise.resolve([]));
+            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+                project: {
+                    integrations: []
+                }
+            } as any);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
                 Promise.resolve(undefined)
             );
@@ -545,10 +623,16 @@ suite('SqlCellStatusBarProvider', () => {
         });
 
         test('shows error message if workspace edit fails', async () => {
-            const cell = createMockCell('sql', { sql_integration_id: 'old-integration' });
+            const notebookMetadata = { deepnoteProjectId: 'project-1' };
+            const cell = createMockCell('sql', { sql_integration_id: 'old-integration' }, notebookMetadata);
             const newIntegrationId = 'new-integration';
 
-            when(commandIntegrationStorage.getAll()).thenReturn(Promise.resolve([]));
+            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+                project: {
+                    integrations: []
+                }
+            } as any);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
                 Promise.resolve({ id: newIntegrationId, label: 'New Integration' } as any)
             );
@@ -560,10 +644,16 @@ suite('SqlCellStatusBarProvider', () => {
         });
 
         test('fires onDidChangeCellStatusBarItems after successful update', async () => {
-            const cell = createMockCell('sql', { sql_integration_id: 'old-integration' });
+            const notebookMetadata = { deepnoteProjectId: 'project-1' };
+            const cell = createMockCell('sql', { sql_integration_id: 'old-integration' }, notebookMetadata);
             const newIntegrationId = 'new-integration';
 
-            when(commandIntegrationStorage.getAll()).thenReturn(Promise.resolve([]));
+            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+                project: {
+                    integrations: []
+                }
+            } as any);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
                 Promise.resolve({ id: newIntegrationId, label: 'New Integration' } as any)
             );
@@ -581,9 +671,15 @@ suite('SqlCellStatusBarProvider', () => {
         });
 
         test('executes manage integrations command when configure option is selected', async () => {
-            const cell = createMockCell('sql', { sql_integration_id: 'current-integration' });
+            const notebookMetadata = { deepnoteProjectId: 'project-1' };
+            const cell = createMockCell('sql', { sql_integration_id: 'current-integration' }, notebookMetadata);
 
-            when(commandIntegrationStorage.getAll()).thenReturn(Promise.resolve([]));
+            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+                project: {
+                    integrations: []
+                }
+            } as any);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
                 Promise.resolve({ id: '__configure__', label: 'Configure current integration' } as any)
             );
@@ -600,10 +696,16 @@ suite('SqlCellStatusBarProvider', () => {
         });
 
         test('includes DuckDB integration in quick pick items', async () => {
-            const cell = createMockCell('sql', {});
+            const notebookMetadata = { deepnoteProjectId: 'project-1' };
+            const cell = createMockCell('sql', {}, notebookMetadata);
             let quickPickItems: any[] = [];
 
-            when(commandIntegrationStorage.getAll()).thenReturn(Promise.resolve([]));
+            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+                project: {
+                    integrations: []
+                }
+            } as any);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenCall((items) => {
                 quickPickItems = items;
                 return Promise.resolve(undefined);
@@ -618,23 +720,22 @@ suite('SqlCellStatusBarProvider', () => {
 
         test('marks current integration as selected in quick pick', async () => {
             const currentIntegrationId = 'current-integration';
-            const cell = createMockCell('sql', { sql_integration_id: currentIntegrationId });
+            const notebookMetadata = { deepnoteProjectId: 'project-1' };
+            const cell = createMockCell('sql', { sql_integration_id: currentIntegrationId }, notebookMetadata);
             let quickPickItems: any[] = [];
 
-            when(commandIntegrationStorage.getAll()).thenReturn(
-                Promise.resolve([
-                    {
-                        id: currentIntegrationId,
-                        name: 'Current Integration',
-                        type: IntegrationType.Postgres,
-                        host: 'localhost',
-                        port: 5432,
-                        database: 'test',
-                        username: 'user',
-                        password: 'pass'
-                    }
-                ])
-            );
+            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+                project: {
+                    integrations: [
+                        {
+                            id: currentIntegrationId,
+                            name: 'Current Integration',
+                            type: 'pgsql'
+                        }
+                    ]
+                }
+            } as any);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenCall((items) => {
                 quickPickItems = items;
                 return Promise.resolve(undefined);
@@ -645,6 +746,72 @@ suite('SqlCellStatusBarProvider', () => {
             const currentItem = quickPickItems.find((item) => item.id === currentIntegrationId);
             assert.isDefined(currentItem, 'Current integration should be in quick pick items');
             assert.strictEqual(currentItem.detail, 'Currently selected');
+        });
+
+        test('shows error message when project ID is missing', async () => {
+            const cell = createMockCell('sql', {}, {}); // No notebook metadata
+
+            await switchIntegrationHandler(cell);
+
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
+        });
+
+        test('shows error message when project is not found', async () => {
+            const notebookMetadata = { deepnoteProjectId: 'missing-project' };
+            const cell = createMockCell('sql', {}, notebookMetadata);
+
+            when(commandNotebookManager.getOriginalProject('missing-project')).thenReturn(undefined);
+
+            await switchIntegrationHandler(cell);
+
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
+        });
+
+        test('skips DATAFRAME_SQL_INTEGRATION_ID from project integrations list', async () => {
+            const notebookMetadata = { deepnoteProjectId: 'project-1' };
+            const cell = createMockCell('sql', {}, notebookMetadata);
+            let quickPickItems: any[] = [];
+
+            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+                project: {
+                    integrations: [
+                        {
+                            id: DATAFRAME_SQL_INTEGRATION_ID,
+                            name: 'Should be skipped',
+                            type: 'duckdb'
+                        },
+                        {
+                            id: 'postgres-integration',
+                            name: 'PostgreSQL',
+                            type: 'pgsql'
+                        }
+                    ]
+                }
+            } as any);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenCall((items) => {
+                quickPickItems = items;
+                return Promise.resolve(undefined);
+            });
+
+            await switchIntegrationHandler(cell);
+
+            // Should have 2 items: postgres-integration and DuckDB (added separately)
+            const projectIntegrationItems = quickPickItems.filter(
+                (item) => item.id && item.id !== DATAFRAME_SQL_INTEGRATION_ID
+            );
+            assert.strictEqual(
+                projectIntegrationItems.length,
+                1,
+                'Should have only 1 project integration (DATAFRAME_SQL_INTEGRATION_ID should be skipped)'
+            );
+            assert.strictEqual(projectIntegrationItems[0].id, 'postgres-integration');
+
+            // DuckDB should still be in the list (added separately)
+            const duckDbItem = quickPickItems.find((item) => item.id === DATAFRAME_SQL_INTEGRATION_ID);
+            assert.isDefined(duckDbItem, 'DuckDB should still be in the list');
         });
     });
 

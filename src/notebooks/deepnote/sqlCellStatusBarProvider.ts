@@ -22,7 +22,13 @@ import { IExtensionSyncActivationService } from '../../platform/activation/types
 import { IDisposableRegistry } from '../../platform/common/types';
 import { IIntegrationStorage } from './integrations/types';
 import { Commands } from '../../platform/common/constants';
-import { DATAFRAME_SQL_INTEGRATION_ID, IntegrationType } from '../../platform/notebooks/deepnote/integrationTypes';
+import {
+    DATAFRAME_SQL_INTEGRATION_ID,
+    DEEPNOTE_TO_INTEGRATION_TYPE,
+    IntegrationType,
+    RawIntegrationType
+} from '../../platform/notebooks/deepnote/integrationTypes';
+import { IDeepnoteNotebookManager } from '../types';
 
 /**
  * QuickPick item with an integration ID
@@ -42,7 +48,8 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
     constructor(
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
-        @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage
+        @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
+        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager
     ) {}
 
     public activate(): void {
@@ -195,7 +202,19 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
         // Get integration configuration to display the name
         const config = await this.integrationStorage.getProjectIntegrationConfig(projectId, integrationId);
-        const displayName = config?.name || l10n.t('Unknown integration (configure)');
+
+        // Determine the display name
+        let displayName: string;
+        if (config?.name) {
+            // Integration is configured, use the config name
+            displayName = config.name;
+        } else {
+            // Integration is not configured, try to get the name from the project's integration list
+            const project = this.notebookManager.getOriginalProject(projectId);
+            const projectIntegration = project?.project.integrations?.find((i) => i.id === integrationId);
+            const baseName = projectIntegration?.name || l10n.t('Unknown integration');
+            displayName = l10n.t('{0} (configure)', baseName);
+        }
 
         // Create a status bar item that opens the integration picker
         return {
@@ -285,17 +304,30 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
     private async switchIntegration(cell: NotebookCell): Promise<void> {
         const currentIntegrationId = this.getIntegrationId(cell);
 
-        // Get all available integrations
-        const allIntegrations = await this.integrationStorage.getAll();
+        // Get the project ID from the notebook metadata
+        const projectId = cell.notebook.metadata?.deepnoteProjectId;
+        if (!projectId) {
+            void window.showErrorMessage(l10n.t('Cannot determine project ID'));
+            return;
+        }
 
-        // Build quick pick items
+        // Get the project to access its integrations list
+        const project = this.notebookManager.getOriginalProject(projectId);
+        if (!project) {
+            void window.showErrorMessage(l10n.t('Project not found'));
+            return;
+        }
+
+        // Build quick pick items from project integrations
         const items: (QuickPickItem | LocalQuickPickItem)[] = [];
 
-        // Check if current integration is unknown (not in the list)
+        const projectIntegrations = project.project.integrations || [];
+
+        // Check if current integration is unknown (not in the project's list)
         const isCurrentIntegrationUnknown =
             currentIntegrationId &&
             currentIntegrationId !== DATAFRAME_SQL_INTEGRATION_ID &&
-            !allIntegrations.some((i) => i.id === currentIntegrationId);
+            !projectIntegrations.some((i) => i.id === currentIntegrationId);
 
         // Add current unknown integration first if it exists
         if (isCurrentIntegrationUnknown && currentIntegrationId) {
@@ -308,15 +340,21 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
             items.push(item);
         }
 
-        // Add all configured integrations
-        for (const integration of allIntegrations) {
-            const typeLabel = this.getIntegrationTypeLabel(integration.type);
+        // Add all project integrations
+        for (const projectIntegration of projectIntegrations) {
+            // Skip the internal DuckDB integration
+            if (projectIntegration.id === DATAFRAME_SQL_INTEGRATION_ID) {
+                continue;
+            }
+
+            const integrationType = DEEPNOTE_TO_INTEGRATION_TYPE[projectIntegration.type as RawIntegrationType];
+            const typeLabel = integrationType ? this.getIntegrationTypeLabel(integrationType) : projectIntegration.type;
+
             const item: LocalQuickPickItem = {
-                label: integration.name || integration.id,
+                label: projectIntegration.name || projectIntegration.id,
                 description: typeLabel,
-                detail: integration.id === currentIntegrationId ? l10n.t('Currently selected') : undefined,
-                // Store the integration ID in a custom property
-                id: integration.id
+                detail: projectIntegration.id === currentIntegrationId ? l10n.t('Currently selected') : undefined,
+                id: projectIntegration.id
             };
             items.push(item);
         }

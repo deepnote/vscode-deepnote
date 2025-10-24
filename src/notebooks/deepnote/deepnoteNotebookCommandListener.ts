@@ -6,7 +6,8 @@ import {
     NotebookCellKind,
     NotebookEdit,
     NotebookRange,
-    NotebookCell
+    NotebookCell,
+    NotebookEditorRevealType
 } from 'vscode';
 import z from 'zod';
 
@@ -25,7 +26,8 @@ import {
     DeepnoteDateInputMetadataSchema,
     DeepnoteDateRangeInputMetadataSchema,
     DeepnoteFileInputMetadataSchema,
-    DeepnoteButtonMetadataSchema
+    DeepnoteButtonMetadataSchema,
+    DeepnoteSqlMetadata
 } from './deepnoteSchemas';
 
 type InputBlockType =
@@ -88,10 +90,15 @@ export function getNextDeepnoteVariableName(cells: NotebookCell[], prefix: 'df' 
             acc.push(contentValue);
         }
 
-        const parsedMetadataValue = z.string().safeParse(cell.metadata.__deepnotePocket?.variableName);
-
+        const parsedMetadataValue = z.string().safeParse(cell.metadata['deepnote_variable_name']);
         if (parsedMetadataValue.success) {
             acc.push(parsedMetadataValue.data);
+        }
+
+        const parsedPocketMetadataValue = z.string().safeParse(cell.metadata.__deepnotePocket?.deepnote_variable_name);
+
+        if (parsedPocketMetadataValue.success) {
+            acc.push(parsedPocketMetadataValue.data);
         }
 
         return acc;
@@ -175,6 +182,14 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         }
         const document = editor.notebook;
         const selection = editor.selection;
+        const cells = editor.notebook.getCells();
+        const deepnoteVariableName = getNextDeepnoteVariableName(cells, 'df');
+
+        const defaultMetadata: DeepnoteSqlMetadata = {
+            deepnote_variable_name: deepnoteVariableName,
+            deepnote_return_variable_type: 'dataframe',
+            sql_integration_id: ''
+        };
 
         // Determine the index where to insert the new cell (below current selection or at the end)
         const insertIndex = selection ? selection.end : document.cellCount;
@@ -185,14 +200,22 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             const newCell = new NotebookCellData(NotebookCellKind.Code, '', 'sql');
             newCell.metadata = {
                 __deepnotePocket: {
-                    type: 'sql'
-                }
+                    type: 'sql',
+                    ...defaultMetadata
+                },
+                ...defaultMetadata
             };
             const nbEdit = NotebookEdit.insertCells(insertIndex, [newCell]);
             edit.set(document.uri, [nbEdit]);
         }).then(
             () => {
-                editor.selection = new NotebookRange(insertIndex, insertIndex + 1);
+                const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
+                editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
+                editor.selection = notebookRange;
+                // Enter edit mode on the new cell
+                commands
+                    .executeCommand('notebook.cell.edit')
+                    .then(undefined, (error) => logger.error('Error entering edit mode', error));
             },
             (error) => {
                 logger.error('Error inserting SQL block', error);
@@ -231,7 +254,13 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             edit.set(document.uri, [nbEdit]);
         }).then(
             () => {
-                editor.selection = new NotebookRange(insertIndex, insertIndex + 1);
+                const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
+                editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
+                editor.selection = notebookRange;
+                // Enter edit mode on the new cell
+                commands
+                    .executeCommand('notebook.cell.edit')
+                    .then(undefined, (error) => logger.error('Error entering edit mode', error));
             },
             (error) => {
                 logger.error('Error inserting big number chart block', error);
@@ -273,7 +302,13 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             edit.set(document.uri, [nbEdit]);
         }).then(
             () => {
-                editor.selection = new NotebookRange(insertIndex, insertIndex + 1);
+                const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
+                editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
+                editor.selection = notebookRange;
+                // Enter edit mode on the new cell
+                commands
+                    .executeCommand('notebook.cell.edit')
+                    .then(undefined, (error) => logger.error('Error entering edit mode', error));
             },
             (error) => {
                 logger.error('Error inserting input block', error);

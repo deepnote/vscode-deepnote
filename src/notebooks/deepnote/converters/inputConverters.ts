@@ -363,7 +363,7 @@ export class InputDateRangeBlockConverter extends BaseInputBlockConverter<typeof
 
         // Parse the cell value to extract the date range
         const cellValue = cell.value.trim();
-        let value: [string, string] | string = '';
+        let value: [string, string] | null = null;
 
         // Try to parse as tuple
         const tupleMatch = cellValue.match(/\(\s*["']([^"']*)["']\s*,\s*["']([^"']*)["']\s*\)/);
@@ -381,7 +381,12 @@ export class InputDateRangeBlockConverter extends BaseInputBlockConverter<typeof
         block.metadata = {
             ...(block.metadata ?? {}),
             ...baseMetadata,
-            deepnote_variable_value: value
+            deepnote_variable_value:
+                value !== null
+                    ? value
+                    : existingMetadata.success
+                    ? (existingMetadata.data as any).deepnote_variable_value
+                    : null
         };
     }
 }

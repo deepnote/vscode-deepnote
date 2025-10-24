@@ -305,6 +305,74 @@ suite('InputSelectBlockConverter', () => {
 
             assert.strictEqual(cell.value, 'None');
         });
+
+        test('escapes quotes in single select value', () => {
+            const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
+                content: '',
+                id: 'block-123',
+                metadata: {
+                    deepnote_variable_value: 'Option with "quotes"'
+                },
+                sortingKey: 'a0',
+                type: 'input-select'
+            };
+
+            const cell = converter.convertToCell(block);
+
+            assert.strictEqual(cell.value, '"Option with \\"quotes\\""');
+        });
+
+        test('escapes backslashes in single select value', () => {
+            const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
+                content: '',
+                id: 'block-123',
+                metadata: {
+                    deepnote_variable_value: 'Path\\to\\file'
+                },
+                sortingKey: 'a0',
+                type: 'input-select'
+            };
+
+            const cell = converter.convertToCell(block);
+
+            assert.strictEqual(cell.value, '"Path\\\\to\\\\file"');
+        });
+
+        test('escapes quotes in multi-select array values', () => {
+            const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
+                content: '',
+                id: 'block-123',
+                metadata: {
+                    deepnote_variable_value: ['Option "A"', 'Option "B"']
+                },
+                sortingKey: 'a0',
+                type: 'input-select'
+            };
+
+            const cell = converter.convertToCell(block);
+
+            assert.strictEqual(cell.value, '["Option \\"A\\"", "Option \\"B\\""]');
+        });
+
+        test('handles empty array for multi-select', () => {
+            const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
+                content: '',
+                id: 'block-123',
+                metadata: {
+                    deepnote_variable_value: []
+                },
+                sortingKey: 'a0',
+                type: 'input-select'
+            };
+
+            const cell = converter.convertToCell(block);
+
+            assert.strictEqual(cell.value, '[]');
+        });
     });
 
     suite('applyChangesToBlock', () => {
@@ -786,6 +854,40 @@ suite('InputFileBlockConverter', () => {
             const cell = converter.convertToCell(block);
 
             assert.strictEqual(cell.value, '');
+        });
+
+        test('escapes backslashes in Windows file paths', () => {
+            const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
+                content: '',
+                id: 'block-123',
+                metadata: {
+                    deepnote_variable_value: 'C:\\Users\\Documents\\file.txt'
+                },
+                sortingKey: 'a0',
+                type: 'input-file'
+            };
+
+            const cell = converter.convertToCell(block);
+
+            assert.strictEqual(cell.value, '"C:\\\\Users\\\\Documents\\\\file.txt"');
+        });
+
+        test('escapes quotes in file paths', () => {
+            const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
+                content: '',
+                id: 'block-123',
+                metadata: {
+                    deepnote_variable_value: 'file "with quotes".txt'
+                },
+                sortingKey: 'a0',
+                type: 'input-file'
+            };
+
+            const cell = converter.convertToCell(block);
+
+            assert.strictEqual(cell.value, '"file \\"with quotes\\".txt"');
         });
     });
 

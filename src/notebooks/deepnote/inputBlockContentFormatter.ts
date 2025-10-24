@@ -25,10 +25,10 @@ export function formatInputBlockCellContent(blockType: string, metadata: Record<
                     // Empty array for multi-select
                     return '[]';
                 }
-                return `[${value.map((v) => `"${v}"`).join(', ')}]`;
+                return `[${value.map((v) => JSON.stringify(v)).join(', ')}]`;
             } else if (typeof value === 'string') {
                 // Single select: show as quoted string
-                return `"${value}"`;
+                return JSON.stringify(value);
             } else if (value === null || value === undefined) {
                 // Empty/null value
                 return 'None';
@@ -50,7 +50,7 @@ export function formatInputBlockCellContent(blockType: string, metadata: Record<
             const value = metadata.deepnote_variable_value;
             if (value) {
                 const dateStr = formatDateValue(value);
-                return dateStr ? `"${dateStr}"` : '""';
+                return dateStr ? JSON.stringify(dateStr) : '""';
             }
             return '""';
         }
@@ -61,7 +61,7 @@ export function formatInputBlockCellContent(blockType: string, metadata: Record<
                 const start = formatDateValue(value[0]);
                 const end = formatDateValue(value[1]);
                 if (start || end) {
-                    return `("${start}", "${end}")`;
+                    return `(${JSON.stringify(start)}, ${JSON.stringify(end)})`;
                 }
             } else {
                 const defaultValue = metadata.deepnote_variable_default_value;
@@ -69,7 +69,7 @@ export function formatInputBlockCellContent(blockType: string, metadata: Record<
                     const start = formatDateValue(defaultValue[0]);
                     const end = formatDateValue(defaultValue[1]);
                     if (start || end) {
-                        return `("${start}", "${end}")`;
+                        return `(${JSON.stringify(start)}, ${JSON.stringify(end)})`;
                     }
                 }
             }
@@ -78,7 +78,7 @@ export function formatInputBlockCellContent(blockType: string, metadata: Record<
 
         case 'input-file': {
             const value = metadata.deepnote_variable_value;
-            return typeof value === 'string' && value ? `"${value}"` : '';
+            return typeof value === 'string' && value ? JSON.stringify(value) : '';
         }
 
         case 'button': {

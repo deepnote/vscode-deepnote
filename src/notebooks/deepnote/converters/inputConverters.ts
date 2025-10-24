@@ -28,7 +28,7 @@ export abstract class BaseInputBlockConverter<T extends z.ZodObject> implements 
      * Clears block.content, parses schema, deletes DEEPNOTE_VSCODE_RAW_CONTENT_KEY,
      * and merges metadata with updates.
      */
-    protected updateBlockMetadata(block: DeepnoteBlock, updates: Record<string, unknown>): void {
+    protected updateBlockMetadata(block: DeepnoteBlock, updates: Partial<z.infer<T>>): void {
         block.content = '';
 
         const existingMetadata = this.schema().safeParse(block.metadata);

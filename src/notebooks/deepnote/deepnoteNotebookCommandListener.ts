@@ -11,6 +11,9 @@ import {
     NotebookRange,
     NotebookCell
 } from 'vscode';
+import z from 'zod';
+
+import { logger } from '../../platform/logging';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { Commands } from '../../platform/common/constants';
@@ -28,7 +31,6 @@ import {
     DeepnoteFileInputMetadataSchema,
     DeepnoteButtonMetadataSchema
 } from './deepnoteSchemas';
-import z from 'zod';
 
 type InputBlockType =
     | 'input-text'
@@ -76,6 +78,7 @@ export function safeParseDeepnoteVariableNameFromContentJson(content: string): s
     try {
         return JSON.parse(content)['deepnote_variable_name'];
     } catch (error) {
+        logger.error('Error parsing deepnote variable name from content JSON', error);
         return undefined;
     }
 }

@@ -1,6 +1,3 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-
 import * as React from 'react';
 import * as ReactDOM from 'react-dom';
 
@@ -21,4 +18,3 @@ ReactDOM.render(
     <SelectInputSettingsPanel baseTheme={baseTheme} vscodeApi={vscodeApi} />,
     document.getElementById('root') as HTMLElement
 );
-

@@ -738,10 +738,25 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
                         void this.updateCellMetadata(cell, { deepnote_variable_value: [] });
                     }
                 });
+            } else {
+                // If empty values are not allowed, ensure at least one item is always selected
+                quickPick.onDidChangeSelection((selectedItems) => {
+                    if (selectedItems.length === 0) {
+                        // Prevent deselecting the last item - restore previous selection
+                        quickPick.selectedItems = optionItems.filter((item) => item.picked);
+                    }
+                });
             }
 
             quickPick.onDidAccept(() => {
                 const selected = quickPick.selectedItems;
+
+                // If empty values are not allowed, ensure at least one item is selected
+                if (!allowEmpty && selected.length === 0) {
+                    void window.showWarningMessage(l10n.t('At least one option must be selected'));
+                    return;
+                }
+
                 const newValue = selected.map((item) => item.label);
                 void this.updateCellMetadata(cell, { deepnote_variable_value: newValue });
                 quickPick.hide();

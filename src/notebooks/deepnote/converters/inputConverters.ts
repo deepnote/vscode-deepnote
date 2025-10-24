@@ -53,7 +53,7 @@ export abstract class BaseInputBlockConverter<T extends z.ZodObject> implements 
     }
 
     canConvert(blockType: string): boolean {
-        return blockType.toLowerCase() === this.getSupportedType();
+        return this.getSupportedTypes().includes(blockType.toLowerCase());
     }
 
     convertToCell(block: DeepnoteBlock): NotebookCellData {

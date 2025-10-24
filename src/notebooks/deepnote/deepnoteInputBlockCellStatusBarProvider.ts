@@ -682,6 +682,7 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
 
         const selectType = metadata.deepnote_variable_select_type as string | undefined;
         const allowMultiple = metadata.deepnote_allow_multiple_values as boolean | undefined;
+        const allowEmpty = metadata.deepnote_allow_empty_values as boolean | undefined;
         const currentValue = metadata.deepnote_variable_value;
 
         // Get options based on select type
@@ -705,29 +706,82 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
         }
 
         if (allowMultiple) {
-            // Multi-select using QuickPick
+            // Multi-select using QuickPick with custom behavior for clear selection
             const currentSelection = Array.isArray(currentValue) ? currentValue : [];
-            const selected = await window.showQuickPick(
-                options.map((opt) => ({
-                    label: opt,
-                    picked: currentSelection.includes(opt)
-                })),
-                {
-                    canPickMany: true,
-                    placeHolder: l10n.t('Select one or more options')
-                }
-            );
+            const clearSelectionLabel = l10n.t('$(circle-slash) Clear selection');
 
-            if (selected === undefined) {
-                return;
+            // Create quick pick items
+            const optionItems = options.map((opt) => ({
+                label: opt,
+                picked: currentSelection.includes(opt)
+            }));
+
+            // Add empty option if allowed
+            if (allowEmpty) {
+                optionItems.unshift({
+                    label: clearSelectionLabel,
+                    picked: false
+                });
             }
 
-            const newValue = selected.map((item) => item.label);
-            await this.updateCellMetadata(cell, { deepnote_variable_value: newValue });
+            // Use createQuickPick for more control
+            const quickPick = window.createQuickPick();
+            quickPick.items = optionItems;
+            quickPick.selectedItems = optionItems.filter((item) => item.picked);
+            quickPick.canSelectMany = true;
+            quickPick.placeholder = allowEmpty
+                ? l10n.t('Select one or more options (or clear selection)')
+                : l10n.t('Select one or more options');
+
+            // Listen for selection changes to handle "Clear selection" specially
+            if (allowEmpty) {
+                quickPick.onDidChangeSelection((selectedItems) => {
+                    const hasClearSelection = selectedItems.some((item) => item.label === clearSelectionLabel);
+                    if (hasClearSelection) {
+                        // If "Clear selection" is selected, immediately clear and close
+                        quickPick.selectedItems = [];
+                        quickPick.hide();
+                        void this.updateCellMetadata(cell, { deepnote_variable_value: [] });
+                    }
+                });
+            }
+
+            quickPick.onDidAccept(() => {
+                const selected = quickPick.selectedItems;
+                const hasClearSelection = selected.some((item) => item.label === clearSelectionLabel);
+
+                if (!hasClearSelection) {
+                    const newValue = selected.map((item) => item.label);
+                    void this.updateCellMetadata(cell, { deepnote_variable_value: newValue });
+                }
+                quickPick.hide();
+            });
+
+            quickPick.onDidHide(() => {
+                quickPick.dispose();
+            });
+
+            quickPick.show();
         } else {
             // Single select
-            const selected = await window.showQuickPick(options, {
-                placeHolder: l10n.t('Select an option'),
+            const quickPickItems = options.map((opt) => ({
+                label: opt,
+                description: typeof currentValue === 'string' && currentValue === opt ? l10n.t('(current)') : undefined
+            }));
+
+            // Add empty option if allowed
+            if (allowEmpty) {
+                quickPickItems.unshift({
+                    label: l10n.t('$(circle-slash) None'),
+                    description:
+                        currentValue === null || currentValue === undefined || currentValue === ''
+                            ? l10n.t('(current)')
+                            : undefined
+                });
+            }
+
+            const selected = await window.showQuickPick(quickPickItems, {
+                placeHolder: allowEmpty ? l10n.t('Select an option or none') : l10n.t('Select an option'),
                 canPickMany: false
             });
 
@@ -735,7 +789,13 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
                 return;
             }
 
-            await this.updateCellMetadata(cell, { deepnote_variable_value: selected });
+            // Check if "None" was chosen
+            const noneLabel = l10n.t('$(circle-slash) None');
+            if (selected.label === noneLabel) {
+                await this.updateCellMetadata(cell, { deepnote_variable_value: null });
+            } else {
+                await this.updateCellMetadata(cell, { deepnote_variable_value: selected.label });
+            }
         }
     }
 

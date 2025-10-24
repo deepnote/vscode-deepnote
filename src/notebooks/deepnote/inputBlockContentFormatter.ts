@@ -21,10 +21,17 @@ export function formatInputBlockCellContent(blockType: string, metadata: Record<
             const value = metadata.deepnote_variable_value;
             if (Array.isArray(value)) {
                 // Multi-select: show as array of quoted strings
+                if (value.length === 0) {
+                    // Empty array for multi-select
+                    return '[]';
+                }
                 return `[${value.map((v) => `"${v}"`).join(', ')}]`;
             } else if (typeof value === 'string') {
                 // Single select: show as quoted string
                 return `"${value}"`;
+            } else if (value === null || value === undefined) {
+                // Empty/null value
+                return 'None';
             }
             return '';
         }
@@ -100,4 +107,3 @@ function formatDateValue(val: unknown): string {
     }
     return String(val);
 }
-

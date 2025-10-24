@@ -1021,7 +1021,11 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
         }
 
         // Store as YYYY-MM-DD format (not full ISO string)
-        const newValue = currentEnd ? [input, currentEnd] : [input, input];
+        let newValue = currentEnd ? [input, currentEnd] : [input, input];
+        if (newValue[1] && newValue[0] > newValue[1]) {
+            newValue = [newValue[1], newValue[0]];
+            void window.showWarningMessage(l10n.t('Start date was after end date; the range was adjusted.'));
+        }
         await this.updateCellMetadata(cell, { deepnote_variable_value: newValue });
     }
 
@@ -1062,7 +1066,11 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
         }
 
         // Store as YYYY-MM-DD format (not full ISO string)
-        const newValue = currentStart ? [currentStart, input] : [input, input];
+        let newValue = currentStart ? [currentStart, input] : [input, input];
+        if (newValue[0] > newValue[1]) {
+            newValue = [newValue[1], newValue[0]];
+            void window.showWarningMessage(l10n.t('End date was before start date; the range was adjusted.'));
+        }
         await this.updateCellMetadata(cell, { deepnote_variable_value: newValue });
     }
 

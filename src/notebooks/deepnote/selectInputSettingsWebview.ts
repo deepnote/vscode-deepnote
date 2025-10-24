@@ -6,7 +6,6 @@ import {
     l10n,
     NotebookCell,
     NotebookEdit,
-    NotebookRange,
     Uri,
     ViewColumn,
     WebviewPanel,
@@ -185,17 +184,8 @@ export class SelectInputSettingsWebviewProvider {
             metadata.deepnote_variable_options = settings.options;
         }
 
-        // Replace the cell with updated metadata
-        const cellData = {
-            kind: this.currentCell.kind,
-            languageId: this.currentCell.document.languageId,
-            value: this.currentCell.document.getText(),
-            metadata
-        };
-
-        edit.set(this.currentCell.notebook.uri, [
-            NotebookEdit.replaceCells(new NotebookRange(this.currentCell.index, this.currentCell.index + 1), [cellData])
-        ]);
+        // Update cell metadata to preserve outputs and attachments
+        edit.set(this.currentCell.notebook.uri, [NotebookEdit.updateCellMetadata(this.currentCell.index, metadata)]);
 
         await workspace.applyEdit(edit);
     }

@@ -859,6 +859,22 @@ export namespace Integrations {
     export const bigQueryUnnamedIntegration = (id: string) => l10n.t('Unnamed BigQuery Integration ({0})', id);
 }
 
+export namespace SelectInputSettings {
+    export const title = l10n.t('Settings');
+    export const allowMultipleValues = l10n.t('Allow to select multiple values');
+    export const allowEmptyValue = l10n.t('Allow empty value');
+    export const valueSourceTitle = l10n.t('Value');
+    export const fromOptions = l10n.t('From options');
+    export const fromOptionsDescription = l10n.t('A set of defined options.');
+    export const addOptionPlaceholder = l10n.t('Add option...');
+    export const addButton = l10n.t('Add');
+    export const fromVariable = l10n.t('From variable');
+    export const fromVariableDescription = l10n.t('A list or Series that contains only strings, numbers or booleans.');
+    export const variablePlaceholder = l10n.t('Variable name...');
+    export const saveButton = l10n.t('Save');
+    export const cancelButton = l10n.t('Cancel');
+}
+
 export namespace Deprecated {
     export const SHOW_DEPRECATED_FEATURE_PROMPT_FORMAT_ON_SAVE = l10n.t({
         message: "The setting 'python.formatting.formatOnSave' is deprecated, please use 'editor.formatOnSave'.",

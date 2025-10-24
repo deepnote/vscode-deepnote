@@ -15,6 +15,8 @@ import {
 } from 'vscode';
 import { inject, injectable } from 'inversify';
 import { IExtensionContext } from '../../platform/common/types';
+import { LocalizedMessages } from '../../messageTypes';
+import * as localize from '../../platform/common/utils/localize';
 
 interface SelectInputSettings {
     allowMultipleValues: boolean;
@@ -91,6 +93,7 @@ export class SelectInputSettingsWebviewProvider {
 
         // Send initial data
         await this.sendInitialData();
+        await this.sendLocStrings();
 
         // Return a promise that resolves when the user saves or cancels
         return new Promise((resolve) => {
@@ -116,6 +119,33 @@ export class SelectInputSettingsWebviewProvider {
         await this.currentPanel.webview.postMessage({
             type: 'init',
             settings
+        });
+    }
+
+    private async sendLocStrings(): Promise<void> {
+        if (!this.currentPanel) {
+            return;
+        }
+
+        const locStrings: Partial<LocalizedMessages> = {
+            selectInputSettingsTitle: localize.SelectInputSettings.title,
+            allowMultipleValues: localize.SelectInputSettings.allowMultipleValues,
+            allowEmptyValue: localize.SelectInputSettings.allowEmptyValue,
+            valueSourceTitle: localize.SelectInputSettings.valueSourceTitle,
+            fromOptions: localize.SelectInputSettings.fromOptions,
+            fromOptionsDescription: localize.SelectInputSettings.fromOptionsDescription,
+            addOptionPlaceholder: localize.SelectInputSettings.addOptionPlaceholder,
+            addButton: localize.SelectInputSettings.addButton,
+            fromVariable: localize.SelectInputSettings.fromVariable,
+            fromVariableDescription: localize.SelectInputSettings.fromVariableDescription,
+            variablePlaceholder: localize.SelectInputSettings.variablePlaceholder,
+            saveButton: localize.SelectInputSettings.saveButton,
+            cancelButton: localize.SelectInputSettings.cancelButton
+        };
+
+        await this.currentPanel.webview.postMessage({
+            type: 'locInit',
+            locStrings
         });
     }
 

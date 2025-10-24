@@ -10,8 +10,7 @@ export interface SelectInputSettings {
 }
 
 export interface WebviewMessage {
-    type: 'init' | 'save' | 'locInit';
+    type: 'init' | 'save' | 'locInit' | 'cancel';
     settings?: SelectInputSettings;
     locStrings?: Record<string, string>;
 }
-

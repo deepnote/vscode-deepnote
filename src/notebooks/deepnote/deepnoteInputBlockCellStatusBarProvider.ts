@@ -18,9 +18,11 @@ import {
     workspace
 } from 'vscode';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
-import { injectable } from 'inversify';
+import { inject, injectable } from 'inversify';
 import type { Pocket } from '../../platform/deepnote/pocket';
 import { formatInputBlockCellContent } from './inputBlockContentFormatter';
+import { SelectInputSettingsWebviewProvider } from './selectInputSettingsWebview';
+import { IExtensionContext } from '../../platform/common/types';
 
 /**
  * Provides status bar items for Deepnote input block cells to display their block type.
@@ -32,8 +34,13 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
 {
     private readonly disposables: Disposable[] = [];
     private readonly _onDidChangeCellStatusBarItems = new EventEmitter<void>();
+    private readonly selectInputSettingsWebview: SelectInputSettingsWebviewProvider;
 
     public readonly onDidChangeCellStatusBarItems = this._onDidChangeCellStatusBarItems.event;
+
+    constructor(@inject(IExtensionContext) extensionContext: IExtensionContext) {
+        this.selectInputSettingsWebview = new SelectInputSettingsWebviewProvider(extensionContext);
+    }
 
     // List of supported Deepnote input block types
     private readonly INPUT_BLOCK_TYPES = [
@@ -135,6 +142,16 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
                 const activeCell = cell || this.getActiveCell();
                 if (activeCell) {
                     await this.fileInputChooseFile(activeCell);
+                }
+            })
+        );
+
+        // Select input: configure settings
+        this.disposables.push(
+            commands.registerCommand('deepnote.selectInputSettings', async (cell?: NotebookCell) => {
+                const activeCell = cell || this.getActiveCell();
+                if (activeCell) {
+                    await this.selectInputSettings(activeCell);
                 }
             })
         );
@@ -314,6 +331,19 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
             command: {
                 title: l10n.t('Choose Option'),
                 command: 'deepnote.selectInputChooseOption',
+                arguments: [cell]
+            }
+        });
+
+        // Settings button
+        items.push({
+            text: l10n.t('$(gear) Settings'),
+            alignment: 1,
+            priority: 79,
+            tooltip: l10n.t('Configure select input settings\nClick to open'),
+            command: {
+                title: l10n.t('Settings'),
+                command: 'deepnote.selectInputSettings',
                 arguments: [cell]
             }
         });
@@ -843,6 +873,16 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
         const filePath = uris[0].path;
 
         await this.updateCellMetadata(cell, { deepnote_variable_value: filePath });
+    }
+
+    /**
+     * Handler for select input: configure settings
+     */
+    private async selectInputSettings(cell: NotebookCell): Promise<void> {
+        await this.selectInputSettingsWebview.show(cell);
+        // The webview will handle saving the settings
+        // Trigger a status bar refresh after the webview closes
+        this._onDidChangeCellStatusBarItems.fire();
     }
 
     /**

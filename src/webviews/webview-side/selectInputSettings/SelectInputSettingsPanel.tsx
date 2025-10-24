@@ -1,0 +1,243 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+import * as React from 'react';
+import { IVsCodeApi } from '../react-common/postOffice';
+import { getLocString, storeLocStrings } from '../react-common/locReactSide';
+import { SelectInputSettings, WebviewMessage } from './types';
+
+export interface ISelectInputSettingsPanelProps {
+    baseTheme: string;
+    vscodeApi: IVsCodeApi;
+}
+
+export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> = ({ baseTheme, vscodeApi }) => {
+    const [settings, setSettings] = React.useState<SelectInputSettings>({
+        allowMultipleValues: false,
+        allowEmptyValue: false,
+        selectType: 'from-options',
+        options: [],
+        selectedVariable: ''
+    });
+
+    const [newOption, setNewOption] = React.useState('');
+
+    React.useEffect(() => {
+        const handleMessage = (event: MessageEvent) => {
+            const message = event.data as WebviewMessage;
+
+            switch (message.type) {
+                case 'init':
+                    if (message.settings) {
+                        setSettings(message.settings);
+                    }
+                    break;
+
+                case 'locInit':
+                    if (message.locStrings) {
+                        storeLocStrings(message.locStrings);
+                    }
+                    break;
+            }
+        };
+
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
+    }, []);
+
+    const handleToggle = (field: 'allowMultipleValues' | 'allowEmptyValue') => {
+        setSettings((prev) => ({
+            ...prev,
+            [field]: !prev[field]
+        }));
+    };
+
+    const handleSelectTypeChange = (selectType: 'from-options' | 'from-variable') => {
+        setSettings((prev) => ({
+            ...prev,
+            selectType
+        }));
+    };
+
+    const handleAddOption = () => {
+        if (newOption.trim()) {
+            setSettings((prev) => ({
+                ...prev,
+                options: [...prev.options, newOption.trim()]
+            }));
+            setNewOption('');
+        }
+    };
+
+    const handleRemoveOption = (index: number) => {
+        setSettings((prev) => ({
+            ...prev,
+            options: prev.options.filter((_, i) => i !== index)
+        }));
+    };
+
+    const handleVariableChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setSettings((prev) => ({
+            ...prev,
+            selectedVariable: e.target.value
+        }));
+    };
+
+    const handleSave = () => {
+        vscodeApi.postMessage({
+            type: 'save',
+            settings
+        });
+    };
+
+    const handleCancel = () => {
+        vscodeApi.postMessage({
+            type: 'cancel'
+        });
+    };
+
+    return (
+        <div className={`select-input-settings-panel theme-${baseTheme}`}>
+            <h1>{getLocString('selectInputSettingsTitle', 'Settings')}</h1>
+
+            <div className="settings-section">
+                <div className="toggle-option">
+                    <label htmlFor="allowMultiple">
+                        {getLocString('allowMultipleValues', 'Allow to select multiple values')}
+                    </label>
+                    <label className="toggle-switch">
+                        <input
+                            type="checkbox"
+                            id="allowMultiple"
+                            checked={settings.allowMultipleValues}
+                            onChange={() => handleToggle('allowMultipleValues')}
+                        />
+                        <span className="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div className="toggle-option">
+                    <label htmlFor="allowEmpty">{getLocString('allowEmptyValue', 'Allow empty value')}</label>
+                    <label className="toggle-switch">
+                        <input
+                            type="checkbox"
+                            id="allowEmpty"
+                            checked={settings.allowEmptyValue}
+                            onChange={() => handleToggle('allowEmptyValue')}
+                        />
+                        <span className="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <h2>{getLocString('valueSourceTitle', 'Value')}</h2>
+
+            <div className="value-source-section">
+                <div
+                    className={`radio-option ${settings.selectType === 'from-options' ? 'selected' : ''}`}
+                    onClick={() => handleSelectTypeChange('from-options')}
+                >
+                    <input
+                        type="radio"
+                        id="fromOptions"
+                        name="selectType"
+                        checked={settings.selectType === 'from-options'}
+                        onChange={() => handleSelectTypeChange('from-options')}
+                    />
+                    <div className="radio-content">
+                        <div className="radio-title">{getLocString('fromOptions', 'From options')}</div>
+                        <div className="radio-description">
+                            {getLocString('fromOptionsDescription', 'A set of defined options.')}
+                        </div>
+
+                        {settings.selectType === 'from-options' && (
+                            <div className="options-list">
+                                {settings.options.map((option, index) => (
+                                    <span key={index} className="option-tag">
+                                        {option}
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleRemoveOption(index);
+                                            }}
+                                            aria-label="Remove option"
+                                        >
+                                            ×
+                                        </button>
+                                    </span>
+                                ))}
+
+                                <div className="add-option-form">
+                                    <input
+                                        type="text"
+                                        value={newOption}
+                                        onChange={(e) => setNewOption(e.target.value)}
+                                        onKeyPress={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                handleAddOption();
+                                            }
+                                        }}
+                                        placeholder={getLocString('addOptionPlaceholder', 'Add option...')}
+                                        onClick={(e) => e.stopPropagation()}
+                                    />
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleAddOption();
+                                        }}
+                                    >
+                                        {getLocString('addButton', 'Add')}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div
+                    className={`radio-option ${settings.selectType === 'from-variable' ? 'selected' : ''}`}
+                    onClick={() => handleSelectTypeChange('from-variable')}
+                >
+                    <input
+                        type="radio"
+                        id="fromVariable"
+                        name="selectType"
+                        checked={settings.selectType === 'from-variable'}
+                        onChange={() => handleSelectTypeChange('from-variable')}
+                    />
+                    <div className="radio-content">
+                        <div className="radio-title">{getLocString('fromVariable', 'From variable')}</div>
+                        <div className="radio-description">
+                            {getLocString(
+                                'fromVariableDescription',
+                                'A list or Series that contains only strings, numbers or booleans.'
+                            )}
+                        </div>
+
+                        {settings.selectType === 'from-variable' && (
+                            <input
+                                type="text"
+                                className="variable-input"
+                                value={settings.selectedVariable}
+                                onChange={handleVariableChange}
+                                placeholder={getLocString('variablePlaceholder', 'Variable name...')}
+                                onClick={(e) => e.stopPropagation()}
+                            />
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            <div className="actions">
+                <button className="btn-primary" onClick={handleSave}>
+                    {getLocString('saveButton', 'Save')}
+                </button>
+                <button className="btn-secondary" onClick={handleCancel}>
+                    {getLocString('cancelButton', 'Cancel')}
+                </button>
+            </div>
+        </div>
+    );
+};
+

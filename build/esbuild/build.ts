@@ -379,6 +379,11 @@ async function buildAll() {
             path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'integrations', 'index.tsx'),
             path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'integrations', 'index.js'),
             { target: 'web', watch: watchAll }
+        ),
+        build(
+            path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'selectInputSettings', 'index.tsx'),
+            path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'selectInputSettings', 'index.js'),
+            { target: 'web', watch: watchAll }
         )
     );
 

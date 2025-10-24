@@ -172,7 +172,7 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
                                         type="text"
                                         value={newOption}
                                         onChange={(e) => setNewOption(e.target.value)}
-                                        onKeyPress={(e) => {
+                                        onKeyDown={(e) => {
                                             if (e.key === 'Enter') {
                                                 e.preventDefault();
                                                 handleAddOption();
@@ -240,4 +240,3 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
         </div>
     );
 };
-

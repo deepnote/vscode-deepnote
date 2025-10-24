@@ -233,11 +233,18 @@ export class InputSliderBlockConverter extends BaseInputBlockConverter<typeof De
     override applyChangesToBlock(block: DeepnoteBlock, cell: NotebookCellData): void {
         block.content = '';
 
-        // The cell value contains the numeric value as a string
-        const value = cell.value.trim();
+        // Parse numeric value; fall back to existing/default
+        const str = cell.value.trim();
+        const parsed = Number(str);
 
         const existingMetadata = this.schema().safeParse(block.metadata);
         const baseMetadata = existingMetadata.success ? existingMetadata.data : this.defaultConfig();
+
+        const value = Number.isFinite(parsed)
+            ? parsed
+            : existingMetadata.success
+            ? (existingMetadata.data as any).deepnote_variable_value
+            : (this.defaultConfig() as any).deepnote_variable_value;
 
         if (block.metadata != null) {
             delete block.metadata[DEEPNOTE_VSCODE_RAW_CONTENT_KEY];

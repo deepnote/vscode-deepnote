@@ -6,6 +6,7 @@ import {
     NotebookRange,
     Position,
     Range,
+    Uri,
     workspace,
     WorkspaceEdit
 } from 'vscode';
@@ -133,7 +134,7 @@ export class DeepnoteInputBlockEditProtection implements Disposable {
         }
 
         // Group cells by notebook to apply edits efficiently
-        const editsByNotebook = new Map<string, { uri: any; edits: NotebookEdit[] }>();
+        const editsByNotebook = new Map<string, { uri: Uri; edits: NotebookEdit[] }>();
 
         for (const { cell, blockType } of cellsToFix) {
             const expectedLanguage = this.expectedLanguages.get(blockType);

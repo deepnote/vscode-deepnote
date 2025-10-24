@@ -17,7 +17,7 @@ import { inject, injectable } from 'inversify';
 import { IExtensionContext } from '../../platform/common/types';
 import { LocalizedMessages } from '../../messageTypes';
 import * as localize from '../../platform/common/utils/localize';
-import { SelectInputSettings } from '../../webviews/webview-side/selectInputSettings/types';
+import { SelectInputSettings } from '../../platform/notebooks/deepnote/types';
 
 /**
  * Manages the webview panel for select input settings

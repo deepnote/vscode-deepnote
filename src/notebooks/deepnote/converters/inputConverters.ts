@@ -245,11 +245,11 @@ export class InputSliderBlockConverter extends BaseInputBlockConverter<typeof De
             value = parsed;
         } else if (existingMetadata.success) {
             // Parse existing value as number (it might be stored as string in schema)
-            const existingValue = (existingMetadata.data as any).deepnote_variable_value;
+            const existingValue = existingMetadata.data.deepnote_variable_value;
             const existingParsed = Number(existingValue);
             value = Number.isFinite(existingParsed) ? existingParsed : 0;
         } else {
-            const defaultValue = (this.defaultConfig() as any).deepnote_variable_value;
+            const defaultValue = this.defaultConfig().deepnote_variable_value;
             const defaultParsed = Number(defaultValue);
             value = Number.isFinite(defaultParsed) ? defaultParsed : 0;
         }
@@ -390,11 +390,7 @@ export class InputDateRangeBlockConverter extends BaseInputBlockConverter<typeof
             ...(block.metadata ?? {}),
             ...baseMetadata,
             deepnote_variable_value:
-                value !== null
-                    ? value
-                    : existingMetadata.success
-                    ? (existingMetadata.data as any).deepnote_variable_value
-                    : null
+                value !== null ? value : existingMetadata.success ? existingMetadata.data.deepnote_variable_value : null
         };
     }
 }

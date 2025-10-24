@@ -1,16 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-export interface SelectInputSettings {
-    allowMultipleValues: boolean;
-    allowEmptyValue: boolean;
-    selectType: 'from-options' | 'from-variable';
-    options: string[];
-    selectedVariable: string;
-}
-
-export interface WebviewMessage {
-    type: 'init' | 'save' | 'locInit' | 'cancel';
-    settings?: SelectInputSettings;
-    locStrings?: Record<string, string>;
-}
+// Re-export types from platform for use in webview
+export type {
+    SelectInputSettings,
+    SelectInputWebviewMessage as WebviewMessage
+} from '../../../platform/notebooks/deepnote/types';

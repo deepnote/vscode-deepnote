@@ -493,7 +493,7 @@ suite('InputSliderBlockConverter', () => {
             converter.applyChangesToBlock(block, cell);
 
             assert.strictEqual(block.content, '');
-            assert.strictEqual(block.metadata?.deepnote_variable_value, 7);
+            assert.strictEqual(block.metadata?.deepnote_variable_value, '7');
             // Other metadata should be preserved
             assert.strictEqual(block.metadata?.deepnote_variable_name, 'slider1');
             assert.strictEqual(block.metadata?.deepnote_slider_min_value, 0);
@@ -516,7 +516,7 @@ suite('InputSliderBlockConverter', () => {
 
             converter.applyChangesToBlock(block, cell);
 
-            assert.strictEqual(block.metadata?.deepnote_variable_value, 42);
+            assert.strictEqual(block.metadata?.deepnote_variable_value, '42');
         });
 
         test('handles invalid numeric value', () => {
@@ -536,7 +536,7 @@ suite('InputSliderBlockConverter', () => {
             converter.applyChangesToBlock(block, cell);
 
             // Should fall back to existing value (parsed as number)
-            assert.strictEqual(block.metadata?.deepnote_variable_value, 5);
+            assert.strictEqual(block.metadata?.deepnote_variable_value, '5');
         });
     });
 });

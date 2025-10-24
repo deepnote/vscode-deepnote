@@ -188,7 +188,7 @@ export class InputSliderBlockConverter extends BaseInputBlockConverter<typeof De
         const value = Number.isFinite(parsed) ? parsed : fallback;
 
         this.updateBlockMetadata(block, {
-            deepnote_variable_value: value
+            deepnote_variable_value: String(value)
         });
     }
 }

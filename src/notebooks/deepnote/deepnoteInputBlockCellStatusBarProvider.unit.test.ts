@@ -121,7 +121,7 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
             const items = provider.provideCellStatusBarItems(cell);
 
             expect(items).to.not.be.undefined;
-            expect(items).to.have.lengthOf(2);
+            expect(items).to.have.lengthOf(3); // Type label, variable, and choose file button
             expect(items?.[0].text).to.equal('Input File');
         });
 

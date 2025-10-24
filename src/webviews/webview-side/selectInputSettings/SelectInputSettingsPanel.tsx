@@ -136,6 +136,14 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
                 <div
                     className={`radio-option ${settings.selectType === 'from-options' ? 'selected' : ''}`}
                     onClick={() => handleSelectTypeChange('from-options')}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handleSelectTypeChange('from-options');
+                        }
+                    }}
+                    role="button"
+                    tabIndex={0}
                 >
                     <input
                         type="radio"
@@ -156,6 +164,7 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
                                     <span key={index} className="option-tag">
                                         {option}
                                         <button
+                                            type="button"
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 handleRemoveOption(index);
@@ -182,6 +191,7 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
                                         onClick={(e) => e.stopPropagation()}
                                     />
                                     <button
+                                        type="button"
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             handleAddOption();
@@ -198,6 +208,14 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
                 <div
                     className={`radio-option ${settings.selectType === 'from-variable' ? 'selected' : ''}`}
                     onClick={() => handleSelectTypeChange('from-variable')}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handleSelectTypeChange('from-variable');
+                        }
+                    }}
+                    role="button"
+                    tabIndex={0}
                 >
                     <input
                         type="radio"
@@ -230,10 +248,10 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
             </div>
 
             <div className="actions">
-                <button className="btn-primary" onClick={handleSave}>
+                <button type="button" className="btn-primary" onClick={handleSave}>
                     {getLocString('saveButton', 'Save')}
                 </button>
-                <button className="btn-secondary" onClick={handleCancel}>
+                <button type="button" className="btn-secondary" onClick={handleCancel}>
                     {getLocString('cancelButton', 'Cancel')}
                 </button>
             </div>

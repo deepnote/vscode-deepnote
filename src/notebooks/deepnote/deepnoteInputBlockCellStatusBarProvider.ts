@@ -9,6 +9,7 @@ import {
     NotebookCellStatusBarItemProvider,
     NotebookEdit,
     Position,
+    QuickPickItem,
     Range,
     ThemeIcon,
     WorkspaceEdit,
@@ -740,10 +741,16 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
                 });
             } else {
                 // If empty values are not allowed, ensure at least one item is always selected
+                // Track the most recent non-empty selection
+                let lastNonEmptySelection: readonly QuickPickItem[] = optionItems.filter((item) => item.picked);
+
                 quickPick.onDidChangeSelection((selectedItems) => {
                     if (selectedItems.length === 0) {
-                        // Prevent deselecting the last item - restore previous selection
-                        quickPick.selectedItems = optionItems.filter((item) => item.picked);
+                        // Prevent deselecting the last item - restore most recent selection
+                        quickPick.selectedItems = lastNonEmptySelection;
+                    } else {
+                        // Update the last non-empty selection
+                        lastNonEmptySelection = selectedItems;
                     }
                 });
             }

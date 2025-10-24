@@ -24,8 +24,8 @@ export function getDeepnoteEnvironmentStatusVisual(status: EnvironmentStatus): {
             };
         case EnvironmentStatus.Starting:
             return {
-                icon: 'vm-outline',
-                text: 'Starting',
+                icon: 'loading~spin',
+                text: 'Starting...',
                 contextValue: 'deepnoteEnvironment.starting',
                 themeColorId: 'charts.yellow'
             };

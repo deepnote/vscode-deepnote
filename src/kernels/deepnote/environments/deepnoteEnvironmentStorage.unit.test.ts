@@ -18,9 +18,8 @@ suite('DeepnoteEnvironmentStorage', () => {
 
     const testInterpreter: PythonEnvironment = {
         id: 'test-python-id',
-        uri: Uri.file('/usr/bin/python3'),
-        version: { major: 3, minor: 11, patch: 0, raw: '3.11.0' }
-    } as PythonEnvironment;
+        uri: Uri.file('/usr/bin/python3')
+    };
 
     setup(() => {
         mockContext = mock<IExtensionContext>();
@@ -144,8 +143,11 @@ suite('DeepnoteEnvironmentStorage', () => {
                         {
                             id: 'config-1',
                             name: 'Test Config',
-                            pythonInterpreterPath: '/usr/bin/python3',
-                            venvPath: '/path/to/venv',
+                            pythonInterpreterPath: {
+                                id: 'test-python-id',
+                                uri: 'file:///usr/bin/python3'
+                            },
+                            venvPath: 'file:///path/to/venv',
                             createdAt: '2025-01-01T00:00:00.000Z',
                             lastUsedAt: '2025-01-01T00:00:00.000Z',
                             packages: ['numpy'],

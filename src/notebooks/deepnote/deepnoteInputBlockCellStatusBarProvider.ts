@@ -234,12 +234,12 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
         }
 
         // Build detailed tooltip
-        const tooltipLines = [`Deepnote ${formattedName}`];
+        const tooltipLines = [l10n.t('Deepnote {0}', formattedName)];
         if (label) {
-            tooltipLines.push(`Label: ${label}`);
+            tooltipLines.push(l10n.t('Label: {0}', label));
         }
         if (buttonTitle) {
-            tooltipLines.push(`Title: ${buttonTitle}`);
+            tooltipLines.push(l10n.t('Title: {0}', buttonTitle));
         }
 
         // Add type-specific metadata to tooltip
@@ -518,45 +518,59 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
         }
 
         switch (blockType) {
-            case 'input-slider':
+            case 'input-slider': {
                 const min = metadata.deepnote_slider_min_value;
                 const max = metadata.deepnote_slider_max_value;
                 const step = metadata.deepnote_slider_step;
                 if (min !== undefined && max !== undefined) {
-                    tooltipLines.push(`Range: ${min} - ${max}${step !== undefined ? ` (step: ${step})` : ''}`);
+                    tooltipLines.push(
+                        l10n.t(
+                            'Range: {0} - {1}{2}',
+                            String(min),
+                            String(max),
+                            step !== undefined ? l10n.t(' (step: {0})', String(step)) : ''
+                        )
+                    );
                 }
                 break;
+            }
 
-            case 'input-select':
+            case 'input-select': {
                 const options = metadata.deepnote_variable_options as string[] | undefined;
                 if (options && options.length > 0) {
-                    tooltipLines.push(`Options: ${options.slice(0, 3).join(', ')}${options.length > 3 ? '...' : ''}`);
+                    tooltipLines.push(
+                        l10n.t('Options: {0}', `${options.slice(0, 3).join(', ')}${options.length > 3 ? '...' : ''}`)
+                    );
                 }
                 break;
+            }
 
-            case 'input-file':
+            case 'input-file': {
                 const extensions = metadata.deepnote_allowed_file_extensions as string | undefined;
                 if (extensions) {
-                    tooltipLines.push(`Allowed extensions: ${extensions}`);
+                    tooltipLines.push(l10n.t('Allowed extensions: {0}', extensions));
                 }
                 break;
+            }
 
-            case 'button':
+            case 'button': {
                 const behavior = metadata.deepnote_button_behavior as string | undefined;
                 const colorScheme = metadata.deepnote_button_color_scheme as string | undefined;
                 if (behavior) {
-                    tooltipLines.push(`Behavior: ${behavior}`);
+                    tooltipLines.push(l10n.t('Behavior: {0}', behavior));
                 }
                 if (colorScheme) {
-                    tooltipLines.push(`Color: ${colorScheme}`);
+                    tooltipLines.push(l10n.t('Color: {0}', colorScheme));
                 }
                 break;
+            }
         }
 
         // Add default value if present
         const defaultValue = metadata.deepnote_variable_default_value;
         if (defaultValue !== undefined && defaultValue !== null) {
-            tooltipLines.push(`Default: ${defaultValue}`);
+            const dv = typeof defaultValue === 'object' ? JSON.stringify(defaultValue) : String(defaultValue);
+            tooltipLines.push(l10n.t('Default: {0}', dv));
         }
     }
 

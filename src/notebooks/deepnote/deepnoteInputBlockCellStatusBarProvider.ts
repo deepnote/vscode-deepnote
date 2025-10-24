@@ -119,6 +119,16 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
             })
         );
 
+        // Slider: set step value
+        this.disposables.push(
+            commands.registerCommand('deepnote.sliderSetStep', async (cell?: NotebookCell) => {
+                const activeCell = cell || this.getActiveCell();
+                if (activeCell) {
+                    await this.sliderSetStep(activeCell);
+                }
+            })
+        );
+
         // Checkbox: toggle value
         this.disposables.push(
             commands.registerCommand('deepnote.checkboxToggle', async (cell?: NotebookCell) => {
@@ -312,6 +322,7 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
     ): void {
         const min = metadata.deepnote_slider_min_value as number | undefined;
         const max = metadata.deepnote_slider_max_value as number | undefined;
+        const step = metadata.deepnote_slider_step as number | undefined;
 
         items.push({
             text: l10n.t('Min: {0}', min ?? 0),
@@ -333,6 +344,18 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
             command: {
                 title: l10n.t('Set Max'),
                 command: 'deepnote.sliderSetMax',
+                arguments: [cell]
+            }
+        });
+
+        items.push({
+            text: l10n.t('Step: {0}', step ?? 1),
+            alignment: 1,
+            priority: 78,
+            tooltip: l10n.t('Step size\nClick to change'),
+            command: {
+                title: l10n.t('Set Step'),
+                command: 'deepnote.sliderSetStep',
                 arguments: [cell]
             }
         });
@@ -706,6 +729,36 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
 
         const newMax = parseFloat(input);
         await this.updateCellMetadata(cell, { deepnote_slider_max_value: newMax });
+    }
+
+    /**
+     * Handler for slider: set step value
+     */
+    private async sliderSetStep(cell: NotebookCell): Promise<void> {
+        const metadata = cell.metadata as Record<string, unknown> | undefined;
+        const currentStep = (metadata?.deepnote_slider_step as number) ?? 1;
+
+        const input = await window.showInputBox({
+            prompt: l10n.t('Enter step size'),
+            value: String(currentStep),
+            validateInput: (value) => {
+                const num = parseFloat(value);
+                if (isNaN(num)) {
+                    return l10n.t('Please enter a valid number');
+                }
+                if (num <= 0) {
+                    return l10n.t('Step size must be greater than 0');
+                }
+                return undefined;
+            }
+        });
+
+        if (input === undefined) {
+            return;
+        }
+
+        const newStep = parseFloat(input);
+        await this.updateCellMetadata(cell, { deepnote_slider_step: newStep });
     }
 
     /**

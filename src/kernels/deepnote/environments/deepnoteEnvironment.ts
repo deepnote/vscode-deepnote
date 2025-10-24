@@ -66,7 +66,10 @@ export interface DeepnoteEnvironment {
 export interface DeepnoteEnvironmentState {
     id: string;
     name: string;
-    pythonInterpreterPath: string;
+    pythonInterpreterPath: {
+        id: string;
+        uri: string;
+    };
     venvPath: string;
     createdAt: string;
     lastUsedAt: string;

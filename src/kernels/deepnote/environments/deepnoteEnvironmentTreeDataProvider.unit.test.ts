@@ -127,7 +127,7 @@ suite('DeepnoteEnvironmentTreeDataProvider', () => {
             const infoItems = await provider.getChildren(configItem);
 
             const labels = infoItems.map((item) => item.label as string);
-            const hasPort = labels.some((label) => label.includes('Port:') && label.includes('8888'));
+            const hasPort = labels.some((label) => label.includes('Ports:') && label.includes('8888'));
             const hasUrl = labels.some((label) => label.includes('URL:') && label.includes('http://localhost:8888'));
 
             assert.isTrue(hasPort, 'Should include port info');

@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { Event, EventEmitter, TreeDataProvider, TreeItem } from 'vscode';
+import { Disposable, Event, EventEmitter, TreeDataProvider, TreeItem } from 'vscode';
 import { IDeepnoteEnvironmentManager } from '../types';
 import { EnvironmentTreeItemType, DeepnoteEnvironmentTreeItem } from './deepnoteEnvironmentTreeItem.node';
 import { EnvironmentStatus } from './deepnoteEnvironment';
@@ -11,14 +11,19 @@ import { EnvironmentStatus } from './deepnoteEnvironment';
  */
 export class DeepnoteEnvironmentTreeDataProvider implements TreeDataProvider<DeepnoteEnvironmentTreeItem> {
     private readonly _onDidChangeTreeData = new EventEmitter<DeepnoteEnvironmentTreeItem | undefined | void>();
-    public readonly onDidChangeTreeData: Event<DeepnoteEnvironmentTreeItem | undefined | void> =
-        this._onDidChangeTreeData.event;
+    private readonly disposables: Disposable[] = [];
 
     constructor(private readonly environmentManager: IDeepnoteEnvironmentManager) {
         // Listen to environment changes and refresh the tree
-        this.environmentManager.onDidChangeEnvironments(() => {
-            this.refresh();
-        });
+        this.disposables.push(
+            this.environmentManager.onDidChangeEnvironments(() => {
+                this.refresh();
+            })
+        );
+    }
+
+    public get onDidChangeTreeData(): Event<DeepnoteEnvironmentTreeItem | undefined | void> {
+        return this._onDidChangeTreeData.event;
     }
 
     public refresh(): void {
@@ -142,5 +147,6 @@ export class DeepnoteEnvironmentTreeDataProvider implements TreeDataProvider<Dee
 
     public dispose(): void {
         this._onDidChangeTreeData.dispose();
+        this.disposables.forEach((d) => d.dispose());
     }
 }

@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import { inject, injectable } from 'inversify';
-import { QuickPickItem, window, Uri, commands, ThemeColor } from 'vscode';
+import { QuickPickItem, window, Uri, commands } from 'vscode';
 import { logger } from '../../../platform/logging';
 import { IDeepnoteEnvironmentManager } from '../types';
 import { DeepnoteEnvironment, EnvironmentStatus } from './deepnoteEnvironment';
@@ -11,7 +11,7 @@ import { getDisplayPath } from '../../../platform/common/platform/fs-paths';
 export function getDeepnoteEnvironmentStatusVisual(status: EnvironmentStatus): {
     icon: string;
     text: string;
-    themeColor: ThemeColor;
+    themeColorId: string;
     contextValue: string;
 } {
     switch (status) {
@@ -20,28 +20,28 @@ export function getDeepnoteEnvironmentStatusVisual(status: EnvironmentStatus): {
                 icon: 'vm-running',
                 text: 'Running',
                 contextValue: 'deepnoteEnvironment.running',
-                themeColor: { id: 'charts.green' }
+                themeColorId: 'charts.green'
             };
         case EnvironmentStatus.Starting:
             return {
                 icon: 'vm-outline',
                 text: 'Starting',
                 contextValue: 'deepnoteEnvironment.starting',
-                themeColor: { id: 'charts.yellow' }
+                themeColorId: 'charts.yellow'
             };
         case EnvironmentStatus.Stopped:
             return {
                 icon: 'vm-outline',
                 text: 'Stopped',
                 contextValue: 'deepnoteEnvironment.stopped',
-                themeColor: { id: 'charts.gray' }
+                themeColorId: 'charts.gray'
             };
         case EnvironmentStatus.Error:
             return {
                 icon: 'vm-outline',
                 text: 'Error',
                 contextValue: 'deepnoteEnvironment.stopped',
-                themeColor: { id: 'charts.gray' }
+                themeColorId: 'charts.gray'
             };
         default:
             status satisfies never;
@@ -49,7 +49,7 @@ export function getDeepnoteEnvironmentStatusVisual(status: EnvironmentStatus): {
                 icon: 'vm-outline',
                 text: 'Unknown',
                 contextValue: 'deepnoteEnvironment.stopped',
-                themeColor: { id: 'charts.gray' }
+                themeColorId: 'charts.gray'
             };
     }
 }

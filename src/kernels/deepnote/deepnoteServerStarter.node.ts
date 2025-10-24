@@ -181,7 +181,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         const processService = await this.processServiceFactory.create(undefined);
 
         // Set up environment to ensure the venv's Python is used for shell commands
-        const venvBinDir = venvInterpreter.uri.fsPath.replace(/\/python$/, '').replace(/\\python\.exe$/, '');
+        const venvBinDir = path.dirname(venvInterpreter.uri.fsPath);
         const env = { ...process.env };
 
         // Prepend venv bin directory to PATH so shell commands use venv's Python

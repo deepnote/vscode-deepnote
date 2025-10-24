@@ -41,7 +41,7 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
         const statusVisual = getDeepnoteEnvironmentStatusVisual(this.status);
 
         this.label = `${this.environment.name} [${statusVisual.text}]`;
-        this.iconPath = new ThemeIcon(statusVisual.icon, { id: statusVisual.themeColor.id });
+        this.iconPath = new ThemeIcon(statusVisual.icon, { id: statusVisual.themeColorId });
         this.contextValue = statusVisual.contextValue;
 
         // Make it collapsible to show info items

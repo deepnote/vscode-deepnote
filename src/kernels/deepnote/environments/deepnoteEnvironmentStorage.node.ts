@@ -64,8 +64,11 @@ export class DeepnoteEnvironmentStorage {
         return {
             id: config.id,
             name: config.name,
-            pythonInterpreterPath: config.pythonInterpreter.uri.fsPath,
-            venvPath: config.venvPath.fsPath,
+            pythonInterpreterPath: {
+                id: config.pythonInterpreter.id,
+                uri: config.pythonInterpreter.uri.toString(true)
+            },
+            venvPath: config.venvPath.toString(true),
             createdAt: config.createdAt.toISOString(),
             lastUsedAt: config.lastUsedAt.toISOString(),
             packages: config.packages,
@@ -79,20 +82,18 @@ export class DeepnoteEnvironmentStorage {
      */
     private deserializeEnvironment(state: DeepnoteEnvironmentState): DeepnoteEnvironment | undefined {
         try {
-            const interpreterUri = Uri.file(state.pythonInterpreterPath);
-
             // Create PythonEnvironment directly from stored path
             // No need to resolve through interpreter service - we just need the path
             const interpreter: PythonEnvironment = {
-                uri: interpreterUri,
-                id: interpreterUri.fsPath
+                uri: Uri.parse(state.pythonInterpreterPath.uri),
+                id: state.pythonInterpreterPath.id
             };
 
             return {
                 id: state.id,
                 name: state.name,
                 pythonInterpreter: interpreter,
-                venvPath: Uri.file(state.venvPath),
+                venvPath: Uri.parse(state.venvPath),
                 createdAt: new Date(state.createdAt),
                 lastUsedAt: new Date(state.lastUsedAt),
                 packages: state.packages,

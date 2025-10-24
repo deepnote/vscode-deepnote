@@ -1,4 +1,4 @@
-import { assert } from 'chai';
+import { assert, use } from 'chai';
 import { anything, instance, mock, when, verify, deepEqual } from 'ts-mockito';
 import { Memento, Uri } from 'vscode';
 import { DeepnoteEnvironmentStorage } from './deepnoteEnvironmentStorage.node';
@@ -6,6 +6,9 @@ import { IExtensionContext } from '../../../platform/common/types';
 import { IInterpreterService } from '../../../platform/interpreter/contracts';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
 import { DeepnoteEnvironmentState } from './deepnoteEnvironment';
+import chaiAsPromised from 'chai-as-promised';
+
+use(chaiAsPromised);
 
 suite('DeepnoteEnvironmentStorage', () => {
     let storage: DeepnoteEnvironmentStorage;
@@ -42,7 +45,10 @@ suite('DeepnoteEnvironmentStorage', () => {
             const storedState: DeepnoteEnvironmentState = {
                 id: 'config-1',
                 name: 'Test Config',
-                pythonInterpreterPath: '/usr/bin/python3',
+                pythonInterpreterPath: {
+                    id: 'test-python-id',
+                    uri: '/usr/bin/python3'
+                },
                 venvPath: '/path/to/venv',
                 createdAt: '2025-01-01T00:00:00.000Z',
                 lastUsedAt: '2025-01-01T00:00:00.000Z',
@@ -59,8 +65,10 @@ suite('DeepnoteEnvironmentStorage', () => {
             assert.strictEqual(configs.length, 1);
             assert.strictEqual(configs[0].id, 'config-1');
             assert.strictEqual(configs[0].name, 'Test Config');
-            assert.strictEqual(configs[0].pythonInterpreter.uri.fsPath, '/usr/bin/python3');
-            assert.strictEqual(configs[0].venvPath.fsPath, '/path/to/venv');
+            const expectedInterpreterFsPath = Uri.file(storedState.pythonInterpreterPath.uri).fsPath;
+            const expectedVenvFsPath = Uri.file(storedState.venvPath).fsPath;
+            assert.strictEqual(configs[0].pythonInterpreter.uri.fsPath, expectedInterpreterFsPath);
+            assert.strictEqual(configs[0].venvPath.fsPath, expectedVenvFsPath);
             assert.deepStrictEqual(configs[0].packages, ['numpy', 'pandas']);
             assert.strictEqual(configs[0].toolkitVersion, '0.2.30');
             assert.strictEqual(configs[0].description, 'Test environment');
@@ -71,7 +79,10 @@ suite('DeepnoteEnvironmentStorage', () => {
                 {
                     id: 'config-1',
                     name: 'Valid Config',
-                    pythonInterpreterPath: '/usr/bin/python3',
+                    pythonInterpreterPath: {
+                        id: 'test-python-id',
+                        uri: '/usr/bin/python3'
+                    },
                     venvPath: '/path/to/venv1',
                     createdAt: '2025-01-01T00:00:00.000Z',
                     lastUsedAt: '2025-01-01T00:00:00.000Z'
@@ -79,7 +90,10 @@ suite('DeepnoteEnvironmentStorage', () => {
                 {
                     id: 'config-2',
                     name: 'Potentially Invalid Config',
-                    pythonInterpreterPath: '/invalid/python',
+                    pythonInterpreterPath: {
+                        id: 'test-python-id',
+                        uri: '/invalid/python'
+                    },
                     venvPath: '/path/to/venv2',
                     createdAt: '2025-01-01T00:00:00.000Z',
                     lastUsedAt: '2025-01-01T00:00:00.000Z'

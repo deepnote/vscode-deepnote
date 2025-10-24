@@ -645,13 +645,6 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
         // Update cell metadata
         edit.set(cell.notebook.uri, [NotebookEdit.updateCellMetadata(cell.index, updatedMetadata)]);
 
-        // Update cell content (replace entire cell text with "# " + variable name)
-        const fullRange = new Range(
-            new Position(0, 0),
-            new Position(cell.document.lineCount - 1, cell.document.lineAt(cell.document.lineCount - 1).text.length)
-        );
-        edit.replace(cell.document.uri, fullRange, `# ${newVariableName}`);
-
         const success = await workspace.applyEdit(edit);
         if (!success) {
             void window.showErrorMessage(l10n.t('Failed to update variable name'));

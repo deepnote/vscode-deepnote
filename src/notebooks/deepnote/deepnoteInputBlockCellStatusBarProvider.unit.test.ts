@@ -2,10 +2,12 @@
 // Licensed under the MIT License.
 
 import { expect } from 'chai';
+import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { DeepnoteInputBlockCellStatusBarItemProvider } from './deepnoteInputBlockCellStatusBarProvider';
-import { NotebookCell, NotebookCellKind, NotebookDocument } from 'vscode';
+import { NotebookCell, NotebookCellKind, NotebookDocument, NotebookEdit, WorkspaceEdit } from 'vscode';
 import { Uri } from 'vscode';
 import type { IExtensionContext } from '../../platform/common/types';
+import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 
 suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
     let provider: DeepnoteInputBlockCellStatusBarItemProvider;
@@ -23,13 +25,16 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
     });
 
     function createMockCell(metadata?: Record<string, unknown>): NotebookCell {
+        const notebookUri = Uri.file('/test/notebook.deepnote');
         return {
             index: 0,
-            notebook: {} as NotebookDocument,
+            notebook: {
+                uri: notebookUri
+            } as NotebookDocument,
             kind: NotebookCellKind.Code,
             document: {
-                uri: Uri.file('/test/notebook.deepnote'),
-                fileName: '/test/notebook.deepnote',
+                uri: Uri.file('/test/notebook.deepnote#cell0'),
+                fileName: '/test/notebook.deepnote#cell0',
                 isUntitled: false,
                 languageId: 'json',
                 version: 1,
@@ -39,7 +44,7 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
                 save: async () => true,
                 eol: 1,
                 lineCount: 1,
-                lineAt: () => ({}) as any,
+                lineAt: () => ({ text: '' }) as any,
                 offsetAt: () => 0,
                 positionAt: () => ({}) as any,
                 validateRange: () => ({}) as any,
@@ -211,6 +216,455 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
 
             expect(items).to.not.be.undefined;
             expect(items?.[0].text).to.equal('Input Text');
+        });
+    });
+
+    suite('Command Handlers', () => {
+        setup(() => {
+            resetVSCodeMocks();
+        });
+
+        teardown(() => {
+            resetVSCodeMocks();
+        });
+
+        suite('deepnote.updateInputBlockVariableName', () => {
+            test('should update variable name when valid input is provided', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-text' },
+                    deepnote_variable_name: 'old_var'
+                });
+
+                when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve('new_var'));
+                when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+                await (provider as any).updateVariableName(cell);
+
+                verify(mockedVSCodeNamespaces.window.showInputBox(anything())).once();
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
+            });
+
+            test('should not update if user cancels input', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-text' },
+                    deepnote_variable_name: 'old_var'
+                });
+
+                when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(undefined));
+
+                await (provider as any).updateVariableName(cell);
+
+                verify(mockedVSCodeNamespaces.window.showInputBox(anything())).once();
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+            });
+
+            test('should not update if variable name is unchanged', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-text' },
+                    deepnote_variable_name: 'my_var'
+                });
+
+                when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve('my_var'));
+
+                await (provider as any).updateVariableName(cell);
+
+                verify(mockedVSCodeNamespaces.window.showInputBox(anything())).once();
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+            });
+
+            test('should show error if workspace edit fails', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-text' },
+                    deepnote_variable_name: 'old_var'
+                });
+
+                when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve('new_var'));
+                when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(false));
+
+                await (provider as any).updateVariableName(cell);
+
+                verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            });
+        });
+
+        suite('deepnote.checkboxToggle', () => {
+            test('should toggle checkbox from false to true', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-checkbox' },
+                    deepnote_variable_value: false
+                });
+
+                when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+                await (provider as any).checkboxToggle(cell);
+
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
+            });
+
+            test('should toggle checkbox from true to false', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-checkbox' },
+                    deepnote_variable_value: true
+                });
+
+                when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+                await (provider as any).checkboxToggle(cell);
+
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
+            });
+
+            test('should default to false if value is undefined', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-checkbox' }
+                });
+
+                when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+                await (provider as any).checkboxToggle(cell);
+
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
+            });
+        });
+
+        suite('deepnote.sliderSetMin', () => {
+            test('should update slider min value', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-slider' },
+                    deepnote_slider_min_value: 0
+                });
+
+                when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve('5'));
+                when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+                await (provider as any).sliderSetMin(cell);
+
+                verify(mockedVSCodeNamespaces.window.showInputBox(anything())).once();
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
+            });
+
+            test('should not update if user cancels', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-slider' },
+                    deepnote_slider_min_value: 0
+                });
+
+                when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(undefined));
+
+                await (provider as any).sliderSetMin(cell);
+
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+            });
+        });
+
+        suite('deepnote.sliderSetMax', () => {
+            test('should update slider max value', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-slider' },
+                    deepnote_slider_max_value: 10
+                });
+
+                when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve('20'));
+                when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+                await (provider as any).sliderSetMax(cell);
+
+                verify(mockedVSCodeNamespaces.window.showInputBox(anything())).once();
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
+            });
+
+            test('should not update if user cancels', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-slider' },
+                    deepnote_slider_max_value: 10
+                });
+
+                when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(undefined));
+
+                await (provider as any).sliderSetMax(cell);
+
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+            });
+        });
+
+        suite('deepnote.sliderSetStep', () => {
+            test('should update slider step value', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-slider' },
+                    deepnote_slider_step: 1
+                });
+
+                when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve('0.5'));
+                when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+                await (provider as any).sliderSetStep(cell);
+
+                verify(mockedVSCodeNamespaces.window.showInputBox(anything())).once();
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
+            });
+
+            test('should not update if user cancels', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-slider' },
+                    deepnote_slider_step: 1
+                });
+
+                when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(undefined));
+
+                await (provider as any).sliderSetStep(cell);
+
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+            });
+        });
+
+        suite('deepnote.selectInputChooseOption', () => {
+            test('should update single select value', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-select' },
+                    deepnote_variable_select_type: 'from-options',
+                    deepnote_variable_options: ['option1', 'option2', 'option3'],
+                    deepnote_variable_value: 'option1',
+                    deepnote_allow_multiple_values: false
+                });
+
+                when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                    Promise.resolve({ label: 'option2' } as any)
+                );
+                when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+                await (provider as any).selectInputChooseOption(cell);
+
+                verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).once();
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
+            });
+
+            test('should not update if user cancels single select', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-select' },
+                    deepnote_variable_select_type: 'from-options',
+                    deepnote_variable_options: ['option1', 'option2'],
+                    deepnote_allow_multiple_values: false
+                });
+
+                when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                    Promise.resolve(undefined)
+                );
+
+                await (provider as any).selectInputChooseOption(cell);
+
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+            });
+
+            test('should show info message for from-variable select type', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-select' },
+                    deepnote_variable_select_type: 'from-variable',
+                    deepnote_variable_selected_variable: 'my_options'
+                });
+
+                await (provider as any).selectInputChooseOption(cell);
+
+                verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+            });
+
+            test('should show warning if no options available', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-select' },
+                    deepnote_variable_select_type: 'from-options',
+                    deepnote_variable_options: []
+                });
+
+                await (provider as any).selectInputChooseOption(cell);
+
+                verify(mockedVSCodeNamespaces.window.showWarningMessage(anything())).once();
+            });
+        });
+
+        suite('deepnote.selectInputSettings', () => {
+            test('should open settings webview and fire status bar update', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-select' }
+                });
+
+                // Mock the webview show method
+                const webview = (provider as any).selectInputSettingsWebview;
+                let showCalled = false;
+                webview.show = async () => {
+                    showCalled = true;
+                };
+
+                // Track if the event was fired
+                let eventFired = false;
+                provider.onDidChangeCellStatusBarItems(() => {
+                    eventFired = true;
+                });
+
+                await (provider as any).selectInputSettings(cell);
+
+                expect(showCalled).to.be.true;
+                expect(eventFired).to.be.true;
+            });
+        });
+
+        suite('deepnote.fileInputChooseFile', () => {
+            test('should update file path when file is selected', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-file' }
+                });
+
+                const mockUri = Uri.file('/path/to/file.txt');
+                when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(Promise.resolve([mockUri]));
+                when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+                await (provider as any).fileInputChooseFile(cell);
+
+                verify(mockedVSCodeNamespaces.window.showOpenDialog(anything())).once();
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
+            });
+
+            test('should not update if user cancels file selection', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-file' }
+                });
+
+                when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(Promise.resolve(undefined));
+
+                await (provider as any).fileInputChooseFile(cell);
+
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+            });
+
+            test('should not update if empty array is returned', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-file' }
+                });
+
+                when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(Promise.resolve([]));
+
+                await (provider as any).fileInputChooseFile(cell);
+
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+            });
+        });
+
+        suite('deepnote.dateInputChooseDate', () => {
+            test('should update date value when valid date is provided', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-date' },
+                    deepnote_variable_value: '2024-01-01'
+                });
+
+                when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve('2024-12-31'));
+                when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+                await (provider as any).dateInputChooseDate(cell);
+
+                verify(mockedVSCodeNamespaces.window.showInputBox(anything())).once();
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
+            });
+
+            test('should not update if user cancels date input', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-date' }
+                });
+
+                when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(undefined));
+
+                await (provider as any).dateInputChooseDate(cell);
+
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+            });
+        });
+
+        suite('deepnote.dateRangeChooseStart', () => {
+            test('should update start date in date range', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-date-range' },
+                    deepnote_variable_value: ['2024-01-01', '2024-12-31']
+                });
+
+                when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve('2024-02-01'));
+                when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+                await (provider as any).dateRangeChooseStart(cell);
+
+                verify(mockedVSCodeNamespaces.window.showInputBox(anything())).once();
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
+            });
+
+            test('should not update if user cancels start date input', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-date-range' },
+                    deepnote_variable_value: ['2024-01-01', '2024-12-31']
+                });
+
+                when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(undefined));
+
+                await (provider as any).dateRangeChooseStart(cell);
+
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+            });
+
+            test('should show warning if start date is after end date', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-date-range' },
+                    deepnote_variable_value: ['2024-01-01', '2024-06-30']
+                });
+
+                when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve('2024-12-31'));
+                when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+                await (provider as any).dateRangeChooseStart(cell);
+
+                verify(mockedVSCodeNamespaces.window.showWarningMessage(anything())).once();
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
+            });
+        });
+
+        suite('deepnote.dateRangeChooseEnd', () => {
+            test('should update end date in date range', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-date-range' },
+                    deepnote_variable_value: ['2024-01-01', '2024-12-31']
+                });
+
+                when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve('2024-11-30'));
+                when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+                await (provider as any).dateRangeChooseEnd(cell);
+
+                verify(mockedVSCodeNamespaces.window.showInputBox(anything())).once();
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
+            });
+
+            test('should not update if user cancels end date input', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-date-range' },
+                    deepnote_variable_value: ['2024-01-01', '2024-12-31']
+                });
+
+                when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(undefined));
+
+                await (provider as any).dateRangeChooseEnd(cell);
+
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+            });
+
+            test('should show warning if end date is before start date', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-date-range' },
+                    deepnote_variable_value: ['2024-06-01', '2024-12-31']
+                });
+
+                when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve('2024-01-01'));
+                when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+                await (provider as any).dateRangeChooseEnd(cell);
+
+                verify(mockedVSCodeNamespaces.window.showWarningMessage(anything())).once();
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
+            });
         });
     });
 });

@@ -605,13 +605,6 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
             }
         }
 
-        // Fall back to cell content (which should contain the variable name with "# " prefix)
-        const cellContent = cell.document.getText().trim();
-        if (cellContent) {
-            // Remove "# " prefix if present
-            return cellContent.startsWith('# ') ? cellContent.substring(2) : cellContent;
-        }
-
         return '';
     }
 

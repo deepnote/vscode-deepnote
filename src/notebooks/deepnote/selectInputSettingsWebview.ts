@@ -17,14 +17,7 @@ import { inject, injectable } from 'inversify';
 import { IExtensionContext } from '../../platform/common/types';
 import { LocalizedMessages } from '../../messageTypes';
 import * as localize from '../../platform/common/utils/localize';
-
-interface SelectInputSettings {
-    allowMultipleValues: boolean;
-    allowEmptyValue: boolean;
-    selectType: 'from-options' | 'from-variable';
-    options: string[];
-    selectedVariable: string;
-}
+import { SelectInputSettings } from '../../webviews/webview-side/selectInputSettings/types';
 
 /**
  * Manages the webview panel for select input settings

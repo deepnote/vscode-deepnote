@@ -133,19 +133,7 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
             <h2>{getLocString('valueSourceTitle', 'Value')}</h2>
 
             <div className="value-source-section">
-                <div
-                    className={`radio-option ${settings.selectType === 'from-options' ? 'selected' : ''}`}
-                    onClick={() => handleSelectTypeChange('from-options')}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            handleSelectTypeChange('from-options');
-                        }
-                    }}
-                    role="radio"
-                    tabIndex={0}
-                    aria-checked={settings.selectType === 'from-options'}
-                >
+                <label className={`radio-option ${settings.selectType === 'from-options' ? 'selected' : ''}`}>
                     <input
                         type="radio"
                         id="fromOptions"
@@ -166,10 +154,7 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
                                         {option}
                                         <button
                                             type="button"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleRemoveOption(index);
-                                            }}
+                                            onClick={() => handleRemoveOption(index)}
                                             aria-label="Remove option"
                                         >
                                             ×
@@ -189,36 +174,17 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
                                             }
                                         }}
                                         placeholder={getLocString('addOptionPlaceholder', 'Add option...')}
-                                        onClick={(e) => e.stopPropagation()}
                                     />
-                                    <button
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleAddOption();
-                                        }}
-                                    >
+                                    <button type="button" onClick={handleAddOption}>
                                         {getLocString('addButton', 'Add')}
                                     </button>
                                 </div>
                             </div>
                         )}
                     </div>
-                </div>
+                </label>
 
-                <div
-                    className={`radio-option ${settings.selectType === 'from-variable' ? 'selected' : ''}`}
-                    onClick={() => handleSelectTypeChange('from-variable')}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            handleSelectTypeChange('from-variable');
-                        }
-                    }}
-                    role="radio"
-                    tabIndex={0}
-                    aria-checked={settings.selectType === 'from-variable'}
-                >
+                <label className={`radio-option ${settings.selectType === 'from-variable' ? 'selected' : ''}`}>
                     <input
                         type="radio"
                         id="fromVariable"
@@ -242,11 +208,10 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
                                 value={settings.selectedVariable}
                                 onChange={handleVariableChange}
                                 placeholder={getLocString('variablePlaceholder', 'Variable name...')}
-                                onClick={(e) => e.stopPropagation()}
                             />
                         )}
                     </div>
-                </div>
+                </label>
             </div>
 
             <div className="actions">

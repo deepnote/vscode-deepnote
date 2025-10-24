@@ -748,8 +748,8 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
             return;
         }
 
-        const newDate = new Date(input);
-        await this.updateCellMetadata(cell, { deepnote_variable_value: newDate.toISOString() });
+        // Store as YYYY-MM-DD format (not full ISO string)
+        await this.updateCellMetadata(cell, { deepnote_variable_value: input });
     }
 
     /**
@@ -788,8 +788,8 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
             return;
         }
 
-        const newStart = new Date(input).toISOString();
-        const newValue = currentEnd ? [newStart, new Date(currentEnd).toISOString()] : [newStart, newStart];
+        // Store as YYYY-MM-DD format (not full ISO string)
+        const newValue = currentEnd ? [input, currentEnd] : [input, input];
         await this.updateCellMetadata(cell, { deepnote_variable_value: newValue });
     }
 
@@ -829,8 +829,8 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
             return;
         }
 
-        const newEnd = new Date(input).toISOString();
-        const newValue = currentStart ? [new Date(currentStart).toISOString(), newEnd] : [newEnd, newEnd];
+        // Store as YYYY-MM-DD format (not full ISO string)
+        const newValue = currentStart ? [currentStart, input] : [input, input];
         await this.updateCellMetadata(cell, { deepnote_variable_value: newValue });
     }
 

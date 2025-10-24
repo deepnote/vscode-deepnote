@@ -4,13 +4,14 @@
 import { inject, injectable, named } from 'inversify';
 import { CancellationToken, Uri, workspace } from 'vscode';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
-import { IDeepnoteToolkitInstaller, DEEPNOTE_TOOLKIT_WHEEL_URL } from './types';
+import { IDeepnoteToolkitInstaller, DEEPNOTE_TOOLKIT_WHEEL_URL, DEEPNOTE_TOOLKIT_VERSION } from './types';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { logger } from '../../platform/logging';
 import { IOutputChannel, IExtensionContext } from '../../platform/common/types';
 import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
 import { IFileSystem } from '../../platform/common/platform/types';
 import { Cancellation } from '../../platform/common/cancellation';
+import { DeepnoteVenvCreationError, DeepnoteToolkitInstallError } from '../../platform/errors/deepnoteKernelErrors';
 
 /**
  * Handles installation of the deepnote-toolkit Python package.
@@ -19,7 +20,7 @@ import { Cancellation } from '../../platform/common/cancellation';
 export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
     private readonly venvPythonPaths: Map<string, Uri> = new Map();
     // Track in-flight installations per venv path to prevent concurrent installs
-    private readonly pendingInstallations: Map<string, Promise<PythonEnvironment | undefined>> = new Map();
+    private readonly pendingInstallations: Map<string, Promise<PythonEnvironment>> = new Map();
 
     constructor(
         @inject(IProcessServiceFactory) private readonly processServiceFactory: IProcessServiceFactory,
@@ -29,10 +30,11 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
     ) {}
 
     private getVenvPath(deepnoteFileUri: Uri): Uri {
-        // Create a unique venv name based on the file path using a hash
+        // Create a unique venv name based on the file path and toolkit version using a hash
         // This avoids Windows MAX_PATH issues and prevents directory structure leakage
+        // Including the version ensures a new venv is created when the toolkit version changes
         const hash = this.getVenvHash(deepnoteFileUri);
-        return Uri.joinPath(this.context.globalStorageUri, 'deepnote-venvs', hash);
+        return Uri.joinPath(this.context.globalStorageUri, 'deepnote-venvs', `${hash}-${DEEPNOTE_TOOLKIT_VERSION}`);
     }
 
     /**
@@ -75,7 +77,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         baseInterpreter: PythonEnvironment,
         venvPath: Uri,
         token?: CancellationToken
-    ): Promise<PythonEnvironment | undefined> {
+    ): Promise<PythonEnvironment> {
         const venvKey = venvPath.fsPath;
 
         logger.info(`Ensuring virtual environment at ${venvKey}`);
@@ -191,7 +193,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         baseInterpreter: PythonEnvironment,
         venvPath: Uri,
         token?: CancellationToken
-    ): Promise<PythonEnvironment | undefined> {
+    ): Promise<PythonEnvironment> {
         try {
             Cancellation.throwIfCanceled(token);
 
@@ -230,7 +232,12 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                     logger.error(`venv stderr: ${venvResult.stderr}`);
                 }
                 this.outputChannel.appendLine('Error: Failed to create virtual environment');
-                return undefined;
+
+                throw new DeepnoteVenvCreationError(
+                    baseInterpreter.uri.fsPath,
+                    venvPath.fsPath,
+                    venvResult.stderr || 'Virtual environment was created but Python interpreter not found'
+                );
             }
 
             // Use undefined as resource to get full system environment (including git in PATH)
@@ -297,12 +304,33 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             } else {
                 logger.error('deepnote-toolkit installation failed');
                 this.outputChannel.appendLine('✗ deepnote-toolkit installation failed');
-                return undefined;
+
+                throw new DeepnoteToolkitInstallError(
+                    venvInterpreter.uri.fsPath,
+                    venvPath.fsPath,
+                    DEEPNOTE_TOOLKIT_WHEEL_URL,
+                    installResult.stdout || '',
+                    installResult.stderr || 'Package installation completed but verification failed'
+                );
             }
         } catch (ex) {
+            // If this is already a DeepnoteKernelError, rethrow it without wrapping
+            if (ex instanceof DeepnoteVenvCreationError || ex instanceof DeepnoteToolkitInstallError) {
+                throw ex;
+            }
+
+            // Otherwise, log full details and wrap in a generic toolkit install error
             logger.error(`Failed to set up deepnote-toolkit: ${ex}`);
-            this.outputChannel.appendLine(`Error setting up deepnote-toolkit: ${ex}`);
-            return undefined;
+            this.outputChannel.appendLine('Failed to set up deepnote-toolkit; see logs for details');
+
+            throw new DeepnoteToolkitInstallError(
+                baseInterpreter.uri.fsPath,
+                venvPath.fsPath,
+                DEEPNOTE_TOOLKIT_WHEEL_URL,
+                '',
+                ex instanceof Error ? ex.message : String(ex),
+                ex instanceof Error ? ex : undefined
+            );
         }
     }
 

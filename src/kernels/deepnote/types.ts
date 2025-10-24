@@ -82,13 +82,15 @@ export interface IDeepnoteToolkitInstaller {
      * @param baseInterpreter The base Python interpreter to use for creating the venv
      * @param venvPath The path where the venv should be created
      * @param token Cancellation token to cancel the operation
-     * @returns The Python interpreter from the venv if installed successfully, undefined otherwise
+     * @returns The Python interpreter from the venv
+     * @throws {DeepnoteVenvCreationError} If venv creation fails
+     * @throws {DeepnoteToolkitInstallError} If toolkit installation fails
      */
     ensureVenvAndToolkit(
         baseInterpreter: PythonEnvironment,
         venvPath: vscode.Uri,
         token?: vscode.CancellationToken
-    ): Promise<PythonEnvironment | undefined>;
+    ): Promise<PythonEnvironment>;
 
     /**
      * Install additional packages in the venv.

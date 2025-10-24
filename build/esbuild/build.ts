@@ -9,6 +9,9 @@ import { lessLoader } from 'esbuild-plugin-less';
 import fs from 'fs-extra';
 import { getZeroMQPreBuildsFoldersToKeep, getBundleConfiguration, bundleConfiguration } from '../webpack/common';
 import ImportGlobPlugin from 'esbuild-plugin-import-glob';
+import postcss from 'postcss';
+import tailwindcss from '@tailwindcss/postcss';
+import autoprefixer from 'autoprefixer';
 const plugin = require('node-stdlib-browser/helpers/esbuild/plugin');
 const stdLibBrowser = require('node-stdlib-browser');
 
@@ -45,6 +48,8 @@ const commonExternals = [
     'vscode',
     'commonjs',
     'node:crypto',
+    'node:fs/promises',
+    'node:path',
     'vscode-jsonrpc', // Used by a few modules, might as well pull this out, instead of duplicating it in separate bundles.
     // Ignore telemetry specific packages that are not required.
     'applicationinsights-native-metrics',
@@ -86,7 +91,11 @@ const loader: { [ext: string]: Loader } = {
 
 // https://github.com/evanw/esbuild/issues/20#issuecomment-802269745
 // https://github.com/hyrious/esbuild-plugin-style
-function style({ minify = true, charset = 'utf8' }: StylePluginOptions = {}): Plugin {
+function style({
+    minify = true,
+    charset = 'utf8',
+    enableTailwind = false
+}: StylePluginOptions & { enableTailwind?: boolean } = {}): Plugin {
     return {
         name: 'style',
         setup({ onResolve, onLoad }) {
@@ -132,6 +141,32 @@ function style({ minify = true, charset = 'utf8' }: StylePluginOptions = {}): Pl
             }));
 
             onLoad({ filter: /.*/, namespace: 'style-content' }, async (args) => {
+                // Process with PostCSS/Tailwind if enabled and file exists
+                if (enableTailwind && args.path.includes('tailwind.css') && fs.existsSync(args.path)) {
+                    try {
+                        const cssContent = await fs.readFile(args.path, 'utf8');
+                        const result = await postcss([tailwindcss, autoprefixer]).process(cssContent, {
+                            from: args.path,
+                            to: args.path
+                        });
+
+                        const options = { ...opt, stdin: { contents: result.css, loader: 'css' } };
+                        options.loader = options.loader || {};
+                        // Add the same loaders we add for other places
+                        Object.keys(loader).forEach((key) => {
+                            if (options.loader && !options.loader[key]) {
+                                options.loader[key] = loader[key];
+                            }
+                        });
+                        const { errors, warnings, outputFiles } = await esbuild.build(options);
+                        return { errors, warnings, contents: outputFiles![0].text, loader: 'text' };
+                    } catch (error) {
+                        console.error(`PostCSS processing failed for ${args.path}:`, error);
+                        throw error;
+                    }
+                }
+
+                // Default behavior for other CSS files
                 const options = { entryPoints: [args.path], ...opt };
                 options.loader = options.loader || {};
                 // Add the same loaders we add for other places
@@ -140,7 +175,9 @@ function style({ minify = true, charset = 'utf8' }: StylePluginOptions = {}): Pl
                         options.loader[key] = loader[key];
                     }
                 });
+
                 const { errors, warnings, outputFiles } = await esbuild.build(options);
+
                 return { errors, warnings, contents: outputFiles![0].text, loader: 'text' };
             });
         }
@@ -158,7 +195,9 @@ function createConfig(
     const plugins: Plugin[] = [];
     let define: SameShape<BuildOptions, BuildOptions>['define'] = undefined;
     if (target === 'web') {
-        plugins.push(style());
+        // Enable Tailwind processing for dataframe renderer
+        const enableTailwind = source.includes(path.join('dataframe-renderer', 'index.ts'));
+        plugins.push(style({ enableTailwind }));
         plugins.push(lessLoader());
 
         define = {
@@ -288,6 +327,40 @@ async function buildAll() {
             { target: 'web', watch: watchAll }
         ),
         build(
+            path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'dataframe-renderer', 'index.ts'),
+            path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'dataframeRenderer', 'dataframeRenderer.js'),
+            { target: 'web', watch: isWatchMode }
+        ),
+        build(
+            path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'chart-big-number-renderer', 'index.ts'),
+            path.join(
+                extensionFolder,
+                'dist',
+                'webviews',
+                'webview-side',
+                'chartBigNumberRenderer',
+                'chartBigNumberRenderer.js'
+            ),
+            { target: 'web', watch: isWatchMode }
+        ),
+        build(
+            path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'vega-renderer', 'index.ts'),
+            path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'vegaRenderer', 'vegaRenderer.js'),
+            { target: 'web', watch: isWatchMode }
+        ),
+        build(
+            path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'sql-metadata-renderer', 'index.ts'),
+            path.join(
+                extensionFolder,
+                'dist',
+                'webviews',
+                'webview-side',
+                'sqlMetadataRenderer',
+                'sqlMetadataRenderer.js'
+            ),
+            { target: 'web', watch: isWatchMode }
+        ),
+        build(
             path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'variable-view', 'index.tsx'),
             path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'viewers', 'variableView.js'),
             { target: 'web', watch: watchAll }
@@ -300,6 +373,11 @@ async function buildAll() {
         build(
             path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'data-explorer', 'index.tsx'),
             path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'viewers', 'dataExplorer.js'),
+            { target: 'web', watch: watchAll }
+        ),
+        build(
+            path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'integrations', 'index.tsx'),
+            path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'integrations', 'index.js'),
             { target: 'web', watch: watchAll }
         )
     );

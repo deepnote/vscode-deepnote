@@ -43,6 +43,17 @@ import { INotebookEditorProvider, INotebookPythonEnvironmentService } from './ty
 import { DeepnoteActivationService } from './deepnote/deepnoteActivationService';
 import { DeepnoteNotebookManager } from './deepnote/deepnoteNotebookManager';
 import { IDeepnoteNotebookManager } from './types';
+import { IntegrationStorage } from '../platform/notebooks/deepnote/integrationStorage';
+import { IntegrationDetector } from './deepnote/integrations/integrationDetector';
+import { IntegrationManager } from './deepnote/integrations/integrationManager';
+import { IntegrationWebviewProvider } from './deepnote/integrations/integrationWebview';
+import {
+    IIntegrationDetector,
+    IIntegrationManager,
+    IIntegrationStorage,
+    IIntegrationWebviewProvider
+} from './deepnote/integrations/types';
+import { SqlCellStatusBarProvider } from './deepnote/sqlCellStatusBarProvider';
 import {
     IDeepnoteToolkitInstaller,
     IDeepnoteServerStarter,
@@ -64,6 +75,8 @@ import { DeepnoteEnvironmentsView } from '../kernels/deepnote/environments/deepn
 import { DeepnoteEnvironmentsActivationService } from '../kernels/deepnote/environments/deepnoteEnvironmentsActivationService';
 import { DeepnoteEnvironmentPicker } from '../kernels/deepnote/environments/deepnoteEnvironmentPicker';
 import { DeepnoteNotebookEnvironmentMapper } from '../kernels/deepnote/environments/deepnoteNotebookEnvironmentMapper.node';
+import { SqlIntegrationStartupCodeProvider } from './deepnote/integrations/sqlIntegrationStartupCodeProvider';
+import { DeepnoteCellCopyHandler } from './deepnote/deepnoteCellCopyHandler';
 
 export function registerTypes(serviceManager: IServiceManager, isDevMode: boolean) {
     registerControllerTypes(serviceManager, isDevMode);
@@ -137,6 +150,22 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
         DeepnoteActivationService
     );
     serviceManager.addSingleton<IDeepnoteNotebookManager>(IDeepnoteNotebookManager, DeepnoteNotebookManager);
+    serviceManager.addSingleton<IIntegrationStorage>(IIntegrationStorage, IntegrationStorage);
+    serviceManager.addSingleton<IIntegrationDetector>(IIntegrationDetector, IntegrationDetector);
+    serviceManager.addSingleton<IIntegrationWebviewProvider>(IIntegrationWebviewProvider, IntegrationWebviewProvider);
+    serviceManager.addSingleton<IIntegrationManager>(IIntegrationManager, IntegrationManager);
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        SqlCellStatusBarProvider
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        SqlIntegrationStartupCodeProvider
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        DeepnoteCellCopyHandler
+    );
 
     // Deepnote kernel services
     serviceManager.addSingleton<IDeepnoteToolkitInstaller>(IDeepnoteToolkitInstaller, DeepnoteToolkitInstaller);

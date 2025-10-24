@@ -805,6 +805,58 @@ export namespace WebViews {
     export const dvDeprecationWarning = l10n.t(
         'The built-in data viewer will be deprecated and no longer usable starting with Visual Studio Code 1.92. Please <a href="command:workbench.extensions.search?%22@tag:jupyterVariableViewers%22">install other data viewing extensions</a> to continue inspecting data'
     );
+    export const dataframeRowsColumns = l10n.t('{0} rows, {1} columns');
+    export const dataframePerPage = l10n.t('/ page');
+    export const dataframePreviousPage = l10n.t('Previous page');
+    export const dataframeNextPage = l10n.t('Next page');
+    export const dataframePageOf = l10n.t('Page {0} of {1}');
+    export const dataframeCopyTable = l10n.t('Copy table');
+    export const dataframeExportTable = l10n.t('Export table');
+}
+
+export namespace Integrations {
+    export const title = l10n.t('Deepnote Integrations');
+    export const noIntegrationsFound = l10n.t('No integrations found in this project.');
+    export const connected = l10n.t('Connected');
+    export const notConfigured = l10n.t('Not Configured');
+    export const configure = l10n.t('Configure');
+    export const reconfigure = l10n.t('Reconfigure');
+    export const reset = l10n.t('Reset');
+    export const confirmResetTitle = l10n.t('Confirm Reset');
+    export const confirmResetMessage = l10n.t('Are you sure you want to reset this integration configuration?');
+    export const confirmResetDetails = l10n.t('This will remove the stored credentials. You can reconfigure it later.');
+    export const configureTitle = l10n.t('Configure Integration: {0}');
+    export const cancel = l10n.t('Cancel');
+    export const save = l10n.t('Save');
+    export const requiredField = l10n.t('*');
+    export const optionalField = l10n.t('(optional)');
+
+    // PostgreSQL form strings
+    export const postgresNameLabel = l10n.t('Name (optional)');
+    export const postgresNamePlaceholder = l10n.t('My PostgreSQL Database');
+    export const postgresHostLabel = l10n.t('Host');
+    export const postgresHostPlaceholder = l10n.t('localhost');
+    export const postgresPortLabel = l10n.t('Port');
+    export const postgresPortPlaceholder = l10n.t('5432');
+    export const postgresDatabaseLabel = l10n.t('Database');
+    export const postgresDatabasePlaceholder = l10n.t('mydb');
+    export const postgresUsernameLabel = l10n.t('Username');
+    export const postgresUsernamePlaceholder = l10n.t('postgres');
+    export const postgresPasswordLabel = l10n.t('Password');
+    export const postgresPasswordPlaceholder = l10n.t('••••••••');
+    export const postgresSslLabel = l10n.t('Use SSL');
+    export const postgresUnnamedIntegration = (id: string) => l10n.t('Unnamed PostgreSQL Integration ({0})', id);
+
+    // BigQuery form strings
+    export const bigQueryNameLabel = l10n.t('Name (optional)');
+    export const bigQueryNamePlaceholder = l10n.t('My BigQuery Project');
+    export const bigQueryProjectIdLabel = l10n.t('Project ID');
+    export const bigQueryProjectIdPlaceholder = l10n.t('my-project-id');
+    export const bigQueryCredentialsLabel = l10n.t('Service Account Credentials (JSON)');
+    export const bigQueryCredentialsPlaceholder = l10n.t('{"type": "service_account", ...}');
+    export const bigQueryCredentialsRequired = l10n.t('Credentials are required');
+    export const bigQueryInvalidJson = (message: string) => l10n.t('Invalid JSON: {0}', message);
+    export const bigQueryUnnamedIntegration = (id: string) => l10n.t('Unnamed BigQuery Integration ({0})', id);
 }
 
 export namespace Deprecated {

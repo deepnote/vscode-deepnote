@@ -1,18 +1,23 @@
 import { inject, injectable } from 'inversify';
-import { workspace, CancellationToken, window } from 'vscode';
+import { workspace, CancellationToken, window, Uri, l10n } from 'vscode';
 import * as fs from 'fs';
-import * as path from '../../platform/vscode-path/path';
-import type { DeepnoteProject } from './deepnoteTypes';
+
+import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 import { ILogger } from '../../platform/logging/types';
 import { IPersistentStateFactory } from '../../platform/common/types';
 
 const DONT_ASK_OVERWRITE_REQUIREMENTS_KEY = 'DEEPNOTE_DONT_ASK_OVERWRITE_REQUIREMENTS';
 
+export const IDeepnoteRequirementsHelper = Symbol('IDeepnoteRequirementsHelper');
+export interface IDeepnoteRequirementsHelper {
+    createRequirementsFile(project: DeepnoteProject, token: CancellationToken): Promise<void>;
+}
+
 /**
  * Helper class for creating requirements.txt files from Deepnote project settings.
  */
 @injectable()
-export class DeepnoteRequirementsHelper {
+export class DeepnoteRequirementsHelper implements IDeepnoteRequirementsHelper {
     constructor(
         @inject(ILogger) private readonly logger: ILogger,
         @inject(IPersistentStateFactory) private readonly persistentStateFactory: IPersistentStateFactory
@@ -36,6 +41,21 @@ export class DeepnoteRequirementsHelper {
                 return;
             }
 
+            // Validate and normalize requirements: ensure they are valid strings, trim them, remove empty entries, and dedupe
+            const normalizedRequirements = Array.from(
+                new Set(
+                    requirements
+                        .filter((req): req is string => typeof req === 'string') // Keep only string entries with type guard
+                        .map((req) => req.trim()) // Trim whitespace
+                        .filter((req) => req.length > 0) // Remove empty strings
+                )
+            );
+
+            if (normalizedRequirements.length === 0) {
+                this.logger.info(`No valid requirements found in project ${project.project.id}`);
+                return;
+            }
+
             // Get the workspace folder to determine where to create the requirements.txt file
             const workspaceFolders = workspace.workspaceFolders;
             if (!workspaceFolders || workspaceFolders.length === 0) {
@@ -48,11 +68,14 @@ export class DeepnoteRequirementsHelper {
                 return;
             }
 
-            const workspaceRoot = workspaceFolders[0].uri.fsPath;
-            const requirementsPath = path.join(workspaceRoot, 'requirements.txt');
+            // Use Uri.joinPath to build the filesystem path using the Uri API
+            const requirementsPath = Uri.joinPath(workspaceFolders[0].uri, 'requirements.txt').fsPath;
 
-            // Convert requirements array to text format first
-            const requirementsText = requirements.join('\n') + '\n';
+            // Convert normalized requirements array to text format (using LF line endings)
+            const requirementsText = normalizedRequirements.join('\n') + '\n';
+
+            // Helper to normalize line endings to LF for comparison
+            const normalizeLineEndings = (text: string): string => text.replace(/\r\n/g, '\n');
 
             // Check if requirements.txt already exists
             const fileExists = await fs.promises
@@ -61,10 +84,12 @@ export class DeepnoteRequirementsHelper {
                 .catch(() => false);
 
             if (fileExists) {
-                // Read existing file contents and compare
+                // Read existing file contents and compare (normalize line endings for comparison)
                 const existingContent = await fs.promises.readFile(requirementsPath, 'utf8');
+                const normalizedExistingContent = normalizeLineEndings(existingContent);
+                const normalizedRequirementsText = normalizeLineEndings(requirementsText);
 
-                if (existingContent === requirementsText) {
+                if (normalizedExistingContent === normalizedRequirementsText) {
                     this.logger.info('requirements.txt already has the correct content, skipping update');
                     return;
                 }
@@ -77,12 +102,14 @@ export class DeepnoteRequirementsHelper {
 
                 if (!dontAskState.value) {
                     // User hasn't chosen "Don't Ask Again", so prompt them
-                    const yes = 'Yes';
-                    const no = 'No';
-                    const dontAskAgain = "Don't Ask Again";
+                    const yes = l10n.t('Yes');
+                    const no = l10n.t('No');
+                    const dontAskAgain = l10n.t("Don't Ask Again");
 
                     const response = await window.showWarningMessage(
-                        `A requirements.txt file already exists in this workspace. Do you want to override it with requirements from your Deepnote project?`,
+                        l10n.t(
+                            'A requirements.txt file already exists in this workspace. Do you want to override it with requirements from your Deepnote project?'
+                        ),
                         { modal: true },
                         yes,
                         no,
@@ -131,15 +158,10 @@ export class DeepnoteRequirementsHelper {
             }
 
             this.logger.info(
-                `Created requirements.txt with ${requirements.length} dependencies at ${requirementsPath}`
+                `Created requirements.txt with ${normalizedRequirements.length} dependencies at ${requirementsPath}`
             );
         } catch (error) {
             this.logger.error(`Error creating requirements.txt:`, error);
         }
     }
-}
-
-export const IDeepnoteRequirementsHelper = Symbol('IDeepnoteRequirementsHelper');
-export interface IDeepnoteRequirementsHelper {
-    createRequirementsFile(project: DeepnoteProject, token: CancellationToken): Promise<void>;
 }

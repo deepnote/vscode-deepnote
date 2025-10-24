@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { inject, injectable, named } from 'inversify';
+import { inject, injectable, named, optional } from 'inversify';
 import { CancellationToken, Uri } from 'vscode';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { IDeepnoteServerStarter, IDeepnoteToolkitInstaller, DeepnoteServerInfo, DEEPNOTE_DEFAULT_PORT } from './types';
@@ -12,11 +12,13 @@ import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
 import { sleep } from '../../platform/common/utils/async';
 import { Cancellation, raceCancellationError } from '../../platform/common/cancellation';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
+import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
 import getPort from 'get-port';
 import * as fs from 'fs-extra';
 import * as os from 'os';
 import * as path from '../../platform/vscode-path/path';
 import { generateUuid } from '../../platform/common/uuid';
+import { DeepnoteServerStartupError, DeepnoteServerTimeoutError } from '../../platform/errors/deepnoteKernelErrors';
 
 /**
  * Lock file data structure for tracking server ownership
@@ -43,13 +45,18 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
     private readonly sessionId: string = generateUuid();
     // Directory for lock files
     private readonly lockFileDir: string = path.join(os.tmpdir(), 'vscode-deepnote-locks');
+    // Track server output for error reporting
+    private readonly serverOutputByFile: Map<string, { stdout: string; stderr: string }> = new Map();
 
     constructor(
         @inject(IProcessServiceFactory) private readonly processServiceFactory: IProcessServiceFactory,
         @inject(IDeepnoteToolkitInstaller) private readonly toolkitInstaller: IDeepnoteToolkitInstaller,
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel,
         @inject(IHttpClient) private readonly httpClient: IHttpClient,
-        @inject(IAsyncDisposableRegistry) asyncRegistry: IAsyncDisposableRegistry
+        @inject(IAsyncDisposableRegistry) asyncRegistry: IAsyncDisposableRegistry,
+        @inject(ISqlIntegrationEnvVarsProvider)
+        @optional()
+        private readonly sqlIntegrationEnvVars?: ISqlIntegrationEnvVarsProvider
     ) {
         // Register for disposal when the extension deactivates
         asyncRegistry.push(this);
@@ -196,6 +203,31 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         // Detached mode
         env.DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE = 'true';
 
+        // Detached mode ensures no requests are made to the backend (directly, or via proxy)
+        // as there is no backend running in the extension, therefore:
+        // 1. integration environment variables are injected here instead
+        // 2. post start hooks won't work / are not executed
+        env.DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE = 'true';
+
+        // Inject SQL integration environment variables
+        if (this.sqlIntegrationEnvVars) {
+            logger.debug(`DeepnoteServerStarter: Injecting SQL integration env vars for environment ${environmentId}`);
+            try {
+                // const sqlEnvVars = await this.sqlIntegrationEnvVars.getEnvironmentVariables(deepnoteFileUri, token);
+                const sqlEnvVars = {}; // TODO: update how environment variables are retrieved
+                if (sqlEnvVars && Object.keys(sqlEnvVars).length > 0) {
+                    logger.debug(`DeepnoteServerStarter: Injecting ${Object.keys(sqlEnvVars).length} SQL env vars`);
+                    Object.assign(env, sqlEnvVars);
+                } else {
+                    logger.debug('DeepnoteServerStarter: No SQL integration env vars to inject');
+                }
+            } catch (error) {
+                logger.error('DeepnoteServerStarter: Failed to get SQL integration env vars', error.message);
+            }
+        } else {
+            logger.debug('DeepnoteServerStarter: SqlIntegrationEnvironmentVariablesProvider not available');
+        }
+
         // Remove PYTHONHOME if it exists (can interfere with venv)
         delete env.PYTHONHOME;
 
@@ -219,15 +251,27 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         const disposables: IDisposable[] = [];
         this.disposablesByFile.set(environmentId, disposables);
 
+        // Initialize output tracking for error reporting
+        this.serverOutputByFile.set(environmentId, { stdout: '', stderr: '' });
+
         // Monitor server output
         serverProcess.out.onDidChange(
             (output) => {
+                const outputTracking = this.serverOutputByFile.get(environmentId);
                 if (output.source === 'stdout') {
                     logger.trace(`Deepnote server (${environmentId}): ${output.out}`);
                     this.outputChannel.appendLine(output.out);
+                    if (outputTracking) {
+                        // Keep last 5000 characters of output for error reporting
+                        outputTracking.stdout = (outputTracking.stdout + output.out).slice(-5000);
+                    }
                 } else if (output.source === 'stderr') {
                     logger.warn(`Deepnote server stderr (${environmentId}): ${output.out}`);
                     this.outputChannel.appendLine(output.out);
+                    if (outputTracking) {
+                        // Keep last 5000 characters of error output for error reporting
+                        outputTracking.stderr = (outputTracking.stderr + output.out).slice(-5000);
+                    }
                 }
             },
             this,
@@ -250,13 +294,37 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         try {
             const serverReady = await this.waitForServer(serverInfo, 120000, token);
             if (!serverReady) {
-                await this.stopServerForEnvironment(environmentId);
-                throw new Error('Deepnote server failed to start within timeout period');
+                const output = this.serverOutputByFile.get(environmentId);
+
+                throw new DeepnoteServerTimeoutError(serverInfo.url, 120000, output?.stderr || undefined);
             }
         } catch (error) {
+            if (error instanceof DeepnoteServerTimeoutError || error instanceof DeepnoteServerStartupError) {
+                // await this.stopServerImpl(deepnoteFileUri);
+                await this.stopServerForEnvironment(environmentId);
+                throw error;
+            }
+
+            // Capture output BEFORE cleaning up (stopServerImpl deletes it)
+            // const output = this.serverOutputByFile.get(fileKey);
+            const output = this.serverOutputByFile.get(environmentId);
+            const capturedStdout = output?.stdout || '';
+            const capturedStderr = output?.stderr || '';
+
             // Clean up leaked server before rethrowing
             await this.stopServerForEnvironment(environmentId);
-            throw error;
+            // throw error;
+
+            // TODO
+            // Wrap in a generic server startup error with captured output
+            throw new DeepnoteServerStartupError(
+                interpreter.uri.fsPath,
+                serverInfo.jupyterPort,
+                'unknown',
+                capturedStdout,
+                capturedStderr,
+                error instanceof Error ? error : undefined
+            );
         }
 
         logger.info(`Deepnote server started successfully at ${url} for environment ${environmentId}`);
@@ -279,6 +347,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                 serverProcess.proc?.kill();
                 this.serverProcesses.delete(environmentId);
                 this.serverInfos.delete(environmentId);
+                this.serverOutputByFile.delete(environmentId);
                 this.outputChannel.appendLine(`Deepnote server stopped for environment ${environmentId}`);
 
                 // Clean up lock file after stopping the server
@@ -505,6 +574,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         this.serverInfos.clear();
         this.disposablesByFile.clear();
         this.pendingOperations.clear();
+        this.serverOutputByFile.clear();
 
         logger.info('DeepnoteServerStarter disposed successfully');
     }

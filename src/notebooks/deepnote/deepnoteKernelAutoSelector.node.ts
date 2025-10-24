@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { inject, injectable, optional } from 'inversify';
+import { inject, injectable, optional, named } from 'inversify';
 import {
     CancellationToken,
     NotebookDocument,
@@ -13,7 +13,9 @@ import {
     NotebookController,
     CancellationTokenSource,
     Disposable,
-    Uri
+    Uri,
+    l10n,
+    env
 } from 'vscode';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
@@ -40,9 +42,12 @@ import { disposeAsync } from '../../platform/common/utils';
 import { IDeepnoteInitNotebookRunner } from './deepnoteInitNotebookRunner.node';
 import { IDeepnoteNotebookManager } from '../types';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
-import { DeepnoteProject } from './deepnoteTypes';
+import { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 import { IKernelProvider, IKernel, IJupyterKernelSpec } from '../../kernels/types';
+import { DeepnoteKernelError } from '../../platform/errors/deepnoteKernelErrors';
 import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnoteEnvironment';
+import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
+import { IOutputChannel } from '../../platform/common/types';
 
 /**
  * Automatically selects and starts Deepnote kernel for .deepnote notebooks
@@ -80,7 +85,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         @inject(IDeepnoteEnvironmentManager) private readonly configurationManager: IDeepnoteEnvironmentManager,
         @inject(IDeepnoteEnvironmentPicker) private readonly configurationPicker: IDeepnoteEnvironmentPicker,
         @inject(IDeepnoteNotebookEnvironmentMapper)
-        private readonly notebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper
+        private readonly notebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper,
+        @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel
     ) {}
 
     public activate() {
@@ -130,8 +136,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         // Always try to ensure kernel is selected (this will reuse existing controllers)
         // Don't await - let it happen in background so notebook opens quickly
         void this.ensureKernelSelected(notebook).catch((error) => {
-            logger.error(`Failed to auto-select Deepnote kernel for ${getDisplayPath(notebook.uri)}: ${error}`);
-            void window.showErrorMessage(`Failed to load Deepnote kernel: ${error}`);
+            logger.error(`Failed to auto-select Deepnote kernel for ${getDisplayPath(notebook.uri)}`, error);
+            void this.handleKernelSelectionError(error);
         });
     }
 
@@ -243,7 +249,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 logger.info(`Init notebook cancelled for project ${projectId}`);
                 return;
             }
-            logger.error(`Error running init notebook: ${error}`);
+            logger.error('Error running init notebook', error);
             // Continue anyway - don't block user if init fails
         } finally {
             // Always clean up the CTS and event listeners
@@ -298,7 +304,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         return window.withProgress(
             {
                 location: ProgressLocation.Notification,
-                title: 'Loading Deepnote Kernel',
+                title: l10n.t('Loading Deepnote Kernel'),
                 cancellable: true
             },
             async (progress, progressToken) => {
@@ -322,7 +328,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                                 notebook.uri
                             )}`
                         );
-                        progress.report({ message: 'Reusing existing kernel...' });
+                        progress.report({ message: l10n.t('Reusing existing kernel...') });
 
                         // Ensure server is registered with the provider (it might have been unregistered on close)
                         if (connectionMetadata.serverInfo) {
@@ -404,7 +410,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                         progressToken
                     );
                 } catch (ex) {
-                    logger.error(`Failed to auto-select Deepnote kernel: ${ex}`);
+                    logger.error('Failed to auto-select Deepnote kernel', ex);
                     throw ex;
                 }
             }
@@ -627,7 +633,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         const loadingController = notebooks.createNotebookController(
             `deepnote-loading-${notebookKey}`,
             DEEPNOTE_NOTEBOOK_TYPE,
-            'Loading Deepnote Kernel...'
+            l10n.t('Loading Deepnote Kernel...')
         );
 
         // Set it as the preferred controller immediately
@@ -645,5 +651,62 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         // Store it so we can dispose it later
         this.loadingControllers.set(notebookKey, loadingController);
         logger.info(`Created loading controller for ${notebookKey}`);
+    }
+
+    /**
+     * Handle kernel selection errors with user-friendly messages and actions
+     */
+    private async handleKernelSelectionError(error: unknown): Promise<void> {
+        // Handle DeepnoteKernelError types with specific guidance
+        if (error instanceof DeepnoteKernelError) {
+            // Log the technical details
+            logger.error(error.getErrorReport());
+
+            // Show user-friendly error with actions
+            const showOutputAction = l10n.t('Show Output');
+            const copyErrorAction = l10n.t('Copy Error Details');
+            const actions: string[] = [showOutputAction, copyErrorAction];
+
+            const troubleshootingHeader = l10n.t('Troubleshooting:');
+            const troubleshootingSteps = error.troubleshootingSteps
+                .slice(0, 3)
+                .map((step, i) => `${i + 1}. ${step}`)
+                .join('\n');
+
+            const selectedAction = await window.showErrorMessage(
+                `${error.userMessage}\n\n${troubleshootingHeader}\n${troubleshootingSteps}`,
+                { modal: false },
+                ...actions
+            );
+
+            if (selectedAction === showOutputAction) {
+                this.outputChannel.show();
+            } else if (selectedAction === copyErrorAction) {
+                try {
+                    await env.clipboard.writeText(error.getErrorReport());
+                    void window.showInformationMessage(l10n.t('Error details copied to clipboard'));
+                } catch (clipboardError) {
+                    logger.error('Failed to copy error details to clipboard', clipboardError);
+                    void window.showErrorMessage(l10n.t('Failed to copy error details to clipboard'));
+                }
+            }
+
+            return;
+        }
+
+        // Handle generic errors
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger.error(`Deepnote kernel error: ${errorMessage}`);
+
+        const showOutputAction = l10n.t('Show Output');
+        const selectedAction = await window.showErrorMessage(
+            l10n.t('Failed to load Deepnote kernel: {0}', errorMessage),
+            { modal: false },
+            showOutputAction
+        );
+
+        if (selectedAction === showOutputAction) {
+            this.outputChannel.show();
+        }
     }
 }

@@ -2,6 +2,14 @@
  * Utility functions for Deepnote block ID and sorting key generation
  */
 
+export function parseJsonWithFallback(value: string, fallback?: unknown): unknown | null {
+    try {
+        return JSON.parse(value);
+    } catch (error) {
+        return fallback ?? null;
+    }
+}
+
 /**
  * Generate a random hex ID for blocks (32 character hex string)
  */

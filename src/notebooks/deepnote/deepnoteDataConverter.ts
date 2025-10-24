@@ -1,12 +1,21 @@
 import { NotebookCellData, NotebookCellKind, NotebookCellOutput, NotebookCellOutputItem } from 'vscode';
 
-import type { DeepnoteBlock, DeepnoteOutput } from './deepnoteTypes';
 import { generateBlockId, generateSortingKey } from './dataConversionUtils';
+import type { DeepnoteBlock, DeepnoteOutput } from '../../platform/deepnote/deepnoteTypes';
 import { ConverterRegistry } from './converters/converterRegistry';
+import { BlockConverter } from './converters/blockConverter';
 import { CodeBlockConverter } from './converters/codeBlockConverter';
-import { addPocketToCellMetadata, createBlockFromPocket } from './pocket';
-import { TextBlockConverter } from './converters/textBlockConverter';
+import { addPocketToCellMetadata, createBlockFromPocket } from '../../platform/deepnote/pocket';
 import { MarkdownBlockConverter } from './converters/markdownBlockConverter';
+import { VisualizationBlockConverter } from './converters/visualizationBlockConverter';
+import { compile as convertVegaLiteSpecToVega } from 'vega-lite';
+import { produce } from 'immer';
+import { SqlBlockConverter } from './converters/sqlBlockConverter';
+import { TextBlockConverter } from './converters/textBlockConverter';
+import type { Field } from 'vega-lite/build/src/channeldef';
+import type { LayerSpec, TopLevel } from 'vega-lite/build/src/spec';
+import { ChartBigNumberBlockConverter } from './converters/chartBigNumberBlockConverter';
+import { CHART_BIG_NUMBER_MIME_TYPE } from '../../platform/deepnote/deepnoteConstants';
 
 /**
  * Utility class for converting between Deepnote block structures and VS Code notebook cells.
@@ -17,8 +26,20 @@ export class DeepnoteDataConverter {
 
     constructor() {
         this.registry.register(new CodeBlockConverter());
-        this.registry.register(new TextBlockConverter());
         this.registry.register(new MarkdownBlockConverter());
+        this.registry.register(new ChartBigNumberBlockConverter());
+        this.registry.register(new SqlBlockConverter());
+        this.registry.register(new TextBlockConverter());
+        this.registry.register(new VisualizationBlockConverter());
+    }
+
+    /**
+     * Finds a converter for the given block type.
+     * @param blockType The type of block to find a converter for
+     * @returns The converter if found, undefined otherwise
+     */
+    public findConverter(blockType: string): BlockConverter | undefined {
+        return this.registry.findConverter(blockType);
     }
 
     /**
@@ -28,7 +49,7 @@ export class DeepnoteDataConverter {
      * @returns Array of VS Code notebook cell data
      */
     convertBlocksToCells(blocks: DeepnoteBlock[]): NotebookCellData[] {
-        return blocks.map((block) => {
+        return blocks.map((block, index) => {
             const converter = this.registry.findConverter(block.type);
 
             if (!converter) {
@@ -48,16 +69,60 @@ export class DeepnoteDataConverter {
                 sortingKey: block.sortingKey,
                 ...(blockWithOptionalFields.blockGroup && { blockGroup: blockWithOptionalFields.blockGroup }),
                 ...(block.executionCount !== undefined && { executionCount: block.executionCount }),
-                ...(block.outputs !== undefined && { outputs: block.outputs })
+                // Track whether this block had outputs for round-trip fidelity
+                __hadOutputs: block.outputs !== undefined
             };
 
             // The pocket is a place to tuck away Deepnote-specific fields for later.
             addPocketToCellMetadata(cell);
 
-            cell.outputs = this.transformOutputsForVsCode(block.outputs || []);
+            // Only set outputs if the block has them (including empty arrays)
+            // This preserves round-trip fidelity
+            if (block.outputs !== undefined) {
+                cell.outputs = this.transformOutputsForVsCode(
+                    block.outputs,
+                    index,
+                    block.id,
+                    block.type,
+                    block.metadata
+                );
+            }
 
             return cell;
         });
+    }
+
+    convertCellToBlock(cell: NotebookCellData, index: number): DeepnoteBlock {
+        const block = createBlockFromPocket(cell, index);
+
+        const converter = this.registry.findConverter(block.type);
+
+        if (!converter) {
+            return this.createFallbackBlock(cell, index);
+        }
+
+        converter.applyChangesToBlock(block, cell);
+
+        // Convert VS Code outputs to Deepnote format
+        // Outputs are managed by VS Code natively, not stored in the pocket
+        // Preserve outputs when they exist (including newly produced outputs)
+        // Only set if not already set to avoid overwriting converter-managed outputs
+        const hadOutputs = cell.metadata?.__hadOutputs;
+        if (!block.outputs) {
+            // Set outputs if:
+            // 1. The cell has non-empty outputs, OR
+            // 2. The block originally had outputs (even if empty)
+            if ((cell.outputs && cell.outputs.length > 0) || hadOutputs) {
+                block.outputs = cell.outputs ? this.transformOutputsForDeepnote(cell.outputs) : [];
+            }
+        }
+
+        // Clean up internal tracking flags from metadata
+        if (block.metadata && '__hadOutputs' in block.metadata) {
+            delete block.metadata.__hadOutputs;
+        }
+
+        return block;
     }
 
     /**
@@ -67,24 +132,7 @@ export class DeepnoteDataConverter {
      * @returns Array of Deepnote blocks
      */
     convertCellsToBlocks(cells: NotebookCellData[]): DeepnoteBlock[] {
-        return cells.map((cell, index) => {
-            const block = createBlockFromPocket(cell, index);
-
-            const converter = this.registry.findConverter(block.type);
-
-            if (!converter) {
-                return this.createFallbackBlock(cell, index);
-            }
-
-            converter.applyChangesToBlock(block, cell);
-
-            // If pocket didn't have outputs, but cell does, convert VS Code outputs to Deepnote format
-            if (!block.outputs && cell.outputs && cell.outputs.length > 0) {
-                block.outputs = this.transformOutputsForDeepnote(cell.outputs);
-            }
-
-            return block;
-        });
+        return cells.map((cell, index) => this.convertCellToBlock(cell, index));
     }
 
     private base64ToUint8Array(base64: string): Uint8Array {
@@ -179,6 +227,12 @@ export class DeepnoteDataConverter {
                     data['application/vnd.deepnote.dataframe.v3+json'] = JSON.parse(
                         new TextDecoder().decode(item.data)
                     );
+                } else if (item.mime === 'application/vnd.vega.v5+json') {
+                    data['application/vnd.vega.v5+json'] = JSON.parse(new TextDecoder().decode(item.data));
+                } else if (item.mime === 'application/vnd.deepnote.sql-output-metadata+json') {
+                    data['application/vnd.deepnote.sql-output-metadata+json'] = JSON.parse(
+                        new TextDecoder().decode(item.data)
+                    );
                 }
             }
 
@@ -202,7 +256,13 @@ export class DeepnoteDataConverter {
         });
     }
 
-    private transformOutputsForVsCode(outputs: DeepnoteOutput[]): NotebookCellOutput[] {
+    private transformOutputsForVsCode(
+        outputs: DeepnoteOutput[],
+        cellIndex: number,
+        cellId: string,
+        blockType: DeepnoteBlock['type'],
+        blockMetadata?: Record<string, unknown>
+    ): NotebookCellOutput[] {
         return outputs.map((output) => {
             if ('output_type' in output) {
                 if (output.output_type === 'error') {
@@ -213,7 +273,13 @@ export class DeepnoteDataConverter {
                         stack: errorOutput.traceback ? errorOutput.traceback.join('\n') : ''
                     };
 
-                    return new NotebookCellOutput([NotebookCellOutputItem.error(error)]);
+                    const metadata: Record<string, unknown> = {
+                        cellId,
+                        ...(blockMetadata ?? {}),
+                        cellIndex
+                    };
+
+                    return new NotebookCellOutput([NotebookCellOutputItem.error(error)], metadata);
                 }
 
                 if (output.output_type === 'execute_result' || output.output_type === 'display_data') {
@@ -244,6 +310,44 @@ export class DeepnoteDataConverter {
                             );
                         }
 
+                        if (data['application/vnd.vega.v5+json']) {
+                            items.push(
+                                NotebookCellOutputItem.json(
+                                    data['application/vnd.vega.v5+json'],
+                                    'application/vnd.vega.v5+json'
+                                )
+                            );
+                        }
+
+                        if (data['application/vnd.deepnote.sql-output-metadata+json']) {
+                            items.push(
+                                NotebookCellOutputItem.json(
+                                    data['application/vnd.deepnote.sql-output-metadata+json'],
+                                    'application/vnd.deepnote.sql-output-metadata+json'
+                                )
+                            );
+                        }
+
+                        if (data['application/vnd.vegalite.v5+json']) {
+                            const patchedVegaLiteSpec = produce(
+                                data['application/vnd.vegalite.v5+json'] as TopLevel<LayerSpec<Field>>,
+                                (draft) => {
+                                    draft.height = 'container';
+                                    draft.width = 'container';
+
+                                    draft.autosize = {
+                                        type: 'fit'
+                                    };
+                                    if (!draft.config) {
+                                        draft.config = {};
+                                    }
+                                    draft.config.customFormatTypes = true;
+                                }
+                            );
+                            const vegaSpec = convertVegaLiteSpecToVega(patchedVegaLiteSpec).spec;
+                            items.push(NotebookCellOutputItem.json(vegaSpec, 'application/vnd.vega.v5+json'));
+                        }
+
                         if (data['application/json']) {
                             items.push(NotebookCellOutputItem.json(data['application/json'], 'application/json'));
                         }
@@ -267,14 +371,34 @@ export class DeepnoteDataConverter {
                             );
                         }
 
-                        // Plain text as fallback (always last)
                         if (data['text/plain']) {
-                            items.push(NotebookCellOutputItem.text(data['text/plain'] as string));
+                            let mimeType = 'text/plain';
+                            // deepnote-toolkit returns the text/plain mime type for big number outputs
+                            // and for the custom renderer to be used, we need to return the application/vnd.deepnote.chart.big-number+json mime type
+                            if (blockType === 'big-number' && !(CHART_BIG_NUMBER_MIME_TYPE in data)) {
+                                mimeType = CHART_BIG_NUMBER_MIME_TYPE;
+                            }
+                            items.push(NotebookCellOutputItem.text(data['text/plain'] as string, mimeType));
+                        }
+
+                        // Deepnote chart big number
+                        if (data[CHART_BIG_NUMBER_MIME_TYPE]) {
+                            items.push(
+                                NotebookCellOutputItem.text(
+                                    data[CHART_BIG_NUMBER_MIME_TYPE] as string,
+                                    CHART_BIG_NUMBER_MIME_TYPE
+                                )
+                            );
                         }
                     }
 
                     // Preserve metadata and execution_count
-                    const metadata: Record<string, unknown> = {};
+                    // Merge in order: cellId, blockMetadata, cellIndex, executionCount, then output.metadata (wins conflicts)
+                    const metadata: Record<string, unknown> = {
+                        cellId,
+                        ...(blockMetadata ?? {}),
+                        cellIndex
+                    };
 
                     if (output.execution_count !== undefined) {
                         metadata.executionCount = output.execution_count;
@@ -284,9 +408,7 @@ export class DeepnoteDataConverter {
                         Object.assign(metadata, output.metadata);
                     }
 
-                    return Object.keys(metadata).length > 0
-                        ? new NotebookCellOutput(items, metadata)
-                        : new NotebookCellOutput(items);
+                    return new NotebookCellOutput(items, metadata);
                 }
 
                 if (output.output_type === 'stream') {
@@ -299,12 +421,30 @@ export class DeepnoteDataConverter {
                             ? 'application/vnd.code.notebook.stderr'
                             : 'application/vnd.code.notebook.stdout';
 
-                    return new NotebookCellOutput([NotebookCellOutputItem.text(String(output.text), mimeType)]);
+                    const metadata: Record<string, unknown> = {
+                        cellId,
+                        ...(blockMetadata ?? {}),
+                        cellIndex
+                    };
+
+                    return new NotebookCellOutput(
+                        [NotebookCellOutputItem.text(String(output.text), mimeType)],
+                        metadata
+                    );
                 }
 
                 // Unknown output type - return as text if available
                 if ('text' in output && output.text) {
-                    return new NotebookCellOutput([NotebookCellOutputItem.text(String(output.text), 'text/plain')]);
+                    const metadata: Record<string, unknown> = {
+                        cellId,
+                        ...(blockMetadata ?? {}),
+                        cellIndex
+                    };
+
+                    return new NotebookCellOutput(
+                        [NotebookCellOutputItem.text(String(output.text), 'text/plain')],
+                        metadata
+                    );
                 }
 
                 // No text, return empty output
@@ -313,7 +453,16 @@ export class DeepnoteDataConverter {
 
             // Fallback for outputs without output_type but with text
             if ('text' in output && output.text) {
-                return new NotebookCellOutput([NotebookCellOutputItem.text(String(output.text), 'text/plain')]);
+                const metadata: Record<string, unknown> = {
+                    cellId,
+                    ...(blockMetadata ?? {}),
+                    cellIndex
+                };
+
+                return new NotebookCellOutput(
+                    [NotebookCellOutputItem.text(String(output.text), 'text/plain')],
+                    metadata
+                );
             }
 
             return new NotebookCellOutput([]);

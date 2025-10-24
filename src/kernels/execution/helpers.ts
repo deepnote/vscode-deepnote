@@ -2,30 +2,32 @@
 // Licensed under the MIT License.
 
 import type * as nbformat from '@jupyterlab/nbformat';
-import { NotebookCellOutput, NotebookCellOutputItem, NotebookCell, Position, Range } from 'vscode';
+import { NotebookCell, NotebookCellOutput, NotebookCellOutputItem, Position, Range } from 'vscode';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import type { KernelMessage } from '@jupyterlab/services';
 import fastDeepEqual from 'fast-deep-equal';
-import * as path from '../../platform/vscode-path/path';
-import * as uriPath from '../../platform/vscode-path/resources';
+import { Pocket } from '../../platform/deepnote/pocket';
 import { PYTHON_LANGUAGE } from '../../platform/common/constants';
 import { concatMultilineString, splitMultilineString } from '../../platform/common/utils';
-import { logger } from '../../platform/logging';
-import { sendTelemetryEvent, Telemetry } from '../../telemetry';
-import { createOutputWithErrorMessageForDisplay } from '../../platform/errors/errorUtils';
-import { CellExecutionCreator } from './cellExecutionCreator';
-import { IKernelController, KernelConnectionMetadata } from '../types';
-import {
-    isPythonKernelConnection,
-    getInterpreterFromKernelConnectionMetadata,
-    kernelConnectionMetadataHasKernelModel,
-    getKernelRegistrationInfo
-} from '../helpers';
 import { StopWatch } from '../../platform/common/utils/stopWatch';
-import { getExtensionSpecificStack } from '../../platform/errors/errors';
-import { getCachedEnvironment, getVersion } from '../../platform/interpreter/helpers';
 import { base64ToUint8Array, uint8ArrayToBase64 } from '../../platform/common/utils/string';
+import { CHART_BIG_NUMBER_MIME_TYPE } from '../../platform/deepnote/deepnoteConstants';
+import { getExtensionSpecificStack } from '../../platform/errors/errors';
+import { createOutputWithErrorMessageForDisplay } from '../../platform/errors/errorUtils';
+import { getCachedEnvironment, getVersion } from '../../platform/interpreter/helpers';
+import { logger } from '../../platform/logging';
 import type { NotebookCellExecutionState } from '../../platform/notebooks/cellExecutionStateService';
+import * as path from '../../platform/vscode-path/path';
+import * as uriPath from '../../platform/vscode-path/resources';
+import { sendTelemetryEvent, Telemetry } from '../../telemetry';
+import {
+    getInterpreterFromKernelConnectionMetadata,
+    getKernelRegistrationInfo,
+    isPythonKernelConnection,
+    kernelConnectionMetadataHasKernelModel
+} from '../helpers';
+import { IKernelController, KernelConnectionMetadata } from '../types';
+import { CellExecutionCreator } from './cellExecutionCreator';
 
 export enum CellOutputMimeTypes {
     error = 'application/vnd.code.notebook.error',
@@ -115,7 +117,15 @@ export function traceCellMessage(cell: NotebookCell, message: string | (() => st
     );
 }
 
-const cellOutputMappers = new Map<nbformat.OutputType, (output: nbformat.IOutput) => NotebookCellOutput>();
+const cellOutputMappers = new Map<
+    nbformat.OutputType,
+    (
+        output: nbformat.IOutput,
+        cellIndex?: number,
+        cellId?: string,
+        cellMetadata?: Record<string, unknown>
+    ) => NotebookCellOutput
+>();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 cellOutputMappers.set('display_data', translateDisplayDataOutput as any);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -126,7 +136,12 @@ cellOutputMappers.set('execute_result', translateDisplayDataOutput as any);
 cellOutputMappers.set('stream', translateStreamOutput as any);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 cellOutputMappers.set('update_display_data', translateDisplayDataOutput as any);
-export function cellOutputToVSCCellOutput(output: nbformat.IOutput): NotebookCellOutput {
+export function cellOutputToVSCCellOutput(
+    output: nbformat.IOutput,
+    cellIndex?: number,
+    cellId?: string,
+    cellMetadata?: Record<string, unknown>
+): NotebookCellOutput {
     /**
      * Stream, `application/x.notebook.stream`
      * Error, `application/x.notebook.error-traceback`
@@ -153,20 +168,39 @@ export function cellOutputToVSCCellOutput(output: nbformat.IOutput): NotebookCel
     const fn = cellOutputMappers.get(output.output_type as nbformat.OutputType);
     let result: NotebookCellOutput;
     if (fn) {
-        result = fn(output);
+        result = fn(output, cellIndex, cellId, cellMetadata);
     } else {
         logger.warn(`Unable to translate cell from ${output.output_type} to NotebookCellData for VS Code.`);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        result = translateDisplayDataOutput(output as any);
+        result = translateDisplayDataOutput(output as any, cellIndex, cellId, cellMetadata);
     }
     return result;
 }
 
-function getOutputMetadata(output: nbformat.IOutput): CellOutputMetadata {
-    // Add on transient data if we have any. This should be removed by our save functions elsewhere.
+function getOutputMetadata(
+    output: nbformat.IOutput,
+    cellIndex?: number,
+    cellId?: string,
+    cellMetadata?: Record<string, unknown>
+): CellOutputMetadata {
+    // Merge in order: cellId, cellMetadata, cellIndex, then output-specific metadata (output metadata wins conflicts)
     const metadata: CellOutputMetadata = {
         outputType: output.output_type
     };
+
+    if (cellId) {
+        metadata.cellId = cellId;
+    }
+
+    // Merge cell metadata next (block-level metadata from Deepnote)
+    if (cellMetadata) {
+        Object.assign(metadata, cellMetadata);
+    }
+
+    if (cellIndex !== undefined) {
+        metadata.cellIndex = cellIndex;
+    }
+
     if (output.transient) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         metadata.transient = output.transient as any;
@@ -177,7 +211,13 @@ function getOutputMetadata(output: nbformat.IOutput): CellOutputMetadata {
         case 'execute_result':
         case 'update_display_data': {
             metadata.executionCount = output.execution_count;
-            metadata.metadata = output.metadata ? JSON.parse(JSON.stringify(output.metadata)) : {};
+            // Output metadata is merged in two places:
+            // 1. At the top level for easy access by custom renderers
+            // 2. In the metadata property for round-trip conversion
+            if (output.metadata) {
+                Object.assign(metadata, output.metadata);
+                metadata.metadata = output.metadata;
+            }
             break;
         }
         default:
@@ -200,7 +240,10 @@ export function getNotebookCellOutputMetadata(output: {
  * E.g. Jupyter cell output contains metadata to add backgrounds to images.
  */
 function translateDisplayDataOutput(
-    output: nbformat.IDisplayData | nbformat.IDisplayUpdate | nbformat.IExecuteResult
+    output: nbformat.IDisplayData | nbformat.IDisplayUpdate | nbformat.IExecuteResult,
+    cellIndex?: number,
+    cellId?: string,
+    cellMetadata?: Record<string, unknown>
 ): NotebookCellOutput {
     // Metadata could be as follows:
     // We'll have metadata specific to each mime type as well as generic metadata.
@@ -219,7 +262,10 @@ function translateDisplayDataOutput(
         }
     }
     */
-    const metadata = getOutputMetadata(output);
+    const deepnotePocket = cellMetadata?.__deepnotePocket as Pocket | undefined;
+    const deepnoteBlockType = deepnotePocket?.type;
+
+    const metadata = getOutputMetadata(output, cellIndex, cellId, cellMetadata);
     // If we have SVG or PNG, then add special metadata to indicate whether to display `open plot`
     if ('image/svg+xml' in output.data || 'image/png' in output.data) {
         metadata.__displayOpenPlotIcon = true;
@@ -228,17 +274,24 @@ function translateDisplayDataOutput(
     if (output.data) {
         // eslint-disable-next-line no-restricted-syntax
         for (const key in output.data) {
-            items.push(convertJupyterOutputToBuffer(key, output.data[key]));
+            // TODO - remove this once this is handled in the deepnote-toolkit
+            let effectiveKey = deepnoteBlockType === 'big-number' ? CHART_BIG_NUMBER_MIME_TYPE : key;
+            items.push(convertJupyterOutputToBuffer(effectiveKey, output.data[key] ?? output.data[effectiveKey]));
         }
     }
 
     return new NotebookCellOutput(sortOutputItemsBasedOnDisplayOrder(items), metadata);
 }
 
-function translateStreamOutput(output: nbformat.IStream): NotebookCellOutput {
+function translateStreamOutput(
+    output: nbformat.IStream,
+    cellIndex?: number,
+    cellId?: string,
+    cellMetadata?: Record<string, unknown>
+): NotebookCellOutput {
     const value = concatMultilineString(output.text);
     const factoryFn = output.name === 'stderr' ? NotebookCellOutputItem.stderr : NotebookCellOutputItem.stdout;
-    return new NotebookCellOutput([factoryFn(value)], getOutputMetadata(output));
+    return new NotebookCellOutput([factoryFn(value)], getOutputMetadata(output, cellIndex, cellId, cellMetadata));
 }
 
 // Output stream can only have stderr or stdout so just check the first output. Undefined if no outputs
@@ -282,6 +335,14 @@ interface CellOutputMetadata {
      */
     outputType: nbformat.OutputType | string;
     executionCount?: nbformat.IExecuteResult['ExecutionCount'];
+    /**
+     * Index of the cell that produced this output
+     */
+    cellIndex?: number;
+    /**
+     * ID of the cell that produced this output
+     */
+    cellId?: string;
     /**
      * Whether the original Mime data is JSON or not.
      * This properly only exists in metadata for NotebookCellOutputItems
@@ -542,7 +603,12 @@ export function translateCellDisplayOutput(output: NotebookCellOutput): JupyterO
  * As we're displaying the error in the statusbar, we don't want this dup error in output.
  * Hence remove this.
  */
-function translateErrorOutput(output?: nbformat.IError): NotebookCellOutput {
+function translateErrorOutput(
+    output?: nbformat.IError,
+    cellIndex?: number,
+    cellId?: string,
+    cellMetadata?: Record<string, unknown>
+): NotebookCellOutput {
     output = output || { output_type: 'error', ename: '', evalue: '', traceback: [] };
     return new NotebookCellOutput(
         [
@@ -552,7 +618,7 @@ function translateErrorOutput(output?: nbformat.IError): NotebookCellOutput {
                 stack: (output?.traceback || []).join('\n')
             })
         ],
-        { ...getOutputMetadata(output), originalError: output }
+        { ...getOutputMetadata(output, cellIndex, cellId, cellMetadata), originalError: output }
     );
 }
 

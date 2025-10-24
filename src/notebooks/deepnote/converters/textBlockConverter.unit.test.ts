@@ -1,7 +1,7 @@
 import { assert } from 'chai';
 import { NotebookCellData, NotebookCellKind } from 'vscode';
 
-import type { DeepnoteBlock } from '../deepnoteTypes';
+import type { DeepnoteBlock } from '../../../platform/deepnote/deepnoteTypes';
 import { TextBlockConverter } from './textBlockConverter';
 
 suite('TextBlockConverter', () => {

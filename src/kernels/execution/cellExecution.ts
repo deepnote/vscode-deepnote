@@ -4,6 +4,7 @@
 import type * as KernelMessage from '@jupyterlab/services/lib/kernel/messages';
 import { NotebookCell, NotebookCellExecution, workspace, NotebookCellOutput } from 'vscode';
 
+import { createPythonCode } from '@deepnote/blocks';
 import type { Kernel } from '@jupyterlab/services';
 import { CellExecutionCreator } from './cellExecutionCreator';
 import { analyzeKernelErrors, createOutputWithErrorMessageForDisplay } from '../../platform/errors/errorUtils';
@@ -32,6 +33,7 @@ import { KernelError } from '../errors/kernelError';
 import { getCachedSysPrefix } from '../../platform/interpreter/helpers';
 import { getCellMetadata } from '../../platform/common/utils';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
+import { DeepnoteDataConverter } from '../../notebooks/deepnote/deepnoteDataConverter';
 
 /**
  * Factory for CellExecution objects.
@@ -405,6 +407,21 @@ export class CellExecution implements ICellExecution, IDisposable {
             traceCellMessage(this.cell, 'Empty cell execution');
             return this.completedSuccessfully();
         }
+
+        // Convert NotebookCell to Deepnote block for further operations
+        const cellData = {
+            kind: this.cell.kind,
+            value: this.cell.document.getText(),
+            languageId: this.cell.document.languageId,
+            metadata: this.cell.metadata,
+            outputs: [...(this.cell.outputs || [])]
+        };
+
+        const dataConverter = new DeepnoteDataConverter();
+        const deepnoteBlock = dataConverter.convertCellToBlock(cellData, this.cell.index);
+
+        logger.info(`Cell ${this.cell.index}: Using createPythonCode for ${deepnoteBlock.type} block`);
+        code = createPythonCode(deepnoteBlock);
 
         // Generate metadata from our cell (some kernels expect this.)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

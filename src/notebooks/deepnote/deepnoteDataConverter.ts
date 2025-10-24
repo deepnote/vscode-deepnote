@@ -15,6 +15,17 @@ import { TextBlockConverter } from './converters/textBlockConverter';
 import type { Field } from 'vega-lite/build/src/channeldef';
 import type { LayerSpec, TopLevel } from 'vega-lite/build/src/spec';
 import { ChartBigNumberBlockConverter } from './converters/chartBigNumberBlockConverter';
+import {
+    InputTextBlockConverter,
+    InputTextareaBlockConverter,
+    InputSelectBlockConverter,
+    InputSliderBlockConverter,
+    InputCheckboxBlockConverter,
+    InputDateBlockConverter,
+    InputDateRangeBlockConverter,
+    InputFileBlockConverter,
+    ButtonBlockConverter
+} from './converters/inputConverters';
 import { CHART_BIG_NUMBER_MIME_TYPE } from '../../platform/deepnote/deepnoteConstants';
 
 /**
@@ -28,6 +39,15 @@ export class DeepnoteDataConverter {
         this.registry.register(new CodeBlockConverter());
         this.registry.register(new MarkdownBlockConverter());
         this.registry.register(new ChartBigNumberBlockConverter());
+        this.registry.register(new InputTextBlockConverter());
+        this.registry.register(new InputTextareaBlockConverter());
+        this.registry.register(new InputSelectBlockConverter());
+        this.registry.register(new InputSliderBlockConverter());
+        this.registry.register(new InputCheckboxBlockConverter());
+        this.registry.register(new InputDateBlockConverter());
+        this.registry.register(new InputDateRangeBlockConverter());
+        this.registry.register(new InputFileBlockConverter());
+        this.registry.register(new ButtonBlockConverter());
         this.registry.register(new SqlBlockConverter());
         this.registry.register(new TextBlockConverter());
         this.registry.register(new VisualizationBlockConverter());

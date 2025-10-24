@@ -25,6 +25,7 @@ import type { Pocket } from '../../platform/deepnote/pocket';
 import { formatInputBlockCellContent } from './inputBlockContentFormatter';
 import { SelectInputSettingsWebviewProvider } from './selectInputSettingsWebview';
 import { IExtensionContext } from '../../platform/common/types';
+import { getFilePath } from '../../platform/common/platform/fs-paths';
 
 /**
  * Provides status bar items for Deepnote input block cells to display their block type.
@@ -941,8 +942,8 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
             return;
         }
 
-        // Get the file path
-        const filePath = uris[0].path;
+        // Get the file path (using getFilePath for platform-correct path separators)
+        const filePath = getFilePath(uris[0]);
 
         await this.updateCellMetadata(cell, { deepnote_variable_value: filePath });
     }

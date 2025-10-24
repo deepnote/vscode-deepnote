@@ -3,6 +3,7 @@
 
 import {
     Disposable,
+    l10n,
     NotebookCell,
     NotebookEdit,
     NotebookRange,
@@ -47,7 +48,7 @@ export class SelectInputSettingsWebviewProvider {
         // Create a new panel
         this.currentPanel = window.createWebviewPanel(
             'deepnoteSelectInputSettings',
-            'Select Input Settings',
+            l10n.t('Select Input Settings'),
             column || ViewColumn.One,
             {
                 enableScripts: true,
@@ -218,16 +219,6 @@ export class SelectInputSettingsWebviewProvider {
                 'index.js'
             )
         );
-        const styleUri = webview.asWebviewUri(
-            Uri.joinPath(
-                this.extensionContext.extensionUri,
-                'dist',
-                'webviews',
-                'webview-side',
-                'selectInputSettings',
-                'selectInputSettings.css'
-            )
-        );
         const codiconUri = webview.asWebviewUri(
             Uri.joinPath(
                 this.extensionContext.extensionUri,
@@ -240,6 +231,8 @@ export class SelectInputSettingsWebviewProvider {
             )
         );
 
+        const title = l10n.t('Select Input Settings');
+
         return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -247,12 +240,11 @@ export class SelectInputSettingsWebviewProvider {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}'; font-src ${webview.cspSource};">
     <link rel="stylesheet" href="${codiconUri}">
-    <link rel="stylesheet" href="${styleUri}">
-    <title>Select Input Settings</title>
+    <title>${title}</title>
 </head>
 <body>
     <div id="root"></div>
-    <script nonce="${nonce}" src="${scriptUri}"></script>
+    <script nonce="${nonce}" type="module" src="${scriptUri}"></script>
 </body>
 </html>`;
     }

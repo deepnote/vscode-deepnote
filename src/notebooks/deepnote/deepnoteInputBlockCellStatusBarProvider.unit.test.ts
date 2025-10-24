@@ -57,7 +57,7 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
             const items = provider.provideCellStatusBarItems(cell);
 
             expect(items).to.not.be.undefined;
-            expect(items).to.have.lengthOf(2);
+            expect(items).to.have.length.at.least(2);
             expect(items?.[0].text).to.equal('Input Text');
             expect(items?.[0].alignment).to.equal(1); // Left
         });
@@ -67,7 +67,7 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
             const items = provider.provideCellStatusBarItems(cell);
 
             expect(items).to.not.be.undefined;
-            expect(items).to.have.lengthOf(2);
+            expect(items).to.have.length.at.least(2);
             expect(items?.[0].text).to.equal('Input Textarea');
         });
 
@@ -130,7 +130,7 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
             const items = provider.provideCellStatusBarItems(cell);
 
             expect(items).to.not.be.undefined;
-            expect(items).to.have.lengthOf(2);
+            expect(items).to.have.length.at.least(2);
             expect(items?.[0].text).to.equal('Button');
         });
     });

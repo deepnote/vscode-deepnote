@@ -149,7 +149,7 @@ suite('InputTextBlockConverter', () => {
                 sortingKey: 'a0',
                 type: 'input-text'
             };
-            const cell = new NotebookCellData(NotebookCellKind.Code, 'var1', 'python');
+            const cell = new NotebookCellData(NotebookCellKind.Code, 'var1', 'plaintext');
 
             converter.applyChangesToBlock(block, cell);
 
@@ -165,7 +165,7 @@ suite('InputTextBlockConverter', () => {
                 sortingKey: 'a0',
                 type: 'input-text'
             };
-            const cell = new NotebookCellData(NotebookCellKind.Code, 'var', 'python');
+            const cell = new NotebookCellData(NotebookCellKind.Code, 'var', 'plaintext');
 
             converter.applyChangesToBlock(block, cell);
 

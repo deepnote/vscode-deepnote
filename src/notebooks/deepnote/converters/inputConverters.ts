@@ -181,19 +181,11 @@ export class InputSliderBlockConverter extends BaseInputBlockConverter<typeof De
 
         const existingMetadata = this.schema().safeParse(block.metadata);
 
-        let value: number;
-        if (Number.isFinite(parsed)) {
-            value = parsed;
-        } else if (existingMetadata.success) {
-            // Parse existing value as number (it might be stored as string in schema)
-            const existingValue = existingMetadata.data.deepnote_variable_value;
-            const existingParsed = Number(existingValue);
-            value = Number.isFinite(existingParsed) ? existingParsed : 0;
-        } else {
-            const defaultValue = this.defaultConfig().deepnote_variable_value;
-            const defaultParsed = Number(defaultValue);
-            value = Number.isFinite(defaultParsed) ? defaultParsed : 0;
-        }
+        const existingValue = existingMetadata.success
+            ? Number(existingMetadata.data.deepnote_variable_value)
+            : Number(this.defaultConfig().deepnote_variable_value);
+        const fallback = Number.isFinite(existingValue) ? existingValue : 0;
+        const value = Number.isFinite(parsed) ? parsed : fallback;
 
         this.updateBlockMetadata(block, {
             deepnote_variable_value: value

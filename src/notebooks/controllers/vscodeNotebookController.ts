@@ -297,8 +297,12 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
 
         logger.info(
             `Updating controller ${this.id} connection. Changed: ${hasChanged}. ` +
-            `Old interpreter: ${oldConnection.interpreter ? getDisplayPath(oldConnection.interpreter.uri) : 'none'}, ` +
-            `New interpreter: ${kernelConnection.interpreter ? getDisplayPath(kernelConnection.interpreter.uri) : 'none'}`
+                `Old interpreter: ${
+                    oldConnection.interpreter ? getDisplayPath(oldConnection.interpreter.uri) : 'none'
+                }, ` +
+                `New interpreter: ${
+                    kernelConnection.interpreter ? getDisplayPath(kernelConnection.interpreter.uri) : 'none'
+                }`
         );
 
         // Update the stored connection metadata
@@ -316,11 +320,13 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
 
             // Dispose any existing kernels using the old connection for all associated notebooks
             // This forces a fresh kernel connection when cells are next executed
-            const notebooksToUpdate = workspace.notebookDocuments.filter(doc => this.associatedDocuments.has(doc));
-            notebooksToUpdate.forEach(notebook => {
+            const notebooksToUpdate = workspace.notebookDocuments.filter((doc) => this.associatedDocuments.has(doc));
+            notebooksToUpdate.forEach((notebook) => {
                 const existingKernel = this.kernelProvider.get(notebook);
                 if (existingKernel) {
-                    logger.info(`Disposing old kernel for notebook ${getDisplayPath(notebook.uri)} due to connection update`);
+                    logger.info(
+                        `Disposing old kernel for notebook ${getDisplayPath(notebook.uri)} due to connection update`
+                    );
                     existingKernel.dispose().catch(noop);
                 }
             });

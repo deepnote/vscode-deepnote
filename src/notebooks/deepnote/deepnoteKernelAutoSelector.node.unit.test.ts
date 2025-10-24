@@ -8,7 +8,7 @@ import {
     IDeepnoteNotebookEnvironmentMapper
 } from '../../kernels/deepnote/types';
 import { IControllerRegistration, IVSCodeNotebookController } from '../controllers/types';
-import { IDisposableRegistry } from '../../platform/common/types';
+import { IDisposableRegistry, IOutputChannel } from '../../platform/common/types';
 import { IPythonExtensionChecker } from '../../platform/api/types';
 import { IJupyterRequestCreator } from '../../kernels/jupyter/types';
 import { IConfigurationService } from '../../platform/common/types';
@@ -20,6 +20,7 @@ import { NotebookDocument, Uri, NotebookController, CancellationToken } from 'vs
 import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnoteEnvironment';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { IJupyterKernelSpec } from '../../kernels/types';
+import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
 
 suite('DeepnoteKernelAutoSelector - rebuildController', () => {
     let selector: DeepnoteKernelAutoSelector;
@@ -36,6 +37,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
     let mockEnvironmentManager: IDeepnoteEnvironmentManager;
     let mockEnvironmentPicker: IDeepnoteEnvironmentPicker;
     let mockNotebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper;
+    let mockOutputChannel: IOutputChannel;
 
     let mockNotebook: NotebookDocument;
     let mockController: IVSCodeNotebookController;
@@ -56,6 +58,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         mockEnvironmentManager = mock<IDeepnoteEnvironmentManager>();
         mockEnvironmentPicker = mock<IDeepnoteEnvironmentPicker>();
         mockNotebookEnvironmentMapper = mock<IDeepnoteNotebookEnvironmentMapper>();
+        mockOutputChannel = mock<IOutputChannel>(STANDARD_OUTPUT_CHANNEL);
 
         // Create mock notebook
         mockNotebook = {
@@ -102,7 +105,8 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             instance(mockRequirementsHelper),
             instance(mockEnvironmentManager),
             instance(mockEnvironmentPicker),
-            instance(mockNotebookEnvironmentMapper)
+            instance(mockNotebookEnvironmentMapper),
+            instance(mockOutputChannel)
         );
     });
 

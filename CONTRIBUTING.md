@@ -53,7 +53,6 @@ curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
 nvm install
 nvm use
 
-
 # Install Python (Ubuntu/Debian)
 sudo apt update && sudo apt install python3 python3-pip python3-venv
 

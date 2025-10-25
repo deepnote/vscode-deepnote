@@ -188,7 +188,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         const defaultMetadata: DeepnoteSqlMetadata = {
             deepnote_variable_name: deepnoteVariableName,
             deepnote_return_variable_type: 'dataframe',
-            sql_integration_id: ''
+            sql_integration_id: 'deepnote-dataframe-sql'
         };
 
         // Determine the index where to insert the new cell (below current selection or at the end)

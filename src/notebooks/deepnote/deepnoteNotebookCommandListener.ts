@@ -282,7 +282,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         const insertIndex = selection ? selection.end : document.cellCount;
 
         // Get the appropriate schema and parse default metadata based on block type
-        let defaultMetadata = getInputBlockMetadata(blockType, deepnoteVariableName);
+        const defaultMetadata = getInputBlockMetadata(blockType, deepnoteVariableName);
 
         const metadata = {
             __deepnotePocket: {

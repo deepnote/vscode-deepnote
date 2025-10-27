@@ -285,7 +285,7 @@ export class KernelProcess extends ObservableDisposable implements IKernelProces
             // Zmq does not use a client server architecture, even if
             // a peer is not up and running the messages are queued till the peer is ready to recieve.
             // No point waiting for ports to get used, see
-            // https://github.com/microsoft/vscode-jupyter/issues/14835
+            // https://github.com/deepnote/vscode-deepnote/issues/14835
             const portsUsed = doNotWaitForZmqPortsToGetUsed
                 ? Promise.resolve()
                 : Promise.all([
@@ -504,7 +504,7 @@ export class KernelProcess extends ObservableDisposable implements IKernelProces
             // Replace the connection file argument with this file
             // Remember, non-python kernels can have argv as `--connection-file={connection_file}`,
             // hence we should not replace the entire entry, but just replace the text `{connection_file}`
-            // See https://github.com/microsoft/vscode-jupyter/issues/7203
+            // See https://github.com/deepnote/vscode-deepnote/issues/7203
             const quotedConnectionFile = this.connectionFile.fsPath.includes(' ')
                 ? `"${this.connectionFile.fsPath}"` // Quoted for spaces in file paths.
                 : this.connectionFile.fsPath;

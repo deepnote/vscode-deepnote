@@ -51,7 +51,7 @@ export function sharedIWDebuggerTests(
                 }
             };
             suiteSetup(async function () {
-                // https://github.com/microsoft/vscode-jupyter/issues/16860
+                // https://github.com/deepnote/vscode-deepnote/issues/16860
                 if (debuggerType === 'JupyterProtocolDebugger') {
                     return this.skip();
                 }

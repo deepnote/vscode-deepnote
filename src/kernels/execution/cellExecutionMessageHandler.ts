@@ -225,7 +225,7 @@ export class CellExecutionMessageHandler implements IDisposable {
         this.execution = cellExecution;
         // We're in all messages.
         // When using the `interact` function in Python, we can get outputs from comm messages even before execution has completed.
-        // See https://github.com/microsoft/vscode-jupyter/issues/9503 for more information on why we need to monitor anyMessage and iopubMessage signals.
+        // See https://github.com/deepnote/vscode-deepnote/issues/9503 for more information on why we need to monitor anyMessage and iopubMessage signals.
         this.kernel.anyMessage.connect(this.onKernelAnyMessage, this);
         this.kernel.iopubMessage.connect(this.onKernelIOPubMessage, this);
 
@@ -395,13 +395,13 @@ export class CellExecutionMessageHandler implements IDisposable {
             }
         }
         // We're only interested in messages after execution has completed.
-        // See https://github.com/microsoft/vscode-jupyter/issues/9503 for more information.
+        // See https://github.com/deepnote/vscode-deepnote/issues/9503 for more information.
         if (direction !== 'send' || !this.completedExecution) {
             return;
         }
         if (jupyterLab.KernelMessage.isCommMsgMsg(msg) && this.ownedCommIds.has(msg.content.comm_id)) {
             // Looks like we have a comm msg request sent by some output or the like.
-            // See https://github.com/microsoft/vscode-jupyter/issues/9503 for more information.
+            // See https://github.com/deepnote/vscode-deepnote/issues/9503 for more information.
             this.ownedRequestMsgIds.add(msg.header.msg_id);
         }
     }
@@ -411,11 +411,11 @@ export class CellExecutionMessageHandler implements IDisposable {
         }
 
         // We're only interested in messages after execution has completed.
-        // See https://github.com/microsoft/vscode-jupyter/issues/9503 for more information.
+        // See https://github.com/deepnote/vscode-deepnote/issues/9503 for more information.
 
         // Handle iopub messages that are sent from Jupyter in response to some
         // comm message (requests) sent by an output widget.
-        // See https://github.com/microsoft/vscode-jupyter/issues/9503 for more information.
+        // See https://github.com/deepnote/vscode-deepnote/issues/9503 for more information.
         if (
             !msg.parent_header ||
             !('msg_id' in msg.parent_header) ||
@@ -497,7 +497,7 @@ export class CellExecutionMessageHandler implements IDisposable {
             // try {
             //     // The time from the kernel is more accurate, as that will ignore the network latency.
             //     // Note: There could be an offset between the time on the kernel and the time on the client.
-            //     // https://github.com/microsoft/vscode-jupyter/issues/14072
+            //     // https://github.com/deepnote/vscode-deepnote/issues/14072
             //     // this.startTime = new Date(msg.header.date).getTime();
             // } catch {
             //     //
@@ -980,7 +980,7 @@ export class CellExecutionMessageHandler implements IDisposable {
         }
 
         if (msg.parent_header.msg_type === 'comm_msg' && msg.header.msg_type === 'stream') {
-            // Fix for https://github.com/microsoft/vscode-jupyter/issues/15996
+            // Fix for https://github.com/deepnote/vscode-deepnote/issues/15996
             // We're not interested in stream messages that are part of comm messages.
             return;
         }

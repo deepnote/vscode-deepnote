@@ -310,7 +310,7 @@ export class JupyterKernelSessionFactory implements IKernelSessionFactory {
 
         // If kernelName is empty this can cause problems for servers that don't
         // understand that empty kernel name means the default kernel.
-        // See https://github.com/microsoft/vscode-jupyter/issues/5290
+        // See https://github.com/deepnote/vscode-deepnote/issues/5290
         const kernelName =
             getNameOfKernelConnection(options.kernelConnection) ?? options.kernelSpecManager?.specs?.default ?? '';
 

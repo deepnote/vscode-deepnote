@@ -61,7 +61,7 @@ export class CellExecutionFactory {
  *
  * WARNING: Do not dispose `request: Kernel.IShellFuture` object.
  * Even after request.done & execute_reply is sent we could have more messages coming from iopub.
- * Further details here https://github.com/microsoft/vscode-jupyter/issues/232 & https://github.com/jupyter/jupyter_client/issues/297
+ * Further details here https://github.com/deepnote/vscode-deepnote/issues/232 & https://github.com/jupyter/jupyter_client/issues/297
  *
  */
 export class CellExecution implements ICellExecution, IDisposable {
@@ -471,7 +471,7 @@ export class CellExecution implements ICellExecution, IDisposable {
 
         // WARNING: Do not dispose `request`.
         // Even after request.done & execute_reply is sent we could have more messages coming from iopub.
-        // We have tests for this & check https://github.com/microsoft/vscode-jupyter/issues/232 & https://github.com/jupyter/jupyter_client/issues/297
+        // We have tests for this & check https://github.com/deepnote/vscode-deepnote/issues/232 & https://github.com/jupyter/jupyter_client/issues/297
 
         try {
             // When the request finishes we are done
@@ -484,7 +484,7 @@ export class CellExecution implements ICellExecution, IDisposable {
             // try {
             //     // The time from the kernel is more accurate, as that will ignore the network latency.
             //     // Note: There could be an offset between the time on the kernel and the time on the client.
-            //     // https://github.com/microsoft/vscode-jupyter/issues/14072
+            //     // https://github.com/deepnote/vscode-deepnote/issues/14072
             //     completedTime = new Date(reply.header.date).getTime();
             // } catch {
             //     //

@@ -134,7 +134,7 @@ export interface IIPyWidgetScriptManager {
      * Note:
      * - We cannot always assume the entry point is index.js
      * - We cannot always assume the name of the widget is the same as the name of the folder in nbextensions
-     * Because of these assumptions a hello world widget did not work in the past, see https://github.com/microsoft/vscode-jupyter/issues/10319.
+     * Because of these assumptions a hello world widget did not work in the past, see https://github.com/deepnote/vscode-deepnote/issues/10319.
      */
     getWidgetModuleMappings(): Promise<Record<string, Uri> | undefined>;
 }

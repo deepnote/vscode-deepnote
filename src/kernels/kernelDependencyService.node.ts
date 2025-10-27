@@ -268,7 +268,7 @@ export class KernelDependencyService implements IKernelDependencyService {
         const options = [installOption];
         if (resource && !cannotChangeKernels) {
             // Due to a bug in our code, if we don't have a resource, don't display the option to change kernels.
-            // https://github.com/microsoft/vscode-jupyter/issues/6135
+            // https://github.com/deepnote/vscode-deepnote/issues/6135
             options.push(selectKernelOption);
         }
         options.push(moreInfoOption);
@@ -303,7 +303,7 @@ export class KernelDependencyService implements IKernelDependencyService {
                     });
 
                     // Link to our wiki page on jupyter kernels + ipykernel
-                    // https://github.com/microsoft/vscode-jupyter/wiki/Jupyter-Kernels-and-the-Jupyter-Extension#python-extension-and-ipykernel
+                    // https://github.com/deepnote/vscode-deepnote/wiki/Jupyter-Kernels-and-the-Jupyter-Extension#python-extension-and-ipykernel
                     void env.openExternal(Uri.parse('https://aka.ms/AAhi594'));
                 }
                 // "More Info" isn't a full valid response here, so reprompt after showing it

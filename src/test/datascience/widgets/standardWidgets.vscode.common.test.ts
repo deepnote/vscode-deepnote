@@ -259,7 +259,7 @@ suite('Standard IPyWidget Tests @widgets', function () {
             await assertOutputContainsHtml(cell2, comms, ['Button clicked.']);
         });
         test.skip('Widget renders after executing a notebook which was saved after previous execution', async () => {
-            // // https://github.com/microsoft/vscode-jupyter/issues/8748
+            // // https://github.com/deepnote/vscode-deepnote/issues/8748
             // await initializeNotebookForWidgetTest(disposables, { templateFile: 'standard_widgets.ipynb' }, editor);
             // const cell = window.activeNotebookEditor?.notebook.cellAt(0)!;
             // await executeCellAndWaitForOutput(cell, comms);
@@ -295,7 +295,7 @@ suite('Standard IPyWidget Tests @widgets', function () {
             // await assertOutputContainsHtml(cell, comms, ['66'], '.widget-readout');
         });
         test.skip('Widget renders after interrupting kernel', async () => {
-            // // https://github.com/microsoft/vscode-jupyter/issues/8749
+            // // https://github.com/deepnote/vscode-deepnote/issues/8749
             // const comms = await initializeNotebookForWidgetTest(disposables, {
             //     templateFile: 'standard_widgets.ipynb'
             // });
@@ -315,7 +315,7 @@ suite('Standard IPyWidget Tests @widgets', function () {
             // await assertOutputContainsHtml(cell, comms, ['66'], '.widget-readout');
         });
         test('Nested Output Widgets', async function () {
-            // https://github.com/microsoft/vscode-jupyter/issues/16861
+            // https://github.com/deepnote/vscode-deepnote/issues/16861
             if (IS_REMOTE_NATIVE_TEST()) {
                 return this.skip();
             }

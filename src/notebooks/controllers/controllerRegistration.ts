@@ -111,7 +111,7 @@ export class ControllerRegistration implements IControllerRegistration, IExtensi
                     return connection.id === controller.connection.id;
                 }) ||
                 // On CI (tests), do not dispose of the active interpreter controller.
-                // See https://github.com/microsoft/vscode-jupyter/issues/13335
+                // See https://github.com/deepnote/vscode-deepnote/issues/13335
                 (isCI && this._activeInterpreterControllerIds.has(controller.id));
 
             // Never remove remote kernels that don't exist.

@@ -126,7 +126,7 @@ export class KernelEnvironmentVariablesService {
 
         let mergedVars = { ...process.env };
 
-        // On windows (see https://github.com/microsoft/vscode-jupyter/issues/10940)
+        // On windows (see https://github.com/deepnote/vscode-deepnote/issues/10940)
         // upper case all of the keys
         if (process.platform === 'win32') {
             mergedVars = {};
@@ -164,7 +164,7 @@ export class KernelEnvironmentVariablesService {
             }
 
             // If user asks us to, set PYTHONNOUSERSITE
-            // For more details see here https://github.com/microsoft/vscode-jupyter/issues/8553#issuecomment-997144591
+            // For more details see here https://github.com/deepnote/vscode-deepnote/issues/8553#issuecomment-997144591
             // https://docs.python.org/3/library/site.html#site.ENABLE_USER_SITE
             if (this.configService.getSettings(undefined).excludeUserSitePackages) {
                 logger.info(`Adding env Variable PYTHONNOUSERSITE to ${getDisplayPath(interpreter?.uri)}`);

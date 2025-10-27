@@ -86,5 +86,5 @@ fig = go.Figure(data=go.Bar(y=[2, 3, 1, 5]))
 fig.show()
 
 #%% [markdown]
-# ## Test split cell (code below should run -- see issue https://github.com/microsoft/vscode-jupyter/issues/8543)
+# ## Test split cell (code below should run -- see issue https://github.com/deepnote/vscode-deepnote/issues/8543)
 print("hi")

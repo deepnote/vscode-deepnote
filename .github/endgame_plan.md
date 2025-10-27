@@ -1,14 +1,14 @@
-* [Endgame Template](https://github.com/microsoft/vscode-jupyter/blob/main/.github/endgame_plan.md)
+* [Endgame Template](https://github.com/deepnote/vscode-deepnote/blob/main/.github/endgame_plan.md)
 
 ## Thursday
 - [ ] Ensure that any CI test failures have issues assigned to that area's owner.
 - [ ] Work with the build champ to drive the build to green by fixing/disabling tests or pinging area owners to do so.
 
 ## Friday
-- [ ] Review [Component Governance](https://dev.azure.com/monacotools/Monaco/_componentGovernance/191876) (Click on "microsoft/vscode-jupyter" on that page) and resolve all High/Severe issues.
+- [ ] Review [Component Governance](https://dev.azure.com/monacotools/Monaco/_componentGovernance/191876) (Click on "deepnote/vscode-deepnote" on that page) and resolve all High/Severe issues.
   - [ ] Focus on resolving `Critical` and `High` priority issues as others will be addressed in the `debt` week.
   - [ ] Manually add any repository dependencies (if you can't add manually, refer [here](https://docs.opensource.microsoft.com/tools/cg/features/cgmanifest/)). Only add a cgmanifest.json if the components are not NPM or are not dev only.
-        Instructions on updating `npm` dependencies in `package.json` & `package-lock.json` can be found [here](https://github.com/microsoft/vscode-jupyter/wiki/Resolving-Component-Governance-and-Dependabot-issues-(updating-package-lock.json)).
+        Instructions on updating `npm` dependencies in `package.json` & `package-lock.json` can be found [here](https://github.com/deepnote/vscode-deepnote/wiki/Resolving-Component-Governance-and-Dependabot-issues-(updating-package-lock.json)).
 - [ ] Create new release branch with format `release/release-YYYY.MM`.
   * Note: The release branch is now ready for to be published (or hotfixed)
 - [ ] Back on the `main` branch, bump the version in `package.json`.

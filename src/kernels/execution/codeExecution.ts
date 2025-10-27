@@ -32,7 +32,7 @@ const extensionIdsPerExtension = new Map<string, number>();
  * WARNING: Do not dispose `request: Kernel.IShellFuture` object.
  * Even after request.done & execute_reply is sent we could have more messages coming from iopub.
  * E.g. we could have messages from a bg thread.
- * Further details here https://github.com/microsoft/vscode-jupyter/issues/232 & https://github.com/jupyter/jupyter_client/issues/297
+ * Further details here https://github.com/deepnote/vscode-deepnote/issues/232 & https://github.com/jupyter/jupyter_client/issues/297
  */
 export class CodeExecution implements ICodeExecution, IDisposable {
     public readonly type = 'code';

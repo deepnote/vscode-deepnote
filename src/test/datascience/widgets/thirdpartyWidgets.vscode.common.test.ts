@@ -102,7 +102,7 @@ import { IS_REMOTE_NATIVE_TEST } from '../../constants';
         });
 
         test('Button Widget with custom comm message rendering a matplotlib widget', async function () {
-            // https://github.com/microsoft/vscode-jupyter/issues/16861
+            // https://github.com/deepnote/vscode-deepnote/issues/16861
             if (IS_REMOTE_NATIVE_TEST()) {
                 return this.skip();
             }
@@ -124,7 +124,7 @@ import { IS_REMOTE_NATIVE_TEST } from '../../constants';
             await assertOutputContainsHtml(cell0, comms, ['>Figure 1<', '<canvas', 'Download plot']);
         });
         test('Render AnyWidget (test js<-->kernel comms with binary data)', async function () {
-            // https://github.com/microsoft/vscode-jupyter/issues/16861
+            // https://github.com/deepnote/vscode-deepnote/issues/16861
             if (IS_REMOTE_NATIVE_TEST()) {
                 return this.skip();
             }
@@ -186,7 +186,7 @@ import { IS_REMOTE_NATIVE_TEST } from '../../constants';
             );
         });
         test('Render matplotlib, widget', async function () {
-            // https://github.com/microsoft/vscode-jupyter/issues/16861
+            // https://github.com/deepnote/vscode-deepnote/issues/16861
             if (IS_REMOTE_NATIVE_TEST()) {
                 return this.skip();
             }
@@ -203,7 +203,7 @@ import { IS_REMOTE_NATIVE_TEST } from '../../constants';
             await assertOutputContainsHtml(cell, comms, ['>Figure 1<', '<canvas', 'Download plot']);
         });
         test('Render matplotlib, widget in multiple cells', async function () {
-            // https://github.com/microsoft/vscode-jupyter/issues/16861
+            // https://github.com/deepnote/vscode-deepnote/issues/16861
             if (IS_REMOTE_NATIVE_TEST()) {
                 return this.skip();
             }

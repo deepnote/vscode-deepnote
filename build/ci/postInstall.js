@@ -109,7 +109,7 @@ function fixJupyterLabRenderers() {
 }
 
 /**
- * Ensures extension loads in safari (https://github.com/microsoft/vscode-jupyter/issues/10621)
+ * Ensures extension loads in safari (https://github.com/deepnote/vscode-deepnote/issues/10621)
  * Some of the regexes are not supported in safari and not required either.
  */
 function fixStripComments() {

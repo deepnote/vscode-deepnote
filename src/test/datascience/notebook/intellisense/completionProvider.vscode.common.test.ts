@@ -151,7 +151,7 @@ import { IKernelProvider } from '../../../../kernels/types';
                     );
                 }
                 // Make sure it is skipping items that are already provided by pylance (no dupes)
-                // Pylance isn't returning them right now: https://github.com/microsoft/vscode-jupyter/issues/8842
+                // Pylance isn't returning them right now: https://github.com/deepnote/vscode-deepnote/issues/8842
                 // assert.notOk(
                 //     items.find((item) => (typeof item === 'string' ? item.includes('Name') : item.label.includes('Name')))
                 // );
@@ -188,7 +188,7 @@ import { IKernelProvider } from '../../../../kernels/types';
                 await testCompletions('df.', '.', fileName, 'Age', 'S', 'Sex');
             });
             test.skip('Dataframe column completions', async () => {
-                // https://github.com/microsoft/vscode-jupyter/issues/14012
+                // https://github.com/deepnote/vscode-deepnote/issues/14012
                 const fileName = path.basename(window.activeNotebookEditor!.notebook.uri.fsPath);
                 await testCompletions('df.Name.', '.', fileName, 'add_prefix', 'add_s', 'add_suffix');
             });

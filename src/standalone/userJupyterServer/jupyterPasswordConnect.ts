@@ -152,7 +152,7 @@ export class JupyterPasswordConnect {
                     sessionCookieName = sessionResult.sessionCookieName;
                     sessionCookieValue = sessionResult.sessionCookieValue;
                 } else {
-                    // Special case for Kubeflow, see https://github.com/microsoft/vscode-jupyter/issues/8441
+                    // Special case for Kubeflow, see https://github.com/deepnote/vscode-deepnote/issues/8441
                     // get xsrf cookie with session cookie
                     sessionCookieName = 'authservice_session';
                     sessionCookieValue = userPassword;

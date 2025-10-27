@@ -144,7 +144,7 @@ export class ContributedLocalKernelSpecFinder
             // Exclude python kernel specs (we'll get that from the pythonKernelFinder)
             const kernelSpecs = this.nonPythonKernelFinder.kernels.filter((item) => {
                 // Remove this condition.
-                // https://github.com/microsoft/vscode-jupyter/issues/12278
+                // https://github.com/deepnote/vscode-deepnote/issues/12278
                 if (this.extensionChecker.isPythonExtensionInstalled) {
                     return item.kernelSpec.language !== PYTHON_LANGUAGE;
                 }

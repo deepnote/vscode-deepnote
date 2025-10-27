@@ -71,7 +71,7 @@ function sortOutputItemsBasedOnDisplayOrder(outputItems: NotebookCellOutputItem[
         let indexOfMimeTypeB = orderOfMimeTypes.findIndex((mime) => isMimeTypeMatch(mime, outputItemB.mime));
         // Sometimes we can have mime types with empty data, e.g. when using holoview we can have `application/vnd.holoviews_load.v0+json` with empty value.
         // & in these cases we have HTML/JS and those take precedence.
-        // https://github.com/microsoft/vscode-jupyter/issues/6109
+        // https://github.com/deepnote/vscode-deepnote/issues/6109
         if (isEmptyVendoredMimeType(outputItemA)) {
             indexOfMimeTypeA = -1;
         }

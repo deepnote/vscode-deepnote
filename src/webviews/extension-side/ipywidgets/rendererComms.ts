@@ -145,7 +145,7 @@ export class IPyWidgetRendererComms implements IExtensionSyncActivationService {
     }
     private sendWidgetVersionAndState(comms: NotebookRendererMessaging, editor: NotebookEditor) {
         // Support for loading Widget state from ipynb files.
-        // Temporarily disabled. See https://github.com/microsoft/vscode-jupyter/issues/11117
+        // Temporarily disabled. See https://github.com/deepnote/vscode-deepnote/issues/11117
         // const metadata = getNotebookMetadata(editor.notebook);
         // const widgetState = metadata?.widgets;
 

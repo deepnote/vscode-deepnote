@@ -5,7 +5,7 @@
 | `main` branch |
 | ------------- |
 
-## | ![Main Build](https://github.com/microsoft/vscode-jupyter/actions/workflows/build-test.yml/badge.svg?branch=main)
+## | ![Main Build](https://github.com/deepnote/vscode-deepnote/actions/workflows/build-test.yml/badge.svg?branch=main)
 
 [For contributing to the [Microsoft Python Language Server](https://github.com/Microsoft/python-language-server) see its own repo; for [Pylance](https://github.com/microsoft/pylance-release) see its own repo; for [debugpy](https://github.com/microsoft/debugpy) see its own repo]
 
@@ -27,7 +27,7 @@
 ### Setup
 
 ```shell
-git clone https://github.com/microsoft/vscode-jupyter
+git clone https://github.com/deepnote/vscode-deepnote
 cd vscode-jupyter
 
 ```
@@ -201,7 +201,7 @@ be matched against suite and test "names" to be run. By default all tests
 are run.
 
 For example, to run only the tests in the `DataScience - Kernels Finder` suite (from
-[`src/test/datascience/kernel-launcher/kernelFinder.vscode.test.ts`](https://github.com/microsoft/vscode-jupyter/blob/269e0790f9ef6f1571140f0650c6b5fb844f1940/src/test/datascience/kernel-launcher/kernelFinder.vscode.test.ts))
+[`src/test/datascience/kernel-launcher/kernelFinder.vscode.test.ts`](https://github.com/deepnote/vscode-deepnote/blob/269e0790f9ef6f1571140f0650c6b5fb844f1940/src/test/datascience/kernel-launcher/kernelFinder.vscode.test.ts))
 you would set the value to `Kernels Finder`.
 
 Be sure to escape any grep-sensitive characters in your suite name.
@@ -209,7 +209,7 @@ Be sure to escape any grep-sensitive characters in your suite name.
 In some rare cases in the "system" tests the `VSC_JUPYTER_CI_TEST_GREP`
 environment variable is ignored. If that happens then you will need to
 temporarily modify the `const defaultGrep =` line in
-[`src/test/index.ts`](https://github.com/microsoft/vscode-jupyter/blob/de1bfe1cbebc0f4e570dc4ae7e1ca057abb0533e/src/test/index.ts#L62).
+[`src/test/index.ts`](https://github.com/deepnote/vscode-deepnote/blob/de1bfe1cbebc0f4e570dc4ae7e1ca057abb0533e/src/test/index.ts#L62).
 
 _Launching from VSCode_
 
@@ -269,7 +269,7 @@ well!
 
 ### Folder Structure
 
-At a high level we have a bunch of folders. Each high level is described in this wiki [page](https://github.com/microsoft/vscode-jupyter/wiki/Source-Code-Organization)
+At a high level we have a bunch of folders. Each high level is described in this wiki [page](https://github.com/deepnote/vscode-deepnote/wiki/Source-Code-Organization)
 
 ### Typical workflow
 
@@ -282,16 +282,16 @@ Here's an example of a typical workflow:
 1. Start VS code Insiders root
 1. CTRL+SHIFT+B (run the task `compile`)
 1. Make code changes
-1. Write and [run](https://github.com/microsoft/vscode-jupyter/blob/29c4be79f64df1858692321b43c3079bb77bdd69/.vscode/launch.json#L252) unit tests if appropriate
-1. Test with [`Extension`](https://github.com/microsoft/vscode-jupyter/blob/29c4be79f64df1858692321b43c3079bb77bdd69/.vscode/launch.json#L6) launch task
+1. Write and [run](https://github.com/deepnote/vscode-deepnote/blob/29c4be79f64df1858692321b43c3079bb77bdd69/.vscode/launch.json#L252) unit tests if appropriate
+1. Test with [`Extension`](https://github.com/deepnote/vscode-deepnote/blob/29c4be79f64df1858692321b43c3079bb77bdd69/.vscode/launch.json#L6) launch task
 1. Repeat until works in normal extension
-1. Test with [`Extension (web)`](https://github.com/microsoft/vscode-jupyter/blob/29c4be79f64df1858692321b43c3079bb77bdd69/.vscode/launch.json#L34) launch task
-1. Run [jupyter notebook server](https://github.com/microsoft/vscode-jupyter/wiki/Connecting-to-a-remote-Jupyter-server-from-vscode.dev) to use in web testing
+1. Test with [`Extension (web)`](https://github.com/deepnote/vscode-deepnote/blob/29c4be79f64df1858692321b43c3079bb77bdd69/.vscode/launch.json#L34) launch task
+1. Run [jupyter notebook server](https://github.com/deepnote/vscode-deepnote/wiki/Connecting-to-a-remote-Jupyter-server-from-vscode.dev) to use in web testing
 1. Repeat until works in web extension
-1. Write integration tests and [run](https://github.com/microsoft/vscode-jupyter/blob/29c4be79f64df1858692321b43c3079bb77bdd69/.vscode/launch.json#L216) locally.
+1. Write integration tests and [run](https://github.com/deepnote/vscode-deepnote/blob/29c4be79f64df1858692321b43c3079bb77bdd69/.vscode/launch.json#L216) locally.
 1. Submit PR
 1. Check PR output to make sure tests don't fail.
-1. Debug [CI test failures](https://github.com/microsoft/vscode-jupyter/wiki/Tests)
+1. Debug [CI test failures](https://github.com/deepnote/vscode-deepnote/wiki/Tests)
 
 ### Helping others
 
@@ -321,7 +321,7 @@ All development is actively done in the `main` branch of the
 repository. This allows us to have a
 [development build](#development-build) which is expected to be stable at
 all times. Once we reach a release candidate, it becomes
-our [release branch](https://github.com/microsoft/vscode-jupyter/branches).
+our [release branch](https://github.com/deepnote/vscode-deepnote/branches).
 At that point only what is in the release branch will make it into the next
 release.
 

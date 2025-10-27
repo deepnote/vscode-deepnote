@@ -860,7 +860,7 @@ export namespace Integrations {
 }
 
 export namespace SelectInputSettings {
-    export const title = l10n.t('Settings');
+    export const title = l10n.t('Select Input Settings');
     export const allowMultipleValues = l10n.t('Allow to select multiple values');
     export const allowEmptyValue = l10n.t('Allow empty value');
     export const valueSourceTitle = l10n.t('Value');

@@ -47,7 +47,7 @@ export class SelectInputSettingsWebviewProvider {
         // Create a new panel
         this.currentPanel = window.createWebviewPanel(
             'deepnoteSelectInputSettings',
-            l10n.t('Select Input Settings'),
+            localize.SelectInputSettings.title,
             column || ViewColumn.One,
             {
                 enableScripts: true,
@@ -238,7 +238,7 @@ export class SelectInputSettingsWebviewProvider {
             )
         );
 
-        const title = l10n.t('Select Input Settings');
+        const title = localize.SelectInputSettings.title;
 
         return `<!DOCTYPE html>
 <html lang="en">

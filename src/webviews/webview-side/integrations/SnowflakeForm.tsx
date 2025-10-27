@@ -31,6 +31,7 @@ function getInitialValues(existingConfig: SnowflakeIntegrationConfig | null) {
     }
 
     // Type narrowing based on authMethod
+    // Note: existingConfig can have authMethod === null (legacy configs from backend)
     if (existingConfig.authMethod === null || existingConfig.authMethod === SnowflakeAuthMethods.PASSWORD) {
         return {
             username: existingConfig.username || '',
@@ -219,7 +220,7 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
             </div>
 
             {!isUnsupported &&
-                (authMethod === null || authMethod === SnowflakeAuthMethods.PASSWORD ? (
+                (authMethod === SnowflakeAuthMethods.PASSWORD ? (
                     <>
                         <div className="form-group">
                             <label htmlFor="username">

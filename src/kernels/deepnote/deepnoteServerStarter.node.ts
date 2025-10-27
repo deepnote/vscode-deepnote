@@ -590,15 +590,133 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
     }
 
     /**
+     * Check if a process is a deepnote-toolkit related process by examining its command line.
+     */
+    private async isDeepnoteRelatedProcess(pid: number): Promise<boolean> {
+        try {
+            const processService = await this.processServiceFactory.create(undefined);
+
+            if (process.platform === 'win32') {
+                // Windows: use wmic to get command line
+                const result = await processService.exec(
+                    'wmic',
+                    ['process', 'where', `ProcessId=${pid}`, 'get', 'CommandLine'],
+                    { throwOnStdErr: false }
+                );
+                if (result.stdout) {
+                    const cmdLine = result.stdout.toLowerCase();
+                    // Check if it's running from our deepnote-venvs directory or is deepnote_toolkit
+                    return cmdLine.includes('deepnote-venvs') || cmdLine.includes('deepnote_toolkit');
+                }
+            } else {
+                // Unix-like: use ps to get command line
+                const result = await processService.exec('ps', ['-p', pid.toString(), '-o', 'command='], {
+                    throwOnStdErr: false
+                });
+                if (result.stdout) {
+                    const cmdLine = result.stdout.toLowerCase();
+                    // Check if it's running from our deepnote-venvs directory or is deepnote_toolkit
+                    return cmdLine.includes('deepnote-venvs') || cmdLine.includes('deepnote_toolkit');
+                }
+            }
+        } catch (ex) {
+            logger.debug(`Failed to check if process ${pid} is deepnote-related: ${ex}`);
+        }
+        return false;
+    }
+
+    /**
+     * Find and kill orphaned deepnote-toolkit processes using specific ports.
+     * This is useful for cleaning up LSP servers and Jupyter servers that may be stuck.
+     * Only kills processes that are both orphaned AND deepnote-related.
+     */
+    private async cleanupProcessesByPort(port: number): Promise<void> {
+        try {
+            const processService = await this.processServiceFactory.create(undefined);
+
+            if (process.platform === 'win32') {
+                // Windows: use netstat to find process using port
+                const result = await processService.exec('netstat', ['-ano'], { throwOnStdErr: false });
+                if (result.stdout) {
+                    const lines = result.stdout.split('\n');
+                    for (const line of lines) {
+                        if (line.includes(`:${port}`) && line.includes('LISTENING')) {
+                            const parts = line.trim().split(/\s+/);
+                            const pid = parseInt(parts[parts.length - 1], 10);
+                            if (!isNaN(pid) && pid > 0) {
+                                // Check if it's deepnote-related first
+                                const isDeepnoteRelated = await this.isDeepnoteRelatedProcess(pid);
+                                if (!isDeepnoteRelated) {
+                                    logger.debug(`Process ${pid} on port ${port} is not deepnote-related, skipping`);
+                                    continue;
+                                }
+
+                                const isOrphaned = await this.isProcessOrphaned(pid);
+                                if (isOrphaned) {
+                                    logger.info(
+                                        `Found orphaned deepnote-related process ${pid} using port ${port}, killing...`
+                                    );
+                                    await processService.exec('taskkill', ['/F', '/PID', pid.toString()], {
+                                        throwOnStdErr: false
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Unix-like: use lsof to find process using port
+                const result = await processService.exec('lsof', ['-i', `:${port}`, '-t'], { throwOnStdErr: false });
+                if (result.stdout) {
+                    const pids = result.stdout
+                        .trim()
+                        .split('\n')
+                        .map((p) => parseInt(p.trim(), 10))
+                        .filter((p) => !isNaN(p) && p > 0);
+
+                    for (const pid of pids) {
+                        // Check if it's deepnote-related first
+                        const isDeepnoteRelated = await this.isDeepnoteRelatedProcess(pid);
+                        if (!isDeepnoteRelated) {
+                            logger.debug(`Process ${pid} on port ${port} is not deepnote-related, skipping`);
+                            continue;
+                        }
+
+                        const isOrphaned = await this.isProcessOrphaned(pid);
+                        if (isOrphaned) {
+                            logger.info(
+                                `Found orphaned deepnote-related process ${pid} using port ${port}, killing...`
+                            );
+                            await processService.exec('kill', ['-9', pid.toString()], { throwOnStdErr: false });
+                        } else {
+                            logger.info(
+                                `Deepnote-related process ${pid} using port ${port} has active parent, skipping`
+                            );
+                        }
+                    }
+                }
+            }
+        } catch (ex) {
+            logger.debug(`Failed to cleanup processes on port ${port}: ${ex}`);
+        }
+    }
+
+    /**
      * Cleans up any orphaned deepnote-toolkit processes from previous VS Code sessions.
      * This prevents port conflicts when starting new servers.
      */
     private async cleanupOrphanedProcesses(): Promise<void> {
         try {
             logger.info('Checking for orphaned deepnote-toolkit processes...');
+
+            // First, clean up any orphaned processes using known ports
+            // This catches LSP servers (2087) and Jupyter servers (8888+) that may be stuck
+            await this.cleanupProcessesByPort(2087); // Python LSP server
+            await this.cleanupProcessesByPort(8888); // Default Jupyter port
+
             const processService = await this.processServiceFactory.create(undefined);
 
-            // Find all deepnote-toolkit server processes
+            // Find all deepnote-toolkit server processes and related child processes
             let command: string;
             let args: string[];
 
@@ -619,8 +737,17 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                 const candidatePids: number[] = [];
 
                 for (const line of lines) {
-                    // Look for processes running deepnote_toolkit server
-                    if (line.includes('deepnote_toolkit') && line.includes('server')) {
+                    // Look for processes running deepnote_toolkit server or related child processes
+                    // This includes:
+                    // - deepnote_toolkit server (main server process)
+                    // - pylsp (Python LSP server child process)
+                    // - jupyter (Jupyter server child process)
+                    const isDeepnoteRelated =
+                        (line.includes('deepnote_toolkit') && line.includes('server')) ||
+                        (line.includes('pylsp') && line.includes('2087')) || // LSP server on port 2087
+                        (line.includes('jupyter') && line.includes('deepnote'));
+
+                    if (isDeepnoteRelated) {
                         // Extract PID based on platform
                         let pid: number | undefined;
 
@@ -646,7 +773,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
                 if (candidatePids.length > 0) {
                     logger.info(
-                        `Found ${candidatePids.length} deepnote-toolkit server process(es): ${candidatePids.join(', ')}`
+                        `Found ${candidatePids.length} deepnote-related process(es): ${candidatePids.join(', ')}`
                     );
 
                     const pidsToKill: number[] = [];
@@ -654,11 +781,12 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
                     // Check each process to determine if it should be killed
                     for (const pid of candidatePids) {
-                        // Check if there's a lock file for this PID
+                        // Check if there's a lock file for this PID (only main server processes have lock files)
                         const lockData = await this.readLockFile(pid);
 
                         if (lockData) {
-                            // Lock file exists - check if it belongs to a different session
+                            // Lock file exists - this is a main server process
+                            // Check if it belongs to a different session
                             if (lockData.sessionId !== this.sessionId) {
                                 // Different session - check if the process is actually orphaned
                                 const isOrphaned = await this.isProcessOrphaned(pid);
@@ -678,7 +806,8 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                                 pidsToSkip.push({ pid, reason: 'belongs to current session' });
                             }
                         } else {
-                            // No lock file - check if orphaned before killing
+                            // No lock file - could be a child process (LSP, Jupyter) or orphaned main process
+                            // Check if orphaned before killing
                             const isOrphaned = await this.isProcessOrphaned(pid);
                             if (isOrphaned) {
                                 logger.info(`PID ${pid} has no lock file and is orphaned - will kill`);
@@ -700,7 +829,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                     if (pidsToKill.length > 0) {
                         logger.info(`Killing ${pidsToKill.length} orphaned process(es): ${pidsToKill.join(', ')}`);
                         this.outputChannel.appendLine(
-                            `Cleaning up ${pidsToKill.length} orphaned deepnote-toolkit process(es)...`
+                            `Cleaning up ${pidsToKill.length} orphaned deepnote-related process(es)...`
                         );
 
                         for (const pid of pidsToKill) {
@@ -714,7 +843,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                                 }
                                 logger.info(`Killed orphaned process ${pid}`);
 
-                                // Clean up the lock file after killing
+                                // Clean up the lock file after killing (if it exists)
                                 await this.deleteLockFile(pid);
                             } catch (ex) {
                                 logger.warn(`Failed to kill process ${pid}: ${ex}`);
@@ -723,10 +852,10 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
                         this.outputChannel.appendLine('✓ Cleanup complete');
                     } else {
-                        logger.info('No orphaned deepnote-toolkit processes found (all processes are active)');
+                        logger.info('No orphaned deepnote-related processes found (all processes are active)');
                     }
                 } else {
-                    logger.info('No deepnote-toolkit server processes found');
+                    logger.info('No deepnote-related processes found');
                 }
             }
         } catch (ex) {

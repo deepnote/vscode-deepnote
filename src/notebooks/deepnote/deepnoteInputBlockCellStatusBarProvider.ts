@@ -1001,6 +1001,42 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
     }
 
     /**
+     * Strictly validate a YYYY-MM-DD date string.
+     * Returns the normalized string if valid, or null if invalid.
+     * Rejects out-of-range dates like "2023-02-30".
+     */
+    private validateStrictDate(value: string): string | null {
+        // 1) Match YYYY-MM-DD format
+        const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+        if (!match) {
+            return null;
+        }
+
+        // 2) Extract year, month, day as integers
+        const year = parseInt(match[1], 10);
+        const month = parseInt(match[2], 10);
+        const day = parseInt(match[3], 10);
+
+        // 3) Check month is 1..12
+        if (month < 1 || month > 12) {
+            return null;
+        }
+
+        // 4) Compute correct days-in-month (accounting for leap years)
+        const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+        const daysInMonth = [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        const maxDay = daysInMonth[month - 1];
+
+        // 5) Ensure day is within range
+        if (day < 1 || day > maxDay) {
+            return null;
+        }
+
+        // Return the normalized string
+        return value;
+    }
+
+    /**
      * Handler for date input: choose date
      */
     private async dateInputChooseDate(cell: NotebookCell): Promise<void> {
@@ -1015,11 +1051,7 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
                 if (!value) {
                     return l10n.t('Date cannot be empty');
                 }
-                if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-                    return l10n.t('Please enter date in YYYY-MM-DD format');
-                }
-                const date = new Date(value);
-                if (isNaN(date.getTime())) {
+                if (this.validateStrictDate(value) === null) {
                     return l10n.t('Invalid date');
                 }
                 return undefined;
@@ -1055,11 +1087,7 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
                 if (!value) {
                     return l10n.t('Date cannot be empty');
                 }
-                if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-                    return l10n.t('Please enter date in YYYY-MM-DD format');
-                }
-                const date = new Date(value);
-                if (isNaN(date.getTime())) {
+                if (this.validateStrictDate(value) === null) {
                     return l10n.t('Invalid date');
                 }
                 return undefined;
@@ -1100,11 +1128,7 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
                 if (!value) {
                     return l10n.t('Date cannot be empty');
                 }
-                if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-                    return l10n.t('Please enter date in YYYY-MM-DD format');
-                }
-                const date = new Date(value);
-                if (isNaN(date.getTime())) {
+                if (this.validateStrictDate(value) === null) {
                     return l10n.t('Invalid date');
                 }
                 return undefined;

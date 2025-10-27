@@ -824,11 +824,43 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                 // Fallback to ss if lsof didn't find anything or failed
                 if (uniquePids.size === 0) {
                     try {
+                        // Try ss with filter first
                         const ssResult = await processService.exec('ss', ['-tlnp', `sport = :${port}`], {
                             throwOnStdErr: false
                         });
-                        if (ssResult.stdout) {
-                            // Parse ss output: look for pid=<number>
+
+                        // Check if filtered call succeeded (some ss builds reject the filter)
+                        const filterFailed =
+                            !ssResult.stdout ||
+                            ssResult.stdout.trim().length === 0 ||
+                            (ssResult.stderr && ssResult.stderr.includes('filter'));
+
+                        if (filterFailed) {
+                            logger.debug(`ss filter not supported, trying without filter...`);
+                            // Run ss without filter and parse full output
+                            const ssUnfilteredResult = await processService.exec('ss', ['-tlnp'], {
+                                throwOnStdErr: false
+                            });
+
+                            if (ssUnfilteredResult.stdout) {
+                                const lines = ssUnfilteredResult.stdout.split('\n');
+                                for (const line of lines) {
+                                    // Match lines containing the port (e.g., ":8888" or ":8888 ")
+                                    const portPattern = new RegExp(`:${port}\\b`);
+                                    if (portPattern.test(line)) {
+                                        // Extract pid=<number> from matching lines
+                                        const pidMatches = line.matchAll(/pid=(\d+)/g);
+                                        for (const match of pidMatches) {
+                                            const pid = parseInt(match[1], 10);
+                                            if (!isNaN(pid) && pid > 0) {
+                                                uniquePids.add(pid);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } else if (ssResult.stdout) {
+                            // Filtered call succeeded, parse its output
                             const pidMatches = ssResult.stdout.matchAll(/pid=(\d+)/g);
                             for (const match of pidMatches) {
                                 const pid = parseInt(match[1], 10);

@@ -146,12 +146,21 @@ export class SelectInputSettingsWebviewProvider {
         switch (message.type) {
             case 'save':
                 if (message.settings && this.currentCell) {
-                    await this.saveSettings(message.settings);
-                    if (this.resolvePromise) {
-                        this.resolvePromise(message.settings);
-                        this.resolvePromise = undefined;
+                    try {
+                        await this.saveSettings(message.settings);
+                        if (this.resolvePromise) {
+                            this.resolvePromise(message.settings);
+                            this.resolvePromise = undefined;
+                        }
+                        this.currentPanel?.dispose();
+                    } catch (error) {
+                        // Error is already shown to user in saveSettings, just reject the promise
+                        if (this.resolvePromise) {
+                            this.resolvePromise(null);
+                            this.resolvePromise = undefined;
+                        }
+                        // Keep panel open so user can retry or cancel
                     }
-                    this.currentPanel?.dispose();
                 }
                 break;
 
@@ -182,12 +191,20 @@ export class SelectInputSettingsWebviewProvider {
         // Update the options field based on the select type
         if (settings.selectType === 'from-options') {
             metadata.deepnote_variable_options = settings.options;
+        } else {
+            // Clear stale options when not using 'from-options' mode
+            delete metadata.deepnote_variable_options;
         }
 
         // Update cell metadata to preserve outputs and attachments
         edit.set(this.currentCell.notebook.uri, [NotebookEdit.updateCellMetadata(this.currentCell.index, metadata)]);
 
-        await workspace.applyEdit(edit);
+        const success = await workspace.applyEdit(edit);
+        if (!success) {
+            const errorMessage = l10n.t('Failed to save select input settings');
+            void window.showErrorMessage(errorMessage);
+            throw new Error(errorMessage);
+        }
     }
 
     private getWebviewContent(): string {

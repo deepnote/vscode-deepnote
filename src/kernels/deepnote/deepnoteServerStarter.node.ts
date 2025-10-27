@@ -742,12 +742,15 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
                     // Parse and deduplicate PIDs
                     for (const line of lines) {
-                        if (line.includes(`:${port}`) && line.includes('LISTENING')) {
-                            const parts = line.trim().split(/\s+/);
+                        if (!line.includes('LISTENING')) continue;
+                        const parts = line.trim().split(/\s+/);
+                        // Windows netstat columns: Proto LocalAddress ForeignAddress State PID
+                        const local = parts[1] || '';
+                        const m = local.match(/:(\d+)]?$/); // handles IPv4 and [::]:port
+                        const localPort = m ? parseInt(m[1], 10) : NaN;
+                        if (localPort === port) {
                             const pid = parseInt(parts[parts.length - 1], 10);
-                            if (!isNaN(pid) && pid > 0) {
-                                uniquePids.add(pid);
-                            }
+                            if (!isNaN(pid) && pid > 0) uniquePids.add(pid);
                         }
                     }
 

@@ -969,18 +969,22 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                         // - deepnote_toolkit server (main server process)
                         // - pylsp (Python LSP server child process)
                         // - jupyter (Jupyter server child process)
-                        const isDeepnoteRelated =
+                        const matchesPattern =
                             (line.includes('deepnote_toolkit') && line.includes('server')) ||
                             (line.includes('pylsp') && line.includes('2087')) || // LSP server on port 2087
                             (line.includes('jupyter') && line.includes('deepnote'));
 
-                        if (isDeepnoteRelated) {
+                        if (matchesPattern) {
                             // Unix format: user PID ...
                             const parts = line.trim().split(/\s+/);
                             if (parts.length > 1) {
                                 const pid = parseInt(parts[1], 10);
                                 if (!isNaN(pid)) {
-                                    candidatePids.push(pid);
+                                    // Validate with isDeepnoteRelatedProcess before adding to candidates
+                                    const isDeepnoteRelated = await this.isDeepnoteRelatedProcess(pid);
+                                    if (isDeepnoteRelated) {
+                                        candidatePids.push(pid);
+                                    }
                                 }
                             }
                         }
@@ -996,6 +1000,14 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
                 // Check each process to determine if it should be killed
                 for (const pid of candidatePids) {
+                    // Re-verify it's deepnote-related before any kill/lock logic
+                    const isDeepnoteRelated = await this.isDeepnoteRelatedProcess(pid);
+                    if (!isDeepnoteRelated) {
+                        logger.debug(`PID ${pid} is no longer deepnote-related, skipping`);
+                        pidsToSkip.push({ pid, reason: 'not deepnote-related' });
+                        continue;
+                    }
+
                     // Check if there's a lock file for this PID (only main server processes have lock files)
                     const lockData = await this.readLockFile(pid);
 

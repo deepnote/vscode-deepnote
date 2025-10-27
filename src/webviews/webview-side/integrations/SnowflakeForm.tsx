@@ -114,21 +114,18 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
                 <label htmlFor="authMethod">
                     {getLocString('integrationsSnowflakeAuthMethodLabel', 'Authentication')}
                 </label>
-                <div className="form-subgroup">
-                    <label>{getLocString('integrationsSnowflakeAuthMethodSubLabel', 'Method')}</label>
-                    <select
-                        id="authMethod"
-                        value={authMethod}
-                        onChange={(e) => setAuthMethod(e.target.value as SnowflakeAuthMethod)}
-                    >
-                        <option value="username_password">
-                            {getLocString('integrationsSnowflakeAuthMethodUsernamePassword', 'Username & password')}
-                        </option>
-                        <option value="key_pair">
-                            {getLocString('integrationsSnowflakeAuthMethodKeyPair', 'Key-pair (service account)')}
-                        </option>
-                    </select>
-                </div>
+                <select
+                    id="authMethod"
+                    value={authMethod}
+                    onChange={(e) => setAuthMethod(e.target.value as SnowflakeAuthMethod)}
+                >
+                    <option value="username_password">
+                        {getLocString('integrationsSnowflakeAuthMethodUsernamePassword', 'Username & password')}
+                    </option>
+                    <option value="key_pair">
+                        {getLocString('integrationsSnowflakeAuthMethodKeyPair', 'Key-pair (service account)')}
+                    </option>
+                </select>
             </div>
 
             {authMethod === 'username_password' ? (

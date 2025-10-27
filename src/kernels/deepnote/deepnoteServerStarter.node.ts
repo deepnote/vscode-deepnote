@@ -839,12 +839,21 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
      */
     private async cleanupOrphanedProcesses(): Promise<void> {
         try {
+            const startTime = Date.now();
             logger.info('Checking for orphaned deepnote-toolkit processes...');
 
             // First, clean up any orphaned processes using known ports
-            // This catches LSP servers (2087) and Jupyter servers (8888+) that may be stuck
+            // This catches LSP servers (2087) and Jupyter servers (8888-8895) that may be stuck
             await this.cleanupProcessesByPort(2087); // Python LSP server
-            await this.cleanupProcessesByPort(8888); // Default Jupyter port
+
+            // Scan common Jupyter port range (8888-8895)
+            // Jupyter typically uses 8888 but will increment if that port is busy
+            for (let port = 8888; port <= 8895; port++) {
+                await this.cleanupProcessesByPort(port);
+            }
+
+            const portCleanupTime = Date.now() - startTime;
+            logger.debug(`Port-based cleanup completed in ${portCleanupTime}ms`);
 
             const processService = await this.processServiceFactory.create(undefined);
 

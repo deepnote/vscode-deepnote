@@ -858,146 +858,180 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             const processService = await this.processServiceFactory.create(undefined);
 
             // Find all deepnote-toolkit server processes and related child processes
-            let command: string;
-            let args: string[];
+            const candidatePids: number[] = [];
 
             if (process.platform === 'win32') {
-                // Windows: use tasklist and findstr
-                command = 'tasklist';
-                args = ['/FI', 'IMAGENAME eq python.exe', '/FO', 'CSV', '/NH'];
-            } else {
-                // Unix-like: use ps and grep
-                command = 'ps';
-                args = ['aux'];
-            }
+                // Windows: tasklist CSV doesn't include command lines, so we need a two-step approach:
+                // 1. Get all python.exe and pythonw.exe PIDs
+                // 2. Check each PID's command line to see if it's deepnote-related
 
-            const result = await processService.exec(command, args, { throwOnStdErr: false });
+                // Step 1: Get all Python process PIDs
+                const pythonPids: number[] = [];
 
-            if (result.stdout) {
-                const lines = result.stdout.split('\n');
-                const candidatePids: number[] = [];
-
-                for (const line of lines) {
-                    // Look for processes running deepnote_toolkit server or related child processes
-                    // This includes:
-                    // - deepnote_toolkit server (main server process)
-                    // - pylsp (Python LSP server child process)
-                    // - jupyter (Jupyter server child process)
-                    const isDeepnoteRelated =
-                        (line.includes('deepnote_toolkit') && line.includes('server')) ||
-                        (line.includes('pylsp') && line.includes('2087')) || // LSP server on port 2087
-                        (line.includes('jupyter') && line.includes('deepnote'));
-
-                    if (isDeepnoteRelated) {
-                        // Extract PID based on platform
-                        let pid: number | undefined;
-
-                        if (process.platform === 'win32') {
-                            // Windows CSV format: "python.exe","12345",...
-                            const match = line.match(/"python\.exe","(\d+)"/);
-                            if (match) {
-                                pid = parseInt(match[1], 10);
+                // Check python.exe
+                const pythonResult = await processService.exec(
+                    'tasklist',
+                    ['/FI', 'IMAGENAME eq python.exe', '/FO', 'CSV', '/NH'],
+                    { throwOnStdErr: false }
+                );
+                if (pythonResult.stdout) {
+                    const lines = pythonResult.stdout.split('\n');
+                    for (const line of lines) {
+                        // Windows CSV format: "python.exe","12345",...
+                        const match = line.match(/"python\.exe","(\d+)"/);
+                        if (match) {
+                            const pid = parseInt(match[1], 10);
+                            if (!isNaN(pid)) {
+                                pythonPids.push(pid);
                             }
-                        } else {
+                        }
+                    }
+                }
+
+                // Check pythonw.exe
+                const pythonwResult = await processService.exec(
+                    'tasklist',
+                    ['/FI', 'IMAGENAME eq pythonw.exe', '/FO', 'CSV', '/NH'],
+                    { throwOnStdErr: false }
+                );
+                if (pythonwResult.stdout) {
+                    const lines = pythonwResult.stdout.split('\n');
+                    for (const line of lines) {
+                        // Windows CSV format: "pythonw.exe","12345",...
+                        const match = line.match(/"pythonw\.exe","(\d+)"/);
+                        if (match) {
+                            const pid = parseInt(match[1], 10);
+                            if (!isNaN(pid)) {
+                                pythonPids.push(pid);
+                            }
+                        }
+                    }
+                }
+
+                logger.debug(`Found ${pythonPids.length} Python process(es) on Windows`);
+
+                // Step 2: Check each Python PID to see if it's deepnote-related
+                for (const pid of pythonPids) {
+                    const isDeepnoteRelated = await this.isDeepnoteRelatedProcess(pid);
+                    if (isDeepnoteRelated) {
+                        candidatePids.push(pid);
+                    }
+                }
+            } else {
+                // Unix-like: use ps with full command line
+                const result = await processService.exec('ps', ['aux'], { throwOnStdErr: false });
+
+                if (result.stdout) {
+                    const lines = result.stdout.split('\n');
+
+                    for (const line of lines) {
+                        // Look for processes running deepnote_toolkit server or related child processes
+                        // This includes:
+                        // - deepnote_toolkit server (main server process)
+                        // - pylsp (Python LSP server child process)
+                        // - jupyter (Jupyter server child process)
+                        const isDeepnoteRelated =
+                            (line.includes('deepnote_toolkit') && line.includes('server')) ||
+                            (line.includes('pylsp') && line.includes('2087')) || // LSP server on port 2087
+                            (line.includes('jupyter') && line.includes('deepnote'));
+
+                        if (isDeepnoteRelated) {
                             // Unix format: user PID ...
                             const parts = line.trim().split(/\s+/);
                             if (parts.length > 1) {
-                                pid = parseInt(parts[1], 10);
+                                const pid = parseInt(parts[1], 10);
+                                if (!isNaN(pid)) {
+                                    candidatePids.push(pid);
+                                }
                             }
-                        }
-
-                        if (pid && !isNaN(pid)) {
-                            candidatePids.push(pid);
                         }
                     }
                 }
+            }
 
-                if (candidatePids.length > 0) {
-                    logger.info(
-                        `Found ${candidatePids.length} deepnote-related process(es): ${candidatePids.join(', ')}`
-                    );
+            if (candidatePids.length > 0) {
+                logger.info(`Found ${candidatePids.length} deepnote-related process(es): ${candidatePids.join(', ')}`);
 
-                    const pidsToKill: number[] = [];
-                    const pidsToSkip: Array<{ pid: number; reason: string }> = [];
+                const pidsToKill: number[] = [];
+                const pidsToSkip: Array<{ pid: number; reason: string }> = [];
 
-                    // Check each process to determine if it should be killed
-                    for (const pid of candidatePids) {
-                        // Check if there's a lock file for this PID (only main server processes have lock files)
-                        const lockData = await this.readLockFile(pid);
+                // Check each process to determine if it should be killed
+                for (const pid of candidatePids) {
+                    // Check if there's a lock file for this PID (only main server processes have lock files)
+                    const lockData = await this.readLockFile(pid);
 
-                        if (lockData) {
-                            // Lock file exists - this is a main server process
-                            // Check if it belongs to a different session
-                            if (lockData.sessionId !== this.sessionId) {
-                                // Different session - check if the process is actually orphaned
-                                const isOrphaned = await this.isProcessOrphaned(pid);
-                                if (isOrphaned) {
-                                    logger.info(
-                                        `PID ${pid} belongs to session ${lockData.sessionId} and is orphaned - will kill`
-                                    );
-                                    pidsToKill.push(pid);
-                                } else {
-                                    pidsToSkip.push({
-                                        pid,
-                                        reason: `belongs to active session ${lockData.sessionId.substring(0, 8)}...`
-                                    });
-                                }
-                            } else {
-                                // Same session - this shouldn't happen during startup, but skip it
-                                pidsToSkip.push({ pid, reason: 'belongs to current session' });
-                            }
-                        } else {
-                            // No lock file - could be a child process (LSP, Jupyter) or orphaned main process
-                            // Check if orphaned before killing
+                    if (lockData) {
+                        // Lock file exists - this is a main server process
+                        // Check if it belongs to a different session
+                        if (lockData.sessionId !== this.sessionId) {
+                            // Different session - check if the process is actually orphaned
                             const isOrphaned = await this.isProcessOrphaned(pid);
                             if (isOrphaned) {
-                                logger.info(`PID ${pid} has no lock file and is orphaned - will kill`);
+                                logger.info(
+                                    `PID ${pid} belongs to session ${lockData.sessionId} and is orphaned - will kill`
+                                );
                                 pidsToKill.push(pid);
                             } else {
-                                pidsToSkip.push({ pid, reason: 'no lock file but has active parent process' });
+                                pidsToSkip.push({
+                                    pid,
+                                    reason: `belongs to active session ${lockData.sessionId.substring(0, 8)}...`
+                                });
                             }
+                        } else {
+                            // Same session - this shouldn't happen during startup, but skip it
+                            pidsToSkip.push({ pid, reason: 'belongs to current session' });
                         }
-                    }
-
-                    // Log skipped processes
-                    if (pidsToSkip.length > 0) {
-                        for (const { pid, reason } of pidsToSkip) {
-                            logger.info(`Skipping PID ${pid}: ${reason}`);
-                        }
-                    }
-
-                    // Kill orphaned processes
-                    if (pidsToKill.length > 0) {
-                        logger.info(`Killing ${pidsToKill.length} orphaned process(es): ${pidsToKill.join(', ')}`);
-                        this.outputChannel.appendLine(
-                            `Cleaning up ${pidsToKill.length} orphaned deepnote-related process(es)...`
-                        );
-
-                        for (const pid of pidsToKill) {
-                            try {
-                                if (process.platform === 'win32') {
-                                    await processService.exec('taskkill', ['/F', '/T', '/PID', pid.toString()], {
-                                        throwOnStdErr: false
-                                    });
-                                } else {
-                                    await processService.exec('kill', ['-9', pid.toString()], { throwOnStdErr: false });
-                                }
-                                logger.info(`Killed orphaned process ${pid}`);
-
-                                // Clean up the lock file after killing (if it exists)
-                                await this.deleteLockFile(pid);
-                            } catch (ex) {
-                                logger.warn(`Failed to kill process ${pid}: ${ex}`);
-                            }
-                        }
-
-                        this.outputChannel.appendLine('✓ Cleanup complete');
                     } else {
-                        logger.info('No orphaned deepnote-related processes found (all processes are active)');
+                        // No lock file - could be a child process (LSP, Jupyter) or orphaned main process
+                        // Check if orphaned before killing
+                        const isOrphaned = await this.isProcessOrphaned(pid);
+                        if (isOrphaned) {
+                            logger.info(`PID ${pid} has no lock file and is orphaned - will kill`);
+                            pidsToKill.push(pid);
+                        } else {
+                            pidsToSkip.push({ pid, reason: 'no lock file but has active parent process' });
+                        }
                     }
-                } else {
-                    logger.info('No deepnote-related processes found');
                 }
+
+                // Log skipped processes
+                if (pidsToSkip.length > 0) {
+                    for (const { pid, reason } of pidsToSkip) {
+                        logger.info(`Skipping PID ${pid}: ${reason}`);
+                    }
+                }
+
+                // Kill orphaned processes
+                if (pidsToKill.length > 0) {
+                    logger.info(`Killing ${pidsToKill.length} orphaned process(es): ${pidsToKill.join(', ')}`);
+                    this.outputChannel.appendLine(
+                        `Cleaning up ${pidsToKill.length} orphaned deepnote-related process(es)...`
+                    );
+
+                    for (const pid of pidsToKill) {
+                        try {
+                            if (process.platform === 'win32') {
+                                await processService.exec('taskkill', ['/F', '/T', '/PID', pid.toString()], {
+                                    throwOnStdErr: false
+                                });
+                            } else {
+                                await processService.exec('kill', ['-9', pid.toString()], { throwOnStdErr: false });
+                            }
+                            logger.info(`Killed orphaned process ${pid}`);
+
+                            // Clean up the lock file after killing (if it exists)
+                            await this.deleteLockFile(pid);
+                        } catch (ex) {
+                            logger.warn(`Failed to kill process ${pid}: ${ex}`);
+                        }
+                    }
+
+                    this.outputChannel.appendLine('✓ Cleanup complete');
+                } else {
+                    logger.info('No orphaned deepnote-related processes found (all processes are active)');
+                }
+            } else {
+                logger.info('No deepnote-related processes found');
             }
         } catch (ex) {
             // Don't fail startup if cleanup fails

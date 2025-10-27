@@ -7,7 +7,8 @@ import {
     NotebookEdit,
     NotebookRange,
     NotebookCell,
-    NotebookEditorRevealType
+    NotebookEditorRevealType,
+    l10n
 } from 'vscode';
 import z from 'zod';
 
@@ -106,7 +107,7 @@ export function getNextDeepnoteVariableName(cells: NotebookCell[], prefix: 'df' 
 
     const maxDeepnoteVariableNamesSuffixNumber =
         deepnoteVariableNames.reduce<number | null>((acc, name) => {
-            if (!name.startsWith(prefix)) {
+            if (!name.startsWith(`${prefix}_`)) {
                 return acc;
             }
 
@@ -178,7 +179,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
     public async addSqlBlock(): Promise<void> {
         const editor = window.activeNotebookEditor;
         if (!editor) {
-            throw new Error('No active notebook editor found');
+            throw new Error(l10n.t('No active notebook editor found'));
         }
         const document = editor.notebook;
         const selection = editor.selection;
@@ -209,7 +210,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             edit.set(document.uri, [nbEdit]);
         });
         if (result !== true) {
-            throw new Error('Failed to insert SQL block');
+            throw new Error(l10n.t('Failed to insert SQL block'));
         }
 
         const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
@@ -222,7 +223,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
     public async addBigNumberChartBlock(): Promise<void> {
         const editor = window.activeNotebookEditor;
         if (!editor) {
-            throw new Error('No active notebook editor found');
+            throw new Error(l10n.t('No active notebook editor found'));
         }
         const document = editor.notebook;
         const selection = editor.selection;
@@ -250,7 +251,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             edit.set(document.uri, [nbEdit]);
         });
         if (result !== true) {
-            throw new Error('Failed to insert big number chart block');
+            throw new Error(l10n.t('Failed to insert big number chart block'));
         }
 
         const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
@@ -263,7 +264,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
     public async addInputBlock(blockType: InputBlockType): Promise<void> {
         const editor = window.activeNotebookEditor;
         if (!editor) {
-            throw new Error('No active notebook editor found');
+            throw new Error(l10n.t('No active notebook editor found'));
         }
         const document = editor.notebook;
         const selection = editor.selection;
@@ -294,7 +295,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             edit.set(document.uri, [nbEdit]);
         });
         if (result !== true) {
-            throw new Error('Failed to insert input block');
+            throw new Error(l10n.t('Failed to insert input block'));
         }
 
         const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);

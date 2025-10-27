@@ -234,6 +234,7 @@ export type LocalizedMessages = {
     integrationsSnowflakeRolePlaceholder: string;
     integrationsSnowflakeWarehouseLabel: string;
     integrationsSnowflakeWarehousePlaceholder: string;
+    integrationsSnowflakeUnnamedIntegration: string;
     // Common form strings
     integrationsRequiredField: string;
     integrationsOptionalField: string;

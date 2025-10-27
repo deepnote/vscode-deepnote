@@ -110,14 +110,17 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        const unnamedIntegration = format('Unnamed Snowflake Integration ({0})', integrationId);
+        const unnamedIntegration = getLocString(
+            'integrationsSnowflakeUnnamedIntegration',
+            'Unnamed Snowflake Integration ({0})'
+        );
 
         let config: SnowflakeIntegrationConfig;
 
-        if (authMethod === null || authMethod === SnowflakeAuthMethods.PASSWORD) {
+        if (authMethod === SnowflakeAuthMethods.PASSWORD) {
             config = {
                 id: integrationId,
-                name: (name || unnamedIntegration).trim(),
+                name: (name || format(unnamedIntegration, integrationId)).trim(),
                 type: 'snowflake',
                 account: account.trim(),
                 authMethod: authMethod,
@@ -128,9 +131,14 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
                 role: role.trim() || undefined
             };
         } else if (authMethod === SnowflakeAuthMethods.SERVICE_ACCOUNT_KEY_PAIR) {
+            // Guard against empty private key
+            if (!privateKey.trim()) {
+                return;
+            }
+
             config = {
                 id: integrationId,
-                name: (name || unnamedIntegration).trim(),
+                name: (name || format(unnamedIntegration, integrationId)).trim(),
                 type: 'snowflake',
                 account: account.trim(),
                 authMethod: authMethod,
@@ -186,6 +194,7 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
                     placeholder={getLocString('integrationsSnowflakeAccountPlaceholder', 'abcd.us-east-1')}
                     autoComplete="off"
                     required
+                    pattern=".*\S.*"
                     disabled={isUnsupported}
                 />
             </div>
@@ -225,6 +234,7 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
                                 placeholder={getLocString('integrationsSnowflakeUsernamePlaceholder', '')}
                                 autoComplete="username"
                                 required
+                                pattern=".*\S.*"
                             />
                         </div>
 
@@ -241,6 +251,7 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
                                 placeholder={getLocString('integrationsSnowflakePasswordPlaceholder', '•••••')}
                                 autoComplete="current-password"
                                 required
+                                pattern=".*\S.*"
                             />
                         </div>
                     </>
@@ -268,6 +279,7 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
                                 placeholder={getLocString('integrationsSnowflakeServiceAccountUsernamePlaceholder', '')}
                                 autoComplete="username"
                                 required
+                                pattern=".*\S.*"
                             />
                         </div>
 

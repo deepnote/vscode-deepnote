@@ -942,12 +942,12 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
                 .filter((ext) => ext.length > 0);
 
             if (extensions.length > 0) {
-                filters['Allowed Files'] = extensions;
+                filters[l10n.t('Allowed Files')] = extensions;
             }
         }
 
         // Add "All Files" option
-        filters['All Files'] = ['*'];
+        filters[l10n.t('All Files')] = ['*'];
 
         const uris = await window.showOpenDialog({
             canSelectFiles: true,

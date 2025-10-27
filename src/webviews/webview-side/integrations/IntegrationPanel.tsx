@@ -3,7 +3,7 @@ import { IVsCodeApi } from '../react-common/postOffice';
 import { getLocString, storeLocStrings } from '../react-common/locReactSide';
 import { IntegrationList } from './IntegrationList';
 import { ConfigurationForm } from './ConfigurationForm';
-import { IntegrationWithStatus, WebviewMessage, IntegrationConfig } from './types';
+import { IntegrationWithStatus, WebviewMessage, IntegrationConfig, IntegrationType } from './types';
 
 export interface IIntegrationPanelProps {
     baseTheme: string;
@@ -14,6 +14,10 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
     const [integrations, setIntegrations] = React.useState<IntegrationWithStatus[]>([]);
     const [selectedIntegrationId, setSelectedIntegrationId] = React.useState<string | null>(null);
     const [selectedConfig, setSelectedConfig] = React.useState<IntegrationConfig | null>(null);
+    const [selectedIntegrationName, setSelectedIntegrationName] = React.useState<string | undefined>(undefined);
+    const [selectedIntegrationType, setSelectedIntegrationType] = React.useState<IntegrationType | undefined>(
+        undefined
+    );
     const [message, setMessage] = React.useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [confirmDelete, setConfirmDelete] = React.useState<string | null>(null);
 
@@ -51,6 +55,8 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
                 case 'showForm':
                     setSelectedIntegrationId(msg.integrationId);
                     setSelectedConfig(msg.config);
+                    setSelectedIntegrationName(msg.integrationName);
+                    setSelectedIntegrationType(msg.integrationType);
                     break;
 
                 case 'success':
@@ -144,6 +150,8 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
                 <ConfigurationForm
                     integrationId={selectedIntegrationId}
                     existingConfig={selectedConfig}
+                    integrationName={selectedIntegrationName}
+                    integrationType={selectedIntegrationType}
                     onSave={handleSave}
                     onCancel={handleCancel}
                 />

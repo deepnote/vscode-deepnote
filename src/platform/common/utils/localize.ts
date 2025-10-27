@@ -831,6 +831,10 @@ export namespace Integrations {
     export const requiredField = l10n.t('*');
     export const optionalField = l10n.t('(optional)');
 
+    // Integration type labels
+    export const postgresTypeLabel = l10n.t('PostgreSQL');
+    export const bigQueryTypeLabel = l10n.t('BigQuery');
+
     // PostgreSQL form strings
     export const postgresNameLabel = l10n.t('Name (optional)');
     export const postgresNamePlaceholder = l10n.t('My PostgreSQL Database');

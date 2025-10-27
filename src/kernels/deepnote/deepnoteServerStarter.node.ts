@@ -771,6 +771,9 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                                     throwOnStdErr: false
                                 });
                                 logger.debug(`Gracefully killed process ${pid}`);
+
+                                // Clean up lock file after successful kill
+                                await this.deleteLockFile(pid);
                             } catch (gracefulError) {
                                 // If graceful kill failed, use /F (force)
                                 logger.debug(`Graceful kill failed for ${pid}, using /F flag...`);
@@ -778,6 +781,9 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                                     await processService.exec('taskkill', ['/F', '/T', '/PID', pid.toString()], {
                                         throwOnStdErr: false
                                     });
+
+                                    // Clean up lock file after successful force kill
+                                    await this.deleteLockFile(pid);
                                 } catch (forceError) {
                                     logger.debug(`Force kill also failed for ${pid}: ${forceError}`);
                                 }
@@ -791,11 +797,15 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                 // Unix-like: try lsof first, fallback to ss
                 let uniquePids = new Set<number>();
 
-                // Try lsof with LISTEN filter
+                // Try lsof with LISTEN filter and -nP to avoid slow DNS/service lookups
                 try {
-                    const lsofResult = await processService.exec('lsof', ['-sTCP:LISTEN', '-i', `:${port}`, '-t'], {
-                        throwOnStdErr: false
-                    });
+                    const lsofResult = await processService.exec(
+                        'lsof',
+                        ['-sTCP:LISTEN', '-i', `:${port}`, '-t', '-nP'],
+                        {
+                            throwOnStdErr: false
+                        }
+                    );
                     if (lsofResult.stdout) {
                         const pids = lsofResult.stdout
                             .trim()
@@ -849,6 +859,9 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                             `Found orphaned deepnote-related process ${pid} using port ${port}, attempting graceful kill...`
                         );
                         await this.killProcessGracefully(pid, processService);
+
+                        // Clean up lock file after successful kill
+                        await this.deleteLockFile(pid);
                     } else {
                         logger.debug(`Deepnote-related process ${pid} on port ${port} has active parent, skipping`);
                     }

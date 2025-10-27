@@ -32,10 +32,10 @@ export function getDeepnoteEnvironmentStatusVisual(status: EnvironmentStatus): {
             };
         case EnvironmentStatus.Error:
             return {
-                icon: 'vm-outline',
+                icon: 'error',
                 text: l10n.t('Error'),
-                contextValue: 'deepnoteEnvironment.stopped',
-                themeColorId: 'charts.gray'
+                contextValue: 'deepnoteEnvironment.error',
+                themeColorId: 'errorForeground'
             };
         default:
             status satisfies never;

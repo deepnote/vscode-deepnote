@@ -96,17 +96,18 @@ function convertIntegrationConfigToJson(config: IntegrationConfig): string {
                 const database = config.database ? `/${encodeURIComponent(config.database)}` : '';
                 url = `snowflake://${encodedUsername}:${encodedPassword}@${encodedAccount}${database}`;
 
-                const queryParams: string[] = [];
+                const queryParams = new URLSearchParams();
                 if (config.warehouse) {
-                    queryParams.push(`warehouse=${encodeURIComponent(config.warehouse)}`);
+                    queryParams.set('warehouse', config.warehouse);
                 }
                 if (config.role) {
-                    queryParams.push(`role=${encodeURIComponent(config.role)}`);
+                    queryParams.set('role', config.role);
                 }
-                queryParams.push('application=Deepnote');
+                queryParams.set('application', 'Deepnote');
 
-                if (queryParams.length > 0) {
-                    url += `?${queryParams.join('&')}`;
+                const queryString = queryParams.toString();
+                if (queryString) {
+                    url += `?${queryString}`;
                 }
             } else if (config.authMethod === SnowflakeAuthMethods.SERVICE_ACCOUNT_KEY_PAIR) {
                 // Service account key-pair authentication
@@ -114,18 +115,19 @@ function convertIntegrationConfigToJson(config: IntegrationConfig): string {
                 const database = config.database ? `/${encodeURIComponent(config.database)}` : '';
                 url = `snowflake://${encodedUsername}@${encodedAccount}${database}`;
 
-                const queryParams: string[] = [];
+                const queryParams = new URLSearchParams();
                 if (config.warehouse) {
-                    queryParams.push(`warehouse=${encodeURIComponent(config.warehouse)}`);
+                    queryParams.set('warehouse', config.warehouse);
                 }
                 if (config.role) {
-                    queryParams.push(`role=${encodeURIComponent(config.role)}`);
+                    queryParams.set('role', config.role);
                 }
-                queryParams.push('authenticator=snowflake_jwt');
-                queryParams.push('application=Deepnote');
+                queryParams.set('authenticator', 'snowflake_jwt');
+                queryParams.set('application', 'Deepnote');
 
-                if (queryParams.length > 0) {
-                    url += `?${queryParams.join('&')}`;
+                const queryString = queryParams.toString();
+                if (queryString) {
+                    url += `?${queryString}`;
                 }
 
                 // For key-pair auth, pass the private key and passphrase as params

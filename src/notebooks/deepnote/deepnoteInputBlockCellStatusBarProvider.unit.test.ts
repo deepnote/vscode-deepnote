@@ -4,7 +4,7 @@
 import { expect } from 'chai';
 import { anything, verify, when } from 'ts-mockito';
 
-import { NotebookCell, NotebookCellKind, NotebookDocument, Uri } from 'vscode';
+import { CancellationToken, NotebookCell, NotebookCellKind, NotebookDocument, Uri } from 'vscode';
 
 import type { IExtensionContext } from '../../platform/common/types';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
@@ -13,10 +13,15 @@ import { DeepnoteInputBlockCellStatusBarItemProvider } from './deepnoteInputBloc
 suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
     let provider: DeepnoteInputBlockCellStatusBarItemProvider;
     let mockExtensionContext: IExtensionContext;
+    let mockToken: CancellationToken;
 
     setup(() => {
         mockExtensionContext = {
             subscriptions: []
+        } as any;
+        mockToken = {
+            isCancellationRequested: false,
+            onCancellationRequested: () => ({ dispose: () => {} })
         } as any;
         provider = new DeepnoteInputBlockCellStatusBarItemProvider(mockExtensionContext);
     });
@@ -60,7 +65,7 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
     suite('Input Block Type Detection', () => {
         test('Should return status bar items for input-text block', () => {
             const cell = createMockCell({ __deepnotePocket: { type: 'input-text' } });
-            const items = provider.provideCellStatusBarItems(cell);
+            const items = provider.provideCellStatusBarItems(cell, mockToken);
 
             expect(items).to.not.be.undefined;
             expect(items).to.have.length.at.least(2);
@@ -70,7 +75,7 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
 
         test('Should return status bar items for input-textarea block', () => {
             const cell = createMockCell({ __deepnotePocket: { type: 'input-textarea' } });
-            const items = provider.provideCellStatusBarItems(cell);
+            const items = provider.provideCellStatusBarItems(cell, mockToken);
 
             expect(items).to.not.be.undefined;
             expect(items).to.have.length.at.least(2);
@@ -79,7 +84,7 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
 
         test('Should return status bar items for input-select block', () => {
             const cell = createMockCell({ __deepnotePocket: { type: 'input-select' } });
-            const items = provider.provideCellStatusBarItems(cell);
+            const items = provider.provideCellStatusBarItems(cell, mockToken);
 
             expect(items).to.not.be.undefined;
             expect(items).to.have.length.at.least(2); // Type label, variable, and selection button
@@ -88,7 +93,7 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
 
         test('Should return status bar items for input-slider block', () => {
             const cell = createMockCell({ __deepnotePocket: { type: 'input-slider' } });
-            const items = provider.provideCellStatusBarItems(cell);
+            const items = provider.provideCellStatusBarItems(cell, mockToken);
 
             expect(items).to.not.be.undefined;
             expect(items).to.have.length.at.least(2); // Type label, variable, min, and max buttons
@@ -97,7 +102,7 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
 
         test('Should return status bar items for input-checkbox block', () => {
             const cell = createMockCell({ __deepnotePocket: { type: 'input-checkbox' } });
-            const items = provider.provideCellStatusBarItems(cell);
+            const items = provider.provideCellStatusBarItems(cell, mockToken);
 
             expect(items).to.not.be.undefined;
             expect(items).to.have.length.at.least(2); // Type label, variable, and toggle button
@@ -106,7 +111,7 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
 
         test('Should return status bar items for input-date block', () => {
             const cell = createMockCell({ __deepnotePocket: { type: 'input-date' } });
-            const items = provider.provideCellStatusBarItems(cell);
+            const items = provider.provideCellStatusBarItems(cell, mockToken);
 
             expect(items).to.not.be.undefined;
             expect(items).to.have.length.at.least(2); // Type label, variable, and date button
@@ -115,7 +120,7 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
 
         test('Should return status bar items for input-date-range block', () => {
             const cell = createMockCell({ __deepnotePocket: { type: 'input-date-range' } });
-            const items = provider.provideCellStatusBarItems(cell);
+            const items = provider.provideCellStatusBarItems(cell, mockToken);
 
             expect(items).to.not.be.undefined;
             expect(items).to.have.length.at.least(2); // Type label, variable, start, and end buttons
@@ -124,7 +129,7 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
 
         test('Should return status bar items for input-file block', () => {
             const cell = createMockCell({ __deepnotePocket: { type: 'input-file' } });
-            const items = provider.provideCellStatusBarItems(cell);
+            const items = provider.provideCellStatusBarItems(cell, mockToken);
 
             expect(items).to.not.be.undefined;
             expect(items).to.have.lengthOf(3); // Type label, variable, and choose file button
@@ -133,7 +138,7 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
 
         test('Should return status bar items for button block', () => {
             const cell = createMockCell({ __deepnotePocket: { type: 'button' } });
-            const items = provider.provideCellStatusBarItems(cell);
+            const items = provider.provideCellStatusBarItems(cell, mockToken);
 
             expect(items).to.not.be.undefined;
             expect(items).to.have.length.at.least(2);
@@ -144,35 +149,35 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
     suite('Non-Input Block Types', () => {
         test('Should return undefined for code block', () => {
             const cell = createMockCell({ __deepnotePocket: { type: 'code' } });
-            const items = provider.provideCellStatusBarItems(cell);
+            const items = provider.provideCellStatusBarItems(cell, mockToken);
 
             expect(items).to.be.undefined;
         });
 
         test('Should return undefined for sql block', () => {
             const cell = createMockCell({ __deepnotePocket: { type: 'sql' } });
-            const items = provider.provideCellStatusBarItems(cell);
+            const items = provider.provideCellStatusBarItems(cell, mockToken);
 
             expect(items).to.be.undefined;
         });
 
         test('Should return undefined for markdown block', () => {
             const cell = createMockCell({ __deepnotePocket: { type: 'text-cell-p' } });
-            const items = provider.provideCellStatusBarItems(cell);
+            const items = provider.provideCellStatusBarItems(cell, mockToken);
 
             expect(items).to.be.undefined;
         });
 
         test('Should return undefined for cell with no type metadata', () => {
             const cell = createMockCell({});
-            const items = provider.provideCellStatusBarItems(cell);
+            const items = provider.provideCellStatusBarItems(cell, mockToken);
 
             expect(items).to.be.undefined;
         });
 
         test('Should return undefined for cell with undefined metadata', () => {
             const cell = createMockCell(undefined);
-            const items = provider.provideCellStatusBarItems(cell);
+            const items = provider.provideCellStatusBarItems(cell, mockToken);
 
             expect(items).to.be.undefined;
         });
@@ -181,21 +186,21 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
     suite('Status Bar Item Properties', () => {
         test('Should have correct tooltip for input-text', () => {
             const cell = createMockCell({ __deepnotePocket: { type: 'input-text' } });
-            const items = provider.provideCellStatusBarItems(cell);
+            const items = provider.provideCellStatusBarItems(cell, mockToken);
 
             expect(items?.[0].tooltip).to.equal('Deepnote Input Text');
         });
 
         test('Should have correct tooltip for button', () => {
             const cell = createMockCell({ __deepnotePocket: { type: 'button' } });
-            const items = provider.provideCellStatusBarItems(cell);
+            const items = provider.provideCellStatusBarItems(cell, mockToken);
 
             expect(items?.[0].tooltip).to.equal('Deepnote Button');
         });
 
         test('Should format multi-word block types correctly', () => {
             const cell = createMockCell({ __deepnotePocket: { type: 'input-date-range' } });
-            const items = provider.provideCellStatusBarItems(cell);
+            const items = provider.provideCellStatusBarItems(cell, mockToken);
 
             expect(items?.[0].text).to.equal('Input Date Range');
             expect(items?.[0].tooltip).to.equal('Deepnote Input Date Range');
@@ -205,7 +210,7 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
     suite('Case Insensitivity', () => {
         test('Should handle uppercase block type', () => {
             const cell = createMockCell({ __deepnotePocket: { type: 'INPUT-TEXT' } });
-            const items = provider.provideCellStatusBarItems(cell);
+            const items = provider.provideCellStatusBarItems(cell, mockToken);
 
             expect(items).to.not.be.undefined;
             expect(items?.[0].text).to.equal('INPUT TEXT');
@@ -213,7 +218,7 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
 
         test('Should handle mixed case block type', () => {
             const cell = createMockCell({ __deepnotePocket: { type: 'Input-Text' } });
-            const items = provider.provideCellStatusBarItems(cell);
+            const items = provider.provideCellStatusBarItems(cell, mockToken);
 
             expect(items).to.not.be.undefined;
             expect(items?.[0].text).to.equal('Input Text');

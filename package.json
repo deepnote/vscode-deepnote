@@ -2308,6 +2308,7 @@
         "@vscode/zeromq": "^0.2.3",
         "acorn": "^8.9.0",
         "autoprefixer": "^10.4.21",
+        "bare-events": "^2.8.1",
         "buffer": "^6.0.3",
         "bufferutil": "^4.0.6",
         "chai": "^4.3.10",

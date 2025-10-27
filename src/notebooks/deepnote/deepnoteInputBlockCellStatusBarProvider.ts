@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 import {
+    CancellationToken,
     Disposable,
     EventEmitter,
     NotebookCell,
@@ -208,7 +209,11 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
         return undefined;
     }
 
-    provideCellStatusBarItems(cell: NotebookCell): NotebookCellStatusBarItem[] | undefined {
+    provideCellStatusBarItems(cell: NotebookCell, token: CancellationToken): NotebookCellStatusBarItem[] | undefined {
+        if (token.isCancellationRequested) {
+            return undefined;
+        }
+
         // Check if this cell is a Deepnote input block
         // Get the block type from the __deepnotePocket metadata field
         const pocket = cell.metadata?.__deepnotePocket as Pocket | undefined;

@@ -871,6 +871,7 @@ export namespace SelectInputSettings {
     export const fromVariable = l10n.t('From variable');
     export const fromVariableDescription = l10n.t('A list or Series that contains only strings, numbers or booleans.');
     export const variablePlaceholder = l10n.t('Variable name...');
+    export const removeOptionAriaLabel = l10n.t('Remove option');
     export const saveButton = l10n.t('Save');
     export const cancelButton = l10n.t('Cancel');
 }

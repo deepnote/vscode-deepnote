@@ -171,7 +171,7 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
                                         <button
                                             type="button"
                                             onClick={() => handleRemoveOption(index)}
-                                            aria-label="Remove option"
+                                            aria-label={getLocString('removeOptionAriaLabel', 'Remove option')}
                                         >
                                             ×
                                         </button>

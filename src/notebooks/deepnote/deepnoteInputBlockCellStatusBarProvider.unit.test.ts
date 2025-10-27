@@ -3,11 +3,12 @@
 
 import { expect } from 'chai';
 import { anything, verify, when } from 'ts-mockito';
-import { DeepnoteInputBlockCellStatusBarItemProvider } from './deepnoteInputBlockCellStatusBarProvider';
-import { NotebookCell, NotebookCellKind, NotebookDocument } from 'vscode';
-import { Uri } from 'vscode';
+
+import { NotebookCell, NotebookCellKind, NotebookDocument, Uri } from 'vscode';
+
 import type { IExtensionContext } from '../../platform/common/types';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
+import { DeepnoteInputBlockCellStatusBarItemProvider } from './deepnoteInputBlockCellStatusBarProvider';
 
 suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
     let provider: DeepnoteInputBlockCellStatusBarItemProvider;

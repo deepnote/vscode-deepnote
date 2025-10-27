@@ -75,6 +75,8 @@ suite('InputTextBlockConverter', () => {
 
             const cell = converter.convertToCell(block);
 
+            assert.strictEqual(cell.kind, NotebookCellKind.Code);
+            assert.strictEqual(cell.languageId, 'plaintext');
             assert.strictEqual(cell.value, '');
         });
     });
@@ -98,10 +100,12 @@ suite('InputTextBlockConverter', () => {
             converter.applyChangesToBlock(block, cell);
 
             assert.strictEqual(block.content, '');
-            assert.strictEqual(block.metadata?.deepnote_variable_value, 'new text value');
-            // Other metadata should be preserved
-            assert.strictEqual(block.metadata?.deepnote_input_label, 'existing label');
-            assert.strictEqual(block.metadata?.deepnote_variable_name, 'input_1');
+            assert.deepStrictEqual(block.metadata, {
+                deepnote_variable_value: 'new text value',
+                // Other metadata should be preserved
+                deepnote_input_label: 'existing label',
+                deepnote_variable_name: 'input_1'
+            });
         });
 
         test('handles empty value', () => {
@@ -535,7 +539,7 @@ suite('InputSliderBlockConverter', () => {
 
             converter.applyChangesToBlock(block, cell);
 
-            // Should fall back to existing value (parsed as number)
+            // Should fall back to existing value (string per metadata contract)
             assert.strictEqual(block.metadata?.deepnote_variable_value, '5');
         });
     });

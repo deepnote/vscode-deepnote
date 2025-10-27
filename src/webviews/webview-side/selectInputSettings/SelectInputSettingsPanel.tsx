@@ -60,13 +60,29 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
     };
 
     const handleAddOption = () => {
-        if (newOption.trim()) {
-            setSettings((prev) => ({
-                ...prev,
-                options: [...prev.options, newOption.trim()]
-            }));
-            setNewOption('');
+        const trimmedValue = newOption.trim();
+
+        // Check if the trimmed value is non-empty
+        if (!trimmedValue) {
+            return;
         }
+
+        // Normalize for comparison (case-insensitive)
+        const normalizedValue = trimmedValue.toLowerCase();
+
+        // Check if the normalized value is already present in options
+        const isDuplicate = settings.options.some((option) => option.toLowerCase() === normalizedValue);
+
+        if (isDuplicate) {
+            return;
+        }
+
+        // Add the trimmed value and clear input
+        setSettings((prev) => ({
+            ...prev,
+            options: [...prev.options, trimmedValue]
+        }));
+        setNewOption('');
     };
 
     const handleRemoveOption = (index: number) => {

@@ -1,5 +1,5 @@
 import { inject, injectable } from 'inversify';
-import { commands, Disposable, ProgressLocation, TreeView, window } from 'vscode';
+import { commands, Disposable, l10n, ProgressLocation, TreeView, window } from 'vscode';
 import { IDisposableRegistry } from '../../../platform/common/types';
 import { logger } from '../../../platform/logging';
 import { IPythonApiProvider } from '../../../platform/api/types';
@@ -138,7 +138,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
             // Step 1: Select Python interpreter
             const api = await this.pythonApiProvider.getNewApi();
             if (!api || !api.environments.known || api.environments.known.length === 0) {
-                void window.showErrorMessage('No Python interpreters found. Please install Python first.');
+                void window.showErrorMessage(l10n.t('No Python interpreters found. Please install Python first.'));
                 return;
             }
 
@@ -165,7 +165,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 );
 
             const selectedInterpreter = await window.showQuickPick(interpreterItems, {
-                placeHolder: 'Select a Python interpreter for this environment',
+                placeHolder: l10n.t('Select a Python interpreter for this environment'),
                 matchOnDescription: true
             });
 
@@ -175,11 +175,11 @@ export class DeepnoteEnvironmentsView implements Disposable {
 
             // Step 2: Enter environment name
             const name = await window.showInputBox({
-                prompt: 'Enter a name for this environment',
-                placeHolder: 'e.g., Python 3.11 (Data Science)',
+                prompt: l10n.t('Enter a name for this environment'),
+                placeHolder: l10n.t('e.g., Python 3.11 (Data Science)'),
                 validateInput: (value: string) => {
                     if (!value || value.trim().length === 0) {
-                        return 'Name cannot be empty';
+                        return l10n.t('Name cannot be empty');
                     }
                     return undefined;
                 }
@@ -191,8 +191,8 @@ export class DeepnoteEnvironmentsView implements Disposable {
 
             // Step 3: Enter packages (optional)
             const packagesInput = await window.showInputBox({
-                prompt: 'Enter additional packages to install (comma-separated, optional)',
-                placeHolder: 'e.g., pandas, numpy, matplotlib',
+                prompt: l10n.t('Enter additional packages to install (comma-separated, optional)'),
+                placeHolder: l10n.t('e.g., pandas, numpy, matplotlib'),
                 validateInput: (value: string) => {
                     if (!value || value.trim().length === 0) {
                         return undefined; // Empty is OK
@@ -201,7 +201,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
                     const packages = value.split(',').map((p: string) => p.trim());
                     for (const pkg of packages) {
                         if (!/^[a-zA-Z0-9_\-\[\]]+$/.test(pkg)) {
-                            return `Invalid package name: ${pkg}`;
+                            return l10n.t('Invalid package name: {0}', pkg);
                         }
                     }
                     return undefined;
@@ -219,19 +219,19 @@ export class DeepnoteEnvironmentsView implements Disposable {
 
             // Step 4: Enter description (optional)
             const description = await window.showInputBox({
-                prompt: 'Enter a description for this environment (optional)',
-                placeHolder: 'e.g., Environment for data science projects'
+                prompt: l10n.t('Enter a description for this environment (optional)'),
+                placeHolder: l10n.t('e.g., Environment for data science projects')
             });
 
             // Create environment with progress
             await window.withProgress(
                 {
                     location: ProgressLocation.Notification,
-                    title: `Creating environment "${name}"...`,
+                    title: l10n.t('Creating environment "{0}"...', name),
                     cancellable: true
                 },
                 async (progress: { report: (value: { message?: string; increment?: number }) => void }, token) => {
-                    progress.report({ message: 'Setting up virtual environment...' });
+                    progress.report({ message: l10n.t('Setting up virtual environment...') });
 
                     const options: CreateDeepnoteEnvironmentOptions = {
                         name: name.trim(),
@@ -244,7 +244,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
                         const config = await this.environmentManager.createEnvironment(options, token);
                         logger.info(`Created environment: ${config.id} (${config.name})`);
 
-                        void window.showInformationMessage(`Environment "${name}" created successfully!`);
+                        void window.showInformationMessage(l10n.t('Environment "{0}" created successfully!', name));
                     } catch (error) {
                         logger.error('Failed to create environment', error);
                         throw error;
@@ -252,7 +252,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 }
             );
         } catch (error) {
-            void window.showErrorMessage(`Failed to create environment: ${error}`);
+            void window.showErrorMessage(l10n.t('Failed to create environment: {0}', error));
         }
     }
 
@@ -266,7 +266,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
             await window.withProgress(
                 {
                     location: ProgressLocation.Notification,
-                    title: `Starting server for "${config.name}"...`,
+                    title: l10n.t('Starting server for "{0}"...', config.name),
                     cancellable: true
                 },
                 async (_progress, _token) => {
@@ -275,10 +275,10 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 }
             );
 
-            void window.showInformationMessage(`Server started for "${config.name}"`);
+            void window.showInformationMessage(l10n.t('Server started for "{0}"', config.name));
         } catch (error) {
             logger.error('Failed to start server', error);
-            void window.showErrorMessage(`Failed to start server: ${error}`);
+            void window.showErrorMessage(l10n.t('Failed to start server: {0}', error));
         }
     }
 
@@ -292,7 +292,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
             await window.withProgress(
                 {
                     location: ProgressLocation.Notification,
-                    title: `Stopping server for "${config.name}"...`,
+                    title: l10n.t('Stopping server for "{0}"...', config.name),
                     cancellable: true
                 },
                 async (_progress, token) => {
@@ -301,10 +301,10 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 }
             );
 
-            void window.showInformationMessage(`Server stopped for "${config.name}"`);
+            void window.showInformationMessage(l10n.t('Server stopped for "{0}"', config.name));
         } catch (error) {
             logger.error('Failed to stop server', error);
-            void window.showErrorMessage(`Failed to stop server: ${error}`);
+            void window.showErrorMessage(l10n.t('Failed to stop server: {0}', error));
         }
     }
 
@@ -318,7 +318,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
             await window.withProgress(
                 {
                     location: ProgressLocation.Notification,
-                    title: `Restarting server for "${config.name}"...`,
+                    title: l10n.t('Restarting server for "{0}"...', config.name),
                     cancellable: true
                 },
                 async (_progress, token) => {
@@ -327,10 +327,10 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 }
             );
 
-            void window.showInformationMessage(`Server restarted for "${config.name}"`);
+            void window.showInformationMessage(l10n.t('Server restarted for "{0}"', config.name));
         } catch (error) {
             logger.error('Failed to restart server', error);
-            void window.showErrorMessage(`Failed to restart server: ${error}`);
+            void window.showErrorMessage(l10n.t('Failed to restart server: {0}', error));
         }
     }
 
@@ -342,12 +342,15 @@ export class DeepnoteEnvironmentsView implements Disposable {
 
         // Confirm deletion
         const confirmation = await window.showWarningMessage(
-            `Are you sure you want to delete "${config.name}"? This will remove the virtual environment and cannot be undone.`,
+            l10n.t(
+                'Are you sure you want to delete "{0}"? This will remove the virtual environment and cannot be undone.',
+                config.name
+            ),
             { modal: true },
-            'Delete'
+            l10n.t('Delete')
         );
 
-        if (confirmation !== 'Delete') {
+        if (confirmation !== l10n.t('Delete')) {
             return;
         }
 
@@ -355,7 +358,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
             await window.withProgress(
                 {
                     location: ProgressLocation.Notification,
-                    title: `Deleting environment "${config.name}"...`,
+                    title: l10n.t('Deleting environment "{0}"...', config.name),
                     cancellable: true
                 },
                 async (_progress, token) => {
@@ -370,25 +373,25 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 }
             );
 
-            void window.showInformationMessage(`Environment "${config.name}" deleted`);
+            void window.showInformationMessage(l10n.t('Environment "{0}" deleted', config.name));
         } catch (error) {
             logger.error('Failed to delete environment', error);
-            void window.showErrorMessage(`Failed to delete environment: ${error}`);
+            void window.showErrorMessage(l10n.t('Failed to delete environment: {0}', error));
         }
     }
 
-    private async editEnvironmentName(environmentId: string): Promise<void> {
+    public async editEnvironmentName(environmentId: string): Promise<void> {
         const config = this.environmentManager.getEnvironment(environmentId);
         if (!config) {
             return;
         }
 
         const newName = await window.showInputBox({
-            prompt: 'Enter a new name for this environment',
+            prompt: l10n.t('Enter a new name for this environment'),
             value: config.name,
             validateInput: (value: string) => {
                 if (!value || value.trim().length === 0) {
-                    return 'Name cannot be empty';
+                    return l10n.t('Name cannot be empty');
                 }
                 return undefined;
             }
@@ -404,10 +407,10 @@ export class DeepnoteEnvironmentsView implements Disposable {
             });
 
             logger.info(`Renamed environment ${environmentId} to "${newName}"`);
-            void window.showInformationMessage(`Environment renamed to "${newName}"`);
+            void window.showInformationMessage(l10n.t('Environment renamed to "{0}"', newName));
         } catch (error) {
             logger.error('Failed to rename environment', error);
-            void window.showErrorMessage(`Failed to rename environment: ${error}`);
+            void window.showErrorMessage(l10n.t('Failed to rename environment: {0}', error));
         }
     }
 
@@ -419,17 +422,17 @@ export class DeepnoteEnvironmentsView implements Disposable {
 
         // Show input box for package names
         const packagesInput = await window.showInputBox({
-            prompt: 'Enter packages to install (comma-separated)',
-            placeHolder: 'e.g., pandas, numpy, matplotlib',
+            prompt: l10n.t('Enter packages to install (comma-separated)'),
+            placeHolder: l10n.t('e.g., pandas, numpy, matplotlib'),
             value: config.packages?.join(', ') || '',
             validateInput: (value: string) => {
                 if (!value || value.trim().length === 0) {
-                    return 'Please enter at least one package';
+                    return l10n.t('Please enter at least one package');
                 }
                 const packages = value.split(',').map((p: string) => p.trim());
                 for (const pkg of packages) {
                     if (!/^[a-zA-Z0-9_\-\[\]]+$/.test(pkg)) {
-                        return `Invalid package name: ${pkg}`;
+                        return l10n.t('Invalid package name: {0}', pkg);
                     }
                 }
                 return undefined;
@@ -449,7 +452,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
             await window.withProgress(
                 {
                     location: ProgressLocation.Notification,
-                    title: `Updating packages for "${config.name}"...`,
+                    title: l10n.t('Updating packages for "{0}"...', config.name),
                     cancellable: false
                 },
                 async () => {
@@ -458,10 +461,10 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 }
             );
 
-            void window.showInformationMessage(`Packages updated for "${config.name}"`);
+            void window.showInformationMessage(l10n.t('Packages updated for "{0}"', config.name));
         } catch (error) {
             logger.error('Failed to update packages', error);
-            void window.showErrorMessage(`Failed to update packages: ${error}`);
+            void window.showErrorMessage(l10n.t('Failed to update packages: {0}', error));
         }
     }
 
@@ -469,7 +472,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
         // Get the active notebook
         const activeNotebook = window.activeNotebookEditor?.notebook;
         if (!activeNotebook || activeNotebook.notebookType !== 'deepnote') {
-            void window.showWarningMessage('No active Deepnote notebook found');
+            void window.showWarningMessage(l10n.t('No active Deepnote notebook found'));
             return;
         }
 
@@ -487,12 +490,12 @@ export class DeepnoteEnvironmentsView implements Disposable {
 
         if (environments.length === 0) {
             const choice = await window.showInformationMessage(
-                'No environments found. Create one first?',
-                'Create Environment',
-                'Cancel'
+                l10n.t('No environments found. Create one first?'),
+                l10n.t('Create Environment'),
+                l10n.t('Cancel')
             );
 
-            if (choice === 'Create Environment') {
+            if (choice === l10n.t('Create Environment')) {
                 await commands.executeCommand('deepnote.environments.create');
             }
             return;
@@ -502,26 +505,28 @@ export class DeepnoteEnvironmentsView implements Disposable {
         const items: (import('vscode').QuickPickItem & { environmentId?: string })[] = environments.map((env) => {
             const envWithStatus = this.environmentManager.getEnvironmentWithStatus(env.id);
             const statusIcon = envWithStatus?.status === 'running' ? '$(vm-running)' : '$(vm-outline)';
-            const statusText = envWithStatus?.status === 'running' ? '[Running]' : '[Stopped]';
+            const statusText = envWithStatus?.status === 'running' ? l10n.t('[Running]') : l10n.t('[Stopped]');
             const isCurrent = currentEnvironment?.id === env.id;
 
             return {
                 label: `${statusIcon} ${env.name} ${statusText}${isCurrent ? ' $(check)' : ''}`,
                 description: getDisplayPath(env.pythonInterpreter.uri),
-                detail: env.packages?.length ? `Packages: ${env.packages.join(', ')}` : 'No additional packages',
+                detail: env.packages?.length
+                    ? l10n.t('Packages: {0}', env.packages.join(', '))
+                    : l10n.t('No additional packages'),
                 environmentId: env.id
             };
         });
 
         // Add "Create new" option at the end
         items.push({
-            label: '$(add) Create New Environment',
-            description: 'Set up a new kernel environment',
+            label: l10n.t('$(add) Create New Environment'),
+            description: l10n.t('Set up a new kernel environment'),
             alwaysShow: true
         });
 
         const selected = await window.showQuickPick(items, {
-            placeHolder: 'Select an environment for this notebook',
+            placeHolder: l10n.t('Select an environment for this notebook'),
             matchOnDescription: true,
             matchOnDetail: true
         });
@@ -551,13 +556,15 @@ export class DeepnoteEnvironmentsView implements Disposable {
 
         if (hasExecutingCells) {
             const proceed = await window.showWarningMessage(
-                'Some cells are currently executing. Switching environments now may cause errors. Do you want to continue?',
+                l10n.t(
+                    'Some cells are currently executing. Switching environments now may cause errors. Do you want to continue?'
+                ),
                 { modal: true },
-                'Yes, Switch Anyway',
-                'Cancel'
+                l10n.t('Yes, Switch Anyway'),
+                l10n.t('Cancel')
             );
 
-            if (proceed !== 'Yes, Switch Anyway') {
+            if (proceed !== l10n.t('Yes, Switch Anyway')) {
                 logger.info('User cancelled environment switch due to executing cells');
                 return;
             }
@@ -572,7 +579,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
             await window.withProgress(
                 {
                     location: ProgressLocation.Notification,
-                    title: `Switching to environment...`,
+                    title: l10n.t('Switching to environment...'),
                     cancellable: false
                 },
                 async () => {
@@ -590,10 +597,10 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 }
             );
 
-            void window.showInformationMessage('Environment switched successfully');
+            void window.showInformationMessage(l10n.t('Environment switched successfully'));
         } catch (error) {
             logger.error('Failed to switch environment', error);
-            void window.showErrorMessage(`Failed to switch environment: ${error}`);
+            void window.showErrorMessage(l10n.t('Failed to switch environment: {0}', error));
         }
     }
 

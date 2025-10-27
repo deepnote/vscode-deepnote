@@ -1062,11 +1062,23 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                     for (const pid of pidsToKill) {
                         try {
                             if (process.platform === 'win32') {
-                                await processService.exec('taskkill', ['/F', '/T', '/PID', pid.toString()], {
-                                    throwOnStdErr: false
-                                });
+                                // Windows: Try graceful kill first (without /F), then force kill if needed
+                                logger.debug(`Attempting graceful termination of process ${pid}...`);
+                                try {
+                                    await processService.exec('taskkill', ['/T', '/PID', pid.toString()], {
+                                        throwOnStdErr: false
+                                    });
+                                    logger.debug(`Gracefully killed process ${pid}`);
+                                } catch (gracefulError) {
+                                    // If graceful kill failed, use /F (force)
+                                    logger.debug(`Graceful kill failed for ${pid}, using /F flag...`);
+                                    await processService.exec('taskkill', ['/F', '/T', '/PID', pid.toString()], {
+                                        throwOnStdErr: false
+                                    });
+                                }
                             } else {
-                                await processService.exec('kill', ['-9', pid.toString()], { throwOnStdErr: false });
+                                // Unix: Use helper that tries SIGTERM then SIGKILL
+                                await this.killProcessGracefully(pid, processService);
                             }
                             logger.info(`Killed orphaned process ${pid}`);
 

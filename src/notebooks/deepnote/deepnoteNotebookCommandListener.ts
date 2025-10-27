@@ -30,7 +30,7 @@ import {
     DeepnoteSqlMetadata
 } from './deepnoteSchemas';
 
-type InputBlockType =
+export type InputBlockType =
     | 'input-text'
     | 'input-textarea'
     | 'input-select'
@@ -175,10 +175,10 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         );
     }
 
-    private addSqlBlock(): void {
+    public async addSqlBlock(): Promise<void> {
         const editor = window.activeNotebookEditor;
         if (!editor) {
-            return;
+            throw new Error('No active notebook editor found');
         }
         const document = editor.notebook;
         const selection = editor.selection;
@@ -194,7 +194,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         // Determine the index where to insert the new cell (below current selection or at the end)
         const insertIndex = selection ? selection.end : document.cellCount;
 
-        chainWithPendingUpdates(document, (edit) => {
+        const result = await chainWithPendingUpdates(document, (edit) => {
             // Create a SQL cell with SQL language for syntax highlighting
             // This matches the SqlBlockConverter representation
             const newCell = new NotebookCellData(NotebookCellKind.Code, '', 'sql');
@@ -207,26 +207,22 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             };
             const nbEdit = NotebookEdit.insertCells(insertIndex, [newCell]);
             edit.set(document.uri, [nbEdit]);
-        }).then(
-            () => {
-                const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
-                editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
-                editor.selection = notebookRange;
-                // Enter edit mode on the new cell
-                commands
-                    .executeCommand('notebook.cell.edit')
-                    .then(undefined, (error) => logger.error('Error entering edit mode', error));
-            },
-            (error) => {
-                logger.error('Error inserting SQL block', error);
-            }
-        );
+        });
+        if (result !== true) {
+            throw new Error('Failed to insert SQL block');
+        }
+
+        const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
+        editor.revealRange(notebookRange, NotebookEditorRevealType?.Default ?? 0);
+        editor.selection = notebookRange;
+        // Enter edit mode on the new cell
+        await commands.executeCommand('notebook.cell.edit');
     }
 
-    private addBigNumberChartBlock(): void {
+    public async addBigNumberChartBlock(): Promise<void> {
         const editor = window.activeNotebookEditor;
         if (!editor) {
-            return;
+            throw new Error('No active notebook editor found');
         }
         const document = editor.notebook;
         const selection = editor.selection;
@@ -243,7 +239,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             }
         };
 
-        chainWithPendingUpdates(document, (edit) => {
+        const result = await chainWithPendingUpdates(document, (edit) => {
             const newCell = new NotebookCellData(
                 NotebookCellKind.Code,
                 JSON.stringify(bigNumberMetadata, null, 2),
@@ -252,26 +248,22 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             newCell.metadata = metadata;
             const nbEdit = NotebookEdit.insertCells(insertIndex, [newCell]);
             edit.set(document.uri, [nbEdit]);
-        }).then(
-            () => {
-                const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
-                editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
-                editor.selection = notebookRange;
-                // Enter edit mode on the new cell
-                commands
-                    .executeCommand('notebook.cell.edit')
-                    .then(undefined, (error) => logger.error('Error entering edit mode', error));
-            },
-            (error) => {
-                logger.error('Error inserting big number chart block', error);
-            }
-        );
+        });
+        if (result !== true) {
+            throw new Error('Failed to insert big number chart block');
+        }
+
+        const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
+        editor.revealRange(notebookRange, NotebookEditorRevealType?.Default ?? 0);
+        editor.selection = notebookRange;
+        // Enter edit mode on the new cell
+        await commands.executeCommand('notebook.cell.edit');
     }
 
-    private addInputBlock(blockType: InputBlockType): void {
+    public async addInputBlock(blockType: InputBlockType): Promise<void> {
         const editor = window.activeNotebookEditor;
         if (!editor) {
-            return;
+            throw new Error('No active notebook editor found');
         }
         const document = editor.notebook;
         const selection = editor.selection;
@@ -291,7 +283,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             }
         };
 
-        chainWithPendingUpdates(document, (edit) => {
+        const result = await chainWithPendingUpdates(document, (edit) => {
             const newCell = new NotebookCellData(
                 NotebookCellKind.Code,
                 JSON.stringify(defaultMetadata, null, 2),
@@ -300,19 +292,16 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             newCell.metadata = metadata;
             const nbEdit = NotebookEdit.insertCells(insertIndex, [newCell]);
             edit.set(document.uri, [nbEdit]);
-        }).then(
-            () => {
-                const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
-                editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
-                editor.selection = notebookRange;
-                // Enter edit mode on the new cell
-                commands
-                    .executeCommand('notebook.cell.edit')
-                    .then(undefined, (error) => logger.error('Error entering edit mode', error));
-            },
-            (error) => {
-                logger.error('Error inserting input block', error);
-            }
-        );
+        });
+        if (result !== true) {
+            throw new Error('Failed to insert input block');
+        }
+
+        const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
+        // editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
+        editor.revealRange(notebookRange, 0);
+        editor.selection = notebookRange;
+        // Enter edit mode on the new cell
+        await commands.executeCommand('notebook.cell.edit');
     }
 }

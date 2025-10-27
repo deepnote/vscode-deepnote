@@ -13,6 +13,11 @@ import {
     DeepnoteEnvironmentWithStatus
 } from './environments/deepnoteEnvironment';
 
+export interface VenvAndToolkitInstallation {
+    pythonInterpreter: PythonEnvironment;
+    toolkitVersion: string;
+}
+
 /**
  * Connection metadata for Deepnote Toolkit Kernels.
  * This kernel connects to a Jupyter server started by deepnote-toolkit.
@@ -82,7 +87,7 @@ export interface IDeepnoteToolkitInstaller {
      * @param baseInterpreter The base Python interpreter to use for creating the venv
      * @param venvPath The path where the venv should be created
      * @param token Cancellation token to cancel the operation
-     * @returns The Python interpreter from the venv
+     * @returns The Python interpreter from the venv and the toolkit version
      * @throws {DeepnoteVenvCreationError} If venv creation fails
      * @throws {DeepnoteToolkitInstallError} If toolkit installation fails
      */
@@ -90,7 +95,7 @@ export interface IDeepnoteToolkitInstaller {
         baseInterpreter: PythonEnvironment,
         venvPath: vscode.Uri,
         token?: vscode.CancellationToken
-    ): Promise<PythonEnvironment>;
+    ): Promise<VenvAndToolkitInstallation>;
 
     /**
      * Install additional packages in the venv.

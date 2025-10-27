@@ -96,15 +96,13 @@ export class DeepnoteEnvironmentTreeDataProvider implements TreeDataProvider<Dee
         // Python interpreter
         items.push(
             DeepnoteEnvironmentTreeItem.createInfoItem(
-                `Python: ${this.getShortPath(config.pythonInterpreter.uri.fsPath)}`,
+                `Python: ${config.pythonInterpreter.uri.fsPath}`,
                 'symbol-namespace'
             )
         );
 
         // Venv path
-        items.push(
-            DeepnoteEnvironmentTreeItem.createInfoItem(`Venv: ${this.getShortPath(config.venvPath.fsPath)}`, 'folder')
-        );
+        items.push(DeepnoteEnvironmentTreeItem.createInfoItem(`Venv: ${config.venvPath.fsPath}`, 'folder'));
 
         // Packages
         if (config.packages && config.packages.length > 0) {
@@ -130,19 +128,6 @@ export class DeepnoteEnvironmentTreeDataProvider implements TreeDataProvider<Dee
         );
 
         return items;
-    }
-
-    /**
-     * Shorten a file path for display (show last 2-3 segments)
-     */
-    private getShortPath(fullPath: string): string {
-        const parts = fullPath.split(/[/\\]/);
-        if (parts.length <= 3) {
-            return fullPath;
-        }
-
-        // Show last 3 segments with ellipsis
-        return `.../${parts.slice(-3).join('/')}`;
     }
 
     public dispose(): void {

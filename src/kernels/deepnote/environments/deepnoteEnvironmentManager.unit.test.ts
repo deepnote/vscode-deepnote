@@ -4,7 +4,13 @@ import { Uri } from 'vscode';
 import { DeepnoteEnvironmentManager } from './deepnoteEnvironmentManager.node';
 import { DeepnoteEnvironmentStorage } from './deepnoteEnvironmentStorage.node';
 import { IExtensionContext } from '../../../platform/common/types';
-import { IDeepnoteServerStarter, IDeepnoteToolkitInstaller, DeepnoteServerInfo } from '../types';
+import {
+    IDeepnoteServerStarter,
+    IDeepnoteToolkitInstaller,
+    DeepnoteServerInfo,
+    VenvAndToolkitInstallation,
+    DEEPNOTE_TOOLKIT_VERSION
+} from '../types';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
 import { EnvironmentStatus } from './deepnoteEnvironment';
 
@@ -26,6 +32,11 @@ suite('DeepnoteEnvironmentManager', () => {
         jupyterPort: 8888,
         lspPort: 8889,
         token: 'test-token'
+    };
+
+    const testVenvAndToolkit: VenvAndToolkitInstallation = {
+        pythonInterpreter: testInterpreter,
+        toolkitVersion: DEEPNOTE_TOOLKIT_VERSION
     };
 
     setup(() => {
@@ -179,7 +190,7 @@ suite('DeepnoteEnvironmentManager', () => {
         test('should return environment with running status when server is running', async () => {
             when(mockStorage.saveEnvironments(anything())).thenResolve();
             when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testInterpreter
+                testVenvAndToolkit
             );
             when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
                 testServerInfo
@@ -271,7 +282,7 @@ suite('DeepnoteEnvironmentManager', () => {
         test('should stop server before deleting if running', async () => {
             when(mockStorage.saveEnvironments(anything())).thenResolve();
             when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testInterpreter
+                testVenvAndToolkit
             );
             when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
                 testServerInfo
@@ -298,7 +309,7 @@ suite('DeepnoteEnvironmentManager', () => {
         test('should start server for environment', async () => {
             when(mockStorage.saveEnvironments(anything())).thenResolve();
             when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testInterpreter
+                testVenvAndToolkit
             );
             when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
                 testServerInfo
@@ -321,7 +332,7 @@ suite('DeepnoteEnvironmentManager', () => {
         test('should install additional packages when specified', async () => {
             when(mockStorage.saveEnvironments(anything())).thenResolve();
             when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testInterpreter
+                testVenvAndToolkit
             );
             when(mockToolkitInstaller.installAdditionalPackages(anything(), anything(), anything())).thenResolve();
             when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
@@ -344,7 +355,7 @@ suite('DeepnoteEnvironmentManager', () => {
         test('should always call serverStarter.startServer to ensure fresh serverInfo (UT-6)', async () => {
             when(mockStorage.saveEnvironments(anything())).thenResolve();
             when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testInterpreter
+                testVenvAndToolkit
             );
             when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
                 testServerInfo
@@ -370,7 +381,7 @@ suite('DeepnoteEnvironmentManager', () => {
 
             when(mockStorage.saveEnvironments(anything())).thenResolve();
             when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testInterpreter
+                testVenvAndToolkit
             );
 
             // First call returns initial serverInfo
@@ -415,7 +426,7 @@ suite('DeepnoteEnvironmentManager', () => {
         test('should update lastUsedAt timestamp', async () => {
             when(mockStorage.saveEnvironments(anything())).thenResolve();
             when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testInterpreter
+                testVenvAndToolkit
             );
             when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
                 testServerInfo
@@ -443,7 +454,7 @@ suite('DeepnoteEnvironmentManager', () => {
         test('should stop running server', async () => {
             when(mockStorage.saveEnvironments(anything())).thenResolve();
             when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testInterpreter
+                testVenvAndToolkit
             );
             when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
                 testServerInfo
@@ -486,7 +497,7 @@ suite('DeepnoteEnvironmentManager', () => {
         test('should stop and start server', async () => {
             when(mockStorage.saveEnvironments(anything())).thenResolve();
             when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testInterpreter
+                testVenvAndToolkit
             );
             when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
                 testServerInfo

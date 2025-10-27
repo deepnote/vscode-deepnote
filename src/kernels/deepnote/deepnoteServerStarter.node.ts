@@ -166,10 +166,11 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
         // Ensure toolkit is installed in venv and get venv's Python interpreter
         logger.info(`Ensuring deepnote-toolkit is installed in venv for environment ${environmentId}...`);
-        const venvInterpreter = await this.toolkitInstaller.ensureVenvAndToolkit(interpreter, venvPath, token);
-        if (!venvInterpreter) {
-            throw new Error('Failed to install deepnote-toolkit. Please check the output for details.');
-        }
+        const { pythonInterpreter: venvInterpreter } = await this.toolkitInstaller.ensureVenvAndToolkit(
+            interpreter,
+            venvPath,
+            token
+        );
 
         Cancellation.throwIfCanceled(token);
 

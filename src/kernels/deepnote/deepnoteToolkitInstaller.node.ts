@@ -3,15 +3,20 @@
 
 import { inject, injectable, named } from 'inversify';
 import { CancellationToken, Uri, workspace } from 'vscode';
-import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
-import { IDeepnoteToolkitInstaller, DEEPNOTE_TOOLKIT_WHEEL_URL, DEEPNOTE_TOOLKIT_VERSION } from './types';
-import { IProcessServiceFactory } from '../../platform/common/process/types.node';
-import { logger } from '../../platform/logging';
-import { IOutputChannel, IExtensionContext } from '../../platform/common/types';
+import { Cancellation } from '../../platform/common/cancellation';
 import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
 import { IFileSystem } from '../../platform/common/platform/types';
-import { Cancellation } from '../../platform/common/cancellation';
-import { DeepnoteVenvCreationError, DeepnoteToolkitInstallError } from '../../platform/errors/deepnoteKernelErrors';
+import { IProcessServiceFactory } from '../../platform/common/process/types.node';
+import { IExtensionContext, IOutputChannel } from '../../platform/common/types';
+import { DeepnoteToolkitInstallError, DeepnoteVenvCreationError } from '../../platform/errors/deepnoteKernelErrors';
+import { logger } from '../../platform/logging';
+import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
+import {
+    DEEPNOTE_TOOLKIT_VERSION,
+    DEEPNOTE_TOOLKIT_WHEEL_URL,
+    IDeepnoteToolkitInstaller,
+    VenvAndToolkitInstallation
+} from './types';
 
 /**
  * Handles installation of the deepnote-toolkit Python package.
@@ -20,7 +25,7 @@ import { DeepnoteVenvCreationError, DeepnoteToolkitInstallError } from '../../pl
 export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
     private readonly venvPythonPaths: Map<string, Uri> = new Map();
     // Track in-flight installations per venv path to prevent concurrent installs
-    private readonly pendingInstallations: Map<string, Promise<PythonEnvironment>> = new Map();
+    private readonly pendingInstallations: Map<string, Promise<VenvAndToolkitInstallation>> = new Map();
 
     constructor(
         @inject(IProcessServiceFactory) private readonly processServiceFactory: IProcessServiceFactory,
@@ -77,7 +82,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         baseInterpreter: PythonEnvironment,
         venvPath: Uri,
         token?: CancellationToken
-    ): Promise<PythonEnvironment> {
+    ): Promise<VenvAndToolkitInstallation> {
         const venvKey = venvPath.fsPath;
 
         logger.info(`Ensuring virtual environment at ${venvKey}`);
@@ -96,19 +101,22 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
 
         // Check if venv already exists with toolkit installed
         const existingVenv = await this.getVenvInterpreterByPath(venvPath);
-        if (existingVenv && (await this.isToolkitInstalled(existingVenv))) {
-            logger.info(`deepnote-toolkit venv already exists at ${venvPath.fsPath}`);
+        if (existingVenv) {
+            const toolkitVersion = await this.isToolkitInstalled(existingVenv);
+            if (toolkitVersion != null) {
+                logger.info(`deepnote-toolkit venv already exists at ${venvPath.fsPath}`);
 
-            // Ensure kernel spec is installed (may have been deleted or never installed)
-            try {
-                await this.installKernelSpec(existingVenv, venvPath);
-            } catch (ex) {
-                logger.warn(`Failed to ensure kernel spec installed: ${ex}`);
-                // Don't fail - continue with existing venv
+                // Ensure kernel spec is installed (may have been deleted or never installed)
+                try {
+                    await this.installKernelSpec(existingVenv, venvPath);
+                } catch (ex) {
+                    logger.warn(`Failed to ensure kernel spec installed: ${ex}`);
+                    // Don't fail - continue with existing venv
+                }
+
+                logger.info(`Venv ready at ${venvPath.fsPath}`);
+                return { pythonInterpreter: existingVenv, toolkitVersion };
             }
-
-            logger.info(`Venv ready at ${venvPath.fsPath}`);
-            return existingVenv;
         }
 
         // Double-check for race condition
@@ -193,7 +201,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         baseInterpreter: PythonEnvironment,
         venvPath: Uri,
         token?: CancellationToken
-    ): Promise<PythonEnvironment> {
+    ): Promise<VenvAndToolkitInstallation> {
         try {
             Cancellation.throwIfCanceled(token);
 
@@ -288,7 +296,8 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             }
 
             // Verify installation
-            if (await this.isToolkitInstalled(venvInterpreter)) {
+            const installedToolkitVersion = await this.isToolkitInstalled(venvInterpreter);
+            if (installedToolkitVersion != null) {
                 logger.info('deepnote-toolkit installed successfully in venv');
 
                 // Install kernel spec so the kernel uses this venv's Python
@@ -300,7 +309,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                 }
 
                 this.outputChannel.appendLine('✓ Deepnote toolkit ready');
-                return venvInterpreter;
+                return { pythonInterpreter: venvInterpreter, toolkitVersion: installedToolkitVersion };
             } else {
                 logger.error('deepnote-toolkit installation failed');
                 this.outputChannel.appendLine('✗ deepnote-toolkit installation failed');
@@ -334,18 +343,19 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         }
     }
 
-    private async isToolkitInstalled(interpreter: PythonEnvironment): Promise<boolean> {
+    private async isToolkitInstalled(interpreter: PythonEnvironment): Promise<string | undefined> {
         try {
             // Use undefined as resource to get full system environment
             const processService = await this.processServiceFactory.create(undefined);
             const result = await processService.exec(interpreter.uri.fsPath, [
                 '-c',
-                "import deepnote_toolkit; print('installed')"
+                'import deepnote_toolkit; print(deepnote_toolkit.__version__)'
             ]);
-            return result.stdout.toLowerCase().includes('installed');
+            logger.info(`isToolkitInstalled result: ${result.stdout}`);
+            return result.stdout.trim();
         } catch (ex) {
             logger.debug(`deepnote-toolkit not found: ${ex}`);
-            return false;
+            return undefined;
         }
     }
 

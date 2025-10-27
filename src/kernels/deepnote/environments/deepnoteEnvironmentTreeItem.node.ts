@@ -83,8 +83,6 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
         lines.push(`Status: ${this.status}`);
         lines.push(`Python: ${this.environment.pythonInterpreter.uri.fsPath}`);
         lines.push(`Venv: ${this.environment.venvPath.fsPath}`);
-        // lines.push(`Python: ${this.environment.pythonInterpreter.uriFsPath}`);
-        // lines.push(`Venv: ${this.environment.venvPathFsPath}`);
 
         if (this.environment.packages && this.environment.packages.length > 0) {
             lines.push(`Packages: ${this.environment.packages.join(', ')}`);

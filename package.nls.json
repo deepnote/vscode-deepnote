@@ -255,5 +255,14 @@
     "deepnote.commands.importJupyterNotebook.title": "Import Jupyter Notebook",
     "deepnote.views.explorer.name": "Explorer",
     "deepnote.views.explorer.welcome": "No Deepnote notebooks found in this workspace.",
-    "deepnote.command.selectNotebook.title": "Select Notebook"
+    "deepnote.command.selectNotebook.title": "Select Notebook",
+    "deepnote.commands.environments.create.title": "Create Environment",
+    "deepnote.commands.environments.start.title": "Start Server",
+    "deepnote.commands.environments.stop.title": "Stop Server",
+    "deepnote.commands.environments.restart.title": "Restart Server",
+    "deepnote.commands.environments.delete.title": "Delete Environment",
+    "deepnote.commands.environments.managePackages.title": "Manage Packages",
+    "deepnote.commands.environments.editName.title": "Rename Environment",
+    "deepnote.commands.environments.refresh.title": "Refresh",
+    "deepnote.commands.environments.selectForNotebook.title": "Select Environment for Notebook"
 }

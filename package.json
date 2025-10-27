@@ -87,54 +87,54 @@
             },
             {
                 "command": "deepnote.environments.create",
-                "title": "Create Environment",
+                "title": "%deepnote.commands.environments.create.title%",
                 "category": "Deepnote",
                 "icon": "$(add)"
             },
             {
                 "command": "deepnote.environments.start",
-                "title": "Start Server",
+                "title": "%deepnote.commands.environments.start.title%",
                 "category": "Deepnote",
                 "icon": "$(debug-start)"
             },
             {
                 "command": "deepnote.environments.stop",
-                "title": "Stop Server",
+                "title": "%deepnote.commands.environments.stop.title%",
                 "category": "Deepnote",
                 "icon": "$(debug-stop)"
             },
             {
                 "command": "deepnote.environments.restart",
-                "title": "Restart Server",
+                "title": "%deepnote.commands.environments.restart.title%",
                 "category": "Deepnote",
                 "icon": "$(debug-restart)"
             },
             {
                 "command": "deepnote.environments.delete",
-                "title": "Delete Environment",
+                "title": "%deepnote.commands.environments.delete.title%",
                 "category": "Deepnote",
                 "icon": "$(trash)"
             },
             {
                 "command": "deepnote.environments.managePackages",
-                "title": "Manage Packages",
+                "title": "%deepnote.commands.environments.managePackages.title%",
                 "category": "Deepnote",
                 "icon": "$(package)"
             },
             {
                 "command": "deepnote.environments.editName",
-                "title": "Rename Environment",
+                "title": "%deepnote.commands.environments.editName.title%",
                 "category": "Deepnote"
             },
             {
                 "command": "deepnote.environments.refresh",
-                "title": "Refresh",
+                "title": "%deepnote.commands.environments.refresh.title%",
                 "category": "Deepnote",
                 "icon": "$(refresh)"
             },
             {
                 "command": "deepnote.environments.selectForNotebook",
-                "title": "Select Environment for Notebook",
+                "title": "%deepnote.commands.environments.selectForNotebook.title%",
                 "category": "Deepnote",
                 "icon": "$(server-environment)"
             },

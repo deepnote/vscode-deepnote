@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import { inject, injectable, named } from 'inversify';
-import { CancellationToken, Uri, workspace } from 'vscode';
+import { CancellationToken, l10n, Uri, workspace } from 'vscode';
 import { Cancellation } from '../../platform/common/cancellation';
 import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
 import { IFileSystem } from '../../platform/common/platform/types';
@@ -166,7 +166,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         }
 
         logger.info(`Installing additional packages in ${venvPath.fsPath}: ${packages.join(', ')}`);
-        this.outputChannel.appendLine(`Installing packages: ${packages.join(', ')}...`);
+        this.outputChannel.appendLine(l10n.t('Installing packages: {0}...', packages.join(', ')));
 
         try {
             Cancellation.throwIfCanceled(token);
@@ -186,10 +186,10 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             }
 
             logger.info('Additional packages installed successfully');
-            this.outputChannel.appendLine('✓ Packages installed successfully');
+            this.outputChannel.appendLine(l10n.t('✓ Packages installed successfully'));
         } catch (ex) {
             logger.error(`Failed to install additional packages: ${ex}`);
-            this.outputChannel.appendLine(`✗ Failed to install packages: ${ex}`);
+            this.outputChannel.appendLine(l10n.t('✗ Failed to install packages: {0}', ex));
             throw ex;
         }
     }
@@ -206,7 +206,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             Cancellation.throwIfCanceled(token);
 
             logger.info(`Creating virtual environment at ${venvPath.fsPath}`);
-            this.outputChannel.appendLine(`Setting up Deepnote toolkit environment...`);
+            this.outputChannel.appendLine(l10n.t('Setting up Deepnote toolkit environment...'));
 
             // Create venv parent directory if it doesn't exist
             const venvParentDir = Uri.joinPath(this.context.globalStorageUri, 'deepnote-venvs');
@@ -239,7 +239,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                 if (venvResult.stderr) {
                     logger.error(`venv stderr: ${venvResult.stderr}`);
                 }
-                this.outputChannel.appendLine('Error: Failed to create virtual environment');
+                this.outputChannel.appendLine(l10n.t('Error: Failed to create virtual environment'));
 
                 throw new DeepnoteVenvCreationError(
                     baseInterpreter.uri.fsPath,
@@ -253,7 +253,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
 
             // Upgrade pip in the venv to the latest version
             logger.info('Upgrading pip in venv to latest version...');
-            this.outputChannel.appendLine('Upgrading pip...');
+            this.outputChannel.appendLine(l10n.t('Upgrading pip...'));
             const pipUpgradeResult = await venvProcessService.exec(
                 venvInterpreter.uri.fsPath,
                 ['-m', 'pip', 'install', '--upgrade', 'pip'],
@@ -271,7 +271,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
 
             // Install deepnote-toolkit and ipykernel in venv
             logger.info(`Installing deepnote-toolkit and ipykernel in venv from ${DEEPNOTE_TOOLKIT_WHEEL_URL}`);
-            this.outputChannel.appendLine('Installing deepnote-toolkit and ipykernel...');
+            this.outputChannel.appendLine(l10n.t('Installing deepnote-toolkit and ipykernel...'));
 
             const installResult = await venvProcessService.exec(
                 venvInterpreter.uri.fsPath,
@@ -308,11 +308,11 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                     // Don't fail the entire installation if kernel spec creation fails
                 }
 
-                this.outputChannel.appendLine('✓ Deepnote toolkit ready');
+                this.outputChannel.appendLine(l10n.t('✓ Deepnote toolkit ready'));
                 return { pythonInterpreter: venvInterpreter, toolkitVersion: installedToolkitVersion };
             } else {
                 logger.error('deepnote-toolkit installation failed');
-                this.outputChannel.appendLine('✗ deepnote-toolkit installation failed');
+                this.outputChannel.appendLine(l10n.t('✗ deepnote-toolkit installation failed'));
 
                 throw new DeepnoteToolkitInstallError(
                     venvInterpreter.uri.fsPath,
@@ -330,7 +330,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
 
             // Otherwise, log full details and wrap in a generic toolkit install error
             logger.error(`Failed to set up deepnote-toolkit: ${ex}`);
-            this.outputChannel.appendLine('Failed to set up deepnote-toolkit; see logs for details');
+            this.outputChannel.appendLine(l10n.t('Failed to set up deepnote-toolkit; see logs for details'));
 
             throw new DeepnoteToolkitInstallError(
                 baseInterpreter.uri.fsPath,

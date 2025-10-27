@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import { inject, injectable, named } from 'inversify';
-import { CancellationToken, Uri } from 'vscode';
+import { CancellationToken, l10n, Uri } from 'vscode';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { logger } from '../../platform/logging';
@@ -198,7 +198,7 @@ export class DeepnoteSharedToolkitInstaller {
             logger.info(
                 `Installing shared deepnote-toolkit v${this.toolkitVersion} to ${this.sharedInstallationPath.fsPath}`
             );
-            this.outputChannel.appendLine(`Installing shared deepnote-toolkit v${this.toolkitVersion}...`);
+            this.outputChannel.appendLine(l10n.t('Installing shared deepnote-toolkit v{0}...', this.toolkitVersion));
 
             // Create shared installation directory
             await this.fs.createDirectory(this.sharedInstallationPath);
@@ -240,16 +240,16 @@ export class DeepnoteSharedToolkitInstaller {
                 await this.fs.writeFile(this.versionFilePath, Buffer.from(this.toolkitVersion, 'utf8'));
 
                 logger.info(`Shared deepnote-toolkit v${this.toolkitVersion} installed successfully`);
-                this.outputChannel.appendLine(`✓ Shared deepnote-toolkit v${this.toolkitVersion} ready`);
+                this.outputChannel.appendLine(l10n.t('✓ Shared deepnote-toolkit v{0} ready', this.toolkitVersion));
                 return true;
             } else {
                 logger.error('Shared deepnote-toolkit installation failed - package not found');
-                this.outputChannel.appendLine('✗ Shared deepnote-toolkit installation failed');
+                this.outputChannel.appendLine(l10n.t('✗ Shared deepnote-toolkit installation failed'));
                 return false;
             }
         } catch (ex) {
             logger.error(`Failed to install shared deepnote-toolkit: ${ex}`);
-            this.outputChannel.appendLine(`Error installing shared deepnote-toolkit: ${ex}`);
+            this.outputChannel.appendLine(l10n.t('Error installing shared deepnote-toolkit: {0}', ex));
             return false;
         }
     }

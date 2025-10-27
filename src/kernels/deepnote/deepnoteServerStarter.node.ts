@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import { inject, injectable, named, optional } from 'inversify';
-import { CancellationToken, Uri } from 'vscode';
+import { CancellationToken, l10n, Uri } from 'vscode';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { IDeepnoteServerStarter, IDeepnoteToolkitInstaller, DeepnoteServerInfo, DEEPNOTE_DEFAULT_PORT } from './types';
 import { IProcessServiceFactory, ObservableExecutionResult } from '../../platform/common/process/types.node';
@@ -182,7 +182,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             `Starting deepnote-toolkit server on jupyter port ${jupyterPort} and lsp port ${lspPort} for environment ${environmentId}`
         );
         this.outputChannel.appendLine(
-            `Starting Deepnote server on jupyter port ${jupyterPort} and lsp port ${lspPort}...`
+            l10n.t('Starting Deepnote server on jupyter port {0} and lsp port {1}...', jupyterPort, lspPort)
         );
 
         // Start the server with venv's Python in PATH
@@ -329,7 +329,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         }
 
         logger.info(`Deepnote server started successfully at ${url} for environment ${environmentId}`);
-        this.outputChannel.appendLine(`✓ Deepnote server running at ${url}`);
+        this.outputChannel.appendLine(l10n.t('✓ Deepnote server running at {0}', url));
 
         return serverInfo;
     }
@@ -349,7 +349,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                 this.serverProcesses.delete(environmentId);
                 this.serverInfos.delete(environmentId);
                 this.serverOutputByFile.delete(environmentId);
-                this.outputChannel.appendLine(`Deepnote server stopped for environment ${environmentId}`);
+                this.outputChannel.appendLine(l10n.t('Deepnote server stopped for environment {0}', environmentId));
 
                 // Clean up lock file after stopping the server
                 if (serverPid) {
@@ -837,7 +837,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                     if (pidsToKill.length > 0) {
                         logger.info(`Killing ${pidsToKill.length} orphaned process(es): ${pidsToKill.join(', ')}`);
                         this.outputChannel.appendLine(
-                            `Cleaning up ${pidsToKill.length} orphaned deepnote-toolkit process(es)...`
+                            l10n.t('Cleaning up {0} orphaned deepnote-toolkit process(es)...', pidsToKill.length)
                         );
 
                         for (const pid of pidsToKill) {
@@ -858,7 +858,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                             }
                         }
 
-                        this.outputChannel.appendLine('✓ Cleanup complete');
+                        this.outputChannel.appendLine(l10n.t('✓ Cleanup complete'));
                     } else {
                         logger.info('No orphaned deepnote-toolkit processes found (all processes are active)');
                     }

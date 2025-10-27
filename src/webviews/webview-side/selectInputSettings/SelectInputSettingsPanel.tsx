@@ -23,8 +23,8 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
     const [newOption, setNewOption] = React.useState('');
 
     React.useEffect(() => {
-        const handleMessage = (event: MessageEvent) => {
-            const message = event.data as WebviewMessage;
+        const handleMessage = (event: MessageEvent<WebviewMessage>) => {
+            const message = event.data;
 
             switch (message.type) {
                 case 'init':

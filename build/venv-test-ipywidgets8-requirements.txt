@@ -1,5 +1,5 @@
 # List of requirements for ipython tests
-numpy
+numpy>=1.22.2
 pandas
 # Install jupyter itself so we end up with a kernel
 jupyter
@@ -8,3 +8,17 @@ ipywidgets
 anywidget
 matplotlib
 ipympl
+
+# Security updates for transitive dependencies
+pillow>=10.2.0
+setuptools>=78.1.1
+zipp>=3.19.1
+tornado>=6.4.1
+anyio>=4.4.0
+requests>=2.32.4
+fonttools>=4.43.0
+jupyter-server>=2.14.1
+jupyter-core>=5.8.0
+ipython>=8.10.0
+urllib3>=2.2.2
+jupyterlab>=4.4.8

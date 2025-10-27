@@ -1,12 +1,6 @@
 import { assert } from 'chai';
 import * as sinon from 'sinon';
 import {
-    DeepnoteNotebookCommandListener,
-    getNextDeepnoteVariableName,
-    InputBlockType
-} from './deepnoteNotebookCommandListener';
-import { IDisposable } from '../../platform/common/types';
-import {
     NotebookCell,
     NotebookDocument,
     NotebookEditor,
@@ -18,6 +12,13 @@ import {
     window,
     Uri
 } from 'vscode';
+
+import {
+    DeepnoteNotebookCommandListener,
+    getNextDeepnoteVariableName,
+    InputBlockType
+} from './deepnoteNotebookCommandListener';
+import { IDisposable } from '../../platform/common/types';
 import * as notebookUpdater from '../../kernels/execution/notebookUpdater';
 import { createMockedNotebookDocument } from '../../test/datascience/editor-integration/helpers';
 

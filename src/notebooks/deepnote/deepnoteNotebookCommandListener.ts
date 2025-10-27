@@ -213,7 +213,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         }
 
         const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
-        editor.revealRange(notebookRange, NotebookEditorRevealType?.Default ?? 0);
+        editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
         editor.selection = notebookRange;
         // Enter edit mode on the new cell
         await commands.executeCommand('notebook.cell.edit');
@@ -254,7 +254,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         }
 
         const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
-        editor.revealRange(notebookRange, NotebookEditorRevealType?.Default ?? 0);
+        editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
         editor.selection = notebookRange;
         // Enter edit mode on the new cell
         await commands.executeCommand('notebook.cell.edit');
@@ -298,8 +298,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         }
 
         const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
-        // editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
-        editor.revealRange(notebookRange, 0);
+        editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
         editor.selection = notebookRange;
         // Enter edit mode on the new cell
         await commands.executeCommand('notebook.cell.edit');

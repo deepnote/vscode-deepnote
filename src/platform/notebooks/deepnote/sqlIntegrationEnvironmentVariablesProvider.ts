@@ -10,7 +10,7 @@ import {
     DATAFRAME_SQL_INTEGRATION_ID,
     IntegrationConfig,
     IntegrationType,
-    SnowflakeAuthMethod
+    SnowflakeAuthMethods
 } from './integrationTypes';
 
 /**
@@ -82,16 +82,17 @@ function convertIntegrationConfigToJson(config: IntegrationConfig): string {
             // Build Snowflake connection URL
             // Format depends on auth method:
             // Username+password: snowflake://{username}:{password}@{account}/{database}?warehouse={warehouse}&role={role}&application=YourApp
-            // Key-pair: snowflake://{username}@{account}/{database}?warehouse={warehouse}&role={role}&authenticator=snowflake_jwt&application=YourApp
-            const encodedUsername = encodeURIComponent(config.username);
+            // Service account key-pair: snowflake://{username}@{account}/{database}?warehouse={warehouse}&role={role}&authenticator=snowflake_jwt&application=YourApp
             const encodedAccount = encodeURIComponent(config.account);
 
             let url: string;
             const params: Record<string, unknown> = {};
 
-            if (config.authMethod === SnowflakeAuthMethod.UsernamePassword) {
+            // Check if this is a supported auth method
+            if (config.authMethod === null || config.authMethod === SnowflakeAuthMethods.PASSWORD) {
                 // Username+password authentication
-                const encodedPassword = encodeURIComponent(config.password || '');
+                const encodedUsername = encodeURIComponent(config.username);
+                const encodedPassword = encodeURIComponent(config.password);
                 const database = config.database ? `/${encodeURIComponent(config.database)}` : '';
                 url = `snowflake://${encodedUsername}:${encodedPassword}@${encodedAccount}${database}`;
 
@@ -107,8 +108,9 @@ function convertIntegrationConfigToJson(config: IntegrationConfig): string {
                 if (queryParams.length > 0) {
                     url += `?${queryParams.join('&')}`;
                 }
-            } else {
-                // Key-pair authentication
+            } else if (config.authMethod === SnowflakeAuthMethods.SERVICE_ACCOUNT_KEY_PAIR) {
+                // Service account key-pair authentication
+                const encodedUsername = encodeURIComponent(config.username);
                 const database = config.database ? `/${encodeURIComponent(config.database)}` : '';
                 url = `snowflake://${encodedUsername}@${encodedAccount}${database}`;
 
@@ -127,10 +129,15 @@ function convertIntegrationConfigToJson(config: IntegrationConfig): string {
                 }
 
                 // For key-pair auth, pass the private key and passphrase as params
-                params.private_key = config.privateKey || '';
+                params.private_key = config.privateKey;
                 if (config.privateKeyPassphrase) {
                     params.private_key_passphrase = config.privateKeyPassphrase;
                 }
+            } else {
+                // Unsupported auth method
+                throw new UnsupportedIntegrationError(
+                    `Snowflake integration with auth method '${config.authMethod}' is not supported in VSCode`
+                );
             }
 
             return JSON.stringify({

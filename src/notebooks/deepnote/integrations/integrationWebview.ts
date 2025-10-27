@@ -164,6 +164,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsSnowflakeAuthMethodSubLabel: localize.Integrations.snowflakeAuthMethodSubLabel,
             integrationsSnowflakeAuthMethodUsernamePassword: localize.Integrations.snowflakeAuthMethodUsernamePassword,
             integrationsSnowflakeAuthMethodKeyPair: localize.Integrations.snowflakeAuthMethodKeyPair,
+            integrationsSnowflakeUnsupportedAuthMethod: localize.Integrations.snowflakeUnsupportedAuthMethod,
             integrationsSnowflakeUsernameLabel: localize.Integrations.snowflakeUsernameLabel,
             integrationsSnowflakeUsernamePlaceholder: localize.Integrations.snowflakeUsernamePlaceholder,
             integrationsSnowflakePasswordLabel: localize.Integrations.snowflakePasswordLabel,

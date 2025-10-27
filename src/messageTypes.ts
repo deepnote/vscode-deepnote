@@ -214,6 +214,7 @@ export type LocalizedMessages = {
     integrationsSnowflakeAuthMethodSubLabel: string;
     integrationsSnowflakeAuthMethodUsernamePassword: string;
     integrationsSnowflakeAuthMethodKeyPair: string;
+    integrationsSnowflakeUnsupportedAuthMethod: string;
     integrationsSnowflakeUsernameLabel: string;
     integrationsSnowflakeUsernamePlaceholder: string;
     integrationsSnowflakePasswordLabel: string;

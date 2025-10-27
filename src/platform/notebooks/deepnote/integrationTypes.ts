@@ -65,31 +65,70 @@ export interface BigQueryIntegrationConfig extends BaseIntegrationConfig {
 }
 
 /**
- * Snowflake authentication method
+ * Snowflake authentication methods
  */
-export enum SnowflakeAuthMethod {
-    UsernamePassword = 'username_password',
-    KeyPair = 'key_pair'
+export const SnowflakeAuthMethods = {
+    PASSWORD: 'PASSWORD',
+    OKTA: 'OKTA',
+    NATIVE_SNOWFLAKE: 'NATIVE_SNOWFLAKE',
+    AZURE_AD: 'AZURE_AD',
+    KEY_PAIR: 'KEY_PAIR',
+    SERVICE_ACCOUNT_KEY_PAIR: 'SERVICE_ACCOUNT_KEY_PAIR'
+} as const;
+
+export type SnowflakeAuthMethod = (typeof SnowflakeAuthMethods)[keyof typeof SnowflakeAuthMethods] | null;
+
+/**
+ * Supported auth methods that we can configure in VSCode
+ */
+export const SUPPORTED_SNOWFLAKE_AUTH_METHODS = [
+    null, // Legacy username+password (no authMethod field)
+    SnowflakeAuthMethods.PASSWORD,
+    SnowflakeAuthMethods.SERVICE_ACCOUNT_KEY_PAIR
+] as const;
+
+/**
+ * Base Snowflake configuration with common fields
+ */
+interface BaseSnowflakeConfig extends BaseIntegrationConfig {
+    type: IntegrationType.Snowflake;
+    account: string;
+    warehouse?: string;
+    database?: string;
+    role?: string;
 }
 
 /**
- * Snowflake integration configuration
+ * Snowflake integration configuration (discriminated union)
  */
-export interface SnowflakeIntegrationConfig extends BaseIntegrationConfig {
-    type: IntegrationType.Snowflake;
-    account: string;
-    authMethod: SnowflakeAuthMethod;
-    username: string;
-    // For username+password auth
-    password?: string;
-    // For key-pair auth
-    privateKey?: string;
-    privateKeyPassphrase?: string;
-    // Optional fields
-    database?: string;
-    warehouse?: string;
-    role?: string;
-}
+export type SnowflakeIntegrationConfig = BaseSnowflakeConfig &
+    (
+        | {
+              authMethod: null;
+              username: string;
+              password: string;
+          }
+        | {
+              authMethod: typeof SnowflakeAuthMethods.PASSWORD;
+              username: string;
+              password: string;
+          }
+        | {
+              authMethod: typeof SnowflakeAuthMethods.SERVICE_ACCOUNT_KEY_PAIR;
+              username: string;
+              privateKey: string;
+              privateKeyPassphrase?: string;
+          }
+        | {
+              // Unsupported auth methods - we store them but don't allow editing
+              authMethod:
+                  | typeof SnowflakeAuthMethods.OKTA
+                  | typeof SnowflakeAuthMethods.NATIVE_SNOWFLAKE
+                  | typeof SnowflakeAuthMethods.AZURE_AD
+                  | typeof SnowflakeAuthMethods.KEY_PAIR;
+              [key: string]: unknown; // Allow any additional fields for unsupported methods
+          }
+    );
 
 /**
  * Union type of all integration configurations

@@ -872,6 +872,9 @@ export namespace Integrations {
     export const snowflakeAuthMethodSubLabel = l10n.t('Method');
     export const snowflakeAuthMethodUsernamePassword = l10n.t('Username & password');
     export const snowflakeAuthMethodKeyPair = l10n.t('Key-pair (service account)');
+    export const snowflakeUnsupportedAuthMethod = l10n.t(
+        'This Snowflake integration uses an authentication method that is not supported in VSCode. You can view the integration details but cannot edit or use it.'
+    );
     export const snowflakeUsernameLabel = l10n.t('Username');
     export const snowflakeUsernamePlaceholder = l10n.t('WEBSITE_ANALYTICS_USER');
     export const snowflakePasswordLabel = l10n.t('Password');

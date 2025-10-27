@@ -83,7 +83,7 @@ suite(`Interactive window execution @iw`, async function () {
         logger.info(`Ended Test (completed) ${this.currentTest?.title}`);
     });
     test('__file__ exists even after restarting a kernel', async function () {
-        // https://github.com/deepnote/vscode-deepnote/issues/12251
+        // https://github.com/microsoft/vscode-jupyter/issues/12251
         // Ensure we click `Yes` when prompted to restart the kernel.
         disposables.push(await clickOKForRestartPrompt());
 

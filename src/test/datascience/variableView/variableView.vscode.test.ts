@@ -104,7 +104,7 @@ suite('VariableView @variableViewer', function () {
         const kernel = kernelProvider.get(cell.notebook.uri)!;
         const execution = kernelProvider.getKernelExecution(kernel);
         const outputs = await execution.executeHidden('%who_ls');
-        // https://github.com/deepnote/vscode-deepnote/issues/10559
+        // https://github.com/microsoft/vscode-jupyter/issues/10559
         const varsToIgnore = ['matplotlib_inline', 'matplotlib'];
         // Sample output is `["test", "test2", "os", "sys"]`
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -192,7 +192,7 @@ suite('VariableView @variableViewer', function () {
     test('VariableView basic types A (webview-test)', async function () {
         const version = await getVersion(activeInterpreter);
         if (version?.major === 3 && (version.minor || 0) >= 10) {
-            // https://github.com/deepnote/vscode-deepnote/issues/8523
+            // https://github.com/microsoft/vscode-jupyter/issues/8523
             return this.skip();
         }
         // Send the command to open the view

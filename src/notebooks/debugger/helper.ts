@@ -177,7 +177,7 @@ export async function cellDebugSetup(
     debugAdapter: IKernelDebugAdapter
 ): Promise<void> {
     // remove this if when https://github.com/microsoft/debugpy/issues/706 is fixed and ipykernel ships it
-    // executing this code restarts debugpy and fixes https://github.com/deepnote/vscode-deepnote/issues/7251
+    // executing this code restarts debugpy and fixes https://github.com/microsoft/vscode-jupyter/issues/7251
     const code = 'import debugpy\ndebugpy.debug_this_thread()';
     await execution.executeHidden(code);
 

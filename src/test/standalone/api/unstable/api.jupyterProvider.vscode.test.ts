@@ -44,7 +44,7 @@ suite('Jupyter Provider Tests', function () {
             return this.skip();
         }
         if (IS_CONDA_TEST()) {
-            // Due to upstream issue documented here https://github.com/deepnote/vscode-deepnote/issues/14338
+            // Due to upstream issue documented here https://github.com/microsoft/vscode-jupyter/issues/14338
             return this.skip();
         }
         this.timeout(120_000);

@@ -520,7 +520,7 @@ async function postStartKernel(
     // Note: jupyter (python code) tries this a couple f times).
     // Note: We don't yet want to do what Jupyter does today, it could slow the startup of kernels.
     // Lets try this and see (hence the telemetry to see the cost of this check).
-    // We know 10s is way too slow, see https://github.com/deepnote/vscode-deepnote/issues/8917
+    // We know 10s is way too slow, see https://github.com/microsoft/vscode-jupyter/issues/8917
     const gotIoPubMessage = createDeferred<boolean>();
     const kernelInfoRequestHandled = createDeferred<boolean>();
     const iopubHandler = () => gotIoPubMessage.resolve(true);

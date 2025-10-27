@@ -118,7 +118,7 @@ suite('Smoke Tests', function () {
     }).timeout(timeoutForCellToRun);
 
     test('Interactive window should always pick up current active interpreter', async function () {
-        return this.skip(); // See https://github.com/deepnote/vscode-deepnote/issues/5478
+        return this.skip(); // See https://github.com/microsoft/vscode-jupyter/issues/5478
 
         // Make an interactive window
         await vscode.commands.executeCommand<void>('jupyter.createnewinteractive');

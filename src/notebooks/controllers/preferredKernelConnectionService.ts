@@ -28,7 +28,7 @@ import { getRemoteSessionOptions } from '../../kernels/jupyter/session/jupyterSe
 import { getCachedEnvironment, getEnvironmentType, getPythonEnvironmentName } from '../../platform/interpreter/helpers';
 
 /**
- * Attempt to clean up https://github.com/deepnote/vscode-deepnote/issues/11914
+ * Attempt to clean up https://github.com/microsoft/vscode-jupyter/issues/11914
  * Provides the ability to look for exact or preferred kernel connections.
  * Note: This class has zero side effects unlike `ControllerPreferredService`, and is meant to be a replacement for it
  */

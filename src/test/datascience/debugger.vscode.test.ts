@@ -201,7 +201,7 @@ suite('Run By Line @debugger', function () {
         assert.isTrue(getCellOutputs(cell).includes('1'));
     });
 
-    // https://github.com/deepnote/vscode-deepnote/issues/16860
+    // https://github.com/microsoft/vscode-jupyter/issues/16860
     test.skip('Interrupt during debugging', async function () {
         const cell = await insertCodeCell('a=1\na', { index: 0 });
         const doc = window.activeNotebookEditor?.notebook!;
@@ -220,7 +220,7 @@ suite('Run By Line @debugger', function () {
         );
     });
 
-    // https://github.com/deepnote/vscode-deepnote/issues/16860
+    // https://github.com/microsoft/vscode-jupyter/issues/16860
     test.skip('Stops in same-cell function called from last line', async function () {
         const cell = await insertCodeCell('def foo():\n    print(1)\n\nfoo()', { index: 0 });
         const doc = window.activeNotebookEditor?.notebook!;
@@ -251,7 +251,7 @@ suite('Run By Line @debugger', function () {
     });
 
     test.skip('Restart while debugging', async function () {
-        // https://github.com/deepnote/vscode-deepnote/issues/12188
+        // https://github.com/microsoft/vscode-jupyter/issues/12188
         const cell = await insertCodeCell('def foo():\n    print(1)\n\nfoo()', { index: 0 });
         const doc = window.activeNotebookEditor?.notebook!;
 
@@ -274,7 +274,7 @@ suite('Run By Line @debugger', function () {
     });
 
     test.skip('Does not stop in other cell', async function () {
-        // https://github.com/deepnote/vscode-deepnote/issues/8757
+        // https://github.com/microsoft/vscode-jupyter/issues/8757
         const cell0 = await insertCodeCell('def foo():\n    print(1)');
         const cell1 = await insertCodeCell('foo()');
         const doc = window.activeNotebookEditor?.notebook!;
@@ -297,7 +297,7 @@ suite('Run By Line @debugger', function () {
     });
 
     test.skip('Run a second time after interrupt', async function () {
-        // https://github.com/deepnote/vscode-deepnote/issues/11245
+        // https://github.com/microsoft/vscode-jupyter/issues/11245
         await insertCodeCell(
             'import time\nfor i in range(0,50):\n  time.sleep(.1)\n  print("sleepy")\nprint("final " + "output")',
             {

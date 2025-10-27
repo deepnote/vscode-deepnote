@@ -835,7 +835,7 @@ import { setPythonApi } from '../../../platform/interpreter/helpers';
         ].forEach((activePythonEnv) => {
             suite(activePythonEnv ? `With active Python (${activePythonEnv.id})` : 'without active Python', () => {
                 setup(function () {
-                    // Flaky windows unit tests. https://github.com/deepnote/vscode-deepnote/issues/13462
+                    // Flaky windows unit tests. https://github.com/microsoft/vscode-jupyter/issues/13462
                     return this.skip();
                 });
                 /**
@@ -914,7 +914,7 @@ import { setPythonApi } from '../../../platform/interpreter/helpers';
                     });
                 });
                 test('If two kernelspecs share the same interpreter, but have different env variables, then both should be listed', async function () {
-                    // https://github.com/deepnote/vscode-deepnote/issues/13236
+                    // https://github.com/microsoft/vscode-jupyter/issues/13236
                     if (os.platform() === 'win32') {
                         return this.skip();
                     }

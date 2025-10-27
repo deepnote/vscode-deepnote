@@ -772,7 +772,7 @@ function compareKernelSpecOrEnvNames(
  * Given that hash, compare the two kernels and find the better of the two.
  *
  * If the user has kernelspec in metadata & the interpreter hash is stored in metadata, then its a great match.
- * This is the preferred approach https://github.com/deepnote/vscode-deepnote/issues/5612
+ * This is the preferred approach https://github.com/microsoft/vscode-jupyter/issues/5612
  */
 function compareAgainstInterpreterInNotebookMetadata(
     {

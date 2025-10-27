@@ -144,7 +144,7 @@ export abstract class ModuleInstaller implements IModuleInstaller {
                         progress?.report({ message });
                         logger.debug(output.out);
                         if (output.source === 'stderr') {
-                            // https://github.com/deepnote/vscode-deepnote/issues/12703
+                            // https://github.com/microsoft/vscode-jupyter/issues/12703
                             // Sometimes on windows we get an error that says "ERROR: Could not install packages due to an OSError: [Errno 2] No such file or directory:"
                             // Look for such errors so we can provide a better error message to the user.
                             if (couldNotInstallErr) {
@@ -168,7 +168,7 @@ export abstract class ModuleInstaller implements IModuleInstaller {
                     .then(
                         () => {
                             if (observable?.proc?.exitCode !== 0) {
-                                // https://github.com/deepnote/vscode-deepnote/issues/12703
+                                // https://github.com/microsoft/vscode-jupyter/issues/12703
                                 // `ERROR: Could not install packages due to an OSError: [Errno 2] No such file or directory: 'C:\\Users\\donjayamanne\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.10_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python310\\site-packages\\jedi\\third_party\\typeshed\\third_party\\2and3\\requests\\packages\\urllib3\\packages\\ssl_match_hostname\\_implementation.pyi'
                                 // HINT: This error might have occurred since this system does not have Windows Long Path support enabled. You can find information on how to enable this at https://pip.pypa.io/warnings/enable-long-paths`;
                                 // Remove the `[notice]` lines from the error messages

@@ -80,7 +80,7 @@ export class PoetryInstaller extends ModuleInstaller {
         // TODO: We have to shell exec this because child_process.spawn will die
         // for poetry.
         // See issue:
-        // https://github.com/deepnote/vscode-deepnote/issues/9265
+        // https://github.com/microsoft/vscode-jupyter/issues/9265
         return {
             useShellExec: true,
             args,

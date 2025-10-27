@@ -71,7 +71,7 @@ suite('Non-Python Kernel @nonPython ', async function () {
         verifyPromptWasNotDisplayed();
         await closeNotebooksAndCleanUpAfterTests(disposables);
     });
-    // https://github.com/deepnote/vscode-deepnote/issues/10900
+    // https://github.com/microsoft/vscode-jupyter/issues/10900
     test('Automatically pick Deno kernel when opening a Deno Notebook', async () => {
         const notebook = await TestNotebookDocument.openFile(testDenoNb);
         await waitForCondition(

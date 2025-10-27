@@ -765,7 +765,7 @@ export class GlobalPythonKernelSpecFinder implements IDisposable {
         //                         // Telemetry to see, and fix this invalid code paths, clearly code is complicated
 
         //                         // NOTE: Defaulting to the active interpreter (of any random workspace folder, even if user has multiple folders open) is hacky, but this is the only fall back we have.
-        //                         // See here https://github.com/deepnote/vscode-deepnote/issues/12278
+        //                         // See here https://github.com/microsoft/vscode-jupyter/issues/12278
         //                         const activeInterpreterOfAWorkspaceFolder = activeInterpreters.find((i) => !!i);
         //                         let kernelInterpreter = activeInterpreterOfAWorkspaceFolder;
         //                         // If the interpreter information is stored in kernel spec.json then use that to determine the interpreter.

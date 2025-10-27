@@ -268,7 +268,7 @@ export class KernelDependencyService implements IKernelDependencyService {
         const options = [installOption];
         if (resource && !cannotChangeKernels) {
             // Due to a bug in our code, if we don't have a resource, don't display the option to change kernels.
-            // https://github.com/deepnote/vscode-deepnote/issues/6135
+            // https://github.com/microsoft/vscode-jupyter/issues/6135
             options.push(selectKernelOption);
         }
         options.push(moreInfoOption);

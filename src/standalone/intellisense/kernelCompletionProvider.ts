@@ -506,7 +506,7 @@ export class KernelCompletionProvider extends DisposableBase implements IExtensi
                      * Do not wait for completions,
                      * If the completions request crashes then we don't get a response for this request,
                      * Hence we end up waiting indefinitely.
-                     * https://github.com/deepnote/vscode-deepnote/issues/9014
+                     * https://github.com/microsoft/vscode-jupyter/issues/9014
                      *
                      * We send this request to ensure the completion provider in the kernel has bee pre-warmed.
                      * This way things are faster when the user actually triggers a completion.

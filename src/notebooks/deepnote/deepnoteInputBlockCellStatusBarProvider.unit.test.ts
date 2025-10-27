@@ -496,14 +496,18 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
 
                 // Track if the event was fired
                 let eventFired = false;
-                provider.onDidChangeCellStatusBarItems(() => {
+                const disposable = provider.onDidChangeCellStatusBarItems(() => {
                     eventFired = true;
                 });
 
-                await (provider as any).selectInputSettings(cell);
+                try {
+                    await (provider as any).selectInputSettings(cell);
 
-                expect(showCalled).to.be.true;
-                expect(eventFired).to.be.true;
+                    expect(showCalled).to.be.true;
+                    expect(eventFired).to.be.true;
+                } finally {
+                    disposable.dispose();
+                }
             });
         });
 

@@ -179,8 +179,12 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
                                 ))}
 
                                 <div className="add-option-form">
+                                    <label htmlFor="addOptionInput" className="visually-hidden">
+                                        Option name
+                                    </label>
                                     <input
                                         type="text"
+                                        id="addOptionInput"
                                         value={newOption}
                                         onChange={(e) => setNewOption(e.target.value)}
                                         onKeyDown={(e) => {
@@ -190,6 +194,7 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
                                             }
                                         }}
                                         placeholder={getLocString('addOptionPlaceholder', 'Add option...')}
+                                        aria-label="Option name"
                                     />
                                     <button type="button" onClick={handleAddOption}>
                                         {getLocString('addButton', 'Add')}
@@ -218,13 +223,20 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
                         </div>
 
                         {settings.selectType === 'from-variable' && (
-                            <input
-                                type="text"
-                                className="variable-input"
-                                value={settings.selectedVariable}
-                                onChange={handleVariableChange}
-                                placeholder={getLocString('variablePlaceholder', 'Variable name...')}
-                            />
+                            <>
+                                <label htmlFor="variableNameInput" className="visually-hidden">
+                                    Variable name
+                                </label>
+                                <input
+                                    type="text"
+                                    id="variableNameInput"
+                                    className="variable-input"
+                                    value={settings.selectedVariable}
+                                    onChange={handleVariableChange}
+                                    placeholder={getLocString('variablePlaceholder', 'Variable name...')}
+                                    aria-label="Variable name"
+                                />
+                            </>
                         )}
                     </div>
                 </label>

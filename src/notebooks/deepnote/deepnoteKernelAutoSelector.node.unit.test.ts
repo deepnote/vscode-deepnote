@@ -770,7 +770,7 @@ function createMockEnvironment(id: string, name: string, hasServer: boolean = fa
         name,
         description: `Test environment ${name}`,
         pythonInterpreter: mockPythonInterpreter,
-        venvPath: Uri.parse(`/test/venvs/${id}`),
+        venvPath: Uri.file(`/test/venvs/${id}`),
         packages: [],
         createdAt: new Date(),
         lastUsedAt: new Date(),

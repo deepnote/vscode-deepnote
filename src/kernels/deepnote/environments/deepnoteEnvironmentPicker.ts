@@ -1,58 +1,10 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-
 import { inject, injectable } from 'inversify';
-import { QuickPickItem, window, Uri, commands } from 'vscode';
+import { QuickPickItem, window, Uri, commands, l10n } from 'vscode';
 import { logger } from '../../../platform/logging';
 import { IDeepnoteEnvironmentManager } from '../types';
 import { DeepnoteEnvironment, EnvironmentStatus } from './deepnoteEnvironment';
 import { getDisplayPath } from '../../../platform/common/platform/fs-paths';
-
-export function getDeepnoteEnvironmentStatusVisual(status: EnvironmentStatus): {
-    icon: string;
-    text: string;
-    themeColorId: string;
-    contextValue: string;
-} {
-    switch (status) {
-        case EnvironmentStatus.Running:
-            return {
-                icon: 'vm-running',
-                text: 'Running',
-                contextValue: 'deepnoteEnvironment.running',
-                themeColorId: 'charts.green'
-            };
-        case EnvironmentStatus.Starting:
-            return {
-                icon: 'loading~spin',
-                text: 'Starting...',
-                contextValue: 'deepnoteEnvironment.starting',
-                themeColorId: 'charts.yellow'
-            };
-        case EnvironmentStatus.Stopped:
-            return {
-                icon: 'vm-outline',
-                text: 'Stopped',
-                contextValue: 'deepnoteEnvironment.stopped',
-                themeColorId: 'charts.gray'
-            };
-        case EnvironmentStatus.Error:
-            return {
-                icon: 'vm-outline',
-                text: 'Error',
-                contextValue: 'deepnoteEnvironment.stopped',
-                themeColorId: 'charts.gray'
-            };
-        default:
-            status satisfies never;
-            return {
-                icon: 'vm-outline',
-                text: 'Unknown',
-                contextValue: 'deepnoteEnvironment.stopped',
-                themeColorId: 'charts.gray'
-            };
-    }
-}
+import { getDeepnoteEnvironmentStatusVisual } from './deepnoteEnvironmentUi';
 
 /**
  * Handles showing environment picker UI for notebook selection
@@ -77,9 +29,9 @@ export class DeepnoteEnvironmentPicker {
         if (environments.length === 0) {
             // No environments exist - prompt user to create one
             const choice = await window.showInformationMessage(
-                `No environments found. Create one to use with ${getDisplayPath(notebookUri)}?`,
-                'Create Environment',
-                'Cancel'
+                l10n.t('No environments found. Create one to use with {0}?', getDisplayPath(notebookUri)),
+                l10n.t('Create Environment'),
+                l10n.t('Cancel')
             );
 
             if (choice === 'Create Environment') {
@@ -109,7 +61,9 @@ export class DeepnoteEnvironmentPicker {
             return {
                 label: `$(${icon}) ${env.name} [${text}]`,
                 description: getDisplayPath(env.pythonInterpreter.uri),
-                detail: env.packages?.length ? `Packages: ${env.packages.join(', ')}` : 'No additional packages',
+                detail: env.packages?.length
+                    ? l10n.t('Packages: {0}', env.packages.join(', '))
+                    : l10n.t('No additional packages'),
                 environment: env
             };
         });

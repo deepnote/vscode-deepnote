@@ -29,6 +29,16 @@ interface ServerLockFile {
     timestamp: number;
 }
 
+type PendingOperation =
+    | {
+          type: 'start';
+          promise: Promise<DeepnoteServerInfo>;
+      }
+    | {
+          type: 'stop';
+          promise: Promise<void>;
+      };
+
 /**
  * Starts and manages the deepnote-toolkit Jupyter server.
  */
@@ -38,7 +48,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
     private readonly serverInfos: Map<string, DeepnoteServerInfo> = new Map();
     private readonly disposablesByFile: Map<string, IDisposable[]> = new Map();
     // Track in-flight operations per file to prevent concurrent start/stop
-    private readonly pendingOperations: Map<string, Promise<DeepnoteServerInfo | void>> = new Map();
+    private readonly pendingOperations: Map<string, PendingOperation> = new Map();
     // Global lock for port allocation to prevent race conditions when multiple environments start concurrently
     private portAllocationLock: Promise<void> = Promise.resolve();
     // Unique session ID for this VS Code window instance
@@ -65,12 +75,12 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
     public activate(): void {
         // Ensure lock file directory exists
         this.initializeLockFileDirectory().catch((ex) => {
-            logger.warn(`Failed to initialize lock file directory: ${ex}`);
+            logger.warn('Failed to initialize lock file directory', ex);
         });
 
         // Clean up any orphaned deepnote-toolkit processes from previous sessions
         this.cleanupOrphanedProcesses().catch((ex) => {
-            logger.warn(`Failed to cleanup orphaned processes: ${ex}`);
+            logger.warn('Failed to cleanup orphaned processes', ex);
         });
     }
 
@@ -89,11 +99,11 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         token?: CancellationToken
     ): Promise<DeepnoteServerInfo> {
         // Wait for any pending operations on this environment to complete
-        const pendingOp = this.pendingOperations.get(environmentId);
+        let pendingOp = this.pendingOperations.get(environmentId);
         if (pendingOp) {
             logger.info(`Waiting for pending operation on environment ${environmentId} to complete...`);
             try {
-                await pendingOp;
+                await pendingOp.promise;
             } catch {
                 // Ignore errors from previous operations
             }
@@ -108,12 +118,22 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             return existingServerInfo;
         }
 
+        // Start the operation if not already pending
+        pendingOp = this.pendingOperations.get(environmentId);
+
+        if (pendingOp && pendingOp.type === 'start') {
+            return await pendingOp.promise;
+        }
+
         // Start the operation and track it
-        const operation = this.startServerForEnvironment(interpreter, venvPath, environmentId, token);
+        const operation = {
+            type: 'start' as const,
+            promise: this.startServerForEnvironment(interpreter, venvPath, environmentId, token)
+        };
         this.pendingOperations.set(environmentId, operation);
 
         try {
-            const result = await operation;
+            const result = await operation.promise;
             return result;
         } finally {
             // Remove from pending operations when done
@@ -127,24 +147,32 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
      * Environment-based method: Stop the server for a kernel environment.
      * @param environmentId The environment ID
      */
-    public async stopServer(environmentId: string): Promise<void> {
+    public async stopServer(environmentId: string, token?: CancellationToken): Promise<void> {
+        if (token?.isCancellationRequested) {
+            throw new Error('Operation cancelled');
+        }
+
         // Wait for any pending operations on this environment to complete
         const pendingOp = this.pendingOperations.get(environmentId);
         if (pendingOp) {
             logger.info(`Waiting for pending operation on environment ${environmentId} before stopping...`);
             try {
-                await pendingOp;
+                await pendingOp.promise;
             } catch {
                 // Ignore errors from previous operations
             }
         }
 
+        if (token?.isCancellationRequested) {
+            throw new Error('Operation cancelled');
+        }
+
         // Start the stop operation and track it
-        const operation = this.stopServerForEnvironment(environmentId);
+        const operation = { type: 'stop' as const, promise: this.stopServerForEnvironment(environmentId, token) };
         this.pendingOperations.set(environmentId, operation);
 
         try {
-            await operation;
+            await operation.promise;
         } finally {
             // Remove from pending operations when done
             if (this.pendingOperations.get(environmentId) === operation) {
@@ -337,7 +365,11 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
     /**
      * Environment-based server stop implementation.
      */
-    private async stopServerForEnvironment(environmentId: string): Promise<void> {
+    private async stopServerForEnvironment(environmentId: string, token?: CancellationToken): Promise<void> {
+        if (token?.isCancellationRequested) {
+            throw new Error('Operation cancelled');
+        }
+
         const serverProcess = this.serverProcesses.get(environmentId);
 
         if (serverProcess) {
@@ -351,13 +383,21 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                 this.serverOutputByFile.delete(environmentId);
                 this.outputChannel.appendLine(l10n.t('Deepnote server stopped for environment {0}', environmentId));
 
+                if (token?.isCancellationRequested) {
+                    throw new Error('Operation cancelled');
+                }
+
                 // Clean up lock file after stopping the server
                 if (serverPid) {
                     await this.deleteLockFile(serverPid);
                 }
             } catch (ex) {
-                logger.error(`Error stopping Deepnote server: ${ex}`);
+                logger.error('Error stopping Deepnote server', ex);
             }
+        }
+
+        if (token?.isCancellationRequested) {
+            throw new Error('Operation cancelled');
         }
 
         const disposables = this.disposablesByFile.get(environmentId);
@@ -492,10 +532,17 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             attempts++;
         }
 
-        throw new Error(
-            `Failed to find available port after ${maxAttempts} attempts (started at ${startPort}). Ports in use: ${Array.from(
-                portsInUse
-            ).join(', ')}`
+        throw new DeepnoteServerStartupError(
+            'python', // unknown here
+            startPort,
+            'process_failed',
+            '',
+            l10n.t(
+                'Failed to find available port after {0} attempts (started at {1}). Ports in use: {2}',
+                maxAttempts,
+                startPort,
+                Array.from(portsInUse).join(', ')
+            )
         );
     }
 
@@ -546,7 +593,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                     killPromises.push(exitPromise);
                 }
             } catch (ex) {
-                logger.error(`Error stopping Deepnote server for ${fileKey}: ${ex}`);
+                logger.error(`Error stopping Deepnote server for ${fileKey}`, ex);
             }
         }
 
@@ -566,7 +613,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             try {
                 disposables.forEach((d) => d.dispose());
             } catch (ex) {
-                logger.error(`Error disposing resources for ${fileKey}: ${ex}`);
+                logger.error(`Error disposing resources for ${fileKey}`, ex);
             }
         }
 
@@ -588,7 +635,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             await fs.ensureDir(this.lockFileDir);
             logger.info(`Lock file directory initialized at ${this.lockFileDir} with session ID ${this.sessionId}`);
         } catch (ex) {
-            logger.error(`Failed to create lock file directory: ${ex}`);
+            logger.error('Failed to create lock file directory', ex);
         }
     }
 
@@ -613,7 +660,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             await fs.writeJson(lockFilePath, lockData, { spaces: 2 });
             logger.info(`Created lock file for PID ${pid} with session ID ${this.sessionId}`);
         } catch (ex) {
-            logger.warn(`Failed to write lock file for PID ${pid}: ${ex}`);
+            logger.warn(`Failed to write lock file for PID ${pid}`, ex);
         }
     }
 
@@ -627,7 +674,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                 return await fs.readJson(lockFilePath);
             }
         } catch (ex) {
-            logger.warn(`Failed to read lock file for PID ${pid}: ${ex}`);
+            logger.warn(`Failed to read lock file for PID ${pid}`, ex);
         }
         return null;
     }
@@ -643,7 +690,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                 logger.info(`Deleted lock file for PID ${pid}`);
             }
         } catch (ex) {
-            logger.warn(`Failed to delete lock file for PID ${pid}: ${ex}`);
+            logger.warn(`Failed to delete lock file for PID ${pid}`, ex);
         }
     }
 
@@ -719,7 +766,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                 }
             }
         } catch (ex) {
-            logger.warn(`Failed to check if process ${pid} is orphaned: ${ex}`);
+            logger.warn(`Failed to check if process ${pid} is orphaned`, ex);
         }
 
         // If we can't determine, assume it's not orphaned (safer)
@@ -854,7 +901,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                                 // Clean up the lock file after killing
                                 await this.deleteLockFile(pid);
                             } catch (ex) {
-                                logger.warn(`Failed to kill process ${pid}: ${ex}`);
+                                logger.warn(`Failed to kill process ${pid}`, ex);
                             }
                         }
 
@@ -868,7 +915,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             }
         } catch (ex) {
             // Don't fail startup if cleanup fails
-            logger.warn(`Error during orphaned process cleanup: ${ex}`);
+            logger.warn('Error during orphaned process cleanup', ex);
         }
     }
 }

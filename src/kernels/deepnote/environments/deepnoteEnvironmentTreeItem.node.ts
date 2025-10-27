@@ -1,6 +1,6 @@
-import { ThemeIcon, TreeItem, TreeItemCollapsibleState } from 'vscode';
+import { l10n, ThemeIcon, TreeItem, TreeItemCollapsibleState } from 'vscode';
 import { DeepnoteEnvironment, EnvironmentStatus } from './deepnoteEnvironment';
-import { getDeepnoteEnvironmentStatusVisual } from './deepnoteEnvironmentPicker';
+import { getDeepnoteEnvironmentStatusVisual } from './deepnoteEnvironmentUi';
 
 /**
  * Type of tree item in the environments view
@@ -81,8 +81,8 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
         lines.push(`**${this.environment.name}**`);
         lines.push('');
         lines.push(`Status: ${this.status}`);
-        lines.push(`Python: ${this.environment.pythonInterpreter.uri.fsPath}`);
-        lines.push(`Venv: ${this.environment.venvPath.fsPath}`);
+        lines.push(`Python: ${this.environment.pythonInterpreter.uri.toString(true)}`);
+        lines.push(`Venv: ${this.environment.venvPath.toString(true)}`);
 
         if (this.environment.packages && this.environment.packages.length > 0) {
             lines.push(`Packages: ${this.environment.packages.join(', ')}`);
@@ -108,13 +108,13 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
         const days = Math.floor(hours / 24);
 
         if (seconds < 60) {
-            return 'just now';
+            return l10n.t('just now');
         } else if (minutes < 60) {
-            return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+            return l10n.t('{0} minute(s) ago', minutes);
         } else if (hours < 24) {
-            return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+            return l10n.t('{0} hour(s) ago', hours);
         } else if (days < 7) {
-            return `${days} day${days > 1 ? 's' : ''} ago`;
+            return l10n.t('{0} day(s) ago', days);
         } else {
             return date.toLocaleDateString();
         }

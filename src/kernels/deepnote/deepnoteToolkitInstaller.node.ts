@@ -108,9 +108,10 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
 
                 // Ensure kernel spec is installed (may have been deleted or never installed)
                 try {
-                    await this.installKernelSpec(existingVenv, venvPath);
+                    Cancellation.throwIfCanceled(token);
+                    await this.installKernelSpec(existingVenv, venvPath, token);
                 } catch (ex) {
-                    logger.warn(`Failed to ensure kernel spec installed: ${ex}`);
+                    logger.warn('Failed to ensure kernel spec installed', ex);
                     // Don't fail - continue with existing venv
                 }
 
@@ -188,7 +189,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             logger.info('Additional packages installed successfully');
             this.outputChannel.appendLine(l10n.t('✓ Packages installed successfully'));
         } catch (ex) {
-            logger.error(`Failed to install additional packages: ${ex}`);
+            logger.error('Failed to install additional packages', ex);
             this.outputChannel.appendLine(l10n.t('✗ Failed to install packages: {0}', ex));
             throw ex;
         }
@@ -227,7 +228,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
 
             // Log any stderr output (warnings, etc.) but don't fail on it
             if (venvResult.stderr) {
-                logger.info(`venv creation stderr: ${venvResult.stderr}`);
+                logger.info('venv creation stderr', venvResult.stderr);
             }
 
             Cancellation.throwIfCanceled(token);
@@ -237,7 +238,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             if (!venvInterpreter) {
                 logger.error('Failed to create venv: Python interpreter not found after venv creation');
                 if (venvResult.stderr) {
-                    logger.error(`venv stderr: ${venvResult.stderr}`);
+                    logger.error('venv stderr', venvResult.stderr);
                 }
                 this.outputChannel.appendLine(l10n.t('Error: Failed to create virtual environment'));
 
@@ -264,7 +265,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                 logger.info(`pip upgrade output: ${pipUpgradeResult.stdout}`);
             }
             if (pipUpgradeResult.stderr) {
-                logger.info(`pip upgrade stderr: ${pipUpgradeResult.stderr}`);
+                logger.info('pip upgrade stderr', pipUpgradeResult.stderr);
             }
 
             Cancellation.throwIfCanceled(token);
@@ -302,9 +303,10 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
 
                 // Install kernel spec so the kernel uses this venv's Python
                 try {
-                    await this.installKernelSpec(venvInterpreter, venvPath);
+                    Cancellation.throwIfCanceled(token);
+                    await this.installKernelSpec(venvInterpreter, venvPath, token);
                 } catch (ex) {
-                    logger.warn(`Failed to install kernel spec: ${ex}`);
+                    logger.warn('Failed to install kernel spec', ex);
                     // Don't fail the entire installation if kernel spec creation fails
                 }
 
@@ -329,7 +331,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             }
 
             // Otherwise, log full details and wrap in a generic toolkit install error
-            logger.error(`Failed to set up deepnote-toolkit: ${ex}`);
+            logger.error('Failed to set up deepnote-toolkit', ex);
             this.outputChannel.appendLine(l10n.t('Failed to set up deepnote-toolkit; see logs for details'));
 
             throw new DeepnoteToolkitInstallError(
@@ -354,7 +356,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             logger.info(`isToolkitInstalled result: ${result.stdout}`);
             return result.stdout.trim();
         } catch (ex) {
-            logger.debug(`deepnote-toolkit not found: ${ex}`);
+            logger.debug('deepnote-toolkit not found', ex);
             return undefined;
         }
     }
@@ -380,8 +382,17 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
     /**
      * Install ipykernel kernel spec for a venv.
      * This is idempotent - safe to call multiple times.
+     * @param venvInterpreter The venv Python interpreter
+     * @param venvPath The venv path
+     * @param token Cancellation token
      */
-    private async installKernelSpec(venvInterpreter: PythonEnvironment, venvPath: Uri): Promise<void> {
+    private async installKernelSpec(
+        venvInterpreter: PythonEnvironment,
+        venvPath: Uri,
+        token?: CancellationToken
+    ): Promise<void> {
+        Cancellation.throwIfCanceled(token);
+
         const kernelSpecName = this.getKernelSpecName(venvPath);
         const kernelSpecPath = Uri.joinPath(venvPath, 'share', 'jupyter', 'kernels', kernelSpecName);
 
@@ -391,10 +402,15 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             return;
         }
 
+        Cancellation.throwIfCanceled(token);
+
         logger.info(`Installing kernel spec '${kernelSpecName}' for venv at ${venvPath.fsPath}...`);
         const kernelDisplayName = this.getKernelDisplayName(venvPath);
 
         const venvProcessService = await this.processServiceFactory.create(undefined);
+
+        Cancellation.throwIfCanceled(token);
+
         await venvProcessService.exec(
             venvInterpreter.uri.fsPath,
             [

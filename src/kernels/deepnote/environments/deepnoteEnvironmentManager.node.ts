@@ -1,5 +1,5 @@
 import { injectable, inject } from 'inversify';
-import { EventEmitter, Uri } from 'vscode';
+import { EventEmitter, Uri, CancellationToken } from 'vscode';
 import { generateUuid as uuid } from '../../../platform/common/uuid';
 import { IExtensionContext } from '../../../platform/common/types';
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
@@ -74,7 +74,14 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
     /**
      * Create a new kernel environment
      */
-    public async createEnvironment(options: CreateDeepnoteEnvironmentOptions): Promise<DeepnoteEnvironment> {
+    public async createEnvironment(
+        options: CreateDeepnoteEnvironmentOptions,
+        token?: CancellationToken
+    ): Promise<DeepnoteEnvironment> {
+        if (token?.isCancellationRequested) {
+            throw new Error('Operation cancelled');
+        }
+
         const id = uuid();
         const venvPath = Uri.joinPath(this.context.globalStorageUri, 'deepnote-venvs', id);
 
@@ -88,6 +95,10 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
             packages: options.packages,
             description: options.description
         };
+
+        if (token?.isCancellationRequested) {
+            throw new Error('Operation cancelled');
+        }
 
         this.environments.set(id, environment);
         await this.persistEnvironments();
@@ -164,7 +175,11 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
     /**
      * Delete an environment
      */
-    public async deleteEnvironment(id: string): Promise<void> {
+    public async deleteEnvironment(id: string, token?: CancellationToken): Promise<void> {
+        if (token?.isCancellationRequested) {
+            throw new Error('Operation cancelled');
+        }
+
         const config = this.environments.get(id);
         if (!config) {
             throw new Error(`Environment not found: ${id}`);
@@ -172,7 +187,11 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
 
         // Stop the server if running
         if (config.serverInfo) {
-            await this.stopServer(id);
+            await this.stopServer(id, token);
+        }
+
+        if (token?.isCancellationRequested) {
+            throw new Error('Operation cancelled');
         }
 
         this.environments.delete(id);
@@ -229,7 +248,11 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
     /**
      * Stop the Jupyter server for an environment
      */
-    public async stopServer(id: string): Promise<void> {
+    public async stopServer(id: string, token?: CancellationToken): Promise<void> {
+        if (token?.isCancellationRequested) {
+            throw new Error('Operation cancelled');
+        }
+
         const config = this.environments.get(id);
         if (!config) {
             throw new Error(`Environment not found: ${id}`);
@@ -243,7 +266,11 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
         try {
             logger.info(`Stopping server for environment: ${config.name} (${id})`);
 
-            await this.serverStarter.stopServer(id);
+            await this.serverStarter.stopServer(id, token);
+
+            if (token?.isCancellationRequested) {
+                throw new Error('Operation cancelled');
+            }
 
             config.serverInfo = undefined;
 
@@ -260,9 +287,9 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
     /**
      * Restart the Jupyter server for an environment
      */
-    public async restartServer(id: string): Promise<void> {
+    public async restartServer(id: string, token?: CancellationToken): Promise<void> {
         logger.info(`Restarting server for environment: ${id}`);
-        await this.stopServer(id);
+        await this.stopServer(id, token);
         await this.startServer(id);
     }
 

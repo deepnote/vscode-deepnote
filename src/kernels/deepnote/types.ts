@@ -144,8 +144,9 @@ export interface IDeepnoteServerStarter {
     /**
      * Stops the deepnote-toolkit server for a kernel environment.
      * @param environmentId The environment ID
+     * @param token Cancellation token to cancel the operation
      */
-    stopServer(environmentId: string): Promise<void>;
+    stopServer(environmentId: string, token?: vscode.CancellationToken): Promise<void>;
 
     /**
      * Disposes all server processes and resources.
@@ -209,8 +210,13 @@ export interface IDeepnoteEnvironmentManager {
 
     /**
      * Create a new kernel environment
+     * @param options Environment creation options
+     * @param token Cancellation token to cancel the operation
      */
-    createEnvironment(options: CreateDeepnoteEnvironmentOptions): Promise<DeepnoteEnvironment>;
+    createEnvironment(
+        options: CreateDeepnoteEnvironmentOptions,
+        token?: vscode.CancellationToken
+    ): Promise<DeepnoteEnvironment>;
 
     /**
      * Get all environments
@@ -237,23 +243,30 @@ export interface IDeepnoteEnvironmentManager {
 
     /**
      * Delete an environment
+     * @param id The environment ID
+     * @param token Cancellation token to cancel the operation
      */
-    deleteEnvironment(id: string): Promise<void>;
+    deleteEnvironment(id: string, token?: vscode.CancellationToken): Promise<void>;
 
     /**
      * Start the Jupyter server for an environment
+     * @param id The environment ID
      */
     startServer(id: string): Promise<void>;
 
     /**
      * Stop the Jupyter server for an environment
+     * @param id The environment ID
+     * @param token Cancellation token to cancel the operation
      */
-    stopServer(id: string): Promise<void>;
+    stopServer(id: string, token?: vscode.CancellationToken): Promise<void>;
 
     /**
      * Restart the Jupyter server for an environment
+     * @param id The environment ID
+     * @param token Cancellation token to cancel the operation
      */
-    restartServer(id: string): Promise<void>;
+    restartServer(id: string, token?: vscode.CancellationToken): Promise<void>;
 
     /**
      * Update the last used timestamp for an environment

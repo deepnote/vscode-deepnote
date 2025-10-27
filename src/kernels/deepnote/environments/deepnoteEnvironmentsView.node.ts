@@ -1,6 +1,3 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-
 import { inject, injectable } from 'inversify';
 import { commands, Disposable, ProgressLocation, TreeView, window } from 'vscode';
 import { IDisposableRegistry } from '../../../platform/common/types';
@@ -231,9 +228,9 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 {
                     location: ProgressLocation.Notification,
                     title: `Creating environment "${name}"...`,
-                    cancellable: false
+                    cancellable: true
                 },
-                async (progress: { report: (value: { message?: string; increment?: number }) => void }) => {
+                async (progress: { report: (value: { message?: string; increment?: number }) => void }, token) => {
                     progress.report({ message: 'Setting up virtual environment...' });
 
                     const options: CreateDeepnoteEnvironmentOptions = {
@@ -244,12 +241,12 @@ export class DeepnoteEnvironmentsView implements Disposable {
                     };
 
                     try {
-                        const config = await this.environmentManager.createEnvironment(options);
+                        const config = await this.environmentManager.createEnvironment(options, token);
                         logger.info(`Created environment: ${config.id} (${config.name})`);
 
                         void window.showInformationMessage(`Environment "${name}" created successfully!`);
                     } catch (error) {
-                        logger.error(`Failed to create environment: ${error}`);
+                        logger.error('Failed to create environment', error);
                         throw error;
                     }
                 }
@@ -270,9 +267,9 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 {
                     location: ProgressLocation.Notification,
                     title: `Starting server for "${config.name}"...`,
-                    cancellable: false
+                    cancellable: true
                 },
-                async () => {
+                async (_progress, _token) => {
                     await this.environmentManager.startServer(environmentId);
                     logger.info(`Started server for environment: ${environmentId}`);
                 }
@@ -280,7 +277,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
 
             void window.showInformationMessage(`Server started for "${config.name}"`);
         } catch (error) {
-            logger.error(`Failed to start server: ${error}`);
+            logger.error('Failed to start server', error);
             void window.showErrorMessage(`Failed to start server: ${error}`);
         }
     }
@@ -296,17 +293,17 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 {
                     location: ProgressLocation.Notification,
                     title: `Stopping server for "${config.name}"...`,
-                    cancellable: false
+                    cancellable: true
                 },
-                async () => {
-                    await this.environmentManager.stopServer(environmentId);
+                async (_progress, token) => {
+                    await this.environmentManager.stopServer(environmentId, token);
                     logger.info(`Stopped server for environment: ${environmentId}`);
                 }
             );
 
             void window.showInformationMessage(`Server stopped for "${config.name}"`);
         } catch (error) {
-            logger.error(`Failed to stop server: ${error}`);
+            logger.error('Failed to stop server', error);
             void window.showErrorMessage(`Failed to stop server: ${error}`);
         }
     }
@@ -322,17 +319,17 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 {
                     location: ProgressLocation.Notification,
                     title: `Restarting server for "${config.name}"...`,
-                    cancellable: false
+                    cancellable: true
                 },
-                async () => {
-                    await this.environmentManager.restartServer(environmentId);
+                async (_progress, token) => {
+                    await this.environmentManager.restartServer(environmentId, token);
                     logger.info(`Restarted server for environment: ${environmentId}`);
                 }
             );
 
             void window.showInformationMessage(`Server restarted for "${config.name}"`);
         } catch (error) {
-            logger.error(`Failed to restart server: ${error}`);
+            logger.error('Failed to restart server', error);
             void window.showErrorMessage(`Failed to restart server: ${error}`);
         }
     }
@@ -359,17 +356,23 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 {
                     location: ProgressLocation.Notification,
                     title: `Deleting environment "${config.name}"...`,
-                    cancellable: false
+                    cancellable: true
                 },
-                async () => {
-                    await this.environmentManager.deleteEnvironment(environmentId);
+                async (_progress, token) => {
+                    // Clean up notebook mappings referencing this env
+                    const notebooks = this.notebookEnvironmentMapper.getNotebooksUsingEnvironment(environmentId);
+                    for (const nb of notebooks) {
+                        await this.notebookEnvironmentMapper.removeEnvironmentForNotebook(nb);
+                    }
+
+                    await this.environmentManager.deleteEnvironment(environmentId, token);
                     logger.info(`Deleted environment: ${environmentId}`);
                 }
             );
 
             void window.showInformationMessage(`Environment "${config.name}" deleted`);
         } catch (error) {
-            logger.error(`Failed to delete environment: ${error}`);
+            logger.error('Failed to delete environment', error);
             void window.showErrorMessage(`Failed to delete environment: ${error}`);
         }
     }
@@ -403,7 +406,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
             logger.info(`Renamed environment ${environmentId} to "${newName}"`);
             void window.showInformationMessage(`Environment renamed to "${newName}"`);
         } catch (error) {
-            logger.error(`Failed to rename environment: ${error}`);
+            logger.error('Failed to rename environment', error);
             void window.showErrorMessage(`Failed to rename environment: ${error}`);
         }
     }
@@ -457,7 +460,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
 
             void window.showInformationMessage(`Packages updated for "${config.name}"`);
         } catch (error) {
-            logger.error(`Failed to update packages: ${error}`);
+            logger.error('Failed to update packages', error);
             void window.showErrorMessage(`Failed to update packages: ${error}`);
         }
     }
@@ -589,7 +592,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
 
             void window.showInformationMessage('Environment switched successfully');
         } catch (error) {
-            logger.error(`Failed to switch environment: ${error}`);
+            logger.error('Failed to switch environment', error);
             void window.showErrorMessage(`Failed to switch environment: ${error}`);
         }
     }

@@ -287,7 +287,7 @@ suite('DeepnoteEnvironmentManager', () => {
             when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
                 testServerInfo
             );
-            when(mockServerStarter.stopServer(anything())).thenResolve();
+            when(mockServerStarter.stopServer(anything(), anything())).thenResolve();
 
             const config = await manager.createEnvironment({
                 name: 'Test',
@@ -297,7 +297,7 @@ suite('DeepnoteEnvironmentManager', () => {
             await manager.startServer(config.id);
             await manager.deleteEnvironment(config.id);
 
-            verify(mockServerStarter.stopServer(config.id)).once();
+            verify(mockServerStarter.stopServer(config.id, anything())).once();
         });
 
         test('should throw error for non-existent environment', async () => {
@@ -459,7 +459,7 @@ suite('DeepnoteEnvironmentManager', () => {
             when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
                 testServerInfo
             );
-            when(mockServerStarter.stopServer(anything())).thenResolve();
+            when(mockServerStarter.stopServer(anything(), anything())).thenResolve();
 
             const config = await manager.createEnvironment({
                 name: 'Test',
@@ -472,7 +472,7 @@ suite('DeepnoteEnvironmentManager', () => {
             const updated = manager.getEnvironment(config.id);
             assert.isUndefined(updated?.serverInfo);
 
-            verify(mockServerStarter.stopServer(config.id)).once();
+            verify(mockServerStarter.stopServer(config.id, anything())).once();
         });
 
         test('should do nothing if server is not running', async () => {
@@ -502,7 +502,7 @@ suite('DeepnoteEnvironmentManager', () => {
             when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
                 testServerInfo
             );
-            when(mockServerStarter.stopServer(anything())).thenResolve();
+            when(mockServerStarter.stopServer(anything(), anything())).thenResolve();
 
             const config = await manager.createEnvironment({
                 name: 'Test',
@@ -512,7 +512,7 @@ suite('DeepnoteEnvironmentManager', () => {
             await manager.startServer(config.id);
             await manager.restartServer(config.id);
 
-            verify(mockServerStarter.stopServer(config.id)).once();
+            verify(mockServerStarter.stopServer(config.id, anything())).once();
             // Called twice: once for initial start, once for restart
             verify(mockServerStarter.startServer(anything(), anything(), anything(), anything())).twice();
         });

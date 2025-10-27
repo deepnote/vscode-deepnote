@@ -32,7 +32,7 @@ export class DeepnoteEnvironmentsActivationService implements IExtensionSyncActi
                 logger.info('Deepnote kernel environments initialized');
             },
             (error: unknown) => {
-                logger.error(`Failed to initialize Deepnote kernel environments: ${error}`);
+                logger.error('Failed to initialize Deepnote kernel environments', error);
             }
         );
     }

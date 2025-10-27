@@ -98,11 +98,11 @@ export class DeepnoteSharedToolkitInstaller {
             const success = result.stdout.toLowerCase().includes('shared import successful');
             logger.info(`Shared installation test result: ${success ? 'SUCCESS' : 'FAILED'}`);
             if (!success) {
-                logger.warn(`Shared installation test failed: stdout=${result.stdout}, stderr=${result.stderr}`);
+                logger.warn('Shared installation test failed', { stdout: result.stdout, stderr: result.stderr });
             }
             return success;
         } catch (ex) {
-            logger.error(`Shared installation test error: ${ex}`);
+            logger.error('Shared installation test error', ex);
             return false;
         }
     }
@@ -180,7 +180,7 @@ export class DeepnoteSharedToolkitInstaller {
             const packagePath = Uri.joinPath(this.sharedInstallationPath, 'deepnote_toolkit');
             return await this.fs.exists(packagePath);
         } catch (ex) {
-            logger.debug(`Error checking shared installation: ${ex}`);
+            logger.debug('Error checking shared installation', ex);
             return false;
         }
     }
@@ -248,7 +248,7 @@ export class DeepnoteSharedToolkitInstaller {
                 return false;
             }
         } catch (ex) {
-            logger.error(`Failed to install shared deepnote-toolkit: ${ex}`);
+            logger.error('Failed to install shared deepnote-toolkit', ex);
             this.outputChannel.appendLine(l10n.t('Error installing shared deepnote-toolkit: {0}', ex));
             return false;
         }

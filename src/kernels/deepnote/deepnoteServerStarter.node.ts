@@ -645,6 +645,60 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
     }
 
     /**
+     * Check if a process is still alive.
+     */
+    private async isProcessAlive(pid: number): Promise<boolean> {
+        try {
+            const processService = await this.processServiceFactory.create(undefined);
+            if (process.platform === 'win32') {
+                const result = await processService.exec('tasklist', ['/FI', `PID eq ${pid}`, '/NH'], {
+                    throwOnStdErr: false
+                });
+                return result.stdout.includes(pid.toString());
+            } else {
+                // Use kill -0 to check if process exists (doesn't actually kill)
+                // If it succeeds, process exists; if it fails, process doesn't exist
+                try {
+                    await processService.exec('kill', ['-0', pid.toString()], { throwOnStdErr: false });
+                    return true;
+                } catch {
+                    return false;
+                }
+            }
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Attempt graceful kill (SIGTERM) then escalate to SIGKILL if needed.
+     */
+    private async killProcessGracefully(
+        pid: number,
+        processService: import('../../platform/common/process/types.node').IProcessService
+    ): Promise<void> {
+        try {
+            // Try graceful termination first (SIGTERM)
+            logger.debug(`Attempting graceful termination of process ${pid} (SIGTERM)...`);
+            await processService.exec('kill', [pid.toString()], { throwOnStdErr: false });
+
+            // Wait a bit for graceful shutdown
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+
+            // Check if still alive
+            const stillAlive = await this.isProcessAlive(pid);
+            if (stillAlive) {
+                logger.debug(`Process ${pid} did not terminate gracefully, escalating to SIGKILL...`);
+                await processService.exec('kill', ['-9', pid.toString()], { throwOnStdErr: false });
+            } else {
+                logger.debug(`Process ${pid} terminated gracefully`);
+            }
+        } catch (ex) {
+            logger.debug(`Error during graceful kill of process ${pid}: ${ex}`);
+        }
+    }
+
+    /**
      * Find and kill orphaned deepnote-toolkit processes using specific ports.
      * This is useful for cleaning up LSP servers and Jupyter servers that may be stuck.
      * Only kills processes that are both orphaned AND deepnote-related.
@@ -654,46 +708,25 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             const processService = await this.processServiceFactory.create(undefined);
 
             if (process.platform === 'win32') {
-                // Windows: use netstat to find process using port
+                // Windows: use netstat to find LISTENING processes on port
                 const result = await processService.exec('netstat', ['-ano'], { throwOnStdErr: false });
                 if (result.stdout) {
                     const lines = result.stdout.split('\n');
+                    const uniquePids = new Set<number>();
+
+                    // Parse and deduplicate PIDs
                     for (const line of lines) {
                         if (line.includes(`:${port}`) && line.includes('LISTENING')) {
                             const parts = line.trim().split(/\s+/);
                             const pid = parseInt(parts[parts.length - 1], 10);
                             if (!isNaN(pid) && pid > 0) {
-                                // Check if it's deepnote-related first
-                                const isDeepnoteRelated = await this.isDeepnoteRelatedProcess(pid);
-                                if (!isDeepnoteRelated) {
-                                    logger.debug(`Process ${pid} on port ${port} is not deepnote-related, skipping`);
-                                    continue;
-                                }
-
-                                const isOrphaned = await this.isProcessOrphaned(pid);
-                                if (isOrphaned) {
-                                    logger.info(
-                                        `Found orphaned deepnote-related process ${pid} using port ${port}, killing...`
-                                    );
-                                    await processService.exec('taskkill', ['/F', '/PID', pid.toString()], {
-                                        throwOnStdErr: false
-                                    });
-                                }
+                                uniquePids.add(pid);
                             }
                         }
                     }
-                }
-            } else {
-                // Unix-like: use lsof to find process using port
-                const result = await processService.exec('lsof', ['-i', `:${port}`, '-t'], { throwOnStdErr: false });
-                if (result.stdout) {
-                    const pids = result.stdout
-                        .trim()
-                        .split('\n')
-                        .map((p) => parseInt(p.trim(), 10))
-                        .filter((p) => !isNaN(p) && p > 0);
 
-                    for (const pid of pids) {
+                    // Process each unique PID
+                    for (const pid of uniquePids) {
                         // Check if it's deepnote-related first
                         const isDeepnoteRelated = await this.isDeepnoteRelatedProcess(pid);
                         if (!isDeepnoteRelated) {
@@ -704,14 +737,94 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                         const isOrphaned = await this.isProcessOrphaned(pid);
                         if (isOrphaned) {
                             logger.info(
-                                `Found orphaned deepnote-related process ${pid} using port ${port}, killing...`
+                                `Found orphaned deepnote-related process ${pid} using port ${port}, killing process tree...`
                             );
-                            await processService.exec('kill', ['-9', pid.toString()], { throwOnStdErr: false });
+                            // Try without /F first (graceful)
+                            try {
+                                await processService.exec('taskkill', ['/T', '/PID', pid.toString()], {
+                                    throwOnStdErr: false
+                                });
+                                logger.debug(`Gracefully killed process ${pid}`);
+                            } catch (gracefulError) {
+                                // If graceful kill failed, use /F (force)
+                                logger.debug(`Graceful kill failed for ${pid}, using /F flag...`);
+                                try {
+                                    await processService.exec('taskkill', ['/F', '/T', '/PID', pid.toString()], {
+                                        throwOnStdErr: false
+                                    });
+                                } catch (forceError) {
+                                    logger.debug(`Force kill also failed for ${pid}: ${forceError}`);
+                                }
+                            }
                         } else {
-                            logger.info(
-                                `Deepnote-related process ${pid} using port ${port} has active parent, skipping`
-                            );
+                            logger.debug(`Deepnote-related process ${pid} on port ${port} has active parent, skipping`);
                         }
+                    }
+                }
+            } else {
+                // Unix-like: try lsof first, fallback to ss
+                let uniquePids = new Set<number>();
+
+                // Try lsof with LISTEN filter
+                try {
+                    const lsofResult = await processService.exec('lsof', ['-sTCP:LISTEN', '-i', `:${port}`, '-t'], {
+                        throwOnStdErr: false
+                    });
+                    if (lsofResult.stdout) {
+                        const pids = lsofResult.stdout
+                            .trim()
+                            .split('\n')
+                            .map((p) => parseInt(p.trim(), 10))
+                            .filter((p) => !isNaN(p) && p > 0);
+                        pids.forEach((pid) => uniquePids.add(pid));
+                    }
+                } catch (lsofError) {
+                    logger.debug(`lsof failed or unavailable, trying ss: ${lsofError}`);
+                }
+
+                // Fallback to ss if lsof didn't find anything or failed
+                if (uniquePids.size === 0) {
+                    try {
+                        const ssResult = await processService.exec('ss', ['-tlnp', `sport = :${port}`], {
+                            throwOnStdErr: false
+                        });
+                        if (ssResult.stdout) {
+                            // Parse ss output: look for pid=<number>
+                            const pidMatches = ssResult.stdout.matchAll(/pid=(\d+)/g);
+                            for (const match of pidMatches) {
+                                const pid = parseInt(match[1], 10);
+                                if (!isNaN(pid) && pid > 0) {
+                                    uniquePids.add(pid);
+                                }
+                            }
+                        }
+                    } catch (ssError) {
+                        logger.debug(`ss also failed: ${ssError}`);
+                    }
+                }
+
+                if (uniquePids.size === 0) {
+                    logger.debug(`No processes found listening on port ${port}`);
+                    return;
+                }
+
+                // Process each unique PID
+                for (const pid of uniquePids) {
+                    // Check if it's deepnote-related first
+                    const isDeepnoteRelated = await this.isDeepnoteRelatedProcess(pid);
+                    if (!isDeepnoteRelated) {
+                        logger.debug(`Process ${pid} on port ${port} is not deepnote-related, skipping`);
+                        continue;
+                    }
+
+                    const isOrphaned = await this.isProcessOrphaned(pid);
+                    if (isOrphaned) {
+                        logger.info(
+                            `Found orphaned deepnote-related process ${pid} using port ${port}, attempting graceful kill...`
+                        );
+                        await this.killProcessGracefully(pid, processService);
+                    } else {
+                        logger.debug(`Deepnote-related process ${pid} on port ${port} has active parent, skipping`);
                     }
                 }
             }

@@ -597,26 +597,45 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             const processService = await this.processServiceFactory.create(undefined);
 
             if (process.platform === 'win32') {
-                // Windows: use wmic to get command line
-                const result = await processService.exec(
-                    'wmic',
-                    ['process', 'where', `ProcessId=${pid}`, 'get', 'CommandLine'],
-                    { throwOnStdErr: false }
-                );
-                if (result.stdout) {
-                    const cmdLine = result.stdout.toLowerCase();
-                    // Check if it's running from our deepnote-venvs directory or is deepnote_toolkit
-                    return cmdLine.includes('deepnote-venvs') || cmdLine.includes('deepnote_toolkit');
+                // Windows: prefer PowerShell CIM, fallback to WMIC
+                let cmdLine = '';
+                try {
+                    const ps = await processService.exec(
+                        'powershell.exe',
+                        [
+                            '-NoProfile',
+                            '-Command',
+                            `(Get-CimInstance Win32_Process -Filter "ProcessId=${pid}").CommandLine`
+                        ],
+                        { throwOnStdErr: false }
+                    );
+                    cmdLine = (ps.stdout || '').toLowerCase();
+                } catch {
+                    // Ignore PowerShell errors, will fallback to WMIC
+                }
+                if (!cmdLine) {
+                    const result = await processService.exec(
+                        'wmic',
+                        ['process', 'where', `ProcessId=${pid}`, 'get', 'CommandLine'],
+                        { throwOnStdErr: false }
+                    );
+                    cmdLine = (result.stdout || '').toLowerCase();
+                }
+                if (cmdLine) {
+                    // Use regex to match path separators for more robust detection
+                    const inVenv = /[\\/](deepnote-venvs)[\\/]/i.test(cmdLine);
+                    return inVenv || cmdLine.includes('deepnote_toolkit');
                 }
             } else {
-                // Unix-like: use ps to get command line
-                const result = await processService.exec('ps', ['-p', pid.toString(), '-o', 'command='], {
+                // Unix-like: use ps with -ww to avoid truncation of long command lines
+                const result = await processService.exec('ps', ['-ww', '-p', pid.toString(), '-o', 'command='], {
                     throwOnStdErr: false
                 });
                 if (result.stdout) {
                     const cmdLine = result.stdout.toLowerCase();
-                    // Check if it's running from our deepnote-venvs directory or is deepnote_toolkit
-                    return cmdLine.includes('deepnote-venvs') || cmdLine.includes('deepnote_toolkit');
+                    // Use regex to match path separators for more robust detection
+                    const inVenv = /[\\/](deepnote-venvs)[\\/]/i.test(cmdLine);
+                    return inVenv || cmdLine.includes('deepnote_toolkit');
                 }
             }
         } catch (ex) {

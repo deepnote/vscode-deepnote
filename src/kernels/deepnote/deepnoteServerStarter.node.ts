@@ -651,10 +651,36 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         try {
             const processService = await this.processServiceFactory.create(undefined);
             if (process.platform === 'win32') {
-                const result = await processService.exec('tasklist', ['/FI', `PID eq ${pid}`, '/NH'], {
+                // Use CSV format for reliable parsing
+                const result = await processService.exec('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], {
                     throwOnStdErr: false
                 });
-                return result.stdout.includes(pid.toString());
+
+                // Parse CSV output to find matching PID
+                const lines = result.stdout.split('\n');
+                for (const line of lines) {
+                    // Skip INFO: messages and empty lines
+                    if (line.trim().startsWith('INFO:') || line.trim() === '') {
+                        continue;
+                    }
+
+                    try {
+                        // CSV format: "ImageName","PID","SessionName","Session#","MemUsage"
+                        // Example: "python.exe","12345","Console","1","50,000 K"
+                        // PID is in the second column (index 1)
+                        const match = line.match(/"[^"]*","(\d+)"/);
+                        if (match) {
+                            const linePid = parseInt(match[1], 10);
+                            if (!isNaN(linePid) && linePid === pid) {
+                                return true;
+                            }
+                        }
+                    } catch {
+                        // Ignore parse errors for individual lines
+                        continue;
+                    }
+                }
+                return false;
             } else {
                 // Use kill -0 to check if process exists (doesn't actually kill)
                 // If it succeeds, process exists; if it fails, process doesn't exist

@@ -834,6 +834,7 @@ export namespace Integrations {
     // Integration type labels
     export const postgresTypeLabel = l10n.t('PostgreSQL');
     export const bigQueryTypeLabel = l10n.t('BigQuery');
+    export const snowflakeTypeLabel = l10n.t('Snowflake');
 
     // PostgreSQL form strings
     export const postgresNameLabel = l10n.t('Name (optional)');
@@ -861,6 +862,42 @@ export namespace Integrations {
     export const bigQueryCredentialsRequired = l10n.t('Credentials are required');
     export const bigQueryInvalidJson = (message: string) => l10n.t('Invalid JSON: {0}', message);
     export const bigQueryUnnamedIntegration = (id: string) => l10n.t('Unnamed BigQuery Integration ({0})', id);
+
+    // Snowflake form strings
+    export const snowflakeNameLabel = l10n.t('Integration name');
+    export const snowflakeNamePlaceholder = l10n.t('[Demo] Snowflake');
+    export const snowflakeAccountLabel = l10n.t('Account name');
+    export const snowflakeAccountPlaceholder = l10n.t('ptb34938.us-east-1');
+    export const snowflakeAuthMethodLabel = l10n.t('Authentication');
+    export const snowflakeAuthMethodSubLabel = l10n.t('Method');
+    export const snowflakeAuthMethodUsernamePassword = l10n.t('Username & password');
+    export const snowflakeAuthMethodKeyPair = l10n.t('Key-pair (service account)');
+    export const snowflakeUsernameLabel = l10n.t('Username');
+    export const snowflakeUsernamePlaceholder = l10n.t('WEBSITE_ANALYTICS_USER');
+    export const snowflakePasswordLabel = l10n.t('Password');
+    export const snowflakePasswordPlaceholder = l10n.t('••••••••••••••');
+    export const snowflakeServiceAccountUsernameLabel = l10n.t('Service Account Username');
+    export const snowflakeServiceAccountUsernameHelp = l10n.t(
+        'The username of the service account that will be used to connect to Snowflake'
+    );
+    export const snowflakeServiceAccountUsernamePlaceholder = l10n.t('WEBSITE_ANALYTICS_USER');
+    export const snowflakePrivateKeyLabel = l10n.t('Private Key');
+    export const snowflakePrivateKeyHelp = l10n.t(
+        'The private key in PEM format. Make sure to include the entire key, including BEGIN and END markers.'
+    );
+    export const snowflakePrivateKeyPlaceholder = l10n.t("Begins with '-----BEGIN PRIVATE KEY-----'");
+    export const snowflakePrivateKeyPassphraseLabel = l10n.t('Private Key Passphrase (optional)');
+    export const snowflakePrivateKeyPassphraseHelp = l10n.t(
+        'If the private key is encrypted, provide the passphrase to decrypt it'
+    );
+    export const snowflakePrivateKeyPassphrasePlaceholder = l10n.t('Private key passphrase (optional)');
+    export const snowflakeDatabaseLabel = l10n.t('Database (optional)');
+    export const snowflakeDatabasePlaceholder = l10n.t('DEEPNOTE');
+    export const snowflakeRoleLabel = l10n.t('Role (optional)');
+    export const snowflakeRolePlaceholder = l10n.t('');
+    export const snowflakeWarehouseLabel = l10n.t('Warehouse (optional)');
+    export const snowflakeWarehousePlaceholder = l10n.t('');
+    export const snowflakeUnnamedIntegration = (id: string) => l10n.t('Unnamed Snowflake Integration ({0})', id);
 }
 
 export namespace Deprecated {

@@ -182,6 +182,7 @@ export type LocalizedMessages = {
     // Integration type labels
     integrationsPostgresTypeLabel: string;
     integrationsBigQueryTypeLabel: string;
+    integrationsSnowflakeTypeLabel: string;
     // PostgreSQL form strings
     integrationsPostgresNameLabel: string;
     integrationsPostgresNamePlaceholder: string;
@@ -204,6 +205,34 @@ export type LocalizedMessages = {
     integrationsBigQueryCredentialsLabel: string;
     integrationsBigQueryCredentialsPlaceholder: string;
     integrationsBigQueryCredentialsRequired: string;
+    // Snowflake form strings
+    integrationsSnowflakeNameLabel: string;
+    integrationsSnowflakeNamePlaceholder: string;
+    integrationsSnowflakeAccountLabel: string;
+    integrationsSnowflakeAccountPlaceholder: string;
+    integrationsSnowflakeAuthMethodLabel: string;
+    integrationsSnowflakeAuthMethodSubLabel: string;
+    integrationsSnowflakeAuthMethodUsernamePassword: string;
+    integrationsSnowflakeAuthMethodKeyPair: string;
+    integrationsSnowflakeUsernameLabel: string;
+    integrationsSnowflakeUsernamePlaceholder: string;
+    integrationsSnowflakePasswordLabel: string;
+    integrationsSnowflakePasswordPlaceholder: string;
+    integrationsSnowflakeServiceAccountUsernameLabel: string;
+    integrationsSnowflakeServiceAccountUsernameHelp: string;
+    integrationsSnowflakeServiceAccountUsernamePlaceholder: string;
+    integrationsSnowflakePrivateKeyLabel: string;
+    integrationsSnowflakePrivateKeyHelp: string;
+    integrationsSnowflakePrivateKeyPlaceholder: string;
+    integrationsSnowflakePrivateKeyPassphraseLabel: string;
+    integrationsSnowflakePrivateKeyPassphraseHelp: string;
+    integrationsSnowflakePrivateKeyPassphrasePlaceholder: string;
+    integrationsSnowflakeDatabaseLabel: string;
+    integrationsSnowflakeDatabasePlaceholder: string;
+    integrationsSnowflakeRoleLabel: string;
+    integrationsSnowflakeRolePlaceholder: string;
+    integrationsSnowflakeWarehouseLabel: string;
+    integrationsSnowflakeWarehousePlaceholder: string;
     // Common form strings
     integrationsRequiredField: string;
     integrationsOptionalField: string;

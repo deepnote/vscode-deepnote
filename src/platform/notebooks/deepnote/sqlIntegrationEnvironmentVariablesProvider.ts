@@ -6,7 +6,12 @@ import { EnvironmentVariables } from '../../common/variables/types';
 import { BaseError } from '../../errors/types';
 import { logger } from '../../logging';
 import { IIntegrationStorage, ISqlIntegrationEnvVarsProvider } from './types';
-import { DATAFRAME_SQL_INTEGRATION_ID, IntegrationConfig, IntegrationType } from './integrationTypes';
+import {
+    DATAFRAME_SQL_INTEGRATION_ID,
+    IntegrationConfig,
+    IntegrationType,
+    SnowflakeAuthMethod
+} from './integrationTypes';
 
 /**
  * Error thrown when an unsupported integration type is encountered.
@@ -69,6 +74,68 @@ function convertIntegrationConfigToJson(config: IntegrationConfig): string {
                     project_id: config.projectId,
                     credentials: JSON.parse(config.credentials)
                 },
+                param_style: 'format'
+            });
+        }
+
+        case IntegrationType.Snowflake: {
+            // Build Snowflake connection URL
+            // Format depends on auth method:
+            // Username+password: snowflake://{username}:{password}@{account}/{database}?warehouse={warehouse}&role={role}&application=YourApp
+            // Key-pair: snowflake://{username}@{account}/{database}?warehouse={warehouse}&role={role}&authenticator=snowflake_jwt&application=YourApp
+            const encodedUsername = encodeURIComponent(config.username);
+            const encodedAccount = encodeURIComponent(config.account);
+
+            let url: string;
+            const params: Record<string, unknown> = {};
+
+            if (config.authMethod === SnowflakeAuthMethod.UsernamePassword) {
+                // Username+password authentication
+                const encodedPassword = encodeURIComponent(config.password || '');
+                const database = config.database ? `/${encodeURIComponent(config.database)}` : '';
+                url = `snowflake://${encodedUsername}:${encodedPassword}@${encodedAccount}${database}`;
+
+                const queryParams: string[] = [];
+                if (config.warehouse) {
+                    queryParams.push(`warehouse=${encodeURIComponent(config.warehouse)}`);
+                }
+                if (config.role) {
+                    queryParams.push(`role=${encodeURIComponent(config.role)}`);
+                }
+                queryParams.push('application=Deepnote');
+
+                if (queryParams.length > 0) {
+                    url += `?${queryParams.join('&')}`;
+                }
+            } else {
+                // Key-pair authentication
+                const database = config.database ? `/${encodeURIComponent(config.database)}` : '';
+                url = `snowflake://${encodedUsername}@${encodedAccount}${database}`;
+
+                const queryParams: string[] = [];
+                if (config.warehouse) {
+                    queryParams.push(`warehouse=${encodeURIComponent(config.warehouse)}`);
+                }
+                if (config.role) {
+                    queryParams.push(`role=${encodeURIComponent(config.role)}`);
+                }
+                queryParams.push('authenticator=snowflake_jwt');
+                queryParams.push('application=Deepnote');
+
+                if (queryParams.length > 0) {
+                    url += `?${queryParams.join('&')}`;
+                }
+
+                // For key-pair auth, pass the private key and passphrase as params
+                params.private_key = config.privateKey || '';
+                if (config.privateKeyPassphrase) {
+                    params.private_key_passphrase = config.privateKeyPassphrase;
+                }
+            }
+
+            return JSON.stringify({
+                url: url,
+                params: params,
                 param_style: 'format'
             });
         }

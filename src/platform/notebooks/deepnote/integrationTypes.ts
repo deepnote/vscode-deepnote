@@ -9,7 +9,8 @@ export const DATAFRAME_SQL_INTEGRATION_ID = 'deepnote-dataframe-sql';
  */
 export enum IntegrationType {
     Postgres = 'postgres',
-    BigQuery = 'bigquery'
+    BigQuery = 'bigquery',
+    Snowflake = 'snowflake'
 }
 
 /**
@@ -17,7 +18,8 @@ export enum IntegrationType {
  */
 export const INTEGRATION_TYPE_TO_DEEPNOTE = {
     [IntegrationType.Postgres]: 'pgsql',
-    [IntegrationType.BigQuery]: 'big-query'
+    [IntegrationType.BigQuery]: 'big-query',
+    [IntegrationType.Snowflake]: 'snowflake'
 } as const satisfies { [type in IntegrationType]: string };
 
 export type RawIntegrationType = (typeof INTEGRATION_TYPE_TO_DEEPNOTE)[keyof typeof INTEGRATION_TYPE_TO_DEEPNOTE];
@@ -27,7 +29,8 @@ export type RawIntegrationType = (typeof INTEGRATION_TYPE_TO_DEEPNOTE)[keyof typ
  */
 export const DEEPNOTE_TO_INTEGRATION_TYPE: Record<RawIntegrationType, IntegrationType> = {
     pgsql: IntegrationType.Postgres,
-    'big-query': IntegrationType.BigQuery
+    'big-query': IntegrationType.BigQuery,
+    snowflake: IntegrationType.Snowflake
 };
 
 /**
@@ -62,9 +65,36 @@ export interface BigQueryIntegrationConfig extends BaseIntegrationConfig {
 }
 
 /**
+ * Snowflake authentication method
+ */
+export enum SnowflakeAuthMethod {
+    UsernamePassword = 'username_password',
+    KeyPair = 'key_pair'
+}
+
+/**
+ * Snowflake integration configuration
+ */
+export interface SnowflakeIntegrationConfig extends BaseIntegrationConfig {
+    type: IntegrationType.Snowflake;
+    account: string;
+    authMethod: SnowflakeAuthMethod;
+    username: string;
+    // For username+password auth
+    password?: string;
+    // For key-pair auth
+    privateKey?: string;
+    privateKeyPassphrase?: string;
+    // Optional fields
+    database?: string;
+    warehouse?: string;
+    role?: string;
+}
+
+/**
  * Union type of all integration configurations
  */
-export type IntegrationConfig = PostgresIntegrationConfig | BigQueryIntegrationConfig;
+export type IntegrationConfig = PostgresIntegrationConfig | BigQueryIntegrationConfig | SnowflakeIntegrationConfig;
 
 /**
  * Integration connection status

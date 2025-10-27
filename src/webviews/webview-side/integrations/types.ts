@@ -1,6 +1,8 @@
-export type IntegrationType = 'postgres' | 'bigquery';
+export type IntegrationType = 'postgres' | 'bigquery' | 'snowflake';
 
 export type IntegrationStatus = 'connected' | 'disconnected' | 'error';
+
+export type SnowflakeAuthMethod = 'username_password' | 'key_pair';
 
 export interface BaseIntegrationConfig {
     id: string;
@@ -24,7 +26,23 @@ export interface BigQueryIntegrationConfig extends BaseIntegrationConfig {
     credentials: string;
 }
 
-export type IntegrationConfig = PostgresIntegrationConfig | BigQueryIntegrationConfig;
+export interface SnowflakeIntegrationConfig extends BaseIntegrationConfig {
+    type: 'snowflake';
+    account: string;
+    authMethod: SnowflakeAuthMethod;
+    username: string;
+    // For username+password auth
+    password?: string;
+    // For key-pair auth
+    privateKey?: string;
+    privateKeyPassphrase?: string;
+    // Optional fields
+    database?: string;
+    warehouse?: string;
+    role?: string;
+}
+
+export type IntegrationConfig = PostgresIntegrationConfig | BigQueryIntegrationConfig | SnowflakeIntegrationConfig;
 
 export interface IntegrationWithStatus {
     id: string;

@@ -149,6 +149,22 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
             }
 
             try {
+                // Handle internal DuckDB integration specially
+                if (integrationId === DATAFRAME_SQL_INTEGRATION_ID) {
+                    const envVarName = convertToEnvironmentVariableName(getSqlEnvVarName(integrationId));
+                    const credentialsJson = JSON.stringify({
+                        url: 'deepnote+duckdb:///:memory:',
+                        params: {},
+                        param_style: 'qmark'
+                    });
+
+                    envVars[envVarName] = credentialsJson;
+                    logger.debug(
+                        `SqlIntegrationEnvironmentVariablesProvider: Added env var for dataframe SQL integration`
+                    );
+                    continue;
+                }
+
                 const config = await this.integrationStorage.getIntegrationConfig(integrationId);
                 if (!config) {
                     logger.warn(
@@ -162,7 +178,7 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
                 const credentialsJson = convertIntegrationConfigToJson(config);
 
                 envVars[envVarName] = credentialsJson;
-                logger.info(
+                logger.debug(
                     `SqlIntegrationEnvironmentVariablesProvider: Added env var ${envVarName} for integration ${integrationId}`
                 );
             } catch (error) {
@@ -194,11 +210,6 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
             if (metadata && typeof metadata === 'object') {
                 const integrationId = (metadata as Record<string, unknown>).sql_integration_id;
                 if (typeof integrationId === 'string') {
-                    // Skip the internal DuckDB integration
-                    if (integrationId === DATAFRAME_SQL_INTEGRATION_ID) {
-                        continue;
-                    }
-
                     integrationIds.add(integrationId);
                     logger.trace(
                         `SqlIntegrationEnvironmentVariablesProvider: Found integration ${integrationId} in cell ${cell.index}`

@@ -266,7 +266,7 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
                                 )}{' '}
                                 <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                             </label>
-                            <p className="form-help-text">
+                            <p className="form-help-text" id="username-help">
                                 {getLocString(
                                     'integrationsSnowflakeServiceAccountUsernameHelp',
                                     'The username of the service account that will be used to connect to Snowflake'
@@ -281,6 +281,7 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
                                 autoComplete="username"
                                 required
                                 pattern=".*\S.*"
+                                aria-describedby="username-help"
                             />
                         </div>
 
@@ -289,7 +290,7 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
                                 {getLocString('integrationsSnowflakePrivateKeyLabel', 'Private Key')}{' '}
                                 <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                             </label>
-                            <p className="form-help-text">
+                            <p className="form-help-text" id="privateKey-help">
                                 {getLocString(
                                     'integrationsSnowflakePrivateKeyHelp',
                                     'The private key in PEM format. Make sure to include the entire key, including BEGIN and END markers.'
@@ -309,6 +310,7 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
                                 autoCorrect="off"
                                 autoCapitalize="off"
                                 required
+                                aria-describedby="privateKey-help"
                             />
                         </div>
 
@@ -319,7 +321,7 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
                                     'Private Key Passphrase (optional)'
                                 )}
                             </label>
-                            <p className="form-help-text">
+                            <p className="form-help-text" id="privateKeyPassphrase-help">
                                 {getLocString(
                                     'integrationsSnowflakePrivateKeyPassphraseHelp',
                                     'If the private key is encrypted, provide the passphrase to decrypt it'
@@ -335,6 +337,7 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
                                     'Private key passphrase (optional)'
                                 )}
                                 autoComplete="off"
+                                aria-describedby="privateKeyPassphrase-help"
                             />
                         </div>
                     </>

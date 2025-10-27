@@ -843,7 +843,13 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
         }
 
         const newMin = parseFloat(input);
-        await this.updateCellMetadata(cell, { deepnote_slider_min_value: newMin });
+        const updates: Record<string, unknown> = { deepnote_slider_min_value: newMin };
+        const currentMax = metadata?.deepnote_slider_max_value as number | undefined;
+        if (currentMax !== undefined && newMin > currentMax) {
+            updates.deepnote_slider_max_value = newMin;
+            void window.showWarningMessage(l10n.t('Min exceeded max; max adjusted to {0}.', String(newMin)));
+        }
+        await this.updateCellMetadata(cell, updates);
     }
 
     /**
@@ -870,7 +876,13 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
         }
 
         const newMax = parseFloat(input);
-        await this.updateCellMetadata(cell, { deepnote_slider_max_value: newMax });
+        const updates: Record<string, unknown> = { deepnote_slider_max_value: newMax };
+        const currentMin = metadata?.deepnote_slider_min_value as number | undefined;
+        if (currentMin !== undefined && newMax < currentMin) {
+            updates.deepnote_slider_min_value = newMax;
+            void window.showWarningMessage(l10n.t('Max exceeded min; min adjusted to {0}.', String(newMax)));
+        }
+        await this.updateCellMetadata(cell, updates);
     }
 
     /**

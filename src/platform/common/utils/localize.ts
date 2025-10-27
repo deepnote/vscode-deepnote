@@ -876,14 +876,14 @@ export namespace Integrations {
         'This Snowflake integration uses an authentication method that is not supported in VSCode. You can view the integration details but cannot edit or use it.'
     );
     export const snowflakeUsernameLabel = l10n.t('Username');
-    export const snowflakeUsernamePlaceholder = l10n.t('WEBSITE_ANALYTICS_USER');
+    export const snowflakeUsernamePlaceholder = l10n.t('user');
     export const snowflakePasswordLabel = l10n.t('Password');
-    export const snowflakePasswordPlaceholder = l10n.t('••••••••••••••');
+    export const snowflakePasswordPlaceholder = l10n.t('•••••');
     export const snowflakeServiceAccountUsernameLabel = l10n.t('Service Account Username');
     export const snowflakeServiceAccountUsernameHelp = l10n.t(
         'The username of the service account that will be used to connect to Snowflake'
     );
-    export const snowflakeServiceAccountUsernamePlaceholder = l10n.t('WEBSITE_ANALYTICS_USER');
+    export const snowflakeServiceAccountUsernamePlaceholder = l10n.t('');
     export const snowflakePrivateKeyLabel = l10n.t('Private Key');
     export const snowflakePrivateKeyHelp = l10n.t(
         'The private key in PEM format. Make sure to include the entire key, including BEGIN and END markers.'
@@ -895,7 +895,7 @@ export namespace Integrations {
     );
     export const snowflakePrivateKeyPassphrasePlaceholder = l10n.t('Private key passphrase (optional)');
     export const snowflakeDatabaseLabel = l10n.t('Database (optional)');
-    export const snowflakeDatabasePlaceholder = l10n.t('DEEPNOTE');
+    export const snowflakeDatabasePlaceholder = l10n.t('');
     export const snowflakeRoleLabel = l10n.t('Role (optional)');
     export const snowflakeRolePlaceholder = l10n.t('');
     export const snowflakeWarehouseLabel = l10n.t('Warehouse (optional)');

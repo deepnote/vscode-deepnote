@@ -91,10 +91,12 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
             return '';
         }
 
+        const { text } = getDeepnoteEnvironmentStatusVisual(this.status ?? EnvironmentStatus.Stopped);
+
         const lines: string[] = [];
         lines.push(`**${this.environment.name}**`);
         lines.push('');
-        lines.push(l10n.t('Status: {0}', this.status ?? l10n.t('Unknown')));
+        lines.push(l10n.t('Status: {0}', text));
         lines.push(l10n.t('Python: {0}', this.environment.pythonInterpreter.uri.toString(true)));
         lines.push(l10n.t('Venv: {0}', this.environment.venvPath.toString(true)));
 

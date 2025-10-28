@@ -14,7 +14,7 @@ print("Using authtoken with prefix: " + authtoken[:4])
 # %%
 def getRuns(createdDate):
     runsResponse = requests.get(
-        "https://api.github.com/repos/deepnote/vscode-deepnote/actions/workflows/ci.yml/runs"
+        "https://api.github.com/repos/deepnote/vscode-deepnote/actions/workflows/ci.yml/runs",
         params={"created": createdDate, "branch": "main"},
         headers={
             "Accept": "application/vnd.github+json",

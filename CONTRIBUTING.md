@@ -5,7 +5,7 @@
 | `main` branch |
 | ------------- |
 
-## | ![Main Build](https://github.com/deepnote/vscode-deepnote/actions/workflows/build-test.yml/badge.svg?branch=main)
+## | ![Main Build](https://github.com/deepnote/vscode-deepnote/actions/workflows/ci.yml/badge.svg?branch=main)
 
 [For contributing to the [Microsoft Python Language Server](https://github.com/Microsoft/python-language-server) see its own repo; for [Pylance](https://github.com/microsoft/pylance-release) see its own repo; for [debugpy](https://github.com/microsoft/debugpy) see its own repo]
 

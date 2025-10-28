@@ -111,7 +111,7 @@ suite('DeepnoteEnvironmentTreeItem', () => {
 
             const tooltip = item.tooltip as string;
             assert.include(tooltip, 'Test Environment');
-            assert.include(tooltip, 'running'); // Status enum value is lowercase
+            assert.include(tooltip, 'Running...');
             assert.include(tooltip, testInterpreter.uri.fsPath);
         });
 

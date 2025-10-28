@@ -61,17 +61,7 @@ suite('DeepnoteEnvironmentsActivationService', () => {
             assert.ok(activationService);
         });
 
-        test('should accept environment manager', () => {
-            const service = new DeepnoteEnvironmentsActivationService(
-                instance(mockConfigManager),
-                instance(mockOutputChannel),
-                instance(mockEnvironmentsView)
-            );
-
-            assert.ok(service);
-        });
-
-        test('should accept environments view', () => {
+        test('should accept dependencies', () => {
             const service = new DeepnoteEnvironmentsActivationService(
                 instance(mockConfigManager),
                 instance(mockOutputChannel),

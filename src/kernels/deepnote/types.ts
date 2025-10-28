@@ -252,7 +252,7 @@ export interface IDeepnoteEnvironmentManager {
      * Start the Jupyter server for an environment
      * @param id The environment ID
      */
-    startServer(id: string): Promise<void>;
+    startServer(id: string, token?: vscode.CancellationToken): Promise<void>;
 
     /**
      * Stop the Jupyter server for an environment

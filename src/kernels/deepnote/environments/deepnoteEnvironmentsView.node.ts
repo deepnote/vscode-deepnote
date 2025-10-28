@@ -1,12 +1,12 @@
 import { inject, injectable } from 'inversify';
-import { commands, Disposable, l10n, ProgressLocation, TreeView, window } from 'vscode';
+import { commands, Disposable, l10n, ProgressLocation, QuickPickItem, TreeView, window } from 'vscode';
 import { IDisposableRegistry } from '../../../platform/common/types';
 import { logger } from '../../../platform/logging';
 import { IPythonApiProvider } from '../../../platform/api/types';
 import { IDeepnoteEnvironmentManager, IDeepnoteKernelAutoSelector, IDeepnoteNotebookEnvironmentMapper } from '../types';
 import { DeepnoteEnvironmentTreeDataProvider } from './deepnoteEnvironmentTreeDataProvider.node';
 import { DeepnoteEnvironmentTreeItem } from './deepnoteEnvironmentTreeItem.node';
-import { CreateDeepnoteEnvironmentOptions } from './deepnoteEnvironment';
+import { CreateDeepnoteEnvironmentOptions, EnvironmentStatus } from './deepnoteEnvironment';
 import {
     getCachedEnvironment,
     resolvedPythonEnvToJupyterEnv,
@@ -14,6 +14,7 @@ import {
 } from '../../../platform/interpreter/helpers';
 import { getDisplayPath } from '../../../platform/common/platform/fs-paths';
 import { IKernelProvider } from '../../types';
+import { getDeepnoteEnvironmentStatusVisual } from './deepnoteEnvironmentUi';
 
 /**
  * View controller for the Deepnote kernel environments tree view.
@@ -189,6 +190,13 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 return;
             }
 
+            // Check if name is already in use
+            const existingEnvironments = this.environmentManager.listEnvironments();
+            if (existingEnvironments.some((env) => env.name === name)) {
+                void window.showErrorMessage(l10n.t('An environment with this name already exists'));
+                return;
+            }
+
             // Step 3: Enter packages (optional)
             const packagesInput = await window.showInputBox({
                 prompt: l10n.t('Enter additional packages to install (comma-separated, optional)'),
@@ -200,7 +208,11 @@ export class DeepnoteEnvironmentsView implements Disposable {
                     // Basic validation: check for valid package names
                     const packages = value.split(',').map((p: string) => p.trim());
                     for (const pkg of packages) {
-                        if (!/^[a-zA-Z0-9_\-\[\]]+$/.test(pkg)) {
+                        const isValid =
+                            /^[A-Za-z0-9._\-]+(\[[A-Za-z0-9_,.\-]+\])?(\s*(==|>=|<=|~=|>|<)\s*[A-Za-z0-9.*+!\-_.]+)?(?:\s*;.+)?$/.test(
+                                pkg
+                            );
+                        if (!isValid) {
                             return l10n.t('Invalid package name: {0}', pkg);
                         }
                     }
@@ -244,7 +256,9 @@ export class DeepnoteEnvironmentsView implements Disposable {
                         const config = await this.environmentManager.createEnvironment(options, token);
                         logger.info(`Created environment: ${config.id} (${config.name})`);
 
-                        void window.showInformationMessage(l10n.t('Environment "{0}" created successfully!', name));
+                        void window.showInformationMessage(
+                            l10n.t('Environment "{0}" created successfully!', config.name)
+                        );
                     } catch (error) {
                         logger.error('Failed to create environment', error);
                         throw error;
@@ -269,8 +283,8 @@ export class DeepnoteEnvironmentsView implements Disposable {
                     title: l10n.t('Starting server for "{0}"...', config.name),
                     cancellable: true
                 },
-                async (_progress, _token) => {
-                    await this.environmentManager.startServer(environmentId);
+                async (_progress, token) => {
+                    await this.environmentManager.startServer(environmentId, token);
                     logger.info(`Started server for environment: ${environmentId}`);
                 }
             );
@@ -502,14 +516,17 @@ export class DeepnoteEnvironmentsView implements Disposable {
         }
 
         // Build quick pick items
-        const items: (import('vscode').QuickPickItem & { environmentId?: string })[] = environments.map((env) => {
+        const items: (QuickPickItem & { environmentId?: string })[] = environments.map((env) => {
             const envWithStatus = this.environmentManager.getEnvironmentWithStatus(env.id);
-            const statusIcon = envWithStatus?.status === 'running' ? '$(vm-running)' : '$(vm-outline)';
-            const statusText = envWithStatus?.status === 'running' ? l10n.t('[Running]') : l10n.t('[Stopped]');
+
+            const { icon, text } = getDeepnoteEnvironmentStatusVisual(
+                envWithStatus?.status ?? EnvironmentStatus.Stopped
+            );
+
             const isCurrent = currentEnvironment?.id === env.id;
 
             return {
-                label: `${statusIcon} ${env.name} ${statusText}${isCurrent ? ' $(check)' : ''}`,
+                label: `${icon} ${env.name} [${text}]${isCurrent ? ' $(check)' : ''}`,
                 description: getDisplayPath(env.pythonInterpreter.uri),
                 detail: env.packages?.length
                     ? l10n.t('Packages: {0}', env.packages.join(', '))

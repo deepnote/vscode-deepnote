@@ -11,14 +11,14 @@ import {
     DeepnoteEnvironmentWithStatus,
     EnvironmentStatus
 } from './deepnoteEnvironment';
-import { IDeepnoteServerStarter, IDeepnoteToolkitInstaller } from '../types';
+import { IDeepnoteEnvironmentManager, IDeepnoteServerStarter, IDeepnoteToolkitInstaller } from '../types';
 
 /**
  * Manager for Deepnote kernel environments.
  * Handles CRUD operations and server lifecycle management.
  */
 @injectable()
-export class DeepnoteEnvironmentManager implements IExtensionSyncActivationService {
+export class DeepnoteEnvironmentManager implements IExtensionSyncActivationService, IDeepnoteEnvironmentManager {
     private environments: Map<string, DeepnoteEnvironment> = new Map();
     private readonly _onDidChangeEnvironments = new EventEmitter<void>();
     public readonly onDidChangeEnvironments = this._onDidChangeEnvironments.event;

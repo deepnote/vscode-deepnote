@@ -1,6 +1,3 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-
 import { Disposable, Event, EventEmitter, TreeDataProvider, TreeItem } from 'vscode';
 import { IDeepnoteEnvironmentManager } from '../types';
 import { EnvironmentTreeItemType, DeepnoteEnvironmentTreeItem } from './deepnoteEnvironmentTreeItem.node';

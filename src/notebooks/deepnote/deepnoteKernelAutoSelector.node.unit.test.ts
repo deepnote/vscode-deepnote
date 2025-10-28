@@ -1,5 +1,5 @@
 import { assert } from 'chai';
-import { anything, instance, mock, when } from 'ts-mockito';
+import { anything, instance, mock, when, verify } from 'ts-mockito';
 import { DeepnoteKernelAutoSelector } from './deepnoteKernelAutoSelector.node';
 import {
     IDeepnoteEnvironmentManager,
@@ -210,7 +210,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
             // Assert: This test validates the current implementation - the old controller is NOT disposed
             // to prevent "notebook controller is DISPOSED" errors for queued cell executions
-            assert.ok(true, 'Old controller is not disposed - prevents DISPOSED errors for queued executions');
+            verify(oldControllerSpy.dispose()).never();
         });
 
         test('should call ensureKernelSelected to create new controller', async () => {
@@ -234,14 +234,14 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
             // Assert
             // The fact that we got here means ensureKernelSelected was called internally
-            assert.ok(true, 'ensureKernelSelected should be called during rebuild');
+            verify(mockControllerRegistration.addOrUpdate(anything(), anything())).atLeast(1);
         });
 
-        test('should handle cancellation token', async () => {
+        test('should not invoke addOrUpdate when cancellation token is cancelled', async () => {
             // Arrange
             const baseFileUri = mockNotebook.uri.with({ query: '', fragment: '' });
             const cancellationToken = mock<CancellationToken>();
-            when(cancellationToken.isCancellationRequested).thenReturn(false);
+            when(cancellationToken.isCancellationRequested).thenReturn(true);
 
             when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri)).thenReturn('new-env-id');
             when(mockEnvironmentManager.getEnvironment('new-env-id')).thenReturn(
@@ -253,11 +253,11 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             try {
                 await selector.rebuildController(mockNotebook, instance(cancellationToken));
             } catch {
-                // Expected to fail in test due to mocking limitations
+                // Expected to fail or exit early due to cancellation
             }
 
             // Assert
-            assert.ok(true, 'Should handle cancellation token without errors');
+            verify(mockControllerRegistration.addOrUpdate(anything(), anything())).never();
         });
     });
 
@@ -297,7 +297,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
             // Assert: Verify the new environment would be used
             // In a real scenario, the new controller would use env-b's server and interpreter
-            assert.ok(true, 'Environment switching flow should complete');
+            verify(mockControllerRegistration.addOrUpdate(anything(), anything())).atLeast(1);
         });
     });
 

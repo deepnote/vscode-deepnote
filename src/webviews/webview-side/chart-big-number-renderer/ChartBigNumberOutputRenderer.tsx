@@ -24,7 +24,7 @@ export function ChartBigNumberOutputRenderer({
             return 'NaN';
         }
 
-        return formatValue(parsedValue, metadata.deepnote_big_number_format ?? 'number');
+        return formatValue(parsedValue, metadata.deepnote_big_number_format);
     }, [output.value, metadata.deepnote_big_number_format]);
 
     const comparisonValue = useMemo(() => {

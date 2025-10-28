@@ -9,10 +9,12 @@ import { IKernelProvider } from '../../../kernels/types';
 import { DeepnoteEnvironment } from './deepnoteEnvironment';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
+import { DeepnoteEnvironmentTreeDataProvider } from './deepnoteEnvironmentTreeDataProvider.node';
 
 suite('DeepnoteEnvironmentsView', () => {
     let view: DeepnoteEnvironmentsView;
     let mockConfigManager: IDeepnoteEnvironmentManager;
+    let mockTreeDataProvider: DeepnoteEnvironmentTreeDataProvider;
     let mockPythonApiProvider: IPythonApiProvider;
     let mockDisposableRegistry: IDisposableRegistry;
     let mockKernelAutoSelector: IDeepnoteKernelAutoSelector;
@@ -25,6 +27,7 @@ suite('DeepnoteEnvironmentsView', () => {
         disposables.push(new Disposable(() => resetVSCodeMocks()));
 
         mockConfigManager = mock<IDeepnoteEnvironmentManager>();
+        mockTreeDataProvider = mock<DeepnoteEnvironmentTreeDataProvider>();
         mockPythonApiProvider = mock<IPythonApiProvider>();
         mockDisposableRegistry = mock<IDisposableRegistry>();
         mockKernelAutoSelector = mock<IDeepnoteKernelAutoSelector>();
@@ -42,6 +45,7 @@ suite('DeepnoteEnvironmentsView', () => {
 
         view = new DeepnoteEnvironmentsView(
             instance(mockConfigManager),
+            instance(mockTreeDataProvider),
             instance(mockPythonApiProvider),
             instance(mockDisposableRegistry),
             instance(mockKernelAutoSelector),

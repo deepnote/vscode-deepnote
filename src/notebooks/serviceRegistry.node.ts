@@ -78,6 +78,7 @@ import { DeepnoteNotebookEnvironmentMapper } from '../kernels/deepnote/environme
 import { DeepnoteInputBlockCellStatusBarItemProvider } from './deepnote/deepnoteInputBlockCellStatusBarProvider';
 import { SqlIntegrationStartupCodeProvider } from './deepnote/integrations/sqlIntegrationStartupCodeProvider';
 import { DeepnoteCellCopyHandler } from './deepnote/deepnoteCellCopyHandler';
+import { DeepnoteEnvironmentTreeDataProvider } from '../kernels/deepnote/environments/deepnoteEnvironmentTreeDataProvider.node';
 
 export function registerTypes(serviceManager: IServiceManager, isDevMode: boolean) {
     registerControllerTypes(serviceManager, isDevMode);
@@ -186,6 +187,10 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     // Deepnote configuration services
     serviceManager.addSingleton<DeepnoteEnvironmentStorage>(DeepnoteEnvironmentStorage, DeepnoteEnvironmentStorage);
     serviceManager.addSingleton<IDeepnoteEnvironmentManager>(IDeepnoteEnvironmentManager, DeepnoteEnvironmentManager);
+    serviceManager.addSingleton<DeepnoteEnvironmentTreeDataProvider>(
+        DeepnoteEnvironmentTreeDataProvider,
+        DeepnoteEnvironmentTreeDataProvider
+    );
 
     // Deepnote configuration view
     serviceManager.addSingleton<DeepnoteEnvironmentsView>(DeepnoteEnvironmentsView, DeepnoteEnvironmentsView);

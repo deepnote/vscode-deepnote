@@ -4,7 +4,7 @@ import { anything, instance, mock, when, verify, deepEqual } from 'ts-mockito';
 import { Uri } from 'vscode';
 import { DeepnoteEnvironmentManager } from './deepnoteEnvironmentManager.node';
 import { DeepnoteEnvironmentStorage } from './deepnoteEnvironmentStorage.node';
-import { IExtensionContext } from '../../../platform/common/types';
+import { IExtensionContext, IOutputChannel } from '../../../platform/common/types';
 import {
     IDeepnoteServerStarter,
     IDeepnoteToolkitInstaller,
@@ -23,6 +23,7 @@ suite('DeepnoteEnvironmentManager', () => {
     let mockStorage: DeepnoteEnvironmentStorage;
     let mockToolkitInstaller: IDeepnoteToolkitInstaller;
     let mockServerStarter: IDeepnoteServerStarter;
+    let mockOutputChannel: IOutputChannel;
 
     const testInterpreter: PythonEnvironment = {
         id: 'test-python-id',
@@ -47,6 +48,7 @@ suite('DeepnoteEnvironmentManager', () => {
         mockStorage = mock<DeepnoteEnvironmentStorage>();
         mockToolkitInstaller = mock<IDeepnoteToolkitInstaller>();
         mockServerStarter = mock<IDeepnoteServerStarter>();
+        mockOutputChannel = mock<IOutputChannel>();
 
         when(mockContext.globalStorageUri).thenReturn(Uri.file('/global/storage'));
         when(mockStorage.loadEnvironments()).thenResolve([]);
@@ -55,7 +57,8 @@ suite('DeepnoteEnvironmentManager', () => {
             instance(mockContext),
             instance(mockStorage),
             instance(mockToolkitInstaller),
-            instance(mockServerStarter)
+            instance(mockServerStarter),
+            instance(mockOutputChannel)
         );
     });
 

@@ -23,11 +23,12 @@ import { getDeepnoteEnvironmentStatusVisual } from './deepnoteEnvironmentUi';
 @injectable()
 export class DeepnoteEnvironmentsView implements Disposable {
     private readonly treeView: TreeView<DeepnoteEnvironmentTreeItem>;
-    private readonly treeDataProvider: DeepnoteEnvironmentTreeDataProvider;
     private readonly disposables: Disposable[] = [];
 
     constructor(
         @inject(IDeepnoteEnvironmentManager) private readonly environmentManager: IDeepnoteEnvironmentManager,
+        @inject(DeepnoteEnvironmentTreeDataProvider)
+        private readonly treeDataProvider: DeepnoteEnvironmentTreeDataProvider,
         @inject(IPythonApiProvider) private readonly pythonApiProvider: IPythonApiProvider,
         @inject(IDisposableRegistry) disposableRegistry: IDisposableRegistry,
         @inject(IDeepnoteKernelAutoSelector) private readonly kernelAutoSelector: IDeepnoteKernelAutoSelector,
@@ -36,7 +37,6 @@ export class DeepnoteEnvironmentsView implements Disposable {
         @inject(IKernelProvider) private readonly kernelProvider: IKernelProvider
     ) {
         // Create tree data provider
-        this.treeDataProvider = new DeepnoteEnvironmentTreeDataProvider(environmentManager);
 
         // Create tree view
         this.treeView = window.createTreeView('deepnoteEnvironments', {
@@ -45,7 +45,6 @@ export class DeepnoteEnvironmentsView implements Disposable {
         });
 
         this.disposables.push(this.treeView);
-        this.disposables.push(this.treeDataProvider);
 
         // Register commands
         this.registerCommands();

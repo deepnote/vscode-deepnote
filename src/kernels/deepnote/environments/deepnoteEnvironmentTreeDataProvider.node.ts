@@ -2,15 +2,17 @@ import { Disposable, Event, EventEmitter, TreeDataProvider, TreeItem } from 'vsc
 import { IDeepnoteEnvironmentManager } from '../types';
 import { EnvironmentTreeItemType, DeepnoteEnvironmentTreeItem } from './deepnoteEnvironmentTreeItem.node';
 import { EnvironmentStatus } from './deepnoteEnvironment';
+import { inject, injectable } from 'inversify';
 
 /**
  * Tree data provider for the Deepnote kernel environments view
  */
-export class DeepnoteEnvironmentTreeDataProvider implements TreeDataProvider<DeepnoteEnvironmentTreeItem> {
+@injectable()
+export class DeepnoteEnvironmentTreeDataProvider implements TreeDataProvider<DeepnoteEnvironmentTreeItem>, Disposable {
     private readonly _onDidChangeTreeData = new EventEmitter<DeepnoteEnvironmentTreeItem | undefined | void>();
     private readonly disposables: Disposable[] = [];
 
-    constructor(private readonly environmentManager: IDeepnoteEnvironmentManager) {
+    constructor(@inject(IDeepnoteEnvironmentManager) private readonly environmentManager: IDeepnoteEnvironmentManager) {
         // Listen to environment changes and refresh the tree
         this.disposables.push(
             this.environmentManager.onDidChangeEnvironments(() => {

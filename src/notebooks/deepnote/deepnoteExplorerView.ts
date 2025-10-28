@@ -9,6 +9,7 @@ import { DeepnoteTreeDataProvider } from './deepnoteTreeDataProvider';
 import { type DeepnoteTreeItem, DeepnoteTreeItemType, type DeepnoteTreeItemContext } from './deepnoteTreeItem';
 import { generateUuid } from '../../platform/common/uuid';
 import type { DeepnoteFile, DeepnoteNotebook, DeepnoteBlock } from '../../platform/deepnote/deepnoteTypes';
+import { Commands } from '../../platform/common/constants';
 
 /**
  * Manages the Deepnote explorer tree view and related commands
@@ -40,72 +41,72 @@ export class DeepnoteExplorerView {
 
     private registerCommands(): void {
         this.extensionContext.subscriptions.push(
-            commands.registerCommand('deepnote.refreshExplorer', () => this.refreshExplorer())
+            commands.registerCommand(Commands.RefreshDeepnoteExplorer, () => this.refreshExplorer())
         );
 
         this.extensionContext.subscriptions.push(
-            commands.registerCommand('deepnote.openNotebook', (context: DeepnoteTreeItemContext) =>
+            commands.registerCommand(Commands.OpenDeepnoteNotebook, (context: DeepnoteTreeItemContext) =>
                 this.openNotebook(context)
             )
         );
 
         this.extensionContext.subscriptions.push(
-            commands.registerCommand('deepnote.openFile', (treeItem: DeepnoteTreeItem) => this.openFile(treeItem))
+            commands.registerCommand(Commands.OpenDeepnoteFile, (treeItem: DeepnoteTreeItem) => this.openFile(treeItem))
         );
 
         this.extensionContext.subscriptions.push(
-            commands.registerCommand('deepnote.revealInExplorer', () => this.revealActiveNotebook())
+            commands.registerCommand(Commands.RevealInDeepnoteExplorer, () => this.revealActiveNotebook())
         );
 
         this.extensionContext.subscriptions.push(
-            commands.registerCommand('deepnote.newProject', () => this.newProject())
+            commands.registerCommand(Commands.NewProject, () => this.newProject())
         );
 
         this.extensionContext.subscriptions.push(
-            commands.registerCommand('deepnote.importNotebook', () => this.importNotebook())
+            commands.registerCommand(Commands.ImportNotebook, () => this.importNotebook())
         );
 
         this.extensionContext.subscriptions.push(
-            commands.registerCommand('deepnote.importJupyterNotebook', () => this.importJupyterNotebook())
+            commands.registerCommand(Commands.ImportJupyterNotebook, () => this.importJupyterNotebook())
         );
 
         this.extensionContext.subscriptions.push(
-            commands.registerCommand('deepnote.newNotebook', () => this.newNotebook())
+            commands.registerCommand(Commands.NewNotebook, () => this.newNotebook())
         );
 
         // Context menu commands for tree items
         this.extensionContext.subscriptions.push(
-            commands.registerCommand('deepnote.renameProject', (treeItem: DeepnoteTreeItem) =>
+            commands.registerCommand(Commands.RenameProject, (treeItem: DeepnoteTreeItem) =>
                 this.renameProject(treeItem)
             )
         );
 
         this.extensionContext.subscriptions.push(
-            commands.registerCommand('deepnote.deleteProject', (treeItem: DeepnoteTreeItem) =>
+            commands.registerCommand(Commands.DeleteProject, (treeItem: DeepnoteTreeItem) =>
                 this.deleteProject(treeItem)
             )
         );
 
         this.extensionContext.subscriptions.push(
-            commands.registerCommand('deepnote.renameNotebook', (treeItem: DeepnoteTreeItem) =>
+            commands.registerCommand(Commands.RenameNotebook, (treeItem: DeepnoteTreeItem) =>
                 this.renameNotebook(treeItem)
             )
         );
 
         this.extensionContext.subscriptions.push(
-            commands.registerCommand('deepnote.deleteNotebook', (treeItem: DeepnoteTreeItem) =>
+            commands.registerCommand(Commands.DeleteNotebook, (treeItem: DeepnoteTreeItem) =>
                 this.deleteNotebook(treeItem)
             )
         );
 
         this.extensionContext.subscriptions.push(
-            commands.registerCommand('deepnote.duplicateNotebook', (treeItem: DeepnoteTreeItem) =>
+            commands.registerCommand(Commands.DuplicateNotebook, (treeItem: DeepnoteTreeItem) =>
                 this.duplicateNotebook(treeItem)
             )
         );
 
         this.extensionContext.subscriptions.push(
-            commands.registerCommand('deepnote.addNotebookToProject', (treeItem: DeepnoteTreeItem) =>
+            commands.registerCommand(Commands.AddNotebookToProject, (treeItem: DeepnoteTreeItem) =>
                 this.addNotebookToProject(treeItem)
             )
         );
@@ -149,7 +150,10 @@ export class DeepnoteExplorerView {
      * @param suggestedName The default suggested name
      * @returns The entered notebook name, or undefined if cancelled
      */
-    private async promptForNotebookName(suggestedName: string): Promise<string | undefined> {
+    private async promptForNotebookName(
+        suggestedName: string,
+        existingNames: Set<string>
+    ): Promise<string | undefined> {
         return await window.showInputBox({
             prompt: l10n.t('Enter a name for the new notebook'),
             placeHolder: suggestedName,
@@ -157,6 +161,9 @@ export class DeepnoteExplorerView {
             validateInput: (value) => {
                 if (!value || value.trim().length === 0) {
                     return l10n.t('Notebook name cannot be empty');
+                }
+                if (existingNames.has(value)) {
+                    return l10n.t('A notebook with this name already exists');
                 }
                 return null;
             }
@@ -240,6 +247,11 @@ export class DeepnoteExplorerView {
         // Read the Deepnote project file
         const projectData = await this.readDeepnoteProjectFile(fileUri);
 
+        if (projectData.project.id !== projectId) {
+            await window.showErrorMessage(l10n.t('Project ID mismatch'));
+            return null;
+        }
+
         if (!projectData?.project) {
             await window.showErrorMessage(l10n.t('Invalid Deepnote file format'));
             return null;
@@ -247,7 +259,10 @@ export class DeepnoteExplorerView {
 
         // Generate suggested name and prompt user
         const suggestedName = this.generateSuggestedNotebookName(projectData);
-        const notebookName = await this.promptForNotebookName(suggestedName);
+        const notebookName = await this.promptForNotebookName(
+            suggestedName,
+            new Set(projectData.project.notebooks?.map((nb: DeepnoteNotebook) => nb.name.toLowerCase()) ?? [])
+        );
 
         if (!notebookName) {
             return null;
@@ -921,7 +936,8 @@ export class DeepnoteExplorerView {
                     ...block,
                     id: generateUuid(),
                     blockGroup: generateUuid(),
-                    executionCount: undefined
+                    executionCount: undefined,
+                    ...(block.metadata != null ? { metadata: { ...block.metadata } } : {})
                 }))
             };
 

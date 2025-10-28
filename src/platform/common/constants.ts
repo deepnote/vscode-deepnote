@@ -236,6 +236,15 @@ export namespace Commands {
     export const AddInputFileBlock = 'deepnote.addInputFileBlock';
     export const AddButtonBlock = 'deepnote.addButtonBlock';
     export const NewNotebook = 'deepnote.newNotebook';
+    export const NewProject = 'deepnote.newProject';
+    export const ImportNotebook = 'deepnote.importNotebook';
+    export const ImportJupyterNotebook = 'deepnote.importJupyterNotebook';
+    export const RenameProject = 'deepnote.renameProject';
+    export const DeleteProject = 'deepnote.deleteProject';
+    export const RenameNotebook = 'deepnote.renameNotebook';
+    export const DeleteNotebook = 'deepnote.deleteNotebook';
+    export const DuplicateNotebook = 'deepnote.duplicateNotebook';
+    export const AddNotebookToProject = 'deepnote.addNotebookToProject';
     export const ExportAsPythonScript = 'jupyter.exportAsPythonScript';
     export const ExportToHTML = 'jupyter.exportToHTML';
     export const ExportToPDF = 'jupyter.exportToPDF';

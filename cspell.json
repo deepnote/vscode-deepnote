@@ -24,6 +24,7 @@
         "blockgroup",
         "channeldef",
         "dataframe",
+        "datascience",
         "deepnote",
         "deepnoteserver",
         "dntk",

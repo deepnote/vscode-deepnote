@@ -1,7 +1,7 @@
-import { injectable, inject } from 'inversify';
+import { injectable, inject, named } from 'inversify';
 import { EventEmitter, Uri, CancellationToken, l10n } from 'vscode';
 import { generateUuid as uuid } from '../../../platform/common/uuid';
-import { IExtensionContext } from '../../../platform/common/types';
+import { IExtensionContext, IOutputChannel } from '../../../platform/common/types';
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
 import { logger } from '../../../platform/logging';
 import { DeepnoteEnvironmentStorage } from './deepnoteEnvironmentStorage.node';
@@ -13,6 +13,7 @@ import {
 } from './deepnoteEnvironment';
 import { IDeepnoteEnvironmentManager, IDeepnoteServerStarter, IDeepnoteToolkitInstaller } from '../types';
 import { Cancellation } from '../../../platform/common/cancellation';
+import { STANDARD_OUTPUT_CHANNEL } from '../../../platform/common/constants';
 
 /**
  * Manager for Deepnote kernel environments.
@@ -29,7 +30,8 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
         @inject(IExtensionContext) private readonly context: IExtensionContext,
         @inject(DeepnoteEnvironmentStorage) private readonly storage: DeepnoteEnvironmentStorage,
         @inject(IDeepnoteToolkitInstaller) private readonly toolkitInstaller: IDeepnoteToolkitInstaller,
-        @inject(IDeepnoteServerStarter) private readonly serverStarter: IDeepnoteServerStarter
+        @inject(IDeepnoteServerStarter) private readonly serverStarter: IDeepnoteServerStarter,
+        @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel
     ) {}
 
     /**
@@ -39,6 +41,8 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
         // Store the initialization promise so other components can wait for it
         this.initializationPromise = this.initialize().catch((error) => {
             logger.error('Failed to activate environment manager', error);
+            const msg = error instanceof Error ? error.message : String(error);
+            this.outputChannel.appendLine(l10n.t('Failed to activate environment manager: {0}', msg));
         });
     }
 
@@ -79,9 +83,7 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
         options: CreateDeepnoteEnvironmentOptions,
         token?: CancellationToken
     ): Promise<DeepnoteEnvironment> {
-        if (token?.isCancellationRequested) {
-            throw new Error('Operation cancelled');
-        }
+        Cancellation.throwIfCanceled(token);
 
         const id = uuid();
         const venvPath = Uri.joinPath(this.context.globalStorageUri, 'deepnote-venvs', id);
@@ -97,9 +99,7 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
             description: options.description
         };
 
-        if (token?.isCancellationRequested) {
-            throw new Error('Operation cancelled');
-        }
+        Cancellation.throwIfCanceled(token);
 
         this.environments.set(id, environment);
         await this.persistEnvironments();
@@ -177,9 +177,7 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
      * Delete an environment
      */
     public async deleteEnvironment(id: string, token?: CancellationToken): Promise<void> {
-        if (token?.isCancellationRequested) {
-            throw new Error('Operation cancelled');
-        }
+        Cancellation.throwIfCanceled(token);
 
         const config = this.environments.get(id);
         if (!config) {
@@ -191,9 +189,7 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
             await this.stopServer(id, token);
         }
 
-        if (token?.isCancellationRequested) {
-            throw new Error('Operation cancelled');
-        }
+        Cancellation.throwIfCanceled(token);
 
         this.environments.delete(id);
         await this.persistEnvironments();
@@ -315,6 +311,7 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
      * Dispose of all resources
      */
     public dispose(): void {
+        this.outputChannel.dispose();
         this._onDidChangeEnvironments.dispose();
     }
 }

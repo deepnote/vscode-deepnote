@@ -255,6 +255,7 @@
     "deepnote.commands.importJupyterNotebook.title": "Import Jupyter Notebook",
     "deepnote.views.explorer.name": "Explorer",
     "deepnote.views.explorer.welcome": "No Deepnote notebooks found in this workspace.",
+    "deepnote.views.environments.name": "Environments",
     "deepnote.command.selectNotebook.title": "Select Notebook",
     "deepnote.commands.environments.create.title": "Create Environment",
     "deepnote.commands.environments.start.title": "Start Server",

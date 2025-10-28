@@ -249,7 +249,8 @@ export class DeepnoteSharedToolkitInstaller {
             }
         } catch (ex) {
             logger.error('Failed to install shared deepnote-toolkit', ex);
-            this.outputChannel.appendLine(l10n.t('Error installing shared deepnote-toolkit: {0}', ex));
+            const msg = ex instanceof Error ? ex.message : String(ex);
+            this.outputChannel.appendLine(l10n.t('Error installing shared deepnote-toolkit: {0}', msg));
             return false;
         }
     }

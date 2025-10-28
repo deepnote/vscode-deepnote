@@ -28,13 +28,16 @@ export class DeepnoteEnvironmentPicker {
 
         if (environments.length === 0) {
             // No environments exist - prompt user to create one
+            const createLabel = l10n.t('Create Environment');
+            const cancelLabel = l10n.t('Cancel');
+
             const choice = await window.showInformationMessage(
                 l10n.t('No environments found. Create one to use with {0}?', getDisplayPath(notebookUri)),
-                l10n.t('Create Environment'),
-                l10n.t('Cancel')
+                createLabel,
+                cancelLabel
             );
 
-            if (choice === 'Create Environment') {
+            if (choice === createLabel) {
                 // Trigger the create command
                 logger.info('Triggering create environment command from picker');
                 await commands.executeCommand('deepnote.environments.create');

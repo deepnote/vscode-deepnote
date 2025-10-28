@@ -3,18 +3,22 @@ import { instance, mock, when, verify } from 'ts-mockito';
 import { DeepnoteEnvironmentsActivationService } from './deepnoteEnvironmentsActivationService';
 import { IDeepnoteEnvironmentManager } from '../types';
 import { DeepnoteEnvironmentsView } from './deepnoteEnvironmentsView.node';
+import { IOutputChannel } from '../../../platform/common/types';
 
 suite('DeepnoteEnvironmentsActivationService', () => {
     let activationService: DeepnoteEnvironmentsActivationService;
     let mockConfigManager: IDeepnoteEnvironmentManager;
     let mockEnvironmentsView: DeepnoteEnvironmentsView;
+    let mockOutputChannel: IOutputChannel;
 
     setup(() => {
         mockConfigManager = mock<IDeepnoteEnvironmentManager>();
         mockEnvironmentsView = mock<DeepnoteEnvironmentsView>();
+        mockOutputChannel = mock<IOutputChannel>();
 
         activationService = new DeepnoteEnvironmentsActivationService(
             instance(mockConfigManager),
+            instance(mockOutputChannel),
             instance(mockEnvironmentsView)
         );
     });
@@ -60,6 +64,7 @@ suite('DeepnoteEnvironmentsActivationService', () => {
         test('should accept environment manager', () => {
             const service = new DeepnoteEnvironmentsActivationService(
                 instance(mockConfigManager),
+                instance(mockOutputChannel),
                 instance(mockEnvironmentsView)
             );
 
@@ -69,6 +74,7 @@ suite('DeepnoteEnvironmentsActivationService', () => {
         test('should accept environments view', () => {
             const service = new DeepnoteEnvironmentsActivationService(
                 instance(mockConfigManager),
+                instance(mockOutputChannel),
                 instance(mockEnvironmentsView)
             );
 

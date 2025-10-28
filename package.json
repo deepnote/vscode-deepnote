@@ -146,19 +146,19 @@
             },
             {
                 "command": "deepnote.newProject",
-                "title": "New project",
+                "title": "%deepnote.commands.newProject.title%",
                 "category": "Deepnote",
                 "icon": "$(new-file)"
             },
             {
                 "command": "deepnote.importNotebook",
-                "title": "Import notebook",
+                "title": "%deepnote.commands.importNotebook.title%",
                 "category": "Deepnote",
                 "icon": "$(folder-opened)"
             },
             {
                 "command": "deepnote.importJupyterNotebook",
-                "title": "Import Jupyter notebook",
+                "title": "%deepnote.commands.importJupyterNotebook.title%",
                 "category": "Deepnote",
                 "icon": "$(notebook)"
             },
@@ -2005,7 +2005,7 @@
                 },
                 {
                     "id": "deepnoteEnvironments",
-                    "name": "Environments",
+                    "name": "%deepnote.views.environments.name%",
                     "when": "workspaceFolderCount != 0"
                 }
             ]
@@ -2402,7 +2402,6 @@
         "@types/temp": "^0.8.32",
         "@types/tmp": "^0.2.3",
         "@types/url-parse": "^1.4.8",
-        "@types/uuid": "^3.4.3",
         "@types/vscode-notebook-renderer": "^1.60.0",
         "@types/ws": "^6.0.1",
         "@typescript-eslint/eslint-plugin": "^6.9.0",

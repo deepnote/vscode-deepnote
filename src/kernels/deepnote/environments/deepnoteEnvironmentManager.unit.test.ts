@@ -1,4 +1,5 @@
-import { assert } from 'chai';
+import { assert, use } from 'chai';
+import chaiAsPromised from 'chai-as-promised';
 import { anything, instance, mock, when, verify, deepEqual } from 'ts-mockito';
 import { Uri } from 'vscode';
 import { DeepnoteEnvironmentManager } from './deepnoteEnvironmentManager.node';
@@ -13,6 +14,8 @@ import {
 } from '../types';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
 import { EnvironmentStatus } from './deepnoteEnvironment';
+
+use(chaiAsPromised);
 
 suite('DeepnoteEnvironmentManager', () => {
     let manager: DeepnoteEnvironmentManager;
@@ -73,7 +76,7 @@ suite('DeepnoteEnvironmentManager', () => {
 
             manager.activate();
             // Wait for async initialization
-            await new Promise((resolve) => setTimeout(resolve, 100));
+            await manager.waitForInitialization();
 
             const configs = manager.listEnvironments();
             assert.strictEqual(configs.length, 1);
@@ -485,7 +488,7 @@ suite('DeepnoteEnvironmentManager', () => {
 
             await manager.stopServer(config.id);
 
-            verify(mockServerStarter.stopServer(anything())).never();
+            verify(mockServerStarter.stopServer(anything(), anything())).never();
         });
 
         test('should throw error for non-existent environment', async () => {

@@ -1,5 +1,5 @@
 import { injectable, inject } from 'inversify';
-import { EventEmitter, Uri, CancellationToken } from 'vscode';
+import { EventEmitter, Uri, CancellationToken, l10n } from 'vscode';
 import { generateUuid as uuid } from '../../../platform/common/uuid';
 import { IExtensionContext } from '../../../platform/common/types';
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
@@ -153,7 +153,7 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
     ): Promise<void> {
         const config = this.environments.get(id);
         if (!config) {
-            throw new Error(`Environment not found: ${id}`);
+            throw new Error(l10n.t('Environment not found: {0}', id));
         }
 
         if (updates.name !== undefined) {
@@ -204,7 +204,7 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
     /**
      * Start the Jupyter server for an environment
      */
-    public async startServer(id: string): Promise<void> {
+    public async startServer(id: string, token?: CancellationToken): Promise<void> {
         const config = this.environments.get(id);
         if (!config) {
             throw new Error(`Environment not found: ${id}`);
@@ -217,18 +217,18 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
             const { pythonInterpreter, toolkitVersion } = await this.toolkitInstaller.ensureVenvAndToolkit(
                 config.pythonInterpreter,
                 config.venvPath,
-                undefined
+                token
             );
 
             // Install additional packages if specified
             if (config.packages && config.packages.length > 0) {
-                await this.toolkitInstaller.installAdditionalPackages(config.venvPath, config.packages, undefined);
+                await this.toolkitInstaller.installAdditionalPackages(config.venvPath, config.packages, token);
             }
 
             // Start the Jupyter server (serverStarter is idempotent - returns existing if running)
             // IMPORTANT: Always call this to ensure we get the current server info
             // Don't return early based on config.serverInfo - it may be stale!
-            const serverInfo = await this.serverStarter.startServer(pythonInterpreter, config.venvPath, id, undefined);
+            const serverInfo = await this.serverStarter.startServer(pythonInterpreter, config.venvPath, id, token);
 
             config.pythonInterpreter = pythonInterpreter;
             config.toolkitVersion = toolkitVersion;
@@ -290,7 +290,7 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
     public async restartServer(id: string, token?: CancellationToken): Promise<void> {
         logger.info(`Restarting server for environment: ${id}`);
         await this.stopServer(id, token);
-        await this.startServer(id);
+        await this.startServer(id, token);
     }
 
     /**

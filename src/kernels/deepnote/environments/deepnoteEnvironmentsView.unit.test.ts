@@ -10,14 +10,6 @@ import { DeepnoteEnvironment } from './deepnoteEnvironment';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 
-// TODO: Add tests for command registration (requires VSCode API mocking)
-// TODO: Add tests for startServer command execution
-// TODO: Add tests for stopServer command execution
-// TODO: Add tests for restartServer command execution
-// TODO: Add tests for managePackages with package validation
-// TODO: Add tests for createEnvironment workflow
-// TODO: Add tests for selectEnvironmentForNotebook (requires VSCode window API mocking)
-
 suite('DeepnoteEnvironmentsView', () => {
     let view: DeepnoteEnvironmentsView;
     let mockConfigManager: IDeepnoteEnvironmentManager;

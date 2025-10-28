@@ -49,7 +49,7 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
 
         // Set description with last used time
         const lastUsed = this.getRelativeTime(this.environment.lastUsedAt);
-        this.description = `Last used: ${lastUsed}`;
+        this.description = l10n.t('Last used: {0}', lastUsed);
 
         // Set tooltip with detailed info
         this.tooltip = this.buildTooltip();
@@ -62,13 +62,13 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
     }
 
     private setupCreateAction(): void {
-        this.label = 'Create New Environment';
+        this.label = l10n.t('Create New Environment');
         this.iconPath = new ThemeIcon('add');
         this.contextValue = 'deepnoteEnvironment.create';
         this.collapsibleState = TreeItemCollapsibleState.None;
         this.command = {
             command: 'deepnote.environments.create',
-            title: 'Create Environment'
+            title: l10n.t('Create Environment')
         };
     }
 

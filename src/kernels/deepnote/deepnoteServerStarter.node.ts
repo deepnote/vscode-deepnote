@@ -366,9 +366,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
      * Environment-based server stop implementation.
      */
     private async stopServerForEnvironment(environmentId: string, token?: CancellationToken): Promise<void> {
-        if (token?.isCancellationRequested) {
-            throw new Error('Operation cancelled');
-        }
+        Cancellation.throwIfCanceled(token);
 
         const serverProcess = this.serverProcesses.get(environmentId);
 
@@ -382,23 +380,17 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                 this.serverInfos.delete(environmentId);
                 this.serverOutputByFile.delete(environmentId);
                 this.outputChannel.appendLine(l10n.t('Deepnote server stopped for environment {0}', environmentId));
-
-                if (token?.isCancellationRequested) {
-                    throw new Error('Operation cancelled');
-                }
-
+            } catch (ex) {
+                logger.error('Error stopping Deepnote server', ex);
+            } finally {
                 // Clean up lock file after stopping the server
                 if (serverPid) {
                     await this.deleteLockFile(serverPid);
                 }
-            } catch (ex) {
-                logger.error('Error stopping Deepnote server', ex);
             }
         }
 
-        if (token?.isCancellationRequested) {
-            throw new Error('Operation cancelled');
-        }
+        Cancellation.throwIfCanceled(token);
 
         const disposables = this.disposablesByFile.get(environmentId);
         if (disposables) {

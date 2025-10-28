@@ -367,16 +367,22 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
      */
     private getKernelSpecName(venvPath: Uri): string {
         // Extract the venv directory name (last segment of path)
-        const venvDirName = venvPath.fsPath.split(/[/\\]/).filter(Boolean).pop() || 'venv';
-        return `deepnote-${venvDirName}`;
+        const raw = venvPath.fsPath.split(/[/\\]/).filter(Boolean).pop() || 'venv';
+        const safe = raw
+            .toLowerCase()
+            .replace(/[^a-z0-9._-]/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-|-$|^\.+/g, '');
+        return `deepnote-${safe}`;
     }
 
     /**
      * Generate a display name from a venv path.
      */
     private getKernelDisplayName(venvPath: Uri): string {
-        const venvDirName = venvPath.fsPath.split(/[/\\]/).filter(Boolean).pop() || 'venv';
-        return `Deepnote (${venvDirName})`;
+        const raw = venvPath.fsPath.split(/[/\\]/).filter(Boolean).pop() || 'venv';
+        const printable = raw.replace(/[\r\n\t]/g, ' ').trim();
+        return `Deepnote (${printable})`;
     }
 
     /**

@@ -519,7 +519,7 @@ export namespace DataScience {
         );
     export const jupyterDebuggerOutputParseError = (output: string) =>
         l10n.t(
-            'Unable to parse {0} output, please log an issue with https://github.com/microsoft/vscode-jupyter',
+            'Unable to parse {0} output, please log an issue with https://github.com/deepnote/vscode-deepnote',
             output
         );
     export const cellStopOnErrorMessage = l10n.t('Cell was canceled due to an error in a previous cell.');

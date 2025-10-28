@@ -1,6 +1,6 @@
 import { assert } from 'chai';
 import * as sinon from 'sinon';
-import { anything, instance, mock, when } from 'ts-mockito';
+import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { DeepnoteKernelAutoSelector } from './deepnoteKernelAutoSelector.node';
 import {
     IDeepnoteEnvironmentManager,
@@ -20,7 +20,6 @@ import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
 import { NotebookDocument, Uri, NotebookController, CancellationToken } from 'vscode';
 import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnoteEnvironment';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
-import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
 
 suite('DeepnoteKernelAutoSelector - rebuildController', () => {
     let selector: DeepnoteKernelAutoSelector;
@@ -60,7 +59,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         mockEnvironmentManager = mock<IDeepnoteEnvironmentManager>();
         mockEnvironmentPicker = mock<IDeepnoteEnvironmentPicker>();
         mockNotebookEnvironmentMapper = mock<IDeepnoteNotebookEnvironmentMapper>();
-        mockOutputChannel = mock<IOutputChannel>(STANDARD_OUTPUT_CHANNEL);
+        mockOutputChannel = mock<IOutputChannel>();
 
         // Create mock notebook
         mockNotebook = {
@@ -117,9 +116,9 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
     });
 
     suite('rebuildController', () => {
-        test('should log warning when switching with pending cells', async () => {
-            // This test verifies that rebuildController logs a warning when cells are executing
-            // but still proceeds with the environment switch
+        test('should proceed with environment switch despite pending cells', async () => {
+            // This test verifies that rebuildController continues with the environment switch
+            // even when cells are currently executing (pending)
 
             // Arrange
             const mockKernel = mock<IKernel>();
@@ -208,13 +207,48 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             // Mock kernel provider to return no kernel (no cells executing)
             when(mockKernelProvider.get(mockNotebook)).thenReturn(undefined);
 
+            // Get the notebook key that will be used internally
+            const baseFileUri = mockNotebook.uri.with({ query: '', fragment: '' });
+            const notebookKey = baseFileUri.fsPath;
+
+            // Set up initial metadata and server handle to verify they get cleared
+            const selectorWithPrivateAccess = selector as any;
+            const mockMetadata = { id: 'test-metadata' };
+            const mockServerHandle = 'test-server-handle';
+            selectorWithPrivateAccess.notebookConnectionMetadata.set(notebookKey, mockMetadata);
+            selectorWithPrivateAccess.notebookServerHandles.set(notebookKey, mockServerHandle);
+
+            // Verify metadata is set before rebuild
+            assert.strictEqual(
+                selectorWithPrivateAccess.notebookConnectionMetadata.has(notebookKey),
+                true,
+                'Metadata should be set before rebuildController'
+            );
+            assert.strictEqual(
+                selectorWithPrivateAccess.notebookServerHandles.has(notebookKey),
+                true,
+                'Server handle should be set before rebuildController'
+            );
+
             // Stub ensureKernelSelected to avoid full execution
             const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelected').resolves();
 
             // Act
             await selector.rebuildController(mockNotebook);
 
-            // Assert
+            // Assert - verify metadata has been cleared
+            assert.strictEqual(
+                selectorWithPrivateAccess.notebookConnectionMetadata.has(notebookKey),
+                false,
+                'Connection metadata should be cleared to force fresh metadata creation'
+            );
+            assert.strictEqual(
+                selectorWithPrivateAccess.notebookServerHandles.has(notebookKey),
+                false,
+                'Server handle should be cleared'
+            );
+
+            // Assert - verify ensureKernelSelected has been called
             assert.strictEqual(
                 ensureKernelSelectedStub.calledOnce,
                 true,

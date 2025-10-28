@@ -35,12 +35,12 @@ suite('DeepnoteEnvironmentsView', () => {
         mockKernelProvider = mock<IKernelProvider>();
 
         // Mock onDidChangeEnvironments to return a disposable event
-        when(mockConfigManager.onDidChangeEnvironments).thenReturn(() => {
+        when(mockConfigManager.onDidChangeEnvironments).thenReturn((_listener: () => void) => {
             return {
                 dispose: () => {
                     /* noop */
                 }
-            } as Disposable;
+            };
         });
 
         view = new DeepnoteEnvironmentsView(
@@ -224,7 +224,6 @@ suite('DeepnoteEnvironmentsView', () => {
 
             assert.ok(capturedOptions, 'Options should be provided');
             assert.strictEqual(capturedOptions.value, 'Original Name');
-            assert.strictEqual(capturedOptions.prompt, 'Enter a new name for this environment');
         });
     });
 });

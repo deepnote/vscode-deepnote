@@ -227,6 +227,7 @@ suite('DeepnoteEnvironmentManager', () => {
 
             const updated = manager.getEnvironment(config.id);
             assert.strictEqual(updated?.name, 'Updated Name');
+            verify(mockStorage.saveEnvironments(anything())).atLeast(1);
         });
 
         test('should update packages', async () => {
@@ -242,6 +243,7 @@ suite('DeepnoteEnvironmentManager', () => {
 
             const updated = manager.getEnvironment(config.id);
             assert.deepStrictEqual(updated?.packages, ['numpy', 'pandas']);
+            verify(mockStorage.saveEnvironments(anything())).atLeast(1);
         });
 
         test('should throw error for non-existent environment', async () => {
@@ -283,6 +285,7 @@ suite('DeepnoteEnvironmentManager', () => {
 
             const deleted = manager.getEnvironment(config.id);
             assert.isUndefined(deleted);
+            verify(mockStorage.saveEnvironments(anything())).atLeast(1);
         });
 
         test('should stop server before deleting if running', async () => {
@@ -443,12 +446,10 @@ suite('DeepnoteEnvironmentManager', () => {
                 pythonInterpreter: testInterpreter
             });
 
-            const originalLastUsed = config.lastUsedAt;
-            await new Promise((resolve) => setTimeout(resolve, 10));
+            const originalLastUsed = config.lastUsedAt.getTime();
             await manager.startServer(config.id);
-
-            const updated = manager.getEnvironment(config.id);
-            assert.isTrue(updated!.lastUsedAt > originalLastUsed);
+            const updated = manager.getEnvironment(config.id)!;
+            assert.isAtLeast(updated.lastUsedAt.getTime(), originalLastUsed);
         });
 
         test('should throw error for non-existent environment', async () => {

@@ -265,7 +265,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 }
             );
         } catch (error) {
-            void window.showErrorMessage(l10n.t('Failed to create environment: {0}', error));
+            void window.showErrorMessage(l10n.t('Failed to create environment. See output for details.'));
         }
     }
 
@@ -291,7 +291,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
             void window.showInformationMessage(l10n.t('Server started for "{0}"', config.name));
         } catch (error) {
             logger.error('Failed to start server', error);
-            void window.showErrorMessage(l10n.t('Failed to start server: {0}', error));
+            void window.showErrorMessage(l10n.t('Failed to start server. See output for details.'));
         }
     }
 
@@ -317,7 +317,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
             void window.showInformationMessage(l10n.t('Server stopped for "{0}"', config.name));
         } catch (error) {
             logger.error('Failed to stop server', error);
-            void window.showErrorMessage(l10n.t('Failed to stop server: {0}', error));
+            void window.showErrorMessage(l10n.t('Failed to stop server. See output for details.'));
         }
     }
 
@@ -343,7 +343,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
             void window.showInformationMessage(l10n.t('Server restarted for "{0}"', config.name));
         } catch (error) {
             logger.error('Failed to restart server', error);
-            void window.showErrorMessage(l10n.t('Failed to restart server: {0}', error));
+            void window.showErrorMessage(l10n.t('Failed to restart server. See output for details.'));
         }
     }
 
@@ -389,7 +389,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
             void window.showInformationMessage(l10n.t('Environment "{0}" deleted', config.name));
         } catch (error) {
             logger.error('Failed to delete environment', error);
-            void window.showErrorMessage(l10n.t('Failed to delete environment: {0}', error));
+            void window.showErrorMessage(l10n.t('Failed to delete environment. See output for details.'));
         }
     }
 
@@ -423,7 +423,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
             void window.showInformationMessage(l10n.t('Environment renamed to "{0}"', newName));
         } catch (error) {
             logger.error('Failed to rename environment', error);
-            void window.showErrorMessage(l10n.t('Failed to rename environment: {0}', error));
+            void window.showErrorMessage(l10n.t('Failed to rename environment. See output for details.'));
         }
     }
 
@@ -444,7 +444,11 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 }
                 const packages = value.split(',').map((p: string) => p.trim());
                 for (const pkg of packages) {
-                    if (!/^[a-zA-Z0-9_\-\[\]]+$/.test(pkg)) {
+                    const isValid =
+                        /^[A-Za-z0-9._\-]+(\[[A-Za-z0-9_,.\-]+\])?(\s*(==|>=|<=|~=|>|<)\s*[A-Za-z0-9.*+!\-_.]+)?(?:\s*;.+)?$/.test(
+                            pkg
+                        );
+                    if (!isValid) {
                         return l10n.t('Invalid package name: {0}', pkg);
                     }
                 }
@@ -477,7 +481,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
             void window.showInformationMessage(l10n.t('Packages updated for "{0}"', config.name));
         } catch (error) {
             logger.error('Failed to update packages', error);
-            void window.showErrorMessage(l10n.t('Failed to update packages: {0}', error));
+            void window.showErrorMessage(l10n.t('Failed to update packages. See output for details.'));
         }
     }
 
@@ -616,7 +620,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
             void window.showInformationMessage(l10n.t('Environment switched successfully'));
         } catch (error) {
             logger.error('Failed to switch environment', error);
-            void window.showErrorMessage(l10n.t('Failed to switch environment: {0}', error));
+            void window.showErrorMessage(l10n.t('Failed to switch environment. See output for details.'));
         }
     }
 

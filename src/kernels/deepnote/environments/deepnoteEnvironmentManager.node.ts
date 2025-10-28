@@ -283,6 +283,7 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
     public async restartServer(id: string, token?: CancellationToken): Promise<void> {
         logger.info(`Restarting server for environment: ${id}`);
         await this.stopServer(id, token);
+        Cancellation.throwIfCanceled(token);
         await this.startServer(id, token);
     }
 

@@ -34,6 +34,19 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
         }
     }
 
+    /**
+     * Create an info item to display under an environment
+     */
+    public static createInfoItem(label: string, icon?: string): DeepnoteEnvironmentTreeItem {
+        const item = new DeepnoteEnvironmentTreeItem(EnvironmentTreeItemType.InfoItem, undefined, undefined, label);
+
+        if (icon) {
+            item.iconPath = new ThemeIcon(icon);
+        }
+
+        return item;
+    }
+
     private setupEnvironmentItem(): void {
         if (!this.environment || !this.status) {
             return;
@@ -81,21 +94,21 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
         const lines: string[] = [];
         lines.push(`**${this.environment.name}**`);
         lines.push('');
-        lines.push(`Status: ${this.status}`);
-        lines.push(`Python: ${this.environment.pythonInterpreter.uri.toString(true)}`);
-        lines.push(`Venv: ${this.environment.venvPath.toString(true)}`);
+        lines.push(l10n.t('Status: {0}', this.status ?? l10n.t('Unknown')));
+        lines.push(l10n.t('Python: {0}', this.environment.pythonInterpreter.uri.toString(true)));
+        lines.push(l10n.t('Venv: {0}', this.environment.venvPath.toString(true)));
 
         if (this.environment.packages && this.environment.packages.length > 0) {
-            lines.push(`Packages: ${this.environment.packages.join(', ')}`);
+            lines.push(l10n.t('Packages: {0}', this.environment.packages.join(', ')));
         }
 
         if (this.environment.toolkitVersion) {
-            lines.push(`Toolkit: ${this.environment.toolkitVersion}`);
+            lines.push(l10n.t('Toolkit: {0}', this.environment.toolkitVersion));
         }
 
         lines.push('');
-        lines.push(`Created: ${this.environment.createdAt.toLocaleString()}`);
-        lines.push(`Last used: ${this.environment.lastUsedAt.toLocaleString()}`);
+        lines.push(l10n.t('Created: {0}', this.environment.createdAt.toLocaleString()));
+        lines.push(l10n.t('Last used: {0}', this.environment.lastUsedAt.toLocaleString()));
 
         return lines.join('\n');
     }
@@ -119,18 +132,5 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
         } else {
             return date.toLocaleDateString();
         }
-    }
-
-    /**
-     * Create an info item to display under an environment
-     */
-    public static createInfoItem(label: string, icon?: string): DeepnoteEnvironmentTreeItem {
-        const item = new DeepnoteEnvironmentTreeItem(EnvironmentTreeItemType.InfoItem, undefined, undefined, label);
-
-        if (icon) {
-            item.iconPath = new ThemeIcon(icon);
-        }
-
-        return item;
     }
 }

@@ -1,10 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import glob from 'glob';
+import { glob } from 'glob';
 import * as path from '../../platform/vscode-path/path';
 import { parse, SemVer } from 'semver';
-import { promisify } from 'util';
 import { logger } from '../../platform/logging';
 import { arePathsSame } from '../../platform/common/platform/fileUtils.node';
 import { ProcessService } from '../../platform/common/process/proc.node';
@@ -65,14 +64,14 @@ const CondaLocationsGlobWin = `{${condaGlobPathsForWindows.join(',')}}`;
  */
 async function getCondaFileFromKnownLocations(): Promise<string> {
     const globPattern = getOSType() === OSType.Windows ? CondaLocationsGlobWin : CondaLocationsGlob;
-    const condaFiles = await promisify(glob)(globPattern).catch<string[]>((failReason) => {
+    const condaFiles = await glob(globPattern, {}).catch<string[]>((failReason) => {
         logger.warn(
             'Default conda location search failed.',
             `Searching for default install locations for conda results in error: ${failReason}`
         );
         return [];
     });
-    const validCondaFiles = condaFiles.filter((condaPath) => condaPath.length > 0);
+    const validCondaFiles = condaFiles.filter((condaPath: string) => condaPath.length > 0);
     return validCondaFiles.length === 0 ? 'conda' : validCondaFiles[0];
 }
 

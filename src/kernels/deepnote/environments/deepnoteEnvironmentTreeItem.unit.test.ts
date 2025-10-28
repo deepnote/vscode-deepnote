@@ -1,8 +1,8 @@
 import { assert } from 'chai';
-import { ThemeIcon, TreeItemCollapsibleState } from 'vscode';
+import { ThemeIcon, TreeItemCollapsibleState, Uri } from 'vscode';
+
 import { DeepnoteEnvironmentTreeItem, EnvironmentTreeItemType } from './deepnoteEnvironmentTreeItem.node';
 import { DeepnoteEnvironment, EnvironmentStatus } from './deepnoteEnvironment';
-import { Uri } from 'vscode';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
 
 suite('DeepnoteEnvironmentTreeItem', () => {

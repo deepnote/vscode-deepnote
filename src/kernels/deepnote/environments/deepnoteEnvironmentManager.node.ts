@@ -12,6 +12,7 @@ import {
     EnvironmentStatus
 } from './deepnoteEnvironment';
 import { IDeepnoteEnvironmentManager, IDeepnoteServerStarter, IDeepnoteToolkitInstaller } from '../types';
+import { Cancellation } from '../../../platform/common/cancellation';
 
 /**
  * Manager for Deepnote kernel environments.
@@ -249,9 +250,7 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
      * Stop the Jupyter server for an environment
      */
     public async stopServer(id: string, token?: CancellationToken): Promise<void> {
-        if (token?.isCancellationRequested) {
-            throw new Error('Operation cancelled');
-        }
+        Cancellation.throwIfCanceled(token);
 
         const config = this.environments.get(id);
         if (!config) {
@@ -268,9 +267,7 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
 
             await this.serverStarter.stopServer(id, token);
 
-            if (token?.isCancellationRequested) {
-                throw new Error('Operation cancelled');
-            }
+            Cancellation.throwIfCanceled(token);
 
             config.serverInfo = undefined;
 

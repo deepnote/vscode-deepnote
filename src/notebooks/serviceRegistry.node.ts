@@ -186,7 +186,6 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     // Deepnote configuration services
     serviceManager.addSingleton<DeepnoteEnvironmentStorage>(DeepnoteEnvironmentStorage, DeepnoteEnvironmentStorage);
     serviceManager.addSingleton<IDeepnoteEnvironmentManager>(IDeepnoteEnvironmentManager, DeepnoteEnvironmentManager);
-    serviceManager.addBinding(IDeepnoteEnvironmentManager, IExtensionSyncActivationService);
 
     // Deepnote configuration view
     serviceManager.addSingleton<DeepnoteEnvironmentsView>(DeepnoteEnvironmentsView, DeepnoteEnvironmentsView);

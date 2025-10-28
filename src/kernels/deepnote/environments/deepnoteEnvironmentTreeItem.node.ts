@@ -1,4 +1,5 @@
 import { l10n, ThemeIcon, TreeItem, TreeItemCollapsibleState } from 'vscode';
+
 import { DeepnoteEnvironment, EnvironmentStatus } from './deepnoteEnvironment';
 import { getDeepnoteEnvironmentStatusVisual } from './deepnoteEnvironmentUi';
 
@@ -110,11 +111,11 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
         if (seconds < 60) {
             return l10n.t('just now');
         } else if (minutes < 60) {
-            return l10n.t('{0} minute(s) ago', minutes);
+            return minutes === 1 ? l10n.t('1 minute ago') : l10n.t('{0} minutes ago', minutes);
         } else if (hours < 24) {
-            return l10n.t('{0} hour(s) ago', hours);
+            return hours === 1 ? l10n.t('1 hour ago') : l10n.t('{0} hours ago', hours);
         } else if (days < 7) {
-            return l10n.t('{0} day(s) ago', days);
+            return days === 1 ? l10n.t('1 day ago') : l10n.t('{0} days ago', days);
         } else {
             return date.toLocaleDateString();
         }

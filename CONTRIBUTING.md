@@ -19,16 +19,16 @@
 4. Windows, macOS, or Linux
 5. [Visual Studio Code](https://code.visualstudio.com/)
 6. The following VS Code extensions:
-    - [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint)
-    - [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)
-    - [EditorConfig for VS Code](https://marketplace.visualstudio.com/items?itemName=EditorConfig.EditorConfig)
-    - [Python Extension for VS Code](https://marketplace.visualstudio.com/items?itemName=ms-python.python)
+   - [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint)
+   - [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)
+   - [EditorConfig for VS Code](https://marketplace.visualstudio.com/items?itemName=EditorConfig.EditorConfig)
+   - [Python Extension for VS Code](https://marketplace.visualstudio.com/items?itemName=ms-python.python)
 
 ### Setup
 
 ```shell
 git clone https://github.com/deepnote/vscode-deepnote
-cd vscode-jupyter
+cd vscode-deepnote
 
 ```
 
@@ -47,6 +47,7 @@ Then install all the extensions listed under "Workspace Recommendations".
 The `@deepnote/blocks` package is published on GitHub Packages. To install it, you'll need to authenticate with GitHub:
 
 1. Create a GitHub Personal Access Token (classic) with `read:packages` scope:
+
    - Go to https://github.com/settings/tokens
    - Click "Generate new token (classic)"
    - Select the `read:packages` scope
@@ -178,8 +179,8 @@ you can do this by setting environment variables. The same variables work when
 running from the command line or launching from within VSCode, though the
 mechanism used to specify them changes a little.
 
--   Setting `CI_PYTHON_PATH` lets you change the version of python the tests are executed with
--   Setting `VSC_JUPYTER_CI_TEST_GREP` lets you filter the tests by name
+- Setting `CI_PYTHON_PATH` lets you change the version of python the tests are executed with
+- Setting `VSC_JUPYTER_CI_TEST_GREP` lets you filter the tests by name
 
 _`CI_PYTHON_PATH`_
 
@@ -239,8 +240,8 @@ VSC_JUPYTER_CI_TEST_GREP=Sorting npm run testVSCode
 The extension has a number of scripts in ./pythonFiles. Tests for these
 scripts are found in ./pythonFiles/tests. To run those tests:
 
--   `python2.7 pythonFiles/tests/run_all.py`
--   `python3 -m pythonFiles.tests`
+- `python2.7 pythonFiles/tests/run_all.py`
+- `python3 -m pythonFiles.tests`
 
 By default, functional tests are included. To exclude them:
 

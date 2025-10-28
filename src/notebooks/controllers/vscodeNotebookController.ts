@@ -367,7 +367,7 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
         }
 
         // Found on CI that sometimes VS Code calls this with old deleted cells.
-        // See here https://github.com/deepnote/vscode-deepnote/runs/5581627878?check_suite_focus=true
+        // See here https://github.com/microsoft/vscode-jupyter/runs/5581627878?check_suite_focus=true
         cells = cells.filter((cell) => {
             if (cell.index < 0) {
                 logger.warn(

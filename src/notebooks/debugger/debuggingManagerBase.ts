@@ -237,7 +237,7 @@ export abstract class DebuggingManagerBase implements IDisposable, IDebuggingMan
             sendTelemetryEvent(DebuggingTelemetry.clickedOnSetup);
             void env.openExternal(
                 Uri.parse(
-                    'https://github.com/deepnote/vscode-deepnote/wiki/Setting-Up-Run-by-Line-and-Debugging-for-Notebooks'
+                    'https://github.com/microsoft/vscode-jupyter/wiki/Setting-Up-Run-by-Line-and-Debugging-for-Notebooks'
                 )
             );
         } else {

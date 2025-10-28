@@ -303,7 +303,7 @@ export class KernelDependencyService implements IKernelDependencyService {
                     });
 
                     // Link to our wiki page on jupyter kernels + ipykernel
-                    // https://github.com/deepnote/vscode-deepnote/wiki/Jupyter-Kernels-and-the-Jupyter-Extension#python-extension-and-ipykernel
+                    // https://github.com/microsoft/vscode-jupyter/wiki/Jupyter-Kernels-and-the-Jupyter-Extension#python-extension-and-ipykernel
                     void env.openExternal(Uri.parse('https://aka.ms/AAhi594'));
                 }
                 // "More Info" isn't a full valid response here, so reprompt after showing it

@@ -13,7 +13,7 @@ ipympl
 pillow>=10.2.0
 setuptools>=78.1.1
 zipp>=3.19.1
-tornado>=6.4.1
+tornado>=6.5
 anyio>=4.4.0
 requests>=2.32.4
 fonttools>=4.43.0

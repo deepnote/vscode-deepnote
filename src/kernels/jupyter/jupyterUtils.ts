@@ -99,7 +99,7 @@ export function createJupyterConnectionInfo(
 
     // When using built in Jupyter Server providers, & we have a token
     // Then we need to ensure the same token information is setup as a header for websockets as well.
-    // This same change had to be made for JuptyerHub extension, see https://github.com/deepnote/vscode-deepnote-hub/pull/65
+    // This same change had to be made for JuptyerHub extension, see https://github.com/microsoft/vscode-jupyter-hub/pull/65
     if (
         token &&
         jupyterHandle.extensionId === JVSC_EXTENSION_ID &&

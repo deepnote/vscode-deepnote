@@ -1,4 +1,4 @@
-import { l10n, ThemeIcon, TreeItem, TreeItemCollapsibleState } from 'vscode';
+import { l10n, ThemeColor, ThemeIcon, TreeItem, TreeItemCollapsibleState } from 'vscode';
 
 import { DeepnoteEnvironment, EnvironmentStatus } from './deepnoteEnvironment';
 import { getDeepnoteEnvironmentStatusVisual } from './deepnoteEnvironmentUi';
@@ -42,7 +42,7 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
         const statusVisual = getDeepnoteEnvironmentStatusVisual(this.status);
 
         this.label = `${this.environment.name} [${statusVisual.text}]`;
-        this.iconPath = new ThemeIcon(statusVisual.icon, { id: statusVisual.themeColorId });
+        this.iconPath = new ThemeIcon(statusVisual.icon, new ThemeColor(statusVisual.themeColorId));
         this.contextValue = statusVisual.contextValue;
 
         // Make it collapsible to show info items

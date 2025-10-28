@@ -45,6 +45,7 @@ suite('Jupyter Provider Tests', function () {
         }
         if (IS_CONDA_TEST()) {
             // Due to upstream issue documented here https://github.com/microsoft/vscode-jupyter/issues/14338
+            // Note: This issue was closed in Dec 2023. This skip may no longer be necessary and should be tested.
             return this.skip();
         }
         this.timeout(120_000);

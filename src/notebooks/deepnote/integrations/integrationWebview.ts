@@ -5,8 +5,15 @@ import { IExtensionContext } from '../../../platform/common/types';
 import * as localize from '../../../platform/common/utils/localize';
 import { logger } from '../../../platform/logging';
 import { LocalizedMessages, SharedMessages } from '../../../messageTypes';
+import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
 import { IIntegrationStorage, IIntegrationWebviewProvider } from './types';
-import { IntegrationConfig, IntegrationStatus, IntegrationWithStatus } from './integrationTypes';
+import {
+    INTEGRATION_TYPE_TO_DEEPNOTE,
+    IntegrationConfig,
+    IntegrationStatus,
+    IntegrationWithStatus,
+    RawIntegrationType
+} from '../../../platform/notebooks/deepnote/integrationTypes';
 
 /**
  * Manages the webview panel for integration configuration
@@ -19,18 +26,27 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
 
     private integrations: Map<string, IntegrationWithStatus> = new Map();
 
+    private projectId: string | undefined;
+
     constructor(
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
-        @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage
+        @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
+        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager
     ) {}
 
     /**
      * Show the integration management webview
+     * @param projectId The Deepnote project ID
      * @param integrations Map of integration IDs to their status
      * @param selectedIntegrationId Optional integration ID to select/configure immediately
      */
-    public async show(integrations: Map<string, IntegrationWithStatus>, selectedIntegrationId?: string): Promise<void> {
-        // Update the stored integrations with the latest data
+    public async show(
+        projectId: string,
+        integrations: Map<string, IntegrationWithStatus>,
+        selectedIntegrationId?: string
+    ): Promise<void> {
+        // Update the stored integrations and project ID with the latest data
+        this.projectId = projectId;
         this.integrations = integrations;
 
         const column = window.activeTextEditor ? window.activeTextEditor.viewColumn : ViewColumn.One;
@@ -113,6 +129,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsConfirmResetMessage: localize.Integrations.confirmResetMessage,
             integrationsConfirmResetDetails: localize.Integrations.confirmResetDetails,
             integrationsConfigureTitle: localize.Integrations.configureTitle,
+            integrationsPostgresTypeLabel: localize.Integrations.postgresTypeLabel,
+            integrationsBigQueryTypeLabel: localize.Integrations.bigQueryTypeLabel,
             integrationsCancel: localize.Integrations.cancel,
             integrationsSave: localize.Integrations.save,
             integrationsRequiredField: localize.Integrations.requiredField,
@@ -157,6 +175,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         const integrationsData = Array.from(this.integrations.entries()).map(([id, integration]) => ({
             config: integration.config,
             id,
+            integrationName: integration.integrationName,
+            integrationType: integration.integrationType,
             status: integration.status
         }));
         logger.debug(`IntegrationWebviewProvider: Sending ${integrationsData.length} integrations to webview`);
@@ -206,6 +226,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         await this.currentPanel?.webview.postMessage({
             config: integration.config,
             integrationId,
+            integrationName: integration.integrationName,
+            integrationType: integration.integrationType,
             type: 'showForm'
         });
     }
@@ -224,6 +246,9 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 integration.status = IntegrationStatus.Connected;
                 this.integrations.set(integrationId, integration);
             }
+
+            // Update the project's integrations list
+            await this.updateProjectIntegrationsList();
 
             await this.updateWebview();
             await this.currentPanel?.webview.postMessage({
@@ -257,6 +282,9 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 this.integrations.set(integrationId, integration);
             }
 
+            // Update the project's integrations list
+            await this.updateProjectIntegrationsList();
+
             await this.updateWebview();
             await this.currentPanel?.webview.postMessage({
                 message: l10n.t('Configuration deleted successfully'),
@@ -271,6 +299,57 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 ),
                 type: 'error'
             });
+        }
+    }
+
+    /**
+     * Update the project's integrations list based on current integrations
+     */
+    private async updateProjectIntegrationsList(): Promise<void> {
+        if (!this.projectId) {
+            logger.warn('IntegrationWebviewProvider: No project ID available, skipping project update');
+            return;
+        }
+
+        // Build the integrations list from current integrations
+        const projectIntegrations: ProjectIntegration[] = Array.from(this.integrations.entries())
+            .map(([id, integration]): ProjectIntegration | null => {
+                // Get the integration type from config or integration metadata
+                const type = integration.config?.type || integration.integrationType;
+                if (!type) {
+                    logger.warn(`IntegrationWebviewProvider: No type found for integration ${id}, skipping`);
+                    return null;
+                }
+
+                // Map to Deepnote integration type
+                const deepnoteType: RawIntegrationType | undefined = INTEGRATION_TYPE_TO_DEEPNOTE[type];
+                if (!deepnoteType) {
+                    logger.warn(`IntegrationWebviewProvider: Cannot map type ${type} for integration ${id}, skipping`);
+                    return null;
+                }
+
+                return {
+                    id,
+                    name: integration.config?.name || integration.integrationName || id,
+                    type: deepnoteType
+                };
+            })
+            .filter((integration): integration is ProjectIntegration => integration !== null);
+
+        logger.debug(
+            `IntegrationWebviewProvider: Updating project ${this.projectId} with ${projectIntegrations.length} integrations`
+        );
+
+        // Update the project in the notebook manager
+        const success = this.notebookManager.updateProjectIntegrations(this.projectId, projectIntegrations);
+
+        if (!success) {
+            logger.error(
+                `IntegrationWebviewProvider: Failed to update integrations for project ${this.projectId} - project not found`
+            );
+            void window.showErrorMessage(
+                l10n.t('Failed to update integrations: project not found. Please reopen the notebook and try again.')
+            );
         }
     }
 

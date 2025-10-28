@@ -199,7 +199,7 @@ suite('ChartBigNumberBlockConverter', () => {
                         execution_count: 33,
                         data: {
                             'text/plain':
-                                '{"comparisonTitle": "vs a", "comparisonValue": "10", "title": "sgjaoshdgoashgopiashgoihasdoighasoihgoiasdhgoisadhgoihsdoghasdoighaosdg", "value": "30"}'
+                                '{"comparisonTitle": "vs a", "comparisonValue": "10", "title": "Some title", "value": "30"}'
                         },
                         metadata: {}
                     }

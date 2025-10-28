@@ -1,14 +1,9 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import type { ActivationFunction, OutputItem, RendererContext } from 'vscode-notebook-renderer';
+import { ErrorBoundary } from 'react-error-boundary';
 import { VegaRenderer } from './VegaRenderer';
-
-interface Metadata {
-    cellId?: string;
-    cellIndex?: number;
-    executionCount?: number;
-    outputType?: string;
-}
+import { ErrorFallback } from './ErrorBoundary';
 
 /**
  * Renderer for Vega charts (application/vnd.vega.v5+json).
@@ -17,25 +12,26 @@ export const activate: ActivationFunction = (_context: RendererContext<unknown>)
     const elementsCache: Record<string, HTMLElement | undefined> = {};
     return {
         renderOutputItem(outputItem: OutputItem, element: HTMLElement) {
-            console.log(`Vega renderer - rendering output item: ${outputItem.id}`);
             try {
                 const spec = outputItem.json();
-
-                console.log(`Vega renderer - received spec with ${Object.keys(spec).length} keys`);
-
-                const metadata = outputItem.metadata as Metadata | undefined;
-
-                console.log('[VegaRenderer] Full metadata', metadata);
-
                 const root = document.createElement('div');
                 root.style.height = '500px';
 
                 element.appendChild(root);
                 elementsCache[outputItem.id] = root;
                 ReactDOM.render(
-                    React.createElement(VegaRenderer, {
-                        spec: spec
-                    }),
+                    React.createElement(
+                        ErrorBoundary,
+                        {
+                            FallbackComponent: ErrorFallback,
+                            onError: (error, info) => {
+                                console.error('Vega renderer error:', error, info);
+                            }
+                        },
+                        React.createElement(VegaRenderer, {
+                            spec: spec
+                        })
+                    ),
                     root
                 );
             } catch (error) {

@@ -2,9 +2,14 @@ import { inject, injectable } from 'inversify';
 
 import { logger } from '../../../platform/logging';
 import { IDeepnoteNotebookManager } from '../../types';
-import { IntegrationStatus, IntegrationWithStatus } from './integrationTypes';
+import {
+    DATAFRAME_SQL_INTEGRATION_ID,
+    DEEPNOTE_TO_INTEGRATION_TYPE,
+    IntegrationStatus,
+    IntegrationWithStatus,
+    RawIntegrationType
+} from '../../../platform/notebooks/deepnote/integrationTypes';
 import { IIntegrationDetector, IIntegrationStorage } from './types';
-import { BlockWithIntegration, scanBlocksForIntegrations } from './integrationUtils';
 
 /**
  * Service for detecting integrations used in Deepnote notebooks
@@ -17,7 +22,8 @@ export class IntegrationDetector implements IIntegrationDetector {
     ) {}
 
     /**
-     * Detect all integrations used in the given project
+     * Detect all integrations used in the given project.
+     * Uses the project's integrations field as the source of truth.
      */
     async detectIntegrations(projectId: string): Promise<Map<string, IntegrationWithStatus>> {
         // Get the project
@@ -29,33 +35,52 @@ export class IntegrationDetector implements IIntegrationDetector {
             return new Map();
         }
 
-        logger.debug(
-            `IntegrationDetector: Scanning project ${projectId} with ${project.project.notebooks.length} notebooks`
-        );
+        logger.debug(`IntegrationDetector: Scanning project ${projectId} for integrations`);
 
-        // Collect all blocks with SQL integration metadata from all notebooks
-        const blocksWithIntegrations: BlockWithIntegration[] = [];
-        for (const notebook of project.project.notebooks) {
-            logger.trace(`IntegrationDetector: Scanning notebook ${notebook.id} with ${notebook.blocks.length} blocks`);
+        const integrations = new Map<string, IntegrationWithStatus>();
 
-            for (const block of notebook.blocks) {
-                // Check if this is a code block with SQL integration metadata
-                if (block.type === 'code' && block.metadata?.sql_integration_id) {
-                    blocksWithIntegrations.push({
-                        id: block.id,
-                        sql_integration_id: block.metadata.sql_integration_id
-                    });
-                } else if (block.type === 'code') {
-                    logger.trace(
-                        `IntegrationDetector: Block ${block.id} has no sql_integration_id. Metadata:`,
-                        block.metadata
-                    );
-                }
+        // Use the project's integrations field as the source of truth
+        const projectIntegrations = project.project.integrations || [];
+        logger.debug(`IntegrationDetector: Found ${projectIntegrations.length} integrations in project.integrations`);
+
+        for (const projectIntegration of projectIntegrations) {
+            const integrationId = projectIntegration.id;
+
+            // Skip the internal DuckDB integration
+            if (integrationId === DATAFRAME_SQL_INTEGRATION_ID) {
+                continue;
             }
+
+            logger.debug(`IntegrationDetector: Found integration: ${integrationId} (${projectIntegration.type})`);
+
+            // Map the Deepnote integration type to our IntegrationType
+            const integrationType = DEEPNOTE_TO_INTEGRATION_TYPE[projectIntegration.type as RawIntegrationType];
+
+            // Skip unknown integration types
+            if (!integrationType) {
+                logger.warn(
+                    `IntegrationDetector: Unknown integration type '${projectIntegration.type}' for integration ID '${integrationId}'. Skipping.`
+                );
+                continue;
+            }
+
+            // Check if the integration is configured
+            const config = await this.integrationStorage.getIntegrationConfig(integrationId);
+
+            const status: IntegrationWithStatus = {
+                config: config || null,
+                status: config ? IntegrationStatus.Connected : IntegrationStatus.Disconnected,
+                // Include integration metadata from project for prefilling when config is null
+                integrationName: projectIntegration.name,
+                integrationType: integrationType
+            };
+
+            integrations.set(integrationId, status);
         }
 
-        // Use the shared utility to scan blocks and build the status map
-        return scanBlocksForIntegrations(blocksWithIntegrations, this.integrationStorage, 'IntegrationDetector');
+        logger.debug(`IntegrationDetector: Found ${integrations.size} integrations`);
+
+        return integrations;
     }
 
     /**

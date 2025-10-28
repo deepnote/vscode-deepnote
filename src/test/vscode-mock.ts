@@ -195,3 +195,4 @@ mockedVSCode.QuickPickItemKind = vscodeMocks.vscMockExtHostedTypes.QuickPickItem
 mockedVSCode.NotebookCellOutput = vscodeMocks.vscMockExtHostedTypes.NotebookCellOutput;
 (mockedVSCode as any).NotebookCellOutputItem = vscodeMocks.vscMockExtHostedTypes.NotebookCellOutputItem;
 (mockedVSCode as any).NotebookCellExecutionState = vscodeMocks.vscMockExtHostedTypes.NotebookCellExecutionState;
+(mockedVSCode as any).NotebookEditorRevealType = vscodeMocks.vscMockExtHostedTypes.NotebookEditorRevealType;

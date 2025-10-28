@@ -1,6 +1,3 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-
 import { injectable, inject } from 'inversify';
 import {
     commands,
@@ -9,12 +6,16 @@ import {
     NotebookCellKind,
     NotebookEdit,
     NotebookRange,
-    NotebookCell
+    NotebookCell,
+    NotebookEditorRevealType,
+    l10n
 } from 'vscode';
+import z from 'zod';
+
+import { logger } from '../../platform/logging';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { Commands } from '../../platform/common/constants';
-import { noop } from '../../platform/common/utils/misc';
 import { chainWithPendingUpdates } from '../../kernels/execution/notebookUpdater';
 import {
     DeepnoteBigNumberMetadataSchema,
@@ -26,11 +27,11 @@ import {
     DeepnoteDateInputMetadataSchema,
     DeepnoteDateRangeInputMetadataSchema,
     DeepnoteFileInputMetadataSchema,
-    DeepnoteButtonMetadataSchema
+    DeepnoteButtonMetadataSchema,
+    DeepnoteSqlMetadata
 } from './deepnoteSchemas';
-import z from 'zod';
 
-type InputBlockType =
+export type InputBlockType =
     | 'input-text'
     | 'input-textarea'
     | 'input-select'
@@ -74,8 +75,10 @@ export function getInputBlockMetadata(blockType: InputBlockType, variableName: s
 
 export function safeParseDeepnoteVariableNameFromContentJson(content: string): string | undefined {
     try {
-        return JSON.parse(content)['deepnote_variable_name'];
+        const variableNameResult = z.string().safeParse(JSON.parse(content)['deepnote_variable_name']);
+        return variableNameResult.success ? variableNameResult.data : undefined;
     } catch (error) {
+        logger.error('Error parsing deepnote variable name from content JSON', error);
         return undefined;
     }
 }
@@ -88,10 +91,15 @@ export function getNextDeepnoteVariableName(cells: NotebookCell[], prefix: 'df' 
             acc.push(contentValue);
         }
 
-        const parsedMetadataValue = z.string().safeParse(cell.metadata.__deepnotePocket?.variableName);
-
+        const parsedMetadataValue = z.string().safeParse(cell.metadata['deepnote_variable_name']);
         if (parsedMetadataValue.success) {
             acc.push(parsedMetadataValue.data);
+        }
+
+        const parsedPocketMetadataValue = z.string().safeParse(cell.metadata.__deepnotePocket?.deepnote_variable_name);
+
+        if (parsedPocketMetadataValue.success) {
+            acc.push(parsedPocketMetadataValue.data);
         }
 
         return acc;
@@ -99,7 +107,11 @@ export function getNextDeepnoteVariableName(cells: NotebookCell[], prefix: 'df' 
 
     const maxDeepnoteVariableNamesSuffixNumber =
         deepnoteVariableNames.reduce<number | null>((acc, name) => {
-            const m = name.match(new RegExp(`^${prefix}_(\\d+)$`));
+            if (!name.startsWith(`${prefix}_`)) {
+                return acc;
+            }
+
+            const m = name.match(/_(\d+)$/);
             if (m == null) {
                 return acc;
             }
@@ -164,37 +176,54 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         );
     }
 
-    private addSqlBlock(): void {
+    public async addSqlBlock(): Promise<void> {
         const editor = window.activeNotebookEditor;
         if (!editor) {
-            return;
+            throw new Error(l10n.t('No active notebook editor found'));
         }
         const document = editor.notebook;
         const selection = editor.selection;
+        const cells = editor.notebook.getCells();
+        const deepnoteVariableName = getNextDeepnoteVariableName(cells, 'df');
+
+        const defaultMetadata: DeepnoteSqlMetadata = {
+            deepnote_variable_name: deepnoteVariableName,
+            deepnote_return_variable_type: 'dataframe',
+            sql_integration_id: 'deepnote-dataframe-sql'
+        };
 
         // Determine the index where to insert the new cell (below current selection or at the end)
         const insertIndex = selection ? selection.end : document.cellCount;
 
-        chainWithPendingUpdates(document, (edit) => {
+        const result = await chainWithPendingUpdates(document, (edit) => {
             // Create a SQL cell with SQL language for syntax highlighting
             // This matches the SqlBlockConverter representation
             const newCell = new NotebookCellData(NotebookCellKind.Code, '', 'sql');
             newCell.metadata = {
                 __deepnotePocket: {
-                    type: 'sql'
-                }
+                    type: 'sql',
+                    ...defaultMetadata
+                },
+                ...defaultMetadata
             };
             const nbEdit = NotebookEdit.insertCells(insertIndex, [newCell]);
             edit.set(document.uri, [nbEdit]);
-        }).then(() => {
-            editor.selection = new NotebookRange(insertIndex, insertIndex + 1);
-        }, noop);
+        });
+        if (result !== true) {
+            throw new Error(l10n.t('Failed to insert SQL block'));
+        }
+
+        const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
+        editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
+        editor.selection = notebookRange;
+        // Enter edit mode on the new cell
+        await commands.executeCommand('notebook.cell.edit');
     }
 
-    private addBigNumberChartBlock(): void {
+    public async addBigNumberChartBlock(): Promise<void> {
         const editor = window.activeNotebookEditor;
         if (!editor) {
-            return;
+            throw new Error(l10n.t('No active notebook editor found'));
         }
         const document = editor.notebook;
         const selection = editor.selection;
@@ -211,7 +240,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             }
         };
 
-        chainWithPendingUpdates(document, (edit) => {
+        const result = await chainWithPendingUpdates(document, (edit) => {
             const newCell = new NotebookCellData(
                 NotebookCellKind.Code,
                 JSON.stringify(bigNumberMetadata, null, 2),
@@ -220,15 +249,22 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             newCell.metadata = metadata;
             const nbEdit = NotebookEdit.insertCells(insertIndex, [newCell]);
             edit.set(document.uri, [nbEdit]);
-        }).then(() => {
-            editor.selection = new NotebookRange(insertIndex, insertIndex + 1);
-        }, noop);
+        });
+        if (result !== true) {
+            throw new Error(l10n.t('Failed to insert big number chart block'));
+        }
+
+        const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
+        editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
+        editor.selection = notebookRange;
+        // Enter edit mode on the new cell
+        await commands.executeCommand('notebook.cell.edit');
     }
 
-    private addInputBlock(blockType: InputBlockType): void {
+    public async addInputBlock(blockType: InputBlockType): Promise<void> {
         const editor = window.activeNotebookEditor;
         if (!editor) {
-            return;
+            throw new Error(l10n.t('No active notebook editor found'));
         }
         const document = editor.notebook;
         const selection = editor.selection;
@@ -239,7 +275,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         const insertIndex = selection ? selection.end : document.cellCount;
 
         // Get the appropriate schema and parse default metadata based on block type
-        let defaultMetadata = getInputBlockMetadata(blockType, deepnoteVariableName);
+        const defaultMetadata = getInputBlockMetadata(blockType, deepnoteVariableName);
 
         const metadata = {
             __deepnotePocket: {
@@ -248,7 +284,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             }
         };
 
-        chainWithPendingUpdates(document, (edit) => {
+        const result = await chainWithPendingUpdates(document, (edit) => {
             const newCell = new NotebookCellData(
                 NotebookCellKind.Code,
                 JSON.stringify(defaultMetadata, null, 2),
@@ -257,8 +293,15 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             newCell.metadata = metadata;
             const nbEdit = NotebookEdit.insertCells(insertIndex, [newCell]);
             edit.set(document.uri, [nbEdit]);
-        }).then(() => {
-            editor.selection = new NotebookRange(insertIndex, insertIndex + 1);
-        }, noop);
+        });
+        if (result !== true) {
+            throw new Error(l10n.t('Failed to insert input block'));
+        }
+
+        const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
+        editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
+        editor.selection = notebookRange;
+        // Enter edit mode on the new cell
+        await commands.executeCommand('notebook.cell.edit');
     }
 }

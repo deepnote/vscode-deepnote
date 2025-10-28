@@ -183,37 +183,37 @@
             },
             {
                 "command": "deepnote.renameProject",
-                "title": "Rename Project",
+                "title": "%deepnote.commands.renameProject.title%",
                 "category": "Deepnote",
                 "icon": "$(edit)"
             },
             {
                 "command": "deepnote.deleteProject",
-                "title": "Delete Project",
+                "title": "%deepnote.commands.deleteProject.title%",
                 "category": "Deepnote",
                 "icon": "$(trash)"
             },
             {
                 "command": "deepnote.renameNotebook",
-                "title": "Rename Notebook",
+                "title": "%deepnote.commands.renameNotebook.title%",
                 "category": "Deepnote",
                 "icon": "$(edit)"
             },
             {
                 "command": "deepnote.deleteNotebook",
-                "title": "Delete Notebook",
+                "title": "%deepnote.commands.deleteNotebook.title%",
                 "category": "Deepnote",
                 "icon": "$(trash)"
             },
             {
                 "command": "deepnote.duplicateNotebook",
-                "title": "Duplicate Notebook",
+                "title": "%deepnote.commands.duplicateNotebook.title%",
                 "category": "Deepnote",
                 "icon": "$(copy)"
             },
             {
                 "command": "deepnote.addNotebookToProject",
-                "title": "Add Notebook",
+                "title": "%deepnote.commands.addNotebookToProject.title%",
                 "category": "Deepnote",
                 "icon": "$(add)"
             },

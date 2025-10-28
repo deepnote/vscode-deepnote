@@ -227,6 +227,47 @@ export class DeepnoteExplorerView {
         });
     }
 
+    /**
+     * Shared helper that creates and adds a new notebook to a project
+     * @param fileUri The URI of the project file
+     * @param projectId The project ID
+     * @returns Object with notebook ID and name if successful, or null if aborted/failed
+     */
+    private async createAndAddNotebookToProject(
+        fileUri: Uri,
+        projectId: string
+    ): Promise<{ id: string; name: string } | null> {
+        // Read the Deepnote project file
+        const projectData = await this.readDeepnoteProjectFile(fileUri);
+
+        if (!projectData?.project) {
+            await window.showErrorMessage(l10n.t('Invalid Deepnote file format'));
+            return null;
+        }
+
+        // Generate suggested name and prompt user
+        const suggestedName = this.generateSuggestedNotebookName(projectData);
+        const notebookName = await this.promptForNotebookName(suggestedName);
+
+        if (!notebookName) {
+            return null;
+        }
+
+        // Create new notebook with initial block
+        const newNotebook = this.createNotebookWithFirstBlock(notebookName);
+
+        // Add new notebook to the project (initialize array if needed)
+        if (!projectData.project.notebooks) {
+            projectData.project.notebooks = [];
+        }
+        projectData.project.notebooks.push(newNotebook);
+
+        // Save and open the new notebook
+        await this.saveProjectAndOpenNotebook(fileUri, projectData, projectId, newNotebook.id);
+
+        return { id: newNotebook.id, name: notebookName };
+    }
+
     private refreshExplorer(): void {
         this.treeDataProvider.refresh();
     }
@@ -450,35 +491,12 @@ export class DeepnoteExplorerView {
         }
 
         try {
-            // Read the current file
-            const projectData = await this.readDeepnoteProjectFile(fileUri);
+            // Use shared helper to create and add notebook
+            const result = await this.createAndAddNotebookToProject(fileUri, projectId);
 
-            if (!projectData?.project) {
-                await window.showErrorMessage(l10n.t('Invalid Deepnote file format'));
-                return;
+            if (result) {
+                await window.showInformationMessage(l10n.t('Created new notebook: {0}', result.name));
             }
-
-            // Generate suggested name and prompt user
-            const suggestedName = this.generateSuggestedNotebookName(projectData);
-            const notebookName = await this.promptForNotebookName(suggestedName);
-
-            if (!notebookName) {
-                return;
-            }
-
-            // Create new notebook with initial block
-            const newNotebook = this.createNotebookWithFirstBlock(notebookName);
-
-            // Add new notebook to the project
-            if (!projectData.project.notebooks) {
-                projectData.project.notebooks = [];
-            }
-            projectData.project.notebooks.push(newNotebook);
-
-            // Save and open the new notebook
-            await this.saveProjectAndOpenNotebook(fileUri, projectData, projectId, newNotebook.id);
-
-            await window.showInformationMessage(l10n.t('Created new notebook: {0}', notebookName));
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             await window.showErrorMessage(l10n.t('Failed to add notebook: {0}', errorMessage));
@@ -946,34 +964,13 @@ export class DeepnoteExplorerView {
 
         try {
             const fileUri = Uri.file(treeItem.context.filePath);
-            const projectData = await this.readDeepnoteProjectFile(fileUri);
 
-            if (!projectData?.project) {
-                await window.showErrorMessage(l10n.t('Invalid Deepnote file format'));
-                return;
+            // Use shared helper to create and add notebook
+            const result = await this.createAndAddNotebookToProject(fileUri, projectId);
+
+            if (result) {
+                await window.showInformationMessage(l10n.t('Created new notebook: {0}', result.name));
             }
-
-            // Generate suggested name and prompt user
-            const suggestedName = this.generateSuggestedNotebookName(projectData);
-            const notebookName = await this.promptForNotebookName(suggestedName);
-
-            if (!notebookName) {
-                return;
-            }
-
-            // Create new notebook with initial block
-            const newNotebook = this.createNotebookWithFirstBlock(notebookName);
-
-            // Add new notebook to the project
-            if (!projectData.project.notebooks) {
-                projectData.project.notebooks = [];
-            }
-            projectData.project.notebooks.push(newNotebook);
-
-            // Save and open the new notebook
-            await this.saveProjectAndOpenNotebook(fileUri, projectData, projectId, newNotebook.id);
-
-            await window.showInformationMessage(l10n.t('Created new notebook: {0}', notebookName));
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             await window.showErrorMessage(l10n.t('Failed to add notebook: {0}', errorMessage));

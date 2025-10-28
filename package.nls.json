@@ -265,6 +265,12 @@
     "deepnote.commands.addInputFileBlock.title": "Add Input File Block",
     "deepnote.commands.addButtonBlock.title": "Add Button Block",
     "deepnote.commands.newNotebook.title": "New Notebook",
+    "deepnote.commands.renameProject.title": "Rename Project",
+    "deepnote.commands.deleteProject.title": "Delete Project",
+    "deepnote.commands.renameNotebook.title": "Rename Notebook",
+    "deepnote.commands.deleteNotebook.title": "Delete Notebook",
+    "deepnote.commands.duplicateNotebook.title": "Duplicate Notebook",
+    "deepnote.commands.addNotebookToProject.title": "Add Notebook",
     "deepnote.views.explorer.name": "Explorer",
     "deepnote.views.explorer.welcome": "No Deepnote notebooks found in this workspace.",
     "deepnote.command.selectNotebook.title": "Select Notebook"

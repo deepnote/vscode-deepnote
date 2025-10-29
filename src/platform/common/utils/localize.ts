@@ -830,6 +830,7 @@ export namespace Integrations {
     export const save = l10n.t('Save');
     export const requiredField = l10n.t('*');
     export const optionalField = l10n.t('(optional)');
+    export const unnamedIntegration = (id: string) => l10n.t('Unnamed Integration ({0})', id);
 
     // Integration type labels
     export const postgresTypeLabel = l10n.t('PostgreSQL');
@@ -850,7 +851,6 @@ export namespace Integrations {
     export const postgresPasswordLabel = l10n.t('Password');
     export const postgresPasswordPlaceholder = l10n.t('••••••••');
     export const postgresSslLabel = l10n.t('Use SSL');
-    export const postgresUnnamedIntegration = (id: string) => l10n.t('Unnamed PostgreSQL Integration ({0})', id);
 
     // BigQuery form strings
     export const bigQueryNameLabel = l10n.t('Name (optional)');
@@ -861,7 +861,6 @@ export namespace Integrations {
     export const bigQueryCredentialsPlaceholder = l10n.t('{"type": "service_account", ...}');
     export const bigQueryCredentialsRequired = l10n.t('Credentials are required');
     export const bigQueryInvalidJson = (message: string) => l10n.t('Invalid JSON: {0}', message);
-    export const bigQueryUnnamedIntegration = (id: string) => l10n.t('Unnamed BigQuery Integration ({0})', id);
 
     // Snowflake form strings
     export const snowflakeNameLabel = l10n.t('Name (optional)');
@@ -899,7 +898,6 @@ export namespace Integrations {
     export const snowflakeRolePlaceholder = l10n.t('');
     export const snowflakeWarehouseLabel = l10n.t('Warehouse (optional)');
     export const snowflakeWarehousePlaceholder = l10n.t('');
-    export const snowflakeUnnamedIntegration = (id: string) => l10n.t('Unnamed Snowflake Integration ({0})', id);
 }
 
 export namespace Deprecated {

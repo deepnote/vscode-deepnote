@@ -231,10 +231,10 @@ export type LocalizedMessages = {
     integrationsSnowflakeRolePlaceholder: string;
     integrationsSnowflakeWarehouseLabel: string;
     integrationsSnowflakeWarehousePlaceholder: string;
-    integrationsSnowflakeUnnamedIntegration: string;
     // Common form strings
     integrationsRequiredField: string;
     integrationsOptionalField: string;
+    integrationsUnnamedIntegration: string;
 };
 // Map all messages to specific payloads
 export class IInteractiveWindowMapping {

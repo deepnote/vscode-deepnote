@@ -107,10 +107,7 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        const unnamedIntegration = getLocString(
-            'integrationsSnowflakeUnnamedIntegration',
-            'Unnamed Snowflake Integration ({0})'
-        );
+        const unnamedIntegration = getLocString('integrationsUnnamedIntegration', 'Unnamed Integration ({0})');
 
         let config: SnowflakeIntegrationConfig;
 

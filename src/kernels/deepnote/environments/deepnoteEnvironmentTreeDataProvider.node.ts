@@ -85,45 +85,61 @@ export class DeepnoteEnvironmentTreeDataProvider implements TreeDataProvider<Dee
         if (statusInfo?.status === EnvironmentStatus.Running && config.serverInfo) {
             items.push(
                 DeepnoteEnvironmentTreeItem.createInfoItem(
+                    'ports',
                     `Ports: jupyter=${config.serverInfo.jupyterPort}, lsp=${config.serverInfo.lspPort}`,
                     'port'
                 )
             );
-            items.push(DeepnoteEnvironmentTreeItem.createInfoItem(`URL: ${config.serverInfo.url}`, 'globe'));
+            items.push(DeepnoteEnvironmentTreeItem.createInfoItem('url', `URL: ${config.serverInfo.url}`, 'globe'));
         }
 
         // Python interpreter
         items.push(
             DeepnoteEnvironmentTreeItem.createInfoItem(
+                'python',
                 `Python: ${config.pythonInterpreter.uri.fsPath}`,
                 'symbol-namespace'
             )
         );
 
         // Venv path
-        items.push(DeepnoteEnvironmentTreeItem.createInfoItem(`Venv: ${config.venvPath.fsPath}`, 'folder'));
+        items.push(DeepnoteEnvironmentTreeItem.createInfoItem('venv', `Venv: ${config.venvPath.fsPath}`, 'folder'));
 
         // Packages
         if (config.packages && config.packages.length > 0) {
             items.push(
-                DeepnoteEnvironmentTreeItem.createInfoItem(`Packages: ${config.packages.join(', ')}`, 'package')
+                DeepnoteEnvironmentTreeItem.createInfoItem(
+                    'packages',
+                    `Packages: ${config.packages.join(', ')}`,
+                    'package'
+                )
             );
         } else {
-            items.push(DeepnoteEnvironmentTreeItem.createInfoItem('Packages: (none)', 'package'));
+            items.push(DeepnoteEnvironmentTreeItem.createInfoItem('packages', 'Packages: (none)', 'package'));
         }
 
         // Toolkit version
         if (config.toolkitVersion) {
-            items.push(DeepnoteEnvironmentTreeItem.createInfoItem(`Toolkit: ${config.toolkitVersion}`, 'versions'));
+            items.push(
+                DeepnoteEnvironmentTreeItem.createInfoItem('toolkit', `Toolkit: ${config.toolkitVersion}`, 'versions')
+            );
         }
 
         // Timestamps
         items.push(
-            DeepnoteEnvironmentTreeItem.createInfoItem(`Created: ${config.createdAt.toLocaleString()}`, 'history')
+            DeepnoteEnvironmentTreeItem.createInfoItem(
+                'created',
+                `Created: ${config.createdAt.toLocaleString()}`,
+                'history'
+            )
         );
 
         items.push(
-            DeepnoteEnvironmentTreeItem.createInfoItem(`Last used: ${config.lastUsedAt.toLocaleString()}`, 'clock')
+            DeepnoteEnvironmentTreeItem.createInfoItem(
+                'lastUsed',
+                `Last used: ${config.lastUsedAt.toLocaleString()}`,
+                'clock'
+            )
         );
 
         return items;

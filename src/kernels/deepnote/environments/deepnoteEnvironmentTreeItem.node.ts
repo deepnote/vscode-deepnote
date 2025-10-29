@@ -12,6 +12,16 @@ export enum EnvironmentTreeItemType {
     CreateAction = 'create'
 }
 
+export type DeepnoteEnvironmentTreeInfoItemId =
+    | 'ports'
+    | 'url'
+    | 'python'
+    | 'venv'
+    | 'packages'
+    | 'toolkit'
+    | 'created'
+    | 'lastUsed';
+
 /**
  * Tree item for displaying environments and related info
  */
@@ -37,8 +47,13 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
     /**
      * Create an info item to display under an environment
      */
-    public static createInfoItem(label: string, icon?: string): DeepnoteEnvironmentTreeItem {
+    public static createInfoItem(
+        id: DeepnoteEnvironmentTreeInfoItemId,
+        label: string,
+        icon?: string
+    ): DeepnoteEnvironmentTreeItem {
         const item = new DeepnoteEnvironmentTreeItem(EnvironmentTreeItemType.InfoItem, undefined, undefined, label);
+        item.id = `info-${id}`;
 
         if (icon) {
             item.iconPath = new ThemeIcon(icon);
@@ -54,6 +69,7 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
 
         const statusVisual = getDeepnoteEnvironmentStatusVisual(this.status ?? EnvironmentStatus.Stopped);
 
+        this.id = this.environment.id;
         this.label = `${this.environment.name} [${statusVisual.text}]`;
         this.iconPath = new ThemeIcon(statusVisual.icon, new ThemeColor(statusVisual.themeColorId));
         this.contextValue = statusVisual.contextValue;
@@ -76,6 +92,7 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
     }
 
     private setupCreateAction(): void {
+        this.id = 'create';
         this.label = l10n.t('Create New Environment');
         this.iconPath = new ThemeIcon('add');
         this.contextValue = 'deepnoteEnvironment.create';

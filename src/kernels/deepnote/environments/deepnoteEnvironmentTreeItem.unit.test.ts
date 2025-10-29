@@ -149,7 +149,7 @@ suite('DeepnoteEnvironmentTreeItem', () => {
         });
 
         test('should create info item with icon', () => {
-            const item = DeepnoteEnvironmentTreeItem.createInfoItem('Port: 8888', 'circle-filled');
+            const item = DeepnoteEnvironmentTreeItem.createInfoItem('ports', 'Port: 8888', 'circle-filled');
 
             assert.strictEqual(item.label, 'Port: 8888');
             assert.instanceOf(item.iconPath, ThemeIcon);
@@ -157,7 +157,7 @@ suite('DeepnoteEnvironmentTreeItem', () => {
         });
 
         test('should create info item without icon', () => {
-            const item = DeepnoteEnvironmentTreeItem.createInfoItem('No icon');
+            const item = DeepnoteEnvironmentTreeItem.createInfoItem('ports', 'No icon');
 
             assert.strictEqual(item.label, 'No icon');
             assert.isUndefined(item.iconPath);
@@ -195,6 +195,22 @@ suite('DeepnoteEnvironmentTreeItem', () => {
             const item = new DeepnoteEnvironmentTreeItem(
                 EnvironmentTreeItemType.Environment,
                 recentConfig,
+                EnvironmentStatus.Stopped
+            );
+
+            assert.include(item.description as string, 'just now');
+        });
+
+        test('should handle negative time (few seconds in the past)', () => {
+            const fewSecondsAgo = new Date(Date.now() - 5 * 1000);
+            const config: DeepnoteEnvironment = {
+                ...testEnvironment,
+                lastUsedAt: fewSecondsAgo
+            };
+
+            const item = new DeepnoteEnvironmentTreeItem(
+                EnvironmentTreeItemType.Environment,
+                config,
                 EnvironmentStatus.Stopped
             );
 

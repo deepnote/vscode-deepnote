@@ -157,7 +157,7 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
                 <div className="message message-error" style={{ marginBottom: '16px' }}>
                     {getLocString(
                         'integrationsSnowflakeUnsupportedAuthMethod',
-                        'This Snowflake integration uses an authentication method that is not supported in VSCode. You can view the integration details but cannot edit or use it.'
+                        'This Snowflake integration uses an authentication method that is not supported in VS Code. You can view the integration details but cannot edit or use it.'
                     )}
                 </div>
             )}

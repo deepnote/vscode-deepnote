@@ -3,7 +3,6 @@
 
 import { workspace } from 'vscode';
 import { logger } from '../../platform/logging';
-import * as https from 'https';
 import fetch from 'node-fetch';
 
 /**
@@ -37,34 +36,6 @@ function getApiEndpoint(): string {
 }
 
 /**
- * Checks if SSL verification should be disabled
- */
-function shouldDisableSSLVerification(): boolean {
-    const config = workspace.getConfiguration('deepnote');
-    return config.get<boolean>('disableSSLVerification', false);
-}
-
-/**
- * Creates an HTTPS agent with optional SSL verification disabled
- */
-function createHttpsAgent(): https.Agent | undefined {
-    if (shouldDisableSSLVerification()) {
-        logger.warn('SSL certificate verification is disabled. This should only be used in development.');
-        // Create agent with options that bypass both certificate and hostname verification
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const agentOptions: any = {
-            rejectUnauthorized: false,
-            checkServerIdentity: () => {
-                // Return undefined to indicate the check passed
-                return undefined;
-            }
-        };
-        return new https.Agent(agentOptions);
-    }
-    return undefined;
-}
-
-/**
  * Initializes an import by requesting a presigned upload URL
  *
  * @param fileName - Name of the file to import
@@ -76,70 +47,29 @@ export async function initImport(fileName: string, fileSize: number): Promise<In
     const apiEndpoint = getApiEndpoint();
     const url = `${apiEndpoint}/v1/import/init`;
 
-    // Temporarily disable SSL verification at the process level if configured
-    const originalEnvValue = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-    if (shouldDisableSSLVerification()) {
-        process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-        logger.debug('Set NODE_TLS_REJECT_UNAUTHORIZED=0');
-    }
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            fileName,
+            fileSize
+        })
+    });
 
-    try {
-        const agent = createHttpsAgent();
-        logger.debug(`SSL verification disabled: ${shouldDisableSSLVerification()}`);
-        logger.debug(`Agent created: ${!!agent}`);
-        if (agent) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            logger.debug(`Agent rejectUnauthorized: ${(agent as any).options?.rejectUnauthorized}`);
-        }
+    if (!response.ok) {
+        const responseBody = await response.text();
+        logger.error(`Init import failed - Status: ${response.status}, URL: ${url}, Body: ${responseBody}`);
 
-        interface FetchOptions {
-            method: string;
-            headers: Record<string, string>;
-            body: string;
-            agent?: https.Agent;
-        }
-
-        const options: FetchOptions = {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                fileName,
-                fileSize
-            })
+        const error: ApiError = {
+            message: responseBody,
+            statusCode: response.status
         };
-
-        if (agent) {
-            options.agent = agent;
-            logger.debug('Agent attached to request');
-            logger.debug(`Options agent set: ${!!options.agent}`);
-        }
-
-        const response = await fetch(url, options);
-
-        if (!response.ok) {
-            const responseBody = await response.text();
-            logger.error(`Init import failed - Status: ${response.status}, URL: ${url}, Body: ${responseBody}`);
-
-            const error: ApiError = {
-                message: responseBody,
-                statusCode: response.status
-            };
-            throw error;
-        }
-
-        return await response.json();
-    } finally {
-        // Restore original SSL verification setting
-        if (shouldDisableSSLVerification()) {
-            if (originalEnvValue === undefined) {
-                delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-            } else {
-                process.env.NODE_TLS_REJECT_UNAUTHORIZED = originalEnvValue;
-            }
-        }
+        throw error;
     }
+
+    return await response.json();
 }
 
 /**

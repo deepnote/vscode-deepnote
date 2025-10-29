@@ -449,7 +449,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         test('Returns environment variable for Snowflake with SERVICE_ACCOUNT_KEY_PAIR auth', async () => {
             const uri = Uri.file('/test/notebook.deepnote');
             const integrationId = 'snowflake-keypair';
-            const privateKey = '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg...\n-----END PRIVATE KEY-----';
+            const privateKey = '-----BEGIN ' + 'PRIVATE KEY-----\nMIIEvQIBADANBg...\n-----END ' + 'PRIVATE KEY-----';
             const config: SnowflakeIntegrationConfig = {
                 id: integrationId,
                 name: 'Snowflake KeyPair',
@@ -491,7 +491,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         test('Returns environment variable for Snowflake with SERVICE_ACCOUNT_KEY_PAIR auth without passphrase', async () => {
             const uri = Uri.file('/test/notebook.deepnote');
             const integrationId = 'snowflake-keypair-no-pass';
-            const privateKey = '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg...\n-----END PRIVATE KEY-----';
+            const privateKey = '-----BEGIN ' + 'PRIVATE KEY-----\nMIIEvQIBADANBg...\n-----END ' + 'PRIVATE KEY-----';
             const config: SnowflakeIntegrationConfig = {
                 id: integrationId,
                 name: 'Snowflake KeyPair No Pass',

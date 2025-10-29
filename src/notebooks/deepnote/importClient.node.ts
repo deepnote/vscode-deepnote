@@ -50,9 +50,16 @@ function shouldDisableSSLVerification(): boolean {
 function createHttpsAgent(): https.Agent | undefined {
     if (shouldDisableSSLVerification()) {
         logger.warn('SSL certificate verification is disabled. This should only be used in development.');
-        return new https.Agent({
-            rejectUnauthorized: false
-        });
+        // Create agent with options that bypass both certificate and hostname verification
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const agentOptions: any = {
+            rejectUnauthorized: false,
+            checkServerIdentity: () => {
+                // Return undefined to indicate the check passed
+                return undefined;
+            }
+        };
+        return new https.Agent(agentOptions);
     }
     return undefined;
 }
@@ -69,35 +76,74 @@ export async function initImport(fileName: string, fileSize: number): Promise<In
     const apiEndpoint = getApiEndpoint();
     const url = `${apiEndpoint}/v1/import/init`;
 
-    const agent = createHttpsAgent();
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            fileName,
-            fileSize
-        }),
-        agent
-    });
-
-    if (!response.ok) {
-        const responseBody = await response.text();
-        logger.error(`Init import failed - Status: ${response.status}, URL: ${url}, Body: ${responseBody}`);
-
-        const error: ApiError = {
-            message: responseBody,
-            statusCode: response.status
-        };
-        throw error;
+    // Temporarily disable SSL verification at the process level if configured
+    const originalEnvValue = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    if (shouldDisableSSLVerification()) {
+        process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+        logger.debug('Set NODE_TLS_REJECT_UNAUTHORIZED=0');
     }
 
-    return await response.json();
+    try {
+        const agent = createHttpsAgent();
+        logger.debug(`SSL verification disabled: ${shouldDisableSSLVerification()}`);
+        logger.debug(`Agent created: ${!!agent}`);
+        if (agent) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            logger.debug(`Agent rejectUnauthorized: ${(agent as any).options?.rejectUnauthorized}`);
+        }
+
+        interface FetchOptions {
+            method: string;
+            headers: Record<string, string>;
+            body: string;
+            agent?: https.Agent;
+        }
+
+        const options: FetchOptions = {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                fileName,
+                fileSize
+            })
+        };
+
+        if (agent) {
+            options.agent = agent;
+            logger.debug('Agent attached to request');
+            logger.debug(`Options agent set: ${!!options.agent}`);
+        }
+
+        const response = await fetch(url, options);
+
+        if (!response.ok) {
+            const responseBody = await response.text();
+            logger.error(`Init import failed - Status: ${response.status}, URL: ${url}, Body: ${responseBody}`);
+
+            const error: ApiError = {
+                message: responseBody,
+                statusCode: response.status
+            };
+            throw error;
+        }
+
+        return await response.json();
+    } finally {
+        // Restore original SSL verification setting
+        if (shouldDisableSSLVerification()) {
+            if (originalEnvValue === undefined) {
+                delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+            } else {
+                process.env.NODE_TLS_REJECT_UNAUTHORIZED = originalEnvValue;
+            }
+        }
+    }
 }
 
 /**
- * Uploads a file to the presigned S3 URL using XMLHttpRequest for progress tracking
+ * Uploads a file to the presigned S3 URL using node-fetch
  *
  * @param uploadUrl - Presigned S3 URL for uploading
  * @param fileBuffer - File contents as a Buffer
@@ -110,64 +156,34 @@ export async function uploadFile(
     fileBuffer: Buffer,
     onProgress?: (progress: number) => void
 ): Promise<void> {
-    return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
+    // Note: Progress tracking is limited in Node.js without additional libraries
+    // For now, we'll report 50% at start and 100% at completion
+    if (onProgress) {
+        onProgress(50);
+    }
 
-        // Track upload progress
-        if (onProgress) {
-            xhr.upload.addEventListener('progress', (event) => {
-                if (event.lengthComputable) {
-                    const percentComplete = Math.round((event.loaded / event.total) * 100);
-                    onProgress(percentComplete);
-                }
-            });
-        }
-
-        // Handle completion
-        xhr.addEventListener('load', () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-                resolve();
-            } else {
-                logger.error(`Upload failed - Status: ${xhr.status}, Response: ${xhr.responseText}, URL: ${uploadUrl}`);
-                const error: ApiError = {
-                    message: xhr.responseText || 'Upload failed',
-                    statusCode: xhr.status
-                };
-                reject(error);
-            }
-        });
-
-        // Handle errors
-        xhr.addEventListener('error', () => {
-            logger.error(`Network error during upload to: ${uploadUrl}`);
-            const error: ApiError = {
-                message: 'Network error during upload',
-                statusCode: 0
-            };
-            reject(error);
-        });
-
-        xhr.addEventListener('abort', () => {
-            const error: ApiError = {
-                message: 'Upload aborted',
-                statusCode: 0
-            };
-            reject(error);
-        });
-
-        // Start upload
-        xhr.open('PUT', uploadUrl);
-        xhr.setRequestHeader('Content-Type', 'application/octet-stream');
-
-        // Convert Buffer to Uint8Array then Blob for XMLHttpRequest
-        const uint8Array = new Uint8Array(
-            fileBuffer.buffer as ArrayBuffer,
-            fileBuffer.byteOffset,
-            fileBuffer.byteLength
-        );
-        const blob = new Blob([uint8Array], { type: 'application/octet-stream' });
-        xhr.send(blob);
+    const response = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/octet-stream',
+            'Content-Length': fileBuffer.length.toString()
+        },
+        body: fileBuffer
     });
+
+    if (!response.ok) {
+        const responseText = await response.text();
+        logger.error(`Upload failed - Status: ${response.status}, Response: ${responseText}, URL: ${uploadUrl}`);
+        const error: ApiError = {
+            message: responseText || 'Upload failed',
+            statusCode: response.status
+        };
+        throw error;
+    }
+
+    if (onProgress) {
+        onProgress(100);
+    }
 }
 
 /**

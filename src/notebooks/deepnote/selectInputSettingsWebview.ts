@@ -17,7 +17,7 @@ import { inject, injectable } from 'inversify';
 import { IExtensionContext } from '../../platform/common/types';
 import { LocalizedMessages } from '../../messageTypes';
 import * as localize from '../../platform/common/utils/localize';
-import { SelectInputSettings } from '../../platform/notebooks/deepnote/types';
+import { SelectInputSettings, SelectInputWebviewMessage } from '../../platform/notebooks/deepnote/types';
 
 /**
  * Manages the webview panel for select input settings
@@ -145,10 +145,10 @@ export class SelectInputSettingsWebviewProvider {
         });
     }
 
-    private async handleMessage(message: { type: string; settings?: SelectInputSettings }): Promise<void> {
+    private async handleMessage(message: SelectInputWebviewMessage): Promise<void> {
         switch (message.type) {
             case 'save':
-                if (message.settings && this.currentCell) {
+                if (this.currentCell) {
                     try {
                         await this.saveSettings(message.settings);
                         if (this.resolvePromise) {
@@ -173,6 +173,11 @@ export class SelectInputSettingsWebviewProvider {
                     this.resolvePromise = undefined;
                 }
                 this.currentPanel?.dispose();
+                break;
+
+            case 'init':
+            case 'locInit':
+                // These messages are sent from extension to webview, not handled here
                 break;
         }
     }

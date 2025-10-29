@@ -28,15 +28,16 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
 
             switch (message.type) {
                 case 'init':
-                    if (message.settings) {
-                        setSettings(message.settings);
-                    }
+                    setSettings(message.settings);
                     break;
 
                 case 'locInit':
-                    if (message.locStrings) {
-                        storeLocStrings(message.locStrings);
-                    }
+                    storeLocStrings(message.locStrings);
+                    break;
+
+                case 'save':
+                case 'cancel':
+                    // These messages are sent from webview to extension, not handled here
                     break;
             }
         };

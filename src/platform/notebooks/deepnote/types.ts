@@ -17,11 +17,11 @@ export interface SelectInputSettings {
 /**
  * Message types for select input settings webview
  */
-export interface SelectInputWebviewMessage {
-    type: 'init' | 'save' | 'locInit' | 'cancel';
-    settings?: SelectInputSettings;
-    locStrings?: Record<string, string>;
-}
+export type SelectInputWebviewMessage =
+    | { type: 'init'; settings: SelectInputSettings }
+    | { type: 'save'; settings: SelectInputSettings }
+    | { type: 'locInit'; locStrings: Record<string, string> }
+    | { type: 'cancel' };
 
 export const IIntegrationStorage = Symbol('IIntegrationStorage');
 export interface IIntegrationStorage extends IDisposable {

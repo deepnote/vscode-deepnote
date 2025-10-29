@@ -728,9 +728,30 @@
             {
                 "id": "editor.interactiveWindow.context",
                 "label": "%jupyter.command.editor.interactiveWindow.context.label%"
+            },
+            {
+                "id": "deepnote.explorer.context",
+                "label": "Deepnote"
             }
         ],
         "menus": {
+            "view/title": [
+                {
+                    "command": "deepnote.newProject",
+                    "when": "view == deepnoteExplorer",
+                    "group": "navigation@1"
+                },
+                {
+                    "command": "deepnote.importNotebook",
+                    "when": "view == deepnoteExplorer",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "deepnote.refreshExplorer",
+                    "when": "view == deepnoteExplorer",
+                    "group": "navigation@3"
+                }
+            ],
             "editor/context": [
                 {
                     "submenu": "editor.interactiveWindow.context",
@@ -777,6 +798,14 @@
                     "command": "jupyter.execSelectionInteractive",
                     "group": "Jupyter2",
                     "when": "editorFocus && editorLangId == python && !notebookEditorFocused && isWorkspaceTrusted"
+                }
+            ],
+            "deepnote.explorer.context": [
+                {
+                    "command": "deepnote.newProject"
+                },
+                {
+                    "command": "deepnote.importNotebook"
                 }
             ],
             "editor/title": [
@@ -951,6 +980,11 @@
                 }
             ],
             "explorer/context": [
+                {
+                    "submenu": "deepnote.explorer.context",
+                    "when": "isWorkspaceTrusted",
+                    "group": "navigation@10"
+                },
                 {
                     "when": "resourceLangId == python && !notebookEditorFocused && isWorkspaceTrusted",
                     "command": "jupyter.runFileInteractive",

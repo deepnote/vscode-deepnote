@@ -86,42 +86,56 @@ export class DeepnoteEnvironmentTreeDataProvider implements TreeDataProvider<Dee
             items.push(
                 DeepnoteEnvironmentTreeItem.createInfoItem(
                     'ports',
+                    config.id,
                     `Ports: jupyter=${config.serverInfo.jupyterPort}, lsp=${config.serverInfo.lspPort}`,
                     'port'
                 )
             );
-            items.push(DeepnoteEnvironmentTreeItem.createInfoItem('url', `URL: ${config.serverInfo.url}`, 'globe'));
+            items.push(
+                DeepnoteEnvironmentTreeItem.createInfoItem('url', config.id, `URL: ${config.serverInfo.url}`, 'globe')
+            );
         }
 
         // Python interpreter
         items.push(
             DeepnoteEnvironmentTreeItem.createInfoItem(
                 'python',
+                config.id,
                 `Python: ${config.pythonInterpreter.uri.fsPath}`,
                 'symbol-namespace'
             )
         );
 
         // Venv path
-        items.push(DeepnoteEnvironmentTreeItem.createInfoItem('venv', `Venv: ${config.venvPath.fsPath}`, 'folder'));
+        items.push(
+            DeepnoteEnvironmentTreeItem.createInfoItem('venv', config.id, `Venv: ${config.venvPath.fsPath}`, 'folder')
+        );
 
         // Packages
         if (config.packages && config.packages.length > 0) {
             items.push(
                 DeepnoteEnvironmentTreeItem.createInfoItem(
                     'packages',
+                    config.id,
                     `Packages: ${config.packages.join(', ')}`,
                     'package'
                 )
             );
         } else {
-            items.push(DeepnoteEnvironmentTreeItem.createInfoItem('packages', 'Packages: (none)', 'package'));
+            items.push(
+                DeepnoteEnvironmentTreeItem.createInfoItem('packages', config.id, 'Packages: (none)', 'package')
+            );
         }
 
         // Toolkit version
         if (config.toolkitVersion) {
             items.push(
-                DeepnoteEnvironmentTreeItem.createInfoItem('toolkit', `Toolkit: ${config.toolkitVersion}`, 'versions')
+                DeepnoteEnvironmentTreeItem.createInfoItem(
+                    'toolkit',
+                    config.id,
+                    `Toolkit: ${config.toolkitVersion}`,
+                    'versions'
+                )
             );
         }
 
@@ -129,6 +143,7 @@ export class DeepnoteEnvironmentTreeDataProvider implements TreeDataProvider<Dee
         items.push(
             DeepnoteEnvironmentTreeItem.createInfoItem(
                 'created',
+                config.id,
                 `Created: ${config.createdAt.toLocaleString()}`,
                 'history'
             )
@@ -137,6 +152,7 @@ export class DeepnoteEnvironmentTreeDataProvider implements TreeDataProvider<Dee
         items.push(
             DeepnoteEnvironmentTreeItem.createInfoItem(
                 'lastUsed',
+                config.id,
                 `Last used: ${config.lastUsedAt.toLocaleString()}`,
                 'clock'
             )

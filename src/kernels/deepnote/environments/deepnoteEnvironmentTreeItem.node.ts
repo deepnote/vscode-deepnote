@@ -49,11 +49,12 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
      */
     public static createInfoItem(
         id: DeepnoteEnvironmentTreeInfoItemId,
+        environmentId: string,
         label: string,
         icon?: string
     ): DeepnoteEnvironmentTreeItem {
         const item = new DeepnoteEnvironmentTreeItem(EnvironmentTreeItemType.InfoItem, undefined, undefined, label);
-        item.id = `info-${id}`;
+        item.id = `info-${environmentId}-${id}`;
 
         if (icon) {
             item.iconPath = new ThemeIcon(icon);

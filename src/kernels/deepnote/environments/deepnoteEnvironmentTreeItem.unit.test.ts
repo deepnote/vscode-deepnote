@@ -109,10 +109,10 @@ suite('DeepnoteEnvironmentTreeItem', () => {
                 EnvironmentStatus.Running
             );
 
-            const tooltip = item.tooltip as string;
+            const tooltip = `${item.tooltip}`;
             assert.include(tooltip, 'Test Environment');
             assert.include(tooltip, 'Running');
-            assert.include(tooltip, testInterpreter.uri.fsPath);
+            assert.include(tooltip, testInterpreter.uri.toString(true));
         });
 
         test('should include packages in tooltip when present', () => {
@@ -149,7 +149,12 @@ suite('DeepnoteEnvironmentTreeItem', () => {
         });
 
         test('should create info item with icon', () => {
-            const item = DeepnoteEnvironmentTreeItem.createInfoItem('ports', 'Port: 8888', 'circle-filled');
+            const item = DeepnoteEnvironmentTreeItem.createInfoItem(
+                'ports',
+                'test-config-id',
+                'Port: 8888',
+                'circle-filled'
+            );
 
             assert.strictEqual(item.label, 'Port: 8888');
             assert.instanceOf(item.iconPath, ThemeIcon);
@@ -157,7 +162,7 @@ suite('DeepnoteEnvironmentTreeItem', () => {
         });
 
         test('should create info item without icon', () => {
-            const item = DeepnoteEnvironmentTreeItem.createInfoItem('ports', 'No icon');
+            const item = DeepnoteEnvironmentTreeItem.createInfoItem('ports', 'test-config-id', 'No icon');
 
             assert.strictEqual(item.label, 'No icon');
             assert.isUndefined(item.iconPath);

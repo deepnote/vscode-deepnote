@@ -182,7 +182,10 @@ export class DeepnoteBigNumberCellStatusBarProvider
         let comparisonText: string;
         if (comparisonEnabled && comparisonType && comparisonValue) {
             const comparisonTypeLabel = comparisonType === 'percentage-change' ? '% change' : 'vs';
-            comparisonText = `Comparison: ${comparisonTypeLabel} ${comparisonValue}`;
+            const comparisonTitle = (metadata?.deepnote_big_number_comparison_title as string) || '';
+            comparisonText = `Comparison: ${comparisonTypeLabel} ${
+                comparisonTitle ? `${comparisonTitle} (${comparisonValue})` : comparisonValue
+            }`;
         } else {
             comparisonText = 'Set up comparison';
         }

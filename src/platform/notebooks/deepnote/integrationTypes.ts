@@ -65,8 +65,13 @@ export interface BigQueryIntegrationConfig extends BaseIntegrationConfig {
 }
 
 // Import and re-export Snowflake auth constants from shared module
-import { SnowflakeAuthMethod, SnowflakeAuthMethods, SUPPORTED_SNOWFLAKE_AUTH_METHODS } from './snowflakeAuthConstants';
-export { SnowflakeAuthMethod, SnowflakeAuthMethods, SUPPORTED_SNOWFLAKE_AUTH_METHODS };
+import {
+    SnowflakeAuthMethod,
+    SnowflakeAuthMethods,
+    SUPPORTED_SNOWFLAKE_AUTH_METHODS,
+    isSupportedSnowflakeAuthMethod
+} from './snowflakeAuthConstants';
+export { SnowflakeAuthMethod, SnowflakeAuthMethods, SUPPORTED_SNOWFLAKE_AUTH_METHODS, isSupportedSnowflakeAuthMethod };
 
 /**
  * Base Snowflake configuration with common fields

@@ -10,7 +10,8 @@ import {
     DATAFRAME_SQL_INTEGRATION_ID,
     IntegrationConfig,
     IntegrationType,
-    SnowflakeAuthMethods
+    SnowflakeAuthMethods,
+    isSupportedSnowflakeAuthMethod
 } from './integrationTypes';
 
 /**
@@ -85,10 +86,16 @@ function convertIntegrationConfigToJson(config: IntegrationConfig): string {
             // Service account key-pair: snowflake://{username}@{account}/{database}?warehouse={warehouse}&role={role}&authenticator=snowflake_jwt&application=YourApp
             const encodedAccount = encodeURIComponent(config.account);
 
+            // Check if this is a supported auth method
+            if (!isSupportedSnowflakeAuthMethod(config.authMethod)) {
+                throw new UnsupportedIntegrationError(
+                    `Snowflake integration with auth method '${config.authMethod}' is not supported in VSCode`
+                );
+            }
+
             let url: string;
             const params: Record<string, unknown> = {};
 
-            // Check if this is a supported auth method
             if (config.authMethod === null || config.authMethod === SnowflakeAuthMethods.PASSWORD) {
                 // Username+password authentication
                 const encodedUsername = encodeURIComponent(config.username);
@@ -109,8 +116,16 @@ function convertIntegrationConfigToJson(config: IntegrationConfig): string {
                 if (queryString) {
                     url += `?${queryString}`;
                 }
-            } else if (config.authMethod === SnowflakeAuthMethods.SERVICE_ACCOUNT_KEY_PAIR) {
-                // Service account key-pair authentication
+            } else {
+                // Service account key-pair authentication (the only other supported method)
+                // TypeScript needs help narrowing the type here
+                if (config.authMethod !== SnowflakeAuthMethods.SERVICE_ACCOUNT_KEY_PAIR) {
+                    // This should never happen due to the type guard above, but TypeScript needs this
+                    throw new UnsupportedIntegrationError(
+                        `Snowflake integration with auth method '${config.authMethod}' is not supported in VSCode`
+                    );
+                }
+
                 const encodedUsername = encodeURIComponent(config.username);
                 const database = config.database ? `/${encodeURIComponent(config.database)}` : '';
                 url = `snowflake://${encodedUsername}@${encodedAccount}${database}`;
@@ -135,11 +150,6 @@ function convertIntegrationConfigToJson(config: IntegrationConfig): string {
                 if (config.privateKeyPassphrase) {
                     params.private_key_passphrase = config.privateKeyPassphrase;
                 }
-            } else {
-                // Unsupported auth method
-                throw new UnsupportedIntegrationError(
-                    `Snowflake integration with auth method '${config.authMethod}' is not supported in VSCode`
-                );
             }
 
             return JSON.stringify({

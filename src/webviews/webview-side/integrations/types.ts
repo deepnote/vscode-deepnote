@@ -1,7 +1,8 @@
 import {
     SnowflakeAuthMethod,
     SnowflakeAuthMethods,
-    SUPPORTED_SNOWFLAKE_AUTH_METHODS
+    SUPPORTED_SNOWFLAKE_AUTH_METHODS,
+    isSupportedSnowflakeAuthMethod
 } from '../../../platform/notebooks/deepnote/snowflakeAuthConstants';
 
 export type IntegrationType = 'postgres' | 'bigquery' | 'snowflake';
@@ -9,7 +10,7 @@ export type IntegrationType = 'postgres' | 'bigquery' | 'snowflake';
 export type IntegrationStatus = 'connected' | 'disconnected' | 'error';
 
 // Re-export Snowflake auth constants for convenience
-export { SnowflakeAuthMethod, SnowflakeAuthMethods, SUPPORTED_SNOWFLAKE_AUTH_METHODS };
+export { SnowflakeAuthMethod, SnowflakeAuthMethods, SUPPORTED_SNOWFLAKE_AUTH_METHODS, isSupportedSnowflakeAuthMethod };
 
 export interface BaseIntegrationConfig {
     id: string;

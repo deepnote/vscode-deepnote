@@ -1,6 +1,11 @@
 import * as React from 'react';
 import { format, getLocString } from '../react-common/locReactSide';
-import { SnowflakeIntegrationConfig, SnowflakeAuthMethod, SnowflakeAuthMethods } from './types';
+import {
+    SnowflakeIntegrationConfig,
+    SnowflakeAuthMethod,
+    SnowflakeAuthMethods,
+    isSupportedSnowflakeAuthMethod
+} from './types';
 
 export interface ISnowflakeFormProps {
     integrationId: string;
@@ -8,15 +13,6 @@ export interface ISnowflakeFormProps {
     integrationName?: string;
     onSave: (config: SnowflakeIntegrationConfig) => void;
     onCancel: () => void;
-}
-
-// Helper to check if auth method is supported
-function isAuthMethodSupported(authMethod: SnowflakeAuthMethod): boolean {
-    return (
-        authMethod === null ||
-        authMethod === SnowflakeAuthMethods.PASSWORD ||
-        authMethod === SnowflakeAuthMethods.SERVICE_ACCOUNT_KEY_PAIR
-    );
 }
 
 // Helper to get initial values from existing config
@@ -64,7 +60,7 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
     onSave,
     onCancel
 }) => {
-    const isUnsupported = existingConfig ? !isAuthMethodSupported(existingConfig.authMethod) : false;
+    const isUnsupported = existingConfig ? !isSupportedSnowflakeAuthMethod(existingConfig.authMethod) : false;
     const initialValues = getInitialValues(existingConfig);
 
     const [name, setName] = React.useState(existingConfig?.name || integrationName || '');
@@ -206,7 +202,7 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
                 </label>
                 <select
                     id="authMethod"
-                    value={authMethod ?? ''}
+                    value={authMethod}
                     onChange={(e) => setAuthMethod(e.target.value as SnowflakeAuthMethod)}
                     disabled={isUnsupported}
                 >

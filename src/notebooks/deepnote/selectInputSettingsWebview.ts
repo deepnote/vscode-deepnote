@@ -18,6 +18,8 @@ import { IExtensionContext } from '../../platform/common/types';
 import { LocalizedMessages } from '../../messageTypes';
 import * as localize from '../../platform/common/utils/localize';
 import { SelectInputSettings, SelectInputWebviewMessage } from '../../platform/notebooks/deepnote/types';
+import { WrappedError } from '../../platform/errors/types';
+import { logger } from '../../platform/logging';
 
 /**
  * Manages the webview panel for select input settings
@@ -210,8 +212,9 @@ export class SelectInputSettingsWebviewProvider {
         const success = await workspace.applyEdit(edit);
         if (!success) {
             const errorMessage = l10n.t('Failed to save select input settings');
+            logger.error(errorMessage);
             void window.showErrorMessage(errorMessage);
-            throw new Error(errorMessage);
+            throw new WrappedError(errorMessage, undefined);
         }
     }
 

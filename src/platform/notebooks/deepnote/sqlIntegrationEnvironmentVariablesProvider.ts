@@ -135,7 +135,7 @@ function convertIntegrationConfigToJson(config: IntegrationConfig): string {
             return JSON.stringify({
                 url: url,
                 params: params,
-                param_style: 'format'
+                param_style: 'pyformat'
             });
         }
 

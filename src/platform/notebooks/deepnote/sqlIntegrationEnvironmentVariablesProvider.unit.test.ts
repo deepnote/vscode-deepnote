@@ -414,7 +414,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 'snowflake://john.doe:secret123@myorg-myaccount/MYDB?warehouse=COMPUTE_WH&role=ANALYST&application=Deepnote'
             );
             assert.deepStrictEqual(credentialsJson.params, {});
-            assert.strictEqual(credentialsJson.param_style, 'format');
+            assert.strictEqual(credentialsJson.param_style, 'pyformat');
         });
 
         test('Returns environment variable for Snowflake with legacy null auth (username+password)', async () => {
@@ -492,7 +492,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 snowflake_private_key: Buffer.from(privateKey).toString('base64'),
                 snowflake_private_key_passphrase: 'passphrase123'
             });
-            assert.strictEqual(credentialsJson.param_style, 'format');
+            assert.strictEqual(credentialsJson.param_style, 'pyformat');
         });
 
         test('Returns environment variable for Snowflake with SERVICE_ACCOUNT_KEY_PAIR auth without passphrase', async () => {
@@ -598,7 +598,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             const credentialsJson = JSON.parse(envVars['SQL_SNOWFLAKE_MINIMAL']!);
             // Should not include warehouse, database, or role in URL when not provided
             assert.strictEqual(credentialsJson.url, 'snowflake://user:pass@minimal-account?application=Deepnote');
-            assert.strictEqual(credentialsJson.param_style, 'format');
+            assert.strictEqual(credentialsJson.param_style, 'pyformat');
         });
 
         test('Skips unsupported Snowflake auth method (OKTA)', async () => {

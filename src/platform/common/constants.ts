@@ -189,6 +189,7 @@ export namespace Commands {
     export const NotebookEditorRemoveAllCells = 'jupyter.notebookeditor.removeallcells';
     export const NotebookEditorRunAllCells = 'jupyter.notebookeditor.runallcells';
     export const NotebookEditorRunSelectedCell = 'jupyter.notebookeditor.runselectedcell';
+    export const NotebookEditorRunFocusedCell = 'jupyter.notebookeditor.runfocusedcell';
     export const NotebookEditorAddCellBelow = 'jupyter.notebookeditor.addcellbelow';
     export const ExpandAllCells = 'jupyter.expandallcells';
     export const CollapseAllCells = 'jupyter.collapseallcells';

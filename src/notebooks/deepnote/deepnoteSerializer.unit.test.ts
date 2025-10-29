@@ -4,7 +4,7 @@ import * as yaml from 'js-yaml';
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
 import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
-import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
+import type { DeepnoteFile, DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 
 suite('DeepnoteNotebookSerializer', () => {
     let serializer: DeepnoteNotebookSerializer;
@@ -63,7 +63,7 @@ suite('DeepnoteNotebookSerializer', () => {
     /**
      * Helper function to convert a DeepnoteProject object with version to YAML format
      */
-    function projectToYaml(projectData: { version: string; metadata: any; project: any }): Uint8Array {
+    function projectToYaml(projectData: DeepnoteFile): Uint8Array {
         const yamlString = yaml.dump(projectData);
         return new TextEncoder().encode(yamlString);
     }
@@ -325,7 +325,7 @@ project:
 
     suite('default notebook selection', () => {
         test('should not select Init notebook when other notebooks are available', async () => {
-            const projectData = {
+            const projectData: DeepnoteFile = {
                 version: '1.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
@@ -378,7 +378,7 @@ project:
         });
 
         test('should select Init notebook when it is the only notebook', async () => {
-            const projectData = {
+            const projectData: DeepnoteFile = {
                 version: '1.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
@@ -417,7 +417,7 @@ project:
         });
 
         test('should select alphabetically first notebook when no initNotebookId', async () => {
-            const projectData = {
+            const projectData: DeepnoteFile = {
                 version: '1.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
@@ -483,7 +483,7 @@ project:
         });
 
         test('should sort Init notebook last when multiple notebooks exist', async () => {
-            const projectData = {
+            const projectData: DeepnoteFile = {
                 version: '1.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',

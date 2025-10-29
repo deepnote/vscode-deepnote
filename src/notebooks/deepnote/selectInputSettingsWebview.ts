@@ -103,7 +103,10 @@ export class SelectInputSettingsWebviewProvider {
             allowMultipleValues: (metadata?.deepnote_allow_multiple_values as boolean) ?? false,
             allowEmptyValue: (metadata?.deepnote_allow_empty_values as boolean) ?? false,
             selectType: (metadata?.deepnote_variable_select_type as 'from-options' | 'from-variable') ?? 'from-options',
-            options: (metadata?.deepnote_variable_custom_options as string[]) ?? [],
+            options:
+                (metadata?.deepnote_variable_custom_options as string[]) ??
+                (metadata?.deepnote_variable_options as string[]) ??
+                [],
             selectedVariable: (metadata?.deepnote_variable_selected_variable as string) ?? ''
         };
 

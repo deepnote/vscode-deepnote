@@ -252,8 +252,11 @@ export class SelectInputSettingsWebviewProvider {
             const errorMessage = localize.SelectInputSettings.failedToSave;
             const cause = error instanceof Error ? error : undefined;
             const causeMessage = cause?.message || String(error);
+            // Log the full error with cause for diagnostics
             logger.error(`${errorMessage}: ${causeMessage}`, error);
-            void window.showErrorMessage(`${errorMessage}: ${causeMessage}`);
+            // Show only the localized friendly message to users
+            void window.showErrorMessage(errorMessage);
+            // Attach the cause to the thrown error for telemetry/diagnostics
             throw new WrappedError(errorMessage, cause);
         }
     }

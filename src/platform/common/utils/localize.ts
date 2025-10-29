@@ -880,6 +880,7 @@ export namespace SelectInputSettings {
     export const removeOptionAriaLabel = l10n.t('Remove option');
     export const saveButton = l10n.t('Save');
     export const cancelButton = l10n.t('Cancel');
+    export const failedToSave = l10n.t('Failed to save select input settings');
 }
 
 export namespace Deprecated {

@@ -3,7 +3,6 @@
 
 import {
     Disposable,
-    l10n,
     NotebookCell,
     NotebookEdit,
     Uri,
@@ -195,26 +194,36 @@ export class SelectInputSettingsWebviewProvider {
         metadata.deepnote_allow_multiple_values = settings.allowMultipleValues;
         metadata.deepnote_allow_empty_values = settings.allowEmptyValue;
         metadata.deepnote_variable_select_type = settings.selectType;
-        metadata.deepnote_variable_custom_options = settings.options;
-        metadata.deepnote_variable_selected_variable = settings.selectedVariable;
 
         // Update the options field based on the select type
         if (settings.selectType === 'from-options') {
+            metadata.deepnote_variable_custom_options = settings.options;
             metadata.deepnote_variable_options = settings.options;
+            delete metadata.deepnote_variable_selected_variable;
         } else {
-            // Clear stale options when not using 'from-options' mode
+            metadata.deepnote_variable_selected_variable = settings.selectedVariable;
+            delete metadata.deepnote_variable_custom_options;
             delete metadata.deepnote_variable_options;
         }
 
         // Update cell metadata to preserve outputs and attachments
         edit.set(this.currentCell.notebook.uri, [NotebookEdit.updateCellMetadata(this.currentCell.index, metadata)]);
 
-        const success = await workspace.applyEdit(edit);
-        if (!success) {
-            const errorMessage = l10n.t('Failed to save select input settings');
-            logger.error(errorMessage);
-            void window.showErrorMessage(errorMessage);
-            throw new WrappedError(errorMessage, undefined);
+        try {
+            const success = await workspace.applyEdit(edit);
+            if (!success) {
+                const errorMessage = localize.SelectInputSettings.failedToSave;
+                logger.error(errorMessage);
+                void window.showErrorMessage(errorMessage);
+                throw new WrappedError(errorMessage, undefined);
+            }
+        } catch (error) {
+            const errorMessage = localize.SelectInputSettings.failedToSave;
+            const cause = error instanceof Error ? error : undefined;
+            const causeMessage = cause?.message || String(error);
+            logger.error(`${errorMessage}: ${causeMessage}`, error);
+            void window.showErrorMessage(`${errorMessage}: ${causeMessage}`);
+            throw new WrappedError(errorMessage, cause);
         }
     }
 

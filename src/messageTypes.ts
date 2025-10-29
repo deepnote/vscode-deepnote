@@ -224,6 +224,7 @@ export type LocalizedMessages = {
     removeOptionAriaLabel: string;
     saveButton: string;
     cancelButton: string;
+    failedToSave: string;
 };
 // Map all messages to specific payloads
 export class IInteractiveWindowMapping {

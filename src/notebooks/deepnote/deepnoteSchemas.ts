@@ -43,6 +43,21 @@ export const DeepnoteBigNumberMetadataSchema = z.object({
         .transform((val) => val ?? false)
 });
 
+export const DeepnoteSqlMetadataSchema = z.object({
+    deepnote_variable_name: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? ''),
+    deepnote_return_variable_type: z
+        .enum(['dataframe', 'query_preview'])
+        .nullish()
+        .transform((val) => val ?? 'dataframe'),
+    sql_integration_id: z
+        .string()
+        .nullish()
+        .transform((val) => val ?? '')
+});
+
 // Base schema with common fields for all input types
 const DeepnoteBaseInputMetadataSchema = z.object({
     deepnote_variable_name: z
@@ -213,3 +228,4 @@ export const DeepnoteButtonMetadataSchema = DeepnoteBaseInputMetadataSchema.exte
 
 export type DeepnoteChartBigNumberOutput = z.infer<typeof DeepnoteChartBigNumberOutputSchema>;
 export type DeepnoteBigNumberMetadata = z.infer<typeof DeepnoteBigNumberMetadataSchema>;
+export type DeepnoteSqlMetadata = z.infer<typeof DeepnoteSqlMetadataSchema>;

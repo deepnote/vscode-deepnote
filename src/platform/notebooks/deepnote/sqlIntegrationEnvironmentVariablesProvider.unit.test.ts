@@ -70,7 +70,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         assert.deepStrictEqual(envVars, {});
     });
 
-    test('Skips internal DuckDB integration', async () => {
+    test('Returns environment variable for internal DuckDB integration', async () => {
         const uri = Uri.file('/test/notebook.deepnote');
         const notebook = createMockNotebook(uri, [
             createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT * FROM df', {
@@ -81,7 +81,13 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
 
         const envVars = await provider.getEnvironmentVariables(uri);
-        assert.deepStrictEqual(envVars, {});
+
+        // Check that the environment variable is set for dataframe SQL
+        assert.property(envVars, 'SQL_DEEPNOTE_DATAFRAME_SQL');
+        const credentialsJson = JSON.parse(envVars['SQL_DEEPNOTE_DATAFRAME_SQL']!);
+        assert.strictEqual(credentialsJson.url, 'deepnote+duckdb:///:memory:');
+        assert.deepStrictEqual(credentialsJson.params, {});
+        assert.strictEqual(credentialsJson.param_style, 'qmark');
     });
 
     test('Returns environment variable for PostgreSQL integration', async () => {

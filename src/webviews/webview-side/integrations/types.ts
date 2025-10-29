@@ -1,6 +1,21 @@
-export type IntegrationType = 'postgres' | 'bigquery';
+import {
+    type SnowflakeAuthMethod,
+    SnowflakeAuthMethods,
+    SUPPORTED_SNOWFLAKE_AUTH_METHODS,
+    isSupportedSnowflakeAuthMethod
+} from '../../../platform/notebooks/deepnote/snowflakeAuthConstants';
+
+export type IntegrationType = 'postgres' | 'bigquery' | 'snowflake';
 
 export type IntegrationStatus = 'connected' | 'disconnected' | 'error';
+
+// Re-export Snowflake auth constants for convenience
+export {
+    type SnowflakeAuthMethod,
+    SnowflakeAuthMethods,
+    SUPPORTED_SNOWFLAKE_AUTH_METHODS,
+    isSupportedSnowflakeAuthMethod
+};
 
 export interface BaseIntegrationConfig {
     id: string;
@@ -24,7 +39,45 @@ export interface BigQueryIntegrationConfig extends BaseIntegrationConfig {
     credentials: string;
 }
 
-export type IntegrationConfig = PostgresIntegrationConfig | BigQueryIntegrationConfig;
+/**
+ * Base Snowflake configuration with common fields
+ */
+interface BaseSnowflakeConfig extends BaseIntegrationConfig {
+    type: 'snowflake';
+    account: string;
+    warehouse?: string;
+    database?: string;
+    role?: string;
+}
+
+/**
+ * Snowflake integration configuration (discriminated union)
+ */
+export type SnowflakeIntegrationConfig = BaseSnowflakeConfig &
+    (
+        | {
+              authMethod: typeof SnowflakeAuthMethods.PASSWORD | null;
+              username: string;
+              password: string;
+          }
+        | {
+              authMethod: typeof SnowflakeAuthMethods.SERVICE_ACCOUNT_KEY_PAIR;
+              username: string;
+              privateKey: string;
+              privateKeyPassphrase?: string;
+          }
+        | {
+              // Unsupported auth methods - we store them but don't allow editing
+              authMethod:
+                  | typeof SnowflakeAuthMethods.OKTA
+                  | typeof SnowflakeAuthMethods.NATIVE_SNOWFLAKE
+                  | typeof SnowflakeAuthMethods.AZURE_AD
+                  | typeof SnowflakeAuthMethods.KEY_PAIR;
+              [key: string]: unknown; // Allow any additional fields for unsupported methods
+          }
+    );
+
+export type IntegrationConfig = PostgresIntegrationConfig | BigQueryIntegrationConfig | SnowflakeIntegrationConfig;
 
 export interface IntegrationWithStatus {
     id: string;

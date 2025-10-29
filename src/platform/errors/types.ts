@@ -105,7 +105,8 @@ export type ErrorCategory =
     | 'unknownProduct'
     | 'invalidInterpreter'
     | 'pythonAPINotInitialized'
-    | 'deepnoteserver';
+    | 'deepnoteserver'
+    | 'unsupported_integration';
 
 // If there are errors, then the are added to the telementry properties.
 export type TelemetryErrorProperties = {

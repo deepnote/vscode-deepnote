@@ -1,5 +1,5 @@
 import { inject, injectable } from 'inversify';
-import { CancellationToken, Event, EventEmitter, NotebookDocument, workspace } from 'vscode';
+import { CancellationToken, Event, EventEmitter, l10n, NotebookDocument, workspace } from 'vscode';
 
 import { IDisposableRegistry, Resource } from '../../common/types';
 import { EnvironmentVariables } from '../../common/variables/types';
@@ -99,7 +99,10 @@ function convertIntegrationConfigToJson(config: IntegrationConfig): string {
                 if (config.authMethod !== SnowflakeAuthMethods.SERVICE_ACCOUNT_KEY_PAIR) {
                     // This should never happen due to the type guard above, but TypeScript needs this
                     throw new UnsupportedIntegrationError(
-                        `Snowflake integration with auth method '${config.authMethod}' is not supported in VSCode`
+                        l10n.t(
+                            "Snowflake integration with auth method '{0}' is not supported in VSCode",
+                            config.authMethod
+                        )
                     );
                 }
 
@@ -138,7 +141,7 @@ function convertIntegrationConfigToJson(config: IntegrationConfig): string {
 
         default:
             throw new UnsupportedIntegrationError(
-                `Unsupported integration type: ${(config as IntegrationConfig).type}`
+                l10n.t('Unsupported integration type: {0}', (config as IntegrationConfig).type)
             );
     }
 }

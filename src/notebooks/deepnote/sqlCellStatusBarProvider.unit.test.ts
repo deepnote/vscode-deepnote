@@ -347,6 +347,25 @@ suite('SqlCellStatusBarProvider', () => {
             // Verify the listener was registered by checking disposables
             assert.isTrue(activateDisposables.length > 0);
         });
+
+        test('registers workspace.onDidChangeNotebookDocument listener', () => {
+            const onDidChangeIntegrations = new EventEmitter<void>();
+            when(activateIntegrationStorage.onDidChangeIntegrations).thenReturn(onDidChangeIntegrations.event);
+
+            activateProvider.activate();
+
+            verify(mockedVSCodeNamespaces.workspace.onDidChangeNotebookDocument(anything())).once();
+        });
+
+        test('disposes the event emitter', () => {
+            const onDidChangeIntegrations = new EventEmitter<void>();
+            when(activateIntegrationStorage.onDidChangeIntegrations).thenReturn(onDidChangeIntegrations.event);
+
+            activateProvider.activate();
+
+            // Verify the emitter is added to disposables
+            assert.isTrue(activateDisposables.length > 0);
+        });
     });
 
     suite('event listeners', () => {
@@ -405,6 +424,72 @@ suite('SqlCellStatusBarProvider', () => {
                 statusBarChangeHandler.count,
                 3,
                 'onDidChangeCellStatusBarItems should fire three times'
+            );
+        });
+
+        test('fires onDidChangeCellStatusBarItems when deepnote notebook changes', () => {
+            const onDidChangeIntegrations = new EventEmitter<void>();
+            const onDidChangeNotebookDocument = new EventEmitter<any>();
+            when(eventIntegrationStorage.onDidChangeIntegrations).thenReturn(onDidChangeIntegrations.event);
+            when(mockedVSCodeNamespaces.workspace.onDidChangeNotebookDocument(anything())).thenCall((handler) => {
+                onDidChangeNotebookDocument.event(handler);
+                return {
+                    dispose: () => {
+                        return;
+                    }
+                };
+            });
+
+            eventProvider.activate();
+
+            const statusBarChangeHandler = createEventHandler(
+                eventProvider,
+                'onDidChangeCellStatusBarItems',
+                eventDisposables
+            );
+
+            // Fire notebook document change event for deepnote notebook
+            onDidChangeNotebookDocument.fire({
+                notebook: {
+                    notebookType: 'deepnote'
+                }
+            });
+
+            assert.strictEqual(statusBarChangeHandler.count, 1, 'onDidChangeCellStatusBarItems should fire once');
+        });
+
+        test('does not fire onDidChangeCellStatusBarItems when non-deepnote notebook changes', () => {
+            const onDidChangeIntegrations = new EventEmitter<void>();
+            const onDidChangeNotebookDocument = new EventEmitter<any>();
+            when(eventIntegrationStorage.onDidChangeIntegrations).thenReturn(onDidChangeIntegrations.event);
+            when(mockedVSCodeNamespaces.workspace.onDidChangeNotebookDocument(anything())).thenCall((handler) => {
+                onDidChangeNotebookDocument.event(handler);
+                return {
+                    dispose: () => {
+                        return;
+                    }
+                };
+            });
+
+            eventProvider.activate();
+
+            const statusBarChangeHandler = createEventHandler(
+                eventProvider,
+                'onDidChangeCellStatusBarItems',
+                eventDisposables
+            );
+
+            // Fire notebook document change event for non-deepnote notebook
+            onDidChangeNotebookDocument.fire({
+                notebook: {
+                    notebookType: 'jupyter-notebook'
+                }
+            });
+
+            assert.strictEqual(
+                statusBarChangeHandler.count,
+                0,
+                'onDidChangeCellStatusBarItems should not fire for non-deepnote notebooks'
             );
         });
     });
@@ -533,6 +618,52 @@ suite('SqlCellStatusBarProvider', () => {
             });
 
             await updateVariableNameHandler(cell);
+        });
+
+        test('falls back to active cell when no cell is provided', async () => {
+            const cell = createMockCell('sql', { deepnote_variable_name: 'old_name' });
+            const newVariableName = 'new_name';
+
+            // Mock active notebook editor
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                selection: { start: 0 },
+                notebook: {
+                    cellAt: (_index: number) => cell
+                }
+            } as any);
+
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(newVariableName));
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+            // Call without providing a cell
+            await updateVariableNameHandler();
+
+            verify(mockedVSCodeNamespaces.window.showInputBox(anything())).once();
+            verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
+        });
+
+        test('shows error when no cell is provided and no active editor', async () => {
+            // Mock no active notebook editor
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
+
+            // Call without providing a cell
+            await updateVariableNameHandler();
+
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(mockedVSCodeNamespaces.window.showInputBox(anything())).never();
+        });
+
+        test('shows error when no cell is provided and active editor has no selection', async () => {
+            // Mock active notebook editor without selection
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                selection: undefined
+            } as any);
+
+            // Call without providing a cell
+            await updateVariableNameHandler();
+
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(mockedVSCodeNamespaces.window.showInputBox(anything())).never();
         });
     });
 
@@ -812,6 +943,68 @@ suite('SqlCellStatusBarProvider', () => {
             // DuckDB should still be in the list (added separately)
             const duckDbItem = quickPickItems.find((item) => item.id === DATAFRAME_SQL_INTEGRATION_ID);
             assert.isDefined(duckDbItem, 'DuckDB should still be in the list');
+        });
+
+        test('falls back to active cell when no cell is provided', async () => {
+            const notebookMetadata = { deepnoteProjectId: 'project-1' };
+            const cell = createMockCell('sql', { sql_integration_id: 'old-integration' }, notebookMetadata);
+            const newIntegrationId = 'new-integration';
+
+            // Mock active notebook editor
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                selection: { start: 0 },
+                notebook: {
+                    cellAt: (_index: number) => cell
+                }
+            } as any);
+
+            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+                project: {
+                    integrations: [
+                        {
+                            id: newIntegrationId,
+                            name: 'New Integration',
+                            type: 'pgsql'
+                        }
+                    ]
+                }
+            } as any);
+
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ id: newIntegrationId, label: 'New Integration' } as any)
+            );
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+            // Call without providing a cell
+            await switchIntegrationHandler();
+
+            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).once();
+            verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
+        });
+
+        test('shows error when no cell is provided and no active editor', async () => {
+            // Mock no active notebook editor
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
+
+            // Call without providing a cell
+            await switchIntegrationHandler();
+
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
+        });
+
+        test('shows error when no cell is provided and active editor has no selection', async () => {
+            // Mock active notebook editor without selection
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                selection: undefined
+            } as any);
+
+            // Call without providing a cell
+            await switchIntegrationHandler();
+
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
         });
     });
 

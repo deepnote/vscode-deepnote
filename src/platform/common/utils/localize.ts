@@ -926,11 +926,12 @@ export namespace BigNumberComparison {
     export const comparisonTypeLabel = l10n.t('Comparison type');
     export const percentageChange = l10n.t('Percentage change');
     export const absoluteValue = l10n.t('Absolute value');
-    export const comparisonValueLabel = l10n.t('Comparison value');
+    export const comparisonValueLabel = l10n.t('Comparison value variable');
     export const comparisonValuePlaceholder = l10n.t('e.g., last_month_revenue');
     export const comparisonTitleLabel = l10n.t('Comparison title (optional)');
     export const comparisonTitlePlaceholder = l10n.t('e.g., vs last month');
     export const comparisonTitleHelp = l10n.t('You can use {{var}} syntax to reference variables');
+    export const comparisonValueHelp = l10n.t('Enter a variable name (not a literal value)');
     export const comparisonFormatLabel = l10n.t('Comparison format (optional)');
     export const comparisonFormatHelp = l10n.t('Leave empty to use the same format as the main value');
     export const saveButton = l10n.t('Save');

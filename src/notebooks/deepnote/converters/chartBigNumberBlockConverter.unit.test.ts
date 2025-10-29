@@ -267,6 +267,112 @@ suite('ChartBigNumberBlockConverter', () => {
             assert.doesNotHaveAnyKeys(block.metadata, [DEEPNOTE_VSCODE_RAW_CONTENT_KEY]);
         });
 
+        test('preserves comparison metadata when updating value', () => {
+            const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
+                content: 'old content',
+                id: 'block-123',
+                metadata: {
+                    deepnote_big_number_value: 'old_value',
+                    deepnote_big_number_title: 'My Number',
+                    deepnote_big_number_format: 'number',
+                    deepnote_big_number_comparison_enabled: true,
+                    deepnote_big_number_comparison_type: 'percentage-change',
+                    deepnote_big_number_comparison_value: 'baseline_value',
+                    deepnote_big_number_comparison_title: 'vs baseline',
+                    deepnote_big_number_comparison_format: 'percent'
+                },
+                sortingKey: 'a0',
+                type: 'big-number'
+            };
+            const cell = new NotebookCellData(NotebookCellKind.Code, 'new_value', 'python');
+
+            converter.applyChangesToBlock(block, cell);
+
+            assert.strictEqual(block.content, '');
+            assert.strictEqual(block.metadata?.deepnote_big_number_value, 'new_value');
+            // Comparison metadata should be preserved
+            assert.strictEqual(block.metadata?.deepnote_big_number_comparison_enabled, true);
+            assert.strictEqual(block.metadata?.deepnote_big_number_comparison_type, 'percentage-change');
+            assert.strictEqual(block.metadata?.deepnote_big_number_comparison_value, 'baseline_value');
+            assert.strictEqual(block.metadata?.deepnote_big_number_comparison_title, 'vs baseline');
+            assert.strictEqual(block.metadata?.deepnote_big_number_comparison_format, 'percent');
+        });
+
+        test('round-trip: block with comparison → cell → block preserves comparison metadata', () => {
+            // Start with a block that has comparison enabled
+            const originalBlock: DeepnoteBlock = {
+                blockGroup: 'test-group',
+                content: '',
+                id: 'block-123',
+                metadata: {
+                    deepnote_big_number_value: 'revenue',
+                    deepnote_big_number_title: 'Revenue',
+                    deepnote_big_number_format: 'currency',
+                    deepnote_big_number_comparison_enabled: true,
+                    deepnote_big_number_comparison_type: 'percentage-change',
+                    deepnote_big_number_comparison_value: 'last_month_revenue',
+                    deepnote_big_number_comparison_title: 'vs last month',
+                    deepnote_big_number_comparison_format: 'percent'
+                },
+                sortingKey: 'a0',
+                type: 'big-number'
+            };
+
+            // Convert block to cell (simulating loading from file)
+            const cell = converter.convertToCell(originalBlock);
+
+            // Manually add metadata like DeepnoteDataConverter does
+            cell.metadata = {
+                ...originalBlock.metadata,
+                id: originalBlock.id,
+                type: originalBlock.type,
+                sortingKey: originalBlock.sortingKey,
+                blockGroup: originalBlock.blockGroup
+            };
+
+            // Move pocket fields
+            const pocket = {
+                type: cell.metadata.type,
+                sortingKey: cell.metadata.sortingKey,
+                blockGroup: cell.metadata.blockGroup
+            };
+            delete cell.metadata.type;
+            delete cell.metadata.sortingKey;
+            delete cell.metadata.blockGroup;
+            cell.metadata.__deepnotePocket = pocket;
+
+            // Now convert cell back to block (simulating execution)
+            const reconstructedBlock: DeepnoteBlock = {
+                blockGroup: pocket.blockGroup || 'default-group',
+                content: cell.value,
+                id: cell.metadata.id as string,
+                metadata: { ...cell.metadata },
+                sortingKey: pocket.sortingKey || 'a0',
+                type: pocket.type || 'code'
+            };
+
+            // Remove pocket and id from metadata
+            if (reconstructedBlock.metadata) {
+                delete reconstructedBlock.metadata.__deepnotePocket;
+                delete reconstructedBlock.metadata.id;
+            }
+
+            // Apply changes from cell (simulating user editing the value)
+            converter.applyChangesToBlock(reconstructedBlock, cell);
+
+            // Verify all comparison metadata is preserved
+            assert.ok(reconstructedBlock.metadata, 'Block metadata should exist');
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            const metadata = reconstructedBlock.metadata!;
+            assert.strictEqual(metadata.deepnote_big_number_value, 'revenue');
+            assert.strictEqual(metadata.deepnote_big_number_comparison_enabled, true);
+            assert.strictEqual(metadata.deepnote_big_number_comparison_type, 'percentage-change');
+            assert.strictEqual(metadata.deepnote_big_number_comparison_value, 'last_month_revenue');
+            assert.strictEqual(metadata.deepnote_big_number_comparison_title, 'vs last month');
+            assert.strictEqual(metadata.deepnote_big_number_comparison_format, 'percent');
+        });
+
         test('handles empty content', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',

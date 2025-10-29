@@ -150,7 +150,7 @@ export const BigNumberComparisonSettingsPanel: React.FC<IBigNumberComparisonSett
 
                     <div className="form-section">
                         <label htmlFor="comparisonValue">
-                            {getLocString('comparisonValueLabel', 'Comparison value')}
+                            {getLocString('comparisonValueLabel', 'Comparison value variable')}
                         </label>
                         <input
                             type="text"
@@ -159,6 +159,7 @@ export const BigNumberComparisonSettingsPanel: React.FC<IBigNumberComparisonSett
                             onChange={handleComparisonValueChange}
                             placeholder={getLocString('comparisonValuePlaceholder', 'e.g., last_month_revenue')}
                         />
+                        <div className="help-text">{getLocString('comparisonValueHelp', 'Enter a variable name')}</div>
                     </div>
 
                     <div className="form-section">

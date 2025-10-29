@@ -1,5 +1,5 @@
 import {
-    SnowflakeAuthMethod,
+    type SnowflakeAuthMethod,
     SnowflakeAuthMethods,
     SUPPORTED_SNOWFLAKE_AUTH_METHODS,
     isSupportedSnowflakeAuthMethod
@@ -10,7 +10,12 @@ export type IntegrationType = 'postgres' | 'bigquery' | 'snowflake';
 export type IntegrationStatus = 'connected' | 'disconnected' | 'error';
 
 // Re-export Snowflake auth constants for convenience
-export { SnowflakeAuthMethod, SnowflakeAuthMethods, SUPPORTED_SNOWFLAKE_AUTH_METHODS, isSupportedSnowflakeAuthMethod };
+export {
+    type SnowflakeAuthMethod,
+    SnowflakeAuthMethods,
+    SUPPORTED_SNOWFLAKE_AUTH_METHODS,
+    isSupportedSnowflakeAuthMethod
+};
 
 export interface BaseIntegrationConfig {
     id: string;

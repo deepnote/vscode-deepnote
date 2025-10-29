@@ -714,6 +714,10 @@
             {
                 "id": "editor.interactiveWindow.context",
                 "label": "%jupyter.command.editor.interactiveWindow.context.label%"
+            },
+            {
+                "id": "deepnote.explorer.context",
+                "label": "Deepnote"
             }
         ],
         "menus": {
@@ -780,6 +784,14 @@
                     "command": "jupyter.execSelectionInteractive",
                     "group": "Jupyter2",
                     "when": "editorFocus && editorLangId == python && !notebookEditorFocused && isWorkspaceTrusted"
+                }
+            ],
+            "deepnote.explorer.context": [
+                {
+                    "command": "deepnote.newProject"
+                },
+                {
+                    "command": "deepnote.importNotebook"
                 }
             ],
             "editor/title": [
@@ -955,12 +967,9 @@
             ],
             "explorer/context": [
                 {
-                    "command": "deepnote.newProject",
-                    "group": "Deepnote@1"
-                },
-                {
-                    "command": "deepnote.importNotebook",
-                    "group": "Deepnote@2"
+                    "submenu": "deepnote.explorer.context",
+                    "when": "isWorkspaceTrusted",
+                    "group": "navigation@10"
                 },
                 {
                     "when": "resourceLangId == python && !notebookEditorFocused && isWorkspaceTrusted",

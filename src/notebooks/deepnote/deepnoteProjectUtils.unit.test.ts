@@ -77,7 +77,7 @@ project:
 version: 1
 project:
   id: test-id
-  name: Test Project with émojis 🚀
+  name: Test Project with emojis 🚀
   notebooks: []
 `;
 
@@ -86,7 +86,7 @@ project:
 
             const result = await readDeepnoteProjectFile(testUri);
 
-            assert.strictEqual(result.project.name, 'Test Project with émojis 🚀');
+            assert.strictEqual(result.project.name, 'Test Project with emojis 🚀');
         });
     });
 });

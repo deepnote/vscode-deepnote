@@ -225,6 +225,17 @@ export namespace Commands {
     export const OpenDeepnoteFile = 'deepnote.openFile';
     export const RevealInDeepnoteExplorer = 'deepnote.revealInExplorer';
     export const ManageIntegrations = 'deepnote.manageIntegrations';
+    export const AddSqlBlock = 'deepnote.addSqlBlock';
+    export const AddBigNumberChartBlock = 'deepnote.addBigNumberChartBlock';
+    export const AddInputTextBlock = 'deepnote.addInputTextBlock';
+    export const AddInputTextareaBlock = 'deepnote.addInputTextareaBlock';
+    export const AddInputSelectBlock = 'deepnote.addInputSelectBlock';
+    export const AddInputSliderBlock = 'deepnote.addInputSliderBlock';
+    export const AddInputCheckboxBlock = 'deepnote.addInputCheckboxBlock';
+    export const AddInputDateBlock = 'deepnote.addInputDateBlock';
+    export const AddInputDateRangeBlock = 'deepnote.addInputDateRangeBlock';
+    export const AddInputFileBlock = 'deepnote.addInputFileBlock';
+    export const AddButtonBlock = 'deepnote.addButtonBlock';
     export const ExportAsPythonScript = 'jupyter.exportAsPythonScript';
     export const ExportToHTML = 'jupyter.exportToHTML';
     export const ExportToPDF = 'jupyter.exportToPDF';

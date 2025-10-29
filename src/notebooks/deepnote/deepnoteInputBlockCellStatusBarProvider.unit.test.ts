@@ -21,7 +21,7 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
         } as any;
         mockToken = {
             isCancellationRequested: false,
-            onCancellationRequested: () => ({ dispose: () => {} })
+            onCancellationRequested: () => ({ dispose: () => undefined })
         } as any;
         provider = new DeepnoteInputBlockCellStatusBarItemProvider(mockExtensionContext);
     });

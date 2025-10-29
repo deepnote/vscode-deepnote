@@ -313,4 +313,174 @@ project:
             assert.instanceOf(testManager, DeepnoteNotebookManager);
         });
     });
+
+    suite('default notebook selection', () => {
+        test('should not select Init notebook when other notebooks are available', async () => {
+            const yamlContent = `
+version: 1.0
+metadata:
+  createdAt: '2023-01-01T00:00:00Z'
+  modifiedAt: '2023-01-02T00:00:00Z'
+project:
+  id: 'project-with-init'
+  name: 'Project with Init'
+  initNotebookId: 'init-notebook'
+  notebooks:
+    - id: 'init-notebook'
+      name: 'Init'
+      blocks:
+        - id: 'block-init'
+          content: 'print("init")'
+          sortingKey: 'a0'
+          type: 'code'
+      executionMode: 'block'
+      isModule: false
+    - id: 'main-notebook'
+      name: 'Main'
+      blocks:
+        - id: 'block-main'
+          content: 'print("main")'
+          sortingKey: 'a0'
+          type: 'code'
+      executionMode: 'block'
+      isModule: false
+  settings: {}
+`;
+
+            const content = new TextEncoder().encode(yamlContent);
+            const result = await serializer.deserializeNotebook(content, {} as any);
+
+            // Should select the Main notebook, not the Init notebook
+            assert.strictEqual(result.metadata?.deepnoteNotebookId, 'main-notebook');
+            assert.strictEqual(result.metadata?.deepnoteNotebookName, 'Main');
+        });
+
+        test('should select Init notebook when it is the only notebook', async () => {
+            const yamlContent = `
+version: 1.0
+metadata:
+  createdAt: '2023-01-01T00:00:00Z'
+  modifiedAt: '2023-01-02T00:00:00Z'
+project:
+  id: 'project-only-init'
+  name: 'Project with only Init'
+  initNotebookId: 'init-notebook'
+  notebooks:
+    - id: 'init-notebook'
+      name: 'Init'
+      blocks:
+        - id: 'block-init'
+          content: 'print("init")'
+          sortingKey: 'a0'
+          type: 'code'
+      executionMode: 'block'
+      isModule: false
+  settings: {}
+`;
+
+            const content = new TextEncoder().encode(yamlContent);
+            const result = await serializer.deserializeNotebook(content, {} as any);
+
+            // Should select the Init notebook since it's the only one
+            assert.strictEqual(result.metadata?.deepnoteNotebookId, 'init-notebook');
+            assert.strictEqual(result.metadata?.deepnoteNotebookName, 'Init');
+        });
+
+        test('should select alphabetically first notebook when no initNotebookId', async () => {
+            const yamlContent = `
+version: 1.0
+metadata:
+  createdAt: '2023-01-01T00:00:00Z'
+  modifiedAt: '2023-01-02T00:00:00Z'
+project:
+  id: 'project-alphabetical'
+  name: 'Project Alphabetical'
+  notebooks:
+    - id: 'zebra-notebook'
+      name: 'Zebra Notebook'
+      blocks:
+        - id: 'block-z'
+          content: 'print("zebra")'
+          sortingKey: 'a0'
+          type: 'code'
+      executionMode: 'block'
+      isModule: false
+    - id: 'alpha-notebook'
+      name: 'Alpha Notebook'
+      blocks:
+        - id: 'block-a'
+          content: 'print("alpha")'
+          sortingKey: 'a0'
+          type: 'code'
+      executionMode: 'block'
+      isModule: false
+    - id: 'bravo-notebook'
+      name: 'Bravo Notebook'
+      blocks:
+        - id: 'block-b'
+          content: 'print("bravo")'
+          sortingKey: 'a0'
+          type: 'code'
+      executionMode: 'block'
+      isModule: false
+  settings: {}
+`;
+
+            const content = new TextEncoder().encode(yamlContent);
+            const result = await serializer.deserializeNotebook(content, {} as any);
+
+            // Should select the alphabetically first notebook
+            assert.strictEqual(result.metadata?.deepnoteNotebookId, 'alpha-notebook');
+            assert.strictEqual(result.metadata?.deepnoteNotebookName, 'Alpha Notebook');
+        });
+
+        test('should sort Init notebook last when multiple notebooks exist', async () => {
+            const yamlContent = `
+version: 1.0
+metadata:
+  createdAt: '2023-01-01T00:00:00Z'
+  modifiedAt: '2023-01-02T00:00:00Z'
+project:
+  id: 'project-multiple'
+  name: 'Project with Multiple'
+  initNotebookId: 'init-notebook'
+  notebooks:
+    - id: 'charlie-notebook'
+      name: 'Charlie'
+      blocks:
+        - id: 'block-c'
+          content: 'print("charlie")'
+          sortingKey: 'a0'
+          type: 'code'
+      executionMode: 'block'
+      isModule: false
+    - id: 'init-notebook'
+      name: 'Init'
+      blocks:
+        - id: 'block-init'
+          content: 'print("init")'
+          sortingKey: 'a0'
+          type: 'code'
+      executionMode: 'block'
+      isModule: false
+    - id: 'alpha-notebook'
+      name: 'Alpha'
+      blocks:
+        - id: 'block-a'
+          content: 'print("alpha")'
+          sortingKey: 'a0'
+          type: 'code'
+      executionMode: 'block'
+      isModule: false
+  settings: {}
+`;
+
+            const content = new TextEncoder().encode(yamlContent);
+            const result = await serializer.deserializeNotebook(content, {} as any);
+
+            // Should select Alpha, not Init even though "Init" comes before "Alpha" alphabetically when in upper case
+            assert.strictEqual(result.metadata?.deepnoteNotebookId, 'alpha-notebook');
+            assert.strictEqual(result.metadata?.deepnoteNotebookName, 'Alpha');
+        });
+    });
 });

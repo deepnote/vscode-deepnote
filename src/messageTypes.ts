@@ -179,6 +179,9 @@ export type LocalizedMessages = {
     integrationsConfigureTitle: string;
     integrationsCancel: string;
     integrationsSave: string;
+    // Integration type labels
+    integrationsPostgresTypeLabel: string;
+    integrationsBigQueryTypeLabel: string;
     // PostgreSQL form strings
     integrationsPostgresNameLabel: string;
     integrationsPostgresNamePlaceholder: string;

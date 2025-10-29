@@ -162,7 +162,7 @@ export class IntegrationManager implements IIntegrationManager {
         }
 
         // Show the webview with optional selected integration
-        await this.webviewProvider.show(integrations, selectedIntegrationId);
+        await this.webviewProvider.show(projectId, integrations, selectedIntegrationId);
     }
 
     /**

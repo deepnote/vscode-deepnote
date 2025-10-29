@@ -519,7 +519,7 @@ export namespace DataScience {
         );
     export const jupyterDebuggerOutputParseError = (output: string) =>
         l10n.t(
-            'Unable to parse {0} output, please log an issue with https://github.com/microsoft/vscode-jupyter',
+            'Unable to parse {0} output, please log an issue with https://github.com/deepnote/vscode-deepnote',
             output
         );
     export const cellStopOnErrorMessage = l10n.t('Cell was canceled due to an error in a previous cell.');
@@ -830,6 +830,10 @@ export namespace Integrations {
     export const save = l10n.t('Save');
     export const requiredField = l10n.t('*');
     export const optionalField = l10n.t('(optional)');
+
+    // Integration type labels
+    export const postgresTypeLabel = l10n.t('PostgreSQL');
+    export const bigQueryTypeLabel = l10n.t('BigQuery');
 
     // PostgreSQL form strings
     export const postgresNameLabel = l10n.t('Name (optional)');

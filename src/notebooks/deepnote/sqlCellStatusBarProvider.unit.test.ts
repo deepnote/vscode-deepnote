@@ -375,6 +375,7 @@ suite('SqlCellStatusBarProvider', () => {
 
             // Verify that the active cell was used
             verify(mockedVSCodeNamespaces.window.showInputBox(anything())).once();
+            verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
         });
 
         test('updateSqlVariableName command handler shows error when no cell and no active editor', async () => {

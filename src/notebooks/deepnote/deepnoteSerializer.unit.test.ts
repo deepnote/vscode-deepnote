@@ -1,4 +1,5 @@
 import { assert } from 'chai';
+import * as yaml from 'js-yaml';
 
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
 import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
@@ -58,6 +59,14 @@ suite('DeepnoteNotebookSerializer', () => {
         manager = new DeepnoteNotebookManager();
         serializer = new DeepnoteNotebookSerializer(manager);
     });
+
+    /**
+     * Helper function to convert a DeepnoteProject object with version to YAML format
+     */
+    function projectToYaml(projectData: { version: string; metadata: any; project: any }): Uint8Array {
+        const yamlString = yaml.dump(projectData);
+        return new TextEncoder().encode(yamlString);
+    }
 
     suite('deserializeNotebook', () => {
         test('should deserialize valid project with selected notebook', async () => {
@@ -316,38 +325,51 @@ project:
 
     suite('default notebook selection', () => {
         test('should not select Init notebook when other notebooks are available', async () => {
-            const yamlContent = `
-version: 1.0
-metadata:
-  createdAt: '2023-01-01T00:00:00Z'
-  modifiedAt: '2023-01-02T00:00:00Z'
-project:
-  id: 'project-with-init'
-  name: 'Project with Init'
-  initNotebookId: 'init-notebook'
-  notebooks:
-    - id: 'init-notebook'
-      name: 'Init'
-      blocks:
-        - id: 'block-init'
-          content: 'print("init")'
-          sortingKey: 'a0'
-          type: 'code'
-      executionMode: 'block'
-      isModule: false
-    - id: 'main-notebook'
-      name: 'Main'
-      blocks:
-        - id: 'block-main'
-          content: 'print("main")'
-          sortingKey: 'a0'
-          type: 'code'
-      executionMode: 'block'
-      isModule: false
-  settings: {}
-`;
+            const projectData = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2023-01-01T00:00:00Z',
+                    modifiedAt: '2023-01-02T00:00:00Z'
+                },
+                project: {
+                    id: 'project-with-init',
+                    name: 'Project with Init',
+                    initNotebookId: 'init-notebook',
+                    notebooks: [
+                        {
+                            id: 'init-notebook',
+                            name: 'Init',
+                            blocks: [
+                                {
+                                    id: 'block-init',
+                                    content: 'print("init")',
+                                    sortingKey: 'a0',
+                                    type: 'code'
+                                }
+                            ],
+                            executionMode: 'block',
+                            isModule: false
+                        },
+                        {
+                            id: 'main-notebook',
+                            name: 'Main',
+                            blocks: [
+                                {
+                                    id: 'block-main',
+                                    content: 'print("main")',
+                                    sortingKey: 'a0',
+                                    type: 'code'
+                                }
+                            ],
+                            executionMode: 'block',
+                            isModule: false
+                        }
+                    ],
+                    settings: {}
+                }
+            };
 
-            const content = new TextEncoder().encode(yamlContent);
+            const content = projectToYaml(projectData);
             const result = await serializer.deserializeNotebook(content, {} as any);
 
             // Should select the Main notebook, not the Init notebook
@@ -356,29 +378,37 @@ project:
         });
 
         test('should select Init notebook when it is the only notebook', async () => {
-            const yamlContent = `
-version: 1.0
-metadata:
-  createdAt: '2023-01-01T00:00:00Z'
-  modifiedAt: '2023-01-02T00:00:00Z'
-project:
-  id: 'project-only-init'
-  name: 'Project with only Init'
-  initNotebookId: 'init-notebook'
-  notebooks:
-    - id: 'init-notebook'
-      name: 'Init'
-      blocks:
-        - id: 'block-init'
-          content: 'print("init")'
-          sortingKey: 'a0'
-          type: 'code'
-      executionMode: 'block'
-      isModule: false
-  settings: {}
-`;
+            const projectData = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2023-01-01T00:00:00Z',
+                    modifiedAt: '2023-01-02T00:00:00Z'
+                },
+                project: {
+                    id: 'project-only-init',
+                    name: 'Project with only Init',
+                    initNotebookId: 'init-notebook',
+                    notebooks: [
+                        {
+                            id: 'init-notebook',
+                            name: 'Init',
+                            blocks: [
+                                {
+                                    id: 'block-init',
+                                    content: 'print("init")',
+                                    sortingKey: 'a0',
+                                    type: 'code'
+                                }
+                            ],
+                            executionMode: 'block',
+                            isModule: false
+                        }
+                    ],
+                    settings: {}
+                }
+            };
 
-            const content = new TextEncoder().encode(yamlContent);
+            const content = projectToYaml(projectData);
             const result = await serializer.deserializeNotebook(content, {} as any);
 
             // Should select the Init notebook since it's the only one
@@ -387,46 +417,64 @@ project:
         });
 
         test('should select alphabetically first notebook when no initNotebookId', async () => {
-            const yamlContent = `
-version: 1.0
-metadata:
-  createdAt: '2023-01-01T00:00:00Z'
-  modifiedAt: '2023-01-02T00:00:00Z'
-project:
-  id: 'project-alphabetical'
-  name: 'Project Alphabetical'
-  notebooks:
-    - id: 'zebra-notebook'
-      name: 'Zebra Notebook'
-      blocks:
-        - id: 'block-z'
-          content: 'print("zebra")'
-          sortingKey: 'a0'
-          type: 'code'
-      executionMode: 'block'
-      isModule: false
-    - id: 'alpha-notebook'
-      name: 'Alpha Notebook'
-      blocks:
-        - id: 'block-a'
-          content: 'print("alpha")'
-          sortingKey: 'a0'
-          type: 'code'
-      executionMode: 'block'
-      isModule: false
-    - id: 'bravo-notebook'
-      name: 'Bravo Notebook'
-      blocks:
-        - id: 'block-b'
-          content: 'print("bravo")'
-          sortingKey: 'a0'
-          type: 'code'
-      executionMode: 'block'
-      isModule: false
-  settings: {}
-`;
+            const projectData = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2023-01-01T00:00:00Z',
+                    modifiedAt: '2023-01-02T00:00:00Z'
+                },
+                project: {
+                    id: 'project-alphabetical',
+                    name: 'Project Alphabetical',
+                    notebooks: [
+                        {
+                            id: 'zebra-notebook',
+                            name: 'Zebra Notebook',
+                            blocks: [
+                                {
+                                    id: 'block-z',
+                                    content: 'print("zebra")',
+                                    sortingKey: 'a0',
+                                    type: 'code'
+                                }
+                            ],
+                            executionMode: 'block',
+                            isModule: false
+                        },
+                        {
+                            id: 'alpha-notebook',
+                            name: 'Alpha Notebook',
+                            blocks: [
+                                {
+                                    id: 'block-a',
+                                    content: 'print("alpha")',
+                                    sortingKey: 'a0',
+                                    type: 'code'
+                                }
+                            ],
+                            executionMode: 'block',
+                            isModule: false
+                        },
+                        {
+                            id: 'bravo-notebook',
+                            name: 'Bravo Notebook',
+                            blocks: [
+                                {
+                                    id: 'block-b',
+                                    content: 'print("bravo")',
+                                    sortingKey: 'a0',
+                                    type: 'code'
+                                }
+                            ],
+                            executionMode: 'block',
+                            isModule: false
+                        }
+                    ],
+                    settings: {}
+                }
+            };
 
-            const content = new TextEncoder().encode(yamlContent);
+            const content = projectToYaml(projectData);
             const result = await serializer.deserializeNotebook(content, {} as any);
 
             // Should select the alphabetically first notebook
@@ -435,47 +483,65 @@ project:
         });
 
         test('should sort Init notebook last when multiple notebooks exist', async () => {
-            const yamlContent = `
-version: 1.0
-metadata:
-  createdAt: '2023-01-01T00:00:00Z'
-  modifiedAt: '2023-01-02T00:00:00Z'
-project:
-  id: 'project-multiple'
-  name: 'Project with Multiple'
-  initNotebookId: 'init-notebook'
-  notebooks:
-    - id: 'charlie-notebook'
-      name: 'Charlie'
-      blocks:
-        - id: 'block-c'
-          content: 'print("charlie")'
-          sortingKey: 'a0'
-          type: 'code'
-      executionMode: 'block'
-      isModule: false
-    - id: 'init-notebook'
-      name: 'Init'
-      blocks:
-        - id: 'block-init'
-          content: 'print("init")'
-          sortingKey: 'a0'
-          type: 'code'
-      executionMode: 'block'
-      isModule: false
-    - id: 'alpha-notebook'
-      name: 'Alpha'
-      blocks:
-        - id: 'block-a'
-          content: 'print("alpha")'
-          sortingKey: 'a0'
-          type: 'code'
-      executionMode: 'block'
-      isModule: false
-  settings: {}
-`;
+            const projectData = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2023-01-01T00:00:00Z',
+                    modifiedAt: '2023-01-02T00:00:00Z'
+                },
+                project: {
+                    id: 'project-multiple',
+                    name: 'Project with Multiple',
+                    initNotebookId: 'init-notebook',
+                    notebooks: [
+                        {
+                            id: 'charlie-notebook',
+                            name: 'Charlie',
+                            blocks: [
+                                {
+                                    id: 'block-c',
+                                    content: 'print("charlie")',
+                                    sortingKey: 'a0',
+                                    type: 'code'
+                                }
+                            ],
+                            executionMode: 'block',
+                            isModule: false
+                        },
+                        {
+                            id: 'init-notebook',
+                            name: 'Init',
+                            blocks: [
+                                {
+                                    id: 'block-init',
+                                    content: 'print("init")',
+                                    sortingKey: 'a0',
+                                    type: 'code'
+                                }
+                            ],
+                            executionMode: 'block',
+                            isModule: false
+                        },
+                        {
+                            id: 'alpha-notebook',
+                            name: 'Alpha',
+                            blocks: [
+                                {
+                                    id: 'block-a',
+                                    content: 'print("alpha")',
+                                    sortingKey: 'a0',
+                                    type: 'code'
+                                }
+                            ],
+                            executionMode: 'block',
+                            isModule: false
+                        }
+                    ],
+                    settings: {}
+                }
+            };
 
-            const content = new TextEncoder().encode(yamlContent);
+            const content = projectToYaml(projectData);
             const result = await serializer.deserializeNotebook(content, {} as any);
 
             // Should select Alpha, not Init even though "Init" comes before "Alpha" alphabetically when in upper case

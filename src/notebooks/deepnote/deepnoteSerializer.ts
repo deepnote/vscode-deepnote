@@ -189,29 +189,18 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
      * @returns
      */
     private findDefaultNotebook(file: DeepnoteFile): DeepnoteNotebook | undefined {
-        const sortedNotebooks = file.project.notebooks.slice().sort((a, b) => {
-            const nameA = a.name.toLowerCase();
-            const nameB = b.name.toLowerCase();
+        if (file.project.notebooks.length === 0) {
+            return undefined;
+        }
 
-            // If there's an Init notebook, we don't want to open it by default unless it's the only one.
-            if (file.project.initNotebookId && a.id === file.project.initNotebookId) {
-                return 1;
-            }
+        const sortedNotebooks = file.project.notebooks.slice().sort((a, b) => a.name.localeCompare(b.name));
+        const sortedNotebooksWithoutInit = file.project.initNotebookId
+            ? sortedNotebooks.filter((nb) => nb.id !== file.project.initNotebookId)
+            : sortedNotebooks;
 
-            if (file.project.initNotebookId && b.id === file.project.initNotebookId) {
-                return -1;
-            }
-
-            if (nameA < nameB) {
-                return -1;
-            }
-
-            if (nameA > nameB) {
-                return 1;
-            }
-
-            return 0;
-        });
+        if (sortedNotebooksWithoutInit.length > 0) {
+            return sortedNotebooksWithoutInit[0];
+        }
 
         return sortedNotebooks[0];
     }

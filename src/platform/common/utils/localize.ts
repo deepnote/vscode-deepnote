@@ -865,7 +865,7 @@ export namespace Integrations {
 
     // Snowflake form strings
     export const snowflakeNameLabel = l10n.t('Integration name');
-    export const snowflakeNamePlaceholder = l10n.t('[Demo] Snowflake');
+    export const snowflakeNamePlaceholder = l10n.t('My Snowflake Database');
     export const snowflakeAccountLabel = l10n.t('Account name');
     export const snowflakeAccountPlaceholder = l10n.t('ptb34938.us-east-1');
     export const snowflakeAuthMethodLabel = l10n.t('Authentication');
@@ -873,7 +873,7 @@ export namespace Integrations {
     export const snowflakeAuthMethodUsernamePassword = l10n.t('Username & password');
     export const snowflakeAuthMethodKeyPair = l10n.t('Key-pair (service account)');
     export const snowflakeUnsupportedAuthMethod = l10n.t(
-        'This Snowflake integration uses an authentication method that is not supported in VSCode. You can view the integration details but cannot edit or use it.'
+        'This Snowflake integration uses an authentication method that is not supported in VS Code. You can view the integration details but cannot edit or use it.'
     );
     export const snowflakeUsernameLabel = l10n.t('Username');
     export const snowflakeUsernamePlaceholder = l10n.t('user');
@@ -891,7 +891,7 @@ export namespace Integrations {
     export const snowflakePrivateKeyPlaceholder = l10n.t("Begins with '-----BEGIN PRIVATE KEY-----'");
     export const snowflakePrivateKeyPassphraseLabel = l10n.t('Private Key Passphrase (optional)');
     export const snowflakePrivateKeyPassphraseHelp = l10n.t(
-        'If the private key is encrypted, provide the passphrase to decrypt it'
+        'If the private key is encrypted, provide the passphrase to decrypt it.'
     );
     export const snowflakePrivateKeyPassphrasePlaceholder = l10n.t('Private key passphrase (optional)');
     export const snowflakeDatabaseLabel = l10n.t('Database (optional)');

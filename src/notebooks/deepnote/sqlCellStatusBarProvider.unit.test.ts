@@ -37,6 +37,16 @@ suite('SqlCellStatusBarProvider', () => {
         cancellationToken = tokenSource.token;
     });
 
+    test('returns undefined when cancellation token is requested', async () => {
+        const cell = createMockCell('sql', {});
+        const tokenSource = new CancellationTokenSource();
+        tokenSource.cancel();
+
+        const result = await provider.provideCellStatusBarItems(cell, tokenSource.token);
+
+        assert.isUndefined(result);
+    });
+
     test('returns undefined for non-SQL cells', async () => {
         const cell = createMockCell('python', {});
 
@@ -620,6 +630,19 @@ suite('SqlCellStatusBarProvider', () => {
             await updateVariableNameHandler(cell);
         });
 
+        test('validates input - accepts valid Python identifier', async () => {
+            const cell = createMockCell('sql', {});
+
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenCall((options) => {
+                const validationResult = options.validateInput('valid_name');
+                assert.isUndefined(validationResult, 'Valid input should return undefined');
+                return Promise.resolve('valid_name');
+            });
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+            await updateVariableNameHandler(cell);
+        });
+
         test('falls back to active cell when no cell is provided', async () => {
             const cell = createMockCell('sql', { deepnote_variable_name: 'old_name' });
             const newVariableName = 'new_name';
@@ -849,6 +872,64 @@ suite('SqlCellStatusBarProvider', () => {
             assert.strictEqual(duckDbItem.label, 'DataFrame SQL (DuckDB)');
         });
 
+        test('shows BigQuery type label for BigQuery integrations', async () => {
+            const notebookMetadata = { deepnoteProjectId: 'project-1' };
+            const cell = createMockCell('sql', {}, notebookMetadata);
+            let quickPickItems: any[] = [];
+
+            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+                project: {
+                    integrations: [
+                        {
+                            id: 'bigquery-integration',
+                            name: 'My BigQuery',
+                            type: 'big-query'
+                        }
+                    ]
+                }
+            } as any);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenCall((items) => {
+                quickPickItems = items;
+                return Promise.resolve(undefined);
+            });
+
+            await switchIntegrationHandler(cell);
+
+            const bigQueryItem = quickPickItems.find((item) => item.id === 'bigquery-integration');
+            assert.isDefined(bigQueryItem, 'BigQuery integration should be in quick pick items');
+            assert.strictEqual(bigQueryItem.description, 'BigQuery');
+        });
+
+        test('shows raw type for unknown integration types', async () => {
+            const notebookMetadata = { deepnoteProjectId: 'project-1' };
+            const cell = createMockCell('sql', {}, notebookMetadata);
+            let quickPickItems: any[] = [];
+
+            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+                project: {
+                    integrations: [
+                        {
+                            id: 'unknown-integration',
+                            name: 'Unknown DB',
+                            type: 'unknown_type'
+                        }
+                    ]
+                }
+            } as any);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenCall((items) => {
+                quickPickItems = items;
+                return Promise.resolve(undefined);
+            });
+
+            await switchIntegrationHandler(cell);
+
+            const unknownItem = quickPickItems.find((item) => item.id === 'unknown-integration');
+            assert.isDefined(unknownItem, 'Unknown integration should be in quick pick items');
+            assert.strictEqual(unknownItem.description, 'unknown_type');
+        });
+
         test('marks current integration as selected in quick pick', async () => {
             const currentIntegrationId = 'current-integration';
             const notebookMetadata = { deepnoteProjectId: 'project-1' };
@@ -1005,6 +1086,54 @@ suite('SqlCellStatusBarProvider', () => {
 
             verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
             verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
+        });
+
+        test('does not update when selected integration is same as current', async () => {
+            const currentIntegrationId = 'current-integration';
+            const notebookMetadata = { deepnoteProjectId: 'project-1' };
+            const cell = createMockCell('sql', { sql_integration_id: currentIntegrationId }, notebookMetadata);
+
+            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+                project: {
+                    integrations: [
+                        {
+                            id: currentIntegrationId,
+                            name: 'Current Integration',
+                            type: 'pgsql'
+                        }
+                    ]
+                }
+            } as any);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ id: currentIntegrationId, label: 'Current Integration' } as any)
+            );
+
+            await switchIntegrationHandler(cell);
+
+            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).once();
+            verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+        });
+
+        test('does not update when selected item has no id property', async () => {
+            const notebookMetadata = { deepnoteProjectId: 'project-1' };
+            const cell = createMockCell('sql', { sql_integration_id: 'current-integration' }, notebookMetadata);
+
+            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+                project: {
+                    integrations: []
+                }
+            } as any);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+            // Return an item without an id property (e.g., a separator)
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ kind: -1 } as any)
+            );
+
+            await switchIntegrationHandler(cell);
+
+            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).once();
+            verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
         });
     });
 

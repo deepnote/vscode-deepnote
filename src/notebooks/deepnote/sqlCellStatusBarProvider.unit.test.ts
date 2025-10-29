@@ -803,6 +803,7 @@ suite('SqlCellStatusBarProvider', () => {
             when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
 
             await updateVariableNameHandler(cell);
+            verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
         });
     });
 

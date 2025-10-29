@@ -19,4 +19,3 @@ export class UnsupportedIntegrationError extends BaseError {
         super('unknown', message);
     }
 }
-

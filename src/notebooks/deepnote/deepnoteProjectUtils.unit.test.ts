@@ -25,7 +25,7 @@ suite('DeepnoteProjectUtils', () => {
             const testUri = Uri.file('/test/project.deepnote');
 
             const validYaml = `
-version: 1
+version: '1'
 project:
   id: test-project-id
   name: Test Project
@@ -40,7 +40,7 @@ project:
 
             const result = await readDeepnoteProjectFile(testUri);
 
-            assert.strictEqual(result.version, 1);
+            assert.strictEqual(result.version, '1');
             assert.strictEqual(result.project.id, 'test-project-id');
             assert.strictEqual(result.project.name, 'Test Project');
             assert.strictEqual(result.project.notebooks.length, 1);
@@ -53,7 +53,7 @@ project:
             const testUri = Uri.file('/test/invalid.deepnote');
 
             const invalidYaml = `
-version: 1
+version: '1'
 project:
   invalid: yaml: content: here
     - malformed

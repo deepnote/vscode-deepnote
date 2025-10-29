@@ -103,25 +103,13 @@ export class SelectInputSettingsWebviewProvider {
 
         const metadata = this.currentCell.metadata as Record<string, unknown> | undefined;
 
-        const allowMultipleValues = (metadata?.deepnote_allow_multiple_values as boolean) ?? false;
-        const allowEmptyValue = (metadata?.deepnote_allow_empty_values as boolean) ?? false;
-        const selectType =
-            (metadata?.deepnote_variable_select_type as 'from-options' | 'from-variable') ?? 'from-options';
-
-        const settings: SelectInputSettings =
-            selectType === 'from-options'
-                ? {
-                      allowMultipleValues,
-                      allowEmptyValue,
-                      selectType: 'from-options',
-                      options: (metadata?.deepnote_variable_custom_options as string[]) ?? []
-                  }
-                : {
-                      allowMultipleValues,
-                      allowEmptyValue,
-                      selectType: 'from-variable',
-                      selectedVariable: (metadata?.deepnote_variable_selected_variable as string) ?? ''
-                  };
+        const settings: SelectInputSettings = {
+            allowMultipleValues: (metadata?.deepnote_allow_multiple_values as boolean) ?? false,
+            allowEmptyValue: (metadata?.deepnote_allow_empty_values as boolean) ?? false,
+            selectType: (metadata?.deepnote_variable_select_type as 'from-options' | 'from-variable') ?? 'from-options',
+            options: (metadata?.deepnote_variable_custom_options as string[]) ?? [],
+            selectedVariable: (metadata?.deepnote_variable_selected_variable as string) ?? ''
+        };
 
         await this.currentPanel.webview.postMessage({
             type: 'init',
@@ -207,15 +195,14 @@ export class SelectInputSettingsWebviewProvider {
         metadata.deepnote_allow_multiple_values = settings.allowMultipleValues;
         metadata.deepnote_allow_empty_values = settings.allowEmptyValue;
         metadata.deepnote_variable_select_type = settings.selectType;
+        metadata.deepnote_variable_custom_options = settings.options;
+        metadata.deepnote_variable_selected_variable = settings.selectedVariable;
 
         // Update the options field based on the select type
         if (settings.selectType === 'from-options') {
-            metadata.deepnote_variable_custom_options = settings.options;
             metadata.deepnote_variable_options = settings.options;
-            delete metadata.deepnote_variable_selected_variable;
         } else {
-            metadata.deepnote_variable_selected_variable = settings.selectedVariable;
-            delete metadata.deepnote_variable_custom_options;
+            // Clear stale options when not using 'from-options' mode
             delete metadata.deepnote_variable_options;
         }
 

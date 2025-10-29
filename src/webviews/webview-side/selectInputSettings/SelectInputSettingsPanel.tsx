@@ -13,7 +13,8 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
         allowMultipleValues: false,
         allowEmptyValue: false,
         selectType: 'from-options',
-        options: []
+        options: [],
+        selectedVariable: ''
     });
 
     const [newOption, setNewOption] = React.useState('');
@@ -50,30 +51,13 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
     };
 
     const handleSelectTypeChange = (selectType: 'from-options' | 'from-variable') => {
-        setSettings((prev) => {
-            if (selectType === 'from-options') {
-                return {
-                    allowMultipleValues: prev.allowMultipleValues,
-                    allowEmptyValue: prev.allowEmptyValue,
-                    selectType: 'from-options',
-                    options: prev.selectType === 'from-options' ? prev.options : []
-                };
-            } else {
-                return {
-                    allowMultipleValues: prev.allowMultipleValues,
-                    allowEmptyValue: prev.allowEmptyValue,
-                    selectType: 'from-variable',
-                    selectedVariable: prev.selectType === 'from-variable' ? prev.selectedVariable : ''
-                };
-            }
-        });
+        setSettings((prev) => ({
+            ...prev,
+            selectType
+        }));
     };
 
     const handleAddOption = () => {
-        if (settings.selectType !== 'from-options') {
-            return;
-        }
-
         const trimmedValue = newOption.trim();
 
         // Check if the trimmed value is non-empty
@@ -92,40 +76,25 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
         }
 
         // Add the trimmed value and clear input
-        setSettings((prev) => {
-            if (prev.selectType !== 'from-options') {
-                return prev;
-            }
-            return {
-                ...prev,
-                options: [...prev.options, trimmedValue]
-            };
-        });
+        setSettings((prev) => ({
+            ...prev,
+            options: [...prev.options, trimmedValue]
+        }));
         setNewOption('');
     };
 
     const handleRemoveOption = (index: number) => {
-        setSettings((prev) => {
-            if (prev.selectType !== 'from-options') {
-                return prev;
-            }
-            return {
-                ...prev,
-                options: prev.options.filter((_, i) => i !== index)
-            };
-        });
+        setSettings((prev) => ({
+            ...prev,
+            options: prev.options.filter((_, i) => i !== index)
+        }));
     };
 
     const handleVariableChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setSettings((prev) => {
-            if (prev.selectType !== 'from-variable') {
-                return prev;
-            }
-            return {
-                ...prev,
-                selectedVariable: e.target.value
-            };
-        });
+        setSettings((prev) => ({
+            ...prev,
+            selectedVariable: e.target.value
+        }));
     };
 
     const handleSave = () => {

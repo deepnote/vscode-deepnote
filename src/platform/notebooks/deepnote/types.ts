@@ -4,21 +4,15 @@ import { EnvironmentVariables } from '../../common/variables/types';
 import { IntegrationConfig } from './integrationTypes';
 
 /**
- * Settings for select input blocks - discriminated union based on selectType
+ * Settings for select input blocks
  */
-export type SelectInputSettings =
-    | {
-          allowMultipleValues: boolean;
-          allowEmptyValue: boolean;
-          selectType: 'from-options';
-          options: string[];
-      }
-    | {
-          allowMultipleValues: boolean;
-          allowEmptyValue: boolean;
-          selectType: 'from-variable';
-          selectedVariable: string;
-      };
+export interface SelectInputSettings {
+    allowMultipleValues: boolean;
+    allowEmptyValue: boolean;
+    selectType: 'from-options' | 'from-variable';
+    options: string[];
+    selectedVariable: string;
+}
 
 /**
  * Message types for select input settings webview

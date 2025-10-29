@@ -48,11 +48,11 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
     }
 
     private setupEnvironmentItem(): void {
-        if (!this.environment || !this.status) {
+        if (!this.environment) {
             return;
         }
 
-        const statusVisual = getDeepnoteEnvironmentStatusVisual(this.status);
+        const statusVisual = getDeepnoteEnvironmentStatusVisual(this.status ?? EnvironmentStatus.Stopped);
 
         this.label = `${this.environment.name} [${statusVisual.text}]`;
         this.iconPath = new ThemeIcon(statusVisual.icon, new ThemeColor(statusVisual.themeColorId));

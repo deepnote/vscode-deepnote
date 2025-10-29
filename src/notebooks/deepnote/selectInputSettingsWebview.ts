@@ -155,12 +155,10 @@ export class SelectInputSettingsWebviewProvider {
                         }
                         this.currentPanel?.dispose();
                     } catch (error) {
-                        // Error is already shown to user in saveSettings, just reject the promise
-                        if (this.resolvePromise) {
-                            this.resolvePromise(null);
-                            this.resolvePromise = undefined;
-                        }
-                        // Keep panel open so user can retry or cancel
+                        // Error is already shown to user in saveSettings
+                        // Keep promise pending so user can retry or cancel
+                        // Panel remains open for retry
+                        logger.error('SelectInputSettingsWebview: Failed to save settings', error);
                     }
                 }
                 break;

@@ -70,6 +70,14 @@
                 "key": "escape",
                 "when": "isCompositeNotebook && !editorHoverVisible && !suggestWidgetVisible && !isComposing && !inSnippetMode && !exceptionWidgetVisible && !selectionAnchorSet && !LinkedEditingInputVisible && !renameInputVisible && !editorHasSelection && !accessibilityHelpWidgetVisible && !breakpointWidgetVisible && !findWidgetVisible && !markersNavigationVisible && !parameterHintsVisible && !editorHasMultipleSelections && !notificationToastsVisible && !notebookEditorFocused && !inlineChatVisible",
                 "command": "interactive.input.clear"
+            },
+            {
+                "key": "cmd+enter",
+                "mac": "cmd+enter",
+                "win": "ctrl+enter",
+                "linux": "ctrl+enter",
+                "when": "notebookEditorFocused && !findInputFocussed && !replaceInputFocussed",
+                "command": "jupyter.notebookeditor.runfocusedcell"
             }
         ],
         "commands": [
@@ -543,6 +551,12 @@
                 "title": "%jupyter.command.jupyter.notebookeditor.removeallcells.title%",
                 "category": "Notebook",
                 "enablement": "!jupyter.webExtension"
+            },
+            {
+                "command": "jupyter.notebookeditor.runfocusedcell",
+                "title": "%jupyter.command.jupyter.notebookeditor.runfocusedcell.title%",
+                "category": "Notebook",
+                "enablement": "notebookEditorFocused"
             },
             {
                 "command": "jupyter.expandallcells",

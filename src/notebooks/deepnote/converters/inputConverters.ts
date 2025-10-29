@@ -27,22 +27,35 @@ export abstract class BaseInputBlockConverter<T extends z.ZodObject> implements 
      * Helper method to update block metadata with common logic.
      * Clears block.content, parses schema, deletes DEEPNOTE_VSCODE_RAW_CONTENT_KEY,
      * and merges metadata with updates.
+     *
+     * If metadata is missing or invalid, applies default config.
+     * Otherwise, preserves existing metadata and only applies updates.
      */
     protected updateBlockMetadata(block: DeepnoteBlock, updates: Partial<z.infer<T>>): void {
         block.content = '';
-
-        const existingMetadata = this.schema().safeParse(block.metadata);
-        const baseMetadata = existingMetadata.success ? existingMetadata.data : this.defaultConfig();
 
         if (block.metadata != null) {
             delete block.metadata[DEEPNOTE_VSCODE_RAW_CONTENT_KEY];
         }
 
-        block.metadata = {
-            ...(block.metadata ?? {}),
-            ...baseMetadata,
-            ...updates
-        };
+        // Check if existing metadata is valid
+        const existingMetadata = this.schema().safeParse(block.metadata);
+        const hasValidMetadata =
+            existingMetadata.success && block.metadata != null && Object.keys(block.metadata).length > 0;
+
+        if (hasValidMetadata) {
+            // Preserve existing metadata and only apply updates
+            block.metadata = {
+                ...(block.metadata ?? {}),
+                ...updates
+            };
+        } else {
+            // Apply defaults when metadata is missing or invalid
+            block.metadata = {
+                ...this.defaultConfig(),
+                ...updates
+            };
+        }
     }
 
     applyChangesToBlock(block: DeepnoteBlock, _cell: NotebookCellData): void {

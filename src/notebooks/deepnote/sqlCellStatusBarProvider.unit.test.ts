@@ -348,6 +348,168 @@ suite('SqlCellStatusBarProvider', () => {
             verify(mockedVSCodeNamespaces.commands.registerCommand('deepnote.switchSqlIntegration', anything())).once();
         });
 
+        test('updateSqlVariableName command handler falls back to active cell when no cell provided', async () => {
+            let commandHandler: ((cell?: NotebookCell) => Promise<void>) | undefined;
+            when(
+                mockedVSCodeNamespaces.commands.registerCommand('deepnote.updateSqlVariableName', anything())
+            ).thenCall((_name, handler) => {
+                commandHandler = handler;
+                return { dispose: () => undefined };
+            });
+
+            const cell = createMockCell('sql', {});
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                notebook: {
+                    cellAt: (_index: number) => cell
+                },
+                selection: { start: 0 }
+            } as any);
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve('new_name'));
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+            activateProvider.activate();
+            assert.isDefined(commandHandler, 'Command handler should be registered');
+
+            // Invoke the handler without a cell argument
+            await commandHandler!();
+
+            // Verify that the active cell was used
+            verify(mockedVSCodeNamespaces.window.showInputBox(anything())).once();
+        });
+
+        test('updateSqlVariableName command handler shows error when no cell and no active editor', async () => {
+            let commandHandler: ((cell?: NotebookCell) => Promise<void>) | undefined;
+            when(
+                mockedVSCodeNamespaces.commands.registerCommand('deepnote.updateSqlVariableName', anything())
+            ).thenCall((_name, handler) => {
+                commandHandler = handler;
+                return { dispose: () => undefined };
+            });
+
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+
+            activateProvider.activate();
+            assert.isDefined(commandHandler, 'Command handler should be registered');
+
+            // Invoke the handler without a cell argument
+            await commandHandler!();
+
+            // Verify error message was shown
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(mockedVSCodeNamespaces.window.showInputBox(anything())).never();
+        });
+
+        test('updateSqlVariableName command handler shows error when no cell and no selection', async () => {
+            let commandHandler: ((cell?: NotebookCell) => Promise<void>) | undefined;
+            when(
+                mockedVSCodeNamespaces.commands.registerCommand('deepnote.updateSqlVariableName', anything())
+            ).thenCall((_name, handler) => {
+                commandHandler = handler;
+                return { dispose: () => undefined };
+            });
+
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                notebook: {},
+                selection: undefined
+            } as any);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+
+            activateProvider.activate();
+            assert.isDefined(commandHandler, 'Command handler should be registered');
+
+            // Invoke the handler without a cell argument
+            await commandHandler!();
+
+            // Verify error message was shown
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(mockedVSCodeNamespaces.window.showInputBox(anything())).never();
+        });
+
+        test('switchSqlIntegration command handler falls back to active cell when no cell provided', async () => {
+            let commandHandler: ((cell?: NotebookCell) => Promise<void>) | undefined;
+            when(mockedVSCodeNamespaces.commands.registerCommand('deepnote.switchSqlIntegration', anything())).thenCall(
+                (_name, handler) => {
+                    commandHandler = handler;
+                    return { dispose: () => undefined };
+                }
+            );
+
+            const notebookMetadata = { deepnoteProjectId: 'project-1' };
+            const cell = createMockCell('sql', {}, notebookMetadata);
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                notebook: {
+                    cellAt: (_index: number) => cell
+                },
+                selection: { start: 0 }
+            } as any);
+            when(activateNotebookManager.getOriginalProject('project-1')).thenReturn({
+                project: { integrations: [] }
+            } as any);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve(undefined)
+            );
+
+            activateProvider.activate();
+            assert.isDefined(commandHandler, 'Command handler should be registered');
+
+            // Invoke the handler without a cell argument
+            await commandHandler!();
+
+            // Verify that the active cell was used
+            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).once();
+        });
+
+        test('switchSqlIntegration command handler shows error when no cell and no active editor', async () => {
+            let commandHandler: ((cell?: NotebookCell) => Promise<void>) | undefined;
+            when(mockedVSCodeNamespaces.commands.registerCommand('deepnote.switchSqlIntegration', anything())).thenCall(
+                (_name, handler) => {
+                    commandHandler = handler;
+                    return { dispose: () => undefined };
+                }
+            );
+
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+
+            activateProvider.activate();
+            assert.isDefined(commandHandler, 'Command handler should be registered');
+
+            // Invoke the handler without a cell argument
+            await commandHandler!();
+
+            // Verify error message was shown
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
+        });
+
+        test('switchSqlIntegration command handler shows error when no cell and no selection', async () => {
+            let commandHandler: ((cell?: NotebookCell) => Promise<void>) | undefined;
+            when(mockedVSCodeNamespaces.commands.registerCommand('deepnote.switchSqlIntegration', anything())).thenCall(
+                (_name, handler) => {
+                    commandHandler = handler;
+                    return { dispose: () => undefined };
+                }
+            );
+
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                notebook: {},
+                selection: undefined
+            } as any);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+
+            activateProvider.activate();
+            assert.isDefined(commandHandler, 'Command handler should be registered');
+
+            // Invoke the handler without a cell argument
+            await commandHandler!();
+
+            // Verify error message was shown
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
+        });
+
         test('listens to integration storage changes', () => {
             const onDidChangeIntegrations = new EventEmitter<void>();
             when(activateIntegrationStorage.onDidChangeIntegrations).thenReturn(onDidChangeIntegrations.event);
@@ -641,52 +803,6 @@ suite('SqlCellStatusBarProvider', () => {
             when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
 
             await updateVariableNameHandler(cell);
-        });
-
-        test('falls back to active cell when no cell is provided', async () => {
-            const cell = createMockCell('sql', { deepnote_variable_name: 'old_name' });
-            const newVariableName = 'new_name';
-
-            // Mock active notebook editor
-            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
-                selection: { start: 0 },
-                notebook: {
-                    cellAt: (_index: number) => cell
-                }
-            } as any);
-
-            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(newVariableName));
-            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
-
-            // Call without providing a cell
-            await updateVariableNameHandler();
-
-            verify(mockedVSCodeNamespaces.window.showInputBox(anything())).once();
-            verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
-        });
-
-        test('shows error when no cell is provided and no active editor', async () => {
-            // Mock no active notebook editor
-            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
-
-            // Call without providing a cell
-            await updateVariableNameHandler();
-
-            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
-            verify(mockedVSCodeNamespaces.window.showInputBox(anything())).never();
-        });
-
-        test('shows error when no cell is provided and active editor has no selection', async () => {
-            // Mock active notebook editor without selection
-            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
-                selection: undefined
-            } as any);
-
-            // Call without providing a cell
-            await updateVariableNameHandler();
-
-            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
-            verify(mockedVSCodeNamespaces.window.showInputBox(anything())).never();
         });
     });
 
@@ -1024,68 +1140,6 @@ suite('SqlCellStatusBarProvider', () => {
             // DuckDB should still be in the list (added separately)
             const duckDbItem = quickPickItems.find((item) => item.id === DATAFRAME_SQL_INTEGRATION_ID);
             assert.isDefined(duckDbItem, 'DuckDB should still be in the list');
-        });
-
-        test('falls back to active cell when no cell is provided', async () => {
-            const notebookMetadata = { deepnoteProjectId: 'project-1' };
-            const cell = createMockCell('sql', { sql_integration_id: 'old-integration' }, notebookMetadata);
-            const newIntegrationId = 'new-integration';
-
-            // Mock active notebook editor
-            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
-                selection: { start: 0 },
-                notebook: {
-                    cellAt: (_index: number) => cell
-                }
-            } as any);
-
-            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
-                project: {
-                    integrations: [
-                        {
-                            id: newIntegrationId,
-                            name: 'New Integration',
-                            type: 'pgsql'
-                        }
-                    ]
-                }
-            } as any);
-
-            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
-            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
-                Promise.resolve({ id: newIntegrationId, label: 'New Integration' } as any)
-            );
-            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
-
-            // Call without providing a cell
-            await switchIntegrationHandler();
-
-            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).once();
-            verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
-        });
-
-        test('shows error when no cell is provided and no active editor', async () => {
-            // Mock no active notebook editor
-            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
-
-            // Call without providing a cell
-            await switchIntegrationHandler();
-
-            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
-            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
-        });
-
-        test('shows error when no cell is provided and active editor has no selection', async () => {
-            // Mock active notebook editor without selection
-            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
-                selection: undefined
-            } as any);
-
-            // Call without providing a cell
-            await switchIntegrationHandler();
-
-            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
-            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
         });
 
         test('does not update when selected integration is same as current', async () => {

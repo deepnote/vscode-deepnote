@@ -225,9 +225,160 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
         });
     });
 
+    suite('activate', () => {
+        setup(() => {
+            resetVSCodeMocks();
+            // Ensure all registration methods return proper disposables
+            when(
+                mockedVSCodeNamespaces.notebooks.registerNotebookCellStatusBarItemProvider(anything(), anything())
+            ).thenReturn({ dispose: () => undefined } as any);
+            when(mockedVSCodeNamespaces.commands.registerCommand(anything(), anything())).thenReturn({
+                dispose: () => undefined
+            } as any);
+            when(mockedVSCodeNamespaces.workspace.onDidChangeNotebookDocument(anything())).thenReturn({
+                dispose: () => undefined
+            } as any);
+        });
+
+        teardown(() => {
+            resetVSCodeMocks();
+        });
+
+        test('registers notebook cell status bar provider for deepnote notebooks', () => {
+            provider.activate();
+
+            verify(
+                mockedVSCodeNamespaces.notebooks.registerNotebookCellStatusBarItemProvider('deepnote', provider)
+            ).once();
+        });
+
+        test('registers deepnote.updateInputBlockVariableName command', () => {
+            provider.activate();
+
+            verify(
+                mockedVSCodeNamespaces.commands.registerCommand('deepnote.updateInputBlockVariableName', anything())
+            ).once();
+        });
+
+        test('updateInputBlockVariableName command handler falls back to active cell when no cell provided', async () => {
+            let commandHandler: ((cell?: NotebookCell) => Promise<void>) | undefined;
+            when(
+                mockedVSCodeNamespaces.commands.registerCommand('deepnote.updateInputBlockVariableName', anything())
+            ).thenCall((_name, handler) => {
+                commandHandler = handler;
+                return { dispose: () => undefined };
+            });
+
+            const cell = createMockCell({ __deepnotePocket: { type: 'input-text' } });
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                notebook: {
+                    cellAt: (_index: number) => cell
+                },
+                selection: { start: 0 }
+            } as any);
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve('new_name'));
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+            provider.activate();
+            expect(commandHandler).to.not.be.undefined;
+
+            // Invoke the handler without a cell argument
+            await commandHandler!();
+
+            // Verify that the active cell was used
+            verify(mockedVSCodeNamespaces.window.showInputBox(anything())).once();
+        });
+
+        test('updateInputBlockVariableName command handler shows error when no cell and no active editor', async () => {
+            let commandHandler: ((cell?: NotebookCell) => Promise<void>) | undefined;
+            when(
+                mockedVSCodeNamespaces.commands.registerCommand('deepnote.updateInputBlockVariableName', anything())
+            ).thenCall((_name, handler) => {
+                commandHandler = handler;
+                return { dispose: () => undefined };
+            });
+
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+
+            provider.activate();
+            expect(commandHandler).to.not.be.undefined;
+
+            // Invoke the handler without a cell argument
+            await commandHandler!();
+
+            // Verify error message was shown
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(mockedVSCodeNamespaces.window.showInputBox(anything())).never();
+        });
+
+        test('updateInputBlockVariableName command handler shows error when no cell and no selection', async () => {
+            let commandHandler: ((cell?: NotebookCell) => Promise<void>) | undefined;
+            when(
+                mockedVSCodeNamespaces.commands.registerCommand('deepnote.updateInputBlockVariableName', anything())
+            ).thenCall((_name, handler) => {
+                commandHandler = handler;
+                return { dispose: () => undefined };
+            });
+
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                notebook: {},
+                selection: undefined
+            } as any);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+
+            provider.activate();
+            expect(commandHandler).to.not.be.undefined;
+
+            // Invoke the handler without a cell argument
+            await commandHandler!();
+
+            // Verify error message was shown
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(mockedVSCodeNamespaces.window.showInputBox(anything())).never();
+        });
+
+        test('registers workspace.onDidChangeNotebookDocument listener', () => {
+            provider.activate();
+
+            verify(mockedVSCodeNamespaces.workspace.onDidChangeNotebookDocument(anything())).once();
+        });
+
+        test('fires status bar update event when deepnote notebook changes', () => {
+            let changeHandler: ((e: any) => void) | undefined;
+            when(mockedVSCodeNamespaces.workspace.onDidChangeNotebookDocument(anything())).thenCall((handler) => {
+                changeHandler = handler;
+                return { dispose: () => undefined };
+            });
+
+            let eventFired = false;
+            provider.onDidChangeCellStatusBarItems(() => {
+                eventFired = true;
+            });
+
+            provider.activate();
+            expect(changeHandler).to.not.be.undefined;
+
+            // Fire the event with a deepnote notebook
+            changeHandler!({ notebook: { notebookType: 'deepnote' } });
+
+            expect(eventFired).to.be.true;
+        });
+    });
+
     suite('Command Handlers', () => {
         setup(() => {
             resetVSCodeMocks();
+            // Ensure all registration methods return proper disposables
+            when(
+                mockedVSCodeNamespaces.notebooks.registerNotebookCellStatusBarItemProvider(anything(), anything())
+            ).thenReturn({ dispose: () => undefined } as any);
+            when(mockedVSCodeNamespaces.commands.registerCommand(anything(), anything())).thenReturn({
+                dispose: () => undefined
+            } as any);
+            when(mockedVSCodeNamespaces.workspace.onDidChangeNotebookDocument(anything())).thenReturn({
+                dispose: () => undefined
+            } as any);
         });
 
         teardown(() => {
@@ -307,6 +458,37 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
                 verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
             });
 
+            test('command handler falls back to active cell when no cell provided', async () => {
+                let commandHandler: ((cell?: NotebookCell) => Promise<void>) | undefined;
+                when(mockedVSCodeNamespaces.commands.registerCommand('deepnote.checkboxToggle', anything())).thenCall(
+                    (_name, handler) => {
+                        commandHandler = handler;
+                        return { dispose: () => undefined };
+                    }
+                );
+
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-checkbox' },
+                    deepnote_variable_value: false
+                });
+                when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                    notebook: {
+                        cellAt: (_index: number) => cell
+                    },
+                    selection: { start: 0 }
+                } as any);
+                when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+                provider.activate();
+                expect(commandHandler).to.not.be.undefined;
+
+                // Invoke the handler without a cell argument
+                await commandHandler!();
+
+                // Verify that the active cell was used
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
+            });
+
             test('should toggle checkbox from true to false', async () => {
                 const cell = createMockCell({
                     __deepnotePocket: { type: 'input-checkbox' },
@@ -330,6 +512,20 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
                 await (provider as any).checkboxToggle(cell);
 
                 verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
+            });
+
+            test('should show error if workspace edit fails', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-checkbox' },
+                    deepnote_variable_value: false
+                });
+
+                when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(false));
+                when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+
+                await (provider as any).checkboxToggle(cell);
+
+                verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
             });
         });
 
@@ -442,6 +638,42 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
 
                 verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).once();
                 verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
+            });
+
+            test('command handler falls back to active cell when no cell provided', async () => {
+                let commandHandler: ((cell?: NotebookCell) => Promise<void>) | undefined;
+                when(
+                    mockedVSCodeNamespaces.commands.registerCommand('deepnote.selectInputChooseOption', anything())
+                ).thenCall((_name, handler) => {
+                    commandHandler = handler;
+                    return { dispose: () => undefined };
+                });
+
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-select' },
+                    deepnote_variable_select_type: 'from-options',
+                    deepnote_variable_options: ['option1', 'option2'],
+                    deepnote_allow_multiple_values: false
+                });
+                when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                    notebook: {
+                        cellAt: (_index: number) => cell
+                    },
+                    selection: { start: 0 }
+                } as any);
+                when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                    Promise.resolve({ label: 'option2' } as any)
+                );
+                when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+                provider.activate();
+                expect(commandHandler).to.not.be.undefined;
+
+                // Invoke the handler without a cell argument
+                await commandHandler!();
+
+                // Verify that the active cell was used
+                verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).once();
             });
 
             test('should not update if user cancels single select', async () => {
@@ -585,6 +817,42 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
 
                 verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
             });
+
+            test('validates empty date input', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-date' }
+                });
+
+                let validateInput: ((value: string) => string | undefined) | undefined;
+                when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenCall((options: any) => {
+                    validateInput = options.validateInput;
+                    return Promise.resolve(undefined);
+                });
+
+                await (provider as any).dateInputChooseDate(cell);
+
+                expect(validateInput).to.not.be.undefined;
+                const result = validateInput!('');
+                expect(result).to.not.be.undefined;
+            });
+
+            test('validates invalid date input', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-date' }
+                });
+
+                let validateInput: ((value: string) => string | undefined) | undefined;
+                when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenCall((options: any) => {
+                    validateInput = options.validateInput;
+                    return Promise.resolve(undefined);
+                });
+
+                await (provider as any).dateInputChooseDate(cell);
+
+                expect(validateInput).to.not.be.undefined;
+                const result = validateInput!('invalid-date');
+                expect(result).to.not.be.undefined;
+            });
         });
 
         suite('deepnote.dateRangeChooseStart', () => {
@@ -630,6 +898,42 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
                 verify(mockedVSCodeNamespaces.window.showWarningMessage(anything())).once();
                 verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
             });
+
+            test('validates empty start date input', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-date-range' }
+                });
+
+                let validateInput: ((value: string) => string | undefined) | undefined;
+                when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenCall((options: any) => {
+                    validateInput = options.validateInput;
+                    return Promise.resolve(undefined);
+                });
+
+                await (provider as any).dateRangeChooseStart(cell);
+
+                expect(validateInput).to.not.be.undefined;
+                const result = validateInput!('');
+                expect(result).to.not.be.undefined;
+            });
+
+            test('validates invalid start date input', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-date-range' }
+                });
+
+                let validateInput: ((value: string) => string | undefined) | undefined;
+                when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenCall((options: any) => {
+                    validateInput = options.validateInput;
+                    return Promise.resolve(undefined);
+                });
+
+                await (provider as any).dateRangeChooseStart(cell);
+
+                expect(validateInput).to.not.be.undefined;
+                const result = validateInput!('not-a-date');
+                expect(result).to.not.be.undefined;
+            });
         });
 
         suite('deepnote.dateRangeChooseEnd', () => {
@@ -674,6 +978,42 @@ suite('DeepnoteInputBlockCellStatusBarItemProvider', () => {
 
                 verify(mockedVSCodeNamespaces.window.showWarningMessage(anything())).once();
                 verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
+            });
+
+            test('validates empty end date input', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-date-range' }
+                });
+
+                let validateInput: ((value: string) => string | undefined) | undefined;
+                when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenCall((options: any) => {
+                    validateInput = options.validateInput;
+                    return Promise.resolve(undefined);
+                });
+
+                await (provider as any).dateRangeChooseEnd(cell);
+
+                expect(validateInput).to.not.be.undefined;
+                const result = validateInput!('');
+                expect(result).to.not.be.undefined;
+            });
+
+            test('validates invalid end date input', async () => {
+                const cell = createMockCell({
+                    __deepnotePocket: { type: 'input-date-range' }
+                });
+
+                let validateInput: ((value: string) => string | undefined) | undefined;
+                when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenCall((options: any) => {
+                    validateInput = options.validateInput;
+                    return Promise.resolve(undefined);
+                });
+
+                await (provider as any).dateRangeChooseEnd(cell);
+
+                expect(validateInput).to.not.be.undefined;
+                const result = validateInput!('bad-date');
+                expect(result).to.not.be.undefined;
             });
         });
     });

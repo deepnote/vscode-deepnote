@@ -471,6 +471,7 @@ export type LocalizedMessages = {
     comparisonValuePlaceholder: string;
     comparisonTitleLabel: string;
     comparisonTitlePlaceholder: string;
+    comparisonTitleHelp: string;
     comparisonFormatLabel: string;
     comparisonFormatHelp: string;
 };

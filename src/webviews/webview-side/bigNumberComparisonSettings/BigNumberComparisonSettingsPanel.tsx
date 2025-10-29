@@ -172,6 +172,9 @@ export const BigNumberComparisonSettingsPanel: React.FC<IBigNumberComparisonSett
                             onChange={handleComparisonTitleChange}
                             placeholder={getLocString('comparisonTitlePlaceholder', 'e.g., vs last month')}
                         />
+                        <div className="help-text">
+                            {getLocString('comparisonTitleHelp', 'You can use {{var}} syntax to reference variables')}
+                        </div>
                     </div>
 
                     <div className="form-section">

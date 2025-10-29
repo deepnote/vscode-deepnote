@@ -136,17 +136,16 @@ export class DeepnoteBigNumberCellStatusBarProvider
         const items: NotebookCellStatusBarItem[] = [];
         const metadata = cell.metadata as Record<string, unknown> | undefined;
 
-        // 1. Block type indicator with title
-        const title = (metadata?.deepnote_big_number_title as string) || '';
-        const blockTypeText = title ? `Big Number: ${title}` : 'Big Number';
+        // 1. Block type indicator
         items.push({
-            text: blockTypeText,
+            text: 'Big Number',
             alignment: 1, // NotebookCellStatusBarAlignment.Left
             priority: 100,
             tooltip: this.buildTooltip(metadata)
         });
 
         // 2. Title editor
+        const title = (metadata?.deepnote_big_number_title as string) || '';
         const titleText = title ? `$(edit) ${title}` : '$(edit) Set title';
         items.push({
             text: titleText,
@@ -162,10 +161,9 @@ export class DeepnoteBigNumberCellStatusBarProvider
 
         // 3. Format selector
         const format = (metadata?.deepnote_big_number_format as string) || 'number';
-        const formatIcon = this.getFormatIcon(format);
         const formatLabel = this.getFormatLabel(format);
         items.push({
-            text: `${formatIcon} ${formatLabel}`,
+            text: formatLabel,
             alignment: 1,
             priority: 90,
             tooltip: l10n.t('Click to change format'),
@@ -184,9 +182,9 @@ export class DeepnoteBigNumberCellStatusBarProvider
         let comparisonText: string;
         if (comparisonEnabled && comparisonType && comparisonValue) {
             const comparisonTypeLabel = comparisonType === 'percentage-change' ? '% change' : 'vs';
-            comparisonText = `$(graph) ${comparisonTypeLabel}: ${comparisonValue}`;
+            comparisonText = `Comparison: ${comparisonTypeLabel} ${comparisonValue}`;
         } else {
-            comparisonText = '$(graph) Add comparison';
+            comparisonText = 'Set up comparison';
         }
 
         items.push({
@@ -199,6 +197,13 @@ export class DeepnoteBigNumberCellStatusBarProvider
                 command: 'deepnote.configureBigNumberComparison',
                 arguments: [cell]
             }
+        });
+
+        // 5. Hint text on the right
+        items.push({
+            text: l10n.t('Expression to show'),
+            alignment: 2, // NotebookCellStatusBarAlignment.Right
+            priority: 100
         });
 
         return items;
@@ -223,17 +228,6 @@ export class DeepnoteBigNumberCellStatusBarProvider
         return lines.join('\n');
     }
 
-    private getFormatIcon(format: string): string {
-        switch (format) {
-            case 'currency':
-                return '$(symbol-currency)';
-            case 'percent':
-                return '$(symbol-misc)';
-            default:
-                return '$(symbol-number)';
-        }
-    }
-
     private getFormatLabel(format: string): string {
         switch (format) {
             case 'currency':
@@ -251,7 +245,7 @@ export class DeepnoteBigNumberCellStatusBarProvider
         const currentTitle = (metadata?.deepnote_big_number_title as string) || '';
 
         const newTitle = await window.showInputBox({
-            prompt: l10n.t('Enter title for big number'),
+            prompt: l10n.t('Enter title for big number. You can use {{var}} syntax to reference variables.'),
             value: currentTitle,
             placeHolder: l10n.t('e.g., Total Revenue')
         });
@@ -315,4 +309,3 @@ export class DeepnoteBigNumberCellStatusBarProvider
         this.comparisonSettingsWebview.dispose();
     }
 }
-

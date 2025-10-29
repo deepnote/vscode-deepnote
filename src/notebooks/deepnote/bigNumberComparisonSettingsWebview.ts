@@ -168,6 +168,7 @@ export class BigNumberComparisonSettingsWebviewProvider {
             comparisonValuePlaceholder: localize.BigNumberComparison.comparisonValuePlaceholder,
             comparisonTitleLabel: localize.BigNumberComparison.comparisonTitleLabel,
             comparisonTitlePlaceholder: localize.BigNumberComparison.comparisonTitlePlaceholder,
+            comparisonTitleHelp: localize.BigNumberComparison.comparisonTitleHelp,
             comparisonFormatLabel: localize.BigNumberComparison.comparisonFormatLabel,
             comparisonFormatHelp: localize.BigNumberComparison.comparisonFormatHelp,
             saveButton: localize.BigNumberComparison.saveButton,

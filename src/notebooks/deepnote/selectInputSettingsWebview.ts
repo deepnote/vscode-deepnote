@@ -87,8 +87,8 @@ export class SelectInputSettingsWebviewProvider {
         );
 
         // Send initial data
-        await this.sendInitialData();
         await this.sendLocStrings();
+        await this.sendInitialData();
 
         // Return a promise that resolves when the user saves or cancels
         return new Promise((resolve) => {

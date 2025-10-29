@@ -132,6 +132,8 @@ export class SelectInputSettingsWebviewProvider {
             fromVariable: localize.SelectInputSettings.fromVariable,
             fromVariableDescription: localize.SelectInputSettings.fromVariableDescription,
             variablePlaceholder: localize.SelectInputSettings.variablePlaceholder,
+            optionNameLabel: localize.SelectInputSettings.optionNameLabel,
+            variableNameLabel: localize.SelectInputSettings.variableNameLabel,
             removeOptionAriaLabel: localize.SelectInputSettings.removeOptionAriaLabel,
             saveButton: localize.SelectInputSettings.saveButton,
             cancelButton: localize.SelectInputSettings.cancelButton

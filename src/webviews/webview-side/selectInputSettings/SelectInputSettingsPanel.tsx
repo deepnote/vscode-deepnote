@@ -180,7 +180,7 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
 
                                 <div className="add-option-form">
                                     <label htmlFor="addOptionInput" className="visually-hidden">
-                                        Option name
+                                        {getLocString('optionNameLabel', 'Option name')}
                                     </label>
                                     <input
                                         type="text"
@@ -194,7 +194,7 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
                                             }
                                         }}
                                         placeholder={getLocString('addOptionPlaceholder', 'Add option...')}
-                                        aria-label="Option name"
+                                        aria-label={getLocString('optionNameLabel', 'Option name')}
                                     />
                                     <button type="button" onClick={handleAddOption}>
                                         {getLocString('addButton', 'Add')}
@@ -225,7 +225,7 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
                         {settings.selectType === 'from-variable' && (
                             <>
                                 <label htmlFor="variableNameInput" className="visually-hidden">
-                                    Variable name
+                                    {getLocString('variableNameLabel', 'Variable name')}
                                 </label>
                                 <input
                                     type="text"
@@ -234,7 +234,7 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
                                     value={settings.selectedVariable}
                                     onChange={handleVariableChange}
                                     placeholder={getLocString('variablePlaceholder', 'Variable name...')}
-                                    aria-label="Variable name"
+                                    aria-label={getLocString('variableNameLabel', 'Variable name')}
                                 />
                             </>
                         )}

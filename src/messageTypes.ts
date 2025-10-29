@@ -219,6 +219,8 @@ export type LocalizedMessages = {
     fromVariable: string;
     fromVariableDescription: string;
     variablePlaceholder: string;
+    optionNameLabel: string;
+    variableNameLabel: string;
     removeOptionAriaLabel: string;
     saveButton: string;
     cancelButton: string;

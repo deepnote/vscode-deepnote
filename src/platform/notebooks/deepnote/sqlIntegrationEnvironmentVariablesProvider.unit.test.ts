@@ -598,6 +598,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             const credentialsJson = JSON.parse(envVars['SQL_SNOWFLAKE_MINIMAL']!);
             // Should not include warehouse, database, or role in URL when not provided
             assert.strictEqual(credentialsJson.url, 'snowflake://user:pass@minimal-account?application=Deepnote');
+            assert.strictEqual(credentialsJson.param_style, 'format');
         });
 
         test('Skips unsupported Snowflake auth method (OKTA)', async () => {

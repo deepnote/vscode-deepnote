@@ -13,6 +13,6 @@ import { BaseError } from './types';
  */
 export class UnsupportedIntegrationError extends BaseError {
     constructor(message: string) {
-        super('unknown', message);
+        super('unsupported_integration', message);
     }
 }

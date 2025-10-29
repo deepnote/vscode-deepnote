@@ -213,6 +213,6 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             return 0;
         });
 
-        return sortedNotebooks[0] ? sortedNotebooks[0] : file.project.notebooks[0];
+        return sortedNotebooks[0];
     }
 }

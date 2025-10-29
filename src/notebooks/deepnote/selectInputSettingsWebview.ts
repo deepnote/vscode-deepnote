@@ -1,4 +1,5 @@
 import {
+    CancellationToken,
     Disposable,
     NotebookCell,
     NotebookEdit,
@@ -33,7 +34,7 @@ export class SelectInputSettingsWebviewProvider {
     /**
      * Show the select input settings webview
      */
-    public async show(cell: NotebookCell): Promise<SelectInputSettings | null> {
+    public async show(cell: NotebookCell, token?: CancellationToken): Promise<SelectInputSettings | null> {
         this.currentCell = cell;
 
         const column = window.activeTextEditor ? window.activeTextEditor.viewColumn : ViewColumn.One;
@@ -77,6 +78,21 @@ export class SelectInputSettingsWebviewProvider {
             this.disposables
         );
 
+        // Handle cancellation token if provided
+        let cancellationDisposable: Disposable | undefined;
+        if (token) {
+            cancellationDisposable = token.onCancellationRequested(() => {
+                // Only handle cancellation if this is still the current panel
+                if (this.currentPanelId === panelId) {
+                    if (this.resolvePromise) {
+                        this.resolvePromise(null);
+                        this.resolvePromise = undefined;
+                    }
+                    this.currentPanel?.dispose();
+                }
+            });
+        }
+
         // Reset when the current panel is closed
         // Guard with panel identity to prevent old panels from affecting new ones
         this.currentPanel.onDidDispose(
@@ -89,6 +105,8 @@ export class SelectInputSettingsWebviewProvider {
                         this.resolvePromise(null);
                         this.resolvePromise = undefined;
                     }
+                    // Clean up cancellation listener
+                    cancellationDisposable?.dispose();
                     this.disposables.forEach((d) => d.dispose());
                     this.disposables.length = 0;
                 }

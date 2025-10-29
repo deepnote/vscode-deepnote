@@ -53,87 +53,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
         disposableRegistry.push(this);
     }
 
-    private registerCommands(): void {
-        // Refresh command
-        this.disposables.push(
-            commands.registerCommand('deepnote.environments.refresh', () => {
-                this.treeDataProvider.refresh();
-            })
-        );
-
-        // Create environment command
-        this.disposables.push(
-            commands.registerCommand('deepnote.environments.create', async () => {
-                await this.createEnvironmentCommand();
-            })
-        );
-
-        // Start server command
-        this.disposables.push(
-            commands.registerCommand('deepnote.environments.start', async (item: DeepnoteEnvironmentTreeItem) => {
-                if (item?.environment) {
-                    await this.startServer(item.environment.id);
-                }
-            })
-        );
-
-        // Stop server command
-        this.disposables.push(
-            commands.registerCommand('deepnote.environments.stop', async (item: DeepnoteEnvironmentTreeItem) => {
-                if (item?.environment) {
-                    await this.stopServer(item.environment.id);
-                }
-            })
-        );
-
-        // Restart server command
-        this.disposables.push(
-            commands.registerCommand('deepnote.environments.restart', async (item: DeepnoteEnvironmentTreeItem) => {
-                if (item?.environment) {
-                    await this.restartServer(item.environment.id);
-                }
-            })
-        );
-
-        // Delete environment command
-        this.disposables.push(
-            commands.registerCommand('deepnote.environments.delete', async (item: DeepnoteEnvironmentTreeItem) => {
-                if (item?.environment) {
-                    await this.deleteEnvironmentCommand(item.environment.id);
-                }
-            })
-        );
-
-        // Edit name command
-        this.disposables.push(
-            commands.registerCommand('deepnote.environments.editName', async (item: DeepnoteEnvironmentTreeItem) => {
-                if (item?.environment) {
-                    await this.editEnvironmentName(item.environment.id);
-                }
-            })
-        );
-
-        // Manage packages command
-        this.disposables.push(
-            commands.registerCommand(
-                'deepnote.environments.managePackages',
-                async (item: DeepnoteEnvironmentTreeItem) => {
-                    if (item?.environment) {
-                        await this.managePackages(item.environment.id);
-                    }
-                }
-            )
-        );
-
-        // Switch environment for notebook command
-        this.disposables.push(
-            commands.registerCommand('deepnote.environments.selectForNotebook', async () => {
-                await this.selectEnvironmentForNotebook();
-            })
-        );
-    }
-
-    private async createEnvironmentCommand(): Promise<void> {
+    public async createEnvironmentCommand(): Promise<void> {
         try {
             // Step 1: Select Python interpreter
             const api = await this.pythonApiProvider.getNewApi();
@@ -269,85 +189,87 @@ export class DeepnoteEnvironmentsView implements Disposable {
         }
     }
 
-    private async startServer(environmentId: string): Promise<void> {
-        const config = this.environmentManager.getEnvironment(environmentId);
-        if (!config) {
-            return;
-        }
+    private registerCommands(): void {
+        // Refresh command
+        this.disposables.push(
+            commands.registerCommand('deepnote.environments.refresh', () => {
+                this.treeDataProvider.refresh();
+            })
+        );
 
-        try {
-            await window.withProgress(
-                {
-                    location: ProgressLocation.Notification,
-                    title: l10n.t('Starting server for "{0}"...', config.name),
-                    cancellable: true
-                },
-                async (_progress, token) => {
-                    await this.environmentManager.startServer(environmentId, token);
-                    logger.info(`Started server for environment: ${environmentId}`);
+        // Create environment command
+        this.disposables.push(
+            commands.registerCommand('deepnote.environments.create', async () => {
+                await this.createEnvironmentCommand();
+            })
+        );
+
+        // Start server command
+        this.disposables.push(
+            commands.registerCommand('deepnote.environments.start', async (item: DeepnoteEnvironmentTreeItem) => {
+                if (item?.environment) {
+                    await this.startServer(item.environment.id);
                 }
-            );
+            })
+        );
 
-            void window.showInformationMessage(l10n.t('Server started for "{0}"', config.name));
-        } catch (error) {
-            logger.error('Failed to start server', error);
-            void window.showErrorMessage(l10n.t('Failed to start server. See output for details.'));
-        }
+        // Stop server command
+        this.disposables.push(
+            commands.registerCommand('deepnote.environments.stop', async (item: DeepnoteEnvironmentTreeItem) => {
+                if (item?.environment) {
+                    await this.stopServer(item.environment.id);
+                }
+            })
+        );
+
+        // Restart server command
+        this.disposables.push(
+            commands.registerCommand('deepnote.environments.restart', async (item: DeepnoteEnvironmentTreeItem) => {
+                if (item?.environment) {
+                    await this.restartServer(item.environment.id);
+                }
+            })
+        );
+
+        // Delete environment command
+        this.disposables.push(
+            commands.registerCommand('deepnote.environments.delete', async (item: DeepnoteEnvironmentTreeItem) => {
+                if (item?.environment) {
+                    await this.deleteEnvironmentCommand(item.environment.id);
+                }
+            })
+        );
+
+        // Edit name command
+        this.disposables.push(
+            commands.registerCommand('deepnote.environments.editName', async (item: DeepnoteEnvironmentTreeItem) => {
+                if (item?.environment) {
+                    await this.editEnvironmentName(item.environment.id);
+                }
+            })
+        );
+
+        // Manage packages command
+        this.disposables.push(
+            commands.registerCommand(
+                'deepnote.environments.managePackages',
+                async (item: DeepnoteEnvironmentTreeItem) => {
+                    if (item?.environment) {
+                        await this.managePackages(item.environment.id);
+                    }
+                }
+            )
+        );
+
+        // Switch environment for notebook command
+        this.disposables.push(
+            commands.registerCommand('deepnote.environments.selectForNotebook', async () => {
+                await this.selectEnvironmentForNotebook();
+            })
+        );
     }
 
-    private async stopServer(environmentId: string): Promise<void> {
-        const config = this.environmentManager.getEnvironment(environmentId);
-        if (!config) {
-            return;
-        }
-
-        try {
-            await window.withProgress(
-                {
-                    location: ProgressLocation.Notification,
-                    title: l10n.t('Stopping server for "{0}"...', config.name),
-                    cancellable: true
-                },
-                async (_progress, token) => {
-                    await this.environmentManager.stopServer(environmentId, token);
-                    logger.info(`Stopped server for environment: ${environmentId}`);
-                }
-            );
-
-            void window.showInformationMessage(l10n.t('Server stopped for "{0}"', config.name));
-        } catch (error) {
-            logger.error('Failed to stop server', error);
-            void window.showErrorMessage(l10n.t('Failed to stop server. See output for details.'));
-        }
-    }
-
-    private async restartServer(environmentId: string): Promise<void> {
-        const config = this.environmentManager.getEnvironment(environmentId);
-        if (!config) {
-            return;
-        }
-
-        try {
-            await window.withProgress(
-                {
-                    location: ProgressLocation.Notification,
-                    title: l10n.t('Restarting server for "{0}"...', config.name),
-                    cancellable: true
-                },
-                async (_progress, token) => {
-                    await this.environmentManager.restartServer(environmentId, token);
-                    logger.info(`Restarted server for environment: ${environmentId}`);
-                }
-            );
-
-            void window.showInformationMessage(l10n.t('Server restarted for "{0}"', config.name));
-        } catch (error) {
-            logger.error('Failed to restart server', error);
-            void window.showErrorMessage(l10n.t('Failed to restart server. See output for details.'));
-        }
-    }
-
-    private async deleteEnvironmentCommand(environmentId: string): Promise<void> {
+    public async deleteEnvironmentCommand(environmentId: string): Promise<void> {
         const config = this.environmentManager.getEnvironment(environmentId);
         if (!config) {
             return;
@@ -393,99 +315,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
         }
     }
 
-    public async editEnvironmentName(environmentId: string): Promise<void> {
-        const config = this.environmentManager.getEnvironment(environmentId);
-        if (!config) {
-            return;
-        }
-
-        const newName = await window.showInputBox({
-            prompt: l10n.t('Enter a new name for this environment'),
-            value: config.name,
-            validateInput: (value: string) => {
-                if (!value || value.trim().length === 0) {
-                    return l10n.t('Name cannot be empty');
-                }
-                return undefined;
-            }
-        });
-
-        if (!newName || newName === config.name) {
-            return;
-        }
-
-        try {
-            await this.environmentManager.updateEnvironment(environmentId, {
-                name: newName.trim()
-            });
-
-            logger.info(`Renamed environment ${environmentId} to "${newName}"`);
-            void window.showInformationMessage(l10n.t('Environment renamed to "{0}"', newName));
-        } catch (error) {
-            logger.error('Failed to rename environment', error);
-            void window.showErrorMessage(l10n.t('Failed to rename environment. See output for details.'));
-        }
-    }
-
-    private async managePackages(environmentId: string): Promise<void> {
-        const config = this.environmentManager.getEnvironment(environmentId);
-        if (!config) {
-            return;
-        }
-
-        // Show input box for package names
-        const packagesInput = await window.showInputBox({
-            prompt: l10n.t('Enter packages to install (comma-separated)'),
-            placeHolder: l10n.t('e.g., pandas, numpy, matplotlib'),
-            value: config.packages?.join(', ') || '',
-            validateInput: (value: string) => {
-                if (!value || value.trim().length === 0) {
-                    return l10n.t('Please enter at least one package');
-                }
-                const packages = value.split(',').map((p: string) => p.trim());
-                for (const pkg of packages) {
-                    const isValid =
-                        /^[A-Za-z0-9._\-]+(\[[A-Za-z0-9_,.\-]+\])?(\s*(==|>=|<=|~=|>|<)\s*[A-Za-z0-9.*+!\-_.]+)?(?:\s*;.+)?$/.test(
-                            pkg
-                        );
-                    if (!isValid) {
-                        return l10n.t('Invalid package name: {0}', pkg);
-                    }
-                }
-                return undefined;
-            }
-        });
-
-        if (!packagesInput) {
-            return;
-        }
-
-        const packages = packagesInput
-            .split(',')
-            .map((p: string) => p.trim())
-            .filter((p: string) => p.length > 0);
-
-        try {
-            await window.withProgress(
-                {
-                    location: ProgressLocation.Notification,
-                    title: l10n.t('Updating packages for "{0}"...', config.name),
-                    cancellable: false
-                },
-                async () => {
-                    await this.environmentManager.updateEnvironment(environmentId, { packages });
-                    logger.info(`Updated packages for environment ${environmentId}`);
-                }
-            );
-
-            void window.showInformationMessage(l10n.t('Packages updated for "{0}"', config.name));
-        } catch (error) {
-            logger.error('Failed to update packages', error);
-            void window.showErrorMessage(l10n.t('Failed to update packages. See output for details.'));
-        }
-    }
-
-    private async selectEnvironmentForNotebook(): Promise<void> {
+    public async selectEnvironmentForNotebook(): Promise<void> {
         // Get the active notebook
         const activeNotebook = window.activeNotebookEditor?.notebook;
         if (!activeNotebook || activeNotebook.notebookType !== 'deepnote') {
@@ -621,6 +451,176 @@ export class DeepnoteEnvironmentsView implements Disposable {
         } catch (error) {
             logger.error('Failed to switch environment', error);
             void window.showErrorMessage(l10n.t('Failed to switch environment. See output for details.'));
+        }
+    }
+
+    private async startServer(environmentId: string): Promise<void> {
+        const config = this.environmentManager.getEnvironment(environmentId);
+        if (!config) {
+            return;
+        }
+
+        try {
+            await window.withProgress(
+                {
+                    location: ProgressLocation.Notification,
+                    title: l10n.t('Starting server for "{0}"...', config.name),
+                    cancellable: true
+                },
+                async (_progress, token) => {
+                    await this.environmentManager.startServer(environmentId, token);
+                    logger.info(`Started server for environment: ${environmentId}`);
+                }
+            );
+
+            void window.showInformationMessage(l10n.t('Server started for "{0}"', config.name));
+        } catch (error) {
+            logger.error('Failed to start server', error);
+            void window.showErrorMessage(l10n.t('Failed to start server. See output for details.'));
+        }
+    }
+
+    private async stopServer(environmentId: string): Promise<void> {
+        const config = this.environmentManager.getEnvironment(environmentId);
+        if (!config) {
+            return;
+        }
+
+        try {
+            await window.withProgress(
+                {
+                    location: ProgressLocation.Notification,
+                    title: l10n.t('Stopping server for "{0}"...', config.name),
+                    cancellable: true
+                },
+                async (_progress, token) => {
+                    await this.environmentManager.stopServer(environmentId, token);
+                    logger.info(`Stopped server for environment: ${environmentId}`);
+                }
+            );
+
+            void window.showInformationMessage(l10n.t('Server stopped for "{0}"', config.name));
+        } catch (error) {
+            logger.error('Failed to stop server', error);
+            void window.showErrorMessage(l10n.t('Failed to stop server. See output for details.'));
+        }
+    }
+
+    private async restartServer(environmentId: string): Promise<void> {
+        const config = this.environmentManager.getEnvironment(environmentId);
+        if (!config) {
+            return;
+        }
+
+        try {
+            await window.withProgress(
+                {
+                    location: ProgressLocation.Notification,
+                    title: l10n.t('Restarting server for "{0}"...', config.name),
+                    cancellable: true
+                },
+                async (_progress, token) => {
+                    await this.environmentManager.restartServer(environmentId, token);
+                    logger.info(`Restarted server for environment: ${environmentId}`);
+                }
+            );
+
+            void window.showInformationMessage(l10n.t('Server restarted for "{0}"', config.name));
+        } catch (error) {
+            logger.error('Failed to restart server', error);
+            void window.showErrorMessage(l10n.t('Failed to restart server. See output for details.'));
+        }
+    }
+
+    public async editEnvironmentName(environmentId: string): Promise<void> {
+        const config = this.environmentManager.getEnvironment(environmentId);
+        if (!config) {
+            return;
+        }
+
+        const newName = await window.showInputBox({
+            prompt: l10n.t('Enter a new name for this environment'),
+            value: config.name,
+            validateInput: (value: string) => {
+                if (!value || value.trim().length === 0) {
+                    return l10n.t('Name cannot be empty');
+                }
+                return undefined;
+            }
+        });
+
+        if (!newName || newName === config.name) {
+            return;
+        }
+
+        try {
+            await this.environmentManager.updateEnvironment(environmentId, {
+                name: newName.trim()
+            });
+
+            logger.info(`Renamed environment ${environmentId} to "${newName}"`);
+            void window.showInformationMessage(l10n.t('Environment renamed to "{0}"', newName));
+        } catch (error) {
+            logger.error('Failed to rename environment', error);
+            void window.showErrorMessage(l10n.t('Failed to rename environment. See output for details.'));
+        }
+    }
+
+    private async managePackages(environmentId: string): Promise<void> {
+        const config = this.environmentManager.getEnvironment(environmentId);
+        if (!config) {
+            return;
+        }
+
+        // Show input box for package names
+        const packagesInput = await window.showInputBox({
+            prompt: l10n.t('Enter packages to install (comma-separated)'),
+            placeHolder: l10n.t('e.g., pandas, numpy, matplotlib'),
+            value: config.packages?.join(', ') || '',
+            validateInput: (value: string) => {
+                if (!value || value.trim().length === 0) {
+                    return l10n.t('Please enter at least one package');
+                }
+                const packages = value.split(',').map((p: string) => p.trim());
+                for (const pkg of packages) {
+                    const isValid =
+                        /^[A-Za-z0-9._\-]+(\[[A-Za-z0-9_,.\-]+\])?(\s*(==|>=|<=|~=|>|<)\s*[A-Za-z0-9.*+!\-_.]+)?(?:\s*;.+)?$/.test(
+                            pkg
+                        );
+                    if (!isValid) {
+                        return l10n.t('Invalid package name: {0}', pkg);
+                    }
+                }
+                return undefined;
+            }
+        });
+
+        if (!packagesInput) {
+            return;
+        }
+
+        const packages = packagesInput
+            .split(',')
+            .map((p: string) => p.trim())
+            .filter((p: string) => p.length > 0);
+
+        try {
+            await window.withProgress(
+                {
+                    location: ProgressLocation.Notification,
+                    title: l10n.t('Updating packages for "{0}"...', config.name),
+                    cancellable: false
+                },
+                async () => {
+                    await this.environmentManager.updateEnvironment(environmentId, { packages });
+                    logger.info(`Updated packages for environment ${environmentId}`);
+                }
+            );
+
+            void window.showInformationMessage(l10n.t('Packages updated for "{0}"', config.name));
+        } catch (error) {
+            logger.error('Failed to update packages', error);
+            void window.showErrorMessage(l10n.t('Failed to update packages. See output for details.'));
         }
     }
 

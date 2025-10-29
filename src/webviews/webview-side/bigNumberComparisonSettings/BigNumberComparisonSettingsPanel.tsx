@@ -19,6 +19,7 @@ export const BigNumberComparisonSettingsPanel: React.FC<IBigNumberComparisonSett
         comparisonTitle: '',
         comparisonFormat: ''
     });
+    const [initialized, setInitialized] = React.useState(false);
 
     React.useEffect(() => {
         const handleMessage = (event: MessageEvent<WebviewMessage>) => {
@@ -27,6 +28,7 @@ export const BigNumberComparisonSettingsPanel: React.FC<IBigNumberComparisonSett
             switch (message.type) {
                 case 'init':
                     setSettings(message.settings);
+                    setInitialized(true);
                     break;
 
                 case 'locInit':
@@ -91,6 +93,10 @@ export const BigNumberComparisonSettingsPanel: React.FC<IBigNumberComparisonSett
             type: 'cancel'
         });
     };
+
+    if (!initialized) {
+        return <div className={`big-number-comparison-settings-panel theme-${baseTheme}`}>Loading...</div>;
+    }
 
     return (
         <div className={`big-number-comparison-settings-panel theme-${baseTheme}`}>
@@ -200,4 +206,3 @@ export const BigNumberComparisonSettingsPanel: React.FC<IBigNumberComparisonSett
         </div>
     );
 };
-

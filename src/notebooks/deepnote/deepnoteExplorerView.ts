@@ -789,39 +789,47 @@ export class DeepnoteExplorerView {
             return;
         }
 
-        const notebook = treeItem.data as DeepnoteNotebook;
-        const currentName = notebook.name;
-
-        const newName = await window.showInputBox({
-            prompt: l10n.t('Enter new notebook name'),
-            value: currentName,
-            validateInput: (value) => {
-                if (!value || value.trim().length === 0) {
-                    return l10n.t('Notebook name cannot be empty');
-                }
-                return null;
-            }
-        });
-
-        if (!newName || newName === currentName) {
-            return;
-        }
-
         try {
             const fileUri = Uri.file(treeItem.context.filePath);
             const projectData = await this.readDeepnoteProjectFile(fileUri);
-
             if (!projectData?.project?.notebooks) {
                 await window.showErrorMessage(l10n.t('Invalid Deepnote file format'));
                 return;
             }
-
             const targetNotebook = projectData.project.notebooks.find(
                 (nb: DeepnoteNotebook) => nb.id === treeItem.context.notebookId
             );
 
             if (!targetNotebook) {
                 await window.showErrorMessage(l10n.t('Notebook not found'));
+                return;
+            }
+
+            const itemNotebook = treeItem.data as DeepnoteNotebook;
+            const currentName = itemNotebook.name;
+
+            if (targetNotebook.id !== itemNotebook.id) {
+                await window.showErrorMessage(l10n.t('Selected notebook is not the target notebook'));
+                return;
+            }
+
+            const existingNames = new Set(projectData.project.notebooks.map((nb: DeepnoteNotebook) => nb.name));
+
+            const newName = await window.showInputBox({
+                prompt: l10n.t('Enter new notebook name'),
+                value: currentName,
+                validateInput: (value) => {
+                    if (!value || value.trim().length === 0) {
+                        return l10n.t('Notebook name cannot be empty');
+                    }
+                    if (existingNames.has(value)) {
+                        return l10n.t('A notebook with this name already exists');
+                    }
+                    return null;
+                }
+            });
+
+            if (!newName || newName === currentName) {
                 return;
             }
 

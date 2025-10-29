@@ -31,7 +31,7 @@ project:
   name: Test Project
   notebooks:
     - id: test-notebook-id
-      title: Test Notebook
+      name: Test Notebook
       blocks: []
 `;
 

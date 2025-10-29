@@ -23,6 +23,26 @@ export type SelectInputWebviewMessage =
     | { type: 'locInit'; locStrings: Record<string, string> }
     | { type: 'cancel' };
 
+/**
+ * Settings for big number comparison
+ */
+export interface BigNumberComparisonSettings {
+    enabled: boolean;
+    comparisonType: 'percentage-change' | 'absolute-value' | '';
+    comparisonValue: string;
+    comparisonTitle: string;
+    comparisonFormat: string;
+}
+
+/**
+ * Message types for big number comparison settings webview
+ */
+export type BigNumberComparisonWebviewMessage =
+    | { type: 'init'; settings: BigNumberComparisonSettings }
+    | { type: 'save'; settings: BigNumberComparisonSettings }
+    | { type: 'locInit'; locStrings: Record<string, string> }
+    | { type: 'cancel' };
+
 export const IIntegrationStorage = Symbol('IIntegrationStorage');
 export interface IIntegrationStorage extends IDisposable {
     /**

@@ -1,10 +1,8 @@
 import { NotebookCellData, NotebookCellKind } from 'vscode';
-import { z } from 'zod';
 
 import type { BlockConverter } from './blockConverter';
 import type { DeepnoteBlock } from '../../../platform/deepnote/deepnoteTypes';
 import { DeepnoteBigNumberMetadataSchema } from '../deepnoteSchemas';
-import { parseJsonWithFallback } from '../dataConversionUtils';
 import { DEEPNOTE_VSCODE_RAW_CONTENT_KEY } from './constants';
 
 const DEFAULT_BIG_NUMBER_CONFIG = DeepnoteBigNumberMetadataSchema.parse({});
@@ -13,25 +11,31 @@ export class ChartBigNumberBlockConverter implements BlockConverter {
     applyChangesToBlock(block: DeepnoteBlock, cell: NotebookCellData): void {
         block.content = '';
 
-        const config = DeepnoteBigNumberMetadataSchema.safeParse(parseJsonWithFallback(cell.value));
-
-        if (config.success !== true) {
-            block.metadata = {
-                ...block.metadata,
-                [DEEPNOTE_VSCODE_RAW_CONTENT_KEY]: cell.value
-            };
-
-            return;
-        }
+        // Parse the cell value as the value expression
+        const valueExpression = cell.value.trim();
 
         if (block.metadata != null) {
             delete block.metadata[DEEPNOTE_VSCODE_RAW_CONTENT_KEY];
         }
 
-        block.metadata = {
-            ...(block.metadata ?? {}),
-            ...config.data
-        };
+        // Check if existing metadata is valid
+        const existingMetadata = DeepnoteBigNumberMetadataSchema.safeParse(block.metadata);
+        const hasValidMetadata =
+            existingMetadata.success && block.metadata != null && Object.keys(block.metadata).length > 0;
+
+        if (hasValidMetadata) {
+            // Preserve existing metadata and only update the value
+            block.metadata = {
+                ...(block.metadata ?? {}),
+                deepnote_big_number_value: valueExpression
+            };
+        } else {
+            // Apply defaults when metadata is missing or invalid
+            block.metadata = {
+                ...DEFAULT_BIG_NUMBER_CONFIG,
+                deepnote_big_number_value: valueExpression
+            };
+        }
     }
 
     canConvert(blockType: string): boolean {
@@ -39,7 +43,6 @@ export class ChartBigNumberBlockConverter implements BlockConverter {
     }
 
     convertToCell(block: DeepnoteBlock): NotebookCellData {
-        const deepnoteJupyterRawContentResult = z.string().safeParse(block.metadata?.[DEEPNOTE_VSCODE_RAW_CONTENT_KEY]);
         const deepnoteBigNumberMetadataResult = DeepnoteBigNumberMetadataSchema.safeParse(block.metadata);
 
         if (deepnoteBigNumberMetadataResult.error != null) {
@@ -47,13 +50,12 @@ export class ChartBigNumberBlockConverter implements BlockConverter {
             console.debug('Metadata:', JSON.stringify(block.metadata));
         }
 
-        const configStr = deepnoteJupyterRawContentResult.success
-            ? deepnoteJupyterRawContentResult.data
-            : deepnoteBigNumberMetadataResult.success
-            ? JSON.stringify(deepnoteBigNumberMetadataResult.data, null, 2)
-            : JSON.stringify(DEFAULT_BIG_NUMBER_CONFIG, null, 2);
+        // Show the value expression as cell content
+        const valueExpression = deepnoteBigNumberMetadataResult.success
+            ? deepnoteBigNumberMetadataResult.data.deepnote_big_number_value
+            : DEFAULT_BIG_NUMBER_CONFIG.deepnote_big_number_value;
 
-        const cell = new NotebookCellData(NotebookCellKind.Code, configStr, 'json');
+        const cell = new NotebookCellData(NotebookCellKind.Code, valueExpression, 'python');
 
         return cell;
     }

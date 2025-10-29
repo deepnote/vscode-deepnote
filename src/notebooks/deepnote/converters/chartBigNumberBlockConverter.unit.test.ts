@@ -50,19 +50,8 @@ suite('ChartBigNumberBlockConverter', () => {
             const cell = converter.convertToCell(block);
 
             assert.strictEqual(cell.kind, NotebookCellKind.Code);
-            assert.strictEqual(cell.languageId, 'json');
-
-            const config = JSON.parse(cell.value);
-            assert.deepStrictEqual(config, {
-                deepnote_big_number_title: 'test title',
-                deepnote_big_number_value: 'b',
-                deepnote_big_number_format: 'number',
-                deepnote_big_number_comparison_type: 'percentage-change',
-                deepnote_big_number_comparison_title: 'vs a',
-                deepnote_big_number_comparison_value: 'a',
-                deepnote_big_number_comparison_format: '',
-                deepnote_big_number_comparison_enabled: true
-            });
+            assert.strictEqual(cell.languageId, 'python');
+            assert.strictEqual(cell.value, 'b');
         });
 
         test('converts absolute change comparison block to cell', () => {
@@ -103,19 +92,8 @@ suite('ChartBigNumberBlockConverter', () => {
             const cell = converter.convertToCell(block);
 
             assert.strictEqual(cell.kind, NotebookCellKind.Code);
-            assert.strictEqual(cell.languageId, 'json');
-
-            const config = JSON.parse(cell.value);
-            assert.deepStrictEqual(config, {
-                deepnote_big_number_title: 'absolute change 2',
-                deepnote_big_number_value: 'b',
-                deepnote_big_number_format: 'number',
-                deepnote_big_number_comparison_type: 'absolute-change',
-                deepnote_big_number_comparison_title: 'vs a',
-                deepnote_big_number_comparison_value: 'a',
-                deepnote_big_number_comparison_format: '',
-                deepnote_big_number_comparison_enabled: true
-            });
+            assert.strictEqual(cell.languageId, 'python');
+            assert.strictEqual(cell.value, 'b');
         });
 
         test('converts absolute value comparison block to cell', () => {
@@ -156,19 +134,8 @@ suite('ChartBigNumberBlockConverter', () => {
             const cell = converter.convertToCell(block);
 
             assert.strictEqual(cell.kind, NotebookCellKind.Code);
-            assert.strictEqual(cell.languageId, 'json');
-
-            const config = JSON.parse(cell.value);
-            assert.deepStrictEqual(config, {
-                deepnote_big_number_title: 'absolute change 2',
-                deepnote_big_number_value: 'b',
-                deepnote_big_number_format: 'number',
-                deepnote_big_number_comparison_type: 'absolute-value',
-                deepnote_big_number_comparison_title: 'vs a',
-                deepnote_big_number_comparison_value: 'a',
-                deepnote_big_number_comparison_format: '',
-                deepnote_big_number_comparison_enabled: true
-            });
+            assert.strictEqual(cell.languageId, 'python');
+            assert.strictEqual(cell.value, 'b');
         });
 
         test('converts disabled comparison block to cell', () => {
@@ -209,47 +176,11 @@ suite('ChartBigNumberBlockConverter', () => {
             const cell = converter.convertToCell(block);
 
             assert.strictEqual(cell.kind, NotebookCellKind.Code);
-            assert.strictEqual(cell.languageId, 'json');
-
-            const config = JSON.parse(cell.value);
-            assert.deepStrictEqual(config, {
-                deepnote_big_number_title: 'some title',
-                deepnote_big_number_value: 'b',
-                deepnote_big_number_format: 'plain',
-                deepnote_big_number_comparison_type: 'percentage-change',
-                deepnote_big_number_comparison_title: 'vs a',
-                deepnote_big_number_comparison_value: 'a',
-                deepnote_big_number_comparison_format: '',
-                deepnote_big_number_comparison_enabled: false
-            });
+            assert.strictEqual(cell.languageId, 'python');
+            assert.strictEqual(cell.value, 'b');
         });
 
-        test('prefers raw content when DEEPNOTE_VSCODE_RAW_CONTENT_KEY exists', () => {
-            const block: DeepnoteBlock = {
-                blockGroup: 'test-group',
-                content: '',
-                id: 'block-123',
-                metadata: {
-                    deepnote_big_number_title: 'metadata title',
-                    deepnote_big_number_value: 'metadata value',
-                    [DEEPNOTE_VSCODE_RAW_CONTENT_KEY]:
-                        '{"deepnote_big_number_title": "raw title", "deepnote_big_number_value": "raw value"}'
-                },
-                sortingKey: 'a0',
-                type: 'big-number'
-            };
-
-            const cell = converter.convertToCell(block);
-
-            assert.strictEqual(cell.kind, NotebookCellKind.Code);
-            assert.strictEqual(cell.languageId, 'json');
-            assert.strictEqual(
-                cell.value,
-                '{"deepnote_big_number_title": "raw title", "deepnote_big_number_value": "raw value"}'
-            );
-        });
-
-        test('uses default config when metadata is invalid', () => {
+        test('uses default value when metadata is invalid', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
                 content: '',
@@ -264,22 +195,11 @@ suite('ChartBigNumberBlockConverter', () => {
             const cell = converter.convertToCell(block);
 
             assert.strictEqual(cell.kind, NotebookCellKind.Code);
-            assert.strictEqual(cell.languageId, 'json');
-
-            const config = JSON.parse(cell.value);
-            assert.deepStrictEqual(config, {
-                deepnote_big_number_title: '',
-                deepnote_big_number_value: '',
-                deepnote_big_number_format: 'number',
-                deepnote_big_number_comparison_type: '',
-                deepnote_big_number_comparison_title: '',
-                deepnote_big_number_comparison_value: '',
-                deepnote_big_number_comparison_format: '',
-                deepnote_big_number_comparison_enabled: false
-            });
+            assert.strictEqual(cell.languageId, 'python');
+            assert.strictEqual(cell.value, '');
         });
 
-        test('uses default config when metadata is empty', () => {
+        test('uses default value when metadata is empty', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
                 content: '',
@@ -292,107 +212,57 @@ suite('ChartBigNumberBlockConverter', () => {
             const cell = converter.convertToCell(block);
 
             assert.strictEqual(cell.kind, NotebookCellKind.Code);
-            assert.strictEqual(cell.languageId, 'json');
-
-            const config = JSON.parse(cell.value);
-            assert.deepStrictEqual(config, {
-                deepnote_big_number_title: '',
-                deepnote_big_number_value: '',
-                deepnote_big_number_format: 'number',
-                deepnote_big_number_comparison_type: '',
-                deepnote_big_number_comparison_title: '',
-                deepnote_big_number_comparison_value: '',
-                deepnote_big_number_comparison_format: '',
-                deepnote_big_number_comparison_enabled: false
-            });
+            assert.strictEqual(cell.languageId, 'python');
+            assert.strictEqual(cell.value, '');
         });
     });
 
     suite('applyChangesToBlock', () => {
-        test('applies valid JSON config to block metadata', () => {
-            const block: DeepnoteBlock = {
-                blockGroup: 'test-group',
-                content: 'old content',
-                id: 'block-123',
-                metadata: { existing: 'value' },
-                sortingKey: 'a0',
-                type: 'big-number'
-            };
-            const configStr = JSON.stringify(
-                {
-                    deepnote_big_number_title: 'new title',
-                    deepnote_big_number_value: 'new value',
-                    deepnote_big_number_format: 'number',
-                    deepnote_big_number_comparison_type: 'percentage-change',
-                    deepnote_big_number_comparison_title: 'vs old',
-                    deepnote_big_number_comparison_value: 'old value',
-                    deepnote_big_number_comparison_format: '',
-                    deepnote_big_number_comparison_enabled: true
-                },
-                null,
-                2
-            );
-            const cell = new NotebookCellData(NotebookCellKind.Code, configStr, 'json');
-
-            converter.applyChangesToBlock(block, cell);
-
-            assert.strictEqual(block.content, '');
-            assert.deepStrictEqual(block.metadata, {
-                existing: 'value',
-                deepnote_big_number_title: 'new title',
-                deepnote_big_number_value: 'new value',
-                deepnote_big_number_format: 'number',
-                deepnote_big_number_comparison_type: 'percentage-change',
-                deepnote_big_number_comparison_title: 'vs old',
-                deepnote_big_number_comparison_value: 'old value',
-                deepnote_big_number_comparison_format: '',
-                deepnote_big_number_comparison_enabled: true
-            });
-        });
-
-        test('stores invalid JSON as raw content', () => {
-            const block: DeepnoteBlock = {
-                blockGroup: 'test-group',
-                content: 'old content',
-                id: 'block-123',
-                metadata: { existing: 'value' },
-                sortingKey: 'a0',
-                type: 'big-number'
-            };
-            const cell = new NotebookCellData(NotebookCellKind.Code, 'invalid json {', 'json');
-
-            converter.applyChangesToBlock(block, cell);
-
-            assert.strictEqual(block.content, '');
-            assert.strictEqual(block.metadata?.[DEEPNOTE_VSCODE_RAW_CONTENT_KEY], 'invalid json {');
-            assert.strictEqual(block.metadata?.existing, 'value');
-        });
-
-        test('removes DEEPNOTE_VSCODE_RAW_CONTENT_KEY when valid config is applied', () => {
+        test('applies value expression to block metadata', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
                 content: 'old content',
                 id: 'block-123',
                 metadata: {
                     existing: 'value',
+                    deepnote_big_number_title: 'old title',
+                    deepnote_big_number_value: 'old_value',
+                    deepnote_big_number_format: 'currency'
+                },
+                sortingKey: 'a0',
+                type: 'big-number'
+            };
+            const cell = new NotebookCellData(NotebookCellKind.Code, 'new_value', 'python');
+
+            converter.applyChangesToBlock(block, cell);
+
+            assert.strictEqual(block.content, '');
+            assert.strictEqual(block.metadata?.deepnote_big_number_value, 'new_value');
+            // Other metadata should be preserved
+            assert.strictEqual(block.metadata?.existing, 'value');
+            assert.strictEqual(block.metadata?.deepnote_big_number_title, 'old title');
+            assert.strictEqual(block.metadata?.deepnote_big_number_format, 'currency');
+        });
+
+        test('removes DEEPNOTE_VSCODE_RAW_CONTENT_KEY when value is applied', () => {
+            const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
+                content: 'old content',
+                id: 'block-123',
+                metadata: {
+                    existing: 'value',
+                    deepnote_big_number_value: 'old_value',
                     [DEEPNOTE_VSCODE_RAW_CONTENT_KEY]: 'old raw content'
                 },
                 sortingKey: 'a0',
                 type: 'big-number'
             };
-            const configStr = JSON.stringify(
-                {
-                    deepnote_big_number_title: 'new title'
-                },
-                null,
-                2
-            );
-            const cell = new NotebookCellData(NotebookCellKind.Code, configStr, 'json');
+            const cell = new NotebookCellData(NotebookCellKind.Code, 'new_value', 'python');
 
             converter.applyChangesToBlock(block, cell);
 
             assert.strictEqual(block.content, '');
-            assert.strictEqual(block.metadata?.deepnote_big_number_title, 'new title');
+            assert.strictEqual(block.metadata?.deepnote_big_number_value, 'new_value');
             assert.strictEqual(block.metadata?.existing, 'value');
             assert.doesNotHaveAnyKeys(block.metadata, [DEEPNOTE_VSCODE_RAW_CONTENT_KEY]);
         });
@@ -402,17 +272,46 @@ suite('ChartBigNumberBlockConverter', () => {
                 blockGroup: 'test-group',
                 content: 'old content',
                 id: 'block-123',
-                metadata: { existing: 'value' },
+                metadata: {
+                    existing: 'value',
+                    deepnote_big_number_value: 'old_value'
+                },
                 sortingKey: 'a0',
                 type: 'big-number'
             };
-            const cell = new NotebookCellData(NotebookCellKind.Code, '', 'json');
+            const cell = new NotebookCellData(NotebookCellKind.Code, '', 'python');
 
             converter.applyChangesToBlock(block, cell);
 
             assert.strictEqual(block.content, '');
-            assert.strictEqual(block.metadata?.[DEEPNOTE_VSCODE_RAW_CONTENT_KEY], '');
+            assert.strictEqual(block.metadata?.deepnote_big_number_value, '');
             assert.strictEqual(block.metadata?.existing, 'value');
+        });
+
+        test('applies defaults when metadata is missing', () => {
+            const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
+                content: 'old content',
+                id: 'block-123',
+                metadata: {},
+                sortingKey: 'a0',
+                type: 'big-number'
+            };
+            const cell = new NotebookCellData(NotebookCellKind.Code, 'my_value', 'python');
+
+            converter.applyChangesToBlock(block, cell);
+
+            assert.strictEqual(block.content, '');
+            assert.deepStrictEqual(block.metadata, {
+                deepnote_big_number_title: '',
+                deepnote_big_number_value: 'my_value',
+                deepnote_big_number_format: 'number',
+                deepnote_big_number_comparison_type: '',
+                deepnote_big_number_comparison_title: '',
+                deepnote_big_number_comparison_value: '',
+                deepnote_big_number_comparison_format: '',
+                deepnote_big_number_comparison_enabled: false
+            });
         });
 
         test('does not modify other block properties', () => {
@@ -421,42 +320,28 @@ suite('ChartBigNumberBlockConverter', () => {
                 content: 'old content',
                 executionCount: 5,
                 id: 'block-123',
-                metadata: { custom: 'value' },
+                metadata: {
+                    custom: 'value',
+                    deepnote_big_number_title: 'title',
+                    deepnote_big_number_value: 'old_value'
+                },
                 outputs: [],
                 sortingKey: 'a0',
                 type: 'big-number'
             };
-            const configStr = JSON.stringify(
-                {
-                    deepnote_big_number_title: 'new title'
-                },
-                null,
-                2
-            );
-            const cell = new NotebookCellData(NotebookCellKind.Code, configStr, 'json');
+            const cell = new NotebookCellData(NotebookCellKind.Code, 'new_value', 'python');
 
             converter.applyChangesToBlock(block, cell);
 
-            assert.deepStrictEqual(block, {
-                blockGroup: 'test-group',
-                content: '',
-                executionCount: 5,
-                id: 'block-123',
-                metadata: {
-                    custom: 'value',
-                    deepnote_big_number_title: 'new title',
-                    deepnote_big_number_comparison_enabled: false,
-                    deepnote_big_number_comparison_format: '',
-                    deepnote_big_number_comparison_title: '',
-                    deepnote_big_number_comparison_type: '',
-                    deepnote_big_number_comparison_value: '',
-                    deepnote_big_number_format: 'number',
-                    deepnote_big_number_value: ''
-                },
-                outputs: [],
-                sortingKey: 'a0',
-                type: 'big-number'
-            });
+            assert.strictEqual(block.blockGroup, 'test-group');
+            assert.strictEqual(block.content, '');
+            assert.strictEqual(block.executionCount, 5);
+            assert.strictEqual(block.id, 'block-123');
+            assert.strictEqual(block.sortingKey, 'a0');
+            assert.strictEqual(block.type, 'big-number');
+            assert.deepStrictEqual(block.outputs, []);
+            assert.strictEqual(block.metadata?.deepnote_big_number_value, 'new_value');
+            assert.strictEqual(block.metadata?.custom, 'value');
         });
     });
 });

@@ -100,6 +100,12 @@
                 "icon": "$(plug)"
             },
             {
+                "command": "deepnote.openInDeepnote",
+                "title": "Open in Deepnote",
+                "category": "Deepnote",
+                "icon": "$(globe)"
+            },
+            {
                 "command": "deepnote.newProject",
                 "title": "New project",
                 "category": "Deepnote",
@@ -761,6 +767,11 @@
                     "when": "editorFocus && editorLangId == python && jupyter.hascodecells && !notebookEditorFocused && isWorkspaceTrusted",
                     "command": "jupyter.exportfileasnotebook",
                     "group": "Jupyter3@2"
+                },
+                {
+                    "when": "resourceExtname == .deepnote",
+                    "command": "deepnote.openInDeepnote",
+                    "group": "navigation"
                 }
             ],
             "editor.interactiveWindow.context": [
@@ -1386,6 +1397,18 @@
             "type": "object",
             "title": "Deepnote",
             "properties": {
+                "deepnote.apiEndpoint": {
+                    "type": "string",
+                    "default": "https://deepnote.com",
+                    "description": "Deepnote API endpoint",
+                    "scope": "application"
+                },
+                "deepnote.disableSSLVerification": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Disable SSL certificate verification (for development only)",
+                    "scope": "application"
+                },
                 "jupyter.experiments.enabled": {
                     "type": "boolean",
                     "default": true,

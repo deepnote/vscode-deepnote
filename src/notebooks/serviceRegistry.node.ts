@@ -70,6 +70,7 @@ import { DeepnoteNotebookCommandListener } from './deepnote/deepnoteNotebookComm
 import { DeepnoteInputBlockCellStatusBarItemProvider } from './deepnote/deepnoteInputBlockCellStatusBarProvider';
 import { SqlIntegrationStartupCodeProvider } from './deepnote/integrations/sqlIntegrationStartupCodeProvider';
 import { DeepnoteCellCopyHandler } from './deepnote/deepnoteCellCopyHandler';
+import { OpenInDeepnoteHandler } from './deepnote/openInDeepnoteHandler.node';
 
 export function registerTypes(serviceManager: IServiceManager, isDevMode: boolean) {
     registerControllerTypes(serviceManager, isDevMode);
@@ -162,6 +163,10 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
         DeepnoteCellCopyHandler
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        OpenInDeepnoteHandler
     );
 
     // Deepnote kernel services

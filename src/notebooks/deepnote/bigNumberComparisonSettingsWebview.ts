@@ -118,9 +118,12 @@ export class BigNumberComparisonSettingsWebviewProvider {
             this.disposables
         );
 
-        // Send initial data
-        await this.sendLocStrings();
-        await this.sendInitialData();
+        // Send initial data after a small delay to ensure webview is ready
+        // This is necessary because postMessage can fail if sent before the webview is fully loaded
+        setTimeout(async () => {
+            await this.sendLocStrings();
+            await this.sendInitialData();
+        }, 100);
 
         // Return a promise that resolves when the user saves or cancels
         return new Promise((resolve) => {

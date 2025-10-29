@@ -9,10 +9,10 @@ import {
     Uri,
     FileSystemWatcher
 } from 'vscode';
-import * as yaml from 'js-yaml';
 
 import { DeepnoteTreeItem, DeepnoteTreeItemType, DeepnoteTreeItemContext } from './deepnoteTreeItem';
 import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
+import { readDeepnoteProjectFile } from './deepnoteProjectUtils';
 
 /**
  * Tree data provider for the Deepnote explorer view.
@@ -131,9 +131,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         }
 
         try {
-            const content = await workspace.fs.readFile(fileUri);
-            const contentString = Buffer.from(content).toString('utf8');
-            const project = yaml.load(contentString) as DeepnoteProject;
+            const project = await readDeepnoteProjectFile(fileUri);
 
             if (project && project.project && project.project.id) {
                 this.cachedProjects.set(filePath, project);

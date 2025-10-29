@@ -65,21 +65,23 @@ export const SelectInputSettingsPanel: React.FC<ISelectInputSettingsPanelProps> 
             return;
         }
 
-        // Normalize for comparison (case-insensitive)
-        const normalizedValue = trimmedValue.toLowerCase();
+        // Add the trimmed value if not duplicate, using functional updater to avoid race conditions
+        setSettings((prev) => {
+            // Normalize for comparison (case-insensitive)
+            const normalizedValue = trimmedValue.toLowerCase();
 
-        // Check if the normalized value is already present in options
-        const isDuplicate = settings.options.some((option) => option.toLowerCase() === normalizedValue);
+            // Check if the normalized value is already present in options
+            const isDuplicate = prev.options.some((option) => option.toLowerCase() === normalizedValue);
 
-        if (isDuplicate) {
-            return;
-        }
+            if (isDuplicate) {
+                return prev;
+            }
 
-        // Add the trimmed value and clear input
-        setSettings((prev) => ({
-            ...prev,
-            options: [...prev.options, trimmedValue]
-        }));
+            return {
+                ...prev,
+                options: [...prev.options, trimmedValue]
+            };
+        });
         setNewOption('');
     };
 

@@ -40,11 +40,12 @@ project:
 
             const result = await readDeepnoteProjectFile(testUri);
 
-            assert.isDefined(result.version);
+            assert.strictEqual(result.version, '1');
             assert.strictEqual(result.project.id, 'test-project-id');
             assert.strictEqual(result.project.name, 'Test Project');
             assert.strictEqual(result.project.notebooks.length, 1);
             assert.strictEqual(result.project.notebooks[0].id, 'test-notebook-id');
+            assert.strictEqual(result.project.notebooks[0].name, 'Test Notebook');
         });
 
         test('should throw error for invalid YAML content', async () => {

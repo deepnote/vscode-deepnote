@@ -49,11 +49,11 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        const unnamedIntegration = format('Unnamed PostgreSQL Integration ({0})', integrationId);
+        const unnamedIntegration = getLocString('integrationsUnnamedIntegration', 'Unnamed Integration ({0})');
 
         const config: PostgresIntegrationConfig = {
             id: integrationId,
-            name: (name || unnamedIntegration).trim(),
+            name: (name || format(unnamedIntegration, integrationId)).trim(),
             type: 'postgres',
             host,
             port: parseInt(port, 10),

@@ -131,6 +131,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsConfigureTitle: localize.Integrations.configureTitle,
             integrationsPostgresTypeLabel: localize.Integrations.postgresTypeLabel,
             integrationsBigQueryTypeLabel: localize.Integrations.bigQueryTypeLabel,
+            integrationsSnowflakeTypeLabel: localize.Integrations.snowflakeTypeLabel,
             integrationsCancel: localize.Integrations.cancel,
             integrationsSave: localize.Integrations.save,
             integrationsRequiredField: localize.Integrations.requiredField,
@@ -154,7 +155,34 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsBigQueryProjectIdPlaceholder: localize.Integrations.bigQueryProjectIdPlaceholder,
             integrationsBigQueryCredentialsLabel: localize.Integrations.bigQueryCredentialsLabel,
             integrationsBigQueryCredentialsPlaceholder: localize.Integrations.bigQueryCredentialsPlaceholder,
-            integrationsBigQueryCredentialsRequired: localize.Integrations.bigQueryCredentialsRequired
+            integrationsBigQueryCredentialsRequired: localize.Integrations.bigQueryCredentialsRequired,
+            integrationsSnowflakeNameLabel: localize.Integrations.snowflakeNameLabel,
+            integrationsSnowflakeNamePlaceholder: localize.Integrations.snowflakeNamePlaceholder,
+            integrationsSnowflakeAccountLabel: localize.Integrations.snowflakeAccountLabel,
+            integrationsSnowflakeAccountPlaceholder: localize.Integrations.snowflakeAccountPlaceholder,
+            integrationsSnowflakeAuthMethodLabel: localize.Integrations.snowflakeAuthMethodLabel,
+            integrationsSnowflakeAuthMethodSubLabel: localize.Integrations.snowflakeAuthMethodSubLabel,
+            integrationsSnowflakeAuthMethodUsernamePassword: localize.Integrations.snowflakeAuthMethodUsernamePassword,
+            integrationsSnowflakeAuthMethodKeyPair: localize.Integrations.snowflakeAuthMethodKeyPair,
+            integrationsSnowflakeUnsupportedAuthMethod: localize.Integrations.snowflakeUnsupportedAuthMethod,
+            integrationsSnowflakeUsernameLabel: localize.Integrations.snowflakeUsernameLabel,
+            integrationsSnowflakePasswordLabel: localize.Integrations.snowflakePasswordLabel,
+            integrationsSnowflakePasswordPlaceholder: localize.Integrations.snowflakePasswordPlaceholder,
+            integrationsSnowflakeServiceAccountUsernameLabel:
+                localize.Integrations.snowflakeServiceAccountUsernameLabel,
+            integrationsSnowflakeServiceAccountUsernameHelp: localize.Integrations.snowflakeServiceAccountUsernameHelp,
+            integrationsSnowflakePrivateKeyLabel: localize.Integrations.snowflakePrivateKeyLabel,
+            integrationsSnowflakePrivateKeyHelp: localize.Integrations.snowflakePrivateKeyHelp,
+            integrationsSnowflakePrivateKeyPlaceholder: localize.Integrations.snowflakePrivateKeyPlaceholder,
+            integrationsSnowflakePrivateKeyPassphraseLabel: localize.Integrations.snowflakePrivateKeyPassphraseLabel,
+            integrationsSnowflakePrivateKeyPassphraseHelp: localize.Integrations.snowflakePrivateKeyPassphraseHelp,
+            integrationsSnowflakeDatabaseLabel: localize.Integrations.snowflakeDatabaseLabel,
+            integrationsSnowflakeDatabasePlaceholder: localize.Integrations.snowflakeDatabasePlaceholder,
+            integrationsSnowflakeRoleLabel: localize.Integrations.snowflakeRoleLabel,
+            integrationsSnowflakeRolePlaceholder: localize.Integrations.snowflakeRolePlaceholder,
+            integrationsSnowflakeWarehouseLabel: localize.Integrations.snowflakeWarehouseLabel,
+            integrationsSnowflakeWarehousePlaceholder: localize.Integrations.snowflakeWarehousePlaceholder,
+            integrationsUnnamedIntegration: localize.Integrations.unnamedIntegration('{0}')
         };
 
         await this.currentPanel.webview.postMessage({

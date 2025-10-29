@@ -878,12 +878,11 @@ export namespace Integrations {
     export const snowflakeUsernameLabel = l10n.t('Username');
     export const snowflakeUsernamePlaceholder = l10n.t('user');
     export const snowflakePasswordLabel = l10n.t('Password');
-    export const snowflakePasswordPlaceholder = l10n.t('•••••');
+    export const snowflakePasswordPlaceholder = l10n.t('••••••••');
     export const snowflakeServiceAccountUsernameLabel = l10n.t('Service Account Username');
     export const snowflakeServiceAccountUsernameHelp = l10n.t(
         'The username of the service account that will be used to connect to Snowflake'
     );
-    export const snowflakeServiceAccountUsernamePlaceholder = l10n.t('');
     export const snowflakePrivateKeyLabel = l10n.t('Private Key');
     export const snowflakePrivateKeyHelp = l10n.t(
         'The private key in PEM format. Make sure to include the entire key, including BEGIN and END markers.'
@@ -893,7 +892,7 @@ export namespace Integrations {
     export const snowflakePrivateKeyPassphraseHelp = l10n.t(
         'If the private key is encrypted, provide the passphrase to decrypt it.'
     );
-    export const snowflakePrivateKeyPassphrasePlaceholder = l10n.t('Private key passphrase (optional)');
+    export const snowflakePrivateKeyPassphrasePlaceholder = l10n.t('');
     export const snowflakeDatabaseLabel = l10n.t('Database (optional)');
     export const snowflakeDatabasePlaceholder = l10n.t('');
     export const snowflakeRoleLabel = l10n.t('Role (optional)');

@@ -216,18 +216,15 @@ export type LocalizedMessages = {
     integrationsSnowflakeAuthMethodKeyPair: string;
     integrationsSnowflakeUnsupportedAuthMethod: string;
     integrationsSnowflakeUsernameLabel: string;
-    integrationsSnowflakeUsernamePlaceholder: string;
     integrationsSnowflakePasswordLabel: string;
     integrationsSnowflakePasswordPlaceholder: string;
     integrationsSnowflakeServiceAccountUsernameLabel: string;
     integrationsSnowflakeServiceAccountUsernameHelp: string;
-    integrationsSnowflakeServiceAccountUsernamePlaceholder: string;
     integrationsSnowflakePrivateKeyLabel: string;
     integrationsSnowflakePrivateKeyHelp: string;
     integrationsSnowflakePrivateKeyPlaceholder: string;
     integrationsSnowflakePrivateKeyPassphraseLabel: string;
     integrationsSnowflakePrivateKeyPassphraseHelp: string;
-    integrationsSnowflakePrivateKeyPassphrasePlaceholder: string;
     integrationsSnowflakeDatabaseLabel: string;
     integrationsSnowflakeDatabasePlaceholder: string;
     integrationsSnowflakeRoleLabel: string;

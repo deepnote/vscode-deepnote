@@ -172,7 +172,7 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
                     id="name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder={getLocString('integrationsSnowflakeNamePlaceholder', '[Demo] Snowflake')}
+                    placeholder={getLocString('integrationsSnowflakeNamePlaceholder', '')}
                     autoComplete="off"
                     disabled={isUnsupported}
                 />
@@ -228,7 +228,6 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
                                 id="username"
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
-                                placeholder={getLocString('integrationsSnowflakeUsernamePlaceholder', '')}
                                 autoComplete="username"
                                 required
                                 pattern=".*\S.*"
@@ -245,7 +244,7 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
                                 id="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                placeholder={getLocString('integrationsSnowflakePasswordPlaceholder', '•••••')}
+                                placeholder={getLocString('integrationsSnowflakePasswordPlaceholder', '••••••••')}
                                 autoComplete="current-password"
                                 required
                                 pattern=".*\S.*"
@@ -273,7 +272,6 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
                                 id="username"
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
-                                placeholder={getLocString('integrationsSnowflakeServiceAccountUsernamePlaceholder', '')}
                                 autoComplete="username"
                                 required
                                 pattern=".*\S.*"
@@ -328,10 +326,6 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
                                 id="privateKeyPassphrase"
                                 value={privateKeyPassphrase}
                                 onChange={(e) => setPrivateKeyPassphrase(e.target.value)}
-                                placeholder={getLocString(
-                                    'integrationsSnowflakePrivateKeyPassphrasePlaceholder',
-                                    'Private key passphrase (optional)'
-                                )}
                                 autoComplete="off"
                                 aria-describedby="privateKeyPassphrase-help"
                             />

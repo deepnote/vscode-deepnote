@@ -166,21 +166,16 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsSnowflakeAuthMethodKeyPair: localize.Integrations.snowflakeAuthMethodKeyPair,
             integrationsSnowflakeUnsupportedAuthMethod: localize.Integrations.snowflakeUnsupportedAuthMethod,
             integrationsSnowflakeUsernameLabel: localize.Integrations.snowflakeUsernameLabel,
-            integrationsSnowflakeUsernamePlaceholder: localize.Integrations.snowflakeUsernamePlaceholder,
             integrationsSnowflakePasswordLabel: localize.Integrations.snowflakePasswordLabel,
             integrationsSnowflakePasswordPlaceholder: localize.Integrations.snowflakePasswordPlaceholder,
             integrationsSnowflakeServiceAccountUsernameLabel:
                 localize.Integrations.snowflakeServiceAccountUsernameLabel,
             integrationsSnowflakeServiceAccountUsernameHelp: localize.Integrations.snowflakeServiceAccountUsernameHelp,
-            integrationsSnowflakeServiceAccountUsernamePlaceholder:
-                localize.Integrations.snowflakeServiceAccountUsernamePlaceholder,
             integrationsSnowflakePrivateKeyLabel: localize.Integrations.snowflakePrivateKeyLabel,
             integrationsSnowflakePrivateKeyHelp: localize.Integrations.snowflakePrivateKeyHelp,
             integrationsSnowflakePrivateKeyPlaceholder: localize.Integrations.snowflakePrivateKeyPlaceholder,
             integrationsSnowflakePrivateKeyPassphraseLabel: localize.Integrations.snowflakePrivateKeyPassphraseLabel,
             integrationsSnowflakePrivateKeyPassphraseHelp: localize.Integrations.snowflakePrivateKeyPassphraseHelp,
-            integrationsSnowflakePrivateKeyPassphrasePlaceholder:
-                localize.Integrations.snowflakePrivateKeyPassphrasePlaceholder,
             integrationsSnowflakeDatabaseLabel: localize.Integrations.snowflakeDatabaseLabel,
             integrationsSnowflakeDatabasePlaceholder: localize.Integrations.snowflakeDatabasePlaceholder,
             integrationsSnowflakeRoleLabel: localize.Integrations.snowflakeRoleLabel,

@@ -930,6 +930,7 @@ export namespace BigNumberComparison {
     export const comparisonValuePlaceholder = l10n.t('e.g., last_month_revenue');
     export const comparisonTitleLabel = l10n.t('Comparison title (optional)');
     export const comparisonTitlePlaceholder = l10n.t('e.g., vs last month');
+    export const comparisonTitleHelp = l10n.t('You can use {{var}} syntax to reference variables');
     export const comparisonFormatLabel = l10n.t('Comparison format (optional)');
     export const comparisonFormatHelp = l10n.t('Leave empty to use the same format as the main value');
     export const saveButton = l10n.t('Save');

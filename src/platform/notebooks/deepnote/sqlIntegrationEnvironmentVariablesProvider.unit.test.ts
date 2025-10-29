@@ -489,8 +489,8 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 'snowflake://service_account@keypair-account/PROD_DB?warehouse=ETL_WH&role=ETL_ROLE&authenticator=snowflake_jwt&application=Deepnote'
             );
             assert.deepStrictEqual(credentialsJson.params, {
-                private_key: privateKey,
-                private_key_passphrase: 'passphrase123'
+                snowflake_private_key: Buffer.from(privateKey).toString('base64'),
+                snowflake_private_key_passphrase: 'passphrase123'
             });
             assert.strictEqual(credentialsJson.param_style, 'format');
         });
@@ -530,7 +530,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 'snowflake://svc_user@account123/DB?warehouse=WH&authenticator=snowflake_jwt&application=Deepnote'
             );
             assert.deepStrictEqual(credentialsJson.params, {
-                private_key: privateKey
+                snowflake_private_key: Buffer.from(privateKey).toString('base64')
             });
         });
 

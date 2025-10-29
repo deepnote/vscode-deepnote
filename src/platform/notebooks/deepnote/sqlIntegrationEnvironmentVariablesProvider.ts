@@ -146,9 +146,9 @@ function convertIntegrationConfigToJson(config: IntegrationConfig): string {
                 }
 
                 // For key-pair auth, pass the private key and passphrase as params
-                params.private_key = config.privateKey;
+                params.snowflake_private_key = Buffer.from(config.privateKey).toString('base64');
                 if (config.privateKeyPassphrase) {
-                    params.private_key_passphrase = config.privateKeyPassphrase;
+                    params.snowflake_private_key_passphrase = config.privateKeyPassphrase;
                 }
             }
 

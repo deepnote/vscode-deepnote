@@ -168,8 +168,16 @@ export class IntegrationManager implements IIntegrationManager {
 
             if (projectIntegration) {
                 integrationName = projectIntegration.name;
-                // Map the Deepnote integration type to our IntegrationType
-                integrationType = DEEPNOTE_TO_INTEGRATION_TYPE[projectIntegration.type as RawIntegrationType];
+
+                // Validate that projectIntegration.type exists in the mapping before lookup
+                if (projectIntegration.type in DEEPNOTE_TO_INTEGRATION_TYPE) {
+                    // Map the Deepnote integration type to our IntegrationType
+                    integrationType = DEEPNOTE_TO_INTEGRATION_TYPE[projectIntegration.type as RawIntegrationType];
+                } else {
+                    logger.warn(
+                        `IntegrationManager: Unknown integration type '${projectIntegration.type}' for integration ID '${selectedIntegrationId}' in project '${projectId}'. Integration type will be undefined.`
+                    );
+                }
             }
 
             integrations.set(selectedIntegrationId, {

@@ -61,23 +61,26 @@ export const BigNumberComparisonSettingsPanel: React.FC<IBigNumberComparisonSett
     };
 
     const handleComparisonValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setSettings((prev) => ({
             ...prev,
-            comparisonValue: e.target.value
+            comparisonValue: value
         }));
     };
 
     const handleComparisonTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setSettings((prev) => ({
             ...prev,
-            comparisonTitle: e.target.value
+            comparisonTitle: value
         }));
     };
 
     const handleComparisonFormatChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const value = e.target.value;
         setSettings((prev) => ({
             ...prev,
-            comparisonFormat: e.target.value
+            comparisonFormat: value
         }));
     };
 

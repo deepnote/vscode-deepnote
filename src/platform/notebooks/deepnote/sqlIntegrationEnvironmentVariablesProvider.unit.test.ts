@@ -592,7 +592,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             assert.strictEqual(credentialsJson.url, 'snowflake://user:pass@minimal-account?application=Deepnote');
         });
 
-        test('Throws error for unsupported Snowflake auth method (OKTA)', async () => {
+        test('Skips unsupported Snowflake auth method (OKTA)', async () => {
             const uri = Uri.file('/test/notebook.deepnote');
             const integrationId = 'snowflake-okta';
             const config: SnowflakeIntegrationConfig = {
@@ -617,7 +617,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             assert.deepStrictEqual(envVars, {});
         });
 
-        test('Throws error for unsupported Snowflake auth method (AZURE_AD)', async () => {
+        test('Skips unsupported Snowflake auth method (AZURE_AD)', async () => {
             const uri = Uri.file('/test/notebook.deepnote');
             const integrationId = 'snowflake-azure';
             const config: SnowflakeIntegrationConfig = {
@@ -641,7 +641,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             assert.deepStrictEqual(envVars, {});
         });
 
-        test('Throws error for unsupported Snowflake auth method (KEY_PAIR)', async () => {
+        test('Skips unsupported Snowflake auth method (KEY_PAIR)', async () => {
             const uri = Uri.file('/test/notebook.deepnote');
             const integrationId = 'snowflake-keypair-user';
             const config: SnowflakeIntegrationConfig = {

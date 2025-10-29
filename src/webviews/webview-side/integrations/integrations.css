@@ -203,7 +203,8 @@ form {
 .form-group input[type='text'],
 .form-group input[type='password'],
 .form-group input[type='number'],
-.form-group textarea {
+.form-group textarea,
+.form-group select {
     padding: 6px 8px;
     background-color: var(--vscode-input-background);
     color: var(--vscode-input-foreground);
@@ -214,7 +215,8 @@ form {
 }
 
 .form-group input:focus,
-.form-group textarea:focus {
+.form-group textarea:focus,
+.form-group select:focus {
     outline: 1px solid var(--vscode-focusBorder);
     border-color: var(--vscode-focusBorder);
 }

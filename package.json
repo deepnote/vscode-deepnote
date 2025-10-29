@@ -1,7 +1,7 @@
 {
     "name": "vscode-deepnote",
     "displayName": "Deepnote",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "description": "Deepnote notebook support.",
     "publisher": "Deepnote",
     "author": {
@@ -23,7 +23,7 @@
         "theme": "light"
     },
     "engines": {
-        "vscode": "^1.103.0"
+        "vscode": "^1.95.0"
     },
     "l10n": "./l10n",
     "extensionKind": [
@@ -70,6 +70,14 @@
                 "key": "escape",
                 "when": "isCompositeNotebook && !editorHoverVisible && !suggestWidgetVisible && !isComposing && !inSnippetMode && !exceptionWidgetVisible && !selectionAnchorSet && !LinkedEditingInputVisible && !renameInputVisible && !editorHasSelection && !accessibilityHelpWidgetVisible && !breakpointWidgetVisible && !findWidgetVisible && !markersNavigationVisible && !parameterHintsVisible && !editorHasMultipleSelections && !notificationToastsVisible && !notebookEditorFocused && !inlineChatVisible",
                 "command": "interactive.input.clear"
+            },
+            {
+                "key": "cmd+enter",
+                "mac": "cmd+enter",
+                "win": "ctrl+enter",
+                "linux": "ctrl+enter",
+                "when": "notebookEditorFocused && !findInputFocussed && !replaceInputFocussed",
+                "command": "jupyter.notebookeditor.runfocusedcell"
             }
         ],
         "commands": [
@@ -598,6 +606,12 @@
                 "enablement": "!jupyter.webExtension"
             },
             {
+                "command": "jupyter.notebookeditor.runfocusedcell",
+                "title": "%jupyter.command.jupyter.notebookeditor.runfocusedcell.title%",
+                "category": "Notebook",
+                "enablement": "notebookEditorFocused"
+            },
+            {
                 "command": "jupyter.expandallcells",
                 "title": "%jupyter.command.jupyter.expandallcells.title%",
                 "shortTitle": "%jupyter.command.jupyter.expandallcells.shorttitle%",
@@ -767,9 +781,30 @@
             {
                 "id": "editor.interactiveWindow.context",
                 "label": "%jupyter.command.editor.interactiveWindow.context.label%"
+            },
+            {
+                "id": "deepnote.explorer.context",
+                "label": "Deepnote"
             }
         ],
         "menus": {
+            "view/title": [
+                {
+                    "command": "deepnote.newProject",
+                    "when": "view == deepnoteExplorer",
+                    "group": "navigation@1"
+                },
+                {
+                    "command": "deepnote.importNotebook",
+                    "when": "view == deepnoteExplorer",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "deepnote.refreshExplorer",
+                    "when": "view == deepnoteExplorer",
+                    "group": "navigation@3"
+                }
+            ],
             "editor/context": [
                 {
                     "submenu": "editor.interactiveWindow.context",
@@ -816,6 +851,14 @@
                     "command": "jupyter.execSelectionInteractive",
                     "group": "Jupyter2",
                     "when": "editorFocus && editorLangId == python && !notebookEditorFocused && isWorkspaceTrusted"
+                }
+            ],
+            "deepnote.explorer.context": [
+                {
+                    "command": "deepnote.newProject"
+                },
+                {
+                    "command": "deepnote.importNotebook"
                 }
             ],
             "editor/title": [
@@ -995,6 +1038,11 @@
                 }
             ],
             "explorer/context": [
+                {
+                    "submenu": "deepnote.explorer.context",
+                    "when": "isWorkspaceTrusted",
+                    "group": "navigation@10"
+                },
                 {
                     "when": "resourceLangId == python && !notebookEditorFocused && isWorkspaceTrusted",
                     "command": "jupyter.runFileInteractive",

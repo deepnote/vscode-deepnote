@@ -22,7 +22,7 @@ async function getPackageJsonInMainBranch(
     tag: string
 ): Promise<{ enabledApiProposals: string[]; engines: { vscode: string } }> {
     // If we can find the latest tag, thats even better.
-    const url = `https://raw.githubusercontent.com/microsoft/vscode-jupyter/${tag}/package.json`;
+    const url = `https://raw.githubusercontent.com/deepnote/vscode-deepnote/${tag}/package.json`;
     const response = await fetch(url);
     return await response.json();
 }

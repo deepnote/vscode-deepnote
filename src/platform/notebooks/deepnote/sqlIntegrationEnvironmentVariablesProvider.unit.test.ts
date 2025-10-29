@@ -5,7 +5,13 @@ import { CancellationTokenSource, EventEmitter, NotebookCell, NotebookCellKind, 
 import { IDisposableRegistry } from '../../common/types';
 import { IntegrationStorage } from './integrationStorage';
 import { SqlIntegrationEnvironmentVariablesProvider } from './sqlIntegrationEnvironmentVariablesProvider';
-import { IntegrationType, PostgresIntegrationConfig, BigQueryIntegrationConfig } from './integrationTypes';
+import {
+    IntegrationType,
+    PostgresIntegrationConfig,
+    BigQueryIntegrationConfig,
+    SnowflakeIntegrationConfig,
+    SnowflakeAuthMethods
+} from './integrationTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 
 suite('SqlIntegrationEnvironmentVariablesProvider', () => {
@@ -371,6 +377,302 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         cts.cancel();
         const envVars = await provider.getEnvironmentVariables(uri, cts.token);
         assert.deepStrictEqual(envVars, {});
+    });
+
+    suite('Snowflake Integration', () => {
+        test('Returns environment variable for Snowflake with PASSWORD auth', async () => {
+            const uri = Uri.file('/test/notebook.deepnote');
+            const integrationId = 'my-snowflake';
+            const config: SnowflakeIntegrationConfig = {
+                id: integrationId,
+                name: 'My Snowflake',
+                type: IntegrationType.Snowflake,
+                account: 'myorg-myaccount',
+                warehouse: 'COMPUTE_WH',
+                database: 'MYDB',
+                role: 'ANALYST',
+                authMethod: SnowflakeAuthMethods.PASSWORD,
+                username: 'john.doe',
+                password: 'secret123'
+            };
+
+            const notebook = createMockNotebook(uri, [
+                createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT * FROM customers', {
+                    sql_integration_id: integrationId
+                })
+            ]);
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
+
+            const envVars = await provider.getEnvironmentVariables(uri);
+
+            assert.property(envVars, 'SQL_MY_SNOWFLAKE');
+            const credentialsJson = JSON.parse(envVars['SQL_MY_SNOWFLAKE']!);
+            assert.strictEqual(
+                credentialsJson.url,
+                'snowflake://john.doe:secret123@myorg-myaccount/MYDB?warehouse=COMPUTE_WH&role=ANALYST&application=Deepnote'
+            );
+            assert.deepStrictEqual(credentialsJson.params, {});
+            assert.strictEqual(credentialsJson.param_style, 'pyformat');
+        });
+
+        test('Returns environment variable for Snowflake with legacy null auth (username+password)', async () => {
+            const uri = Uri.file('/test/notebook.deepnote');
+            const integrationId = 'legacy-snowflake';
+            const config: SnowflakeIntegrationConfig = {
+                id: integrationId,
+                name: 'Legacy Snowflake',
+                type: IntegrationType.Snowflake,
+                account: 'legacy-account',
+                warehouse: 'WH',
+                database: 'DB',
+                authMethod: null,
+                username: 'user',
+                password: 'pass'
+            };
+
+            const notebook = createMockNotebook(uri, [
+                createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT 1', {
+                    sql_integration_id: integrationId
+                })
+            ]);
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
+
+            const envVars = await provider.getEnvironmentVariables(uri);
+
+            assert.property(envVars, 'SQL_LEGACY_SNOWFLAKE');
+            const credentialsJson = JSON.parse(envVars['SQL_LEGACY_SNOWFLAKE']!);
+            assert.strictEqual(
+                credentialsJson.url,
+                'snowflake://user:pass@legacy-account/DB?warehouse=WH&application=Deepnote'
+            );
+            assert.deepStrictEqual(credentialsJson.params, {});
+        });
+
+        test('Returns environment variable for Snowflake with SERVICE_ACCOUNT_KEY_PAIR auth', async () => {
+            const uri = Uri.file('/test/notebook.deepnote');
+            const integrationId = 'snowflake-keypair';
+            const privateKey =
+                '-----BEGIN ' + 'PRIVATE KEY-----\nfakekey-MIIEvQIBADANBg...\n-----END ' + 'PRIVATE KEY-----';
+            const config: SnowflakeIntegrationConfig = {
+                id: integrationId,
+                name: 'Snowflake KeyPair',
+                type: IntegrationType.Snowflake,
+                account: 'keypair-account',
+                warehouse: 'ETL_WH',
+                database: 'PROD_DB',
+                role: 'ETL_ROLE',
+                authMethod: SnowflakeAuthMethods.SERVICE_ACCOUNT_KEY_PAIR,
+                username: 'service_account',
+                privateKey: privateKey,
+                privateKeyPassphrase: 'passphrase123'
+            };
+
+            const notebook = createMockNotebook(uri, [
+                createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT * FROM events', {
+                    sql_integration_id: integrationId
+                })
+            ]);
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
+
+            const envVars = await provider.getEnvironmentVariables(uri);
+
+            assert.property(envVars, 'SQL_SNOWFLAKE_KEYPAIR');
+            const credentialsJson = JSON.parse(envVars['SQL_SNOWFLAKE_KEYPAIR']!);
+            assert.strictEqual(
+                credentialsJson.url,
+                'snowflake://service_account@keypair-account/PROD_DB?warehouse=ETL_WH&role=ETL_ROLE&authenticator=snowflake_jwt&application=Deepnote'
+            );
+            assert.deepStrictEqual(credentialsJson.params, {
+                snowflake_private_key: Buffer.from(privateKey).toString('base64'),
+                snowflake_private_key_passphrase: 'passphrase123'
+            });
+            assert.strictEqual(credentialsJson.param_style, 'pyformat');
+        });
+
+        test('Returns environment variable for Snowflake with SERVICE_ACCOUNT_KEY_PAIR auth without passphrase', async () => {
+            const uri = Uri.file('/test/notebook.deepnote');
+            const integrationId = 'snowflake-keypair-no-pass';
+            const privateKey =
+                '-----BEGIN ' + 'PRIVATE KEY-----\nfakekey-MIIEvQIBADANBg...\n-----END ' + 'PRIVATE KEY-----';
+            const config: SnowflakeIntegrationConfig = {
+                id: integrationId,
+                name: 'Snowflake KeyPair No Pass',
+                type: IntegrationType.Snowflake,
+                account: 'account123',
+                warehouse: 'WH',
+                database: 'DB',
+                authMethod: SnowflakeAuthMethods.SERVICE_ACCOUNT_KEY_PAIR,
+                username: 'svc_user',
+                privateKey: privateKey
+            };
+
+            const notebook = createMockNotebook(uri, [
+                createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT 1', {
+                    sql_integration_id: integrationId
+                })
+            ]);
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
+
+            const envVars = await provider.getEnvironmentVariables(uri);
+
+            assert.property(envVars, 'SQL_SNOWFLAKE_KEYPAIR_NO_PASS');
+            const credentialsJson = JSON.parse(envVars['SQL_SNOWFLAKE_KEYPAIR_NO_PASS']!);
+            assert.strictEqual(
+                credentialsJson.url,
+                'snowflake://svc_user@account123/DB?warehouse=WH&authenticator=snowflake_jwt&application=Deepnote'
+            );
+            assert.deepStrictEqual(credentialsJson.params, {
+                snowflake_private_key: Buffer.from(privateKey).toString('base64')
+            });
+        });
+
+        test('Properly encodes special characters in Snowflake credentials', async () => {
+            const uri = Uri.file('/test/notebook.deepnote');
+            const integrationId = 'snowflake-special';
+            const config: SnowflakeIntegrationConfig = {
+                id: integrationId,
+                name: 'Snowflake Special',
+                type: IntegrationType.Snowflake,
+                account: 'my-org.account',
+                warehouse: 'WH@2024',
+                database: 'DB:TEST',
+                role: 'ROLE#1',
+                authMethod: SnowflakeAuthMethods.PASSWORD,
+                username: 'user@domain.com',
+                password: 'p@ss:word!#$%'
+            };
+
+            const notebook = createMockNotebook(uri, [
+                createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT 1', {
+                    sql_integration_id: integrationId
+                })
+            ]);
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
+
+            const envVars = await provider.getEnvironmentVariables(uri);
+
+            assert.property(envVars, 'SQL_SNOWFLAKE_SPECIAL');
+            const credentialsJson = JSON.parse(envVars['SQL_SNOWFLAKE_SPECIAL']!);
+            // Verify URL encoding of special characters
+            assert.strictEqual(
+                credentialsJson.url,
+                'snowflake://user%40domain.com:p%40ss%3Aword!%23%24%25@my-org.account/DB%3ATEST?warehouse=WH%402024&role=ROLE%231&application=Deepnote'
+            );
+        });
+
+        test('Handles Snowflake with minimal optional fields', async () => {
+            const uri = Uri.file('/test/notebook.deepnote');
+            const integrationId = 'snowflake-minimal';
+            const config: SnowflakeIntegrationConfig = {
+                id: integrationId,
+                name: 'Snowflake Minimal',
+                type: IntegrationType.Snowflake,
+                account: 'minimal-account',
+                authMethod: SnowflakeAuthMethods.PASSWORD,
+                username: 'user',
+                password: 'pass'
+            };
+
+            const notebook = createMockNotebook(uri, [
+                createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT 1', {
+                    sql_integration_id: integrationId
+                })
+            ]);
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
+
+            const envVars = await provider.getEnvironmentVariables(uri);
+
+            assert.property(envVars, 'SQL_SNOWFLAKE_MINIMAL');
+            const credentialsJson = JSON.parse(envVars['SQL_SNOWFLAKE_MINIMAL']!);
+            // Should not include warehouse, database, or role in URL when not provided
+            assert.strictEqual(credentialsJson.url, 'snowflake://user:pass@minimal-account?application=Deepnote');
+            assert.strictEqual(credentialsJson.param_style, 'pyformat');
+        });
+
+        test('Skips unsupported Snowflake auth method (OKTA)', async () => {
+            const uri = Uri.file('/test/notebook.deepnote');
+            const integrationId = 'snowflake-okta';
+            const config: SnowflakeIntegrationConfig = {
+                id: integrationId,
+                name: 'Snowflake OKTA',
+                type: IntegrationType.Snowflake,
+                account: 'okta-account',
+                authMethod: SnowflakeAuthMethods.OKTA
+            };
+
+            const notebook = createMockNotebook(uri, [
+                createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT 1', {
+                    sql_integration_id: integrationId
+                })
+            ]);
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
+
+            // Should return empty object when unsupported auth method is encountered
+            const envVars = await provider.getEnvironmentVariables(uri);
+            assert.deepStrictEqual(envVars, {});
+        });
+
+        test('Skips unsupported Snowflake auth method (AZURE_AD)', async () => {
+            const uri = Uri.file('/test/notebook.deepnote');
+            const integrationId = 'snowflake-azure';
+            const config: SnowflakeIntegrationConfig = {
+                id: integrationId,
+                name: 'Snowflake Azure',
+                type: IntegrationType.Snowflake,
+                account: 'azure-account',
+                authMethod: SnowflakeAuthMethods.AZURE_AD
+            };
+
+            const notebook = createMockNotebook(uri, [
+                createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT 1', {
+                    sql_integration_id: integrationId
+                })
+            ]);
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
+
+            const envVars = await provider.getEnvironmentVariables(uri);
+            assert.deepStrictEqual(envVars, {});
+        });
+
+        test('Skips unsupported Snowflake auth method (KEY_PAIR)', async () => {
+            const uri = Uri.file('/test/notebook.deepnote');
+            const integrationId = 'snowflake-keypair-user';
+            const config: SnowflakeIntegrationConfig = {
+                id: integrationId,
+                name: 'Snowflake KeyPair User',
+                type: IntegrationType.Snowflake,
+                account: 'keypair-user-account',
+                authMethod: SnowflakeAuthMethods.KEY_PAIR
+            };
+
+            const notebook = createMockNotebook(uri, [
+                createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT 1', {
+                    sql_integration_id: integrationId
+                })
+            ]);
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
+
+            const envVars = await provider.getEnvironmentVariables(uri);
+            assert.deepStrictEqual(envVars, {});
+        });
     });
 });
 

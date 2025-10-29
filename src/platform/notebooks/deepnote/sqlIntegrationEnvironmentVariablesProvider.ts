@@ -10,8 +10,7 @@ import {
     DATAFRAME_SQL_INTEGRATION_ID,
     IntegrationConfig,
     IntegrationType,
-    SnowflakeAuthMethods,
-    isSupportedSnowflakeAuthMethod
+    SnowflakeAuthMethods
 } from './integrationTypes';
 
 /**
@@ -70,13 +69,6 @@ function convertIntegrationConfigToJson(config: IntegrationConfig): string {
             // Username+password: snowflake://{username}:{password}@{account}/{database}?warehouse={warehouse}&role={role}&application=YourApp
             // Service account key-pair: snowflake://{username}@{account}/{database}?warehouse={warehouse}&role={role}&authenticator=snowflake_jwt&application=YourApp
             const encodedAccount = encodeURIComponent(config.account);
-
-            // Check if this is a supported auth method
-            if (!isSupportedSnowflakeAuthMethod(config.authMethod)) {
-                throw new UnsupportedIntegrationError(
-                    `Snowflake integration with auth method '${config.authMethod}' is not supported in VSCode`
-                );
-            }
 
             let url: string;
             const params: Record<string, unknown> = {};

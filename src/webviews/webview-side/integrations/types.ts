@@ -51,12 +51,7 @@ interface BaseSnowflakeConfig extends BaseIntegrationConfig {
 export type SnowflakeIntegrationConfig = BaseSnowflakeConfig &
     (
         | {
-              authMethod: null;
-              username: string;
-              password: string;
-          }
-        | {
-              authMethod: typeof SnowflakeAuthMethods.PASSWORD;
+              authMethod: typeof SnowflakeAuthMethods.PASSWORD | null;
               username: string;
               password: string;
           }

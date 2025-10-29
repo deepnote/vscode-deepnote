@@ -70,7 +70,7 @@ export class SelectInputSettingsWebviewProvider {
 
         // Handle messages from the webview
         this.currentPanel.webview.onDidReceiveMessage(
-            async (message) => {
+            async (message: SelectInputWebviewMessage) => {
                 await this.handleMessage(message);
             },
             null,

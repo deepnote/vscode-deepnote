@@ -23,6 +23,7 @@ import { logger } from '../../platform/logging';
 @injectable()
 export class SelectInputSettingsWebviewProvider {
     private currentPanel: WebviewPanel | undefined;
+    private currentPanelId: number = 0;
     private readonly disposables: Disposable[] = [];
     private currentCell: NotebookCell | undefined;
     private resolvePromise: ((settings: SelectInputSettings | null) => void) | undefined;
@@ -37,10 +38,20 @@ export class SelectInputSettingsWebviewProvider {
 
         const column = window.activeTextEditor ? window.activeTextEditor.viewColumn : ViewColumn.One;
 
-        // If we already have a panel, dispose it and create a new one
+        // If we already have a panel, cancel any outstanding operation before disposing
         if (this.currentPanel) {
+            // Cancel the previous operation by resolving with null
+            if (this.resolvePromise) {
+                this.resolvePromise(null);
+                this.resolvePromise = undefined;
+            }
+            // Now dispose the old panel
             this.currentPanel.dispose();
         }
+
+        // Increment panel ID to track this specific panel instance
+        this.currentPanelId++;
+        const panelId = this.currentPanelId;
 
         // Create a new panel
         this.currentPanel = window.createWebviewPanel(
@@ -67,16 +78,20 @@ export class SelectInputSettingsWebviewProvider {
         );
 
         // Reset when the current panel is closed
+        // Guard with panel identity to prevent old panels from affecting new ones
         this.currentPanel.onDidDispose(
             () => {
-                this.currentPanel = undefined;
-                this.currentCell = undefined;
-                if (this.resolvePromise) {
-                    this.resolvePromise(null);
-                    this.resolvePromise = undefined;
+                // Only handle disposal if this is still the current panel
+                if (this.currentPanelId === panelId) {
+                    this.currentPanel = undefined;
+                    this.currentCell = undefined;
+                    if (this.resolvePromise) {
+                        this.resolvePromise(null);
+                        this.resolvePromise = undefined;
+                    }
+                    this.disposables.forEach((d) => d.dispose());
+                    this.disposables.length = 0;
                 }
-                this.disposables.forEach((d) => d.dispose());
-                this.disposables.length = 0;
             },
             null,
             this.disposables

@@ -5,7 +5,7 @@ import { l10n, workspace, type CancellationToken, type NotebookData, type Notebo
 import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
-import type { DeepnoteFile, DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
+import type { DeepnoteFile, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 
 export { DeepnoteBlock, DeepnoteNotebook, DeepnoteOutput, DeepnoteFile } from '../../platform/deepnote/deepnoteTypes';
 
@@ -114,7 +114,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 throw new Error('Missing Deepnote project ID in notebook metadata');
             }
 
-            const originalProject = this.notebookManager.getOriginalProject(projectId) as DeepnoteProject | undefined;
+            const originalProject = this.notebookManager.getOriginalProject(projectId) as DeepnoteFile | undefined;
 
             if (!originalProject) {
                 throw new Error('Original Deepnote project not found. Cannot save changes.');
@@ -135,7 +135,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 throw new Error(`Notebook with ID ${notebookId} not found in project`);
             }
 
-            const updatedProject = JSON.parse(JSON.stringify(originalProject)) as DeepnoteProject;
+            const updatedProject = JSON.parse(JSON.stringify(originalProject)) as DeepnoteFile;
 
             const updatedBlocks = this.converter.convertCellsToBlocks(data.cells);
 
@@ -188,7 +188,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
      * @param file
      * @returns
      */
-    private findDefaultNotebook(file: DeepnoteFile) {
+    private findDefaultNotebook(file: DeepnoteFile): DeepnoteNotebook | undefined {
         const sortedNotebooks = file.project.notebooks.slice().sort((a, b) => {
             const nameA = a.name.toLowerCase();
             const nameB = b.name.toLowerCase();

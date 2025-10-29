@@ -5,39 +5,28 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![VS Code Marketplace](https://img.shields.io/badge/VS%20Code-Marketplace-blue)](https://marketplace.visualstudio.com/items?itemName=Deepnote.vscode-deepnote)
 
-A powerful [Visual Studio Code](https://code.visualstudio.com/) extension that brings [Deepnote](https://deepnote.com/) notebook capabilities directly into your favorite editor. Work with enhanced data science notebooks featuring SQL blocks, database integrations, and collaborative features - all within VS Code.
+A powerful [Visual Studio Code](https://code.visualstudio.com/) extension that brings [Deepnote](https://deepnote.com/) notebook capabilities directly into your favorite editor. Work with sleek AI notebooks featuring SQL blocks, database integrations, and reactive blocks - all within VS Code.
 
-## 🚀 Features
-
+---
 ![Deepnote Projects](./images/deepnote-projects.png)
 
-### Enhanced Notebook Experience
+---
+# 🚀 Deepnote in VS Code - data notebook for AI era
+Run Deepnote locally inside VS Code — not Jupyter — and unlock the next generation of data workflows:
+- 🧠 **SQL in VS Code** — Run SQL queries out of the box, no extensions needed
+- 🧩 **Rich block types** — Combine Python, Markdown, data visualizations, tables, and more — all in one place
+- 🔐 **Native database connections** — Securely connect to Snowflake, BigQuery, Postgres, and 60+ other sources via VS Code’s encrypted SecretStorage API
+- ⚙️ **Init notebooks** — Auto-run setup code (dependencies, env setup) before execution
+- 📦 **Smart requirements** — Generate `requirements.txt` automatically for reproducible runs
 
-Deepnote notebooks extend traditional Jupyter notebooks with powerful data science features:
+🐍 **Jupyter kernel, upgraded**
+- ⚡ **Deepnote kernel** — Fully `.ipynb-compatible`, tuned for modern data workflows
+- 🔁 **Kernel control** — Restart, interrupt, and switch seamlessly
 
-- **🔢 Multiple Block Types** - Work with Python code, SQL queries, Markdown documentation, and specialized data science blocks
-- **🔄 Seamless Language Switching** - Switch between Python and SQL within the same notebook without context switching
-- **🗄️ Database Integrations** - Connect directly to PostgreSQL, BigQuery, Snowflake, and other data sources with secure credential management
-- **⚡ Init Notebooks** - Automatically run initialization code (dependencies, environment setup) before notebook execution
-- **📦 Automatic Requirements** - Generate `requirements.txt` from your project settings for reproducible environments
-- **🎨 Rich Outputs** - View data visualizations, tables, and interactive outputs directly in VS Code
-- **🔐 Secure Credential Storage** - Safely store and manage database credentials using VS Code's encrypted SecretStorage API
-
-### Jupyter Kernel Support
-
-Built on top of robust Jupyter infrastructure:
-
-- **🐍 Python Kernel** - Full Python support with IPython features
-- **🔌 Custom Deepnote Kernel** - Enhanced kernel with Deepnote-specific features and integrations
-- **📊 Interactive Debugging** - Debug notebooks cell-by-cell with VS Code's debugger
-- **🔄 Kernel Management** - Easy kernel selection, restart, and interrupt capabilities
-
-### Project Management
-
-- **📁 Project Explorer** - Browse and manage Deepnote projects directly from VS Code's sidebar
-- **📓 Multi-Notebook Support** - Work with multiple notebooks from the same project
-- **🔍 Quick Navigation** - Jump between notebooks and files with command palette integration
-- **♻️ Auto-Refresh** - Automatic detection of project file changes
+🌐 **Deepnote ecosystem integrations**
+- 🔃 **Auto-refresh** — Instantly detects file and data changes
+- 🧮 **Multi-notebook support** — Work across multiple notebooks in one unified project
+- ☁ **Cloud collaboration** — Switch between local VS Code and Deepnote Cloud to collaborate live on the same file with your team
 
 ## 📋 Requirements
 
@@ -45,18 +34,16 @@ Built on top of robust Jupyter infrastructure:
 - **Python** 3.8 or higher (for running notebooks)
 - **Node.js** 22.15.1 or higher (for development)
 
-## 🎯 Getting Started
-
-### Installation
+## 🎯 Getting started
 
 1. Open VS Code
-2. Press `Ctrl+P` / `Cmd+P` to open Quick Open
+2. Press `Cmd+P` or `Ctrl+P` to open Quick Open
 3. Type `ext install Deepnote.vscode-deepnote`
 4. Press Enter
 
 Or install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=Deepnote.vscode-deepnote)
 
-### Opening Your First Deepnote Notebook
+### Opening your first Deepnote notebook
 
 1. Open a folder containing `.deepnote` project files
 2. Look for the Deepnote icon in the Activity Bar (sidebar)
@@ -66,9 +53,9 @@ Or install from the [VS Code Marketplace](https://marketplace.visualstudio.com/i
 
 ## 📖 Usage
 
-### Command Palette
+### Command palette
 
-Open the Command Palette (`Cmd+Shift+P` on macOS, `Ctrl+Shift+P` on Windows/Linux) and type `Deepnote` to see all available commands:
+Open the Command Palette (`Cmd+Shift+P` or `Ctrl+Shift+P`) and type `Deepnote` to see all available commands:
 
 | Command                            | Description                                        |
 | ---------------------------------- | -------------------------------------------------- |
@@ -82,7 +69,7 @@ Open the Command Palette (`Cmd+Shift+P` on macOS, `Ctrl+Shift+P` on Windows/Linu
 | `Notebook: Select Notebook Kernel` | Select or switch kernels within your notebook      |
 | `Notebook: Change Cell Language`   | Change the language of the cell currently in focus |
 
-### Database Integrations
+### Database integrations
 
 Configure database connections for SQL blocks:
 
@@ -104,31 +91,9 @@ SELECT * FROM users WHERE created_at > '2024-01-01'
 
 Results are displayed as interactive tables that you can explore and export.
 
-## 🛠️ Development
+## 🛠️ Quick start for developers
 
 Want to contribute? Check out our [Contributing Guide](CONTRIBUTING.md) for detailed setup instructions.
-
-### Quick Start for Developers
-
-```bash
-# Clone the repository
-git clone https://github.com/deepnote/vscode-deepnote.git
-cd vscode-deepnote
-
-# Install dependencies
-npm install
-
-# Setup pre-commit hooks
-npm run setup-precommit-hook
-
-# Compile and watch for changes
-npm run watch
-
-# Run tests
-npm run test:unittests
-```
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for more details on:
 - Setting up your development environment
 - Running tests
 - Building the extension
@@ -141,36 +106,20 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for more details on:
 - **[Integrations & Credentials](INTEGRATIONS_CREDENTIALS.md)** - How database integrations work
 - **[Contributing Guide](CONTRIBUTING.md)** - How to contribute to the project
 
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on:
-
-- Code of conduct
-- Development setup
-- Coding standards
-- Pull request process
-- Testing requirements
-
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🐛 Issues & Support
+## 🐛 Issues & support
 
-- **Bug Reports**: [GitHub Issues](https://github.com/deepnote/vscode-deepnote/issues)
-- **Feature Requests**: [GitHub Discussions](https://github.com/deepnote/vscode-deepnote/discussions)
-- **Questions**: [GitHub Discussions](https://github.com/deepnote/vscode-deepnote/discussions)
+- **Bug reports**: [GitHub issues](https://github.com/deepnote/vscode-deepnote/issues)
+- **Feature requests**: [GitHub discussions](https://github.com/deepnote/deepnote/discussions)
+- **Questions**: [GitHub discussions](https://github.com/deepnote/deepnote/discussions)
 
-## 🔗 Related Projects
+## 🔗 Try Deepnote for free at:
 
 - [Deepnote](https://deepnote.com/) - Collaborative data science notebook platform
-- [Jupyter](https://jupyter.org/) - Open-source notebook ecosystem
-- [VS Code Python Extension](https://marketplace.visualstudio.com/items?itemName=ms-python.python) - Python language support for VS Code
-
-## 🌟 Keywords
-
-`deepnote` `jupyter` `notebook` `data-science` `python` `sql` `database` `postgresql` `bigquery` `vscode-extension` `data-analysis` `machine-learning` `interactive-computing` `ipython` `jupyter-notebook` `collaborative-notebooks`
-
----
-
-Made with ❤️ by the Deepnote team
+- [VS Code Extension for Deepnote](https://marketplace.visualstudio.com/items?itemName=Deepnote.vscode-deepnote) - Python language support for VS Code
+- [Cursor extesion for Deepnote](https://open-vsx.org/extension/Deepnote/vscode-deepnote)
+- [Windsurf extension for Deepnote](https://open-vsx.org/extension/Deepnote/vscode-deepnote)
+Made with 💙 by the Deepnote team

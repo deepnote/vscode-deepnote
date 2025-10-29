@@ -71,11 +71,11 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({
             return;
         }
 
-        const unnamedIntegration = format('Unnamed BigQuery Integration ({0})', integrationId);
+        const unnamedIntegration = getLocString('integrationsUnnamedIntegration', 'Unnamed Integration ({0})');
 
         const config: BigQueryIntegrationConfig = {
             id: integrationId,
-            name: (name || unnamedIntegration).trim(),
+            name: (name || format(unnamedIntegration, integrationId)).trim(),
             type: 'bigquery',
             projectId: projectId.trim(),
             credentials: trimmedCredentials

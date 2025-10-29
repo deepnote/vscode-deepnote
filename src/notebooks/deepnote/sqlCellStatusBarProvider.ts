@@ -437,6 +437,8 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
                 return l10n.t('PostgreSQL');
             case IntegrationType.BigQuery:
                 return l10n.t('BigQuery');
+            case IntegrationType.Snowflake:
+                return l10n.t('Snowflake');
             default:
                 return String(type);
         }

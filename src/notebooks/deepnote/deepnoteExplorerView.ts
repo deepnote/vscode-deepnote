@@ -131,13 +131,11 @@ export class DeepnoteExplorerView {
      */
     private generateSuggestedNotebookName(projectData: DeepnoteFile): string {
         const notebookCount = projectData.project.notebooks?.length || 0;
-        const existingNames = new Set(
-            projectData.project.notebooks?.map((nb: DeepnoteNotebook) => nb.name.toLowerCase()) || []
-        );
+        const existingNames = new Set(projectData.project.notebooks?.map((nb: DeepnoteNotebook) => nb.name) || []);
 
         let nextNumber = notebookCount + 1;
         let suggestedName = `Notebook ${nextNumber}`;
-        while (existingNames.has(suggestedName.toLowerCase())) {
+        while (existingNames.has(suggestedName)) {
             nextNumber++;
             suggestedName = `Notebook ${nextNumber}`;
         }
@@ -261,7 +259,7 @@ export class DeepnoteExplorerView {
         const suggestedName = this.generateSuggestedNotebookName(projectData);
         const notebookName = await this.promptForNotebookName(
             suggestedName,
-            new Set(projectData.project.notebooks?.map((nb: DeepnoteNotebook) => nb.name.toLowerCase()) ?? [])
+            new Set(projectData.project.notebooks?.map((nb: DeepnoteNotebook) => nb.name) ?? [])
         );
 
         if (!notebookName) {

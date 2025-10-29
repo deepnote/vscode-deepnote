@@ -864,7 +864,7 @@ export namespace Integrations {
     export const bigQueryUnnamedIntegration = (id: string) => l10n.t('Unnamed BigQuery Integration ({0})', id);
 
     // Snowflake form strings
-    export const snowflakeNameLabel = l10n.t('Integration name');
+    export const snowflakeNameLabel = l10n.t('Name (optional)');
     export const snowflakeNamePlaceholder = l10n.t('My Snowflake Database');
     export const snowflakeAccountLabel = l10n.t('Account name');
     export const snowflakeAccountPlaceholder = l10n.t('ptb34938.us-east-1');

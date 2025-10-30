@@ -153,6 +153,12 @@
                 "icon": "$(plug)"
             },
             {
+                "command": "deepnote.openInDeepnote",
+                "title": "Open in Deepnote",
+                "category": "Deepnote",
+                "icon": "$(globe)"
+            },
+            {
                 "command": "deepnote.newProject",
                 "title": "%deepnote.commands.newProject.title%",
                 "category": "Deepnote",
@@ -181,6 +187,12 @@
                 "title": "%deepnote.commands.addBigNumberChartBlock.title%",
                 "category": "Deepnote",
                 "icon": "$(graph)"
+            },
+            {
+                "command": "deepnote.addChartBlock",
+                "title": "%deepnote.commands.addChartBlock.title%",
+                "category": "Deepnote",
+                "icon": "$(graph-line)"
             },
             {
                 "command": "deepnote.addInputTextBlock",
@@ -824,6 +836,11 @@
                     "when": "editorFocus && editorLangId == python && jupyter.hascodecells && !notebookEditorFocused && isWorkspaceTrusted",
                     "command": "jupyter.exportfileasnotebook",
                     "group": "Jupyter3@2"
+                },
+                {
+                    "when": "resourceExtname == .deepnote",
+                    "command": "deepnote.openInDeepnote",
+                    "group": "navigation"
                 }
             ],
             "editor.interactiveWindow.context": [
@@ -916,6 +933,51 @@
                 {
                     "command": "deepnote.addSqlBlock",
                     "group": "navigation@1",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addChartBlock",
+                    "group": "navigation@2",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addBigNumberChartBlock",
+                    "group": "navigation@3",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addInputTextBlock",
+                    "group": "navigation@4",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addInputTextareaBlock",
+                    "group": "navigation@5",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addInputSelectBlock",
+                    "group": "navigation@6",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addInputSliderBlock",
+                    "group": "navigation@7",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addInputCheckboxBlock",
+                    "group": "navigation@8",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addInputDateBlock",
+                    "group": "navigation@9",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addInputDateRangeBlock",
+                    "group": "navigation@10",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
@@ -1484,6 +1546,18 @@
             "type": "object",
             "title": "Deepnote",
             "properties": {
+                "deepnote.domain": {
+                    "type": "string",
+                    "default": "deepnote.com",
+                    "description": "Deepnote domain (e.g., 'deepnote.com' or 'ra-18838.deepnote-staging.com')",
+                    "scope": "application"
+                },
+                "deepnote.disableSSLVerification": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Disable SSL certificate verification (for development only)",
+                    "scope": "application"
+                },
                 "jupyter.experiments.enabled": {
                     "type": "boolean",
                     "default": true,

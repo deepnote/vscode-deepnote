@@ -9,6 +9,7 @@ import {
     IntegrationType,
     PostgresIntegrationConfig,
     BigQueryIntegrationConfig,
+    DATAFRAME_SQL_INTEGRATION_ID,
     SnowflakeIntegrationConfig,
     SnowflakeAuthMethods
 } from './integrationTypes';
@@ -74,7 +75,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         const uri = Uri.file('/test/notebook.deepnote');
         const notebook = createMockNotebook(uri, [
             createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT * FROM df', {
-                sql_integration_id: 'deepnote-dataframe-sql'
+                sql_integration_id: DATAFRAME_SQL_INTEGRATION_ID
             })
         ]);
 

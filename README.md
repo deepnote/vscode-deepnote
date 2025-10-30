@@ -12,6 +12,7 @@ A powerful [Visual Studio Code](https://code.visualstudio.com/),[Cursor](https:/
 
 ---
 # 🚀 Deepnote in VS Code, Cursor and Windsurf - data notebook for AI era
+
 Run Deepnote locally inside VS Code, Cursor and Windsurf — not Jupyter — and unlock the next generation of data workflows:
 - 🧠 **SQL in VS Code** — Run SQL queries out of the box, no extensions needed
 - 🧩 **Rich block types** — Combine Python, Markdown, data visualizations, tables, and more — all in one place

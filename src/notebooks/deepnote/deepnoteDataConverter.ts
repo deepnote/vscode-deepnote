@@ -27,6 +27,7 @@ import {
     ButtonBlockConverter
 } from './converters/inputConverters';
 import { CHART_BIG_NUMBER_MIME_TYPE } from '../../platform/deepnote/deepnoteConstants';
+import { generateUuid } from '../../platform/common/uuid';
 
 /**
  * Utility class for converting between Deepnote block structures and VS Code notebook cells.
@@ -168,7 +169,7 @@ export class DeepnoteDataConverter {
 
     private createFallbackBlock(cell: NotebookCellData, index: number): DeepnoteBlock {
         return {
-            blockGroup: 'default-group',
+            blockGroup: generateUuid(),
             id: generateBlockId(),
             sortingKey: generateSortingKey(index),
             type: cell.kind === NotebookCellKind.Code ? 'code' : 'markdown',

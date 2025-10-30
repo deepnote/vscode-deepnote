@@ -208,4 +208,5 @@ export interface ICommandNameArgumentTypeMapping {
     [DSCommands.DeleteNotebook]: [];
     [DSCommands.DuplicateNotebook]: [];
     [DSCommands.AddNotebookToProject]: [];
+    [DSCommands.OpenInDeepnote]: [];
 }

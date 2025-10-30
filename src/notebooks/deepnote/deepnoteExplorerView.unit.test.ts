@@ -266,7 +266,9 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             const yamlContent = Buffer.from(capturedContent!).toString('utf8');
             const projectData = yaml.load(yamlContent) as any;
 
-            expect(projectData.version).to.equal(1.0);
+            expect(projectData.version).to.equal('1.0.0');
+            expect(projectData.metadata.createdAt).to.exist;
+            expect(projectData.metadata.modifiedAt).to.exist;
             expect(projectData.project.id).to.equal(projectId);
             expect(projectData.project.name).to.equal(projectName);
             expect(projectData.project.notebooks).to.have.lengthOf(1);

@@ -803,6 +803,16 @@
                     "command": "deepnote.refreshExplorer",
                     "when": "view == deepnoteExplorer",
                     "group": "navigation@3"
+                },
+                {
+                    "command": "deepnote.environments.create",
+                    "when": "view == deepnoteEnvironments",
+                    "group": "navigation@4"
+                },
+                {
+                    "command": "deepnote.environments.refresh",
+                    "when": "view == deepnoteEnvironments",
+                    "group": "navigation@5"
                 }
             ],
             "editor/context": [
@@ -1430,18 +1440,6 @@
                     "group": "jupyter",
                     "title": "%jupyter.command.jupyter.runFileInteractive.title%",
                     "when": "resourceLangId == python && !isInDiffEditor && isWorkspaceTrusted"
-                }
-            ],
-            "view/title": [
-                {
-                    "command": "deepnote.environments.create",
-                    "when": "view == deepnoteEnvironments",
-                    "group": "navigation@1"
-                },
-                {
-                    "command": "deepnote.environments.refresh",
-                    "when": "view == deepnoteEnvironments",
-                    "group": "navigation@2"
                 }
             ],
             "view/item/context": [

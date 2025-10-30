@@ -216,7 +216,7 @@ export class DeepnoteExplorerView {
             const firstBlock = {
                 blockGroup: generateUuid(),
                 content: '',
-                executionCount: null,
+                executionCount: 0,
                 id: generateUuid(),
                 metadata: {},
                 outputs: [],
@@ -226,8 +226,9 @@ export class DeepnoteExplorerView {
             };
 
             const projectData = {
-                version: 1.0,
+                version: '1.0.0',
                 metadata: {
+                    createdAt: new Date().toISOString(),
                     modifiedAt: new Date().toISOString()
                 },
                 project: {

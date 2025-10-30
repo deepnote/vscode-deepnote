@@ -2,7 +2,7 @@ import { assert } from 'chai';
 import { NotebookCellKind, type NotebookCellData } from 'vscode';
 
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
-import type { DeepnoteBlock, DeepnoteOutput } from './deepnoteTypes';
+import type { DeepnoteBlock, DeepnoteOutput } from '../../platform/deepnote/deepnoteTypes';
 
 suite('DeepnoteDataConverter', () => {
     let converter: DeepnoteDataConverter;
@@ -431,6 +431,48 @@ suite('DeepnoteDataConverter', () => {
             assert.strictEqual(outputs[0].items[0].mime, 'text/plain');
             assert.strictEqual(new TextDecoder().decode(outputs[0].items[0].data), 'fallback text');
         });
+
+        test('converts SQL metadata output', () => {
+            const sqlMetadata = {
+                status: 'read_from_cache_success',
+                cache_created_at: '2024-10-21T10:30:00Z',
+                compiled_query: 'SELECT * FROM users',
+                variable_type: 'dataframe',
+                integration_id: 'postgres-prod',
+                size_in_bytes: 2621440
+            };
+
+            const deepnoteOutputs: DeepnoteOutput[] = [
+                {
+                    output_type: 'execute_result',
+                    execution_count: 1,
+                    data: {
+                        'application/vnd.deepnote.sql-output-metadata+json': sqlMetadata
+                    }
+                }
+            ];
+
+            const blocks: DeepnoteBlock[] = [
+                {
+                    blockGroup: 'test-group',
+                    id: 'block1',
+                    type: 'code',
+                    content: 'SELECT * FROM users',
+                    sortingKey: 'a0',
+                    outputs: deepnoteOutputs
+                }
+            ];
+
+            const cells = converter.convertBlocksToCells(blocks);
+            const outputs = cells[0].outputs!;
+
+            assert.strictEqual(outputs.length, 1);
+            assert.strictEqual(outputs[0].items.length, 1);
+            assert.strictEqual(outputs[0].items[0].mime, 'application/vnd.deepnote.sql-output-metadata+json');
+
+            const outputData = JSON.parse(new TextDecoder().decode(outputs[0].items[0].data));
+            assert.deepStrictEqual(outputData, sqlMetadata);
+        });
     });
 
     suite('round trip conversion', () => {
@@ -466,6 +508,53 @@ suite('DeepnoteDataConverter', () => {
             const roundTripBlocks = converter.convertCellsToBlocks(cells);
 
             assert.deepStrictEqual(roundTripBlocks, originalBlocks);
+        });
+
+        test('SQL metadata output round-trips correctly', () => {
+            const sqlMetadata = {
+                status: 'read_from_cache_success',
+                cache_created_at: '2024-10-21T10:30:00Z',
+                compiled_query: 'SELECT * FROM users WHERE active = true',
+                variable_type: 'dataframe',
+                integration_id: 'postgres-prod',
+                size_in_bytes: 2621440
+            };
+
+            const originalBlocks: DeepnoteBlock[] = [
+                {
+                    blockGroup: 'test-group',
+                    id: 'sql-block',
+                    type: 'code',
+                    content: 'SELECT * FROM users WHERE active = true',
+                    sortingKey: 'a0',
+                    executionCount: 1,
+                    metadata: {},
+                    outputs: [
+                        {
+                            output_type: 'execute_result',
+                            execution_count: 1,
+                            data: {
+                                'application/vnd.deepnote.sql-output-metadata+json': sqlMetadata
+                            }
+                        }
+                    ]
+                }
+            ];
+
+            const cells = converter.convertBlocksToCells(originalBlocks);
+            const roundTripBlocks = converter.convertCellsToBlocks(cells);
+
+            // The round-trip should preserve the SQL metadata output
+            assert.strictEqual(roundTripBlocks.length, 1);
+            assert.strictEqual(roundTripBlocks[0].id, 'sql-block');
+            assert.strictEqual(roundTripBlocks[0].outputs?.length, 1);
+
+            const output = roundTripBlocks[0].outputs![0] as {
+                output_type: string;
+                data?: Record<string, unknown>;
+            };
+            assert.strictEqual(output.output_type, 'execute_result');
+            assert.deepStrictEqual(output.data?.['application/vnd.deepnote.sql-output-metadata+json'], sqlMetadata);
         });
 
         test('real deepnote notebook round-trips without losing data', () => {

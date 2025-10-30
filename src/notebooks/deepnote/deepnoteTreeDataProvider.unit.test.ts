@@ -2,7 +2,7 @@ import { assert } from 'chai';
 
 import { DeepnoteTreeDataProvider } from './deepnoteTreeDataProvider';
 import { DeepnoteTreeItem, DeepnoteTreeItemType } from './deepnoteTreeItem';
-import type { DeepnoteProject } from './deepnoteTypes';
+import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 
 suite('DeepnoteTreeDataProvider', () => {
     let provider: DeepnoteTreeDataProvider;

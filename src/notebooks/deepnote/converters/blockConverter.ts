@@ -1,6 +1,6 @@
 import type { NotebookCellData } from 'vscode';
 
-import type { DeepnoteBlock } from '../deepnoteTypes';
+import type { DeepnoteBlock } from '../../../platform/deepnote/deepnoteTypes';
 
 export interface BlockConverter {
     applyChangesToBlock(block: DeepnoteBlock, cell: NotebookCellData): void;

@@ -5,8 +5,15 @@ import { IExtensionContext } from '../../../platform/common/types';
 import { Commands } from '../../../platform/common/constants';
 import { logger } from '../../../platform/logging';
 import { IIntegrationDetector, IIntegrationManager, IIntegrationStorage, IIntegrationWebviewProvider } from './types';
-import { IntegrationStatus, IntegrationWithStatus } from './integrationTypes';
+import {
+    DEEPNOTE_TO_INTEGRATION_TYPE,
+    IntegrationStatus,
+    IntegrationType,
+    IntegrationWithStatus,
+    RawIntegrationType
+} from '../../../platform/notebooks/deepnote/integrationTypes';
 import { BlockWithIntegration, scanBlocksForIntegrations } from './integrationUtils';
+import { IDeepnoteNotebookManager } from '../../types';
 
 /**
  * Manages integration UI and commands for Deepnote notebooks
@@ -21,7 +28,8 @@ export class IntegrationManager implements IIntegrationManager {
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
         @inject(IIntegrationDetector) private readonly integrationDetector: IIntegrationDetector,
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
-        @inject(IIntegrationWebviewProvider) private readonly webviewProvider: IIntegrationWebviewProvider
+        @inject(IIntegrationWebviewProvider) private readonly webviewProvider: IIntegrationWebviewProvider,
+        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager
     ) {}
 
     public activate(): void {
@@ -149,10 +157,34 @@ export class IntegrationManager implements IIntegrationManager {
         // ensure it's in the map even if not detected from the project
         if (selectedIntegrationId && !integrations.has(selectedIntegrationId)) {
             logger.debug(`IntegrationManager: Adding requested integration ${selectedIntegrationId} to the map`);
-            const config = await this.integrationStorage.get(selectedIntegrationId);
+            const config = await this.integrationStorage.getIntegrationConfig(selectedIntegrationId);
+
+            // Try to get integration metadata from the project
+            const project = this.notebookManager.getOriginalProject(projectId);
+            const projectIntegration = project?.project.integrations?.find((i) => i.id === selectedIntegrationId);
+
+            let integrationName: string | undefined;
+            let integrationType: IntegrationType | undefined;
+
+            if (projectIntegration) {
+                integrationName = projectIntegration.name;
+
+                // Validate that projectIntegration.type exists in the mapping before lookup
+                if (projectIntegration.type in DEEPNOTE_TO_INTEGRATION_TYPE) {
+                    // Map the Deepnote integration type to our IntegrationType
+                    integrationType = DEEPNOTE_TO_INTEGRATION_TYPE[projectIntegration.type as RawIntegrationType];
+                } else {
+                    logger.warn(
+                        `IntegrationManager: Unknown integration type '${projectIntegration.type}' for integration ID '${selectedIntegrationId}' in project '${projectId}'. Integration type will be undefined.`
+                    );
+                }
+            }
+
             integrations.set(selectedIntegrationId, {
                 config: config || null,
-                status: config ? IntegrationStatus.Connected : IntegrationStatus.Disconnected
+                status: config ? IntegrationStatus.Connected : IntegrationStatus.Disconnected,
+                integrationName,
+                integrationType
             });
         }
 
@@ -162,7 +194,7 @@ export class IntegrationManager implements IIntegrationManager {
         }
 
         // Show the webview with optional selected integration
-        await this.webviewProvider.show(integrations, selectedIntegrationId);
+        await this.webviewProvider.show(projectId, integrations, selectedIntegrationId);
     }
 
     /**

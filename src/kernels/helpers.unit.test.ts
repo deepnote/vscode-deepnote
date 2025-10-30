@@ -646,4 +646,315 @@ suite('Kernel Connection Helpers', () => {
             assert.strictEqual(name, '.env (Python 9.8.7)');
         });
     });
+
+    suite('executeSilently', () => {
+        interface MockKernelOptions {
+            status: 'ok' | 'error';
+            messages?: Array<{
+                msg_type: 'stream' | 'error' | 'display_data' | 'execute_result';
+                content: any;
+            }>;
+            errorContent?: {
+                ename: string;
+                evalue: string;
+                traceback: string[];
+            };
+        }
+
+        function createMockKernel(options: MockKernelOptions) {
+            return {
+                requestExecute: () => {
+                    let resolvePromise: (value: any) => void;
+
+                    // Create a promise that will be resolved after IOPub messages are dispatched
+                    const donePromise = new Promise<any>((resolve) => {
+                        resolvePromise = resolve;
+                    });
+
+                    return {
+                        done: donePromise,
+                        set onIOPub(cb: (msg: any) => void) {
+                            // Invoke IOPub callback synchronously with all messages
+                            if (options.messages && options.messages.length > 0) {
+                                options.messages.forEach((msg) => {
+                                    cb({
+                                        header: { msg_type: msg.msg_type },
+                                        content: msg.content
+                                    });
+                                });
+                            }
+                            // Resolve the done promise after messages are dispatched
+                            resolvePromise({
+                                content:
+                                    options.status === 'ok'
+                                        ? { status: 'ok' as const }
+                                        : {
+                                              status: 'error' as const,
+                                              ...options.errorContent
+                                          }
+                            });
+                        }
+                    };
+                }
+            };
+        }
+
+        test('Returns outputs from kernel execution', async () => {
+            const mockKernel = createMockKernel({
+                status: 'ok',
+                messages: [
+                    {
+                        msg_type: 'stream',
+                        content: {
+                            name: 'stdout',
+                            text: 'hello\n'
+                        }
+                    }
+                ]
+            });
+
+            const code = 'print("hello")';
+            const { executeSilently } = await import('./helpers');
+            const result = await executeSilently(mockKernel as any, code);
+
+            // executeSilently should return outputs array with collected stream output
+            assert.isArray(result);
+            assert.equal(result.length, 1);
+            assert.equal(result[0].output_type, 'stream');
+            assert.equal((result[0] as any).name, 'stdout');
+            assert.equal((result[0] as any).text, 'hello\n');
+        });
+
+        test('Collects error outputs', async () => {
+            const mockKernel = createMockKernel({
+                status: 'error',
+                errorContent: {
+                    ename: 'NameError',
+                    evalue: 'name not defined',
+                    traceback: ['Traceback...']
+                },
+                messages: [
+                    {
+                        msg_type: 'error',
+                        content: {
+                            ename: 'NameError',
+                            evalue: 'name not defined',
+                            traceback: ['Traceback...']
+                        }
+                    }
+                ]
+            });
+
+            const code = 'undefined_variable';
+            const { executeSilently } = await import('./helpers');
+            const result = await executeSilently(mockKernel as any, code);
+
+            assert.isArray(result);
+            assert.equal(result.length, 1);
+            assert.equal(result[0].output_type, 'error');
+            assert.equal((result[0] as any).ename, 'NameError');
+            assert.equal((result[0] as any).evalue, 'name not defined');
+            assert.deepStrictEqual((result[0] as any).traceback, ['Traceback...']);
+        });
+
+        test('Collects display_data outputs', async () => {
+            const mockKernel = createMockKernel({
+                status: 'ok',
+                messages: [
+                    {
+                        msg_type: 'display_data',
+                        content: {
+                            data: {
+                                'text/plain': 'some data'
+                            },
+                            metadata: {}
+                        }
+                    }
+                ]
+            });
+
+            const code = 'display("data")';
+            const { executeSilently } = await import('./helpers');
+            const result = await executeSilently(mockKernel as any, code);
+
+            assert.isArray(result);
+            assert.equal(result.length, 1);
+            assert.equal(result[0].output_type, 'display_data');
+            assert.deepStrictEqual((result[0] as any).data, { 'text/plain': 'some data' });
+            assert.deepStrictEqual((result[0] as any).metadata, {});
+        });
+
+        test('Handles multiple outputs', async () => {
+            const mockKernel = createMockKernel({
+                status: 'ok',
+                messages: [
+                    {
+                        msg_type: 'stream',
+                        content: {
+                            name: 'stdout',
+                            text: 'output 1'
+                        }
+                    },
+                    {
+                        msg_type: 'stream',
+                        content: {
+                            name: 'stdout',
+                            text: 'output 2'
+                        }
+                    }
+                ]
+            });
+
+            const code = 'print("1"); print("2")';
+            const { executeSilently } = await import('./helpers');
+            const result = await executeSilently(mockKernel as any, code);
+
+            assert.isArray(result);
+            // Consecutive stream messages with the same name are concatenated
+            assert.equal(result.length, 1);
+            assert.equal(result[0].output_type, 'stream');
+            assert.equal((result[0] as any).name, 'stdout');
+            assert.equal((result[0] as any).text, 'output 1output 2');
+        });
+
+        test('Collects execute_result outputs', async () => {
+            const mockKernel = createMockKernel({
+                status: 'ok',
+                messages: [
+                    {
+                        msg_type: 'execute_result',
+                        content: {
+                            data: {
+                                'text/plain': '42'
+                            },
+                            metadata: {},
+                            execution_count: 1
+                        }
+                    }
+                ]
+            });
+
+            const code = '42';
+            const { executeSilently } = await import('./helpers');
+            const result = await executeSilently(mockKernel as any, code);
+
+            assert.isArray(result);
+            assert.equal(result.length, 1);
+            assert.equal(result[0].output_type, 'execute_result');
+            assert.deepStrictEqual((result[0] as any).data, { 'text/plain': '42' });
+            assert.deepStrictEqual((result[0] as any).metadata, {});
+            assert.equal((result[0] as any).execution_count, 1);
+        });
+
+        test('Stream messages with different names produce separate outputs', async () => {
+            const mockKernel = createMockKernel({
+                status: 'ok',
+                messages: [
+                    {
+                        msg_type: 'stream',
+                        content: {
+                            name: 'stdout',
+                            text: 'standard output'
+                        }
+                    },
+                    {
+                        msg_type: 'stream',
+                        content: {
+                            name: 'stderr',
+                            text: 'error output'
+                        }
+                    },
+                    {
+                        msg_type: 'stream',
+                        content: {
+                            name: 'stdout',
+                            text: ' more stdout'
+                        }
+                    }
+                ]
+            });
+
+            const code = 'print("test")';
+            const { executeSilently } = await import('./helpers');
+            const result = await executeSilently(mockKernel as any, code);
+
+            assert.isArray(result);
+            // Should have 3 outputs: stdout, stderr, stdout (not concatenated because stderr is in between)
+            assert.equal(result.length, 3);
+            assert.equal(result[0].output_type, 'stream');
+            assert.equal((result[0] as any).name, 'stdout');
+            assert.equal((result[0] as any).text, 'standard output');
+            assert.equal(result[1].output_type, 'stream');
+            assert.equal((result[1] as any).name, 'stderr');
+            assert.equal((result[1] as any).text, 'error output');
+            assert.equal(result[2].output_type, 'stream');
+            assert.equal((result[2] as any).name, 'stdout');
+            assert.equal((result[2] as any).text, ' more stdout');
+        });
+
+        test('errorOptions with traceErrors logs errors', async () => {
+            const mockKernel = createMockKernel({
+                status: 'error',
+                errorContent: {
+                    ename: 'ValueError',
+                    evalue: 'invalid value',
+                    traceback: ['Traceback (most recent call last):', '  File "<stdin>", line 1']
+                },
+                messages: [
+                    {
+                        msg_type: 'error',
+                        content: {
+                            ename: 'ValueError',
+                            evalue: 'invalid value',
+                            traceback: ['Traceback (most recent call last):', '  File "<stdin>", line 1']
+                        }
+                    }
+                ]
+            });
+
+            const code = 'raise ValueError("invalid value")';
+            const { executeSilently } = await import('./helpers');
+            const result = await executeSilently(mockKernel as any, code, {
+                traceErrors: true,
+                traceErrorsMessage: 'Custom error message'
+            });
+
+            assert.isArray(result);
+            assert.equal(result.length, 1);
+            assert.equal(result[0].output_type, 'error');
+            assert.equal((result[0] as any).ename, 'ValueError');
+        });
+
+        test('errorOptions without traceErrors still collects errors', async () => {
+            const mockKernel = createMockKernel({
+                status: 'error',
+                errorContent: {
+                    ename: 'RuntimeError',
+                    evalue: 'runtime issue',
+                    traceback: ['Traceback...']
+                },
+                messages: [
+                    {
+                        msg_type: 'error',
+                        content: {
+                            ename: 'RuntimeError',
+                            evalue: 'runtime issue',
+                            traceback: ['Traceback...']
+                        }
+                    }
+                ]
+            });
+
+            const code = 'raise RuntimeError("runtime issue")';
+            const { executeSilently } = await import('./helpers');
+            const result = await executeSilently(mockKernel as any, code, {
+                traceErrors: false
+            });
+
+            assert.isArray(result);
+            assert.equal(result.length, 1);
+            assert.equal(result[0].output_type, 'error');
+            assert.equal((result[0] as any).ename, 'RuntimeError');
+        });
+    });
 });

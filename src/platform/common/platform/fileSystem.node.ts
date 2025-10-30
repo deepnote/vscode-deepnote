@@ -3,10 +3,9 @@
 
 import * as path from '../../../platform/vscode-path/path';
 import * as fs from 'fs-extra';
-import glob from 'glob';
+import { glob } from 'glob';
 import { injectable } from 'inversify';
 import * as tmp from 'tmp';
-import { promisify } from 'util';
 import { TemporaryFile } from './types';
 import { IFileSystemNode } from './types.node';
 import { ENCODING, FileSystem as FileSystemBase } from './fileSystem';
@@ -19,10 +18,8 @@ import { getFilePath } from './fs-paths';
  */
 @injectable()
 export class FileSystem extends FileSystemBase implements IFileSystemNode {
-    private globFiles: (pat: string, options?: { cwd: string; dot?: boolean }) => Promise<string[]>;
-    constructor() {
-        super();
-        this.globFiles = promisify(glob);
+    private async globFiles(pat: string, options?: { cwd: string; dot?: boolean }): Promise<string[]> {
+        return glob(pat, options || {});
     }
 
     public createLocalWriteStream(path: string): fs.WriteStream {

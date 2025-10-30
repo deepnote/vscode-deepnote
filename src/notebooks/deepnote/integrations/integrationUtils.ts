@@ -1,6 +1,10 @@
 import { logger } from '../../../platform/logging';
 import { IIntegrationStorage } from './types';
-import { DATAFRAME_SQL_INTEGRATION_ID, IntegrationStatus, IntegrationWithStatus } from './integrationTypes';
+import {
+    DATAFRAME_SQL_INTEGRATION_ID,
+    IntegrationStatus,
+    IntegrationWithStatus
+} from '../../../platform/notebooks/deepnote/integrationTypes';
 
 /**
  * Represents a block with SQL integration metadata
@@ -48,7 +52,7 @@ export async function scanBlocksForIntegrations(
         logger.debug(`${logContext}: Found integration: ${integrationId} in block ${block.id}`);
 
         // Check if the integration is configured
-        const config = await integrationStorage.get(integrationId);
+        const config = await integrationStorage.getIntegrationConfig(integrationId);
 
         const status: IntegrationWithStatus = {
             config: config || null,

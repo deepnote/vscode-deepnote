@@ -11,6 +11,7 @@ import { IOutputChannel, IExtensionContext } from '../../platform/common/types';
 import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
 import { IFileSystem } from '../../platform/common/platform/types';
 import { Cancellation } from '../../platform/common/cancellation';
+import { DeepnoteVenvCreationError, DeepnoteToolkitInstallError } from '../../platform/errors/deepnoteKernelErrors';
 
 /**
  * Handles installation of the deepnote-toolkit Python package.
@@ -19,7 +20,7 @@ import { Cancellation } from '../../platform/common/cancellation';
 export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
     private readonly venvPythonPaths: Map<string, Uri> = new Map();
     // Track in-flight installations per venv path to prevent concurrent installs
-    private readonly pendingInstallations: Map<string, Promise<PythonEnvironment | undefined>> = new Map();
+    private readonly pendingInstallations: Map<string, Promise<PythonEnvironment>> = new Map();
 
     constructor(
         @inject(IProcessServiceFactory) private readonly processServiceFactory: IProcessServiceFactory,
@@ -62,7 +63,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         baseInterpreter: PythonEnvironment,
         deepnoteFileUri: Uri,
         token?: CancellationToken
-    ): Promise<PythonEnvironment | undefined> {
+    ): Promise<PythonEnvironment> {
         const venvPath = this.getVenvPath(deepnoteFileUri);
         const venvKey = venvPath.fsPath;
 
@@ -119,7 +120,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         deepnoteFileUri: Uri,
         venvPath: Uri,
         token?: CancellationToken
-    ): Promise<PythonEnvironment | undefined> {
+    ): Promise<PythonEnvironment> {
         try {
             Cancellation.throwIfCanceled(token);
 
@@ -158,7 +159,12 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                     logger.error(`venv stderr: ${venvResult.stderr}`);
                 }
                 this.outputChannel.appendLine('Error: Failed to create virtual environment');
-                return undefined;
+
+                throw new DeepnoteVenvCreationError(
+                    baseInterpreter.uri.fsPath,
+                    venvPath.fsPath,
+                    venvResult.stderr || 'Virtual environment was created but Python interpreter not found'
+                );
             }
 
             // Use undefined as resource to get full system environment (including git in PATH)
@@ -250,12 +256,33 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             } else {
                 logger.error('deepnote-toolkit installation failed');
                 this.outputChannel.appendLine('✗ deepnote-toolkit installation failed');
-                return undefined;
+
+                throw new DeepnoteToolkitInstallError(
+                    venvInterpreter.uri.fsPath,
+                    venvPath.fsPath,
+                    DEEPNOTE_TOOLKIT_WHEEL_URL,
+                    installResult.stdout || '',
+                    installResult.stderr || 'Package installation completed but verification failed'
+                );
             }
         } catch (ex) {
+            // If this is already a DeepnoteKernelError, rethrow it without wrapping
+            if (ex instanceof DeepnoteVenvCreationError || ex instanceof DeepnoteToolkitInstallError) {
+                throw ex;
+            }
+
+            // Otherwise, log full details and wrap in a generic toolkit install error
             logger.error(`Failed to set up deepnote-toolkit: ${ex}`);
-            this.outputChannel.appendLine(`Error setting up deepnote-toolkit: ${ex}`);
-            return undefined;
+            this.outputChannel.appendLine('Failed to set up deepnote-toolkit; see logs for details');
+
+            throw new DeepnoteToolkitInstallError(
+                baseInterpreter.uri.fsPath,
+                venvPath.fsPath,
+                DEEPNOTE_TOOLKIT_WHEEL_URL,
+                '',
+                ex instanceof Error ? ex.message : String(ex),
+                ex instanceof Error ? ex : undefined
+            );
         }
     }
 

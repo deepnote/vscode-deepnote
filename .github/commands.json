@@ -261,7 +261,7 @@
 		"action": "close",
 		"reason": "not_planned",
 		"addLabel": "*caused-by-extension",
-		"comment": "It looks like this is caused by the Jupyter extension. Please file the issue to the [Jupyter extension repository](https://github.com/microsoft/vscode-jupyter). Make sure to check their issue reporting template and provide them relevant information such as the extension version you're using. See also our [issue reporting guidelines](https://aka.ms/vscodeissuereporting) for more information.\n\nHappy Coding!"
+		"comment": "It looks like this is caused by the Jupyter extension. Please file the issue to the [Jupyter extension repository](https://github.com/deepnote/vscode-deepnote). Make sure to check their issue reporting template and provide them relevant information such as the extension version you're using. See also our [issue reporting guidelines](https://aka.ms/vscodeissuereporting) for more information.\n\nHappy Coding!"
 	},
 	{
 		"type": "comment",

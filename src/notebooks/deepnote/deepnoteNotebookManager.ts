@@ -1,7 +1,7 @@
 import { injectable } from 'inversify';
 
-import { IDeepnoteNotebookManager } from '../types';
-import type { DeepnoteProject } from './deepnoteTypes';
+import { IDeepnoteNotebookManager, ProjectIntegration } from '../types';
+import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 
 /**
  * Centralized manager for tracking Deepnote notebook selections and project state.
@@ -73,6 +73,35 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
      */
     updateCurrentNotebookId(projectId: string, notebookId: string): void {
         this.currentNotebookId.set(projectId, notebookId);
+    }
+
+    /**
+     * Updates the integrations list in the project data.
+     * This modifies the stored project to reflect changes in configured integrations.
+     *
+     * @param projectId - Project identifier
+     * @param integrations - Array of integration metadata to store in the project
+     * @returns `true` if the project was found and updated successfully, `false` if the project does not exist
+     */
+    updateProjectIntegrations(projectId: string, integrations: ProjectIntegration[]): boolean {
+        const project = this.originalProjects.get(projectId);
+
+        if (!project) {
+            return false;
+        }
+
+        const updatedProject = JSON.parse(JSON.stringify(project)) as DeepnoteProject;
+        updatedProject.project.integrations = integrations;
+
+        const currentNotebookId = this.currentNotebookId.get(projectId);
+
+        if (currentNotebookId) {
+            this.storeOriginalProject(projectId, updatedProject, currentNotebookId);
+        } else {
+            this.originalProjects.set(projectId, updatedProject);
+        }
+
+        return true;
     }
 
     /**

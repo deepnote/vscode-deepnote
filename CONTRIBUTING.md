@@ -2,6 +2,15 @@
 
 Thank you for your interest in contributing to the Deepnote VS Code extension! This guide will help you set up your development environment and understand the contribution workflow.
 
+---
+
+| `main` branch |
+| ------------- |
+
+## | ![Main Build](https://github.com/deepnote/vscode-deepnote/actions/workflows/ci.yml/badge.svg?branch=main)
+
+[For contributing to the [Microsoft Python Language Server](https://github.com/Microsoft/python-language-server) see its own repo; for [Pylance](https://github.com/microsoft/pylance-release) see its own repo; for [debugpy](https://github.com/microsoft/debugpy) see its own repo]
+
 ## Contributing a pull request
 
 ### Prerequisites
@@ -12,10 +21,10 @@ Thank you for your interest in contributing to the Deepnote VS Code extension! T
 4. Windows, macOS, or Linux
 5. [Visual Studio Code](https://code.visualstudio.com/)
 6. The following VS Code extensions:
-    - [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint)
-    - [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)
-    - [EditorConfig for VS Code](https://marketplace.visualstudio.com/items?itemName=EditorConfig.EditorConfig)
-    - [Python Extension for VS Code](https://marketplace.visualstudio.com/items?itemName=ms-python.python)
+   - [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint)
+   - [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)
+   - [EditorConfig for VS Code](https://marketplace.visualstudio.com/items?itemName=EditorConfig.EditorConfig)
+   - [Python Extension for VS Code](https://marketplace.visualstudio.com/items?itemName=ms-python.python)
 
 <details>
 <summary><b>📦Or use these commands to install the prerequisites</b></summary>
@@ -93,6 +102,7 @@ Then install all the extensions listed under "Workspace Recommendations".
 The `@deepnote/blocks` package is published on GitHub Packages. To install it, you'll need to authenticate with GitHub:
 
 1. Create a GitHub Personal Access Token (classic) with `read:packages` scope:
+
    - Go to https://github.com/settings/tokens
    - Click "Generate new token (classic)"
    - Select the `read:packages` scope
@@ -104,7 +114,7 @@ The `@deepnote/blocks` package is published on GitHub Packages. To install it, y
    ```
    Replace `YOUR_TOKEN_HERE` with your actual token.
 
-After completing these steps, you can install dependencies normally with `npm ci`. The project's `.npmrc` file is already configured to use GitHub Packages for the `@deepnote` scope.
+After completing these steps, you can install dependencies normally with `npm install`. The project's `.npmrc` file is already configured to use GitHub Packages for the `@deepnote` scope.
 
 On Apple Silicon, you will have to use system versions of `libsodium` and `libzmq` instead of the bundled ones:
 
@@ -124,7 +134,7 @@ npm_config_build_from_source=true npm install zeromq@
 Install the dependecies:
 
 ```shell
-npm ci
+npm install
 # Run this to setup the necessary pre-commit hooks.
 npm run setup-precommit-hook
 python3 -m venv .venv
@@ -302,8 +312,8 @@ you can do this by setting environment variables. The same variables work when
 running from the command line or launching from within VSCode, though the
 mechanism used to specify them changes a little.
 
--   Setting `CI_PYTHON_PATH` lets you change the version of python the tests are executed with
--   Setting `VSC_JUPYTER_CI_TEST_GREP` lets you filter the tests by name
+- Setting `CI_PYTHON_PATH` lets you change the version of python the tests are executed with
+- Setting `VSC_JUPYTER_CI_TEST_GREP` lets you filter the tests by name
 
 _`CI_PYTHON_PATH`_
 
@@ -325,7 +335,7 @@ be matched against suite and test "names" to be run. By default all tests
 are run.
 
 For example, to run only the tests in the `DataScience - Kernels Finder` suite (from
-[`src/test/datascience/kernel-launcher/kernelFinder.vscode.test.ts`](https://github.com/microsoft/vscode-jupyter/blob/269e0790f9ef6f1571140f0650c6b5fb844f1940/src/test/datascience/kernel-launcher/kernelFinder.vscode.test.ts))
+[`src/test/datascience/kernel-launcher/kernelFinder.vscode.test.ts`](https://github.com/deepnote/vscode-deepnote/blob/269e0790f9ef6f1571140f0650c6b5fb844f1940/src/test/datascience/kernel-launcher/kernelFinder.vscode.test.ts))
 you would set the value to `Kernels Finder`.
 
 Be sure to escape any grep-sensitive characters in your suite name.
@@ -333,7 +343,7 @@ Be sure to escape any grep-sensitive characters in your suite name.
 In some rare cases in the "system" tests the `VSC_JUPYTER_CI_TEST_GREP`
 environment variable is ignored. If that happens then you will need to
 temporarily modify the `const defaultGrep =` line in
-[`src/test/index.ts`](https://github.com/microsoft/vscode-jupyter/blob/de1bfe1cbebc0f4e570dc4ae7e1ca057abb0533e/src/test/index.ts#L62).
+[`src/test/index.ts`](https://github.com/deepnote/vscode-deepnote/blob/de1bfe1cbebc0f4e570dc4ae7e1ca057abb0533e/src/test/index.ts#L62).
 
 _Launching from VSCode_
 
@@ -363,8 +373,8 @@ VSC_JUPYTER_CI_TEST_GREP=Sorting npm run testVSCode
 The extension has a number of scripts in ./pythonFiles. Tests for these
 scripts are found in ./pythonFiles/tests. To run those tests:
 
--   `python2.7 pythonFiles/tests/run_all.py`
--   `python3 -m pythonFiles.tests`
+- `python2.7 pythonFiles/tests/run_all.py`
+- `python3 -m pythonFiles.tests`
 
 By default, functional tests are included. To exclude them:
 
@@ -393,7 +403,7 @@ well!
 
 ### Folder Structure
 
-At a high level we have a bunch of folders. Each high level is described in this wiki [page](https://github.com/microsoft/vscode-jupyter/wiki/Source-Code-Organization)
+At a high level we have a bunch of folders. Each high level is described in this wiki [page](https://github.com/deepnote/vscode-deepnote/wiki/Source-Code-Organization)
 
 ### Typical workflow
 
@@ -401,21 +411,21 @@ Here's an example of a typical workflow:
 
 1. Sync to main (get your fork's main to match vscode-jupyter's main)
 1. Create branch
-1. `npm ci`
+1. `npm install`
 1. `npm run clean`
 1. Start VS code Insiders root
 1. CTRL+SHIFT+B (run the task `compile`)
 1. Make code changes
-1. Write and [run](https://github.com/microsoft/vscode-jupyter/blob/29c4be79f64df1858692321b43c3079bb77bdd69/.vscode/launch.json#L252) unit tests if appropriate
-1. Test with [`Extension`](https://github.com/microsoft/vscode-jupyter/blob/29c4be79f64df1858692321b43c3079bb77bdd69/.vscode/launch.json#L6) launch task
+1. Write and [run](https://github.com/deepnote/vscode-deepnote/blob/29c4be79f64df1858692321b43c3079bb77bdd69/.vscode/launch.json#L252) unit tests if appropriate
+1. Test with [`Extension`](https://github.com/deepnote/vscode-deepnote/blob/29c4be79f64df1858692321b43c3079bb77bdd69/.vscode/launch.json#L6) launch task
 1. Repeat until works in normal extension
-1. Test with [`Extension (web)`](https://github.com/microsoft/vscode-jupyter/blob/29c4be79f64df1858692321b43c3079bb77bdd69/.vscode/launch.json#L34) launch task
-1. Run [jupyter notebook server](https://github.com/microsoft/vscode-jupyter/wiki/Connecting-to-a-remote-Jupyter-server-from-vscode.dev) to use in web testing
+1. Test with [`Extension (web)`](https://github.com/deepnote/vscode-deepnote/blob/29c4be79f64df1858692321b43c3079bb77bdd69/.vscode/launch.json#L34) launch task
+1. Run [jupyter notebook server](https://github.com/deepnote/vscode-deepnote/wiki/Connecting-to-a-remote-Jupyter-server-from-vscode.dev) to use in web testing
 1. Repeat until works in web extension
-1. Write integration tests and [run](https://github.com/microsoft/vscode-jupyter/blob/29c4be79f64df1858692321b43c3079bb77bdd69/.vscode/launch.json#L216) locally.
+1. Write integration tests and [run](https://github.com/deepnote/vscode-deepnote/blob/29c4be79f64df1858692321b43c3079bb77bdd69/.vscode/launch.json#L216) locally.
 1. Submit PR
 1. Check PR output to make sure tests don't fail.
-1. Debug [CI test failures](https://github.com/microsoft/vscode-jupyter/wiki/Tests)
+1. Debug [CI test failures](https://github.com/deepnote/vscode-deepnote/wiki/Tests)
 
 ### Helping others
 
@@ -445,7 +455,7 @@ All development is actively done in the `main` branch of the
 repository. This allows us to have a
 [development build](#development-build) which is expected to be stable at
 all times. Once we reach a release candidate, it becomes
-our [release branch](https://github.com/microsoft/vscode-jupyter/branches).
+our [release branch](https://github.com/deepnote/vscode-deepnote/branches).
 At that point only what is in the release branch will make it into the next
 release.
 
@@ -478,7 +488,7 @@ Steps to build the extension on your machine once you've cloned the repo:
 ```bash
 > npm install -g @vscode/vsce
 # Perform the next steps in the vscode-jupyter folder.
-> npm ci
+> npm install
 > npm run clean
 > npm run package # This step takes around 10 minutes.
 ```

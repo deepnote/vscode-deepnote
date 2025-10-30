@@ -2,7 +2,7 @@ import { assert } from 'chai';
 import { TreeItemCollapsibleState, ThemeIcon } from 'vscode';
 
 import { DeepnoteTreeItem, DeepnoteTreeItemType, DeepnoteTreeItemContext } from './deepnoteTreeItem';
-import type { DeepnoteProject, DeepnoteNotebook } from './deepnoteTypes';
+import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 
 suite('DeepnoteTreeItem', () => {
     const mockProject: DeepnoteProject = {

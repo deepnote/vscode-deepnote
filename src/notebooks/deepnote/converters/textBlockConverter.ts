@@ -2,7 +2,7 @@ import { createMarkdown, stripMarkdown } from '@deepnote/blocks';
 import { NotebookCellData, NotebookCellKind } from 'vscode';
 
 import type { BlockConverter } from './blockConverter';
-import type { DeepnoteBlock } from '../deepnoteTypes';
+import type { DeepnoteBlock } from '../../../platform/deepnote/deepnoteTypes';
 
 export class TextBlockConverter implements BlockConverter {
     protected static readonly textBlockTypes = [

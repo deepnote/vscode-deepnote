@@ -1,5 +1,5 @@
 import { TreeItem, TreeItemCollapsibleState, Uri, ThemeIcon } from 'vscode';
-import type { DeepnoteProject, DeepnoteNotebook } from './deepnoteTypes';
+import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 
 /**
  * Represents different types of items in the Deepnote tree view

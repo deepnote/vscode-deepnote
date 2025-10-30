@@ -72,13 +72,15 @@ export interface IDeepnoteToolkitInstaller {
      * @param baseInterpreter The base Python interpreter to use for creating the venv
      * @param deepnoteFileUri The URI of the .deepnote file (used to create a unique venv per file)
      * @param token Cancellation token to cancel the operation
-     * @returns The Python interpreter from the venv if installed successfully, undefined otherwise
+     * @returns The Python interpreter from the venv
+     * @throws {DeepnoteVenvCreationError} If venv creation fails
+     * @throws {DeepnoteToolkitInstallError} If toolkit installation fails
      */
     ensureInstalled(
         baseInterpreter: PythonEnvironment,
         deepnoteFileUri: vscode.Uri,
         token?: vscode.CancellationToken
-    ): Promise<PythonEnvironment | undefined>;
+    ): Promise<PythonEnvironment>;
 
     /**
      * Gets the venv Python interpreter if toolkit is installed, undefined otherwise.

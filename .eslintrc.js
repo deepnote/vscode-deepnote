@@ -74,7 +74,7 @@ module.exports = {
         'import/no-unresolved': [
             'error',
             {
-                ignore: ['monaco-editor', 'vscode']
+                ignore: ['monaco-editor', 'vscode', 'react-error-boundary']
             }
         ],
         'import/prefer-default-export': 'off',

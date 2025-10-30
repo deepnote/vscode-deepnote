@@ -187,21 +187,13 @@ export async function run(): Promise<void> {
         default:
             break;
     }
-    const testFiles = await new Promise<string[]>((resolve, reject) => {
-        // If we have mulitple patterns, then turn into regex from `a,b,c` to `(a|b|c)`
-        const pattern = options.testFilesSuffix.includes(',')
-            ? `(${options.testFilesSuffix.split(',').join('|')})`
-            : options.testFilesSuffix;
-        glob(
-            `**/*${pattern}.js`,
-            { ignore: ['**/**.unit.test.js'].concat(ignoreGlob), cwd: testsRoot },
-            (error, files) => {
-                if (error) {
-                    return reject(error);
-                }
-                resolve(files);
-            }
-        );
+    // If we have mulitple patterns, then turn into regex from `a,b,c` to `(a|b|c)`
+    const pattern = options.testFilesSuffix.includes(',')
+        ? `(${options.testFilesSuffix.split(',').join('|')})`
+        : options.testFilesSuffix;
+    const testFiles = await glob(`**/*${pattern}.js`, {
+        ignore: ['**/**.unit.test.js'].concat(ignoreGlob),
+        cwd: testsRoot
     });
 
     // Setup test files that need to be run.

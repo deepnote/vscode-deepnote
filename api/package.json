@@ -12,13 +12,13 @@
     ],
     "types": "api.d.ts",
     "license": "MIT",
-    "homepage": "https://github.com/microsoft/vscode-jupyter",
+    "homepage": "https://github.com/deepnote/vscode-deepnote",
     "repository": {
         "type": "git",
-        "url": "https://github.com/Microsoft/vscode-jupyter"
+        "url": "https://github.com/deepnote/vscode-deepnote"
     },
     "bugs": {
-        "url": "https://github.com/Microsoft/vscode-jupyter/issues"
+        "url": "https://github.com/deepnote/vscode-deepnote/issues"
     },
     "scripts": {
         "buildStable": "npm run clean && node ./stable.js",

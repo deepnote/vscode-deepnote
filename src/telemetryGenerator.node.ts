@@ -771,15 +771,7 @@ function generateTelemetryGdpr(output: TelemetryEntry[]) {
 }
 
 async function generateTelemetryOutput() {
-    const files = await new Promise<string[]>((resolve, reject) => {
-        glob(path.join(EXTENSION_ROOT_DIR_FOR_TESTS, 'src/**/*.ts'), (ex, res) => {
-            if (ex) {
-                reject(ex);
-            } else {
-                resolve(res);
-            }
-        });
-    });
+    const files = await glob(path.join(EXTENSION_ROOT_DIR_FOR_TESTS, 'src/**/*.ts'));
     // Print out the source tree
     return generateDocumentation(files);
 }

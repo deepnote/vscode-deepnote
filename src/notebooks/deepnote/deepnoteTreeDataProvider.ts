@@ -12,7 +12,7 @@ import {
 import * as yaml from 'js-yaml';
 
 import { DeepnoteTreeItem, DeepnoteTreeItemType, DeepnoteTreeItemContext } from './deepnoteTreeItem';
-import type { DeepnoteProject, DeepnoteNotebook } from './deepnoteTypes';
+import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 
 /**
  * Tree data provider for the Deepnote explorer view.

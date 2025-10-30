@@ -255,7 +255,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
-        // Should return empty object when integration config is missing
+        // Should return only dataframe integration when integration config is missing
         assert.deepStrictEqual(envVars, EXPECTED_EMPTY_ENV_VARS);
     });
 
@@ -625,7 +625,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
             when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
 
-            // Should return empty object when unsupported auth method is encountered
+            // Should return only dataframe integration when unsupported auth method is encountered
             const envVars = await provider.getEnvironmentVariables(uri);
             assert.deepStrictEqual(envVars, EXPECTED_EMPTY_ENV_VARS);
         });

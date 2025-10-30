@@ -102,7 +102,7 @@ suite('DeepnoteNotebookCommandListener', () => {
         const TEST_INPUTS: Array<{
             description: string;
             cells: NotebookCell[];
-            prefix: 'df' | 'query' | 'input';
+            prefix: 'df' | 'query' | 'input' | 'chart';
             expected: string;
         }> = [
             // Tests with 'input' prefix
@@ -973,6 +973,188 @@ suite('DeepnoteNotebookCommandListener', () => {
                     Error,
                     'Failed to insert big number chart block'
                 );
+            });
+        });
+
+        suite('addChartBlock', () => {
+            test('should add chart block at the end when no selection exists', async () => {
+                // Setup mocks
+                const { editor, document } = createMockEditor([], undefined);
+                const { chainStub, executeCommandStub, getCapturedNotebookEdits } =
+                    mockNotebookUpdateAndExecute(editor);
+
+                // Call the method
+                await commandListener.addChartBlock();
+
+                const capturedNotebookEdits = getCapturedNotebookEdits();
+
+                // Verify chainWithPendingUpdates was called
+                assert.isTrue(chainStub.calledOnce, 'chainWithPendingUpdates should be called once');
+                assert.equal(chainStub.firstCall.args[0], document, 'Should be called with correct document');
+
+                // Verify the edits were captured
+                assert.isNotNull(capturedNotebookEdits, 'Notebook edits should be captured');
+                assert.isDefined(capturedNotebookEdits, 'Notebook edits should be defined');
+
+                const editsArray = capturedNotebookEdits!;
+                assert.equal(editsArray.length, 1, 'Should have one notebook edit');
+
+                const notebookEdit = editsArray[0] as any;
+                assert.equal(notebookEdit.newCells.length, 1, 'Should insert one cell');
+
+                const newCell = notebookEdit.newCells[0];
+                assert.equal(newCell.kind, NotebookCellKind.Code, 'Should be a code cell');
+                assert.equal(newCell.languageId, 'json', 'Should have json language');
+
+                // Verify cell content is valid JSON with correct structure
+                const content = JSON.parse(newCell.value);
+                assert.equal(content.variable, 'df_1', 'Should have correct variable name');
+                assert.property(content, 'spec', 'Should have spec property');
+                assert.property(content, 'filters', 'Should have filters property');
+
+                // Verify the spec has the correct Vega-Lite structure
+                assert.equal(content.spec.mark, 'line', 'Should be a line chart');
+                assert.equal(
+                    content.spec.$schema,
+                    'https://vega.github.io/schema/vega-lite/v5.json',
+                    'Should have Vega-Lite schema'
+                );
+                assert.deepStrictEqual(content.spec.data, { values: [] }, 'Should have empty data array');
+                assert.property(content.spec, 'encoding', 'Should have encoding property');
+                assert.property(content.spec.encoding, 'x', 'Should have x encoding');
+                assert.property(content.spec.encoding, 'y', 'Should have y encoding');
+
+                // Verify metadata structure
+                assert.property(newCell.metadata, '__deepnotePocket', 'Should have __deepnotePocket metadata');
+                assert.equal(newCell.metadata.__deepnotePocket.type, 'visualization', 'Should have visualization type');
+
+                // Verify reveal and selection were set
+                assert.isTrue((editor.revealRange as sinon.SinonStub).calledOnce, 'Should reveal the new cell range');
+                const revealCall = (editor.revealRange as sinon.SinonStub).firstCall;
+                assert.equal(revealCall.args[0].start, 0, 'Should reveal correct range start');
+                assert.equal(revealCall.args[0].end, 1, 'Should reveal correct range end');
+                assert.equal(revealCall.args[1], 0, 'Should use NotebookEditorRevealType.Default (value 0)');
+
+                // Verify notebook.cell.edit command was executed
+                assert.isTrue(
+                    executeCommandStub.calledWith('notebook.cell.edit'),
+                    'Should execute notebook.cell.edit command'
+                );
+            });
+
+            test('should add chart block after selection when selection exists', async () => {
+                // Setup mocks
+                const existingCells = [createMockCell('{}'), createMockCell('{}')];
+                const selection = new NotebookRange(0, 1);
+                const { editor } = createMockEditor(existingCells, selection);
+                const { chainStub, getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
+
+                // Call the method
+                await commandListener.addChartBlock();
+
+                const capturedNotebookEdits = getCapturedNotebookEdits();
+
+                // Verify chainWithPendingUpdates was called
+                assert.isTrue(chainStub.calledOnce, 'chainWithPendingUpdates should be called once');
+
+                // Verify a cell was inserted
+                assert.isNotNull(capturedNotebookEdits, 'Notebook edits should be captured');
+                const notebookEdit = capturedNotebookEdits![0] as any;
+                assert.equal(notebookEdit.newCells.length, 1, 'Should insert one cell');
+                assert.equal(notebookEdit.newCells[0].languageId, 'json', 'Should be JSON cell');
+            });
+
+            test('should generate correct variable name when existing chart variables exist', async () => {
+                // Setup mocks with existing df variables
+                const existingCells = [
+                    createMockCell('{ "deepnote_variable_name": "df_1" }'),
+                    createMockCell('{ "variable": "df_2" }')
+                ];
+                const { editor } = createMockEditor(existingCells, undefined);
+                const { getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
+
+                // Call the method
+                await commandListener.addChartBlock();
+
+                const capturedNotebookEdits = getCapturedNotebookEdits();
+                const notebookEdit = capturedNotebookEdits![0] as any;
+                const newCell = notebookEdit.newCells[0];
+
+                // Verify variable name is df_3
+                const content = JSON.parse(newCell.value);
+                assert.equal(content.variable, 'df_3', 'Should generate next variable name');
+            });
+
+            test('should ignore other variable types when generating chart variable name', async () => {
+                // Setup mocks with input and df variables
+                const existingCells = [
+                    createMockCell('{ "deepnote_variable_name": "input_10" }'),
+                    createMockCell('{ "deepnote_variable_name": "df_5" }'),
+                    createMockCell('{ "variable": "df_2" }')
+                ];
+                const { editor } = createMockEditor(existingCells, undefined);
+                const { getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
+
+                // Call the method
+                await commandListener.addChartBlock();
+
+                const capturedNotebookEdits = getCapturedNotebookEdits();
+                const notebookEdit = capturedNotebookEdits![0] as any;
+                const newCell = notebookEdit.newCells[0];
+
+                // Verify variable name is df_6 (uses highest df_ number)
+                const content = JSON.parse(newCell.value);
+                assert.equal(content.variable, 'df_6', 'Should consider all df variables');
+            });
+
+            test('should insert at correct position in the middle of notebook', async () => {
+                // Setup mocks
+                const existingCells = [createMockCell('{}'), createMockCell('{}'), createMockCell('{}')];
+                const selection = new NotebookRange(1, 2);
+                const { editor } = createMockEditor(existingCells, selection);
+                const { chainStub, getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
+
+                // Call the method
+                await commandListener.addChartBlock();
+
+                const capturedNotebookEdits = getCapturedNotebookEdits();
+
+                // Verify chainWithPendingUpdates was called
+                assert.isTrue(chainStub.calledOnce, 'chainWithPendingUpdates should be called once');
+
+                // Verify a cell was inserted
+                assert.isNotNull(capturedNotebookEdits, 'Notebook edits should be captured');
+                const notebookEdit = capturedNotebookEdits![0] as any;
+                assert.equal(notebookEdit.newCells.length, 1, 'Should insert one cell');
+                assert.equal(notebookEdit.newCells[0].languageId, 'json', 'Should be JSON cell');
+            });
+
+            test('should throw error when no active editor exists', async () => {
+                // Setup: no active editor
+                Object.defineProperty(window, 'activeNotebookEditor', {
+                    value: undefined,
+                    configurable: true,
+                    writable: true
+                });
+
+                // Call the method and expect rejection
+                await assert.isRejected(commandListener.addChartBlock(), Error, 'No active notebook editor found');
+            });
+
+            test('should throw error when chainWithPendingUpdates fails', async () => {
+                // Setup mocks
+                const { editor } = createMockEditor([], undefined);
+                Object.defineProperty(window, 'activeNotebookEditor', {
+                    value: editor,
+                    configurable: true,
+                    writable: true
+                });
+
+                // Mock chainWithPendingUpdates to return false
+                sandbox.stub(notebookUpdater, 'chainWithPendingUpdates').resolves(false);
+
+                // Call the method and expect rejection
+                await assert.isRejected(commandListener.addChartBlock(), Error, 'Failed to insert chart block');
             });
         });
     });

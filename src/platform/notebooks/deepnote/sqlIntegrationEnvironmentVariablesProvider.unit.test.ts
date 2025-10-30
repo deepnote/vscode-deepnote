@@ -14,7 +14,7 @@ import {
 } from './integrationTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 
-const EXPECTED_EMPTY_ENV_VARS = {
+const EXPECTED_DATAFRAME_ONLY_ENV_VARS = {
     SQL_DEEPNOTE_DATAFRAME_SQL: '{"url":"deepnote+duckdb:///:memory:","params":{},"param_style":"qmark"}'
 };
 
@@ -59,7 +59,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
 
         const envVars = await provider.getEnvironmentVariables(uri);
-        assert.deepStrictEqual(envVars, EXPECTED_EMPTY_ENV_VARS);
+        assert.deepStrictEqual(envVars, EXPECTED_DATAFRAME_ONLY_ENV_VARS);
     });
 
     test('Returns empty object when SQL cells have no integration ID', async () => {
@@ -71,7 +71,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
 
         const envVars = await provider.getEnvironmentVariables(uri);
-        assert.deepStrictEqual(envVars, EXPECTED_EMPTY_ENV_VARS);
+        assert.deepStrictEqual(envVars, EXPECTED_DATAFRAME_ONLY_ENV_VARS);
     });
 
     test('Returns environment variable for internal DuckDB integration', async () => {
@@ -256,7 +256,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         const envVars = await provider.getEnvironmentVariables(uri);
 
         // Should return only dataframe integration when integration config is missing
-        assert.deepStrictEqual(envVars, EXPECTED_EMPTY_ENV_VARS);
+        assert.deepStrictEqual(envVars, EXPECTED_DATAFRAME_ONLY_ENV_VARS);
     });
 
     test('Properly encodes special characters in PostgreSQL credentials', async () => {
@@ -627,7 +627,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
 
             // Should return only dataframe integration when unsupported auth method is encountered
             const envVars = await provider.getEnvironmentVariables(uri);
-            assert.deepStrictEqual(envVars, EXPECTED_EMPTY_ENV_VARS);
+            assert.deepStrictEqual(envVars, EXPECTED_DATAFRAME_ONLY_ENV_VARS);
         });
 
         test('Skips unsupported Snowflake auth method (AZURE_AD)', async () => {
@@ -651,7 +651,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
 
             const envVars = await provider.getEnvironmentVariables(uri);
-            assert.deepStrictEqual(envVars, EXPECTED_EMPTY_ENV_VARS);
+            assert.deepStrictEqual(envVars, EXPECTED_DATAFRAME_ONLY_ENV_VARS);
         });
 
         test('Skips unsupported Snowflake auth method (KEY_PAIR)', async () => {
@@ -675,7 +675,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
 
             const envVars = await provider.getEnvironmentVariables(uri);
-            assert.deepStrictEqual(envVars, EXPECTED_EMPTY_ENV_VARS);
+            assert.deepStrictEqual(envVars, EXPECTED_DATAFRAME_ONLY_ENV_VARS);
         });
     });
 });

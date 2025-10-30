@@ -190,7 +190,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
-        // Should only have one environment variable
+        // Should only have one environment variable apart from the internal DuckDB integration
         assert.property(envVars, 'SQL_MY_POSTGRES_DB');
         assert.strictEqual(Object.keys(envVars).length, 2);
     });
@@ -234,7 +234,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
-        // Should have two environment variables
+        // Should have two environment variables apart from the internal DuckDB integration
         assert.property(envVars, 'SQL_MY_POSTGRES_DB');
         assert.property(envVars, 'SQL_MY_BIGQUERY');
         assert.strictEqual(Object.keys(envVars).length, 3);

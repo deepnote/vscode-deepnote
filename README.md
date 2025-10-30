@@ -33,7 +33,7 @@ Run Deepnote locally inside VS Code — not Jupyter — and unlock the next gene
 ## 📋 Requirements
 
 - **Visual Studio Code** 1.103.0 or higher
-- **Python** 3.8 or higher (for running notebooks)
+- **Python** 3.10 or higher (for running notebooks)
 - **Node.js** 22.15.1 or higher (for development)
 
 ## 🎯 Getting started

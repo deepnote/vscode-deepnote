@@ -4,6 +4,25 @@
  */
 
 /**
+ * Gets the expected language ID for an input block type.
+ * This is the single source of truth for input block language modes.
+ */
+export function getInputBlockLanguage(blockType: string): string | undefined {
+    const languageMap: Record<string, string> = {
+        'input-text': 'plaintext',
+        'input-textarea': 'plaintext',
+        'input-select': 'python',
+        'input-slider': 'python',
+        'input-checkbox': 'python',
+        'input-date': 'python',
+        'input-date-range': 'python',
+        'input-file': 'python',
+        button: 'python'
+    };
+    return languageMap[blockType];
+}
+
+/**
  * Formats the cell content for an input block based on its type and metadata.
  * @param blockType The type of the input block (e.g., 'input-text', 'input-select')
  * @param metadata The cell metadata containing the value and other configuration

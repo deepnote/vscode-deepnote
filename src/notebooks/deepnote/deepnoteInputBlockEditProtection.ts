@@ -13,7 +13,7 @@ import {
     WorkspaceEdit
 } from 'vscode';
 import { ILogger } from '../../platform/logging/types';
-import { formatInputBlockCellContent } from './inputBlockContentFormatter';
+import { formatInputBlockCellContent, getInputBlockLanguage } from './inputBlockContentFormatter';
 
 /**
  * Protects readonly input blocks from being edited by reverting changes.
@@ -44,19 +44,6 @@ export class DeepnoteInputBlockEditProtection implements Disposable {
         'input-date-range',
         'input-file',
         'button'
-    ]);
-
-    // Map of block types to their expected language IDs
-    private readonly expectedLanguages = new Map<string, string>([
-        ['input-text', 'plaintext'],
-        ['input-textarea', 'plaintext'],
-        ['input-select', 'python'],
-        ['input-slider', 'python'],
-        ['input-checkbox', 'python'],
-        ['input-date', 'python'],
-        ['input-date-range', 'python'],
-        ['input-file', 'python'],
-        ['button', 'python']
     ]);
 
     constructor(@inject(ILogger) private readonly logger: ILogger) {
@@ -99,7 +86,7 @@ export class DeepnoteInputBlockEditProtection implements Disposable {
             const blockType = cell.metadata?.__deepnotePocket?.type || cell.metadata?.type;
 
             if (blockType && this.allInputTypes.has(blockType)) {
-                const expectedLanguage = this.expectedLanguages.get(blockType);
+                const expectedLanguage = getInputBlockLanguage(blockType);
                 // Only add to fix list if language is actually wrong
                 if (expectedLanguage && cell.document.languageId !== expectedLanguage) {
                     cellsToFix.push({ cell, blockType });
@@ -149,7 +136,7 @@ export class DeepnoteInputBlockEditProtection implements Disposable {
         const editsByNotebook = new Map<string, { uri: Uri; edits: NotebookEdit[] }>();
 
         for (const { cell, blockType } of cellsToFix) {
-            const expectedLanguage = this.expectedLanguages.get(blockType);
+            const expectedLanguage = getInputBlockLanguage(blockType);
 
             if (!expectedLanguage) {
                 continue;

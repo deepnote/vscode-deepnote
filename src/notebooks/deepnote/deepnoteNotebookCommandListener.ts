@@ -17,6 +17,7 @@ import { IExtensionSyncActivationService } from '../../platform/activation/types
 import { IDisposableRegistry } from '../../platform/common/types';
 import { Commands } from '../../platform/common/constants';
 import { chainWithPendingUpdates } from '../../kernels/execution/notebookUpdater';
+import { formatInputBlockCellContent, getInputBlockLanguage } from './inputBlockContentFormatter';
 import {
     DeepnoteBigNumberMetadataSchema,
     DeepnoteTextInputMetadataSchema,
@@ -281,15 +282,17 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             __deepnotePocket: {
                 type: blockType,
                 ...defaultMetadata
-            }
+            },
+            ...defaultMetadata
         };
 
         const result = await chainWithPendingUpdates(document, (edit) => {
-            const newCell = new NotebookCellData(
-                NotebookCellKind.Code,
-                JSON.stringify(defaultMetadata, null, 2),
-                'json'
-            );
+            // Use the formatter to get the correct cell content based on block type and metadata
+            const cellContent = formatInputBlockCellContent(blockType, defaultMetadata);
+            // Get the correct language mode for this input block type
+            const languageMode = getInputBlockLanguage(blockType) ?? 'python';
+
+            const newCell = new NotebookCellData(NotebookCellKind.Code, cellContent, languageMode);
             newCell.metadata = metadata;
             const nbEdit = NotebookEdit.insertCells(insertIndex, [newCell]);
             edit.set(document.uri, [nbEdit]);

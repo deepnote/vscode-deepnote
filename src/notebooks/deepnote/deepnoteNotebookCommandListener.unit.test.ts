@@ -18,6 +18,7 @@ import {
     getNextDeepnoteVariableName,
     InputBlockType
 } from './deepnoteNotebookCommandListener';
+import { formatInputBlockCellContent, getInputBlockLanguage } from './inputBlockContentFormatter';
 import { IDisposable } from '../../platform/common/types';
 import * as notebookUpdater from '../../kernels/execution/notebookUpdater';
 import { createMockedNotebookDocument } from '../../test/datascience/editor-integration/helpers';
@@ -605,20 +606,14 @@ suite('DeepnoteNotebookCommandListener', () => {
 
                     const newCell = notebookEdit.newCells[0];
                     assert.equal(newCell.kind, NotebookCellKind.Code, 'Should be a code cell');
-                    assert.equal(newCell.languageId, 'json', 'Should have json language');
 
-                    // Verify cell content is valid JSON with correct structure
-                    const content = JSON.parse(newCell.value);
-                    assert.equal(
-                        content.deepnote_variable_name,
-                        expectedVariableName,
-                        'Variable name should match expected'
-                    );
+                    // Verify language mode matches the expected language for this block type
+                    const expectedLanguage = getInputBlockLanguage(blockType);
+                    assert.equal(newCell.languageId, expectedLanguage, `Should have ${expectedLanguage} language`);
 
-                    // Verify all expected metadata keys are present in content
-                    expectedMetadataKeys.forEach((key) => {
-                        assert.property(content, key, `Content should have ${key} property`);
-                    });
+                    // Verify cell content is formatted correctly using the formatter
+                    const expectedContent = formatInputBlockCellContent(blockType, newCell.metadata);
+                    assert.equal(newCell.value, expectedContent, 'Cell content should match formatted content');
 
                     // Verify metadata structure
                     assert.property(newCell.metadata, '__deepnotePocket', 'Should have __deepnotePocket metadata');
@@ -629,9 +624,19 @@ suite('DeepnoteNotebookCommandListener', () => {
                         'Metadata should have correct variable name'
                     );
 
-                    // Verify metadata keys match content keys
+                    // Verify all expected metadata keys are present in __deepnotePocket
                     expectedMetadataKeys.forEach((key) => {
                         assert.property(newCell.metadata.__deepnotePocket, key, `Metadata should have ${key} property`);
+                    });
+
+                    // Verify metadata is also at the top level
+                    assert.equal(
+                        newCell.metadata.deepnote_variable_name,
+                        expectedVariableName,
+                        'Top-level metadata should have correct variable name'
+                    );
+                    expectedMetadataKeys.forEach((key) => {
+                        assert.property(newCell.metadata, key, `Top-level metadata should have ${key} property`);
                     });
 
                     // Verify reveal and selection were set

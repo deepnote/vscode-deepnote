@@ -11,7 +11,9 @@ A powerful [Visual Studio Code](https://code.visualstudio.com/) extension that b
 ![Deepnote Projects](./images/deepnote-projects.png)
 
 ---
+
 # 🚀 Deepnote in VS Code - data notebook for AI era
+
 Run Deepnote locally inside VS Code — not Jupyter — and unlock the next generation of data workflows:
 - 🧠 **SQL in VS Code** — Run SQL queries out of the box, no extensions needed
 - 🧩 **Rich block types** — Combine Python, Markdown, data visualizations, tables, and more — all in one place

@@ -109,7 +109,11 @@ export class DeepnoteExplorerView {
                 return;
             }
 
-            const existingNames = new Set(projectData.project.notebooks.map((nb: DeepnoteNotebook) => nb.name));
+            const existingNames = new Set(
+                projectData.project.notebooks
+                    .map((nb: DeepnoteNotebook) => nb.name)
+                    .filter((name: string) => name !== currentName)
+            );
 
             const newName = await this.promptForNotebookName(currentName, existingNames);
 

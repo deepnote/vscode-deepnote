@@ -6,7 +6,8 @@ import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/
  */
 export enum DeepnoteTreeItemType {
     ProjectFile = 'projectFile',
-    Notebook = 'notebook'
+    Notebook = 'notebook',
+    Loading = 'loading'
 }
 
 /**
@@ -25,16 +26,20 @@ export class DeepnoteTreeItem extends TreeItem {
     constructor(
         public readonly type: DeepnoteTreeItemType,
         public readonly context: DeepnoteTreeItemContext,
-        public readonly data: DeepnoteProject | DeepnoteNotebook,
+        public readonly data: DeepnoteProject | DeepnoteNotebook | null,
         collapsibleState: TreeItemCollapsibleState
     ) {
         super('', collapsibleState);
 
         this.contextValue = this.type;
-        this.tooltip = this.getTooltip();
-        this.iconPath = this.getIcon();
-        this.label = this.getLabel();
-        this.description = this.getDescription();
+
+        // Skip initialization for loading items as they don't have real data
+        if (this.type !== DeepnoteTreeItemType.Loading) {
+            this.tooltip = this.getTooltip();
+            this.iconPath = this.getIcon();
+            this.label = this.getLabel();
+            this.description = this.getDescription();
+        }
 
         if (this.type === DeepnoteTreeItemType.Notebook) {
             this.resourceUri = this.getNotebookUri();

@@ -1439,7 +1439,7 @@
             "view/item/context": [
                 {
                     "command": "deepnote.revealInExplorer",
-                    "when": "view == deepnoteExplorer",
+                    "when": "view == deepnoteExplorer && viewItem != loading",
                     "group": "inline@2"
                 }
             ]

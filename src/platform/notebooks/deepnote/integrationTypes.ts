@@ -9,7 +9,8 @@ export const DATAFRAME_SQL_INTEGRATION_ID = 'deepnote-dataframe-sql';
  */
 export enum IntegrationType {
     Postgres = 'postgres',
-    BigQuery = 'bigquery'
+    BigQuery = 'bigquery',
+    Snowflake = 'snowflake'
 }
 
 /**
@@ -17,7 +18,8 @@ export enum IntegrationType {
  */
 export const INTEGRATION_TYPE_TO_DEEPNOTE = {
     [IntegrationType.Postgres]: 'pgsql',
-    [IntegrationType.BigQuery]: 'big-query'
+    [IntegrationType.BigQuery]: 'big-query',
+    [IntegrationType.Snowflake]: 'snowflake'
 } as const satisfies { [type in IntegrationType]: string };
 
 export type RawIntegrationType = (typeof INTEGRATION_TYPE_TO_DEEPNOTE)[keyof typeof INTEGRATION_TYPE_TO_DEEPNOTE];
@@ -27,7 +29,8 @@ export type RawIntegrationType = (typeof INTEGRATION_TYPE_TO_DEEPNOTE)[keyof typ
  */
 export const DEEPNOTE_TO_INTEGRATION_TYPE: Record<RawIntegrationType, IntegrationType> = {
     pgsql: IntegrationType.Postgres,
-    'big-query': IntegrationType.BigQuery
+    'big-query': IntegrationType.BigQuery,
+    snowflake: IntegrationType.Snowflake
 };
 
 /**
@@ -61,10 +64,62 @@ export interface BigQueryIntegrationConfig extends BaseIntegrationConfig {
     credentials: string; // JSON string of service account credentials
 }
 
+// Import and re-export Snowflake auth constants from shared module
+import {
+    type SnowflakeAuthMethod,
+    SnowflakeAuthMethods,
+    SUPPORTED_SNOWFLAKE_AUTH_METHODS,
+    isSupportedSnowflakeAuthMethod
+} from './snowflakeAuthConstants';
+export {
+    type SnowflakeAuthMethod,
+    SnowflakeAuthMethods,
+    SUPPORTED_SNOWFLAKE_AUTH_METHODS,
+    isSupportedSnowflakeAuthMethod
+};
+
+/**
+ * Base Snowflake configuration with common fields
+ */
+interface BaseSnowflakeConfig extends BaseIntegrationConfig {
+    type: IntegrationType.Snowflake;
+    account: string;
+    warehouse?: string;
+    database?: string;
+    role?: string;
+}
+
+/**
+ * Snowflake integration configuration (discriminated union)
+ */
+export type SnowflakeIntegrationConfig = BaseSnowflakeConfig &
+    (
+        | {
+              authMethod: typeof SnowflakeAuthMethods.PASSWORD | null;
+              username: string;
+              password: string;
+          }
+        | {
+              authMethod: typeof SnowflakeAuthMethods.SERVICE_ACCOUNT_KEY_PAIR;
+              username: string;
+              privateKey: string;
+              privateKeyPassphrase?: string;
+          }
+        | {
+              // Unsupported auth methods - we store them but don't allow editing
+              authMethod:
+                  | typeof SnowflakeAuthMethods.OKTA
+                  | typeof SnowflakeAuthMethods.NATIVE_SNOWFLAKE
+                  | typeof SnowflakeAuthMethods.AZURE_AD
+                  | typeof SnowflakeAuthMethods.KEY_PAIR;
+              [key: string]: unknown; // Allow any additional fields for unsupported methods
+          }
+    );
+
 /**
  * Union type of all integration configurations
  */
-export type IntegrationConfig = PostgresIntegrationConfig | BigQueryIntegrationConfig;
+export type IntegrationConfig = PostgresIntegrationConfig | BigQueryIntegrationConfig | SnowflakeIntegrationConfig;
 
 /**
  * Integration connection status

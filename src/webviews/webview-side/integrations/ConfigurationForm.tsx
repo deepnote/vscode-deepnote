@@ -2,6 +2,7 @@ import * as React from 'react';
 import { getLocString } from '../react-common/locReactSide';
 import { PostgresForm } from './PostgresForm';
 import { BigQueryForm } from './BigQueryForm';
+import { SnowflakeForm } from './SnowflakeForm';
 import { IntegrationConfig, IntegrationType } from './types';
 
 export interface IConfigurationFormProps {
@@ -22,7 +23,7 @@ export const ConfigurationForm: React.FC<IConfigurationFormProps> = ({
     onCancel
 }) => {
     // Determine integration type from existing config, integration metadata from project, or ID
-    const getIntegrationType = (): 'postgres' | 'bigquery' => {
+    const getIntegrationType = (): 'postgres' | 'bigquery' | 'snowflake' => {
         if (existingConfig) {
             return existingConfig.type;
         }
@@ -36,6 +37,9 @@ export const ConfigurationForm: React.FC<IConfigurationFormProps> = ({
         }
         if (integrationId.includes('bigquery')) {
             return 'bigquery';
+        }
+        if (integrationId.includes('snowflake')) {
+            return 'snowflake';
         }
         // Default to postgres
         return 'postgres';
@@ -67,10 +71,18 @@ export const ConfigurationForm: React.FC<IConfigurationFormProps> = ({
                             onSave={onSave}
                             onCancel={onCancel}
                         />
-                    ) : (
+                    ) : selectedIntegrationType === 'bigquery' ? (
                         <BigQueryForm
                             integrationId={integrationId}
                             existingConfig={existingConfig?.type === 'bigquery' ? existingConfig : null}
+                            integrationName={integrationName}
+                            onSave={onSave}
+                            onCancel={onCancel}
+                        />
+                    ) : (
+                        <SnowflakeForm
+                            integrationId={integrationId}
+                            existingConfig={existingConfig?.type === 'snowflake' ? existingConfig : null}
                             integrationName={integrationName}
                             onSave={onSave}
                             onCancel={onCancel}

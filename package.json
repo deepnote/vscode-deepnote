@@ -1,7 +1,7 @@
 {
     "name": "vscode-deepnote",
     "displayName": "Deepnote",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "description": "Deepnote notebook support.",
     "publisher": "Deepnote",
     "author": {
@@ -23,7 +23,7 @@
         "theme": "light"
     },
     "engines": {
-        "vscode": "^1.103.0"
+        "vscode": "^1.95.0"
     },
     "l10n": "./l10n",
     "extensionKind": [
@@ -70,6 +70,14 @@
                 "key": "escape",
                 "when": "isCompositeNotebook && !editorHoverVisible && !suggestWidgetVisible && !isComposing && !inSnippetMode && !exceptionWidgetVisible && !selectionAnchorSet && !LinkedEditingInputVisible && !renameInputVisible && !editorHasSelection && !accessibilityHelpWidgetVisible && !breakpointWidgetVisible && !findWidgetVisible && !markersNavigationVisible && !parameterHintsVisible && !editorHasMultipleSelections && !notificationToastsVisible && !notebookEditorFocused && !inlineChatVisible",
                 "command": "interactive.input.clear"
+            },
+            {
+                "key": "cmd+enter",
+                "mac": "cmd+enter",
+                "win": "ctrl+enter",
+                "linux": "ctrl+enter",
+                "when": "notebookEditorFocused && !findInputFocussed && !replaceInputFocussed",
+                "command": "jupyter.notebookeditor.runfocusedcell"
             }
         ],
         "commands": [
@@ -120,6 +128,12 @@
                 "title": "%deepnote.commands.addBigNumberChartBlock.title%",
                 "category": "Deepnote",
                 "icon": "$(graph)"
+            },
+            {
+                "command": "deepnote.addChartBlock",
+                "title": "%deepnote.commands.addChartBlock.title%",
+                "category": "Deepnote",
+                "icon": "$(graph-line)"
             },
             {
                 "command": "deepnote.addInputTextBlock",
@@ -587,6 +601,12 @@
                 "enablement": "!jupyter.webExtension"
             },
             {
+                "command": "jupyter.notebookeditor.runfocusedcell",
+                "title": "%jupyter.command.jupyter.notebookeditor.runfocusedcell.title%",
+                "category": "Notebook",
+                "enablement": "notebookEditorFocused"
+            },
+            {
                 "command": "jupyter.expandallcells",
                 "title": "%jupyter.command.jupyter.expandallcells.title%",
                 "shortTitle": "%jupyter.command.jupyter.expandallcells.shorttitle%",
@@ -756,9 +776,30 @@
             {
                 "id": "editor.interactiveWindow.context",
                 "label": "%jupyter.command.editor.interactiveWindow.context.label%"
+            },
+            {
+                "id": "deepnote.explorer.context",
+                "label": "Deepnote"
             }
         ],
         "menus": {
+            "view/title": [
+                {
+                    "command": "deepnote.newProject",
+                    "when": "view == deepnoteExplorer",
+                    "group": "navigation@1"
+                },
+                {
+                    "command": "deepnote.importNotebook",
+                    "when": "view == deepnoteExplorer",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "deepnote.refreshExplorer",
+                    "when": "view == deepnoteExplorer",
+                    "group": "navigation@3"
+                }
+            ],
             "editor/context": [
                 {
                     "submenu": "editor.interactiveWindow.context",
@@ -807,6 +848,14 @@
                     "when": "editorFocus && editorLangId == python && !notebookEditorFocused && isWorkspaceTrusted"
                 }
             ],
+            "deepnote.explorer.context": [
+                {
+                    "command": "deepnote.newProject"
+                },
+                {
+                    "command": "deepnote.importNotebook"
+                }
+            ],
             "editor/title": [
                 {
                     "command": "jupyter.restartkernel",
@@ -852,6 +901,51 @@
                 {
                     "command": "deepnote.addSqlBlock",
                     "group": "navigation@2",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addChartBlock",
+                    "group": "navigation@3",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addBigNumberChartBlock",
+                    "group": "navigation@4",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addInputTextBlock",
+                    "group": "navigation@5",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addInputTextareaBlock",
+                    "group": "navigation@6",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addInputSelectBlock",
+                    "group": "navigation@7",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addInputSliderBlock",
+                    "group": "navigation@8",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addInputCheckboxBlock",
+                    "group": "navigation@9",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addInputDateBlock",
+                    "group": "navigation@10",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addInputDateRangeBlock",
+                    "group": "navigation@11",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
@@ -984,6 +1078,11 @@
                 }
             ],
             "explorer/context": [
+                {
+                    "submenu": "deepnote.explorer.context",
+                    "when": "isWorkspaceTrusted",
+                    "group": "navigation@10"
+                },
                 {
                     "when": "resourceLangId == python && !notebookEditorFocused && isWorkspaceTrusted",
                     "command": "jupyter.runFileInteractive",

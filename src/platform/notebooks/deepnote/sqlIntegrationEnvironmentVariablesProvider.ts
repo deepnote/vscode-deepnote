@@ -1,27 +1,17 @@
 import { inject, injectable } from 'inversify';
-import { CancellationToken, Event, EventEmitter, NotebookDocument, workspace } from 'vscode';
+import { CancellationToken, Event, EventEmitter, l10n, NotebookDocument, workspace } from 'vscode';
 
 import { IDisposableRegistry, Resource } from '../../common/types';
 import { EnvironmentVariables } from '../../common/variables/types';
-import { BaseError } from '../../errors/types';
+import { UnsupportedIntegrationError } from '../../errors/unsupportedIntegrationError';
 import { logger } from '../../logging';
 import { IIntegrationStorage, ISqlIntegrationEnvVarsProvider } from './types';
-import { DATAFRAME_SQL_INTEGRATION_ID, IntegrationConfig, IntegrationType } from './integrationTypes';
-
-/**
- * Error thrown when an unsupported integration type is encountered.
- *
- * Cause:
- * An integration configuration has a type that is not supported by the SQL integration system.
- *
- * Handled by:
- * Callers should handle this error and inform the user that the integration type is not supported.
- */
-class UnsupportedIntegrationError extends BaseError {
-    constructor(public readonly integrationType: string) {
-        super('unknown', `Unsupported integration type: ${integrationType}`);
-    }
-}
+import {
+    DATAFRAME_SQL_INTEGRATION_ID,
+    IntegrationConfig,
+    IntegrationType,
+    SnowflakeAuthMethods
+} from './integrationTypes';
 
 /**
  * Converts an integration ID to the environment variable name format expected by SQL blocks.
@@ -73,8 +63,86 @@ function convertIntegrationConfigToJson(config: IntegrationConfig): string {
             });
         }
 
+        case IntegrationType.Snowflake: {
+            // Build Snowflake connection URL
+            // Format depends on auth method:
+            // Username+password: snowflake://{username}:{password}@{account}/{database}?warehouse={warehouse}&role={role}&application=YourApp
+            // Service account key-pair: snowflake://{username}@{account}/{database}?warehouse={warehouse}&role={role}&authenticator=snowflake_jwt&application=YourApp
+            const encodedAccount = encodeURIComponent(config.account);
+
+            let url: string;
+            const params: Record<string, unknown> = {};
+
+            if (config.authMethod === null || config.authMethod === SnowflakeAuthMethods.PASSWORD) {
+                // Username+password authentication
+                const encodedUsername = encodeURIComponent(config.username);
+                const encodedPassword = encodeURIComponent(config.password);
+                const database = config.database ? `/${encodeURIComponent(config.database)}` : '';
+                url = `snowflake://${encodedUsername}:${encodedPassword}@${encodedAccount}${database}`;
+
+                const queryParams = new URLSearchParams();
+                if (config.warehouse) {
+                    queryParams.set('warehouse', config.warehouse);
+                }
+                if (config.role) {
+                    queryParams.set('role', config.role);
+                }
+                queryParams.set('application', 'Deepnote');
+
+                const queryString = queryParams.toString();
+                if (queryString) {
+                    url += `?${queryString}`;
+                }
+            } else {
+                // Service account key-pair authentication (the only other supported method)
+                // TypeScript needs help narrowing the type here
+                if (config.authMethod !== SnowflakeAuthMethods.SERVICE_ACCOUNT_KEY_PAIR) {
+                    // This should never happen due to the type guard above, but TypeScript needs this
+                    throw new UnsupportedIntegrationError(
+                        l10n.t(
+                            "Snowflake integration with auth method '{0}' is not supported in VSCode",
+                            config.authMethod
+                        )
+                    );
+                }
+
+                const encodedUsername = encodeURIComponent(config.username);
+                const database = config.database ? `/${encodeURIComponent(config.database)}` : '';
+                url = `snowflake://${encodedUsername}@${encodedAccount}${database}`;
+
+                const queryParams = new URLSearchParams();
+                if (config.warehouse) {
+                    queryParams.set('warehouse', config.warehouse);
+                }
+                if (config.role) {
+                    queryParams.set('role', config.role);
+                }
+                queryParams.set('authenticator', 'snowflake_jwt');
+                queryParams.set('application', 'Deepnote');
+
+                const queryString = queryParams.toString();
+                if (queryString) {
+                    url += `?${queryString}`;
+                }
+
+                // For key-pair auth, pass the private key and passphrase as params
+                params.snowflake_private_key = btoa(config.privateKey);
+                if (config.privateKeyPassphrase) {
+                    params.snowflake_private_key_passphrase = config.privateKeyPassphrase;
+                }
+            }
+
+            return JSON.stringify({
+                url: url,
+                params: params,
+                param_style: 'pyformat'
+            });
+        }
+
         default:
-            throw new UnsupportedIntegrationError((config as IntegrationConfig).type);
+            throw new UnsupportedIntegrationError(
+                l10n.t('Unsupported integration type: {0}', (config as IntegrationConfig).type)
+            );
     }
 }
 

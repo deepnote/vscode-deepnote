@@ -58,6 +58,7 @@ export interface ICommandNameArgumentTypeMapping {
     [DSCommands.RestartKernelAndRunUpToSelectedCell]: [{ notebookEditor: { notebookUri: Uri } } | undefined];
     [DSCommands.NotebookEditorRemoveAllCells]: [];
     [DSCommands.NotebookEditorRunAllCells]: [];
+    [DSCommands.NotebookEditorRunFocusedCell]: [];
     [DSCommands.NotebookEditorAddCellBelow]: [];
     [DSCommands.ExpandAllCells]: [];
     [DSCommands.CollapseAllCells]: [];
@@ -185,9 +186,10 @@ export interface ICommandNameArgumentTypeMapping {
     [DSCommands.InstallPythonExtensionViaKernelPicker]: [];
     [DSCommands.InstallPythonViaKernelPicker]: [];
     [DSCommands.ContinueEditSessionInCodespace]: [];
+    [DSCommands.NewNotebook]: [];
     [DSCommands.AddSqlBlock]: [];
     [DSCommands.AddBigNumberChartBlock]: [];
-    [DSCommands.NewNotebook]: [];
+    [DSCommands.AddChartBlock]: [];
     [DSCommands.AddInputTextBlock]: [];
     [DSCommands.AddInputTextareaBlock]: [];
     [DSCommands.AddInputSelectBlock]: [];

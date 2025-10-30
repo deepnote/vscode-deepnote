@@ -14,6 +14,8 @@ const getIntegrationTypeLabel = (type: IntegrationType): string => {
             return getLocString('integrationsPostgresTypeLabel', 'PostgreSQL');
         case 'bigquery':
             return getLocString('integrationsBigQueryTypeLabel', 'BigQuery');
+        case 'snowflake':
+            return getLocString('integrationsSnowflakeTypeLabel', 'Snowflake');
         default:
             return type;
     }

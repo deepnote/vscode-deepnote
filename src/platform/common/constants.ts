@@ -189,6 +189,7 @@ export namespace Commands {
     export const NotebookEditorRemoveAllCells = 'jupyter.notebookeditor.removeallcells';
     export const NotebookEditorRunAllCells = 'jupyter.notebookeditor.runallcells';
     export const NotebookEditorRunSelectedCell = 'jupyter.notebookeditor.runselectedcell';
+    export const NotebookEditorRunFocusedCell = 'jupyter.notebookeditor.runfocusedcell';
     export const NotebookEditorAddCellBelow = 'jupyter.notebookeditor.addcellbelow';
     export const ExpandAllCells = 'jupyter.expandallcells';
     export const CollapseAllCells = 'jupyter.collapseallcells';
@@ -226,6 +227,7 @@ export namespace Commands {
     export const ManageIntegrations = 'deepnote.manageIntegrations';
     export const AddSqlBlock = 'deepnote.addSqlBlock';
     export const AddBigNumberChartBlock = 'deepnote.addBigNumberChartBlock';
+    export const AddChartBlock = 'deepnote.addChartBlock';
     export const AddInputTextBlock = 'deepnote.addInputTextBlock';
     export const AddInputTextareaBlock = 'deepnote.addInputTextareaBlock';
     export const AddInputSelectBlock = 'deepnote.addInputSelectBlock';

@@ -86,7 +86,7 @@ export function safeParseDeepnoteVariableNameFromContentJson(content: string): s
     }
 }
 
-export function getNextDeepnoteVariableName(cells: NotebookCell[], prefix: 'df' | 'query' | 'input' | 'chart'): string {
+export function getNextDeepnoteVariableName(cells: NotebookCell[], prefix: 'df' | 'query' | 'input'): string {
     const deepnoteVariableNames = cells.reduce<string[]>((acc, cell) => {
         const contentValue = safeParseDeepnoteVariableNameFromContentJson(cell.document.getText());
 
@@ -276,7 +276,6 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         const selection = editor.selection;
 
         const insertIndex = selection ? selection.end : document.cellCount;
-        const deepnoteVariableName = getNextDeepnoteVariableName(document.getCells(), 'df');
 
         const defaultVisualizationSpec = {
             mark: 'line',
@@ -289,7 +288,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         };
 
         const cellContent = {
-            variable: deepnoteVariableName,
+            variable: 'df_1',
             spec: defaultVisualizationSpec,
             filters: []
         };

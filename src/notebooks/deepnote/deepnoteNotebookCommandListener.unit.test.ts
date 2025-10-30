@@ -102,7 +102,7 @@ suite('DeepnoteNotebookCommandListener', () => {
         const TEST_INPUTS: Array<{
             description: string;
             cells: NotebookCell[];
-            prefix: 'df' | 'query' | 'input' | 'chart';
+            prefix: 'df' | 'query' | 'input';
             expected: string;
         }> = [
             // Tests with 'input' prefix
@@ -1064,7 +1064,7 @@ suite('DeepnoteNotebookCommandListener', () => {
                 assert.equal(notebookEdit.newCells[0].languageId, 'json', 'Should be JSON cell');
             });
 
-            test('should generate correct variable name when existing chart variables exist', async () => {
+            test('should use hardcoded variable name df_1', async () => {
                 // Setup mocks with existing df variables
                 const existingCells = [
                     createMockCell('{ "deepnote_variable_name": "df_1" }'),
@@ -1080,13 +1080,13 @@ suite('DeepnoteNotebookCommandListener', () => {
                 const notebookEdit = capturedNotebookEdits![0] as any;
                 const newCell = notebookEdit.newCells[0];
 
-                // Verify variable name is df_3
+                // Verify variable name is always df_1
                 const content = JSON.parse(newCell.value);
-                assert.equal(content.variable, 'df_3', 'Should generate next variable name');
+                assert.equal(content.variable, 'df_1', 'Should always use df_1');
             });
 
-            test('should ignore other variable types when generating chart variable name', async () => {
-                // Setup mocks with input and df variables
+            test('should always use df_1 regardless of existing variables', async () => {
+                // Setup mocks with various existing variables
                 const existingCells = [
                     createMockCell('{ "deepnote_variable_name": "input_10" }'),
                     createMockCell('{ "deepnote_variable_name": "df_5" }'),
@@ -1102,9 +1102,9 @@ suite('DeepnoteNotebookCommandListener', () => {
                 const notebookEdit = capturedNotebookEdits![0] as any;
                 const newCell = notebookEdit.newCells[0];
 
-                // Verify variable name is df_6 (uses highest df_ number)
+                // Verify variable name is always df_1
                 const content = JSON.parse(newCell.value);
-                assert.equal(content.variable, 'df_6', 'Should consider all df variables');
+                assert.equal(content.variable, 'df_1', 'Should always use df_1');
             });
 
             test('should insert at correct position in the middle of notebook', async () => {

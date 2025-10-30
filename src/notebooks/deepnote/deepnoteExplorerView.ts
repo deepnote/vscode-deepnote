@@ -1,7 +1,8 @@
 import { injectable, inject } from 'inversify';
 import { commands, window, workspace, type TreeView, Uri, l10n } from 'vscode';
 import * as yaml from 'js-yaml';
-import { convertIpynbFilesToDeepnoteFile } from '@deepnote/convert';
+// NOTE: Use dynamic import for '@deepnote/convert' to avoid activation failures in test hosts
+// where the package may not be resolvable. We only import it when needed.
 
 import { IExtensionContext } from '../../platform/common/types';
 import { IDeepnoteNotebookManager } from '../types';
@@ -357,6 +358,7 @@ export class DeepnoteExplorerView {
                 const outputFileName = `${projectName}.deepnote`;
                 const outputPath = Uri.joinPath(workspaceFolder.uri, outputFileName).path;
 
+                const { convertIpynbFilesToDeepnoteFile } = await import('@deepnote/convert');
                 await convertIpynbFilesToDeepnoteFile(inputFilePaths, {
                     outputPath: outputPath,
                     projectName: projectName
@@ -429,6 +431,7 @@ export class DeepnoteExplorerView {
                 // File doesn't exist, continue
             }
 
+            const { convertIpynbFilesToDeepnoteFile } = await import('@deepnote/convert');
             await convertIpynbFilesToDeepnoteFile(inputFilePaths, {
                 outputPath: outputUri.path,
                 projectName: projectName

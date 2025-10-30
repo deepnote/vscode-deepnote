@@ -198,4 +198,5 @@ export interface ICommandNameArgumentTypeMapping {
     [DSCommands.AddInputDateRangeBlock]: [];
     [DSCommands.AddInputFileBlock]: [];
     [DSCommands.AddButtonBlock]: [];
+    [DSCommands.OpenInDeepnote]: [];
 }

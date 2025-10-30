@@ -5,7 +5,12 @@ import { CancellationTokenSource, EventEmitter, NotebookCell, NotebookCellKind, 
 import { IDisposableRegistry } from '../../common/types';
 import { IntegrationStorage } from './integrationStorage';
 import { SqlIntegrationEnvironmentVariablesProvider } from './sqlIntegrationEnvironmentVariablesProvider';
-import { IntegrationType, PostgresIntegrationConfig, BigQueryIntegrationConfig } from './integrationTypes';
+import {
+    IntegrationType,
+    PostgresIntegrationConfig,
+    BigQueryIntegrationConfig,
+    DATAFRAME_SQL_INTEGRATION_ID
+} from './integrationTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 
 suite('SqlIntegrationEnvironmentVariablesProvider', () => {
@@ -68,7 +73,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         const uri = Uri.file('/test/notebook.deepnote');
         const notebook = createMockNotebook(uri, [
             createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT * FROM df', {
-                sql_integration_id: 'deepnote-dataframe-sql'
+                sql_integration_id: DATAFRAME_SQL_INTEGRATION_ID
             })
         ]);
 

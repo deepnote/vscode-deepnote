@@ -30,6 +30,7 @@ import {
     DeepnoteButtonMetadataSchema,
     DeepnoteSqlMetadata
 } from './deepnoteSchemas';
+import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
 
 export type InputBlockType =
     | 'input-text'
@@ -189,7 +190,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         const defaultMetadata: DeepnoteSqlMetadata = {
             deepnote_variable_name: deepnoteVariableName,
             deepnote_return_variable_type: 'dataframe',
-            sql_integration_id: 'deepnote-dataframe-sql'
+            sql_integration_id: DATAFRAME_SQL_INTEGRATION_ID
         };
 
         // Determine the index where to insert the new cell (below current selection or at the end)

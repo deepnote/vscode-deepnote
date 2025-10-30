@@ -21,6 +21,7 @@ import {
 import { IDisposable } from '../../platform/common/types';
 import * as notebookUpdater from '../../kernels/execution/notebookUpdater';
 import { createMockedNotebookDocument } from '../../test/datascience/editor-integration/helpers';
+import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
 
 suite('DeepnoteNotebookCommandListener', () => {
     let commandListener: DeepnoteNotebookCommandListener;
@@ -734,7 +735,7 @@ suite('DeepnoteNotebookCommandListener', () => {
                 );
                 assert.equal(
                     newCell.metadata.sql_integration_id,
-                    'deepnote-dataframe-sql',
+                    DATAFRAME_SQL_INTEGRATION_ID,
                     'Should have correct sql integration id'
                 );
 

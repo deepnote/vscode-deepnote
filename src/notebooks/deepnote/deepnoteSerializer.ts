@@ -5,7 +5,7 @@ import { l10n, workspace, type CancellationToken, type NotebookData, type Notebo
 import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
-import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
+import type { DeepnoteFile, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 
 export { DeepnoteBlock, DeepnoteNotebook, DeepnoteOutput, DeepnoteFile } from '../../platform/deepnote/deepnoteTypes';
 
@@ -44,20 +44,24 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
         try {
             const contentString = new TextDecoder('utf-8').decode(content);
-            const deepnoteProject = yaml.load(contentString) as DeepnoteProject;
+            const deepnoteFile = yaml.load(contentString) as DeepnoteFile;
 
-            if (!deepnoteProject.project?.notebooks) {
+            if (!deepnoteFile.project?.notebooks) {
                 throw new Error('Invalid Deepnote file: no notebooks found');
             }
 
-            const projectId = deepnoteProject.project.id;
+            const projectId = deepnoteFile.project.id;
             const notebookId = this.findCurrentNotebookId(projectId);
 
             logger.debug(`DeepnoteSerializer: Project ID: ${projectId}, Selected notebook ID: ${notebookId}`);
 
+            if (deepnoteFile.project.notebooks.length === 0) {
+                throw new Error('Deepnote project contains no notebooks.');
+            }
+
             const selectedNotebook = notebookId
-                ? deepnoteProject.project.notebooks.find((nb) => nb.id === notebookId)
-                : deepnoteProject.project.notebooks[0];
+                ? deepnoteFile.project.notebooks.find((nb) => nb.id === notebookId)
+                : this.findDefaultNotebook(deepnoteFile);
 
             if (!selectedNotebook) {
                 throw new Error(l10n.t('No notebook selected or found'));
@@ -67,17 +71,17 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
             logger.debug(`DeepnoteSerializer: Converted ${cells.length} cells from notebook blocks`);
 
-            this.notebookManager.storeOriginalProject(deepnoteProject.project.id, deepnoteProject, selectedNotebook.id);
+            this.notebookManager.storeOriginalProject(deepnoteFile.project.id, deepnoteFile, selectedNotebook.id);
             logger.debug(`DeepnoteSerializer: Stored project ${projectId} in notebook manager`);
 
             return {
                 cells,
                 metadata: {
-                    deepnoteProjectId: deepnoteProject.project.id,
-                    deepnoteProjectName: deepnoteProject.project.name,
+                    deepnoteProjectId: deepnoteFile.project.id,
+                    deepnoteProjectName: deepnoteFile.project.name,
                     deepnoteNotebookId: selectedNotebook.id,
                     deepnoteNotebookName: selectedNotebook.name,
-                    deepnoteVersion: deepnoteProject.version,
+                    deepnoteVersion: deepnoteFile.version,
                     name: selectedNotebook.name,
                     display_name: selectedNotebook.name
                 }
@@ -110,7 +114,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 throw new Error('Missing Deepnote project ID in notebook metadata');
             }
 
-            const originalProject = this.notebookManager.getOriginalProject(projectId) as DeepnoteProject | undefined;
+            const originalProject = this.notebookManager.getOriginalProject(projectId) as DeepnoteFile | undefined;
 
             if (!originalProject) {
                 throw new Error('Original Deepnote project not found. Cannot save changes.');
@@ -131,7 +135,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 throw new Error(`Notebook with ID ${notebookId} not found in project`);
             }
 
-            const updatedProject = JSON.parse(JSON.stringify(originalProject)) as DeepnoteProject;
+            const updatedProject = JSON.parse(JSON.stringify(originalProject)) as DeepnoteFile;
 
             const updatedBlocks = this.converter.convertCellsToBlocks(data.cells);
 
@@ -177,5 +181,27 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
         );
 
         return activeNotebook?.metadata?.deepnoteNotebookId;
+    }
+
+    /**
+     * Finds the default notebook to open when no selection is made.
+     * @param file
+     * @returns
+     */
+    private findDefaultNotebook(file: DeepnoteFile): DeepnoteNotebook | undefined {
+        if (file.project.notebooks.length === 0) {
+            return undefined;
+        }
+
+        const sortedNotebooks = file.project.notebooks.slice().sort((a, b) => a.name.localeCompare(b.name));
+        const sortedNotebooksWithoutInit = file.project.initNotebookId
+            ? sortedNotebooks.filter((nb) => nb.id !== file.project.initNotebookId)
+            : sortedNotebooks;
+
+        if (sortedNotebooksWithoutInit.length > 0) {
+            return sortedNotebooksWithoutInit[0];
+        }
+
+        return sortedNotebooks[0];
     }
 }

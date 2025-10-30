@@ -213,8 +213,7 @@ jobs:
 
       - name: Check package lock drift
         run: |
-          git diff HEAD
-          test "$(git diff --name-only HEAD | wc -l | xargs)" -eq 0
+          git diff --exit-code HEAD
 
   audit-prod:
     name: Audit - Production

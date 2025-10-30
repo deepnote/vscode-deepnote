@@ -192,18 +192,37 @@ jobs:
 
   integration-tests:
     name: Integration Tests
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     permissions:
       id-token: write
       contents: read
       packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        # os: [ubuntu-latest, windows-latest]  # Windows commented out for now, can be re-enabled later
+        python: [python]
+        pythonVersion: ['3.12']
+        tags: [
+            '^[^@]+$|@mandatory|@kernelCore|@python|@jupyter',
+            '@widgets',
+            '@iw',
+            '@webview|@export|@lsp|@variableViewer',
+            '@debugger'
+          ]
+        # exclude:
+        #   - os: windows-latest
+        #     tags: '@widgets'
+        #   - os: windows-latest
+        #     tags: '@webview|@export|@lsp|@variableViewer'
     env:
       VSC_JUPYTER_FORCE_LOGGING: 'true'
       VSC_PYTHON_FORCE_LOGGING: 'true'
       VSC_JUPYTER_CI_TEST_VSC_CHANNEL: 'insiders'
       DISABLE_INSIDERS_EXTENSION: 1
-      PYTHON_VERSION: '3.12'
+      PYTHON_VERSION: ${{ matrix.pythonVersion }}
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
@@ -216,11 +235,11 @@ jobs:
           registry-url: 'https://npm.pkg.github.com'
           scope: '@deepnote'
 
-      - name: Setup Python ${{ env.PYTHON_VERSION }}
+      - name: Setup Python ${{ matrix.pythonVersion }}
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         id: setupPythonVersion
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: ${{ matrix.pythonVersion }}
 
       - name: Set CI Python Path
         run: echo "CI_PYTHON_PATH=${{ steps.setupPythonVersion.outputs.python-path }}" >> $GITHUB_ENV
@@ -230,9 +249,9 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-${{ hashFiles('build/venv-test-ipywidgets8-requirements.txt') }}
+          key: ${{ runner.os }}-pip-${{ matrix.pythonVersion }}-${{ hashFiles('build/venv-test-ipywidgets8-requirements.txt') }}
           restore-keys: |
-            ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-
+            ${{ runner.os }}-pip-${{ matrix.pythonVersion }}-
 
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
@@ -252,15 +271,30 @@ jobs:
       - name: Install screen capture dependencies
         run: sudo apt-get update && sudo apt-get install --fix-missing imagemagick x11-xserver-utils
 
+      - name: Generate Tag Variable
+        run: echo "TAGSVAR=${{ matrix.tags }}" >> $GITHUB_ENV
+
+      - name: Generate Friendly Variable
+        run: echo "TAGS_NAME=${TAGSVAR//[^a-zA-Z]/_}" >> $GITHUB_ENV
+
       - name: Compile TypeScript
         run: npm run compile
         env:
           VSC_JUPYTER_CI_FAST_COMPILATION: 1
+          VSC_JUPYTER_CI_TEST_GREP: ${{ matrix.tags }}
 
       - name: Create temp folder for user data dir
         run: |
           echo "VSC_JUPYTER_USER_DATA_DIR=$(mktemp -d)" >> $GITHUB_ENV
           echo ${{env.VSC_JUPYTER_USER_DATA_DIR}} is user data dir
+
+      # Windows-specific steps (commented out for now)
+      # - name: Create temp folder for user data dir (Windows)
+      #   if: matrix.os == 'windows-latest'
+      #   run: |
+      #     echo "VSC_JUPYTER_USER_DATA_DIR=$env:USERPROFILE\AppData\Local\Temp" >> $Env:GITHUB_ENV
+      #     echo ${{env.VSC_JUPYTER_USER_DATA_DIR}} is user data dir
+      #   shell: pwsh
 
       - name: Set xvfb parameters
         run: echo "xvfbCommand=--server-args=\"-screen 0 1024x768x24\"" >> $GITHUB_ENV
@@ -273,12 +307,24 @@ jobs:
           VSC_JUPYTER_FORCE_LOGGING: 1
           VSC_PYTHON_FORCE_LOGGING: 1
           VSC_JUPYTER_CI_TEST_VSC_CHANNEL: 'insiders'
+          VSC_JUPYTER_CI_TEST_GREP: ${{ matrix.tags }}
+
+      # Windows-specific test execution (commented out for now)
+      # - name: Run integration tests (Windows)
+      #   if: matrix.os == 'windows-latest'
+      #   run: npm run test:integration:windows
+      #   env:
+      #     VSC_JUPYTER_FORCE_LOGGING: 1
+      #     VSC_PYTHON_FORCE_LOGGING: 1
+      #     VSC_JUPYTER_CI_TEST_VSC_CHANNEL: 'insiders'
+      #     VSC_JUPYTER_CI_TEST_GREP: ${{ matrix.tags }}
+      #     VSC_PYTHON_LOG_FILE: ${{env.VSC_JUPYTER_USER_DATA_DIR}}/logs/python.log
 
       - name: Upload VS Code logs
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 #v5
         if: failure()
         with:
-          name: VSCodeLogs-integration-tests
+          name: VSCodeLogs-${{ matrix.os }}-${{ matrix.pythonVersion }}-${{ env.TAGS_NAME }}
           path: '${{env.VSC_JUPYTER_USER_DATA_DIR}}/logs/**/*'
           retention-days: 7
 
@@ -286,9 +332,12 @@ jobs:
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 #v5
         if: always()
         with:
-          name: TestLogs-integration-tests
+          name: TestLogs-${{ matrix.os }}-${{ matrix.pythonVersion }}-${{ env.TAGS_NAME }}
           path: './logs/*'
           retention-days: 7
+
+      - name: Verify there are no unhandled errors
+        run: npx gulp verifyUnhandledErrors
 
   audit-prod:
     name: Audit - Production

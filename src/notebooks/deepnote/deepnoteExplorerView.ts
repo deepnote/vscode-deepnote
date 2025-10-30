@@ -1,6 +1,7 @@
 import { injectable, inject } from 'inversify';
 import { commands, window, workspace, type TreeView, Uri, l10n } from 'vscode';
 import * as yaml from 'js-yaml';
+import { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
 import { convertIpynbFilesToDeepnoteFile } from '@deepnote/convert';
 
 import { IExtensionContext } from '../../platform/common/types';
@@ -11,7 +12,6 @@ import { generateUuid } from '../../platform/common/uuid';
 import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { Commands } from '../../platform/common/constants';
 import { readDeepnoteProjectFile } from './deepnoteProjectUtils';
-import { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
 
 /**
  * Manages the Deepnote explorer tree view and related commands

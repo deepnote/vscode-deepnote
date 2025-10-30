@@ -17,6 +17,7 @@ import { IExtensionSyncActivationService } from '../../platform/activation/types
 import { IDisposableRegistry } from '../../platform/common/types';
 import { Commands } from '../../platform/common/constants';
 import { chainWithPendingUpdates } from '../../kernels/execution/notebookUpdater';
+import { WrappedError } from '../../platform/errors/types';
 import {
     DeepnoteBigNumberMetadataSchema,
     DeepnoteTextInputMetadataSchema,
@@ -269,12 +270,11 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         const editor = window.activeNotebookEditor;
 
         if (!editor) {
-            throw new Error(l10n.t('No active notebook editor found'));
+            throw new WrappedError(l10n.t('No active notebook editor found'));
         }
 
         const document = editor.notebook;
         const selection = editor.selection;
-
         const insertIndex = selection ? selection.end : document.cellCount;
 
         const defaultVisualizationSpec = {
@@ -310,7 +310,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         });
 
         if (result !== true) {
-            throw new Error(l10n.t('Failed to insert chart block'));
+            throw new WrappedError(l10n.t('Failed to insert chart block'));
         }
 
         const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);

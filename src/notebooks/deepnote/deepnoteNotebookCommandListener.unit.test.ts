@@ -21,6 +21,7 @@ import {
 import { IDisposable } from '../../platform/common/types';
 import * as notebookUpdater from '../../kernels/execution/notebookUpdater';
 import { createMockedNotebookDocument } from '../../test/datascience/editor-integration/helpers';
+import { WrappedError } from '../../platform/errors/types';
 
 suite('DeepnoteNotebookCommandListener', () => {
     let commandListener: DeepnoteNotebookCommandListener;
@@ -1138,7 +1139,11 @@ suite('DeepnoteNotebookCommandListener', () => {
                 });
 
                 // Call the method and expect rejection
-                await assert.isRejected(commandListener.addChartBlock(), Error, 'No active notebook editor found');
+                await assert.isRejected(
+                    commandListener.addChartBlock(),
+                    WrappedError,
+                    'No active notebook editor found'
+                );
             });
 
             test('should throw error when chainWithPendingUpdates fails', async () => {
@@ -1154,7 +1159,7 @@ suite('DeepnoteNotebookCommandListener', () => {
                 sandbox.stub(notebookUpdater, 'chainWithPendingUpdates').resolves(false);
 
                 // Call the method and expect rejection
-                await assert.isRejected(commandListener.addChartBlock(), Error, 'Failed to insert chart block');
+                await assert.isRejected(commandListener.addChartBlock(), WrappedError, 'Failed to insert chart block');
             });
         });
     });

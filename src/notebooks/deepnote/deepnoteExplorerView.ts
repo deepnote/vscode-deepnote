@@ -43,20 +43,11 @@ export class DeepnoteExplorerView {
     /**
      * Shared helper that creates and adds a new notebook to a project
      * @param fileUri The URI of the project file
-     * @param projectId The project ID
      * @returns Object with notebook ID and name if successful, or null if aborted/failed
      */
-    public async createAndAddNotebookToProject(
-        fileUri: Uri,
-        projectId: string
-    ): Promise<{ id: string; name: string } | null> {
+    public async createAndAddNotebookToProject(fileUri: Uri): Promise<{ id: string; name: string } | null> {
         // Read the Deepnote project file
         const projectData = await readDeepnoteProjectFile(fileUri);
-
-        if (projectData.project.id !== projectId) {
-            await window.showErrorMessage(l10n.t('Project ID mismatch'));
-            return null;
-        }
 
         if (!projectData?.project) {
             await window.showErrorMessage(l10n.t('Invalid Deepnote file format'));
@@ -84,7 +75,7 @@ export class DeepnoteExplorerView {
         projectData.project.notebooks.push(newNotebook);
 
         // Save and open the new notebook
-        await this.saveProjectAndOpenNotebook(fileUri, projectData, projectId, newNotebook.id);
+        await this.saveProjectAndOpenNotebook(fileUri, projectData, newNotebook.id);
 
         return { id: newNotebook.id, name: notebookName };
     }
@@ -120,19 +111,7 @@ export class DeepnoteExplorerView {
 
             const existingNames = new Set(projectData.project.notebooks.map((nb: DeepnoteNotebook) => nb.name));
 
-            const newName = await window.showInputBox({
-                prompt: l10n.t('Enter new notebook name'),
-                value: currentName,
-                validateInput: (value) => {
-                    if (!value || value.trim().length === 0) {
-                        return l10n.t('Notebook name cannot be empty');
-                    }
-                    if (existingNames.has(value)) {
-                        return l10n.t('A notebook with this name already exists');
-                    }
-                    return null;
-                }
-            });
+            const newName = await this.promptForNotebookName(currentName, existingNames);
 
             if (!newName || newName === currentName) {
                 return;
@@ -482,13 +461,11 @@ export class DeepnoteExplorerView {
      * Saves the project data to file and opens the specified notebook
      * @param fileUri The URI of the project file
      * @param projectData The project data to save
-     * @param projectId The project ID
      * @param notebookId The notebook ID to open
      */
     private async saveProjectAndOpenNotebook(
         fileUri: Uri,
         projectData: DeepnoteFile,
-        projectId: string,
         notebookId: string
     ): Promise<void> {
         // Update metadata timestamp
@@ -506,7 +483,7 @@ export class DeepnoteExplorerView {
         this.treeDataProvider.refresh();
 
         // Open the new notebook
-        this.manager.selectNotebookForProject(projectId, notebookId);
+        this.manager.selectNotebookForProject(projectData.project.id, notebookId);
         const notebookUri = fileUri.with({ query: `notebook=${notebookId}` });
         const document = await workspace.openNotebookDocument(notebookUri);
         await window.showNotebookDocument(document, {
@@ -722,14 +699,6 @@ export class DeepnoteExplorerView {
         }
 
         const document = activeEditor.notebook;
-        const metadata = document.metadata;
-
-        // Get project information from notebook metadata
-        const projectId = metadata?.deepnoteProjectId as string | undefined;
-        if (!projectId) {
-            await window.showErrorMessage(l10n.t('Could not determine project ID'));
-            return;
-        }
 
         // Get the file URI (strip query params if present)
         let fileUri = document.uri;
@@ -739,7 +708,7 @@ export class DeepnoteExplorerView {
 
         try {
             // Use shared helper to create and add notebook
-            const result = await this.createAndAddNotebookToProject(fileUri, projectId);
+            const result = await this.createAndAddNotebookToProject(fileUri);
 
             if (result) {
                 await window.showInformationMessage(l10n.t('Created new notebook: {0}', result.name));
@@ -968,14 +937,11 @@ export class DeepnoteExplorerView {
             return;
         }
 
-        const project = treeItem.data as DeepnoteFile;
-        const projectId = project.project.id;
-
         try {
             const fileUri = Uri.file(treeItem.context.filePath);
 
             // Use shared helper to create and add notebook
-            const result = await this.createAndAddNotebookToProject(fileUri, projectId);
+            const result = await this.createAndAddNotebookToProject(fileUri);
 
             if (result) {
                 await window.showInformationMessage(l10n.t('Created new notebook: {0}', result.name));

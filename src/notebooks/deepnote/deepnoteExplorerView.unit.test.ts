@@ -798,7 +798,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             );
 
             // Execute the method
-            const result = await explorerView.createAndAddNotebookToProject(fileUri, projectId);
+            const result = await explorerView.createAndAddNotebookToProject(fileUri);
 
             // Verify result
             expect(result).to.exist;
@@ -817,38 +817,6 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             expect(updatedProjectData.project.notebooks[1].name).to.equal(notebookName);
             expect(updatedProjectData.project.notebooks[1].blocks).to.have.lengthOf(1);
             expect(updatedProjectData.project.notebooks[1].executionMode).to.equal('block');
-        });
-
-        test('should return null if project ID does not match', async () => {
-            const projectId = 'expected-project-id';
-            const differentProjectId = 'different-project-id';
-            const fileUri = Uri.file('/workspace/test-project.deepnote');
-
-            // Mock existing project data with different ID
-            const existingProjectData = {
-                version: 1.0,
-                project: {
-                    id: differentProjectId,
-                    name: 'Test Project',
-                    notebooks: []
-                }
-            };
-
-            const yamlContent = yaml.dump(existingProjectData);
-
-            // Mock file system
-            const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yamlContent)));
-            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
-
-            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
-
-            // Execute the method
-            const result = await explorerView.createAndAddNotebookToProject(fileUri, projectId);
-
-            // Verify result is null and error was shown
-            expect(result).to.be.null;
-            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
         });
 
         test('should return null if user cancels notebook name input', async () => {
@@ -877,7 +845,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(undefined));
 
             // Execute the method
-            const result = await explorerView.createAndAddNotebookToProject(fileUri, projectId);
+            const result = await explorerView.createAndAddNotebookToProject(fileUri);
 
             // Verify result is null and file was not written
             expect(result).to.be.null;
@@ -925,7 +893,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             );
 
             // Execute the method
-            await explorerView.createAndAddNotebookToProject(fileUri, projectId);
+            await explorerView.createAndAddNotebookToProject(fileUri);
 
             // Verify suggested name is 'Notebook 3' (next in sequence)
             expect(capturedInputBoxOptions).to.exist;

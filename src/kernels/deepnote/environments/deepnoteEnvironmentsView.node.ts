@@ -1,9 +1,14 @@
 import { inject, injectable } from 'inversify';
-import { commands, Disposable, l10n, ProgressLocation, QuickPickItem, TreeView, window } from 'vscode';
+import { commands, Disposable, l10n, ProgressLocation, QuickPickItem, TreeView, window, workspace } from 'vscode';
 import { IDisposableRegistry } from '../../../platform/common/types';
 import { logger } from '../../../platform/logging';
 import { IPythonApiProvider } from '../../../platform/api/types';
-import { IDeepnoteEnvironmentManager, IDeepnoteKernelAutoSelector, IDeepnoteNotebookEnvironmentMapper } from '../types';
+import {
+    DeepnoteKernelConnectionMetadata,
+    IDeepnoteEnvironmentManager,
+    IDeepnoteKernelAutoSelector,
+    IDeepnoteNotebookEnvironmentMapper
+} from '../types';
 import { DeepnoteEnvironmentTreeDataProvider } from './deepnoteEnvironmentTreeDataProvider.node';
 import { DeepnoteEnvironmentTreeItem } from './deepnoteEnvironmentTreeItem.node';
 import { CreateDeepnoteEnvironmentOptions, EnvironmentStatus } from './deepnoteEnvironment';
@@ -303,6 +308,9 @@ export class DeepnoteEnvironmentsView implements Disposable {
                         await this.notebookEnvironmentMapper.removeEnvironmentForNotebook(nb);
                     }
 
+                    // Dispose kernels from any open notebooks using this environment
+                    await this.disposeKernelsUsingEnvironment(environmentId);
+
                     await this.environmentManager.deleteEnvironment(environmentId, token);
                     logger.info(`Deleted environment: ${environmentId}`);
                 }
@@ -312,6 +320,52 @@ export class DeepnoteEnvironmentsView implements Disposable {
         } catch (error) {
             logger.error('Failed to delete environment', error);
             void window.showErrorMessage(l10n.t('Failed to delete environment. See output for details.'));
+        }
+    }
+
+    /**
+     * Dispose kernels from any open notebooks that are using the specified environment.
+     * This ensures the UI reflects that the kernel is no longer available.
+     */
+    private async disposeKernelsUsingEnvironment(environmentId: string): Promise<void> {
+        const openNotebooks = workspace.notebookDocuments;
+
+        for (const notebook of openNotebooks) {
+            // Only check Deepnote notebooks
+            if (notebook.notebookType !== 'deepnote') {
+                continue;
+            }
+
+            // Get the kernel for this notebook
+            const kernel = this.kernelProvider.get(notebook);
+            if (!kernel) {
+                continue;
+            }
+
+            // Check if this kernel is using the environment being deleted
+            const connectionMetadata = kernel.kernelConnectionMetadata;
+            if (connectionMetadata.kind === 'startUsingDeepnoteKernel') {
+                const deepnoteMetadata = connectionMetadata as DeepnoteKernelConnectionMetadata;
+                const expectedHandle = `deepnote-config-server-${environmentId}`;
+
+                if (deepnoteMetadata.serverProviderHandle.handle === expectedHandle) {
+                    logger.info(
+                        `Disposing kernel for notebook ${getDisplayPath(
+                            notebook.uri
+                        )} as it uses deleted environment ${environmentId}`
+                    );
+
+                    try {
+                        // First, unselect the controller from the notebook UI
+                        this.kernelAutoSelector.clearControllerForEnvironment(notebook, environmentId);
+
+                        // Then dispose the kernel
+                        await kernel.dispose();
+                    } catch (error) {
+                        logger.error(`Failed to dispose kernel for ${getDisplayPath(notebook.uri)}`, error);
+                    }
+                }
+            }
         }
     }
 
@@ -359,7 +413,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
             const isCurrent = currentEnvironment?.id === env.id;
 
             return {
-                label: `${icon} ${env.name} [${text}]${isCurrent ? ' $(check)' : ''}`,
+                label: `$(${icon}) ${env.name} [${text}]${isCurrent ? ' $(check)' : ''}`,
                 description: getDisplayPath(env.pythonInterpreter.uri),
                 detail: env.packages?.length
                     ? l10n.t('Packages: {0}', env.packages.join(', '))

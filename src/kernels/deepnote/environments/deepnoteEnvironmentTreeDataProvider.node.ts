@@ -3,12 +3,15 @@ import { IDeepnoteEnvironmentManager } from '../types';
 import { EnvironmentTreeItemType, DeepnoteEnvironmentTreeItem } from './deepnoteEnvironmentTreeItem.node';
 import { EnvironmentStatus } from './deepnoteEnvironment';
 import { inject, injectable } from 'inversify';
+import { IExtensionSyncActivationService } from '../../../platform/activation/types';
 
 /**
  * Tree data provider for the Deepnote kernel environments view
  */
 @injectable()
-export class DeepnoteEnvironmentTreeDataProvider implements TreeDataProvider<DeepnoteEnvironmentTreeItem>, Disposable {
+export class DeepnoteEnvironmentTreeDataProvider
+    implements TreeDataProvider<DeepnoteEnvironmentTreeItem>, IExtensionSyncActivationService, Disposable
+{
     private readonly _onDidChangeTreeData = new EventEmitter<DeepnoteEnvironmentTreeItem | undefined | void>();
     private readonly disposables: Disposable[] = [];
 
@@ -19,6 +22,10 @@ export class DeepnoteEnvironmentTreeDataProvider implements TreeDataProvider<Dee
                 this.refresh();
             })
         );
+    }
+
+    public activate(): void {
+        this.refresh();
     }
 
     public get onDidChangeTreeData(): Event<DeepnoteEnvironmentTreeItem | undefined | void> {

@@ -456,6 +456,107 @@ suite('DeepnoteEnvironmentsView', () => {
             // Verify success message was shown
             verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
         });
+
+        test('should dispose kernels from open notebooks using the deleted environment', async () => {
+            // Mock environment exists
+            when(mockConfigManager.getEnvironment(testEnvironmentId)).thenReturn(testEnvironment);
+
+            // Mock user confirmation
+            when(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).thenReturn(
+                Promise.resolve('Delete')
+            );
+
+            // Mock notebooks using this environment
+            when(mockNotebookEnvironmentMapper.getNotebooksUsingEnvironment(testEnvironmentId)).thenReturn([]);
+            when(mockNotebookEnvironmentMapper.removeEnvironmentForNotebook(anything())).thenResolve();
+
+            // Mock open notebooks with kernels
+            const openNotebook1 = {
+                uri: Uri.file('/workspace/open-notebook1.deepnote'),
+                notebookType: 'deepnote',
+                isClosed: false
+            } as any;
+
+            const openNotebook2 = {
+                uri: Uri.file('/workspace/open-notebook2.deepnote'),
+                notebookType: 'jupyter-notebook',
+                isClosed: false
+            } as any;
+
+            const openNotebook3 = {
+                uri: Uri.file('/workspace/open-notebook3.deepnote'),
+                notebookType: 'deepnote',
+                isClosed: false
+            } as any;
+
+            // Mock workspace.notebookDocuments
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([
+                openNotebook1,
+                openNotebook2,
+                openNotebook3
+            ]);
+
+            // Mock kernels
+            const mockKernel1 = {
+                kernelConnectionMetadata: {
+                    kind: 'startUsingDeepnoteKernel',
+                    serverProviderHandle: {
+                        handle: `deepnote-config-server-${testEnvironmentId}`
+                    }
+                },
+                dispose: sinon.stub().resolves()
+            };
+
+            const mockKernel3 = {
+                kernelConnectionMetadata: {
+                    kind: 'startUsingDeepnoteKernel',
+                    serverProviderHandle: {
+                        handle: 'deepnote-config-server-different-env'
+                    }
+                },
+                dispose: sinon.stub().resolves()
+            };
+
+            // Mock kernelProvider.get()
+            when(mockKernelProvider.get(openNotebook1)).thenReturn(mockKernel1 as any);
+            when(mockKernelProvider.get(openNotebook2)).thenReturn(undefined); // No kernel for jupyter notebook
+            when(mockKernelProvider.get(openNotebook3)).thenReturn(mockKernel3 as any);
+
+            // Mock window.withProgress
+            when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall(
+                (_options: ProgressOptions, callback: Function) => {
+                    const mockProgress = {
+                        report: () => {
+                            // Mock progress reporting
+                        }
+                    };
+                    const mockToken: CancellationToken = {
+                        isCancellationRequested: false,
+                        onCancellationRequested: () => ({
+                            dispose: () => {
+                                // Mock disposable
+                            }
+                        })
+                    };
+                    return callback(mockProgress, mockToken);
+                }
+            );
+
+            // Mock environment deletion
+            when(mockConfigManager.deleteEnvironment(testEnvironmentId, anything())).thenResolve();
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenResolve(undefined);
+
+            // Execute the command
+            await view.deleteEnvironmentCommand(testEnvironmentId);
+
+            // Verify that only kernel1 (using the deleted environment) was disposed
+            assert.strictEqual(mockKernel1.dispose.callCount, 1, 'Kernel using deleted environment should be disposed');
+            assert.strictEqual(
+                mockKernel3.dispose.callCount,
+                0,
+                'Kernel using different environment should not be disposed'
+            );
+        });
     });
 
     suite('selectEnvironmentForNotebook', () => {

@@ -194,6 +194,14 @@ export interface IDeepnoteKernelAutoSelector {
      * @param token Cancellation token to cancel the operation
      */
     rebuildController(notebook: vscode.NotebookDocument, token?: vscode.CancellationToken): Promise<void>;
+
+    /**
+     * Clear the controller selection for a notebook using a specific environment.
+     * This is used when deleting an environment to unselect its controller from any open notebooks.
+     * @param notebook The notebook document
+     * @param environmentId The environment ID
+     */
+    clearControllerForEnvironment(notebook: vscode.NotebookDocument, environmentId: string): void;
 }
 
 export const IDeepnoteEnvironmentManager = Symbol('IDeepnoteEnvironmentManager');

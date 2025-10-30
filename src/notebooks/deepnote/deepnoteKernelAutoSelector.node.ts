@@ -419,7 +419,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
     private async ensureKernelSelectedWithConfiguration(
         notebook: NotebookDocument,
-        // configuration: import('./../../kernels/deepnote/environments/deepnoteEnvironment').DeepnoteEnvironment,
         configuration: DeepnoteEnvironment,
         baseFileUri: Uri,
         notebookKey: string,
@@ -651,6 +650,28 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         // Store it so we can dispose it later
         this.loadingControllers.set(notebookKey, loadingController);
         logger.info(`Created loading controller for ${notebookKey}`);
+    }
+
+    /**
+     * Clear the controller selection for a notebook using a specific environment.
+     * This is used when deleting an environment to unselect its controller from any open notebooks.
+     */
+    public clearControllerForEnvironment(notebook: NotebookDocument, environmentId: string): void {
+        const selectedController = this.controllerRegistration.getSelected(notebook);
+        if (!selectedController || selectedController.connection.kind !== 'startUsingDeepnoteKernel') {
+            return;
+        }
+
+        const deepnoteMetadata = selectedController.connection as DeepnoteKernelConnectionMetadata;
+        const expectedHandle = `deepnote-config-server-${environmentId}`;
+
+        if (deepnoteMetadata.serverProviderHandle.handle === expectedHandle) {
+            // Unselect the controller by setting affinity to Default
+            selectedController.controller.updateNotebookAffinity(notebook, NotebookControllerAffinity.Default);
+            logger.info(
+                `Cleared controller for notebook ${getDisplayPath(notebook.uri)} (environment ${environmentId})`
+            );
+        }
     }
 
     /**

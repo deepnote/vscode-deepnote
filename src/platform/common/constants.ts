@@ -227,6 +227,7 @@ export namespace Commands {
     export const ManageIntegrations = 'deepnote.manageIntegrations';
     export const AddSqlBlock = 'deepnote.addSqlBlock';
     export const AddBigNumberChartBlock = 'deepnote.addBigNumberChartBlock';
+    export const AddChartBlock = 'deepnote.addChartBlock';
     export const AddInputTextBlock = 'deepnote.addInputTextBlock';
     export const AddInputTextareaBlock = 'deepnote.addInputTextareaBlock';
     export const AddInputSelectBlock = 'deepnote.addInputSelectBlock';

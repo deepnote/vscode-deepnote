@@ -5,16 +5,14 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![VS Code Marketplace](https://img.shields.io/badge/VS%20Code-Marketplace-blue)](https://marketplace.visualstudio.com/items?itemName=Deepnote.vscode-deepnote)
 
-A powerful [Visual Studio Code](https://code.visualstudio.com/) extension that brings [Deepnote](https://deepnote.com/) notebook capabilities directly into your favorite editor. Work with sleek AI notebooks featuring SQL blocks, database integrations, and reactive blocks - all within VS Code.
+A powerful [Visual Studio Code](https://code.visualstudio.com/),[Cursor](https://cursor.com/) and [Windsurf](https://windsurf.com/) extension that brings [Deepnote](https://deepnote.com/) notebook capabilities directly into your favorite editor. Work with sleek AI notebooks featuring SQL blocks, database integrations, and reactive blocks - all within VS Code.
 
 ---
 ![Deepnote Projects](./images/deepnote-projects.png)
 
 ---
-
-# 🚀 Deepnote in VS Code - data notebook for AI era
-
-Run Deepnote locally inside VS Code — not Jupyter — and unlock the next generation of data workflows:
+# 🚀 Deepnote in VS Code, Cursor and Windsurf - data notebook for AI era
+Run Deepnote locally inside VS Code, Cursor and Windsurf — not Jupyter — and unlock the next generation of data workflows:
 - 🧠 **SQL in VS Code** — Run SQL queries out of the box, no extensions needed
 - 🧩 **Rich block types** — Combine Python, Markdown, data visualizations, tables, and more — all in one place
 - 🔐 **Native database connections** — Securely connect to Snowflake, BigQuery, Postgres, and 60+ other sources via VS Code’s encrypted SecretStorage API

@@ -122,6 +122,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - [Deepnote](https://deepnote.com/) - Collaborative data science notebook platform
 - [VS Code Extension for Deepnote](https://marketplace.visualstudio.com/items?itemName=Deepnote.vscode-deepnote) - Python language support for VS Code
-- [Cursor extesion for Deepnote](https://open-vsx.org/extension/Deepnote/vscode-deepnote)
+- [Cursor extension for Deepnote](https://open-vsx.org/extension/Deepnote/vscode-deepnote)
 - [Windsurf extension for Deepnote](https://open-vsx.org/extension/Deepnote/vscode-deepnote)
 Made with 💙 by the Deepnote team

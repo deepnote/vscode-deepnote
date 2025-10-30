@@ -9,7 +9,7 @@ import { Commands } from '../../platform/common/constants';
 import { logger } from '../../platform/logging';
 import * as fs from 'fs';
 import * as path from '../../platform/vscode-path/path';
-import { initImport, uploadFile, getErrorMessage, MAX_FILE_SIZE } from './importClient.node';
+import { initImport, uploadFile, getErrorMessage, MAX_FILE_SIZE, getDeepnoteDomain } from './importClient.node';
 
 /**
  * Handler for the "Open in Deepnote" command
@@ -100,7 +100,8 @@ export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
 
                         // Step 3: Open in browser
                         progress.report({ message: l10n.t('Opening in Deepnote...') });
-                        const deepnoteUrl = `https://deepnote.com/import?id=${initResponse.importId}`;
+                        const domain = getDeepnoteDomain();
+                        const deepnoteUrl = `https://${domain}/launch?importId=${initResponse.importId}`;
                         await env.openExternal(Uri.parse(deepnoteUrl));
 
                         void window.showInformationMessage('Opening in Deepnote...');

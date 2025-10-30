@@ -28,11 +28,19 @@ export interface ApiError {
 export const MAX_FILE_SIZE = 100 * 1024 * 1024;
 
 /**
+ * Gets the Deepnote domain from configuration
+ */
+function getDomain(): string {
+    const config = workspace.getConfiguration('deepnote');
+    return config.get<string>('domain', 'deepnote.com');
+}
+
+/**
  * Gets the API endpoint from configuration
  */
 function getApiEndpoint(): string {
-    const config = workspace.getConfiguration('deepnote');
-    return config.get<string>('apiEndpoint', 'https://api.deepnote.com');
+    const domain = getDomain();
+    return `https://api.${domain}`;
 }
 
 /**
@@ -154,4 +162,11 @@ export function getErrorMessage(error: unknown): string {
 
     logger.error('Unknown error type:', typeof error, error);
     return 'An unknown error occurred';
+}
+
+/**
+ * Gets the Deepnote domain from configuration for building launch URLs
+ */
+export function getDeepnoteDomain(): string {
+    return getDomain();
 }

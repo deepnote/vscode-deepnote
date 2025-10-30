@@ -8,6 +8,7 @@ import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteTreeDataProvider } from './deepnoteTreeDataProvider';
 import { type DeepnoteTreeItem, DeepnoteTreeItemType, type DeepnoteTreeItemContext } from './deepnoteTreeItem';
 import { generateUuid } from '../../platform/common/uuid';
+import { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
 
 /**
  * Manages the Deepnote explorer tree view and related commands
@@ -213,7 +214,7 @@ export class DeepnoteExplorerView {
             const projectId = generateUuid();
             const notebookId = generateUuid();
 
-            const firstBlock = {
+            const firstBlock: DeepnoteBlock = {
                 blockGroup: generateUuid(),
                 content: '',
                 executionCount: 0,
@@ -225,7 +226,7 @@ export class DeepnoteExplorerView {
                 version: 1
             };
 
-            const projectData = {
+            const projectData: DeepnoteFile = {
                 version: '1.0.0',
                 metadata: {
                     createdAt: new Date().toISOString(),

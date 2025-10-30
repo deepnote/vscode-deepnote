@@ -1397,10 +1397,10 @@
             "type": "object",
             "title": "Deepnote",
             "properties": {
-                "deepnote.apiEndpoint": {
+                "deepnote.domain": {
                     "type": "string",
-                    "default": "https://deepnote.com",
-                    "description": "Deepnote API endpoint",
+                    "default": "deepnote.com",
+                    "description": "Deepnote domain (e.g., 'deepnote.com' or 'ra-18838.deepnote-staging.com')",
                     "scope": "application"
                 },
                 "deepnote.disableSSLVerification": {

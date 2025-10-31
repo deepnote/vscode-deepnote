@@ -900,6 +900,11 @@
             ],
             "notebook/toolbar": [
                 {
+                    "command": "deepnote.openInDeepnote",
+                    "group": "navigation@-1",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
                     "command": "deepnote.manageIntegrations",
                     "group": "navigation@0",
                     "when": "notebookType == 'deepnote'"

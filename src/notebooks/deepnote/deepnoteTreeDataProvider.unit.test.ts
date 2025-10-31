@@ -97,16 +97,13 @@ suite('DeepnoteTreeDataProvider', () => {
             }
         });
 
-        test('should complete initial scan and show projects after loading', async () => {
+        test('should return empty array when no workspace is available', async () => {
             const newProvider = new DeepnoteTreeDataProvider();
-            const loadingChildren = await newProvider.getChildren();
-            assert.isArray(loadingChildren);
 
-            await new Promise((resolve) => setTimeout(resolve, 10));
-
-            // Second call should show actual projects (or empty array if no projects)
-            const actualChildren = await newProvider.getChildren();
-            assert.isArray(actualChildren);
+            // In test environment without workspace, returns empty array
+            const children = await newProvider.getChildren();
+            assert.isArray(children);
+            assert.strictEqual(children.length, 0, 'Should return empty array when no workspace folders exist');
 
             if (newProvider && typeof newProvider.dispose === 'function') {
                 newProvider.dispose();

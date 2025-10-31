@@ -7,7 +7,10 @@ import {
     workspace,
     RelativePattern,
     Uri,
-    FileSystemWatcher
+    FileSystemWatcher,
+    ThemeIcon,
+    commands,
+    l10n
 } from 'vscode';
 import * as yaml from 'js-yaml';
 
@@ -26,9 +29,12 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
 
     private fileWatcher: FileSystemWatcher | undefined;
     private cachedProjects: Map<string, DeepnoteProject> = new Map();
+    private isInitialScanComplete: boolean = false;
+    private initialScanPromise: Promise<void> | undefined;
 
     constructor() {
         this.setupFileWatcher();
+        this.updateContextKey();
     }
 
     public dispose(): void {
@@ -38,6 +44,9 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
 
     public refresh(): void {
         this.cachedProjects.clear();
+        this.isInitialScanComplete = false;
+        this.initialScanPromise = undefined;
+        this.updateContextKey();
         this._onDidChangeTreeData.fire();
     }
 
@@ -51,6 +60,15 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         }
 
         if (!element) {
+            if (!this.isInitialScanComplete) {
+                if (!this.initialScanPromise) {
+                    this.initialScanPromise = this.performInitialScan();
+                }
+
+                // Show loading item
+                return [this.createLoadingTreeItem()];
+            }
+
             return this.getDeepnoteProjectFiles();
         }
 
@@ -59,6 +77,29 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         }
 
         return [];
+    }
+
+    private createLoadingTreeItem(): DeepnoteTreeItem {
+        const loadingItem = new DeepnoteTreeItem(
+            DeepnoteTreeItemType.Loading,
+            { filePath: '', projectId: '' },
+            null,
+            TreeItemCollapsibleState.None
+        );
+        loadingItem.label = l10n.t('Scanning for Deepnote projects...');
+        loadingItem.iconPath = new ThemeIcon('loading~spin');
+        return loadingItem;
+    }
+
+    private async performInitialScan(): Promise<void> {
+        try {
+            await this.getDeepnoteProjectFiles();
+        } finally {
+            this.isInitialScanComplete = true;
+            this.initialScanPromise = undefined;
+            this.updateContextKey();
+            this._onDidChangeTreeData.fire();
+        }
     }
 
     private async getDeepnoteProjectFiles(): Promise<DeepnoteTreeItem[]> {
@@ -196,5 +237,9 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         }
 
         return undefined;
+    }
+
+    private updateContextKey(): void {
+        void commands.executeCommand('setContext', 'deepnote.explorerInitialScanComplete', this.isInitialScanComplete);
     }
 }

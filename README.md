@@ -5,15 +5,18 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![VS Code Marketplace](https://img.shields.io/badge/VS%20Code-Marketplace-blue)](https://marketplace.visualstudio.com/items?itemName=Deepnote.vscode-deepnote)
 
-A powerful [Visual Studio Code](https://code.visualstudio.com/),[Cursor](https://cursor.com/) and [Windsurf](https://windsurf.com/) extension that brings [Deepnote](https://deepnote.com/) notebook capabilities directly into your favorite editor. Work with sleek AI notebooks featuring SQL blocks, database integrations, and reactive blocks - all within VS Code.
+A powerful [Visual Studio Code](https://marketplace.visualstudio.com/items?itemName=Deepnote.vscode-deepnote), [Cursor](https://marketplace.visualstudio.com/items?itemName=Deepnote.vscode-deepnote) and [Windsurf](https://marketplace.visualstudio.com/items?itemName=Deepnote.vscode-deepnote) extension that brings [Deepnote](https://deepnote.com/) notebook capabilities directly into your favorite editor. Work with sleek AI notebooks featuring SQL blocks, database integrations, and reactive blocks - all within VS Code.
 
 ---
+
 ![Deepnote Projects](./images/deepnote-projects.png)
 
 ---
+
 # 🚀 Deepnote in VS Code, Cursor and Windsurf - data notebook for AI era
 
 Run Deepnote locally inside VS Code, Cursor and Windsurf — not Jupyter — and unlock the next generation of data workflows:
+
 - 🧠 **SQL in VS Code** — Run SQL queries out of the box, no extensions needed
 - 🧩 **Rich block types** — Combine Python, Markdown, data visualizations, tables, and more — all in one place
 - 🔐 **Native database connections** — Securely connect to Snowflake, BigQuery, Postgres, and 60+ other sources via VS Code’s encrypted SecretStorage API
@@ -21,10 +24,12 @@ Run Deepnote locally inside VS Code, Cursor and Windsurf — not Jupyter — and
 - 📦 **Smart requirements** — Generate `requirements.txt` automatically for reproducible runs
 
 🐍 **Jupyter kernel, upgraded**
+
 - ⚡ **Deepnote kernel** — Fully `.ipynb-compatible`, tuned for modern data workflows
 - 🔁 **Kernel control** — Restart, interrupt, and switch seamlessly
 
 🌐 **Deepnote ecosystem integrations**
+
 - 🔃 **Auto-refresh** — Instantly detects file and data changes
 - 🧮 **Multi-notebook support** — Work across multiple notebooks in one unified project
 - ☁ **Cloud collaboration** — Switch between local VS Code and Deepnote Cloud to collaborate live on the same file with your team
@@ -95,6 +100,7 @@ Results are displayed as interactive tables that you can explore and export.
 ## 🛠️ Quick start for developers
 
 Want to contribute? Check out our [Contributing Guide](CONTRIBUTING.md) for detailed setup instructions.
+
 - Setting up your development environment
 - Running tests
 - Building the extension
@@ -117,10 +123,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Feature requests**: [GitHub discussions](https://github.com/deepnote/deepnote/discussions)
 - **Questions**: [GitHub discussions](https://github.com/deepnote/deepnote/discussions)
 
-## 🔗 Try Deepnote for free at:
+---
 
-- [Deepnote](https://deepnote.com/) - Collaborative data science notebook platform
-- [VS Code Extension for Deepnote](https://marketplace.visualstudio.com/items?itemName=Deepnote.vscode-deepnote) - Python language support for VS Code
-- [Cursor extension for Deepnote](https://open-vsx.org/extension/Deepnote/vscode-deepnote)
-- [Windsurf extension for Deepnote](https://open-vsx.org/extension/Deepnote/vscode-deepnote)
-Made with 💙 by the Deepnote team
+<div align="center">
+
+**Built with 💙 by the Deepnote team**
+
+</div>

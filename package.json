@@ -1,7 +1,7 @@
 {
     "name": "vscode-deepnote",
     "displayName": "Deepnote",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "description": "Deepnote notebook support.",
     "publisher": "Deepnote",
     "author": {
@@ -98,6 +98,12 @@
                 "title": "%deepnote.commands.manageIntegrations.title%",
                 "category": "Deepnote",
                 "icon": "$(plug)"
+            },
+            {
+                "command": "deepnote.openInDeepnote",
+                "title": "Open in Deepnote",
+                "category": "Deepnote",
+                "icon": "$(globe)"
             },
             {
                 "command": "deepnote.newProject",
@@ -767,6 +773,11 @@
                     "when": "editorFocus && editorLangId == python && jupyter.hascodecells && !notebookEditorFocused && isWorkspaceTrusted",
                     "command": "jupyter.exportfileasnotebook",
                     "group": "Jupyter3@2"
+                },
+                {
+                    "when": "resourceExtname == .deepnote",
+                    "command": "deepnote.openInDeepnote",
+                    "group": "navigation"
                 }
             ],
             "editor.interactiveWindow.context": [
@@ -1428,7 +1439,7 @@
             "view/item/context": [
                 {
                     "command": "deepnote.revealInExplorer",
-                    "when": "view == deepnoteExplorer",
+                    "when": "view == deepnoteExplorer && viewItem != loading",
                     "group": "inline@2"
                 }
             ]
@@ -1437,6 +1448,18 @@
             "type": "object",
             "title": "Deepnote",
             "properties": {
+                "deepnote.domain": {
+                    "type": "string",
+                    "default": "deepnote.com",
+                    "description": "Deepnote domain (e.g., 'deepnote.com' or 'ra-18838.deepnote-staging.com')",
+                    "scope": "application"
+                },
+                "deepnote.disableSSLVerification": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Disable SSL certificate verification (for development only)",
+                    "scope": "application"
+                },
                 "jupyter.experiments.enabled": {
                     "type": "boolean",
                     "default": true,
@@ -2078,7 +2101,8 @@
         "viewsWelcome": [
             {
                 "view": "deepnoteExplorer",
-                "contents": "Welcome to Deepnote for VS Code!\nExplore your data with SQL and Python. Build interactive notebooks, collaborate with your team, and share your insights.\n\n\n\n[$(new-file) New Project](command:deepnote.newProject)\n[$(folder-opened) Import Notebook](command:deepnote.importNotebook)"
+                "contents": "Welcome to Deepnote for VS Code!\nExplore your data with SQL and Python. Build interactive notebooks, collaborate with your team, and share your insights.\n\n\n\n[$(new-file) New Project](command:deepnote.newProject)\n[$(folder-opened) Import Notebook](command:deepnote.importNotebook)",
+                "when": "deepnote.explorerInitialScanComplete"
             }
         ],
         "debuggers": [

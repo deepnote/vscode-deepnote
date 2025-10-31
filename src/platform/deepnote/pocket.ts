@@ -2,6 +2,7 @@ import type { NotebookCellData } from 'vscode';
 
 import type { DeepnoteBlock } from './deepnoteTypes';
 import { generateBlockId, generateSortingKey } from '../../notebooks/deepnote/dataConversionUtils';
+import { generateUuid } from '../common/uuid';
 
 // Note: 'id' is intentionally excluded from this list so it remains at the top level of cell.metadata
 // The id field is needed at runtime for cell identification during execution
@@ -64,7 +65,7 @@ export function createBlockFromPocket(cell: NotebookCellData, index: number): De
     }
 
     const block: DeepnoteBlock = {
-        blockGroup: pocket?.blockGroup || 'default-group',
+        blockGroup: pocket?.blockGroup || generateUuid(),
         content: cell.value,
         id: cellId || generateBlockId(),
         metadata,

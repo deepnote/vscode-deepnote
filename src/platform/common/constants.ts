@@ -126,6 +126,7 @@ export const LanguagesSupportedByPythonkernel = [
     'perl', // %%perl
     'qsharp', // %%qsharp
     'json', // JSON cells for custom block types
+    'plaintext', // plaintext cells (e.g., Deepnote input-text blocks)
     'raw' // raw cells (no formatting)
 ];
 export const jupyterLanguageToMonacoLanguageMapping = new Map([
@@ -237,6 +238,7 @@ export namespace Commands {
     export const AddInputDateRangeBlock = 'deepnote.addInputDateRangeBlock';
     export const AddInputFileBlock = 'deepnote.addInputFileBlock';
     export const AddButtonBlock = 'deepnote.addButtonBlock';
+    export const OpenInDeepnote = 'deepnote.openInDeepnote';
     export const ExportAsPythonScript = 'jupyter.exportAsPythonScript';
     export const ExportToHTML = 'jupyter.exportToHTML';
     export const ExportToPDF = 'jupyter.exportToPDF';

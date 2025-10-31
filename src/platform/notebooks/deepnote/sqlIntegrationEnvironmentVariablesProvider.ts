@@ -199,6 +199,19 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
             return envVars;
         }
 
+        // Always add the internal DuckDB integration
+        const dataframeSqlIntegrationEnvVarName = convertToEnvironmentVariableName(
+            getSqlEnvVarName(DATAFRAME_SQL_INTEGRATION_ID)
+        );
+        const dataframeSqlIntegrationCredentialsJson = JSON.stringify({
+            url: 'deepnote+duckdb:///:memory:',
+            params: {},
+            param_style: 'qmark'
+        });
+
+        envVars[dataframeSqlIntegrationEnvVarName] = dataframeSqlIntegrationCredentialsJson;
+        logger.debug(`SqlIntegrationEnvironmentVariablesProvider: Added env var for dataframe SQL integration`);
+
         // Scan all cells for SQL integration IDs
         const integrationIds = this.scanNotebookForIntegrations(notebook);
         if (integrationIds.size === 0) {
@@ -219,17 +232,7 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
             try {
                 // Handle internal DuckDB integration specially
                 if (integrationId === DATAFRAME_SQL_INTEGRATION_ID) {
-                    const envVarName = convertToEnvironmentVariableName(getSqlEnvVarName(integrationId));
-                    const credentialsJson = JSON.stringify({
-                        url: 'deepnote+duckdb:///:memory:',
-                        params: {},
-                        param_style: 'qmark'
-                    });
-
-                    envVars[envVarName] = credentialsJson;
-                    logger.debug(
-                        `SqlIntegrationEnvironmentVariablesProvider: Added env var for dataframe SQL integration`
-                    );
+                    // Internal DuckDB integration is handled above
                     continue;
                 }
 

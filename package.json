@@ -858,6 +858,11 @@
             ],
             "notebook/toolbar": [
                 {
+                    "command": "deepnote.openInDeepnote",
+                    "group": "navigation@-1",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
                     "command": "deepnote.manageIntegrations",
                     "group": "navigation@0",
                     "when": "notebookType == 'deepnote'"
@@ -1439,7 +1444,7 @@
             "view/item/context": [
                 {
                     "command": "deepnote.revealInExplorer",
-                    "when": "view == deepnoteExplorer",
+                    "when": "view == deepnoteExplorer && viewItem != loading",
                     "group": "inline@2"
                 }
             ]
@@ -2099,7 +2104,8 @@
         "viewsWelcome": [
             {
                 "view": "deepnoteExplorer",
-                "contents": "Welcome to Deepnote for VS Code!\nExplore your data with SQL and Python. Build interactive notebooks, collaborate with your team, and share your insights.\n\n\n\n[$(new-file) New Project](command:deepnote.newProject)\n[$(folder-opened) Import Notebook](command:deepnote.importNotebook)"
+                "contents": "Welcome to Deepnote for VS Code!\nExplore your data with SQL and Python. Build interactive notebooks, collaborate with your team, and share your insights.\n\n\n\n[$(new-file) New Project](command:deepnote.newProject)\n[$(folder-opened) Import Notebook](command:deepnote.importNotebook)",
+                "when": "deepnote.explorerInitialScanComplete"
             }
         ],
         "debuggers": [

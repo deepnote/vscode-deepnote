@@ -37,6 +37,16 @@ suite('SqlCellStatusBarProvider', () => {
         cancellationToken = tokenSource.token;
     });
 
+    test('returns undefined when cancellation token is requested', async () => {
+        const cell = createMockCell('sql', {});
+        const tokenSource = new CancellationTokenSource();
+        tokenSource.cancel();
+
+        const result = await provider.provideCellStatusBarItems(cell, tokenSource.token);
+
+        assert.isUndefined(result);
+    });
+
     test('returns undefined for non-SQL cells', async () => {
         const cell = createMockCell('python', {});
 
@@ -338,6 +348,169 @@ suite('SqlCellStatusBarProvider', () => {
             verify(mockedVSCodeNamespaces.commands.registerCommand('deepnote.switchSqlIntegration', anything())).once();
         });
 
+        test('updateSqlVariableName command handler falls back to active cell when no cell provided', async () => {
+            let commandHandler: ((cell?: NotebookCell) => Promise<void>) | undefined;
+            when(
+                mockedVSCodeNamespaces.commands.registerCommand('deepnote.updateSqlVariableName', anything())
+            ).thenCall((_name, handler) => {
+                commandHandler = handler;
+                return { dispose: () => undefined };
+            });
+
+            const cell = createMockCell('sql', {});
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                notebook: {
+                    cellAt: (_index: number) => cell
+                },
+                selection: { start: 0 }
+            } as any);
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve('new_name'));
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+            activateProvider.activate();
+            assert.isDefined(commandHandler, 'Command handler should be registered');
+
+            // Invoke the handler without a cell argument
+            await commandHandler!();
+
+            // Verify that the active cell was used
+            verify(mockedVSCodeNamespaces.window.showInputBox(anything())).once();
+            verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
+        });
+
+        test('updateSqlVariableName command handler shows error when no cell and no active editor', async () => {
+            let commandHandler: ((cell?: NotebookCell) => Promise<void>) | undefined;
+            when(
+                mockedVSCodeNamespaces.commands.registerCommand('deepnote.updateSqlVariableName', anything())
+            ).thenCall((_name, handler) => {
+                commandHandler = handler;
+                return { dispose: () => undefined };
+            });
+
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+
+            activateProvider.activate();
+            assert.isDefined(commandHandler, 'Command handler should be registered');
+
+            // Invoke the handler without a cell argument
+            await commandHandler!();
+
+            // Verify error message was shown
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(mockedVSCodeNamespaces.window.showInputBox(anything())).never();
+        });
+
+        test('updateSqlVariableName command handler shows error when no cell and no selection', async () => {
+            let commandHandler: ((cell?: NotebookCell) => Promise<void>) | undefined;
+            when(
+                mockedVSCodeNamespaces.commands.registerCommand('deepnote.updateSqlVariableName', anything())
+            ).thenCall((_name, handler) => {
+                commandHandler = handler;
+                return { dispose: () => undefined };
+            });
+
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                notebook: {},
+                selection: undefined
+            } as any);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+
+            activateProvider.activate();
+            assert.isDefined(commandHandler, 'Command handler should be registered');
+
+            // Invoke the handler without a cell argument
+            await commandHandler!();
+
+            // Verify error message was shown
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(mockedVSCodeNamespaces.window.showInputBox(anything())).never();
+        });
+
+        test('switchSqlIntegration command handler falls back to active cell when no cell provided', async () => {
+            let commandHandler: ((cell?: NotebookCell) => Promise<void>) | undefined;
+            when(mockedVSCodeNamespaces.commands.registerCommand('deepnote.switchSqlIntegration', anything())).thenCall(
+                (_name, handler) => {
+                    commandHandler = handler;
+                    return { dispose: () => undefined };
+                }
+            );
+
+            const notebookMetadata = { deepnoteProjectId: 'project-1' };
+            const cell = createMockCell('sql', {}, notebookMetadata);
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                notebook: {
+                    cellAt: (_index: number) => cell
+                },
+                selection: { start: 0 }
+            } as any);
+            when(activateNotebookManager.getOriginalProject('project-1')).thenReturn({
+                project: { integrations: [] }
+            } as any);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve(undefined)
+            );
+
+            activateProvider.activate();
+            assert.isDefined(commandHandler, 'Command handler should be registered');
+
+            // Invoke the handler without a cell argument
+            await commandHandler!();
+
+            // Verify that the active cell was used
+            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).once();
+        });
+
+        test('switchSqlIntegration command handler shows error when no cell and no active editor', async () => {
+            let commandHandler: ((cell?: NotebookCell) => Promise<void>) | undefined;
+            when(mockedVSCodeNamespaces.commands.registerCommand('deepnote.switchSqlIntegration', anything())).thenCall(
+                (_name, handler) => {
+                    commandHandler = handler;
+                    return { dispose: () => undefined };
+                }
+            );
+
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+
+            activateProvider.activate();
+            assert.isDefined(commandHandler, 'Command handler should be registered');
+
+            // Invoke the handler without a cell argument
+            await commandHandler!();
+
+            // Verify error message was shown
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
+        });
+
+        test('switchSqlIntegration command handler shows error when no cell and no selection', async () => {
+            let commandHandler: ((cell?: NotebookCell) => Promise<void>) | undefined;
+            when(mockedVSCodeNamespaces.commands.registerCommand('deepnote.switchSqlIntegration', anything())).thenCall(
+                (_name, handler) => {
+                    commandHandler = handler;
+                    return { dispose: () => undefined };
+                }
+            );
+
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                notebook: {},
+                selection: undefined
+            } as any);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+
+            activateProvider.activate();
+            assert.isDefined(commandHandler, 'Command handler should be registered');
+
+            // Invoke the handler without a cell argument
+            await commandHandler!();
+
+            // Verify error message was shown
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
+        });
+
         test('listens to integration storage changes', () => {
             const onDidChangeIntegrations = new EventEmitter<void>();
             when(activateIntegrationStorage.onDidChangeIntegrations).thenReturn(onDidChangeIntegrations.event);
@@ -345,6 +518,25 @@ suite('SqlCellStatusBarProvider', () => {
             activateProvider.activate();
 
             // Verify the listener was registered by checking disposables
+            assert.isTrue(activateDisposables.length > 0);
+        });
+
+        test('registers workspace.onDidChangeNotebookDocument listener', () => {
+            const onDidChangeIntegrations = new EventEmitter<void>();
+            when(activateIntegrationStorage.onDidChangeIntegrations).thenReturn(onDidChangeIntegrations.event);
+
+            activateProvider.activate();
+
+            verify(mockedVSCodeNamespaces.workspace.onDidChangeNotebookDocument(anything())).once();
+        });
+
+        test('disposes the event emitter', () => {
+            const onDidChangeIntegrations = new EventEmitter<void>();
+            when(activateIntegrationStorage.onDidChangeIntegrations).thenReturn(onDidChangeIntegrations.event);
+
+            activateProvider.activate();
+
+            // Verify the emitter is added to disposables
             assert.isTrue(activateDisposables.length > 0);
         });
     });
@@ -405,6 +597,72 @@ suite('SqlCellStatusBarProvider', () => {
                 statusBarChangeHandler.count,
                 3,
                 'onDidChangeCellStatusBarItems should fire three times'
+            );
+        });
+
+        test('fires onDidChangeCellStatusBarItems when deepnote notebook changes', () => {
+            const onDidChangeIntegrations = new EventEmitter<void>();
+            const onDidChangeNotebookDocument = new EventEmitter<any>();
+            when(eventIntegrationStorage.onDidChangeIntegrations).thenReturn(onDidChangeIntegrations.event);
+            when(mockedVSCodeNamespaces.workspace.onDidChangeNotebookDocument(anything())).thenCall((handler) => {
+                onDidChangeNotebookDocument.event(handler);
+                return {
+                    dispose: () => {
+                        return;
+                    }
+                };
+            });
+
+            eventProvider.activate();
+
+            const statusBarChangeHandler = createEventHandler(
+                eventProvider,
+                'onDidChangeCellStatusBarItems',
+                eventDisposables
+            );
+
+            // Fire notebook document change event for deepnote notebook
+            onDidChangeNotebookDocument.fire({
+                notebook: {
+                    notebookType: 'deepnote'
+                }
+            });
+
+            assert.strictEqual(statusBarChangeHandler.count, 1, 'onDidChangeCellStatusBarItems should fire once');
+        });
+
+        test('does not fire onDidChangeCellStatusBarItems when non-deepnote notebook changes', () => {
+            const onDidChangeIntegrations = new EventEmitter<void>();
+            const onDidChangeNotebookDocument = new EventEmitter<any>();
+            when(eventIntegrationStorage.onDidChangeIntegrations).thenReturn(onDidChangeIntegrations.event);
+            when(mockedVSCodeNamespaces.workspace.onDidChangeNotebookDocument(anything())).thenCall((handler) => {
+                onDidChangeNotebookDocument.event(handler);
+                return {
+                    dispose: () => {
+                        return;
+                    }
+                };
+            });
+
+            eventProvider.activate();
+
+            const statusBarChangeHandler = createEventHandler(
+                eventProvider,
+                'onDidChangeCellStatusBarItems',
+                eventDisposables
+            );
+
+            // Fire notebook document change event for non-deepnote notebook
+            onDidChangeNotebookDocument.fire({
+                notebook: {
+                    notebookType: 'jupyter-notebook'
+                }
+            });
+
+            assert.strictEqual(
+                statusBarChangeHandler.count,
+                0,
+                'onDidChangeCellStatusBarItems should not fire for non-deepnote notebooks'
             );
         });
     });
@@ -533,6 +791,20 @@ suite('SqlCellStatusBarProvider', () => {
             });
 
             await updateVariableNameHandler(cell);
+        });
+
+        test('validates input - accepts valid Python identifier', async () => {
+            const cell = createMockCell('sql', {});
+
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenCall((options) => {
+                const validationResult = options.validateInput('valid_name');
+                assert.isUndefined(validationResult, 'Valid input should return undefined');
+                return Promise.resolve('valid_name');
+            });
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+            await updateVariableNameHandler(cell);
+            verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
         });
     });
 
@@ -718,6 +990,64 @@ suite('SqlCellStatusBarProvider', () => {
             assert.strictEqual(duckDbItem.label, 'DataFrame SQL (DuckDB)');
         });
 
+        test('shows BigQuery type label for BigQuery integrations', async () => {
+            const notebookMetadata = { deepnoteProjectId: 'project-1' };
+            const cell = createMockCell('sql', {}, notebookMetadata);
+            let quickPickItems: any[] = [];
+
+            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+                project: {
+                    integrations: [
+                        {
+                            id: 'bigquery-integration',
+                            name: 'My BigQuery',
+                            type: 'big-query'
+                        }
+                    ]
+                }
+            } as any);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenCall((items) => {
+                quickPickItems = items;
+                return Promise.resolve(undefined);
+            });
+
+            await switchIntegrationHandler(cell);
+
+            const bigQueryItem = quickPickItems.find((item) => item.id === 'bigquery-integration');
+            assert.isDefined(bigQueryItem, 'BigQuery integration should be in quick pick items');
+            assert.strictEqual(bigQueryItem.description, 'BigQuery');
+        });
+
+        test('shows raw type for unknown integration types', async () => {
+            const notebookMetadata = { deepnoteProjectId: 'project-1' };
+            const cell = createMockCell('sql', {}, notebookMetadata);
+            let quickPickItems: any[] = [];
+
+            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+                project: {
+                    integrations: [
+                        {
+                            id: 'unknown-integration',
+                            name: 'Unknown DB',
+                            type: 'unknown_type'
+                        }
+                    ]
+                }
+            } as any);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenCall((items) => {
+                quickPickItems = items;
+                return Promise.resolve(undefined);
+            });
+
+            await switchIntegrationHandler(cell);
+
+            const unknownItem = quickPickItems.find((item) => item.id === 'unknown-integration');
+            assert.isDefined(unknownItem, 'Unknown integration should be in quick pick items');
+            assert.strictEqual(unknownItem.description, 'unknown_type');
+        });
+
         test('marks current integration as selected in quick pick', async () => {
             const currentIntegrationId = 'current-integration';
             const notebookMetadata = { deepnoteProjectId: 'project-1' };
@@ -812,6 +1142,54 @@ suite('SqlCellStatusBarProvider', () => {
             // DuckDB should still be in the list (added separately)
             const duckDbItem = quickPickItems.find((item) => item.id === DATAFRAME_SQL_INTEGRATION_ID);
             assert.isDefined(duckDbItem, 'DuckDB should still be in the list');
+        });
+
+        test('does not update when selected integration is same as current', async () => {
+            const currentIntegrationId = 'current-integration';
+            const notebookMetadata = { deepnoteProjectId: 'project-1' };
+            const cell = createMockCell('sql', { sql_integration_id: currentIntegrationId }, notebookMetadata);
+
+            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+                project: {
+                    integrations: [
+                        {
+                            id: currentIntegrationId,
+                            name: 'Current Integration',
+                            type: 'pgsql'
+                        }
+                    ]
+                }
+            } as any);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ id: currentIntegrationId, label: 'Current Integration' } as any)
+            );
+
+            await switchIntegrationHandler(cell);
+
+            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).once();
+            verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+        });
+
+        test('does not update when selected item has no id property', async () => {
+            const notebookMetadata = { deepnoteProjectId: 'project-1' };
+            const cell = createMockCell('sql', { sql_integration_id: 'current-integration' }, notebookMetadata);
+
+            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+                project: {
+                    integrations: []
+                }
+            } as any);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+            // Return an item without an id property (e.g., a separator)
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ kind: -1 } as any)
+            );
+
+            await switchIntegrationHandler(cell);
+
+            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).once();
+            verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
         });
     });
 

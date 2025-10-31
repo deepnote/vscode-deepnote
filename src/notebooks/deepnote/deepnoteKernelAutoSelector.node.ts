@@ -9,13 +9,13 @@ import {
     NotebookControllerAffinity,
     window,
     ProgressLocation,
-    notebooks,
     NotebookController,
     CancellationTokenSource,
     Disposable,
     Uri,
     l10n,
-    env
+    env,
+    commands
 } from 'vscode';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
@@ -121,17 +121,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         }
 
         logger.info(`Deepnote notebook opened: ${getDisplayPath(notebook.uri)}`);
-
-        // Check if we already have a controller ready for this notebook
-        const baseFileUri = notebook.uri.with({ query: '', fragment: '' });
-        const notebookKey = baseFileUri.fsPath;
-        const hasExistingController = this.notebookControllers.has(notebookKey);
-
-        // If no existing controller, create a temporary "Loading" controller immediately
-        // This prevents the kernel selector from appearing when user clicks Run All
-        if (!hasExistingController) {
-            this.createLoadingController(notebook, notebookKey);
-        }
 
         // Always try to ensure kernel is selected (this will reuse existing controllers)
         // Don't await - let it happen in background so notebook opens quickly
@@ -301,20 +290,22 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     }
 
     public async ensureKernelSelected(notebook: NotebookDocument, _token?: CancellationToken): Promise<void> {
-        return window.withProgress(
+        const baseFileUri = notebook.uri.with({ query: '', fragment: '' });
+        const notebookKey = baseFileUri.fsPath;
+
+        const kernelSelected = await window.withProgress(
             {
                 location: ProgressLocation.Notification,
                 title: l10n.t('Loading Deepnote Kernel'),
                 cancellable: true
             },
-            async (progress, progressToken) => {
+            async (progress, progressToken): Promise<boolean> => {
                 try {
                     logger.info(`Ensuring Deepnote kernel is selected for ${getDisplayPath(notebook.uri)}`);
 
                     // Extract the base file URI (without query parameters)
                     // Notebooks from the same .deepnote file have different URIs with ?notebook=id query params
-                    const baseFileUri = notebook.uri.with({ query: '', fragment: '' });
-                    const notebookKey = baseFileUri.fsPath;
+
                     logger.info(`Base Deepnote file: ${getDisplayPath(baseFileUri)}`);
 
                     // Check if we already have a controller for this notebook file
@@ -345,7 +336,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                         const selectedController = this.controllerRegistration.getSelected(notebook);
                         if (selectedController && selectedController.id === existingController.id) {
                             logger.info(`Controller already selected for ${getDisplayPath(notebook.uri)}`);
-                            return;
+                            return true;
                         }
 
                         // Auto-select the existing controller for this notebook
@@ -363,7 +354,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                             logger.info(`Disposed loading controller for ${notebookKey}`);
                         }
 
-                        return;
+                        return true;
                     }
 
                     // No existing controller - check if user has selected a configuration for this notebook
@@ -387,10 +378,10 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                         selectedConfig = await this.configurationPicker.pickEnvironment(baseFileUri);
 
                         if (!selectedConfig) {
-                            logger.info(`User cancelled configuration selection - no kernel will be loaded`);
-                            throw new Error(
-                                'No environment selected. Please create an environment using the Deepnote Environments view.'
+                            logger.info(
+                                `User cancelled configuration selection or no environment found - no kernel will be loaded`
                             );
+                            return false;
                         }
 
                         // Save the selection
@@ -401,7 +392,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                     }
 
                     // Use the selected configuration
-                    return this.ensureKernelSelectedWithConfiguration(
+                    await this.ensureKernelSelectedWithConfiguration(
                         notebook,
                         selectedConfig,
                         baseFileUri,
@@ -409,12 +400,53 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                         progress,
                         progressToken
                     );
+
+                    return true;
                 } catch (ex) {
                     logger.error('Failed to auto-select Deepnote kernel', ex);
                     throw ex;
                 }
             }
         );
+
+        if (!kernelSelected) {
+            const createLabel = l10n.t('Create Environment');
+            const cancelLabel = l10n.t('Cancel');
+
+            const choice = await window.showInformationMessage(
+                l10n.t('No environments found. Create one to use with {0}?', getDisplayPath(baseFileUri)),
+                createLabel,
+                cancelLabel
+            );
+
+            if (choice === createLabel) {
+                // Trigger the create command
+                logger.info('Triggering create environment command from picker');
+                await commands.executeCommand('deepnote.environments.create');
+
+                const selectedConfig = await this.configurationPicker.pickEnvironment(baseFileUri);
+                if (!selectedConfig) {
+                    return;
+                }
+
+                const tmpCancellation = new CancellationTokenSource();
+                const tmpCancellationToken = tmpCancellation.token;
+
+                // Use the selected configuration
+                await this.ensureKernelSelectedWithConfiguration(
+                    notebook,
+                    selectedConfig,
+                    baseFileUri,
+                    notebookKey,
+                    {
+                        report: () => {
+                            logger.info('Progress report');
+                        }
+                    },
+                    tmpCancellationToken
+                );
+            }
+        }
     }
 
     private async ensureKernelSelectedWithConfiguration(
@@ -625,31 +657,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         }
 
         return kernelSpec;
-    }
-
-    private createLoadingController(notebook: NotebookDocument, notebookKey: string): void {
-        // Create a temporary controller that shows "Loading..." and prevents kernel selection prompt
-        const loadingController = notebooks.createNotebookController(
-            `deepnote-loading-${notebookKey}`,
-            DEEPNOTE_NOTEBOOK_TYPE,
-            l10n.t('Loading Deepnote Kernel...')
-        );
-
-        // Set it as the preferred controller immediately
-        loadingController.supportsExecutionOrder = false;
-        loadingController.supportedLanguages = ['python'];
-
-        // Execution handler that does nothing - cells will just sit there until real kernel is ready
-        loadingController.executeHandler = () => {
-            // No-op: execution is blocked until the real controller takes over
-        };
-
-        // Select this controller for the notebook
-        loadingController.updateNotebookAffinity(notebook, NotebookControllerAffinity.Preferred);
-
-        // Store it so we can dispose it later
-        this.loadingControllers.set(notebookKey, loadingController);
-        logger.info(`Created loading controller for ${notebookKey}`);
     }
 
     /**

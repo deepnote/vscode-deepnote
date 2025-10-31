@@ -11,7 +11,7 @@ import {
 } from '../types';
 import { DeepnoteEnvironmentTreeDataProvider } from './deepnoteEnvironmentTreeDataProvider.node';
 import { DeepnoteEnvironmentTreeItem } from './deepnoteEnvironmentTreeItem.node';
-import { CreateDeepnoteEnvironmentOptions, EnvironmentStatus } from './deepnoteEnvironment';
+import { CreateDeepnoteEnvironmentOptions, DeepnoteEnvironment, EnvironmentStatus } from './deepnoteEnvironment';
 import {
     getCachedEnvironment,
     resolvedPythonEnvToJupyterEnv,
@@ -58,7 +58,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
         disposableRegistry.push(this);
     }
 
-    public async createEnvironmentCommand(): Promise<void> {
+    public async createEnvironmentCommand(): Promise<DeepnoteEnvironment | undefined> {
         try {
             // Step 1: Select Python interpreter
             const api = await this.pythonApiProvider.getNewApi();
@@ -124,7 +124,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
             // Step 3: Enter packages (optional)
             const packagesInput = await window.showInputBox({
                 prompt: l10n.t('Enter additional packages to install (comma-separated, optional)'),
-                placeHolder: l10n.t('e.g., pandas, numpy, matplotlib'),
+                placeHolder: l10n.t('e.g., matplotlib, terraform'),
                 validateInput: (value: string) => {
                     if (!value || value.trim().length === 0) {
                         return undefined; // Empty is OK
@@ -160,7 +160,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
             });
 
             // Create environment with progress
-            await window.withProgress(
+            return await window.withProgress(
                 {
                     location: ProgressLocation.Notification,
                     title: l10n.t('Creating environment "{0}"...', name),
@@ -183,6 +183,8 @@ export class DeepnoteEnvironmentsView implements Disposable {
                         void window.showInformationMessage(
                             l10n.t('Environment "{0}" created successfully!', config.name)
                         );
+
+                        return config;
                     } catch (error) {
                         logger.error('Failed to create environment', error);
                         throw error;
@@ -389,19 +391,6 @@ export class DeepnoteEnvironmentsView implements Disposable {
         // Get all environments
         const environments = this.environmentManager.listEnvironments();
 
-        if (environments.length === 0) {
-            const choice = await window.showInformationMessage(
-                l10n.t('No environments found. Create one first?'),
-                l10n.t('Create Environment'),
-                l10n.t('Cancel')
-            );
-
-            if (choice === l10n.t('Create Environment')) {
-                await commands.executeCommand('deepnote.environments.create');
-            }
-            return;
-        }
-
         // Build quick pick items
         const items: (QuickPickItem & { environmentId?: string })[] = environments.map((env) => {
             const envWithStatus = this.environmentManager.getEnvironmentWithStatus(env.id);
@@ -422,9 +411,11 @@ export class DeepnoteEnvironmentsView implements Disposable {
             };
         });
 
+        const createNewLabel = l10n.t('$(add) Create New Environment');
+
         // Add "Create new" option at the end
         items.push({
-            label: l10n.t('$(add) Create New Environment'),
+            label: createNewLabel,
             description: l10n.t('Set up a new kernel environment'),
             alwaysShow: true
         });
@@ -439,15 +430,25 @@ export class DeepnoteEnvironmentsView implements Disposable {
             return; // User cancelled
         }
 
-        if (!selected.environmentId) {
-            // User chose "Create new"
-            await commands.executeCommand('deepnote.environments.create');
-            return;
+        let selectedEnvironmentId: string | undefined;
+
+        if (selected.label === createNewLabel) {
+            const newEnvironment = await this.createEnvironmentCommand();
+            if (newEnvironment == null) {
+                return;
+            }
+            // return;
+            selectedEnvironmentId = newEnvironment.id;
+        } else {
+            selectedEnvironmentId = selected.environmentId;
         }
 
         // Check if user selected the same environment
-        if (selected.environmentId === currentEnvironmentId) {
+        if (selectedEnvironmentId === currentEnvironmentId) {
             logger.info(`User selected the same environment - no changes needed`);
+            return;
+        } else if (selectedEnvironmentId == null) {
+            logger.info('User cancelled environment selection');
             return;
         }
 
@@ -475,9 +476,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
         }
 
         // User selected a different environment - switch to it
-        logger.info(
-            `Switching notebook ${getDisplayPath(activeNotebook.uri)} to environment ${selected.environmentId}`
-        );
+        logger.info(`Switching notebook ${getDisplayPath(activeNotebook.uri)} to environment ${selectedEnvironmentId}`);
 
         try {
             await window.withProgress(
@@ -488,16 +487,13 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 },
                 async () => {
                     // Update the notebook-to-environment mapping
-                    await this.notebookEnvironmentMapper.setEnvironmentForNotebook(
-                        baseFileUri,
-                        selected.environmentId!
-                    );
+                    await this.notebookEnvironmentMapper.setEnvironmentForNotebook(baseFileUri, selectedEnvironmentId);
 
                     // Force rebuild the controller with the new environment
                     // This clears cached metadata and creates a fresh controller.
                     await this.kernelAutoSelector.rebuildController(activeNotebook);
 
-                    logger.info(`Successfully switched to environment ${selected.environmentId}`);
+                    logger.info(`Successfully switched to environment ${selectedEnvironmentId}`);
                 }
             );
 

@@ -26,34 +26,6 @@ export class DeepnoteEnvironmentPicker {
 
         const environments = this.environmentManager.listEnvironments();
 
-        if (environments.length === 0) {
-            // No environments exist - prompt user to create one
-            const createLabel = l10n.t('Create Environment');
-            const cancelLabel = l10n.t('Cancel');
-
-            const choice = await window.showInformationMessage(
-                l10n.t('No environments found. Create one to use with {0}?', getDisplayPath(notebookUri)),
-                createLabel,
-                cancelLabel
-            );
-
-            if (choice === createLabel) {
-                // Trigger the create command
-                logger.info('Triggering create environment command from picker');
-                await commands.executeCommand('deepnote.environments.create');
-
-                // Check if an environment was created
-                const newEnvironments = this.environmentManager.listEnvironments();
-                if (newEnvironments.length > 0) {
-                    // Environment created, show picker again
-                    logger.info('Environment created, showing picker again');
-                    return this.pickEnvironment(notebookUri);
-                }
-            }
-
-            return undefined;
-        }
-
         // Build quick pick items
         const items: (QuickPickItem & { environment?: DeepnoteEnvironment })[] = environments.map((env) => {
             const envWithStatus = this.environmentManager.getEnvironmentWithStatus(env.id);

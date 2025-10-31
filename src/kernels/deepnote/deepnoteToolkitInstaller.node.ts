@@ -157,7 +157,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         packages: string[],
         token?: CancellationToken
     ): Promise<void> {
-        if (!packages || packages.length === 0) {
+        if (packages.length === 0) {
             return;
         }
 

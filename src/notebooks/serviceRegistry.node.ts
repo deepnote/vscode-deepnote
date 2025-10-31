@@ -58,7 +58,10 @@ import {
     IDeepnoteToolkitInstaller,
     IDeepnoteServerStarter,
     IDeepnoteKernelAutoSelector,
-    IDeepnoteServerProvider
+    IDeepnoteServerProvider,
+    IDeepnoteEnvironmentManager,
+    IDeepnoteEnvironmentPicker,
+    IDeepnoteNotebookEnvironmentMapper
 } from '../kernels/deepnote/types';
 import { DeepnoteToolkitInstaller } from '../kernels/deepnote/deepnoteToolkitInstaller.node';
 import { DeepnoteServerStarter } from '../kernels/deepnote/deepnoteServerStarter.node';
@@ -66,10 +69,17 @@ import { DeepnoteKernelAutoSelector } from './deepnote/deepnoteKernelAutoSelecto
 import { DeepnoteServerProvider } from '../kernels/deepnote/deepnoteServerProvider.node';
 import { DeepnoteInitNotebookRunner, IDeepnoteInitNotebookRunner } from './deepnote/deepnoteInitNotebookRunner.node';
 import { DeepnoteRequirementsHelper, IDeepnoteRequirementsHelper } from './deepnote/deepnoteRequirementsHelper.node';
+import { DeepnoteEnvironmentManager } from '../kernels/deepnote/environments/deepnoteEnvironmentManager.node';
+import { DeepnoteEnvironmentStorage } from '../kernels/deepnote/environments/deepnoteEnvironmentStorage.node';
+import { DeepnoteEnvironmentsView } from '../kernels/deepnote/environments/deepnoteEnvironmentsView.node';
+import { DeepnoteEnvironmentsActivationService } from '../kernels/deepnote/environments/deepnoteEnvironmentsActivationService';
+import { DeepnoteEnvironmentPicker } from '../kernels/deepnote/environments/deepnoteEnvironmentPicker';
+import { DeepnoteNotebookEnvironmentMapper } from '../kernels/deepnote/environments/deepnoteNotebookEnvironmentMapper.node';
 import { DeepnoteNotebookCommandListener } from './deepnote/deepnoteNotebookCommandListener';
 import { DeepnoteInputBlockCellStatusBarItemProvider } from './deepnote/deepnoteInputBlockCellStatusBarProvider';
 import { SqlIntegrationStartupCodeProvider } from './deepnote/integrations/sqlIntegrationStartupCodeProvider';
 import { DeepnoteCellCopyHandler } from './deepnote/deepnoteCellCopyHandler';
+import { DeepnoteEnvironmentTreeDataProvider } from '../kernels/deepnote/environments/deepnoteEnvironmentTreeDataProvider.node';
 import { OpenInDeepnoteHandler } from './deepnote/openInDeepnoteHandler.node';
 
 export function registerTypes(serviceManager: IServiceManager, isDevMode: boolean) {
@@ -182,6 +192,28 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
         DeepnoteInputBlockCellStatusBarItemProvider
+    );
+
+    // Deepnote configuration services
+    serviceManager.addSingleton<DeepnoteEnvironmentStorage>(DeepnoteEnvironmentStorage, DeepnoteEnvironmentStorage);
+    serviceManager.addSingleton<IDeepnoteEnvironmentManager>(IDeepnoteEnvironmentManager, DeepnoteEnvironmentManager);
+    serviceManager.addSingleton<DeepnoteEnvironmentTreeDataProvider>(
+        DeepnoteEnvironmentTreeDataProvider,
+        DeepnoteEnvironmentTreeDataProvider
+    );
+
+    // Deepnote configuration view
+    serviceManager.addSingleton<DeepnoteEnvironmentsView>(DeepnoteEnvironmentsView, DeepnoteEnvironmentsView);
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        DeepnoteEnvironmentsActivationService
+    );
+
+    // Deepnote configuration selection
+    serviceManager.addSingleton<IDeepnoteEnvironmentPicker>(IDeepnoteEnvironmentPicker, DeepnoteEnvironmentPicker);
+    serviceManager.addSingleton<IDeepnoteNotebookEnvironmentMapper>(
+        IDeepnoteNotebookEnvironmentMapper,
+        DeepnoteNotebookEnvironmentMapper
     );
 
     // File export/import

@@ -94,6 +94,59 @@
                 "icon": "$(reveal)"
             },
             {
+                "command": "deepnote.environments.create",
+                "title": "%deepnote.commands.environments.create.title%",
+                "category": "Deepnote",
+                "icon": "$(add)"
+            },
+            {
+                "command": "deepnote.environments.start",
+                "title": "%deepnote.commands.environments.start.title%",
+                "category": "Deepnote",
+                "icon": "$(debug-start)"
+            },
+            {
+                "command": "deepnote.environments.stop",
+                "title": "%deepnote.commands.environments.stop.title%",
+                "category": "Deepnote",
+                "icon": "$(debug-stop)"
+            },
+            {
+                "command": "deepnote.environments.restart",
+                "title": "%deepnote.commands.environments.restart.title%",
+                "category": "Deepnote",
+                "icon": "$(debug-restart)"
+            },
+            {
+                "command": "deepnote.environments.delete",
+                "title": "%deepnote.commands.environments.delete.title%",
+                "category": "Deepnote",
+                "icon": "$(trash)"
+            },
+            {
+                "command": "deepnote.environments.managePackages",
+                "title": "%deepnote.commands.environments.managePackages.title%",
+                "category": "Deepnote",
+                "icon": "$(package)"
+            },
+            {
+                "command": "deepnote.environments.editName",
+                "title": "%deepnote.commands.environments.editName.title%",
+                "category": "Deepnote"
+            },
+            {
+                "command": "deepnote.environments.refresh",
+                "title": "%deepnote.commands.environments.refresh.title%",
+                "category": "Deepnote",
+                "icon": "$(refresh)"
+            },
+            {
+                "command": "deepnote.environments.selectForNotebook",
+                "title": "%deepnote.commands.environments.selectForNotebook.title%",
+                "category": "Deepnote",
+                "icon": "$(server-environment)"
+            },
+            {
                 "command": "deepnote.manageIntegrations",
                 "title": "%deepnote.commands.manageIntegrations.title%",
                 "category": "Deepnote",
@@ -107,19 +160,19 @@
             },
             {
                 "command": "deepnote.newProject",
-                "title": "New project",
+                "title": "%deepnote.commands.newProject.title%",
                 "category": "Deepnote",
                 "icon": "$(new-file)"
             },
             {
                 "command": "deepnote.importNotebook",
-                "title": "Import notebook",
+                "title": "%deepnote.commands.importNotebook.title%",
                 "category": "Deepnote",
                 "icon": "$(folder-opened)"
             },
             {
                 "command": "deepnote.importJupyterNotebook",
-                "title": "Import Jupyter notebook",
+                "title": "%deepnote.commands.importJupyterNotebook.title%",
                 "category": "Deepnote",
                 "icon": "$(notebook)"
             },
@@ -762,6 +815,16 @@
                     "command": "deepnote.refreshExplorer",
                     "when": "view == deepnoteExplorer",
                     "group": "navigation@3"
+                },
+                {
+                    "command": "deepnote.environments.create",
+                    "when": "view == deepnoteEnvironments",
+                    "group": "navigation@4"
+                },
+                {
+                    "command": "deepnote.environments.refresh",
+                    "when": "view == deepnoteEnvironments",
+                    "group": "navigation@5"
                 }
             ],
             "editor/context": [
@@ -858,58 +921,63 @@
             ],
             "notebook/toolbar": [
                 {
-                    "command": "deepnote.manageIntegrations",
+                    "command": "deepnote.environments.selectForNotebook",
                     "group": "navigation@0",
-                    "when": "notebookType == 'deepnote'"
+                    "when": "notebookType == 'deepnote' && isWorkspaceTrusted"
                 },
                 {
-                    "command": "deepnote.addSqlBlock",
+                    "command": "deepnote.manageIntegrations",
                     "group": "navigation@1",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "deepnote.addChartBlock",
+                    "command": "deepnote.addSqlBlock",
                     "group": "navigation@2",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "deepnote.addBigNumberChartBlock",
+                    "command": "deepnote.addChartBlock",
                     "group": "navigation@3",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "deepnote.addInputTextBlock",
+                    "command": "deepnote.addBigNumberChartBlock",
                     "group": "navigation@4",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "deepnote.addInputTextareaBlock",
+                    "command": "deepnote.addInputTextBlock",
                     "group": "navigation@5",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "deepnote.addInputSelectBlock",
+                    "command": "deepnote.addInputTextareaBlock",
                     "group": "navigation@6",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "deepnote.addInputSliderBlock",
+                    "command": "deepnote.addInputSelectBlock",
                     "group": "navigation@7",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "deepnote.addInputCheckboxBlock",
+                    "command": "deepnote.addInputSliderBlock",
                     "group": "navigation@8",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "deepnote.addInputDateBlock",
+                    "command": "deepnote.addInputCheckboxBlock",
                     "group": "navigation@9",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "deepnote.addInputDateRangeBlock",
+                    "command": "deepnote.addInputDateBlock",
                     "group": "navigation@10",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addInputDateRangeBlock",
+                    "group": "navigation@11",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
@@ -1441,6 +1509,36 @@
                     "command": "deepnote.revealInExplorer",
                     "when": "view == deepnoteExplorer && viewItem != loading",
                     "group": "inline@2"
+                },
+                {
+                    "command": "deepnote.environments.start",
+                    "when": "view == deepnoteEnvironments && viewItem == deepnoteEnvironment.stopped",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "deepnote.environments.stop",
+                    "when": "view == deepnoteEnvironments && viewItem == deepnoteEnvironment.running",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "deepnote.environments.restart",
+                    "when": "view == deepnoteEnvironments && viewItem == deepnoteEnvironment.running",
+                    "group": "1_lifecycle@1"
+                },
+                {
+                    "command": "deepnote.environments.managePackages",
+                    "when": "view == deepnoteEnvironments && viewItem =~ /deepnoteEnvironment\\.(running|stopped)/",
+                    "group": "2_manage@1"
+                },
+                {
+                    "command": "deepnote.environments.editName",
+                    "when": "view == deepnoteEnvironments && viewItem =~ /deepnoteEnvironment\\.(running|stopped)/",
+                    "group": "2_manage@2"
+                },
+                {
+                    "command": "deepnote.environments.delete",
+                    "when": "view == deepnoteEnvironments && viewItem =~ /deepnoteEnvironment\\.(running|stopped)/",
+                    "group": "4_danger@1"
                 }
             ]
         },
@@ -2095,6 +2193,11 @@
                         "light": "./resources/light/deepnote-icon.svg",
                         "dark": "./resources/dark/deepnote-icon.svg"
                     }
+                },
+                {
+                    "id": "deepnoteEnvironments",
+                    "name": "%deepnote.views.environments.name%",
+                    "when": "workspaceFolderCount != 0"
                 }
             ]
         },
@@ -2429,6 +2532,7 @@
         "tcp-port-used": "^1.0.1",
         "tmp": "^0.2.4",
         "url-parse": "^1.5.10",
+        "uuid": "^13.0.0",
         "vega": "^5.33.0",
         "vega-embed": "^6.25.0",
         "vega-lite": "^5.21.0",
@@ -2489,7 +2593,6 @@
         "@types/temp": "^0.8.32",
         "@types/tmp": "^0.2.3",
         "@types/url-parse": "^1.4.8",
-        "@types/uuid": "^3.4.3",
         "@types/vscode-notebook-renderer": "^1.60.0",
         "@types/ws": "^6.0.1",
         "@typescript-eslint/eslint-plugin": "^6.9.0",

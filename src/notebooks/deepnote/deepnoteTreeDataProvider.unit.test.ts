@@ -1,4 +1,5 @@
 import { assert } from 'chai';
+import { l10n } from 'vscode';
 
 import { DeepnoteTreeDataProvider } from './deepnoteTreeDataProvider';
 import { DeepnoteTreeItem, DeepnoteTreeItemType } from './deepnoteTreeItem';
@@ -85,6 +86,31 @@ suite('DeepnoteTreeDataProvider', () => {
             assert.isArray(children);
         });
 
+        test('should not throw on first getChildren call with new provider instance', async () => {
+            const newProvider = new DeepnoteTreeDataProvider();
+
+            // First call - just verify it returns an array and doesn't throw
+            const children = await newProvider.getChildren();
+            assert.isArray(children);
+
+            if (newProvider && typeof newProvider.dispose === 'function') {
+                newProvider.dispose();
+            }
+        });
+
+        test('should return empty array when no workspace is available', async () => {
+            const newProvider = new DeepnoteTreeDataProvider();
+
+            // In test environment without workspace, returns empty array
+            const children = await newProvider.getChildren();
+            assert.isArray(children);
+            assert.strictEqual(children.length, 0, 'Should return empty array when no workspace folders exist');
+
+            if (newProvider && typeof newProvider.dispose === 'function') {
+                newProvider.dispose();
+            }
+        });
+
         test('should return array when called with project item parent', async () => {
             // Create a mock project item
             const mockProjectItem = new DeepnoteTreeItem(
@@ -129,6 +155,112 @@ suite('DeepnoteTreeDataProvider', () => {
 
             // Call refresh to verify it doesn't throw
             assert.doesNotThrow(() => provider.refresh());
+        });
+
+        test('should reset initial scan state on refresh', async () => {
+            const newProvider = new DeepnoteTreeDataProvider();
+            const firstChildren = await newProvider.getChildren();
+            assert.isArray(firstChildren);
+
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            // After scan
+            const afterScanChildren = await newProvider.getChildren();
+            assert.isArray(afterScanChildren);
+
+            // Call refresh to reset state - this exercises the refresh logic
+            newProvider.refresh();
+
+            // After refresh - should return to initial state (loading or empty)
+            const childrenAfterRefresh = await newProvider.getChildren();
+            assert.isArray(childrenAfterRefresh);
+
+            // Verify that refresh reset to initial scan state
+            // The post-refresh state should match the initial state
+            assert.strictEqual(
+                childrenAfterRefresh.length,
+                firstChildren.length,
+                'After refresh, should return to initial state with same number of children'
+            );
+
+            // If initial state had a loading item, post-refresh should too
+            if (firstChildren.length > 0 && firstChildren[0].contextValue === 'loading') {
+                assert.strictEqual(
+                    childrenAfterRefresh[0].contextValue,
+                    'loading',
+                    'After refresh, should show loading item again'
+                );
+                assert.strictEqual(
+                    childrenAfterRefresh[0].label,
+                    firstChildren[0].label,
+                    'Loading item label should match initial state'
+                );
+            }
+
+            if (newProvider && typeof newProvider.dispose === 'function') {
+                newProvider.dispose();
+            }
+        });
+    });
+
+    suite('loading state', () => {
+        test('should call getChildren and execute loading logic', async () => {
+            const newProvider = new DeepnoteTreeDataProvider();
+
+            // Call getChildren without element (root level) - exercises loading code path
+            const children = await newProvider.getChildren(undefined);
+            assert.isArray(children);
+            // In test environment may be empty or have loading item depending on timing
+
+            if (newProvider && typeof newProvider.dispose === 'function') {
+                newProvider.dispose();
+            }
+        });
+
+        test('should handle multiple getChildren calls', async () => {
+            const newProvider = new DeepnoteTreeDataProvider();
+
+            // First call
+            const firstResult = await newProvider.getChildren(undefined);
+            assert.isArray(firstResult);
+
+            // Wait a bit
+            await new Promise((resolve) => setTimeout(resolve, 50));
+
+            // Second call
+            const secondResult = await newProvider.getChildren(undefined);
+            assert.isArray(secondResult);
+
+            if (newProvider && typeof newProvider.dispose === 'function') {
+                newProvider.dispose();
+            }
+        });
+
+        test('should not show loading for child elements', async () => {
+            // Create a mock project item
+            const mockProjectItem = new DeepnoteTreeItem(
+                DeepnoteTreeItemType.ProjectFile,
+                {
+                    filePath: '/workspace/project.deepnote',
+                    projectId: 'project-123'
+                },
+                mockProject,
+                1
+            );
+
+            // Getting children of a project exercises the non-loading code path
+            const children = await provider.getChildren(mockProjectItem);
+            assert.isArray(children);
+
+            // Verify no loading items are present
+            const hasLoadingType = children.some((child) => child.type === DeepnoteTreeItemType.Loading);
+            assert.isFalse(hasLoadingType, 'Children should not contain any loading type items');
+
+            // Also verify no loading labels
+            const hasLoadingLabel = children.some(
+                (child) => child.label === l10n.t('Scanning for Deepnote projects...') || child.label === 'Loading'
+            );
+            assert.isFalse(hasLoadingLabel, 'Children should not contain any loading labels');
         });
     });
 

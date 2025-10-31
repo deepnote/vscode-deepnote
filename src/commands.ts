@@ -188,6 +188,7 @@ export interface ICommandNameArgumentTypeMapping {
     [DSCommands.ContinueEditSessionInCodespace]: [];
     [DSCommands.AddSqlBlock]: [];
     [DSCommands.AddBigNumberChartBlock]: [];
+    [DSCommands.AddChartBlock]: [];
     [DSCommands.AddInputTextBlock]: [];
     [DSCommands.AddInputTextareaBlock]: [];
     [DSCommands.AddInputSelectBlock]: [];
@@ -197,4 +198,5 @@ export interface ICommandNameArgumentTypeMapping {
     [DSCommands.AddInputDateRangeBlock]: [];
     [DSCommands.AddInputFileBlock]: [];
     [DSCommands.AddButtonBlock]: [];
+    [DSCommands.OpenInDeepnote]: [];
 }

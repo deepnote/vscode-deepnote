@@ -17,6 +17,7 @@ import { IExtensionSyncActivationService } from '../../platform/activation/types
 import { IDisposableRegistry } from '../../platform/common/types';
 import { Commands } from '../../platform/common/constants';
 import { chainWithPendingUpdates } from '../../kernels/execution/notebookUpdater';
+import { WrappedError } from '../../platform/errors/types';
 import {
     DeepnoteBigNumberMetadataSchema,
     DeepnoteTextInputMetadataSchema,
@@ -76,7 +77,10 @@ export function getInputBlockMetadata(blockType: InputBlockType, variableName: s
 
 export function safeParseDeepnoteVariableNameFromContentJson(content: string): string | undefined {
     try {
-        const variableNameResult = z.string().safeParse(JSON.parse(content)['deepnote_variable_name']);
+        const parsed = JSON.parse(content);
+        // Chart blocks use 'variable' key, other blocks use 'deepnote_variable_name'
+        const variableName = parsed['variable'] ?? parsed['deepnote_variable_name'];
+        const variableNameResult = z.string().safeParse(variableName);
         return variableNameResult.success ? variableNameResult.data : undefined;
     } catch (error) {
         logger.error('Error parsing deepnote variable name from content JSON', error);
@@ -148,6 +152,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         this.disposableRegistry.push(
             commands.registerCommand(Commands.AddBigNumberChartBlock, () => this.addBigNumberChartBlock())
         );
+        this.disposableRegistry.push(commands.registerCommand(Commands.AddChartBlock, () => this.addChartBlock()));
         this.disposableRegistry.push(
             commands.registerCommand(Commands.AddInputTextBlock, () => this.addInputBlock('input-text'))
         );
@@ -259,6 +264,61 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
         editor.selection = notebookRange;
         // Enter edit mode on the new cell
+        await commands.executeCommand('notebook.cell.edit');
+    }
+
+    public async addChartBlock(): Promise<void> {
+        const editor = window.activeNotebookEditor;
+
+        if (!editor) {
+            throw new WrappedError(l10n.t('No active notebook editor found'));
+        }
+
+        const document = editor.notebook;
+        const selection = editor.selection;
+        const insertIndex = selection ? selection.end : document.cellCount;
+
+        const defaultVisualizationSpec = {
+            mark: 'line',
+            $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
+            data: { values: [] },
+            encoding: {
+                x: { field: 'x', type: 'quantitative' },
+                y: { field: 'y', type: 'quantitative' }
+            }
+        };
+
+        const cellContent = {
+            variable: 'df_1',
+            spec: defaultVisualizationSpec,
+            filters: []
+        };
+
+        const metadata = {
+            __deepnotePocket: {
+                type: 'visualization'
+            }
+        };
+
+        const result = await chainWithPendingUpdates(document, (edit) => {
+            const newCell = new NotebookCellData(NotebookCellKind.Code, JSON.stringify(cellContent, null, 2), 'json');
+
+            newCell.metadata = metadata;
+
+            const nbEdit = NotebookEdit.insertCells(insertIndex, [newCell]);
+
+            edit.set(document.uri, [nbEdit]);
+        });
+
+        if (result !== true) {
+            throw new WrappedError(l10n.t('Failed to insert chart block'));
+        }
+
+        const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
+
+        editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
+        editor.selection = notebookRange;
+
         await commands.executeCommand('notebook.cell.edit');
     }
 

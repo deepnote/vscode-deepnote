@@ -85,13 +85,12 @@ suite('DeepnoteTreeDataProvider', () => {
             assert.isArray(children);
         });
 
-        test('should return array on first call without workspace', async () => {
+        test('should not throw on first getChildren call with new provider instance', async () => {
             const newProvider = new DeepnoteTreeDataProvider();
 
             // First call - just verify it returns an array and doesn't throw
             const children = await newProvider.getChildren();
             assert.isArray(children);
-            // In test environment without workspace, may return empty or loading based on timing
 
             if (newProvider && typeof newProvider.dispose === 'function') {
                 newProvider.dispose();

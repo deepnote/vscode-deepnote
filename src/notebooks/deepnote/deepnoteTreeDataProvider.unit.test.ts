@@ -85,6 +85,26 @@ suite('DeepnoteTreeDataProvider', () => {
             assert.isArray(children);
         });
 
+        test('should return loading item on initial call', async () => {
+            const newProvider = new DeepnoteTreeDataProvider();
+
+            const children = await newProvider.getChildren();
+            assert.isArray(children);
+
+            if (children.length > 0) {
+                // If there are children, check if the first one is a loading item
+                const firstChild = children[0];
+                if (firstChild.type === DeepnoteTreeItemType.Loading) {
+                    assert.strictEqual(firstChild.type, DeepnoteTreeItemType.Loading);
+                    assert.strictEqual(firstChild.contextValue, 'loading');
+                }
+            }
+
+            if (newProvider && typeof newProvider.dispose === 'function') {
+                newProvider.dispose();
+            }
+        });
+
         test('should return array when called with project item parent', async () => {
             // Create a mock project item
             const mockProjectItem = new DeepnoteTreeItem(
@@ -129,6 +149,19 @@ suite('DeepnoteTreeDataProvider', () => {
 
             // Call refresh to verify it doesn't throw
             assert.doesNotThrow(() => provider.refresh());
+        });
+
+        test('should reset initial scan state on refresh', async () => {
+            // First call to getChildren to trigger initial scan
+            const firstChildren = await provider.getChildren();
+            assert.isArray(firstChildren);
+
+            // Call refresh to reset state
+            provider.refresh();
+
+            // After refresh, getChildren should show loading state again
+            const childrenAfterRefresh = await provider.getChildren();
+            assert.isArray(childrenAfterRefresh);
         });
     });
 

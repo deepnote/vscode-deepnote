@@ -579,6 +579,46 @@ suite('DeepnoteTreeItem', () => {
         });
     });
 
+    suite('Loading type', () => {
+        test('should create loading item with null data', () => {
+            const context: DeepnoteTreeItemContext = {
+                filePath: '',
+                projectId: ''
+            };
+
+            const item = new DeepnoteTreeItem(
+                DeepnoteTreeItemType.Loading,
+                context,
+                null,
+                TreeItemCollapsibleState.None
+            );
+
+            assert.strictEqual(item.type, DeepnoteTreeItemType.Loading);
+            assert.strictEqual(item.contextValue, 'loading');
+            assert.strictEqual(item.collapsibleState, TreeItemCollapsibleState.None);
+            assert.isNull(item.data);
+        });
+
+        test('should skip initialization for loading items', () => {
+            const context: DeepnoteTreeItemContext = {
+                filePath: '',
+                projectId: ''
+            };
+
+            const item = new DeepnoteTreeItem(
+                DeepnoteTreeItemType.Loading,
+                context,
+                null,
+                TreeItemCollapsibleState.None
+            );
+
+            // Loading items can have label and iconPath set manually after creation
+            // but should not throw during construction
+            assert.isDefined(item);
+            assert.strictEqual(item.type, DeepnoteTreeItemType.Loading);
+        });
+    });
+
     suite('integration scenarios', () => {
         test('should create valid tree structure hierarchy', () => {
             // Create parent project file

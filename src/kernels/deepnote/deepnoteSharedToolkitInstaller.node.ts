@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import { inject, injectable, named } from 'inversify';
-import { CancellationToken, l10n, Uri } from 'vscode';
+import { CancellationToken, Uri } from 'vscode';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { logger } from '../../platform/logging';
@@ -98,11 +98,11 @@ export class DeepnoteSharedToolkitInstaller {
             const success = result.stdout.toLowerCase().includes('shared import successful');
             logger.info(`Shared installation test result: ${success ? 'SUCCESS' : 'FAILED'}`);
             if (!success) {
-                logger.warn('Shared installation test failed', { stdout: result.stdout, stderr: result.stderr });
+                logger.warn(`Shared installation test failed: stdout=${result.stdout}, stderr=${result.stderr}`);
             }
             return success;
         } catch (ex) {
-            logger.error('Shared installation test error', ex);
+            logger.error(`Shared installation test error: ${ex}`);
             return false;
         }
     }
@@ -180,7 +180,7 @@ export class DeepnoteSharedToolkitInstaller {
             const packagePath = Uri.joinPath(this.sharedInstallationPath, 'deepnote_toolkit');
             return await this.fs.exists(packagePath);
         } catch (ex) {
-            logger.debug('Error checking shared installation', ex);
+            logger.debug(`Error checking shared installation: ${ex}`);
             return false;
         }
     }
@@ -198,7 +198,7 @@ export class DeepnoteSharedToolkitInstaller {
             logger.info(
                 `Installing shared deepnote-toolkit v${this.toolkitVersion} to ${this.sharedInstallationPath.fsPath}`
             );
-            this.outputChannel.appendLine(l10n.t('Installing shared deepnote-toolkit v{0}...', this.toolkitVersion));
+            this.outputChannel.appendLine(`Installing shared deepnote-toolkit v${this.toolkitVersion}...`);
 
             // Create shared installation directory
             await this.fs.createDirectory(this.sharedInstallationPath);
@@ -240,17 +240,16 @@ export class DeepnoteSharedToolkitInstaller {
                 await this.fs.writeFile(this.versionFilePath, Buffer.from(this.toolkitVersion, 'utf8'));
 
                 logger.info(`Shared deepnote-toolkit v${this.toolkitVersion} installed successfully`);
-                this.outputChannel.appendLine(l10n.t('✓ Shared deepnote-toolkit v{0} ready', this.toolkitVersion));
+                this.outputChannel.appendLine(`✓ Shared deepnote-toolkit v${this.toolkitVersion} ready`);
                 return true;
             } else {
                 logger.error('Shared deepnote-toolkit installation failed - package not found');
-                this.outputChannel.appendLine(l10n.t('✗ Shared deepnote-toolkit installation failed'));
+                this.outputChannel.appendLine('✗ Shared deepnote-toolkit installation failed');
                 return false;
             }
         } catch (ex) {
-            logger.error('Failed to install shared deepnote-toolkit', ex);
-            const msg = ex instanceof Error ? ex.message : String(ex);
-            this.outputChannel.appendLine(l10n.t('Error installing shared deepnote-toolkit: {0}', msg));
+            logger.error(`Failed to install shared deepnote-toolkit: ${ex}`);
+            this.outputChannel.appendLine(`Error installing shared deepnote-toolkit: ${ex}`);
             return false;
         }
     }

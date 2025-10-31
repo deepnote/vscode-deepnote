@@ -232,6 +232,16 @@ suite('DeepnoteTreeDataProvider', () => {
             // Getting children of a project exercises the non-loading code path
             const children = await provider.getChildren(mockProjectItem);
             assert.isArray(children);
+
+            // Verify no loading items are present
+            const hasLoadingType = children.some((child) => child.type === DeepnoteTreeItemType.Loading);
+            assert.isFalse(hasLoadingType, 'Children should not contain any loading type items');
+
+            // Also verify no loading labels
+            const hasLoadingLabel = children.some(
+                (child) => child.label === 'Scanning for Deepnote projects...' || child.label === 'Loading'
+            );
+            assert.isFalse(hasLoadingLabel, 'Children should not contain any loading labels');
         });
     });
 

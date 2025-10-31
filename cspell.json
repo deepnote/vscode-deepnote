@@ -50,6 +50,8 @@
         "Pids",
         "PYTHONHOME",
         "Reselecting",
+        "scipy",
+        "sklearn",
         "taskkill",
         "unconfigured",
         "Unconfigured",

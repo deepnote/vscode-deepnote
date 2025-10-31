@@ -126,6 +126,7 @@ export const LanguagesSupportedByPythonkernel = [
     'perl', // %%perl
     'qsharp', // %%qsharp
     'json', // JSON cells for custom block types
+    'plaintext', // plaintext cells (e.g., Deepnote input-text blocks)
     'raw' // raw cells (no formatting)
 ];
 export const jupyterLanguageToMonacoLanguageMapping = new Map([

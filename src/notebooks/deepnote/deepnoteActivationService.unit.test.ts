@@ -3,13 +3,26 @@ import { assert } from 'chai';
 import { DeepnoteActivationService } from './deepnoteActivationService';
 import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
 import { IExtensionContext } from '../../platform/common/types';
+import { ILogger } from '../../platform/logging/types';
 import { IIntegrationManager } from './integrations/types';
+
+function createMockLogger(): ILogger {
+    return {
+        error: () => undefined,
+        warn: () => undefined,
+        info: () => undefined,
+        debug: () => undefined,
+        trace: () => undefined,
+        ci: () => undefined
+    } as ILogger;
+}
 
 suite('DeepnoteActivationService', () => {
     let activationService: DeepnoteActivationService;
     let mockExtensionContext: IExtensionContext;
     let manager: DeepnoteNotebookManager;
     let mockIntegrationManager: IIntegrationManager;
+    let mockLogger: ILogger;
 
     setup(() => {
         mockExtensionContext = {
@@ -22,7 +35,13 @@ suite('DeepnoteActivationService', () => {
                 return;
             }
         };
-        activationService = new DeepnoteActivationService(mockExtensionContext, manager, mockIntegrationManager);
+        mockLogger = createMockLogger();
+        activationService = new DeepnoteActivationService(
+            mockExtensionContext,
+            manager,
+            mockIntegrationManager,
+            mockLogger
+        );
     });
 
     suite('constructor', () => {
@@ -92,8 +111,10 @@ suite('DeepnoteActivationService', () => {
                     return;
                 }
             };
-            const service1 = new DeepnoteActivationService(context1, manager1, mockIntegrationManager1);
-            const service2 = new DeepnoteActivationService(context2, manager2, mockIntegrationManager2);
+            const mockLogger1 = createMockLogger();
+            const mockLogger2 = createMockLogger();
+            const service1 = new DeepnoteActivationService(context1, manager1, mockIntegrationManager1, mockLogger1);
+            const service2 = new DeepnoteActivationService(context2, manager2, mockIntegrationManager2, mockLogger2);
 
             // Verify each service has its own context
             assert.strictEqual((service1 as any).extensionContext, context1);
@@ -128,8 +149,10 @@ suite('DeepnoteActivationService', () => {
                     return;
                 }
             };
-            new DeepnoteActivationService(context1, manager1, mockIntegrationManager1);
-            new DeepnoteActivationService(context2, manager2, mockIntegrationManager2);
+            const mockLogger3 = createMockLogger();
+            const mockLogger4 = createMockLogger();
+            new DeepnoteActivationService(context1, manager1, mockIntegrationManager1, mockLogger3);
+            new DeepnoteActivationService(context2, manager2, mockIntegrationManager2, mockLogger4);
 
             assert.strictEqual(context1.subscriptions.length, 0);
             assert.strictEqual(context2.subscriptions.length, 1);

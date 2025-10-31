@@ -41,8 +41,8 @@ Run Deepnote locally inside VS Code, Cursor and Windsurf — not Jupyter — and
 
 ## 🎯 Getting started
 
-1. Open VS Code
-2. Press `Cmd+P` or `Ctrl+P` to open Quick Open
+1. Open the extensions tab and Search for Deepnote
+2. Or alternatively, press `Cmd+P` or `Ctrl+P` to open the command palette.
 3. Type `ext install Deepnote.vscode-deepnote`
 4. Press Enter
 

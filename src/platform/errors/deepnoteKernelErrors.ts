@@ -99,7 +99,7 @@ export class DeepnoteToolkitInstallError extends DeepnoteKernelError {
     constructor(
         public readonly pythonPath: string,
         public readonly venvPath: string,
-        public readonly packageUrl: string,
+        public readonly packageVersion: string,
         public readonly stdout: string,
         public readonly stderr: string,
         cause?: Error
@@ -112,7 +112,7 @@ export class DeepnoteToolkitInstallError extends DeepnoteKernelError {
         this.technicalDetails = [
             `Python interpreter: ${pythonPath}`,
             `Virtual environment: ${venvPath}`,
-            `Package URL: ${packageUrl}`,
+            `Package version: ${packageVersion}`,
             stdout ? `Installation output:\n${stdout}` : '',
             stderr ? `Error output:\n${stderr}` : 'No error output available',
             cause ? `Underlying error: ${cause.message}` : ''

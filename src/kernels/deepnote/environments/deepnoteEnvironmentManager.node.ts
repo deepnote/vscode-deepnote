@@ -4,6 +4,7 @@ import { generateUuid as uuid } from '../../../platform/common/uuid';
 import { IExtensionContext, IOutputChannel } from '../../../platform/common/types';
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
 import { logger } from '../../../platform/logging';
+import { IFileSystem } from '../../../platform/common/platform/types';
 import { DeepnoteEnvironmentStorage } from './deepnoteEnvironmentStorage.node';
 import {
     CreateDeepnoteEnvironmentOptions,
@@ -31,7 +32,8 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
         @inject(DeepnoteEnvironmentStorage) private readonly storage: DeepnoteEnvironmentStorage,
         @inject(IDeepnoteToolkitInstaller) private readonly toolkitInstaller: IDeepnoteToolkitInstaller,
         @inject(IDeepnoteServerStarter) private readonly serverStarter: IDeepnoteServerStarter,
-        @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel
+        @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel,
+        @inject(IFileSystem) private readonly fileSystem: IFileSystem
     ) {}
 
     /**
@@ -187,6 +189,17 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
         // Stop the server if running
         if (config.serverInfo) {
             await this.stopServer(id, token);
+        }
+
+        Cancellation.throwIfCanceled(token);
+
+        // Delete the virtual environment directory from disk
+        try {
+            await this.fileSystem.delete(config.venvPath);
+            logger.info(`Deleted virtual environment directory: ${config.venvPath.fsPath}`);
+        } catch (error) {
+            // Log but don't fail - the directory might not exist or might already be deleted
+            logger.warn(`Failed to delete virtual environment directory: ${config.venvPath.fsPath}`, error);
         }
 
         Cancellation.throwIfCanceled(token);

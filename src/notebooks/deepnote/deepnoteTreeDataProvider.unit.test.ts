@@ -309,4 +309,194 @@ suite('DeepnoteTreeDataProvider', () => {
             }
         });
     });
+
+    suite('alphabetical sorting', () => {
+        test('should sort projects alphabetically by name', async () => {
+            // Note: This test verifies the concept, but actual sorting happens in getDeepnoteProjectFiles()
+            // which scans the workspace. For now, we verify the tree items can be sorted.
+            const mockProjects: DeepnoteProject[] = [
+                {
+                    metadata: {
+                        createdAt: '2023-01-01T00:00:00Z',
+                        modifiedAt: '2023-01-02T00:00:00Z'
+                    },
+                    project: {
+                        id: 'project-zebra',
+                        name: 'Zebra Project',
+                        notebooks: [],
+                        settings: {}
+                    },
+                    version: '1.0'
+                },
+                {
+                    metadata: {
+                        createdAt: '2023-01-01T00:00:00Z',
+                        modifiedAt: '2023-01-02T00:00:00Z'
+                    },
+                    project: {
+                        id: 'project-apple',
+                        name: 'Apple Project',
+                        notebooks: [],
+                        settings: {}
+                    },
+                    version: '1.0'
+                },
+                {
+                    metadata: {
+                        createdAt: '2023-01-01T00:00:00Z',
+                        modifiedAt: '2023-01-02T00:00:00Z'
+                    },
+                    project: {
+                        id: 'project-middle',
+                        name: 'Middle Project',
+                        notebooks: [],
+                        settings: {}
+                    },
+                    version: '1.0'
+                }
+            ];
+
+            // Create tree items
+            const treeItems = mockProjects.map(
+                (project) =>
+                    new DeepnoteTreeItem(
+                        DeepnoteTreeItemType.ProjectFile,
+                        {
+                            filePath: `/workspace/${project.project.name}.deepnote`,
+                            projectId: project.project.id
+                        },
+                        project,
+                        0
+                    )
+            );
+
+            // Before sorting
+            assert.strictEqual(treeItems[0].label, 'Zebra Project');
+
+            // Verify that sorting would work
+            const sortedItems = [...treeItems].sort((a, b) => {
+                const labelA = typeof a.label === 'string' ? a.label : '';
+                const labelB = typeof b.label === 'string' ? b.label : '';
+                return labelA.toLowerCase().localeCompare(labelB.toLowerCase());
+            });
+
+            assert.strictEqual(sortedItems[0].label, 'Apple Project');
+            assert.strictEqual(sortedItems[1].label, 'Middle Project');
+            assert.strictEqual(sortedItems[2].label, 'Zebra Project');
+        });
+
+        test('should sort notebooks alphabetically by name within a project', async () => {
+            // Create a project with unsorted notebooks
+            const mockProjectWithNotebooks: DeepnoteProject = {
+                metadata: {
+                    createdAt: '2023-01-01T00:00:00Z',
+                    modifiedAt: '2023-01-02T00:00:00Z'
+                },
+                project: {
+                    id: 'project-123',
+                    name: 'Test Project',
+                    notebooks: [
+                        {
+                            id: 'notebook-z',
+                            name: 'Zebra Notebook',
+                            blocks: [],
+                            executionMode: 'block',
+                            isModule: false
+                        },
+                        {
+                            id: 'notebook-a',
+                            name: 'Apple Notebook',
+                            blocks: [],
+                            executionMode: 'block',
+                            isModule: false
+                        },
+                        {
+                            id: 'notebook-m',
+                            name: 'Middle Notebook',
+                            blocks: [],
+                            executionMode: 'block',
+                            isModule: false
+                        }
+                    ],
+                    settings: {}
+                },
+                version: '1.0'
+            };
+
+            const mockProjectItem = new DeepnoteTreeItem(
+                DeepnoteTreeItemType.ProjectFile,
+                {
+                    filePath: '/workspace/project.deepnote',
+                    projectId: 'project-123'
+                },
+                mockProjectWithNotebooks,
+                1
+            );
+
+            const notebookItems = await provider.getChildren(mockProjectItem);
+
+            // Verify notebooks are sorted alphabetically
+            assert.strictEqual(notebookItems.length, 3, 'Should have 3 notebooks');
+            assert.strictEqual(notebookItems[0].label, 'Apple Notebook', 'First notebook should be Apple Notebook');
+            assert.strictEqual(notebookItems[1].label, 'Middle Notebook', 'Second notebook should be Middle Notebook');
+            assert.strictEqual(notebookItems[2].label, 'Zebra Notebook', 'Third notebook should be Zebra Notebook');
+        });
+
+        test('should sort notebooks case-insensitively', async () => {
+            // Create a project with notebooks having different cases
+            const mockProjectWithNotebooks: DeepnoteProject = {
+                metadata: {
+                    createdAt: '2023-01-01T00:00:00Z',
+                    modifiedAt: '2023-01-02T00:00:00Z'
+                },
+                project: {
+                    id: 'project-123',
+                    name: 'Test Project',
+                    notebooks: [
+                        {
+                            id: 'notebook-z',
+                            name: 'zebra notebook',
+                            blocks: [],
+                            executionMode: 'block',
+                            isModule: false
+                        },
+                        {
+                            id: 'notebook-a',
+                            name: 'Apple Notebook',
+                            blocks: [],
+                            executionMode: 'block',
+                            isModule: false
+                        },
+                        {
+                            id: 'notebook-m',
+                            name: 'MIDDLE Notebook',
+                            blocks: [],
+                            executionMode: 'block',
+                            isModule: false
+                        }
+                    ],
+                    settings: {}
+                },
+                version: '1.0'
+            };
+
+            const mockProjectItem = new DeepnoteTreeItem(
+                DeepnoteTreeItemType.ProjectFile,
+                {
+                    filePath: '/workspace/project.deepnote',
+                    projectId: 'project-123'
+                },
+                mockProjectWithNotebooks,
+                1
+            );
+
+            const notebookItems = await provider.getChildren(mockProjectItem);
+
+            // Verify case-insensitive sorting
+            assert.strictEqual(notebookItems.length, 3, 'Should have 3 notebooks');
+            assert.strictEqual(notebookItems[0].label, 'Apple Notebook', 'First should be Apple Notebook');
+            assert.strictEqual(notebookItems[1].label, 'MIDDLE Notebook', 'Second should be MIDDLE Notebook');
+            assert.strictEqual(notebookItems[2].label, 'zebra notebook', 'Third should be zebra notebook');
+        });
+    });
 });

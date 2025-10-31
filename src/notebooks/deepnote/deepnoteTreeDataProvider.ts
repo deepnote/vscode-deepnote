@@ -140,6 +140,13 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
             }
         }
 
+        // Sort projects alphabetically by name (case-insensitive)
+        deepnoteFiles.sort((a, b) => {
+            const labelA = typeof a.label === 'string' ? a.label : '';
+            const labelB = typeof b.label === 'string' ? b.label : '';
+            return labelA.toLowerCase().localeCompare(labelB.toLowerCase());
+        });
+
         return deepnoteFiles;
     }
 
@@ -147,7 +154,14 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         const project = projectItem.data as DeepnoteProject;
         const notebooks = project.project.notebooks || [];
 
-        return notebooks.map((notebook: DeepnoteNotebook) => {
+        // Sort notebooks alphabetically by name (case-insensitive)
+        const sortedNotebooks = [...notebooks].sort((a, b) => {
+            const nameA = a.name || '';
+            const nameB = b.name || '';
+            return nameA.toLowerCase().localeCompare(nameB.toLowerCase());
+        });
+
+        return sortedNotebooks.map((notebook: DeepnoteNotebook) => {
             const context: DeepnoteTreeItemContext = {
                 filePath: projectItem.context.filePath,
                 projectId: projectItem.context.projectId,

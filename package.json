@@ -2101,7 +2101,8 @@
         "viewsWelcome": [
             {
                 "view": "deepnoteExplorer",
-                "contents": "Welcome to Deepnote for VS Code!\nExplore your data with SQL and Python. Build interactive notebooks, collaborate with your team, and share your insights.\n\n\n\n[$(new-file) New Project](command:deepnote.newProject)\n[$(folder-opened) Import Notebook](command:deepnote.importNotebook)"
+                "contents": "Welcome to Deepnote for VS Code!\nExplore your data with SQL and Python. Build interactive notebooks, collaborate with your team, and share your insights.\n\n\n\n[$(new-file) New Project](command:deepnote.newProject)\n[$(folder-opened) Import Notebook](command:deepnote.importNotebook)",
+                "when": "deepnote.explorerInitialScanComplete"
             }
         ],
         "debuggers": [

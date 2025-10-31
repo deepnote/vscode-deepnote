@@ -8,7 +8,8 @@ import {
     RelativePattern,
     Uri,
     FileSystemWatcher,
-    ThemeIcon
+    ThemeIcon,
+    commands
 } from 'vscode';
 import * as yaml from 'js-yaml';
 
@@ -32,6 +33,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
 
     constructor() {
         this.setupFileWatcher();
+        this.updateContextKey();
     }
 
     public dispose(): void {
@@ -43,6 +45,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         this.cachedProjects.clear();
         this.isInitialScanComplete = false;
         this.initialScanPromise = undefined;
+        this.updateContextKey();
         this._onDidChangeTreeData.fire();
     }
 
@@ -93,6 +96,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         } finally {
             this.isInitialScanComplete = true;
             this.initialScanPromise = undefined;
+            this.updateContextKey();
             this._onDidChangeTreeData.fire();
         }
     }
@@ -232,5 +236,9 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         }
 
         return undefined;
+    }
+
+    private updateContextKey(): void {
+        void commands.executeCommand('setContext', 'deepnote.explorerInitialScanComplete', this.isInitialScanComplete);
     }
 }

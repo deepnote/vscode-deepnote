@@ -300,6 +300,14 @@ export function getDisplayNameOrNameOfKernelConnection(kernelConnection: KernelC
             } else {
                 return `Python ${pythonVersion}`.trim();
             }
+        case 'startUsingDeepnoteKernel': {
+            // For Deepnote kernels, use the environment name if available
+            if (kernelConnection.environmentName) {
+                return `Deepnote: ${kernelConnection.environmentName}`;
+            }
+            // Fallback to kernelspec display name
+            return oldDisplayName;
+        }
     }
     return oldDisplayName;
 }

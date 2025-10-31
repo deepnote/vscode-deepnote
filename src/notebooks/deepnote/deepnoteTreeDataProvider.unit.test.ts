@@ -174,9 +174,31 @@ suite('DeepnoteTreeDataProvider', () => {
             // Call refresh to reset state - this exercises the refresh logic
             newProvider.refresh();
 
-            // After refresh - should work without errors
+            // After refresh - should return to initial state (loading or empty)
             const childrenAfterRefresh = await newProvider.getChildren();
             assert.isArray(childrenAfterRefresh);
+
+            // Verify that refresh reset to initial scan state
+            // The post-refresh state should match the initial state
+            assert.strictEqual(
+                childrenAfterRefresh.length,
+                firstChildren.length,
+                'After refresh, should return to initial state with same number of children'
+            );
+
+            // If initial state had a loading item, post-refresh should too
+            if (firstChildren.length > 0 && firstChildren[0].contextValue === 'loading') {
+                assert.strictEqual(
+                    childrenAfterRefresh[0].contextValue,
+                    'loading',
+                    'After refresh, should show loading item again'
+                );
+                assert.strictEqual(
+                    childrenAfterRefresh[0].label,
+                    firstChildren[0].label,
+                    'Loading item label should match initial state'
+                );
+            }
 
             if (newProvider && typeof newProvider.dispose === 'function') {
                 newProvider.dispose();

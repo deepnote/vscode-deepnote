@@ -57,6 +57,7 @@ export class DeepnoteEnvironmentPicker {
         });
 
         if (!selected) {
+            logger.info('User cancelled environment selection');
             return undefined; // User cancelled
         }
 

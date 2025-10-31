@@ -1,7 +1,7 @@
-import { injectable, inject, named } from 'inversify';
+import { injectable, inject, named, optional } from 'inversify';
 import { EventEmitter, Uri, CancellationToken, l10n } from 'vscode';
 import { generateUuid as uuid } from '../../../platform/common/uuid';
-import { IExtensionContext, IOutputChannel } from '../../../platform/common/types';
+import { IConfigurationService, IExtensionContext, IOutputChannel } from '../../../platform/common/types';
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
 import { logger } from '../../../platform/logging';
 import { DeepnoteEnvironmentStorage } from './deepnoteEnvironmentStorage.node';
@@ -11,9 +11,15 @@ import {
     DeepnoteEnvironmentWithStatus,
     EnvironmentStatus
 } from './deepnoteEnvironment';
-import { IDeepnoteEnvironmentManager, IDeepnoteServerStarter, IDeepnoteToolkitInstaller } from '../types';
+import {
+    IDeepnoteEnvironmentManager,
+    IDeepnoteServerProvider,
+    IDeepnoteServerStarter,
+    IDeepnoteToolkitInstaller
+} from '../types';
 import { Cancellation } from '../../../platform/common/cancellation';
 import { STANDARD_OUTPUT_CHANNEL } from '../../../platform/common/constants';
+import { IJupyterRequestAgentCreator, IJupyterRequestCreator } from '../../jupyter/types';
 
 /**
  * Manager for Deepnote kernel environments.
@@ -21,7 +27,11 @@ import { STANDARD_OUTPUT_CHANNEL } from '../../../platform/common/constants';
  */
 @injectable()
 export class DeepnoteEnvironmentManager implements IExtensionSyncActivationService, IDeepnoteEnvironmentManager {
+    // Track server handles per notebook URI for cleanup
+    // private readonly notebookServerHandles = new Map<string, string>();
+
     private environments: Map<string, DeepnoteEnvironment> = new Map();
+    private tmpStartingServers: Map<string, boolean> = new Map();
     private readonly _onDidChangeEnvironments = new EventEmitter<void>();
     public readonly onDidChangeEnvironments = this._onDidChangeEnvironments.event;
     private initializationPromise: Promise<void> | undefined;
@@ -31,6 +41,12 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
         @inject(DeepnoteEnvironmentStorage) private readonly storage: DeepnoteEnvironmentStorage,
         @inject(IDeepnoteToolkitInstaller) private readonly toolkitInstaller: IDeepnoteToolkitInstaller,
         @inject(IDeepnoteServerStarter) private readonly serverStarter: IDeepnoteServerStarter,
+        @inject(IDeepnoteServerProvider) private readonly serverProvider: IDeepnoteServerProvider,
+        @inject(IJupyterRequestCreator) private readonly requestCreator: IJupyterRequestCreator,
+        @inject(IJupyterRequestAgentCreator)
+        @optional()
+        private readonly requestAgentCreator: IJupyterRequestAgentCreator | undefined,
+        @inject(IConfigurationService) private readonly configService: IConfigurationService,
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel
     ) {}
 
@@ -135,6 +151,8 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
         let status: EnvironmentStatus;
         if (config.serverInfo) {
             status = EnvironmentStatus.Running;
+        } else if (this.tmpStartingServers.get(id)) {
+            status = EnvironmentStatus.Starting;
         } else {
             status = EnvironmentStatus.Stopped;
         }
@@ -207,6 +225,9 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
             throw new Error(`Environment not found: ${id}`);
         }
 
+        this.tmpStartingServers.set(id, true);
+        this._onDidChangeEnvironments.fire();
+
         try {
             logger.info(`Ensuring server is running for environment: ${config.name} (${id})`);
 
@@ -239,6 +260,8 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
         } catch (error) {
             logger.error(`Failed to start server for environment: ${config.name} (${id})`, error);
             throw error;
+        } finally {
+            this.tmpStartingServers.delete(id);
         }
     }
 

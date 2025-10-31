@@ -491,7 +491,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
 
                     // Force rebuild the controller with the new environment
                     // This clears cached metadata and creates a fresh controller.
-                    await this.kernelAutoSelector.rebuildController(activeNotebook);
+                    await this.kernelAutoSelector.ensureKernelSelected(activeNotebook);
 
                     logger.info(`Successfully switched to environment ${selectedEnvironmentId}`);
                 }

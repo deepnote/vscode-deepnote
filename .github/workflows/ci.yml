@@ -190,6 +190,31 @@ jobs:
       - name: Run spell check
         run: npm run spell-check
 
+  package-lock-drift-check:
+    name: Package Lock Drift Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6
+        with:
+          cache: 'npm'
+          node-version-file: '.nvmrc'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@deepnote'
+
+      - name: Install dependencies
+        run: npm install
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check package lock drift
+        run: |
+          git diff --exit-code HEAD
+
   audit-prod:
     name: Audit - Production
     runs-on: ubuntu-latest

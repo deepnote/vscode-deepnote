@@ -687,7 +687,7 @@ suite('DeepnoteEnvironmentsView', () => {
         });
     });
 
-    suite('startServer', () => {
+    suite('Server Management (startServer, stopServer, restartServer)', () => {
         const testEnvironmentId = 'test-env-id';
         const testInterpreter: PythonEnvironment = {
             id: 'test-python-id',
@@ -707,11 +707,9 @@ suite('DeepnoteEnvironmentsView', () => {
         setup(() => {
             resetCalls(mockConfigManager);
             resetCalls(mockedVSCodeNamespaces.window);
-        });
 
-        test('should call environmentManager.startServer', async () => {
+            // Common mocks for all server management operations
             when(mockConfigManager.getEnvironment(testEnvironmentId)).thenReturn(testEnvironment);
-            when(mockConfigManager.startServer(testEnvironmentId, anything())).thenResolve();
 
             when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall(
                 (_options: ProgressOptions, callback: Function) => {
@@ -733,112 +731,26 @@ suite('DeepnoteEnvironmentsView', () => {
             );
 
             when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenResolve(undefined);
+        });
+
+        test('should call environmentManager.startServer', async () => {
+            when(mockConfigManager.startServer(testEnvironmentId, anything())).thenResolve();
 
             await (view as any).startServer(testEnvironmentId);
 
             verify(mockConfigManager.startServer(testEnvironmentId, anything())).once();
         });
-    });
-
-    suite('stopServer', () => {
-        const testEnvironmentId = 'test-env-id';
-        const testInterpreter: PythonEnvironment = {
-            id: 'test-python-id',
-            uri: Uri.file('/usr/bin/python3'),
-            version: { major: 3, minor: 11, patch: 0, raw: '3.11.0' }
-        } as PythonEnvironment;
-
-        const testEnvironment: DeepnoteEnvironment = {
-            id: testEnvironmentId,
-            name: 'Test Environment',
-            pythonInterpreter: testInterpreter,
-            venvPath: Uri.file('/path/to/venv'),
-            createdAt: new Date(),
-            lastUsedAt: new Date()
-        };
-
-        setup(() => {
-            resetCalls(mockConfigManager);
-            resetCalls(mockedVSCodeNamespaces.window);
-        });
 
         test('should call environmentManager.stopServer', async () => {
-            when(mockConfigManager.getEnvironment(testEnvironmentId)).thenReturn(testEnvironment);
             when(mockConfigManager.stopServer(testEnvironmentId, anything())).thenResolve();
-
-            when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall(
-                (_options: ProgressOptions, callback: Function) => {
-                    const mockProgress = {
-                        report: () => {
-                            // Mock progress reporting
-                        }
-                    };
-                    const mockToken: CancellationToken = {
-                        isCancellationRequested: false,
-                        onCancellationRequested: () => ({
-                            dispose: () => {
-                                // Mock disposable
-                            }
-                        })
-                    };
-                    return callback(mockProgress, mockToken);
-                }
-            );
-
-            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenResolve(undefined);
 
             await (view as any).stopServer(testEnvironmentId);
 
             verify(mockConfigManager.stopServer(testEnvironmentId, anything())).once();
         });
-    });
-
-    suite('restartServer', () => {
-        const testEnvironmentId = 'test-env-id';
-        const testInterpreter: PythonEnvironment = {
-            id: 'test-python-id',
-            uri: Uri.file('/usr/bin/python3'),
-            version: { major: 3, minor: 11, patch: 0, raw: '3.11.0' }
-        } as PythonEnvironment;
-
-        const testEnvironment: DeepnoteEnvironment = {
-            id: testEnvironmentId,
-            name: 'Test Environment',
-            pythonInterpreter: testInterpreter,
-            venvPath: Uri.file('/path/to/venv'),
-            createdAt: new Date(),
-            lastUsedAt: new Date()
-        };
-
-        setup(() => {
-            resetCalls(mockConfigManager);
-            resetCalls(mockedVSCodeNamespaces.window);
-        });
 
         test('should call environmentManager.restartServer', async () => {
-            when(mockConfigManager.getEnvironment(testEnvironmentId)).thenReturn(testEnvironment);
             when(mockConfigManager.restartServer(testEnvironmentId, anything())).thenResolve();
-
-            when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall(
-                (_options: ProgressOptions, callback: Function) => {
-                    const mockProgress = {
-                        report: () => {
-                            // Mock progress reporting
-                        }
-                    };
-                    const mockToken: CancellationToken = {
-                        isCancellationRequested: false,
-                        onCancellationRequested: () => ({
-                            dispose: () => {
-                                // Mock disposable
-                            }
-                        })
-                    };
-                    return callback(mockProgress, mockToken);
-                }
-            );
-
-            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenResolve(undefined);
 
             await (view as any).restartServer(testEnvironmentId);
 

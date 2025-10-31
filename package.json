@@ -922,62 +922,62 @@
             "notebook/toolbar": [
                 {
                     "command": "deepnote.environments.selectForNotebook",
-                    "group": "navigation@1",
+                    "group": "navigation@0",
                     "when": "notebookType == 'deepnote' && isWorkspaceTrusted"
                 },
                 {
                     "command": "deepnote.manageIntegrations",
-                    "group": "navigation@0",
-                    "when": "notebookType == 'deepnote'"
-                },
-                {
-                    "command": "deepnote.addSqlBlock",
                     "group": "navigation@1",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "deepnote.addChartBlock",
+                    "command": "deepnote.addSqlBlock",
                     "group": "navigation@2",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "deepnote.addBigNumberChartBlock",
+                    "command": "deepnote.addChartBlock",
                     "group": "navigation@3",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "deepnote.addInputTextBlock",
+                    "command": "deepnote.addBigNumberChartBlock",
                     "group": "navigation@4",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "deepnote.addInputTextareaBlock",
+                    "command": "deepnote.addInputTextBlock",
                     "group": "navigation@5",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "deepnote.addInputSelectBlock",
+                    "command": "deepnote.addInputTextareaBlock",
                     "group": "navigation@6",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "deepnote.addInputSliderBlock",
+                    "command": "deepnote.addInputSelectBlock",
                     "group": "navigation@7",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "deepnote.addInputCheckboxBlock",
+                    "command": "deepnote.addInputSliderBlock",
                     "group": "navigation@8",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "deepnote.addInputDateBlock",
+                    "command": "deepnote.addInputCheckboxBlock",
                     "group": "navigation@9",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "deepnote.addInputDateRangeBlock",
+                    "command": "deepnote.addInputDateBlock",
                     "group": "navigation@10",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addInputDateRangeBlock",
+                    "group": "navigation@11",
                     "when": "notebookType == 'deepnote'"
                 },
                 {

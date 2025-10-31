@@ -9,7 +9,8 @@ import {
     Uri,
     FileSystemWatcher,
     ThemeIcon,
-    commands
+    commands,
+    l10n
 } from 'vscode';
 import * as yaml from 'js-yaml';
 
@@ -85,7 +86,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
             null,
             TreeItemCollapsibleState.None
         );
-        loadingItem.label = 'Scanning for Deepnote projects...';
+        loadingItem.label = l10n.t('Scanning for Deepnote projects...');
         loadingItem.iconPath = new ThemeIcon('loading~spin');
         return loadingItem;
     }

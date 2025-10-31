@@ -1,4 +1,5 @@
 import { assert } from 'chai';
+import { l10n } from 'vscode';
 
 import { DeepnoteTreeDataProvider } from './deepnoteTreeDataProvider';
 import { DeepnoteTreeItem, DeepnoteTreeItemType } from './deepnoteTreeItem';
@@ -257,7 +258,7 @@ suite('DeepnoteTreeDataProvider', () => {
 
             // Also verify no loading labels
             const hasLoadingLabel = children.some(
-                (child) => child.label === 'Scanning for Deepnote projects...' || child.label === 'Loading'
+                (child) => child.label === l10n.t('Scanning for Deepnote projects...') || child.label === 'Loading'
             );
             assert.isFalse(hasLoadingLabel, 'Children should not contain any loading labels');
         });

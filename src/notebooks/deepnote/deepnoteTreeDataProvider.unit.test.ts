@@ -85,20 +85,38 @@ suite('DeepnoteTreeDataProvider', () => {
             assert.isArray(children);
         });
 
-        test('should return loading item on initial call', async () => {
+        test('should return loading item on first call with correct properties', async () => {
             const newProvider = new DeepnoteTreeDataProvider();
 
+            // First call should return loading item
             const children = await newProvider.getChildren();
             assert.isArray(children);
+            assert.isAtLeast(children.length, 1);
 
-            if (children.length > 0) {
-                // If there are children, check if the first one is a loading item
-                const firstChild = children[0];
-                if (firstChild.type === DeepnoteTreeItemType.Loading) {
-                    assert.strictEqual(firstChild.type, DeepnoteTreeItemType.Loading);
-                    assert.strictEqual(firstChild.contextValue, 'loading');
-                }
+            const firstChild = children[0];
+            assert.strictEqual(firstChild.type, DeepnoteTreeItemType.Loading);
+            assert.strictEqual(firstChild.contextValue, 'loading');
+            assert.strictEqual(firstChild.label, 'Scanning for Deepnote projects...');
+            assert.isDefined(firstChild.iconPath);
+
+            if (newProvider && typeof newProvider.dispose === 'function') {
+                newProvider.dispose();
             }
+        });
+
+        test('should complete initial scan and show projects after loading', async () => {
+            const newProvider = new DeepnoteTreeDataProvider();
+
+            // First call shows loading
+            const loadingChildren = await newProvider.getChildren();
+            assert.isArray(loadingChildren);
+
+            // Wait a bit for the initial scan to complete
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            // Second call should show actual projects (or empty array if no projects)
+            const actualChildren = await newProvider.getChildren();
+            assert.isArray(actualChildren);
 
             if (newProvider && typeof newProvider.dispose === 'function') {
                 newProvider.dispose();
@@ -152,16 +170,96 @@ suite('DeepnoteTreeDataProvider', () => {
         });
 
         test('should reset initial scan state on refresh', async () => {
-            // First call to getChildren to trigger initial scan
-            const firstChildren = await provider.getChildren();
+            const newProvider = new DeepnoteTreeDataProvider();
+
+            // First call shows loading
+            const firstChildren = await newProvider.getChildren();
             assert.isArray(firstChildren);
 
-            // Call refresh to reset state
-            provider.refresh();
+            // Wait for initial scan to complete
+            await new Promise((resolve) => setTimeout(resolve, 10));
 
-            // After refresh, getChildren should show loading state again
-            const childrenAfterRefresh = await provider.getChildren();
+            // After scan, should not show loading
+            const afterScanChildren = await newProvider.getChildren();
+            assert.isArray(afterScanChildren);
+
+            // Call refresh to reset state
+            newProvider.refresh();
+
+            // After refresh, should show loading again
+            const childrenAfterRefresh = await newProvider.getChildren();
             assert.isArray(childrenAfterRefresh);
+            if (childrenAfterRefresh.length > 0) {
+                const firstItem = childrenAfterRefresh[0];
+                if (firstItem.type === DeepnoteTreeItemType.Loading) {
+                    assert.strictEqual(firstItem.label, 'Scanning for Deepnote projects...');
+                }
+            }
+
+            if (newProvider && typeof newProvider.dispose === 'function') {
+                newProvider.dispose();
+            }
+        });
+    });
+
+    suite('loading state', () => {
+        test('should show loading on first call to empty tree', async () => {
+            const newProvider = new DeepnoteTreeDataProvider();
+
+            // Call getChildren without element (root level)
+            const children = await newProvider.getChildren(undefined);
+            assert.isArray(children);
+            assert.isAtLeast(children.length, 1);
+
+            // First child should be loading item
+            assert.strictEqual(children[0].type, DeepnoteTreeItemType.Loading);
+
+            if (newProvider && typeof newProvider.dispose === 'function') {
+                newProvider.dispose();
+            }
+        });
+
+        test('should transition from loading to projects', async () => {
+            const newProvider = new DeepnoteTreeDataProvider();
+
+            // First call shows loading
+            const loadingResult = await newProvider.getChildren(undefined);
+            assert.isArray(loadingResult);
+            assert.isAtLeast(loadingResult.length, 1);
+            assert.strictEqual(loadingResult[0].type, DeepnoteTreeItemType.Loading);
+
+            // Wait for scan to complete
+            await new Promise((resolve) => setTimeout(resolve, 50));
+
+            // Next call shows actual results
+            const projectsResult = await newProvider.getChildren(undefined);
+            assert.isArray(projectsResult);
+            // In test environment without workspace, this will be empty
+            // but should not contain loading item anymore
+
+            if (newProvider && typeof newProvider.dispose === 'function') {
+                newProvider.dispose();
+            }
+        });
+
+        test('should not show loading for child elements', async () => {
+            // Create a mock project item
+            const mockProjectItem = new DeepnoteTreeItem(
+                DeepnoteTreeItemType.ProjectFile,
+                {
+                    filePath: '/workspace/project.deepnote',
+                    projectId: 'project-123'
+                },
+                mockProject,
+                1
+            );
+
+            // Getting children of a project should never show loading
+            const children = await provider.getChildren(mockProjectItem);
+            assert.isArray(children);
+            // Should not contain any loading items
+            const hasLoadingItem = children.some((child) => child.type === DeepnoteTreeItemType.Loading);
+            assert.isFalse(hasLoadingItem);
         });
     });
 

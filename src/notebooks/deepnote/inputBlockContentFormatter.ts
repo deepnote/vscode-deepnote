@@ -1,0 +1,128 @@
+/**
+ * Utility for formatting input block cell content based on block type and metadata.
+ * This is the single source of truth for how input block values are displayed in cells.
+ */
+
+/**
+ * Gets the expected language ID for an input block type.
+ * This is the single source of truth for input block language modes.
+ */
+export function getInputBlockLanguage(blockType: string): string | undefined {
+    const languageMap: Record<string, string> = {
+        'input-text': 'plaintext',
+        'input-textarea': 'plaintext',
+        'input-select': 'python',
+        'input-slider': 'python',
+        'input-checkbox': 'python',
+        'input-date': 'python',
+        'input-date-range': 'python',
+        'input-file': 'python',
+        button: 'python'
+    };
+    return languageMap[blockType];
+}
+
+/**
+ * Formats the cell content for an input block based on its type and metadata.
+ * @param blockType The type of the input block (e.g., 'input-text', 'input-select')
+ * @param metadata The cell metadata containing the value and other configuration
+ * @returns The formatted cell content string
+ */
+export function formatInputBlockCellContent(blockType: string, metadata: Record<string, unknown>): string {
+    switch (blockType) {
+        case 'input-text':
+        case 'input-textarea': {
+            const value = metadata.deepnote_variable_value;
+            return typeof value === 'string' ? value : '';
+        }
+
+        case 'input-select': {
+            const value = metadata.deepnote_variable_value;
+            if (Array.isArray(value)) {
+                // Multi-select: show as array of quoted strings
+                if (value.length === 0) {
+                    // Empty array for multi-select
+                    return '[]';
+                }
+                return `[${value.map((v) => JSON.stringify(v)).join(', ')}]`;
+            } else if (typeof value === 'string') {
+                // Single select: show as quoted string
+                return JSON.stringify(value);
+            } else if (value === null || value === undefined) {
+                // Empty/null value
+                return 'None';
+            }
+            return '';
+        }
+
+        case 'input-slider': {
+            const value = metadata.deepnote_variable_value;
+            return typeof value === 'number' ? String(value) : '';
+        }
+
+        case 'input-checkbox': {
+            const value = metadata.deepnote_variable_value ?? false;
+            return value ? 'True' : 'False';
+        }
+
+        case 'input-date': {
+            const value = metadata.deepnote_variable_value;
+            if (value) {
+                const dateStr = formatDateValue(value);
+                return dateStr ? JSON.stringify(dateStr) : '""';
+            }
+            return '""';
+        }
+
+        case 'input-date-range': {
+            const value = metadata.deepnote_variable_value;
+            if (Array.isArray(value) && value.length === 2) {
+                const start = formatDateValue(value[0]);
+                const end = formatDateValue(value[1]);
+                if (start || end) {
+                    return `(${JSON.stringify(start)}, ${JSON.stringify(end)})`;
+                }
+            } else {
+                const defaultValue = metadata.deepnote_variable_default_value;
+                if (Array.isArray(defaultValue) && defaultValue.length === 2) {
+                    const start = formatDateValue(defaultValue[0]);
+                    const end = formatDateValue(defaultValue[1]);
+                    if (start || end) {
+                        return `(${JSON.stringify(start)}, ${JSON.stringify(end)})`;
+                    }
+                }
+            }
+            return '';
+        }
+
+        case 'input-file': {
+            const value = metadata.deepnote_variable_value;
+            return typeof value === 'string' && value ? JSON.stringify(value) : '';
+        }
+
+        case 'button': {
+            return '# Buttons only work in Deepnote apps';
+        }
+
+        default:
+            return '';
+    }
+}
+
+/**
+ * Helper to format date value (could be string or Date object).
+ * Converts to YYYY-MM-DD format.
+ */
+function formatDateValue(val: unknown): string {
+    if (!val) {
+        return '';
+    }
+    if (typeof val === 'string') {
+        return val;
+    }
+    if (val instanceof Date) {
+        // Convert Date to YYYY-MM-DD format
+        return val.toISOString().split('T')[0];
+    }
+    return String(val);
+}

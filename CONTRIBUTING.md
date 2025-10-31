@@ -41,25 +41,6 @@ Extensions: Show Recommended Extensions
 
 Then install all the extensions listed under "Workspace Recommendations".
 
-#### Configure access to @deepnote/blocks package
-
-The `@deepnote/blocks` package is published on GitHub Packages. To install it, you'll need to authenticate with GitHub:
-
-1. Create a GitHub Personal Access Token (classic) with `read:packages` scope:
-
-   - Go to https://github.com/settings/tokens
-   - Click "Generate new token (classic)"
-   - Select the `read:packages` scope
-   - Generate and copy the token
-
-2. Add the token to your global `.npmrc` file:
-   ```shell
-   echo "//npm.pkg.github.com/:_authToken=YOUR_TOKEN_HERE" >> ~/.npmrc
-   ```
-   Replace `YOUR_TOKEN_HERE` with your actual token.
-
-After completing these steps, you can install dependencies normally with `npm install`. The project's `.npmrc` file is already configured to use GitHub Packages for the `@deepnote` scope.
-
 On Apple Silicon, you will have to use system versions of `libsodium` and `libzmq` instead of the bundled ones:
 
 ```shell
@@ -345,10 +326,6 @@ smoothly, but it allows you to help out by noticing when a step is
 missed or to learn in case someday you become a project maintainer as
 well!
 
-### Folder structure
-
-At a high level we have a bunch of folders. Each high level is described in this wiki [page](https://github.com/deepnote/vscode-deepnote/wiki/Source-Code-Organization)
-
 ### Typical workflow
 
 Here's an example of a typical workflow:
@@ -364,12 +341,12 @@ Here's an example of a typical workflow:
 1. Test with [`Extension`](https://github.com/deepnote/vscode-deepnote/blob/29c4be79f64df1858692321b43c3079bb77bdd69/.vscode/launch.json#L6) launch task
 1. Repeat until works in normal extension
 1. Test with [`Extension (web)`](https://github.com/deepnote/vscode-deepnote/blob/29c4be79f64df1858692321b43c3079bb77bdd69/.vscode/launch.json#L34) launch task
-1. Run [jupyter notebook server](https://github.com/deepnote/vscode-deepnote/wiki/Connecting-to-a-remote-Jupyter-server-from-vscode.dev) to use in web testing
+1. Run [jupyter notebook server](https://github.com/microsoft/vscode-jupyter/wiki/Connecting-to-a-remote-Jupyter-server-from-vscode.dev-or-github.dev) to use in web testing
 1. Repeat until works in web extension
 1. Write integration tests and [run](https://github.com/deepnote/vscode-deepnote/blob/29c4be79f64df1858692321b43c3079bb77bdd69/.vscode/launch.json#L216) locally.
 1. Submit PR
 1. Check PR output to make sure tests don't fail.
-1. Debug [CI test failures](https://github.com/deepnote/vscode-deepnote/wiki/Tests)
+1. Debug [CI test failures](https://github.com/microsoft/vscode-jupyter/wiki/tests)
 
 ### Helping others
 

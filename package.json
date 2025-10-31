@@ -2079,14 +2079,6 @@
             ]
         },
         "views": {
-            "jupyter-variables": [
-                {
-                    "type": "webview",
-                    "id": "jupyterViewVariables",
-                    "name": "Jupyter Variables",
-                    "when": "jupyter.hasNativeNotebookOrInteractiveWindowOpen"
-                }
-            ],
             "deepnote": [
                 {
                     "id": "deepnoteExplorer",
@@ -2095,6 +2087,12 @@
                         "light": "./resources/light/deepnote-icon.svg",
                         "dark": "./resources/dark/deepnote-icon.svg"
                     }
+                },
+                {
+                    "type": "webview",
+                    "id": "jupyterViewVariables",
+                    "name": "Jupyter Variables",
+                    "when": "jupyter.hasNativeNotebookOrInteractiveWindowOpen"
                 }
             ]
         },

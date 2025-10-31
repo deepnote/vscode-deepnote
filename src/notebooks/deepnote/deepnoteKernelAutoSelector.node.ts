@@ -441,7 +441,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         // as the configuration object may have stale serverInfo from a previous session
         logger.info(`Ensuring server is running for configuration ${configuration.id}`);
         progress.report({ message: 'Starting Deepnote server...' });
-        await this.configurationManager.startServer(configuration.id);
+        await this.configurationManager.startServer(configuration.id, progressToken);
 
         // ALWAYS refresh configuration to get current serverInfo
         // This is critical because the configuration object may have been cached

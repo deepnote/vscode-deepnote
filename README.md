@@ -36,7 +36,7 @@ Run Deepnote locally inside VS Code, Cursor and Windsurf — not Jupyter — and
 
 ## 📋 Requirements
 
-- **Visual Studio Code** 1.103.0 or higher
+- **Visual Studio Code** 1.95.0 or higher
 - **Python** 3.10 or higher (for running notebooks)
 - **Node.js** 22.15.1 or higher (for development)
 

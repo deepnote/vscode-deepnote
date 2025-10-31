@@ -1,4 +1,6 @@
-# Contributing to the Jupyter extension for Visual Studio Code
+# Contributing to the Deepnote extension for Visual Studio Code
+
+Thank you for your interest in contributing to the Deepnote VS Code extension! This guide will help you set up your development environment and understand the contribution workflow.
 
 ---
 
@@ -6,8 +8,6 @@
 | ------------- |
 
 ## | ![Main Build](https://github.com/deepnote/vscode-deepnote/actions/workflows/ci.yml/badge.svg?branch=main)
-
-[For contributing to the [Microsoft Python Language Server](https://github.com/Microsoft/python-language-server) see its own repo; for [Pylance](https://github.com/microsoft/pylance-release) see its own repo; for [debugpy](https://github.com/microsoft/debugpy) see its own repo]
 
 ## Contributing a pull request
 
@@ -29,10 +29,9 @@
 ```shell
 git clone https://github.com/deepnote/vscode-deepnote
 cd vscode-deepnote
-
 ```
 
-#### Install Recommended Extensions
+#### Install recommended extensions
 
 First, install all the recommended VS Code extensions. Open the Command Palette (Ctrl+Shift+P or Cmd+Shift+P) and run:
 
@@ -41,25 +40,6 @@ Extensions: Show Recommended Extensions
 ```
 
 Then install all the extensions listed under "Workspace Recommendations".
-
-#### Configure Access to @deepnote/blocks Package
-
-The `@deepnote/blocks` package is published on GitHub Packages. To install it, you'll need to authenticate with GitHub:
-
-1. Create a GitHub Personal Access Token (classic) with `read:packages` scope:
-
-   - Go to https://github.com/settings/tokens
-   - Click "Generate new token (classic)"
-   - Select the `read:packages` scope
-   - Generate and copy the token
-
-2. Add the token to your global `.npmrc` file:
-   ```shell
-   echo "//npm.pkg.github.com/:_authToken=YOUR_TOKEN_HERE" >> ~/.npmrc
-   ```
-   Replace `YOUR_TOKEN_HERE` with your actual token.
-
-After completing these steps, you can install dependencies normally with `npm install`. The project's `.npmrc` file is already configured to use GitHub Packages for the `@deepnote` scope.
 
 On Apple Silicon, you will have to use system versions of `libsodium` and `libzmq` instead of the bundled ones:
 
@@ -92,7 +72,7 @@ python -m pip install black
 
 ```
 
-### Incremental Build
+### Incremental build
 
 Run the `watch` build Tasks from the [Run Build Task...](https://code.visualstudio.com/docs/editor/tasks) command picker (short cut `CTRL+SHIFT+B` or `⇧⌘B`). This will leave build tasks running in the background and which will re-run as files are edited and saved. You can see the output from either task in the Terminal panel (use the selector to choose which output to look at).
 
@@ -118,7 +98,85 @@ npm run watch-all
 Sometimes you will need to run `npm run clean` and even `rm -r out dist`.
 This is especially true if you have added or removed files.
 
-### Errors and Warnings
+### Running the extension
+
+After completing the setup steps, you can run the Deepnote extension in development mode:
+
+#### Quick start
+
+1. **Open the project in VS Code**
+
+   ```bash
+   code .
+   ```
+
+2. **Start the watch task** (for automatic recompilation)
+   - Press `Ctrl+Shift+B` (Windows/Linux) or `⇧⌘B` (macOS)
+   - Select `watch` from the task list
+   - This will continuously compile your changes in the background
+
+3. **Launch the Extension Development Host**
+   - Press `F5` or click the Run and Debug icon in the sidebar
+   - Select `Extension` from the dropdown menu
+   - Click the green play button
+   - A new VS Code window will open with `[Extension Development Host]` in the title
+
+4. **Test your changes**
+   - The Extension Development Host has the Deepnote extension loaded
+   - Open a Deepnote project or notebook file (`.deepnote`)
+   - Test the functionality you're working on
+   - Check the Debug Console in your main VS Code window for logs
+
+5. **Reload after making changes**
+   - The watch task automatically recompiles when you save files
+   - In the Extension Development Host window, press `Ctrl+R` (Windows/Linux) or `Cmd+R` (macOS) to reload
+   - Or restart the debug session with `Ctrl+Shift+F5` / `Cmd+Shift+F5`
+
+#### Available debug configurations
+
+The project includes several launch configurations in `.vscode/launch.json`:
+
+- **Extension** - Run the extension in a new VS Code window (most common for development)
+- **Extension (web)** - Test the web version of the extension
+- **Extension inside container** - Test in a containerized environment
+- **Unit Tests** - Run unit tests without VS Code
+- **Tests (Jupyter+Python Extension installed)** - Run integration tests
+
+#### Debugging tips
+
+<details>
+<summary>Click to expand debugging tips</summary>
+
+**Enable detailed logging:**
+
+Edit `.vscode/launch.json` and add environment variables:
+
+```json
+"env": {
+    "VSC_JUPYTER_FORCE_LOGGING": "1",
+    "VSC_JUPYTER_LOG_TELEMETRY": "1",
+    "VSC_JUPYTER_LOG_IPYWIDGETS": "1"
+}
+```
+
+**Set breakpoints:**
+- Click in the gutter next to line numbers in your TypeScript code
+- Breakpoints will pause execution in the Extension Development Host
+- Inspect variables in the Debug sidebar
+
+**View logs:**
+- Debug Console: Shows console.log output and errors
+- Output panel: Select "Deepnote" from the dropdown to see extension-specific logs
+- Terminal: Shows build output from the watch task
+
+**Common issues:**
+- If changes don't appear, try `npm run clean` and restart the watch task
+- If breakpoints don't work, ensure source maps are enabled (they are by default)
+- If the extension doesn't load, check the Debug Console for errors
+
+</details>
+
+### Errors and warnings
 
 TypeScript errors and warnings will be displayed in the `Problems` window of Visual Studio Code.
 
@@ -129,7 +187,7 @@ Then, open the debug panel by clicking the `Run and Debug` icon on the sidebar, 
 option from the top menu, and click start. A new window will launch with the title
 `[Extension Development Host]`.
 
-### Running Unit Tests
+### Running unit tests
 
 Note: Unit tests are those in files with extension `.unit.test.ts`.
 
@@ -157,7 +215,7 @@ Alter the `launch.json` file in the `"Debug Unit Tests"` section by setting the 
 
 ...this will only run the suite with the tests you care about during a test run (be sure to set the debugger to run the `Debug Unit Tests` launcher).
 
-### Running Integration Tests (with VS Code)
+### Running integration tests (with VS Code)
 
 Note: Integration tests are those in files with extension `*.vscode.test*.ts`.
 
@@ -172,7 +230,7 @@ You can also run the tests from the command-line (after compiling):
 npm run testVSCode  # will launch the VSC UI
 ```
 
-#### Customising the Test Run
+#### Customising the test run
 
 If you want to change which tests are run or which version of Python is used,
 you can do this by setting environment variables. The same variables work when
@@ -235,7 +293,7 @@ setting a single variable for a subprocess:
 VSC_JUPYTER_CI_TEST_GREP=Sorting npm run testVSCode
 ```
 
-### Testing Python Scripts
+### Testing Python scripts
 
 The extension has a number of scripts in ./pythonFiles. Tests for these
 scripts are found in ./pythonFiles/tests. To run those tests:
@@ -251,13 +309,13 @@ To run only the functional tests:
 
 `python3 -m pythonFiles.tests --functional`
 
-### Standard Debugging
+### Standard debugging
 
 Clone the repo into any directory, open that directory in VSCode, and use the `Extension` launch option within VSCode.
 
-### Coding Standards
+### Coding standards
 
-Messages displayed to the user must be localized using/created constants from/in the [localize.ts](https://github.com/Microsoft/vscode-jupyter/blob/main/src/platform/common/utils/localize.ts) file.
+Messages displayed to the user must be localized using/created constants from/in the [localize.ts](https://github.com/Microsoft/vscode-deepnote/blob/main/src/platform/common/utils/localize.ts) file.
 
 ## Development process
 
@@ -267,10 +325,6 @@ project maintainers do what they do to keep this project running
 smoothly, but it allows you to help out by noticing when a step is
 missed or to learn in case someday you become a project maintainer as
 well!
-
-### Folder Structure
-
-At a high level we have a bunch of folders. Each high level is described in this wiki [page](https://github.com/deepnote/vscode-deepnote/wiki/Source-Code-Organization)
 
 ### Typical workflow
 
@@ -287,12 +341,12 @@ Here's an example of a typical workflow:
 1. Test with [`Extension`](https://github.com/deepnote/vscode-deepnote/blob/29c4be79f64df1858692321b43c3079bb77bdd69/.vscode/launch.json#L6) launch task
 1. Repeat until works in normal extension
 1. Test with [`Extension (web)`](https://github.com/deepnote/vscode-deepnote/blob/29c4be79f64df1858692321b43c3079bb77bdd69/.vscode/launch.json#L34) launch task
-1. Run [jupyter notebook server](https://github.com/deepnote/vscode-deepnote/wiki/Connecting-to-a-remote-Jupyter-server-from-vscode.dev) to use in web testing
+1. Run [jupyter notebook server](https://github.com/microsoft/vscode-jupyter/wiki/Connecting-to-a-remote-Jupyter-server-from-vscode.dev-or-github.dev) to use in web testing
 1. Repeat until works in web extension
 1. Write integration tests and [run](https://github.com/deepnote/vscode-deepnote/blob/29c4be79f64df1858692321b43c3079bb77bdd69/.vscode/launch.json#L216) locally.
 1. Submit PR
 1. Check PR output to make sure tests don't fail.
-1. Debug [CI test failures](https://github.com/deepnote/vscode-deepnote/wiki/Tests)
+1. Debug [CI test failures](https://github.com/microsoft/vscode-jupyter/wiki/tests)
 
 ### Helping others
 
@@ -348,7 +402,7 @@ Overall steps for releasing are covered in the
 
 To create a release _build_, follow the steps outlined in the [release plan](https://github.com/Microsoft/vscode-jupyter/labels/release%20plan) (which has a [template](https://github.com/Microsoft/vscode-jupyter/blob/main/.github/release_plan.md)).
 
-## Local Build
+## Local build
 
 Steps to build the extension on your machine once you've cloned the repo:
 

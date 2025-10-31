@@ -4,7 +4,7 @@
 import { inject, injectable, named } from 'inversify';
 import { CancellationToken, Uri, workspace } from 'vscode';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
-import { IDeepnoteToolkitInstaller, DEEPNOTE_TOOLKIT_WHEEL_URL, DEEPNOTE_TOOLKIT_VERSION } from './types';
+import { IDeepnoteToolkitInstaller, DEEPNOTE_TOOLKIT_VERSION } from './types';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { logger } from '../../platform/logging';
 import { IOutputChannel, IExtensionContext } from '../../platform/common/types';
@@ -189,7 +189,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             Cancellation.throwIfCanceled(token);
 
             // Install deepnote-toolkit and ipykernel in venv
-            logger.info(`Installing deepnote-toolkit and ipykernel in venv from ${DEEPNOTE_TOOLKIT_WHEEL_URL}`);
+            logger.info(`Installing deepnote-toolkit (${DEEPNOTE_TOOLKIT_VERSION}) and ipykernel in venv from PyPI`);
             this.outputChannel.appendLine('Installing deepnote-toolkit and ipykernel...');
 
             const installResult = await venvProcessService.exec(
@@ -199,7 +199,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                     'pip',
                     'install',
                     '--upgrade',
-                    `deepnote-toolkit[server] @ ${DEEPNOTE_TOOLKIT_WHEEL_URL}`,
+                    `deepnote-toolkit[server]==${DEEPNOTE_TOOLKIT_VERSION}`,
                     'ipykernel'
                 ],
                 { throwOnStdErr: false }
@@ -260,7 +260,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                 throw new DeepnoteToolkitInstallError(
                     venvInterpreter.uri.fsPath,
                     venvPath.fsPath,
-                    DEEPNOTE_TOOLKIT_WHEEL_URL,
+                    DEEPNOTE_TOOLKIT_VERSION,
                     installResult.stdout || '',
                     installResult.stderr || 'Package installation completed but verification failed'
                 );
@@ -278,7 +278,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             throw new DeepnoteToolkitInstallError(
                 baseInterpreter.uri.fsPath,
                 venvPath.fsPath,
-                DEEPNOTE_TOOLKIT_WHEEL_URL,
+                DEEPNOTE_TOOLKIT_VERSION,
                 '',
                 ex instanceof Error ? ex.message : String(ex),
                 ex instanceof Error ? ex : undefined

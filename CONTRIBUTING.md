@@ -9,8 +9,6 @@ Thank you for your interest in contributing to the Deepnote VS Code extension! T
 
 ## | ![Main Build](https://github.com/deepnote/vscode-deepnote/actions/workflows/ci.yml/badge.svg?branch=main)
 
-[For contributing to the [Microsoft Python Language Server](https://github.com/Microsoft/python-language-server) see its own repo; for [Pylance](https://github.com/microsoft/pylance-release) see its own repo; for [debugpy](https://github.com/microsoft/debugpy) see its own repo]
-
 ## Contributing a pull request
 
 ### Prerequisites
@@ -336,7 +334,7 @@ Clone the repo into any directory, open that directory in VSCode, and use the `E
 
 ### Coding standards
 
-Messages displayed to the user must be localized using/created constants from/in the [localize.ts](https://github.com/Microsoft/vscode-jupyter/blob/main/src/platform/common/utils/localize.ts) file.
+Messages displayed to the user must be localized using/created constants from/in the [localize.ts](https://github.com/Microsoft/vscode-deepnote/blob/main/src/platform/common/utils/localize.ts) file.
 
 ## Development process
 

@@ -2,9 +2,12 @@ import { assert, use } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 import { anything, instance, mock, when, verify, deepEqual } from 'ts-mockito';
 import { Uri } from 'vscode';
+import * as fs from 'fs';
+import * as os from 'os';
 import { DeepnoteEnvironmentManager } from './deepnoteEnvironmentManager.node';
 import { DeepnoteEnvironmentStorage } from './deepnoteEnvironmentStorage.node';
 import { IExtensionContext, IOutputChannel } from '../../../platform/common/types';
+import { IFileSystem } from '../../../platform/common/platform/types';
 import {
     IDeepnoteServerStarter,
     IDeepnoteToolkitInstaller,
@@ -24,6 +27,8 @@ suite('DeepnoteEnvironmentManager', () => {
     let mockToolkitInstaller: IDeepnoteToolkitInstaller;
     let mockServerStarter: IDeepnoteServerStarter;
     let mockOutputChannel: IOutputChannel;
+    let mockFileSystem: IFileSystem;
+    let testGlobalStoragePath: string;
 
     const testInterpreter: PythonEnvironment = {
         id: 'test-python-id',
@@ -49,17 +54,38 @@ suite('DeepnoteEnvironmentManager', () => {
         mockToolkitInstaller = mock<IDeepnoteToolkitInstaller>();
         mockServerStarter = mock<IDeepnoteServerStarter>();
         mockOutputChannel = mock<IOutputChannel>();
+        mockFileSystem = mock<IFileSystem>();
 
-        when(mockContext.globalStorageUri).thenReturn(Uri.file('/global/storage'));
+        // Create a temporary directory for test storage
+        testGlobalStoragePath = fs.mkdtempSync(`${os.tmpdir()}/deepnote-test-`);
+
+        when(mockContext.globalStorageUri).thenReturn(Uri.file(testGlobalStoragePath));
         when(mockStorage.loadEnvironments()).thenResolve([]);
+
+        // Configure mockFileSystem to actually delete directories for testing
+        when(mockFileSystem.delete(anything())).thenCall((uri: Uri) => {
+            const dirPath = uri.fsPath;
+            if (fs.existsSync(dirPath)) {
+                fs.rmSync(dirPath, { recursive: true, force: true });
+            }
+            return Promise.resolve();
+        });
 
         manager = new DeepnoteEnvironmentManager(
             instance(mockContext),
             instance(mockStorage),
             instance(mockToolkitInstaller),
             instance(mockServerStarter),
-            instance(mockOutputChannel)
+            instance(mockOutputChannel),
+            instance(mockFileSystem)
         );
+    });
+
+    teardown(() => {
+        // Clean up the temporary directory after each test
+        if (testGlobalStoragePath && fs.existsSync(testGlobalStoragePath)) {
+            fs.rmSync(testGlobalStoragePath, { recursive: true, force: true });
+        }
     });
 
     suite('activate', () => {
@@ -311,6 +337,33 @@ suite('DeepnoteEnvironmentManager', () => {
 
         test('should throw error for non-existent environment', async () => {
             await assert.isRejected(manager.deleteEnvironment('non-existent'), 'Environment not found: non-existent');
+        });
+
+        test('should delete virtual environment directory from disk', async () => {
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
+
+            const config = await manager.createEnvironment({
+                name: 'Test',
+                pythonInterpreter: testInterpreter
+            });
+
+            // Create the virtual environment directory to simulate it existing
+            const venvDirPath = config.venvPath.fsPath;
+            fs.mkdirSync(venvDirPath, { recursive: true });
+
+            // Create a dummy file inside to make it a "real" directory
+            fs.writeFileSync(`${venvDirPath}/test.txt`, 'test content');
+
+            // Verify directory and file exist before deletion
+            assert.isTrue(fs.existsSync(venvDirPath), 'Directory should exist before deletion');
+            assert.isTrue(fs.existsSync(`${venvDirPath}/test.txt`), 'File should exist before deletion');
+
+            // Delete the environment
+            await manager.deleteEnvironment(config.id);
+
+            // Verify directory no longer exists (with a small delay to allow async operation)
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            assert.isFalse(fs.existsSync(venvDirPath), 'Directory should not exist after deletion');
         });
     });
 

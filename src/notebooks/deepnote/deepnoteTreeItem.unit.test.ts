@@ -616,6 +616,13 @@ suite('DeepnoteTreeItem', () => {
             // but should not throw during construction
             assert.isDefined(item);
             assert.strictEqual(item.type, DeepnoteTreeItemType.Loading);
+
+            // Verify initialization was skipped - these properties should not be set
+            assert.isUndefined(item.tooltip);
+            assert.isUndefined(item.iconPath);
+            assert.isUndefined(item.description);
+            // label is set to empty string by TreeItem base class
+            assert.strictEqual(item.label, '');
         });
     });
 

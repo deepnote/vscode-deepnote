@@ -9,7 +9,7 @@
             "runtimeExecutable": "${execPath}",
             "args": [
                 "--extensionDevelopmentPath=${workspaceFolder}",
-                "--enable-proposed-api=Deepnote.vscode-deepnote"
+                "--enable-proposed-api"
             ],
             "smartStep": true,
             "sourceMaps": true,

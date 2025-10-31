@@ -686,4 +686,212 @@ suite('DeepnoteEnvironmentsView', () => {
             verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
         });
     });
+
+    suite('startServer', () => {
+        const testEnvironmentId = 'test-env-id';
+        const testInterpreter: PythonEnvironment = {
+            id: 'test-python-id',
+            uri: Uri.file('/usr/bin/python3'),
+            version: { major: 3, minor: 11, patch: 0, raw: '3.11.0' }
+        } as PythonEnvironment;
+
+        const testEnvironment: DeepnoteEnvironment = {
+            id: testEnvironmentId,
+            name: 'Test Environment',
+            pythonInterpreter: testInterpreter,
+            venvPath: Uri.file('/path/to/venv'),
+            createdAt: new Date(),
+            lastUsedAt: new Date()
+        };
+
+        setup(() => {
+            resetCalls(mockConfigManager);
+            resetCalls(mockedVSCodeNamespaces.window);
+        });
+
+        test('should call environmentManager.startServer', async () => {
+            when(mockConfigManager.getEnvironment(testEnvironmentId)).thenReturn(testEnvironment);
+            when(mockConfigManager.startServer(testEnvironmentId, anything())).thenResolve();
+
+            when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall(
+                (_options: ProgressOptions, callback: Function) => {
+                    const mockProgress = {
+                        report: () => {
+                            // Mock progress reporting
+                        }
+                    };
+                    const mockToken: CancellationToken = {
+                        isCancellationRequested: false,
+                        onCancellationRequested: () => ({
+                            dispose: () => {
+                                // Mock disposable
+                            }
+                        })
+                    };
+                    return callback(mockProgress, mockToken);
+                }
+            );
+
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenResolve(undefined);
+
+            await (view as any).startServer(testEnvironmentId);
+
+            verify(mockConfigManager.startServer(testEnvironmentId, anything())).once();
+        });
+    });
+
+    suite('stopServer', () => {
+        const testEnvironmentId = 'test-env-id';
+        const testInterpreter: PythonEnvironment = {
+            id: 'test-python-id',
+            uri: Uri.file('/usr/bin/python3'),
+            version: { major: 3, minor: 11, patch: 0, raw: '3.11.0' }
+        } as PythonEnvironment;
+
+        const testEnvironment: DeepnoteEnvironment = {
+            id: testEnvironmentId,
+            name: 'Test Environment',
+            pythonInterpreter: testInterpreter,
+            venvPath: Uri.file('/path/to/venv'),
+            createdAt: new Date(),
+            lastUsedAt: new Date()
+        };
+
+        setup(() => {
+            resetCalls(mockConfigManager);
+            resetCalls(mockedVSCodeNamespaces.window);
+        });
+
+        test('should call environmentManager.stopServer', async () => {
+            when(mockConfigManager.getEnvironment(testEnvironmentId)).thenReturn(testEnvironment);
+            when(mockConfigManager.stopServer(testEnvironmentId, anything())).thenResolve();
+
+            when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall(
+                (_options: ProgressOptions, callback: Function) => {
+                    const mockProgress = {
+                        report: () => {
+                            // Mock progress reporting
+                        }
+                    };
+                    const mockToken: CancellationToken = {
+                        isCancellationRequested: false,
+                        onCancellationRequested: () => ({
+                            dispose: () => {
+                                // Mock disposable
+                            }
+                        })
+                    };
+                    return callback(mockProgress, mockToken);
+                }
+            );
+
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenResolve(undefined);
+
+            await (view as any).stopServer(testEnvironmentId);
+
+            verify(mockConfigManager.stopServer(testEnvironmentId, anything())).once();
+        });
+    });
+
+    suite('restartServer', () => {
+        const testEnvironmentId = 'test-env-id';
+        const testInterpreter: PythonEnvironment = {
+            id: 'test-python-id',
+            uri: Uri.file('/usr/bin/python3'),
+            version: { major: 3, minor: 11, patch: 0, raw: '3.11.0' }
+        } as PythonEnvironment;
+
+        const testEnvironment: DeepnoteEnvironment = {
+            id: testEnvironmentId,
+            name: 'Test Environment',
+            pythonInterpreter: testInterpreter,
+            venvPath: Uri.file('/path/to/venv'),
+            createdAt: new Date(),
+            lastUsedAt: new Date()
+        };
+
+        setup(() => {
+            resetCalls(mockConfigManager);
+            resetCalls(mockedVSCodeNamespaces.window);
+        });
+
+        test('should call environmentManager.restartServer', async () => {
+            when(mockConfigManager.getEnvironment(testEnvironmentId)).thenReturn(testEnvironment);
+            when(mockConfigManager.restartServer(testEnvironmentId, anything())).thenResolve();
+
+            when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall(
+                (_options: ProgressOptions, callback: Function) => {
+                    const mockProgress = {
+                        report: () => {
+                            // Mock progress reporting
+                        }
+                    };
+                    const mockToken: CancellationToken = {
+                        isCancellationRequested: false,
+                        onCancellationRequested: () => ({
+                            dispose: () => {
+                                // Mock disposable
+                            }
+                        })
+                    };
+                    return callback(mockProgress, mockToken);
+                }
+            );
+
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenResolve(undefined);
+
+            await (view as any).restartServer(testEnvironmentId);
+
+            verify(mockConfigManager.restartServer(testEnvironmentId, anything())).once();
+        });
+    });
+
+    suite('managePackages', () => {
+        const testEnvironmentId = 'test-env-id';
+        const testInterpreter: PythonEnvironment = {
+            id: 'test-python-id',
+            uri: Uri.file('/usr/bin/python3'),
+            version: { major: 3, minor: 11, patch: 0, raw: '3.11.0' }
+        } as PythonEnvironment;
+
+        const testEnvironment: DeepnoteEnvironment = {
+            id: testEnvironmentId,
+            name: 'Test Environment',
+            pythonInterpreter: testInterpreter,
+            venvPath: Uri.file('/path/to/venv'),
+            packages: ['numpy', 'pandas'],
+            createdAt: new Date(),
+            lastUsedAt: new Date()
+        };
+
+        setup(() => {
+            resetCalls(mockConfigManager);
+            resetCalls(mockedVSCodeNamespaces.window);
+        });
+
+        test('should call environmentManager.updateEnvironment with parsed packages', async () => {
+            when(mockConfigManager.getEnvironment(testEnvironmentId)).thenReturn(testEnvironment);
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(
+                Promise.resolve('matplotlib, scipy, sklearn')
+            );
+            when(mockConfigManager.updateEnvironment(anything(), anything())).thenResolve();
+
+            when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall(
+                (_options: ProgressOptions, callback: Function) => {
+                    return callback();
+                }
+            );
+
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenResolve(undefined);
+
+            await (view as any).managePackages(testEnvironmentId);
+
+            verify(
+                mockConfigManager.updateEnvironment(
+                    testEnvironmentId,
+                    deepEqual({ packages: ['matplotlib', 'scipy', 'sklearn'] })
+                )
+            ).once();
+        });
+    });
 });

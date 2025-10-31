@@ -473,6 +473,46 @@ suite('DeepnoteDataConverter', () => {
             const outputData = JSON.parse(new TextDecoder().decode(outputs[0].items[0].data));
             assert.deepStrictEqual(outputData, sqlMetadata);
         });
+
+        test('converts text/markdown output', () => {
+            const markdownContent = '## Result\n\nThis is **formatted** output.';
+
+            const deepnoteOutputs: DeepnoteOutput[] = [
+                {
+                    output_type: 'execute_result',
+                    execution_count: 1,
+                    data: {
+                        'text/markdown': markdownContent,
+                        'text/plain': 'Result\n\nThis is formatted output.'
+                    }
+                }
+            ];
+
+            const blocks: DeepnoteBlock[] = [
+                {
+                    blockGroup: 'test-group',
+                    id: 'block1',
+                    type: 'code',
+                    content: 'display_markdown()',
+                    sortingKey: 'a0',
+                    outputs: deepnoteOutputs
+                }
+            ];
+
+            const cells = converter.convertBlocksToCells(blocks);
+            const outputs = cells[0].outputs!;
+
+            assert.strictEqual(outputs.length, 1);
+            assert.strictEqual(outputs[0].items.length, 2);
+
+            const markdownItem = outputs[0].items.find((item) => item.mime === 'text/markdown');
+            const plainItem = outputs[0].items.find((item) => item.mime === 'text/plain');
+
+            assert.ok(markdownItem, 'Should have text/markdown item');
+            assert.ok(plainItem, 'Should have text/plain item');
+            assert.strictEqual(new TextDecoder().decode(markdownItem!.data), markdownContent);
+            assert.strictEqual(new TextDecoder().decode(plainItem!.data), 'Result\n\nThis is formatted output.');
+        });
     });
 
     suite('round trip conversion', () => {

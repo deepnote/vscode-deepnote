@@ -124,7 +124,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
             // Step 3: Enter packages (optional)
             const packagesInput = await window.showInputBox({
                 prompt: l10n.t('Enter additional packages to install (comma-separated, optional)'),
-                placeHolder: l10n.t('e.g., matplotlib, terraform'),
+                placeHolder: l10n.t('e.g., matplotlib, tensorflow'),
                 validateInput: (value: string) => {
                     if (!value || value.trim().length === 0) {
                         return undefined; // Empty is OK

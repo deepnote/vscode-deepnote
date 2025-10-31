@@ -236,6 +236,8 @@ export class DeepnoteDataConverter {
             for (const item of output.items) {
                 if (item.mime === 'text/plain') {
                     data['text/plain'] = new TextDecoder().decode(item.data);
+                } else if (item.mime === 'text/markdown') {
+                    data['text/markdown'] = new TextDecoder().decode(item.data);
                 } else if (item.mime === 'text/html') {
                     data['text/html'] = new TextDecoder().decode(item.data);
                 } else if (item.mime === 'application/json') {
@@ -390,6 +392,10 @@ export class DeepnoteDataConverter {
                                     'image/jpeg'
                                 )
                             );
+                        }
+
+                        if (data['text/markdown']) {
+                            items.push(NotebookCellOutputItem.text(data['text/markdown'] as string, 'text/markdown'));
                         }
 
                         if (data['text/plain']) {

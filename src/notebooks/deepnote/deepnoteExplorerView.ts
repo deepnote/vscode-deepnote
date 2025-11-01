@@ -231,13 +231,20 @@ export class DeepnoteExplorerView {
                 ...targetNotebook,
                 id: generateUuid(),
                 name: newName,
-                blocks: targetNotebook.blocks.map((block: DeepnoteBlock) => ({
-                    ...block,
-                    id: generateUuid(),
-                    blockGroup: generateUuid(),
-                    executionCount: undefined,
-                    ...(block.metadata != null ? { metadata: { ...block.metadata } } : {})
-                }))
+                blocks: targetNotebook.blocks.map((block: DeepnoteBlock) => {
+                    // Use structuredClone for deep cloning if available, otherwise fall back to JSON
+                    const clonedBlock =
+                        typeof structuredClone !== 'undefined'
+                            ? structuredClone(block)
+                            : JSON.parse(JSON.stringify(block));
+
+                    // Update cloned block with new IDs and reset execution state
+                    clonedBlock.id = generateUuid();
+                    clonedBlock.blockGroup = generateUuid();
+                    clonedBlock.executionCount = undefined;
+
+                    return clonedBlock;
+                })
             };
 
             projectData.project.notebooks.push(newNotebook);

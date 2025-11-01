@@ -104,4 +104,14 @@ export class DeepnoteTreeItem extends TreeItem {
 
         return undefined;
     }
+
+    /**
+     * Updates the tree item's visual fields (label, description, tooltip) based on current data.
+     * Call this after updating the data property to ensure the tree view reflects changes.
+     */
+    public updateVisualFields(): void {
+        this.label = this.getLabel();
+        this.description = this.getDescription();
+        this.tooltip = this.getTooltip();
+    }
 }

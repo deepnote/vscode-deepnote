@@ -84,6 +84,9 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
                 if (project) {
                     // Update the tree item's data
                     cachedTreeItem.data = project;
+
+                    // Update visual fields (label, description, tooltip) to reflect changes
+                    cachedTreeItem.updateVisualFields();
                 }
             } catch (error) {
                 this.logger?.error(`Failed to reload project ${filePath}`, error);
@@ -125,6 +128,9 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
                 if (project) {
                     // Update the tree item's data
                     cachedTreeItem.data = project;
+
+                    // Update visual fields (label, description, tooltip) to reflect changes
+                    cachedTreeItem.updateVisualFields();
                 }
             } catch (error) {
                 this.logger?.error(`Failed to reload project ${filePath}`, error);

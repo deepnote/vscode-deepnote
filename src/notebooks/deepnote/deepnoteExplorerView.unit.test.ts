@@ -1470,6 +1470,136 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             // Verify error message was shown
             verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
         });
+
+        test('should deep clone blocks to prevent shared references', async () => {
+            // This test verifies that duplicating a notebook creates truly independent copies
+            // of nested objects like outputs and metadata, not just shallow references
+            const projectData: DeepnoteFile = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00Z',
+                    modifiedAt: '2024-01-01T00:00:00Z'
+                },
+                project: {
+                    id: 'test-project-id',
+                    name: 'Test Project',
+                    notebooks: [
+                        {
+                            id: 'original-notebook-id',
+                            name: 'Original Notebook',
+                            blocks: [
+                                {
+                                    id: 'block-1',
+                                    blockGroup: 'group-1',
+                                    type: 'code',
+                                    content: 'print("test")',
+                                    sortingKey: '0',
+                                    version: 1,
+                                    executionCount: 5,
+                                    outputs: [{ type: 'stream', text: 'test output' }],
+                                    metadata: { cellId: 'cell-123', custom: { nested: 'value' } }
+                                }
+                            ],
+                            executionMode: 'block'
+                        }
+                    ]
+                }
+            };
+
+            const mockTreeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.Notebook,
+                context: {
+                    filePath: '/workspace/test-project.deepnote',
+                    projectId: 'test-project-id',
+                    notebookId: 'original-notebook-id'
+                },
+                data: projectData.project.notebooks[0]
+            };
+
+            // Mock file system
+            const mockFS = mock<typeof workspace.fs>();
+            const yamlContent = yaml.dump(projectData);
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yamlContent, 'utf-8')));
+
+            let capturedWriteContent: Uint8Array | undefined;
+            when(mockFS.writeFile(anything(), anything())).thenCall((_uri: Uri, content: Uint8Array) => {
+                capturedWriteContent = content;
+                return Promise.resolve();
+            });
+
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            // Stub generateUuid to return predictable IDs
+            const generateUuidStub = sinon.stub(uuidModule, 'generateUuid');
+            generateUuidStub.onCall(0).returns('duplicate-notebook-id');
+            generateUuidStub.onCall(1).returns('duplicate-block-id');
+            generateUuidStub.onCall(2).returns('duplicate-blockgroup-id');
+
+            // Execute duplication
+            await explorerView.duplicateNotebook(mockTreeItem as DeepnoteTreeItem);
+
+            // Parse the written data
+            assert.isDefined(capturedWriteContent, 'File should have been written');
+            const writtenYaml = Buffer.from(capturedWriteContent!).toString('utf-8');
+            const updatedProjectData = yaml.load(writtenYaml) as DeepnoteFile;
+
+            // Find original and duplicated notebooks
+            const originalNotebook = updatedProjectData.project.notebooks.find(
+                (nb) => nb.id === 'original-notebook-id'
+            );
+            const duplicateNotebook = updatedProjectData.project.notebooks.find(
+                (nb) => nb.id === 'duplicate-notebook-id'
+            );
+
+            assert.isDefined(originalNotebook, 'Original notebook should exist');
+            assert.isDefined(duplicateNotebook, 'Duplicate notebook should exist');
+
+            // Verify the blocks are truly independent (deep clone)
+            const originalBlock = originalNotebook!.blocks[0];
+            const duplicateBlock = duplicateNotebook!.blocks[0];
+
+            // Test 1: Verify outputs are not the same reference
+            assert.notStrictEqual(
+                originalBlock.outputs,
+                duplicateBlock.outputs,
+                'Outputs should be different array instances'
+            );
+
+            // Test 2: Verify metadata is not the same reference
+            if (originalBlock.metadata && duplicateBlock.metadata) {
+                assert.notStrictEqual(
+                    originalBlock.metadata,
+                    duplicateBlock.metadata,
+                    'Metadata should be different object instances'
+                );
+
+                // Test 3: Verify nested metadata properties are not shared
+                if (
+                    typeof originalBlock.metadata === 'object' &&
+                    'custom' in originalBlock.metadata &&
+                    typeof duplicateBlock.metadata === 'object' &&
+                    'custom' in duplicateBlock.metadata
+                ) {
+                    assert.notStrictEqual(
+                        (originalBlock.metadata as any).custom,
+                        (duplicateBlock.metadata as any).custom,
+                        'Nested metadata objects should be different instances'
+                    );
+                }
+            }
+
+            // Test 4: Verify that modifying duplicate doesn't affect original
+            // (This would fail with shallow copy)
+            duplicateBlock.outputs!.push({ type: 'stream', text: 'new output' });
+            assert.strictEqual(
+                originalBlock.outputs!.length,
+                1,
+                'Original outputs should not be affected by changes to duplicate'
+            );
+            assert.strictEqual(duplicateBlock.outputs!.length, 2, 'Duplicate outputs should have the new item');
+
+            generateUuidStub.restore();
+        });
     });
 
     suite('renameProject', () => {

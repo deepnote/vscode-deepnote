@@ -336,6 +336,86 @@ suite('DeepnoteTreeDataProvider', () => {
             });
         });
 
+        test('should update visual fields when project data changes', async () => {
+            // Access private caches
+            const treeItemCache = (provider as any).treeItemCache as Map<string, DeepnoteTreeItem>;
+
+            // Create initial project with 1 notebook
+            const filePath = '/workspace/test-project.deepnote';
+            const cacheKey = `project:${filePath}`;
+            const initialProject: DeepnoteProject = {
+                metadata: {
+                    createdAt: '2023-01-01T00:00:00Z',
+                    modifiedAt: '2023-01-01T00:00:00Z'
+                },
+                project: {
+                    id: 'project-123',
+                    name: 'Original Name',
+                    notebooks: [
+                        {
+                            id: 'notebook-1',
+                            name: 'Notebook 1',
+                            blocks: [],
+                            executionMode: 'block',
+                            isModule: false
+                        }
+                    ],
+                    settings: {}
+                },
+                version: '1.0'
+            };
+
+            const mockTreeItem = new DeepnoteTreeItem(
+                DeepnoteTreeItemType.ProjectFile,
+                {
+                    filePath: filePath,
+                    projectId: 'project-123'
+                },
+                initialProject,
+                1
+            );
+            treeItemCache.set(cacheKey, mockTreeItem);
+
+            // Verify initial state
+            assert.strictEqual(mockTreeItem.label, 'Original Name');
+            assert.strictEqual(mockTreeItem.description, '1 notebook');
+
+            // Update the project data (simulating rename and adding notebooks)
+            const updatedProject: DeepnoteProject = {
+                ...initialProject,
+                project: {
+                    ...initialProject.project,
+                    name: 'Renamed Project',
+                    notebooks: [
+                        initialProject.project.notebooks[0],
+                        {
+                            id: 'notebook-2',
+                            name: 'Notebook 2',
+                            blocks: [],
+                            executionMode: 'block',
+                            isModule: false
+                        }
+                    ]
+                }
+            };
+
+            mockTreeItem.data = updatedProject;
+            mockTreeItem.updateVisualFields();
+
+            // Verify visual fields were updated
+            assert.strictEqual(mockTreeItem.label, 'Renamed Project', 'Label should reflect new project name');
+            assert.strictEqual(
+                mockTreeItem.description,
+                '2 notebooks',
+                'Description should reflect new notebook count'
+            );
+            assert.include(
+                mockTreeItem.tooltip as string,
+                'Renamed Project',
+                'Tooltip should include new project name'
+            );
+        });
+
         test('should clear both caches when file is deleted', () => {
             // Access private caches
             const cachedProjects = (provider as any).cachedProjects as Map<string, DeepnoteProject>;

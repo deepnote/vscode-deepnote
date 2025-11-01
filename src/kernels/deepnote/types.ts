@@ -156,6 +156,6 @@ export interface IDeepnoteKernelAutoSelector {
     ensureKernelSelected(notebook: vscode.NotebookDocument, token?: vscode.CancellationToken): Promise<void>;
 }
 
-export const DEEPNOTE_TOOLKIT_VERSION = '1.0.0rc2';
+export const DEEPNOTE_TOOLKIT_VERSION = '1.0.0';
 export const DEEPNOTE_DEFAULT_PORT = 8888;
 export const DEEPNOTE_NOTEBOOK_TYPE = 'deepnote';

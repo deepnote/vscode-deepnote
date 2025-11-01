@@ -6,7 +6,14 @@ import { EnvironmentVariables } from '../../common/variables/types';
 import { UnsupportedIntegrationError } from '../../errors/unsupportedIntegrationError';
 import { logger } from '../../logging';
 import { IIntegrationStorage, ISqlIntegrationEnvVarsProvider } from './types';
-import { LegacyIntegrationConfig, IntegrationType, SnowflakeAuthMethods } from './integrationTypes';
+import {
+    LegacyIntegrationConfig,
+    IntegrationType,
+    SnowflakeAuthMethods,
+    DuckDBIntegrationConfig,
+    DATAFRAME_SQL_INTEGRATION_ID
+} from './integrationTypes';
+import { INotebookEditorProvider, IDeepnoteNotebookManager } from '../../../notebooks/types';
 
 /**
  * Converts an integration ID to the environment variable name format expected by SQL blocks.
@@ -163,6 +170,8 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
 
     constructor(
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
+        @inject(INotebookEditorProvider) private readonly notebookEditorProvider: INotebookEditorProvider,
+        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
         @inject(IDisposableRegistry) disposables: IDisposableRegistry
     ) {
         logger.info('SqlIntegrationEnvironmentVariablesProvider: Constructor called - provider is being instantiated');
@@ -179,8 +188,8 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
 
     /**
      * Get environment variables for SQL integrations.
-     * Provides credentials for all configured integrations in the project.
-     * The internal DuckDB integration is always included via IntegrationStorage.getAll().
+     * Provides credentials for all integrations in the Deepnote project.
+     * The internal DuckDB integration is always included.
      */
     public async getEnvironmentVariables(resource: Resource, token?: CancellationToken): Promise<EnvironmentVariables> {
         const envVars: EnvironmentVariables = {};
@@ -195,20 +204,79 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
 
         logger.trace(`SqlIntegrationEnvironmentVariablesProvider: Getting env vars for resource`);
 
-        // Get all configured integrations from storage (includes DuckDB integration)
-        const allIntegrations = await this.integrationStorage.getAll();
+        // Get the notebook document from the resource
+        const notebook = this.notebookEditorProvider.findAssociatedNotebookDocument(resource);
+        if (!notebook) {
+            logger.trace(`SqlIntegrationEnvironmentVariablesProvider: No notebook found for resource`);
+            return envVars;
+        }
 
+        // Get the project ID from the notebook metadata
+        const projectId = notebook.metadata?.deepnoteProjectId as string | undefined;
+        if (!projectId) {
+            logger.trace(`SqlIntegrationEnvironmentVariablesProvider: No project ID found in notebook metadata`);
+            return envVars;
+        }
+
+        logger.trace(`SqlIntegrationEnvironmentVariablesProvider: Project ID: ${projectId}`);
+
+        // Get the project from the notebook manager
+        const project = this.notebookManager.getOriginalProject(projectId);
+        if (!project) {
+            logger.trace(`SqlIntegrationEnvironmentVariablesProvider: No project found for ID: ${projectId}`);
+            return envVars;
+        }
+
+        // Get the list of integrations from the project
+        const projectIntegrations = project.project.integrations || [];
         logger.trace(
-            `SqlIntegrationEnvironmentVariablesProvider: Found ${allIntegrations.length} configured integrations`
+            `SqlIntegrationEnvironmentVariablesProvider: Found ${projectIntegrations.length} integrations in project`
         );
 
-        // Get credentials for each integration and add to environment variables
-        for (const config of allIntegrations) {
+        // Always add the internal DuckDB integration
+        const duckdbConfig: DuckDBIntegrationConfig = {
+            id: DATAFRAME_SQL_INTEGRATION_ID,
+            name: 'Dataframe SQL (DuckDB)',
+            type: IntegrationType.DuckDB
+        };
+
+        try {
+            const envVarName = convertToEnvironmentVariableName(getSqlEnvVarName(duckdbConfig.id));
+            const credentialsJson = convertIntegrationConfigToJson(duckdbConfig);
+            envVars[envVarName] = credentialsJson;
+            logger.debug(
+                `SqlIntegrationEnvironmentVariablesProvider: Added env var ${envVarName} for DuckDB integration`
+            );
+        } catch (error) {
+            logger.error(
+                `SqlIntegrationEnvironmentVariablesProvider: Failed to get credentials for DuckDB integration`,
+                error
+            );
+        }
+
+        // Get credentials for each project integration and add to environment variables
+        for (const projectIntegration of projectIntegrations) {
             if (token?.isCancellationRequested) {
                 break;
             }
 
+            const integrationId = projectIntegration.id;
+
+            // Skip the internal DuckDB integration (already added above)
+            if (integrationId === DATAFRAME_SQL_INTEGRATION_ID) {
+                continue;
+            }
+
             try {
+                // Get the integration configuration from storage
+                const config = await this.integrationStorage.getIntegrationConfig(integrationId);
+                if (!config) {
+                    logger.debug(
+                        `SqlIntegrationEnvironmentVariablesProvider: No configuration found for integration ${integrationId}, skipping`
+                    );
+                    continue;
+                }
+
                 // Convert integration config to JSON and add as environment variable
                 const envVarName = convertToEnvironmentVariableName(getSqlEnvVarName(config.id));
                 const credentialsJson = convertIntegrationConfigToJson(config);
@@ -219,7 +287,7 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
                 );
             } catch (error) {
                 logger.error(
-                    `SqlIntegrationEnvironmentVariablesProvider: Failed to get credentials for integration ${config.id}`,
+                    `SqlIntegrationEnvironmentVariablesProvider: Failed to get credentials for integration ${integrationId}`,
                     error
                 );
             }

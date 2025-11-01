@@ -1,6 +1,6 @@
 import { assert } from 'chai';
 import { instance, mock, when } from 'ts-mockito';
-import { CancellationTokenSource, EventEmitter, Uri } from 'vscode';
+import { CancellationTokenSource, EventEmitter, NotebookDocument, Uri } from 'vscode';
 
 import { IDisposableRegistry } from '../../common/types';
 import { IntegrationStorage } from './integrationStorage';
@@ -10,33 +10,56 @@ import {
     PostgresIntegrationConfig,
     BigQueryIntegrationConfig,
     SnowflakeIntegrationConfig,
-    SnowflakeAuthMethods,
-    DuckDBIntegrationConfig,
-    DATAFRAME_SQL_INTEGRATION_ID
+    SnowflakeAuthMethods
 } from './integrationTypes';
+import { INotebookEditorProvider, IDeepnoteNotebookManager } from '../../../notebooks/types';
 
 const EXPECTED_DATAFRAME_ONLY_ENV_VARS = {
     SQL_DEEPNOTE_DATAFRAME_SQL: '{"url":"deepnote+duckdb:///:memory:","params":{},"param_style":"qmark"}'
 };
 
-// Helper to create the DuckDB integration config that's always included
-const DUCKDB_INTEGRATION: DuckDBIntegrationConfig = {
-    id: DATAFRAME_SQL_INTEGRATION_ID,
-    name: 'Dataframe SQL (DuckDB)',
-    type: IntegrationType.DuckDB
-};
+// Helper to create a mock project with integrations
+function createMockProject(integrations: Array<{ id: string; name: string; type: string }>) {
+    return {
+        project: {
+            id: 'test-project-id',
+            name: 'Test Project',
+            integrations
+        }
+    };
+}
+
+// Helper to create a mock notebook document
+function createMockNotebook(projectId: string): NotebookDocument {
+    return {
+        metadata: {
+            deepnoteProjectId: projectId,
+            deepnoteNotebookId: 'test-notebook-id'
+        }
+    } as unknown as NotebookDocument;
+}
 
 suite('SqlIntegrationEnvironmentVariablesProvider', () => {
     let provider: SqlIntegrationEnvironmentVariablesProvider;
     let integrationStorage: IntegrationStorage;
+    let notebookEditorProvider: INotebookEditorProvider;
+    let notebookManager: IDeepnoteNotebookManager;
     let disposables: IDisposableRegistry;
 
     setup(() => {
         disposables = [];
         integrationStorage = mock(IntegrationStorage);
+        notebookEditorProvider = mock<INotebookEditorProvider>();
+        notebookManager = mock<IDeepnoteNotebookManager>();
+
         when(integrationStorage.onDidChangeIntegrations).thenReturn(new EventEmitter<void>().event);
 
-        provider = new SqlIntegrationEnvironmentVariablesProvider(instance(integrationStorage), disposables);
+        provider = new SqlIntegrationEnvironmentVariablesProvider(
+            instance(integrationStorage),
+            instance(notebookEditorProvider),
+            instance(notebookManager),
+            disposables
+        );
     });
 
     teardown(() => {
@@ -48,10 +71,40 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         assert.deepStrictEqual(envVars, {});
     });
 
+    test('Returns empty object when no notebook is found', async () => {
+        const uri = Uri.file('/test/notebook.deepnote');
+        when(notebookEditorProvider.findAssociatedNotebookDocument(uri)).thenReturn(undefined);
+
+        const envVars = await provider.getEnvironmentVariables(uri);
+        assert.deepStrictEqual(envVars, {});
+    });
+
+    test('Returns empty object when notebook has no project ID', async () => {
+        const uri = Uri.file('/test/notebook.deepnote');
+        const notebook = { metadata: {} } as NotebookDocument;
+        when(notebookEditorProvider.findAssociatedNotebookDocument(uri)).thenReturn(notebook);
+
+        const envVars = await provider.getEnvironmentVariables(uri);
+        assert.deepStrictEqual(envVars, {});
+    });
+
+    test('Returns empty object when project is not found', async () => {
+        const uri = Uri.file('/test/notebook.deepnote');
+        const notebook = createMockNotebook('test-project-id');
+        when(notebookEditorProvider.findAssociatedNotebookDocument(uri)).thenReturn(notebook);
+        when(notebookManager.getOriginalProject('test-project-id')).thenReturn(undefined);
+
+        const envVars = await provider.getEnvironmentVariables(uri);
+        assert.deepStrictEqual(envVars, {});
+    });
+
     test('Returns only dataframe integration when no integrations are configured', async () => {
         const uri = Uri.file('/test/notebook.deepnote');
-        // IntegrationStorage.getAll() always includes the DuckDB integration
-        when(integrationStorage.getAll()).thenResolve([DUCKDB_INTEGRATION]);
+        const notebook = createMockNotebook('test-project-id');
+        const project = createMockProject([]);
+
+        when(notebookEditorProvider.findAssociatedNotebookDocument(uri)).thenReturn(notebook);
+        when(notebookManager.getOriginalProject('test-project-id')).thenReturn(project as any);
 
         const envVars = await provider.getEnvironmentVariables(uri);
         assert.deepStrictEqual(envVars, EXPECTED_DATAFRAME_ONLY_ENV_VARS);
@@ -59,8 +112,11 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
 
     test('Returns environment variable for internal DuckDB integration', async () => {
         const uri = Uri.file('/test/notebook.deepnote');
-        // IntegrationStorage.getAll() always includes the DuckDB integration
-        when(integrationStorage.getAll()).thenResolve([DUCKDB_INTEGRATION]);
+        const notebook = createMockNotebook('test-project-id');
+        const project = createMockProject([]);
+
+        when(notebookEditorProvider.findAssociatedNotebookDocument(uri)).thenReturn(notebook);
+        when(notebookManager.getOriginalProject('test-project-id')).thenReturn(project as any);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -87,7 +143,12 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             ssl: true
         };
 
-        when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
+        const notebook = createMockNotebook('test-project-id');
+        const project = createMockProject([{ id: integrationId, name: 'My Postgres DB', type: 'pgsql' }]);
+
+        when(notebookEditorProvider.findAssociatedNotebookDocument(uri)).thenReturn(notebook);
+        when(notebookManager.getOriginalProject('test-project-id')).thenReturn(project as any);
+        when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -111,7 +172,12 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             credentials: serviceAccountJson
         };
 
-        when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
+        const notebook = createMockNotebook('test-project-id');
+        const project = createMockProject([{ id: integrationId, name: 'My BigQuery', type: 'big-query' }]);
+
+        when(notebookEditorProvider.findAssociatedNotebookDocument(uri)).thenReturn(notebook);
+        when(notebookManager.getOriginalProject('test-project-id')).thenReturn(project as any);
+        when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -150,7 +216,16 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             credentials: JSON.stringify({ type: 'service_account' })
         };
 
-        when(integrationStorage.getAll()).thenResolve([postgresConfig, bigqueryConfig, DUCKDB_INTEGRATION]);
+        const notebook = createMockNotebook('test-project-id');
+        const project = createMockProject([
+            { id: postgresId, name: 'My Postgres DB', type: 'pgsql' },
+            { id: bigqueryId, name: 'My BigQuery', type: 'big-query' }
+        ]);
+
+        when(notebookEditorProvider.findAssociatedNotebookDocument(uri)).thenReturn(notebook);
+        when(notebookManager.getOriginalProject('test-project-id')).thenReturn(project as any);
+        when(integrationStorage.getIntegrationConfig(postgresId)).thenResolve(postgresConfig);
+        when(integrationStorage.getIntegrationConfig(bigqueryId)).thenResolve(bigqueryConfig);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -175,7 +250,12 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             ssl: false
         };
 
-        when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
+        const notebook = createMockNotebook('test-project-id');
+        const project = createMockProject([{ id: integrationId, name: 'Special Chars DB', type: 'pgsql' }]);
+
+        when(notebookEditorProvider.findAssociatedNotebookDocument(uri)).thenReturn(notebook);
+        when(notebookManager.getOriginalProject('test-project-id')).thenReturn(project as any);
+        when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -207,7 +287,12 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             ssl: true
         };
 
-        when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
+        const notebook = createMockNotebook('test-project-id');
+        const project = createMockProject([{ id: integrationId, name: 'Production Database', type: 'pgsql' }]);
+
+        when(notebookEditorProvider.findAssociatedNotebookDocument(uri)).thenReturn(notebook);
+        when(notebookManager.getOriginalProject('test-project-id')).thenReturn(project as any);
+        when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -235,7 +320,12 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             ssl: false
         };
 
-        when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
+        const notebook = createMockNotebook('test-project-id');
+        const project = createMockProject([{ id: integrationId, name: 'Test DB', type: 'pgsql' }]);
+
+        when(notebookEditorProvider.findAssociatedNotebookDocument(uri)).thenReturn(notebook);
+        when(notebookManager.getOriginalProject('test-project-id')).thenReturn(project as any);
+        when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -248,7 +338,6 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
 
     test('Honors CancellationToken (returns empty when cancelled early)', async () => {
         const uri = Uri.file('/test/notebook.deepnote');
-        when(integrationStorage.getAll()).thenCall(() => new Promise((resolve) => setTimeout(() => resolve([]), 50)));
         const cts = new CancellationTokenSource();
         cts.cancel();
         const envVars = await provider.getEnvironmentVariables(uri, cts.token);
@@ -272,7 +361,12 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 password: 'secret123'
             };
 
-            when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
+            const notebook = createMockNotebook('test-project-id');
+            const project = createMockProject([{ id: integrationId, name: 'My Snowflake', type: 'snowflake' }]);
+
+            when(notebookEditorProvider.findAssociatedNotebookDocument(uri)).thenReturn(notebook);
+            when(notebookManager.getOriginalProject('test-project-id')).thenReturn(project as any);
+            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
 
             const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -301,7 +395,12 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 password: 'pass'
             };
 
-            when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
+            const notebook = createMockNotebook('test-project-id');
+            const project = createMockProject([{ id: integrationId, name: 'Legacy Snowflake', type: 'snowflake' }]);
+
+            when(notebookEditorProvider.findAssociatedNotebookDocument(uri)).thenReturn(notebook);
+            when(notebookManager.getOriginalProject('test-project-id')).thenReturn(project as any);
+            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
 
             const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -333,7 +432,12 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 privateKeyPassphrase: 'passphrase123'
             };
 
-            when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
+            const notebook = createMockNotebook('test-project-id');
+            const project = createMockProject([{ id: integrationId, name: 'Snowflake KeyPair', type: 'snowflake' }]);
+
+            when(notebookEditorProvider.findAssociatedNotebookDocument(uri)).thenReturn(notebook);
+            when(notebookManager.getOriginalProject('test-project-id')).thenReturn(project as any);
+            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
 
             const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -367,7 +471,14 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 privateKey: privateKey
             };
 
-            when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
+            const notebook = createMockNotebook('test-project-id');
+            const project = createMockProject([
+                { id: integrationId, name: 'Snowflake KeyPair No Pass', type: 'snowflake' }
+            ]);
+
+            when(notebookEditorProvider.findAssociatedNotebookDocument(uri)).thenReturn(notebook);
+            when(notebookManager.getOriginalProject('test-project-id')).thenReturn(project as any);
+            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
 
             const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -398,7 +509,12 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 password: 'p@ss:word!#$%'
             };
 
-            when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
+            const notebook = createMockNotebook('test-project-id');
+            const project = createMockProject([{ id: integrationId, name: 'Snowflake Special', type: 'snowflake' }]);
+
+            when(notebookEditorProvider.findAssociatedNotebookDocument(uri)).thenReturn(notebook);
+            when(notebookManager.getOriginalProject('test-project-id')).thenReturn(project as any);
+            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
 
             const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -424,7 +540,12 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 password: 'pass'
             };
 
-            when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
+            const notebook = createMockNotebook('test-project-id');
+            const project = createMockProject([{ id: integrationId, name: 'Snowflake Minimal', type: 'snowflake' }]);
+
+            when(notebookEditorProvider.findAssociatedNotebookDocument(uri)).thenReturn(notebook);
+            when(notebookManager.getOriginalProject('test-project-id')).thenReturn(project as any);
+            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
 
             const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -446,7 +567,12 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 authMethod: SnowflakeAuthMethods.OKTA
             };
 
-            when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
+            const notebook = createMockNotebook('test-project-id');
+            const project = createMockProject([{ id: integrationId, name: 'Snowflake OKTA', type: 'snowflake' }]);
+
+            when(notebookEditorProvider.findAssociatedNotebookDocument(uri)).thenReturn(notebook);
+            when(notebookManager.getOriginalProject('test-project-id')).thenReturn(project as any);
+            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
 
             // Should return only dataframe integration when unsupported auth method is encountered
             const envVars = await provider.getEnvironmentVariables(uri);
@@ -464,7 +590,12 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 authMethod: SnowflakeAuthMethods.AZURE_AD
             };
 
-            when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
+            const notebook = createMockNotebook('test-project-id');
+            const project = createMockProject([{ id: integrationId, name: 'Snowflake Azure', type: 'snowflake' }]);
+
+            when(notebookEditorProvider.findAssociatedNotebookDocument(uri)).thenReturn(notebook);
+            when(notebookManager.getOriginalProject('test-project-id')).thenReturn(project as any);
+            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
 
             const envVars = await provider.getEnvironmentVariables(uri);
             assert.deepStrictEqual(envVars, EXPECTED_DATAFRAME_ONLY_ENV_VARS);
@@ -481,7 +612,14 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 authMethod: SnowflakeAuthMethods.KEY_PAIR
             };
 
-            when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
+            const notebook = createMockNotebook('test-project-id');
+            const project = createMockProject([
+                { id: integrationId, name: 'Snowflake KeyPair User', type: 'snowflake' }
+            ]);
+
+            when(notebookEditorProvider.findAssociatedNotebookDocument(uri)).thenReturn(notebook);
+            when(notebookManager.getOriginalProject('test-project-id')).thenReturn(project as any);
+            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
 
             const envVars = await provider.getEnvironmentVariables(uri);
             assert.deepStrictEqual(envVars, EXPECTED_DATAFRAME_ONLY_ENV_VARS);

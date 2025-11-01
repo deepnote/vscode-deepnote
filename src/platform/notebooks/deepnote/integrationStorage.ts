@@ -4,7 +4,7 @@ import { EventEmitter } from 'vscode';
 import { IEncryptedStorage } from '../../common/application/types';
 import { IAsyncDisposableRegistry } from '../../common/types';
 import { logger } from '../../logging';
-import { LegacyIntegrationConfig, IntegrationType } from './integrationTypes';
+import { LegacyIntegrationConfig, LegacyIntegrationType } from './integrationTypes';
 import { IIntegrationStorage } from './types';
 
 const INTEGRATION_SERVICE_NAME = 'deepnote-integrations';
@@ -63,7 +63,7 @@ export class IntegrationStorage implements IIntegrationStorage {
     /**
      * Get all integrations of a specific type
      */
-    async getByType(type: IntegrationType): Promise<LegacyIntegrationConfig[]> {
+    async getByType(type: LegacyIntegrationType): Promise<LegacyIntegrationConfig[]> {
         await this.ensureCacheLoaded();
         return Array.from(this.cache.values()).filter((config) => config.type === type);
     }

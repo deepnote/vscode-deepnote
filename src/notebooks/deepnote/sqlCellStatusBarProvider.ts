@@ -24,8 +24,8 @@ import { IIntegrationStorage } from './integrations/types';
 import { Commands } from '../../platform/common/constants';
 import {
     DATAFRAME_SQL_INTEGRATION_ID,
-    DEEPNOTE_TO_INTEGRATION_TYPE,
-    IntegrationType,
+    DEEPNOTE_TO_LEGACY_INTEGRATION_TYPE,
+    LegacyIntegrationType,
     RawIntegrationType
 } from '../../platform/notebooks/deepnote/integrationTypes';
 import { IDeepnoteNotebookManager } from '../types';
@@ -347,7 +347,7 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
                 continue;
             }
 
-            const integrationType = DEEPNOTE_TO_INTEGRATION_TYPE[projectIntegration.type as RawIntegrationType];
+            const integrationType = DEEPNOTE_TO_LEGACY_INTEGRATION_TYPE[projectIntegration.type as RawIntegrationType];
             const typeLabel = integrationType ? this.getIntegrationTypeLabel(integrationType) : projectIntegration.type;
 
             const item: LocalQuickPickItem = {
@@ -431,13 +431,13 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         this._onDidChangeCellStatusBarItems.fire();
     }
 
-    private getIntegrationTypeLabel(type: IntegrationType): string {
+    private getIntegrationTypeLabel(type: LegacyIntegrationType): string {
         switch (type) {
-            case IntegrationType.Postgres:
+            case LegacyIntegrationType.Postgres:
                 return l10n.t('PostgreSQL');
-            case IntegrationType.BigQuery:
+            case LegacyIntegrationType.BigQuery:
                 return l10n.t('BigQuery');
-            case IntegrationType.Snowflake:
+            case LegacyIntegrationType.Snowflake:
                 return l10n.t('Snowflake');
             default:
                 return String(type);

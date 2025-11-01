@@ -6,9 +6,9 @@ import { Commands } from '../../../platform/common/constants';
 import { logger } from '../../../platform/logging';
 import { IIntegrationDetector, IIntegrationManager, IIntegrationStorage, IIntegrationWebviewProvider } from './types';
 import {
-    DEEPNOTE_TO_INTEGRATION_TYPE,
+    DEEPNOTE_TO_LEGACY_INTEGRATION_TYPE,
     IntegrationStatus,
-    IntegrationType,
+    LegacyIntegrationType,
     IntegrationWithStatus,
     RawIntegrationType
 } from '../../../platform/notebooks/deepnote/integrationTypes';
@@ -164,15 +164,16 @@ export class IntegrationManager implements IIntegrationManager {
             const projectIntegration = project?.project.integrations?.find((i) => i.id === selectedIntegrationId);
 
             let integrationName: string | undefined;
-            let integrationType: IntegrationType | undefined;
+            let integrationType: LegacyIntegrationType | undefined;
 
             if (projectIntegration) {
                 integrationName = projectIntegration.name;
 
                 // Validate that projectIntegration.type exists in the mapping before lookup
-                if (projectIntegration.type in DEEPNOTE_TO_INTEGRATION_TYPE) {
+                if (projectIntegration.type in DEEPNOTE_TO_LEGACY_INTEGRATION_TYPE) {
                     // Map the Deepnote integration type to our IntegrationType
-                    integrationType = DEEPNOTE_TO_INTEGRATION_TYPE[projectIntegration.type as RawIntegrationType];
+                    integrationType =
+                        DEEPNOTE_TO_LEGACY_INTEGRATION_TYPE[projectIntegration.type as RawIntegrationType];
                 } else {
                     logger.warn(
                         `IntegrationManager: Unknown integration type '${projectIntegration.type}' for integration ID '${selectedIntegrationId}' in project '${projectId}'. Integration type will be undefined.`

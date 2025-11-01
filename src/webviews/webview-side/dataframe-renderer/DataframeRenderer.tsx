@@ -38,7 +38,7 @@ interface DataframeRendererProps {
             name: string;
             stats: ColumnStats;
         }[];
-        preview_row_count: number;
+        preview_row_count?: number;
         row_count: number;
         rows: {
             _deepnote_index_column: number;
@@ -75,7 +75,8 @@ export const DataframeRenderer = memo(function DataframeRenderer({
     const selectId = useMemo(() => generateUuid(), []);
 
     const filteredColumns = data.columns.filter((column) => !column.name.startsWith('_deepnote_'));
-    const numberOfRows = data.preview_row_count ?? data.row_count;
+    const numberOfRows =
+        !data.preview_row_count || Number.isNaN(data.preview_row_count) ? data.row_count : data.preview_row_count;
     const numberOfColumns = filteredColumns.length;
 
     const totalPages = Math.ceil(data.row_count / pageSize);

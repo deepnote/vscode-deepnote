@@ -2489,7 +2489,7 @@
         "node-fetch": "^2.6.7",
         "node-gyp-build": "^4.6.0",
         "node-stream-zip": "^1.6.0",
-        "pdfkit": "^0.13.0",
+        "pdfkit": "^0.17.0",
         "pidtree": "^0.6.0",
         "portfinder": "^1.0.25",
         "react": "^16.5.2",

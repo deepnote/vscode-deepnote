@@ -4,7 +4,7 @@ import { EventEmitter } from 'vscode';
 import { IEncryptedStorage } from '../../common/application/types';
 import { IAsyncDisposableRegistry } from '../../common/types';
 import { logger } from '../../logging';
-import { IntegrationConfig, IntegrationType } from './integrationTypes';
+import { LegacyIntegrationConfig, IntegrationType } from './integrationTypes';
 import { IIntegrationStorage } from './types';
 
 const INTEGRATION_SERVICE_NAME = 'deepnote-integrations';
@@ -16,7 +16,7 @@ const INTEGRATION_SERVICE_NAME = 'deepnote-integrations';
  */
 @injectable()
 export class IntegrationStorage implements IIntegrationStorage {
-    private readonly cache: Map<string, IntegrationConfig> = new Map();
+    private readonly cache: Map<string, LegacyIntegrationConfig> = new Map();
 
     private cacheLoaded = false;
 
@@ -35,7 +35,7 @@ export class IntegrationStorage implements IIntegrationStorage {
     /**
      * Get all stored integration configurations
      */
-    async getAll(): Promise<IntegrationConfig[]> {
+    async getAll(): Promise<LegacyIntegrationConfig[]> {
         await this.ensureCacheLoaded();
         return Array.from(this.cache.values());
     }
@@ -43,7 +43,7 @@ export class IntegrationStorage implements IIntegrationStorage {
     /**
      * Get a specific integration configuration by ID
      */
-    async getIntegrationConfig(integrationId: string): Promise<IntegrationConfig | undefined> {
+    async getIntegrationConfig(integrationId: string): Promise<LegacyIntegrationConfig | undefined> {
         await this.ensureCacheLoaded();
         return this.cache.get(integrationId);
     }
@@ -56,14 +56,14 @@ export class IntegrationStorage implements IIntegrationStorage {
     async getProjectIntegrationConfig(
         _projectId: string,
         integrationId: string
-    ): Promise<IntegrationConfig | undefined> {
+    ): Promise<LegacyIntegrationConfig | undefined> {
         return this.getIntegrationConfig(integrationId);
     }
 
     /**
      * Get all integrations of a specific type
      */
-    async getByType(type: IntegrationType): Promise<IntegrationConfig[]> {
+    async getByType(type: IntegrationType): Promise<LegacyIntegrationConfig[]> {
         await this.ensureCacheLoaded();
         return Array.from(this.cache.values()).filter((config) => config.type === type);
     }
@@ -71,7 +71,7 @@ export class IntegrationStorage implements IIntegrationStorage {
     /**
      * Save or update an integration configuration
      */
-    async save(config: IntegrationConfig): Promise<void> {
+    async save(config: LegacyIntegrationConfig): Promise<void> {
         await this.ensureCacheLoaded();
 
         // Store the configuration as JSON in encrypted storage
@@ -160,7 +160,7 @@ export class IntegrationStorage implements IIntegrationStorage {
                 const configJson = await this.encryptedStorage.retrieve(INTEGRATION_SERVICE_NAME, id);
                 if (configJson) {
                     try {
-                        const config: IntegrationConfig = JSON.parse(configJson);
+                        const config: LegacyIntegrationConfig = JSON.parse(configJson);
                         this.cache.set(id, config);
                     } catch (error) {
                         logger.error(`Failed to parse integration config for ${id}:`, error);

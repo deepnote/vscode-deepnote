@@ -9,7 +9,7 @@ import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
 import { IIntegrationStorage, IIntegrationWebviewProvider } from './types';
 import {
     INTEGRATION_TYPE_TO_DEEPNOTE,
-    IntegrationConfig,
+    LegacyIntegrationConfig,
     IntegrationStatus,
     IntegrationWithStatus,
     RawIntegrationType
@@ -221,7 +221,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     private async handleMessage(message: {
         type: string;
         integrationId?: string;
-        config?: IntegrationConfig;
+        config?: LegacyIntegrationConfig;
     }): Promise<void> {
         switch (message.type) {
             case 'configure':
@@ -263,7 +263,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     /**
      * Save the configuration for an integration
      */
-    private async saveConfiguration(integrationId: string, config: IntegrationConfig): Promise<void> {
+    private async saveConfiguration(integrationId: string, config: LegacyIntegrationConfig): Promise<void> {
         try {
             await this.integrationStorage.save(config);
 

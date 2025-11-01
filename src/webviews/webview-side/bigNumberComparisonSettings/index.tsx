@@ -18,4 +18,3 @@ ReactDOM.render(
     <BigNumberComparisonSettingsPanel baseTheme={baseTheme} vscodeApi={vscodeApi} />,
     document.getElementById('root') as HTMLElement
 );
-

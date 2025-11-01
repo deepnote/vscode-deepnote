@@ -11,4 +11,3 @@ export type WebviewMessage =
     | { type: 'save'; settings: BigNumberComparisonSettings }
     | { type: 'locInit'; locStrings: Record<string, string> }
     | { type: 'cancel' };
-

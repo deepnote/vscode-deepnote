@@ -216,10 +216,11 @@ Provides environment variables containing integration credentials for the Jupyte
 
 **Process:**
 
-1. Scans the notebook for SQL cells with `sql_integration_id` metadata
-2. Retrieves credentials for each detected integration
-3. Converts credentials to the format expected by `deepnote-toolkit`
-4. Returns environment variables to be injected into the kernel process
+1. Retrieves all configured integrations from `IIntegrationStorage`
+2. Converts credentials to the format expected by `deepnote-toolkit`
+3. Returns environment variables to be injected into the kernel process
+
+**Note:** This provider makes credentials for ALL configured integrations available as environment variables, not just those used in the current notebook. This ensures that integrations are available project-wide, matching Deepnote's behavior where integrations are project-scoped.
 
 **Environment Variable Format:**
 

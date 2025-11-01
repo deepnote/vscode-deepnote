@@ -1,6 +1,6 @@
 import { assert } from 'chai';
 import { instance, mock, when } from 'ts-mockito';
-import { CancellationTokenSource, EventEmitter, NotebookCell, NotebookCellKind, NotebookDocument, Uri } from 'vscode';
+import { CancellationTokenSource, EventEmitter, Uri } from 'vscode';
 
 import { IDisposableRegistry } from '../../common/types';
 import { IntegrationStorage } from './integrationStorage';
@@ -9,11 +9,9 @@ import {
     IntegrationType,
     PostgresIntegrationConfig,
     BigQueryIntegrationConfig,
-    DATAFRAME_SQL_INTEGRATION_ID,
     SnowflakeIntegrationConfig,
     SnowflakeAuthMethods
 } from './integrationTypes';
-import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 
 const EXPECTED_DATAFRAME_ONLY_ENV_VARS = {
     SQL_DEEPNOTE_DATAFRAME_SQL: '{"url":"deepnote+duckdb:///:memory:","params":{},"param_style":"qmark"}'
@@ -25,7 +23,6 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
     let disposables: IDisposableRegistry;
 
     setup(() => {
-        resetVSCodeMocks();
         disposables = [];
         integrationStorage = mock(IntegrationStorage);
         when(integrationStorage.onDidChangeIntegrations).thenReturn(new EventEmitter<void>().event);
@@ -42,34 +39,9 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         assert.deepStrictEqual(envVars, {});
     });
 
-    test('Returns empty object when notebook is not found', async () => {
+    test('Returns only dataframe integration when no integrations are configured', async () => {
         const uri = Uri.file('/test/notebook.deepnote');
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([]);
-
-        const envVars = await provider.getEnvironmentVariables(uri);
-        assert.deepStrictEqual(envVars, {});
-    });
-
-    test('Returns empty object when notebook has no SQL cells', async () => {
-        const uri = Uri.file('/test/notebook.deepnote');
-        const notebook = createMockNotebook(uri, [
-            createMockCell(0, NotebookCellKind.Code, 'python', 'print("hello")'),
-            createMockCell(1, NotebookCellKind.Markup, 'markdown', '# Title')
-        ]);
-
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-
-        const envVars = await provider.getEnvironmentVariables(uri);
-        assert.deepStrictEqual(envVars, EXPECTED_DATAFRAME_ONLY_ENV_VARS);
-    });
-
-    test('Returns empty object when SQL cells have no integration ID', async () => {
-        const uri = Uri.file('/test/notebook.deepnote');
-        const notebook = createMockNotebook(uri, [
-            createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT * FROM users', {})
-        ]);
-
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+        when(integrationStorage.getAll()).thenResolve([]);
 
         const envVars = await provider.getEnvironmentVariables(uri);
         assert.deepStrictEqual(envVars, EXPECTED_DATAFRAME_ONLY_ENV_VARS);
@@ -77,13 +49,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
 
     test('Returns environment variable for internal DuckDB integration', async () => {
         const uri = Uri.file('/test/notebook.deepnote');
-        const notebook = createMockNotebook(uri, [
-            createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT * FROM df', {
-                sql_integration_id: DATAFRAME_SQL_INTEGRATION_ID
-            })
-        ]);
-
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+        when(integrationStorage.getAll()).thenResolve([]);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -110,14 +76,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             ssl: true
         };
 
-        const notebook = createMockNotebook(uri, [
-            createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT * FROM users', {
-                sql_integration_id: integrationId
-            })
-        ]);
-
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
+        when(integrationStorage.getAll()).thenResolve([config]);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -141,14 +100,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             credentials: serviceAccountJson
         };
 
-        const notebook = createMockNotebook(uri, [
-            createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT * FROM dataset.table', {
-                sql_integration_id: integrationId
-            })
-        ]);
-
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
+        when(integrationStorage.getAll()).thenResolve([config]);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -163,40 +115,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         assert.strictEqual(credentialsJson.param_style, 'format');
     });
 
-    test('Handles multiple SQL cells with same integration', async () => {
-        const uri = Uri.file('/test/notebook.deepnote');
-        const integrationId = 'my-postgres-db';
-        const config: PostgresIntegrationConfig = {
-            id: integrationId,
-            name: 'My Postgres DB',
-            type: IntegrationType.Postgres,
-            host: 'localhost',
-            port: 5432,
-            database: 'mydb',
-            username: 'user',
-            password: 'pass'
-        };
-
-        const notebook = createMockNotebook(uri, [
-            createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT * FROM users', {
-                sql_integration_id: integrationId
-            }),
-            createMockCell(1, NotebookCellKind.Code, 'sql', 'SELECT * FROM orders', {
-                sql_integration_id: integrationId
-            })
-        ]);
-
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
-
-        const envVars = await provider.getEnvironmentVariables(uri);
-
-        // Should only have one environment variable apart from the internal DuckDB integration
-        assert.property(envVars, 'SQL_MY_POSTGRES_DB');
-        assert.strictEqual(Object.keys(envVars).length, 2);
-    });
-
-    test('Handles multiple SQL cells with different integrations', async () => {
+    test('Returns environment variables for all configured integrations', async () => {
         const uri = Uri.file('/test/notebook.deepnote');
         const postgresId = 'my-postgres-db';
         const bigqueryId = 'my-bigquery';
@@ -220,18 +139,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             credentials: JSON.stringify({ type: 'service_account' })
         };
 
-        const notebook = createMockNotebook(uri, [
-            createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT * FROM users', {
-                sql_integration_id: postgresId
-            }),
-            createMockCell(1, NotebookCellKind.Code, 'sql', 'SELECT * FROM dataset.table', {
-                sql_integration_id: bigqueryId
-            })
-        ]);
-
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(integrationStorage.getIntegrationConfig(postgresId)).thenResolve(postgresConfig);
-        when(integrationStorage.getIntegrationConfig(bigqueryId)).thenResolve(bigqueryConfig);
+        when(integrationStorage.getAll()).thenResolve([postgresConfig, bigqueryConfig]);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -239,25 +147,6 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         assert.property(envVars, 'SQL_MY_POSTGRES_DB');
         assert.property(envVars, 'SQL_MY_BIGQUERY');
         assert.strictEqual(Object.keys(envVars).length, 3);
-    });
-
-    test('Handles missing integration configuration gracefully', async () => {
-        const uri = Uri.file('/test/notebook.deepnote');
-        const integrationId = 'missing-integration';
-
-        const notebook = createMockNotebook(uri, [
-            createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT * FROM users', {
-                sql_integration_id: integrationId
-            })
-        ]);
-
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(undefined);
-
-        const envVars = await provider.getEnvironmentVariables(uri);
-
-        // Should return only dataframe integration when integration config is missing
-        assert.deepStrictEqual(envVars, EXPECTED_DATAFRAME_ONLY_ENV_VARS);
     });
 
     test('Properly encodes special characters in PostgreSQL credentials', async () => {
@@ -275,14 +164,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             ssl: false
         };
 
-        const notebook = createMockNotebook(uri, [
-            createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT * FROM users', {
-                sql_integration_id: integrationId
-            })
-        ]);
-
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
+        when(integrationStorage.getAll()).thenResolve([config]);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -314,14 +196,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             ssl: true
         };
 
-        const notebook = createMockNotebook(uri, [
-            createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT * FROM products', {
-                sql_integration_id: integrationId
-            })
-        ]);
-
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
+        when(integrationStorage.getAll()).thenResolve([config]);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -349,14 +224,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             ssl: false
         };
 
-        const notebook = createMockNotebook(uri, [
-            createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT 1', {
-                sql_integration_id: integrationId
-            })
-        ]);
-
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
+        when(integrationStorage.getAll()).thenResolve([config]);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -369,15 +237,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
 
     test('Honors CancellationToken (returns empty when cancelled early)', async () => {
         const uri = Uri.file('/test/notebook.deepnote');
-        const integrationId = 'cancel-me';
-        const notebook = createMockNotebook(uri, [
-            createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT 1', { sql_integration_id: integrationId })
-        ]);
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        // Return a slow promise to ensure cancellation path is hit
-        when(integrationStorage.getIntegrationConfig(integrationId)).thenCall(
-            () => new Promise((resolve) => setTimeout(() => resolve(undefined), 50))
-        );
+        when(integrationStorage.getAll()).thenCall(() => new Promise((resolve) => setTimeout(() => resolve([]), 50)));
         const cts = new CancellationTokenSource();
         cts.cancel();
         const envVars = await provider.getEnvironmentVariables(uri, cts.token);
@@ -401,14 +261,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 password: 'secret123'
             };
 
-            const notebook = createMockNotebook(uri, [
-                createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT * FROM customers', {
-                    sql_integration_id: integrationId
-                })
-            ]);
-
-            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
+            when(integrationStorage.getAll()).thenResolve([config]);
 
             const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -437,14 +290,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 password: 'pass'
             };
 
-            const notebook = createMockNotebook(uri, [
-                createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT 1', {
-                    sql_integration_id: integrationId
-                })
-            ]);
-
-            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
+            when(integrationStorage.getAll()).thenResolve([config]);
 
             const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -476,14 +322,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 privateKeyPassphrase: 'passphrase123'
             };
 
-            const notebook = createMockNotebook(uri, [
-                createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT * FROM events', {
-                    sql_integration_id: integrationId
-                })
-            ]);
-
-            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
+            when(integrationStorage.getAll()).thenResolve([config]);
 
             const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -517,14 +356,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 privateKey: privateKey
             };
 
-            const notebook = createMockNotebook(uri, [
-                createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT 1', {
-                    sql_integration_id: integrationId
-                })
-            ]);
-
-            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
+            when(integrationStorage.getAll()).thenResolve([config]);
 
             const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -555,14 +387,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 password: 'p@ss:word!#$%'
             };
 
-            const notebook = createMockNotebook(uri, [
-                createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT 1', {
-                    sql_integration_id: integrationId
-                })
-            ]);
-
-            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
+            when(integrationStorage.getAll()).thenResolve([config]);
 
             const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -588,14 +413,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 password: 'pass'
             };
 
-            const notebook = createMockNotebook(uri, [
-                createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT 1', {
-                    sql_integration_id: integrationId
-                })
-            ]);
-
-            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
+            when(integrationStorage.getAll()).thenResolve([config]);
 
             const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -617,14 +435,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 authMethod: SnowflakeAuthMethods.OKTA
             };
 
-            const notebook = createMockNotebook(uri, [
-                createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT 1', {
-                    sql_integration_id: integrationId
-                })
-            ]);
-
-            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
+            when(integrationStorage.getAll()).thenResolve([config]);
 
             // Should return only dataframe integration when unsupported auth method is encountered
             const envVars = await provider.getEnvironmentVariables(uri);
@@ -642,14 +453,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 authMethod: SnowflakeAuthMethods.AZURE_AD
             };
 
-            const notebook = createMockNotebook(uri, [
-                createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT 1', {
-                    sql_integration_id: integrationId
-                })
-            ]);
-
-            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
+            when(integrationStorage.getAll()).thenResolve([config]);
 
             const envVars = await provider.getEnvironmentVariables(uri);
             assert.deepStrictEqual(envVars, EXPECTED_DATAFRAME_ONLY_ENV_VARS);
@@ -666,42 +470,10 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 authMethod: SnowflakeAuthMethods.KEY_PAIR
             };
 
-            const notebook = createMockNotebook(uri, [
-                createMockCell(0, NotebookCellKind.Code, 'sql', 'SELECT 1', {
-                    sql_integration_id: integrationId
-                })
-            ]);
-
-            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-            when(integrationStorage.getIntegrationConfig(integrationId)).thenResolve(config);
+            when(integrationStorage.getAll()).thenResolve([config]);
 
             const envVars = await provider.getEnvironmentVariables(uri);
             assert.deepStrictEqual(envVars, EXPECTED_DATAFRAME_ONLY_ENV_VARS);
         });
     });
 });
-
-function createMockNotebook(uri: Uri, cells: NotebookCell[]): NotebookDocument {
-    return {
-        uri,
-        getCells: () => cells
-    } as NotebookDocument;
-}
-
-function createMockCell(
-    index: number,
-    kind: NotebookCellKind,
-    languageId: string,
-    value: string,
-    metadata?: Record<string, unknown>
-): NotebookCell {
-    return {
-        index,
-        kind,
-        document: {
-            languageId,
-            getText: () => value
-        },
-        metadata: metadata || {}
-    } as NotebookCell;
-}

@@ -29,6 +29,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
 
     private fileWatcher: FileSystemWatcher | undefined;
     private cachedProjects: Map<string, DeepnoteProject> = new Map();
+    private treeItemCache: Map<string, DeepnoteTreeItem> = new Map();
     private isInitialScanComplete: boolean = false;
     private initialScanPromise: Promise<void> | undefined;
 
@@ -44,10 +45,85 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
 
     public refresh(): void {
         this.cachedProjects.clear();
+        this.treeItemCache.clear();
         this.isInitialScanComplete = false;
         this.initialScanPromise = undefined;
         this.updateContextKey();
         this._onDidChangeTreeData.fire();
+    }
+
+    /**
+     * Refresh a specific project file in the tree
+     * @param filePath The path to the project file to refresh
+     */
+    public async refreshProject(filePath: string): Promise<void> {
+        // Get the cached tree item BEFORE clearing caches
+        const cacheKey = `project:${filePath}`;
+        const cachedTreeItem = this.treeItemCache.get(cacheKey);
+
+        // Clear the project data cache to force reload
+        this.cachedProjects.delete(filePath);
+
+        if (cachedTreeItem) {
+            // Reload the project data and update the cached tree item
+            try {
+                const fileUri = Uri.file(filePath);
+                const project = await this.loadDeepnoteProject(fileUri);
+                if (project) {
+                    // Update the tree item's data
+                    cachedTreeItem.data = project;
+                }
+            } catch (error) {
+                console.error(`Failed to reload project ${filePath}:`, error);
+            }
+
+            // Fire change event with the existing cached tree item
+            this._onDidChangeTreeData.fire(cachedTreeItem);
+        } else {
+            // If not found in cache, do a full refresh
+            this._onDidChangeTreeData.fire();
+        }
+    }
+
+    /**
+     * Refresh notebooks for a specific project
+     * @param projectId The project ID whose notebooks should be refreshed
+     */
+    public async refreshNotebook(projectId: string): Promise<void> {
+        // Find the cached tree item by scanning the cache
+        let cachedTreeItem: DeepnoteTreeItem | undefined;
+        let filePath: string | undefined;
+
+        for (const [key, item] of this.treeItemCache.entries()) {
+            if (key.startsWith('project:') && item.context.projectId === projectId) {
+                cachedTreeItem = item;
+                filePath = item.context.filePath;
+                break;
+            }
+        }
+
+        if (cachedTreeItem && filePath) {
+            // Clear the project data cache to force reload
+            this.cachedProjects.delete(filePath);
+
+            // Reload the project data and update the cached tree item
+            try {
+                const fileUri = Uri.file(filePath);
+                const project = await this.loadDeepnoteProject(fileUri);
+                if (project) {
+                    // Update the tree item's data
+                    cachedTreeItem.data = project;
+                }
+            } catch (error) {
+                console.error(`Failed to reload project ${filePath}:`, error);
+            }
+
+            // Fire change event with the existing cached tree item to refresh its children
+            this._onDidChangeTreeData.fire(cachedTreeItem);
+        } else {
+            // If not found in cache, do a full refresh
+            this._onDidChangeTreeData.fire();
+        }
     }
 
     public getTreeItem(element: DeepnoteTreeItem): TreeItem {
@@ -121,17 +197,29 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
                         projectId: project.project.id
                     };
 
-                    const hasNotebooks = project.project.notebooks && project.project.notebooks.length > 0;
-                    const collapsibleState = hasNotebooks
-                        ? TreeItemCollapsibleState.Collapsed
-                        : TreeItemCollapsibleState.None;
+                    // Check if we have a cached tree item for this project
+                    const cacheKey = `project:${file.path}`;
+                    let treeItem = this.treeItemCache.get(cacheKey);
 
-                    const treeItem = new DeepnoteTreeItem(
-                        DeepnoteTreeItemType.ProjectFile,
-                        context,
-                        project,
-                        collapsibleState
-                    );
+                    if (!treeItem) {
+                        // Create new tree item only if not cached
+                        const hasNotebooks = project.project.notebooks && project.project.notebooks.length > 0;
+                        const collapsibleState = hasNotebooks
+                            ? TreeItemCollapsibleState.Collapsed
+                            : TreeItemCollapsibleState.None;
+
+                        treeItem = new DeepnoteTreeItem(
+                            DeepnoteTreeItemType.ProjectFile,
+                            context,
+                            project,
+                            collapsibleState
+                        );
+
+                        this.treeItemCache.set(cacheKey, treeItem);
+                    } else {
+                        // Update the cached tree item's data
+                        treeItem.data = project;
+                    }
 
                     deepnoteFiles.push(treeItem);
                 } catch (error) {
@@ -213,15 +301,17 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         }
 
         this.fileWatcher.onDidChange((uri) => {
-            this.cachedProjects.delete(uri.path);
-            this._onDidChangeTreeData.fire();
+            // Use granular refresh for file changes
+            void this.refreshProject(uri.path);
         });
 
         this.fileWatcher.onDidCreate(() => {
+            // New file created, do full refresh
             this._onDidChangeTreeData.fire();
         });
 
         this.fileWatcher.onDidDelete((uri) => {
+            // File deleted, clear cache and do full refresh
             this.cachedProjects.delete(uri.path);
             this._onDidChangeTreeData.fire();
         });

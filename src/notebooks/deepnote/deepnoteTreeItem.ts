@@ -26,7 +26,7 @@ export class DeepnoteTreeItem extends TreeItem {
     constructor(
         public readonly type: DeepnoteTreeItemType,
         public readonly context: DeepnoteTreeItemContext,
-        public readonly data: DeepnoteProject | DeepnoteNotebook | null,
+        public data: DeepnoteProject | DeepnoteNotebook | null,
         collapsibleState: TreeItemCollapsibleState
     ) {
         super('', collapsibleState);

@@ -133,7 +133,7 @@ export class DeepnoteExplorerView {
             const encoder = new TextEncoder();
             await workspace.fs.writeFile(fileUri, encoder.encode(updatedYaml));
 
-            this.treeDataProvider.refresh();
+            await this.treeDataProvider.refreshNotebook(treeItem.context.projectId);
             await window.showInformationMessage(l10n.t('Notebook renamed to: {0}', newName));
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -181,7 +181,7 @@ export class DeepnoteExplorerView {
             const encoder = new TextEncoder();
             await workspace.fs.writeFile(fileUri, encoder.encode(updatedYaml));
 
-            this.treeDataProvider.refresh();
+            await this.treeDataProvider.refreshNotebook(treeItem.context.projectId);
             await window.showInformationMessage(l10n.t('Notebook deleted: {0}', notebookName));
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -249,7 +249,7 @@ export class DeepnoteExplorerView {
             const encoder = new TextEncoder();
             await workspace.fs.writeFile(fileUri, encoder.encode(updatedYaml));
 
-            this.treeDataProvider.refresh();
+            await this.treeDataProvider.refreshNotebook(treeItem.context.projectId);
 
             // Optionally open the duplicated notebook
             this.manager.selectNotebookForProject(treeItem.context.projectId, newNotebook.id);
@@ -310,7 +310,7 @@ export class DeepnoteExplorerView {
             const encoder = new TextEncoder();
             await workspace.fs.writeFile(fileUri, encoder.encode(updatedYaml));
 
-            this.treeDataProvider.refresh();
+            await this.treeDataProvider.refreshProject(treeItem.context.filePath);
             await window.showInformationMessage(l10n.t('Project renamed to: {0}', newName));
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -484,8 +484,8 @@ export class DeepnoteExplorerView {
         const encoder = new TextEncoder();
         await workspace.fs.writeFile(fileUri, encoder.encode(updatedYaml));
 
-        // Refresh the tree view
-        this.treeDataProvider.refresh();
+        // Refresh the tree view - use granular refresh for notebooks
+        await this.treeDataProvider.refreshNotebook(projectData.project.id);
 
         // Open the new notebook
         this.manager.selectNotebookForProject(projectData.project.id, notebookId);

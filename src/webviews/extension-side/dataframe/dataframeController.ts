@@ -47,7 +47,7 @@ interface DataFrameObject {
         dtype: string;
         name: string;
     }[];
-    preview_row_count: number;
+    preview_row_count?: number;
     row_count: number;
     rows: Record<string, unknown>[];
     type: string;

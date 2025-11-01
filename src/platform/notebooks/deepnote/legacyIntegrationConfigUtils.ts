@@ -7,12 +7,9 @@ import {
 } from '@deepnote/database-integrations';
 import { SnowflakeAuthMethods as LegacySnowflakeAuthMethods } from './snowflakeAuthConstants';
 
-// NOTE: We need a way to upgrade existing configurations to the new format of deepnote/database-integrations.
-type VersionedDatabaseIntegrationConfig = DatabaseIntegrationConfig & { version: 1 };
-
 export async function upgradeLegacyIntegrationConfig(
     config: LegacyIntegrationConfig
-): Promise<VersionedDatabaseIntegrationConfig | null> {
+): Promise<DatabaseIntegrationConfig | null> {
     switch (config.type) {
         case LegacyIntegrationType.Postgres: {
             const metadata = databaseMetadataSchemasByType.pgsql.safeParse({
@@ -26,7 +23,6 @@ export async function upgradeLegacyIntegrationConfig(
 
             return metadata
                 ? {
-                      version: 1,
                       id: config.id,
                       name: config.name,
                       type: 'pgsql',
@@ -42,7 +38,6 @@ export async function upgradeLegacyIntegrationConfig(
 
             return metadata
                 ? {
-                      version: 1,
                       id: config.id,
                       name: config.name,
                       type: 'big-query',
@@ -81,7 +76,6 @@ export async function upgradeLegacyIntegrationConfig(
 
             return metadata
                 ? {
-                      version: 1,
                       id: config.id,
                       name: config.name,
                       type: 'snowflake',

@@ -6,12 +6,7 @@ import { EnvironmentVariables } from '../../common/variables/types';
 import { UnsupportedIntegrationError } from '../../errors/unsupportedIntegrationError';
 import { logger } from '../../logging';
 import { IIntegrationStorage, ISqlIntegrationEnvVarsProvider } from './types';
-import {
-    DATAFRAME_SQL_INTEGRATION_ID,
-    LegacyIntegrationConfig,
-    IntegrationType,
-    SnowflakeAuthMethods
-} from './integrationTypes';
+import { LegacyIntegrationConfig, IntegrationType, SnowflakeAuthMethods } from './integrationTypes';
 
 /**
  * Converts an integration ID to the environment variable name format expected by SQL blocks.
@@ -36,6 +31,15 @@ function getSqlEnvVarName(integrationId: string): string {
  */
 function convertIntegrationConfigToJson(config: LegacyIntegrationConfig): string {
     switch (config.type) {
+        case IntegrationType.DuckDB: {
+            // Internal DuckDB integration for querying dataframes
+            return JSON.stringify({
+                url: 'deepnote+duckdb:///:memory:',
+                params: {},
+                param_style: 'qmark'
+            });
+        }
+
         case IntegrationType.Postgres: {
             // Build PostgreSQL connection URL
             // Format: postgresql://username:password@host:port/database
@@ -176,6 +180,7 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
     /**
      * Get environment variables for SQL integrations.
      * Provides credentials for all configured integrations in the project.
+     * The internal DuckDB integration is always included via IntegrationStorage.getAll().
      */
     public async getEnvironmentVariables(resource: Resource, token?: CancellationToken): Promise<EnvironmentVariables> {
         const envVars: EnvironmentVariables = {};
@@ -190,25 +195,8 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
 
         logger.trace(`SqlIntegrationEnvironmentVariablesProvider: Getting env vars for resource`);
 
-        // Always add the internal DuckDB integration
-        const dataframeSqlIntegrationEnvVarName = convertToEnvironmentVariableName(
-            getSqlEnvVarName(DATAFRAME_SQL_INTEGRATION_ID)
-        );
-        const dataframeSqlIntegrationCredentialsJson = JSON.stringify({
-            url: 'deepnote+duckdb:///:memory:',
-            params: {},
-            param_style: 'qmark'
-        });
-
-        envVars[dataframeSqlIntegrationEnvVarName] = dataframeSqlIntegrationCredentialsJson;
-        logger.debug(`SqlIntegrationEnvironmentVariablesProvider: Added env var for dataframe SQL integration`);
-
-        // Get all configured integrations from storage
+        // Get all configured integrations from storage (includes DuckDB integration)
         const allIntegrations = await this.integrationStorage.getAll();
-        if (allIntegrations.length === 0) {
-            logger.info(`SqlIntegrationEnvironmentVariablesProvider: No configured integrations found`);
-            return envVars;
-        }
 
         logger.trace(
             `SqlIntegrationEnvironmentVariablesProvider: Found ${allIntegrations.length} configured integrations`
@@ -221,11 +209,6 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
             }
 
             try {
-                // Skip internal DuckDB integration (already handled above)
-                if (config.id === DATAFRAME_SQL_INTEGRATION_ID) {
-                    continue;
-                }
-
                 // Convert integration config to JSON and add as environment variable
                 const envVarName = convertToEnvironmentVariableName(getSqlEnvVarName(config.id));
                 const credentialsJson = convertIntegrationConfigToJson(config);

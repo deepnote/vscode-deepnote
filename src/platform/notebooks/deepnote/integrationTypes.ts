@@ -10,17 +10,19 @@ export const DATAFRAME_SQL_INTEGRATION_ID = 'deepnote-dataframe-sql';
 export enum IntegrationType {
     Postgres = 'postgres',
     BigQuery = 'bigquery',
-    Snowflake = 'snowflake'
+    Snowflake = 'snowflake',
+    DuckDB = 'duckdb'
 }
 
 /**
  * Map our IntegrationType enum to Deepnote integration type strings
+ * Note: DuckDB is not included as it's an internal integration that doesn't exist in Deepnote
  */
 export const INTEGRATION_TYPE_TO_DEEPNOTE = {
     [IntegrationType.Postgres]: 'pgsql',
     [IntegrationType.BigQuery]: 'big-query',
     [IntegrationType.Snowflake]: 'snowflake'
-} as const satisfies { [type in IntegrationType]: string };
+} as const satisfies { [type in Exclude<IntegrationType, IntegrationType.DuckDB>]: string };
 
 export type RawIntegrationType = (typeof INTEGRATION_TYPE_TO_DEEPNOTE)[keyof typeof INTEGRATION_TYPE_TO_DEEPNOTE];
 
@@ -62,6 +64,13 @@ export interface BigQueryIntegrationConfig extends BaseIntegrationConfig {
     type: IntegrationType.BigQuery;
     projectId: string;
     credentials: string; // JSON string of service account credentials
+}
+
+/**
+ * DuckDB integration configuration (internal, always available)
+ */
+export interface DuckDBIntegrationConfig extends BaseIntegrationConfig {
+    type: IntegrationType.DuckDB;
 }
 
 // Import and re-export Snowflake auth constants from shared module
@@ -122,7 +131,8 @@ export type SnowflakeIntegrationConfig = BaseSnowflakeConfig &
 export type LegacyIntegrationConfig =
     | PostgresIntegrationConfig
     | BigQueryIntegrationConfig
-    | SnowflakeIntegrationConfig;
+    | SnowflakeIntegrationConfig
+    | DuckDBIntegrationConfig;
 
 /**
  * Integration connection status

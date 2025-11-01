@@ -10,11 +10,20 @@ import {
     PostgresIntegrationConfig,
     BigQueryIntegrationConfig,
     SnowflakeIntegrationConfig,
-    SnowflakeAuthMethods
+    SnowflakeAuthMethods,
+    DuckDBIntegrationConfig,
+    DATAFRAME_SQL_INTEGRATION_ID
 } from './integrationTypes';
 
 const EXPECTED_DATAFRAME_ONLY_ENV_VARS = {
     SQL_DEEPNOTE_DATAFRAME_SQL: '{"url":"deepnote+duckdb:///:memory:","params":{},"param_style":"qmark"}'
+};
+
+// Helper to create the DuckDB integration config that's always included
+const DUCKDB_INTEGRATION: DuckDBIntegrationConfig = {
+    id: DATAFRAME_SQL_INTEGRATION_ID,
+    name: 'Dataframe SQL (DuckDB)',
+    type: IntegrationType.DuckDB
 };
 
 suite('SqlIntegrationEnvironmentVariablesProvider', () => {
@@ -41,7 +50,8 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
 
     test('Returns only dataframe integration when no integrations are configured', async () => {
         const uri = Uri.file('/test/notebook.deepnote');
-        when(integrationStorage.getAll()).thenResolve([]);
+        // IntegrationStorage.getAll() always includes the DuckDB integration
+        when(integrationStorage.getAll()).thenResolve([DUCKDB_INTEGRATION]);
 
         const envVars = await provider.getEnvironmentVariables(uri);
         assert.deepStrictEqual(envVars, EXPECTED_DATAFRAME_ONLY_ENV_VARS);
@@ -49,7 +59,8 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
 
     test('Returns environment variable for internal DuckDB integration', async () => {
         const uri = Uri.file('/test/notebook.deepnote');
-        when(integrationStorage.getAll()).thenResolve([]);
+        // IntegrationStorage.getAll() always includes the DuckDB integration
+        when(integrationStorage.getAll()).thenResolve([DUCKDB_INTEGRATION]);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -76,7 +87,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             ssl: true
         };
 
-        when(integrationStorage.getAll()).thenResolve([config]);
+        when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -100,7 +111,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             credentials: serviceAccountJson
         };
 
-        when(integrationStorage.getAll()).thenResolve([config]);
+        when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -139,7 +150,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             credentials: JSON.stringify({ type: 'service_account' })
         };
 
-        when(integrationStorage.getAll()).thenResolve([postgresConfig, bigqueryConfig]);
+        when(integrationStorage.getAll()).thenResolve([postgresConfig, bigqueryConfig, DUCKDB_INTEGRATION]);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -164,7 +175,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             ssl: false
         };
 
-        when(integrationStorage.getAll()).thenResolve([config]);
+        when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -196,7 +207,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             ssl: true
         };
 
-        when(integrationStorage.getAll()).thenResolve([config]);
+        when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -224,7 +235,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             ssl: false
         };
 
-        when(integrationStorage.getAll()).thenResolve([config]);
+        when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
 
         const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -261,7 +272,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 password: 'secret123'
             };
 
-            when(integrationStorage.getAll()).thenResolve([config]);
+            when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
 
             const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -290,7 +301,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 password: 'pass'
             };
 
-            when(integrationStorage.getAll()).thenResolve([config]);
+            when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
 
             const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -322,7 +333,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 privateKeyPassphrase: 'passphrase123'
             };
 
-            when(integrationStorage.getAll()).thenResolve([config]);
+            when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
 
             const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -356,7 +367,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 privateKey: privateKey
             };
 
-            when(integrationStorage.getAll()).thenResolve([config]);
+            when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
 
             const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -387,7 +398,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 password: 'p@ss:word!#$%'
             };
 
-            when(integrationStorage.getAll()).thenResolve([config]);
+            when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
 
             const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -413,7 +424,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 password: 'pass'
             };
 
-            when(integrationStorage.getAll()).thenResolve([config]);
+            when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
 
             const envVars = await provider.getEnvironmentVariables(uri);
 
@@ -435,7 +446,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 authMethod: SnowflakeAuthMethods.OKTA
             };
 
-            when(integrationStorage.getAll()).thenResolve([config]);
+            when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
 
             // Should return only dataframe integration when unsupported auth method is encountered
             const envVars = await provider.getEnvironmentVariables(uri);
@@ -453,7 +464,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 authMethod: SnowflakeAuthMethods.AZURE_AD
             };
 
-            when(integrationStorage.getAll()).thenResolve([config]);
+            when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
 
             const envVars = await provider.getEnvironmentVariables(uri);
             assert.deepStrictEqual(envVars, EXPECTED_DATAFRAME_ONLY_ENV_VARS);
@@ -470,7 +481,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 authMethod: SnowflakeAuthMethods.KEY_PAIR
             };
 
-            when(integrationStorage.getAll()).thenResolve([config]);
+            when(integrationStorage.getAll()).thenResolve([config, DUCKDB_INTEGRATION]);
 
             const envVars = await provider.getEnvironmentVariables(uri);
             assert.deepStrictEqual(envVars, EXPECTED_DATAFRAME_ONLY_ENV_VARS);

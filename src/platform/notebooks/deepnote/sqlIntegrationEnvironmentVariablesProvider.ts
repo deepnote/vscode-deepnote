@@ -5,7 +5,12 @@ import { IDisposableRegistry, Resource } from '../../common/types';
 import { EnvironmentVariables } from '../../common/variables/types';
 import { UnsupportedIntegrationError } from '../../errors/unsupportedIntegrationError';
 import { logger } from '../../logging';
-import { IIntegrationStorage, ISqlIntegrationEnvVarsProvider } from './types';
+import {
+    IIntegrationStorage,
+    ISqlIntegrationEnvVarsProvider,
+    IPlatformNotebookEditorProvider,
+    IPlatformDeepnoteNotebookManager
+} from './types';
 import {
     LegacyIntegrationConfig,
     IntegrationType,
@@ -13,7 +18,6 @@ import {
     DuckDBIntegrationConfig,
     DATAFRAME_SQL_INTEGRATION_ID
 } from './integrationTypes';
-import { INotebookEditorProvider, IDeepnoteNotebookManager } from '../../../notebooks/types';
 
 /**
  * Converts an integration ID to the environment variable name format expected by SQL blocks.
@@ -170,8 +174,9 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
 
     constructor(
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
-        @inject(INotebookEditorProvider) private readonly notebookEditorProvider: INotebookEditorProvider,
-        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
+        @inject(IPlatformNotebookEditorProvider)
+        private readonly notebookEditorProvider: IPlatformNotebookEditorProvider,
+        @inject(IPlatformDeepnoteNotebookManager) private readonly notebookManager: IPlatformDeepnoteNotebookManager,
         @inject(IDisposableRegistry) disposables: IDisposableRegistry
     ) {
         logger.info('SqlIntegrationEnvironmentVariablesProvider: Constructor called - provider is being instantiated');

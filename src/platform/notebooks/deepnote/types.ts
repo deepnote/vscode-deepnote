@@ -1,7 +1,8 @@
-import { CancellationToken, Event } from 'vscode';
+import { CancellationToken, Event, NotebookDocument, Uri } from 'vscode';
 import { IDisposable, Resource } from '../../common/types';
 import { EnvironmentVariables } from '../../common/variables/types';
 import { LegacyIntegrationConfig } from './integrationTypes';
+import { DeepnoteProject } from '../../deepnote/deepnoteTypes';
 
 /**
  * Settings for select input blocks
@@ -72,4 +73,24 @@ export interface ISqlIntegrationEnvVarsProvider {
      * Get environment variables for SQL integrations used in the given notebook.
      */
     getEnvironmentVariables(resource: Resource, token?: CancellationToken): Promise<EnvironmentVariables>;
+}
+
+/**
+ * Platform-layer interface for accessing notebook documents.
+ * This is a subset of the full INotebookEditorProvider interface from the notebooks layer.
+ * The implementation in the notebooks layer should be bound to this symbol as well.
+ */
+export const IPlatformNotebookEditorProvider = Symbol('IPlatformNotebookEditorProvider');
+export interface IPlatformNotebookEditorProvider {
+    findAssociatedNotebookDocument(uri: Uri): NotebookDocument | undefined;
+}
+
+/**
+ * Platform-layer interface for accessing Deepnote project data.
+ * This is a subset of the full IDeepnoteNotebookManager interface from the notebooks layer.
+ * The implementation in the notebooks layer should be bound to this symbol as well.
+ */
+export const IPlatformDeepnoteNotebookManager = Symbol('IPlatformDeepnoteNotebookManager');
+export interface IPlatformDeepnoteNotebookManager {
+    getOriginalProject(projectId: string): DeepnoteProject | undefined;
 }

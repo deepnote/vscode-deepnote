@@ -513,6 +513,54 @@ suite('DeepnoteDataConverter', () => {
             assert.strictEqual(new TextDecoder().decode(markdownItem!.data), markdownContent);
             assert.strictEqual(new TextDecoder().decode(plainItem!.data), 'Result\n\nThis is formatted output.');
         });
+
+        test('converts Plotly chart output', () => {
+            const plotlyData = {
+                data: [
+                    {
+                        type: 'bar',
+                        x: ['A', 'B', 'C'],
+                        y: [10, 20, 15]
+                    }
+                ],
+                layout: {
+                    title: 'Sample Chart',
+                    xaxis: { title: 'Category' },
+                    yaxis: { title: 'Value' }
+                }
+            };
+
+            const deepnoteOutputs: DeepnoteOutput[] = [
+                {
+                    output_type: 'execute_result',
+                    execution_count: 1,
+                    data: {
+                        'application/vnd.plotly.v1+json': plotlyData
+                    }
+                }
+            ];
+
+            const blocks: DeepnoteBlock[] = [
+                {
+                    blockGroup: 'test-group',
+                    id: 'block1',
+                    type: 'code',
+                    content: 'fig.show()',
+                    sortingKey: 'a0',
+                    outputs: deepnoteOutputs
+                }
+            ];
+
+            const cells = converter.convertBlocksToCells(blocks);
+            const outputs = cells[0].outputs!;
+
+            assert.strictEqual(outputs.length, 1);
+            assert.strictEqual(outputs[0].items.length, 1);
+            assert.strictEqual(outputs[0].items[0].mime, 'application/vnd.plotly.v1+json');
+
+            const outputData = JSON.parse(new TextDecoder().decode(outputs[0].items[0].data));
+            assert.deepStrictEqual(outputData, plotlyData);
+        });
     });
 
     suite('round trip conversion', () => {
@@ -595,6 +643,66 @@ suite('DeepnoteDataConverter', () => {
             };
             assert.strictEqual(output.output_type, 'execute_result');
             assert.deepStrictEqual(output.data?.['application/vnd.deepnote.sql-output-metadata+json'], sqlMetadata);
+        });
+
+        test('Plotly chart output round-trips correctly', () => {
+            const plotlyData = {
+                data: [
+                    {
+                        type: 'histogram',
+                        x: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                        nbinsx: 30,
+                        opacity: 0.75
+                    }
+                ],
+                layout: {
+                    title: 'Sessions per week by churn status',
+                    xaxis: { title: 'Sessions per week' },
+                    yaxis: { title: 'Users' },
+                    legend: {
+                        yanchor: 'top',
+                        y: 1,
+                        xanchor: 'left',
+                        x: 1.02
+                    }
+                }
+            };
+
+            const originalBlocks: DeepnoteBlock[] = [
+                {
+                    blockGroup: 'test-group',
+                    id: 'plotly-block',
+                    type: 'code',
+                    content: 'fig = px.histogram(df)\nfig.show()',
+                    sortingKey: 'a0',
+                    executionCount: 1,
+                    metadata: {},
+                    outputs: [
+                        {
+                            output_type: 'execute_result',
+                            execution_count: 1,
+                            data: {
+                                'application/vnd.plotly.v1+json': plotlyData
+                            }
+                        }
+                    ]
+                }
+            ];
+
+            const cells = converter.convertBlocksToCells(originalBlocks);
+            const roundTripBlocks = converter.convertCellsToBlocks(cells);
+
+            // The round-trip should preserve the Plotly chart output
+            assert.strictEqual(roundTripBlocks.length, 1);
+            assert.strictEqual(roundTripBlocks[0].id, 'plotly-block');
+            assert.strictEqual(roundTripBlocks[0].outputs?.length, 1);
+
+            const output = roundTripBlocks[0].outputs![0] as {
+                output_type: string;
+                data?: Record<string, unknown>;
+            };
+            assert.strictEqual(output.output_type, 'execute_result');
+            assert.deepStrictEqual(output.data?.['application/vnd.plotly.v1+json'], plotlyData);
         });
 
         test('real deepnote notebook round-trips without losing data', () => {

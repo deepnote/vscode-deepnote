@@ -4,7 +4,12 @@ import { EventEmitter } from 'vscode';
 import { IEncryptedStorage } from '../../common/application/types';
 import { IAsyncDisposableRegistry } from '../../common/types';
 import { logger } from '../../logging';
-import { LegacyIntegrationConfig, IntegrationType } from './integrationTypes';
+import {
+    LegacyIntegrationConfig,
+    IntegrationType,
+    DuckDBIntegrationConfig,
+    DATAFRAME_SQL_INTEGRATION_ID
+} from './integrationTypes';
 import { IIntegrationStorage } from './types';
 
 const INTEGRATION_SERVICE_NAME = 'deepnote-integrations';
@@ -33,11 +38,21 @@ export class IntegrationStorage implements IIntegrationStorage {
     }
 
     /**
-     * Get all stored integration configurations
+     * Get all stored integration configurations.
+     * Always includes the internal DuckDB integration at the end of the list.
      */
     async getAll(): Promise<LegacyIntegrationConfig[]> {
         await this.ensureCacheLoaded();
-        return Array.from(this.cache.values());
+        const configs = Array.from(this.cache.values());
+
+        // Always add the internal DuckDB integration at the end
+        const duckdbConfig: DuckDBIntegrationConfig = {
+            id: DATAFRAME_SQL_INTEGRATION_ID,
+            name: 'Dataframe SQL (DuckDB)',
+            type: IntegrationType.DuckDB
+        };
+
+        return [...configs, duckdbConfig];
     }
 
     /**

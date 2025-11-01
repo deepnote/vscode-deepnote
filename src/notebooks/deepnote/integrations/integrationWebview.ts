@@ -9,6 +9,7 @@ import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
 import { IIntegrationStorage, IIntegrationWebviewProvider } from './types';
 import {
     INTEGRATION_TYPE_TO_DEEPNOTE,
+    IntegrationType,
     LegacyIntegrationConfig,
     IntegrationStatus,
     IntegrationWithStatus,
@@ -346,6 +347,12 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 const type = integration.config?.type || integration.integrationType;
                 if (!type) {
                     logger.warn(`IntegrationWebviewProvider: No type found for integration ${id}, skipping`);
+                    return null;
+                }
+
+                // Skip DuckDB integration (internal, not a real Deepnote integration)
+                if (type === IntegrationType.DuckDB) {
+                    logger.trace(`IntegrationWebviewProvider: Skipping internal DuckDB integration ${id}`);
                     return null;
                 }
 

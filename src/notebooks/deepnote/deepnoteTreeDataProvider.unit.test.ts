@@ -1,7 +1,7 @@
 import { assert } from 'chai';
 import { l10n } from 'vscode';
 
-import { DeepnoteTreeDataProvider } from './deepnoteTreeDataProvider';
+import { DeepnoteTreeDataProvider, compareTreeItemsByLabel } from './deepnoteTreeDataProvider';
 import { DeepnoteTreeItem, DeepnoteTreeItemType } from './deepnoteTreeItem';
 import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 
@@ -338,9 +338,8 @@ suite('DeepnoteTreeDataProvider', () => {
     });
 
     suite('alphabetical sorting', () => {
-        test('should sort projects alphabetically by name', async () => {
-            // Note: This test verifies the concept, but actual sorting happens in getDeepnoteProjectFiles()
-            // which scans the workspace. For now, we verify the tree items can be sorted.
+        test('compareTreeItemsByLabel should sort items alphabetically (case-insensitive)', () => {
+            // Test the comparator function in isolation
             const mockProjects: DeepnoteProject[] = [
                 {
                     metadata: {
@@ -383,7 +382,7 @@ suite('DeepnoteTreeDataProvider', () => {
                 }
             ];
 
-            // Create tree items
+            // Create tree items in unsorted order
             const treeItems = mockProjects.map(
                 (project) =>
                     new DeepnoteTreeItem(
@@ -397,16 +396,13 @@ suite('DeepnoteTreeDataProvider', () => {
                     )
             );
 
-            // Before sorting
+            // Verify items are initially unsorted
             assert.strictEqual(treeItems[0].label, 'Zebra Project');
 
-            // Verify that sorting would work
-            const sortedItems = [...treeItems].sort((a, b) => {
-                const labelA = typeof a.label === 'string' ? a.label : '';
-                const labelB = typeof b.label === 'string' ? b.label : '';
-                return labelA.toLowerCase().localeCompare(labelB.toLowerCase());
-            });
+            // Sort using the exported comparator
+            const sortedItems = [...treeItems].sort(compareTreeItemsByLabel);
 
+            // Verify alphabetical order
             assert.strictEqual(sortedItems[0].label, 'Apple Project');
             assert.strictEqual(sortedItems[1].label, 'Middle Project');
             assert.strictEqual(sortedItems[2].label, 'Zebra Project');

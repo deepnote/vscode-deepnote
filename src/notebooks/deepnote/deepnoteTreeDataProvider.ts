@@ -18,6 +18,15 @@ import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/
 import { readDeepnoteProjectFile } from './deepnoteProjectUtils';
 
 /**
+ * Comparator function for sorting tree items alphabetically by label (case-insensitive)
+ */
+export function compareTreeItemsByLabel(a: DeepnoteTreeItem, b: DeepnoteTreeItem): number {
+    const labelA = typeof a.label === 'string' ? a.label : '';
+    const labelB = typeof b.label === 'string' ? b.label : '';
+    return labelA.toLowerCase().localeCompare(labelB.toLowerCase());
+}
+
+/**
  * Tree data provider for the Deepnote explorer view.
  * Manages the tree structure displaying Deepnote project files and their notebooks.
  */
@@ -230,11 +239,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         }
 
         // Sort projects alphabetically by name (case-insensitive)
-        deepnoteFiles.sort((a, b) => {
-            const labelA = typeof a.label === 'string' ? a.label : '';
-            const labelB = typeof b.label === 'string' ? b.label : '';
-            return labelA.toLowerCase().localeCompare(labelB.toLowerCase());
-        });
+        deepnoteFiles.sort(compareTreeItemsByLabel);
 
         return deepnoteFiles;
     }

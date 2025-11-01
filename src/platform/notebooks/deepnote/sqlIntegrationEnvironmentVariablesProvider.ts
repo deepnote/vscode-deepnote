@@ -228,7 +228,7 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
         }
 
         // Get the list of integrations from the project
-        const projectIntegrations = project.project.integrations || [];
+        const projectIntegrations = project.project.integrations?.slice() ?? [];
         logger.trace(
             `SqlIntegrationEnvironmentVariablesProvider: Found ${projectIntegrations.length} integrations in project`
         );
@@ -239,20 +239,7 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
             name: 'Dataframe SQL (DuckDB)',
             type: IntegrationType.DuckDB
         };
-
-        try {
-            const envVarName = convertToEnvironmentVariableName(getSqlEnvVarName(duckdbConfig.id));
-            const credentialsJson = convertIntegrationConfigToJson(duckdbConfig);
-            envVars[envVarName] = credentialsJson;
-            logger.debug(
-                `SqlIntegrationEnvironmentVariablesProvider: Added env var ${envVarName} for DuckDB integration`
-            );
-        } catch (error) {
-            logger.error(
-                `SqlIntegrationEnvironmentVariablesProvider: Failed to get credentials for DuckDB integration`,
-                error
-            );
-        }
+        projectIntegrations.push(duckdbConfig);
 
         // Get credentials for each project integration and add to environment variables
         for (const projectIntegration of projectIntegrations) {
@@ -262,14 +249,12 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
 
             const integrationId = projectIntegration.id;
 
-            // Skip the internal DuckDB integration (already added above)
-            if (integrationId === DATAFRAME_SQL_INTEGRATION_ID) {
-                continue;
-            }
-
             try {
                 // Get the integration configuration from storage
-                const config = await this.integrationStorage.getIntegrationConfig(integrationId);
+                const config =
+                    integrationId === DATAFRAME_SQL_INTEGRATION_ID
+                        ? duckdbConfig
+                        : await this.integrationStorage.getIntegrationConfig(integrationId);
                 if (!config) {
                     logger.debug(
                         `SqlIntegrationEnvironmentVariablesProvider: No configuration found for integration ${integrationId}, skipping`

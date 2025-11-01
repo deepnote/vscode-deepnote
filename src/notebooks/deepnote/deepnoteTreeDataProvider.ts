@@ -131,28 +131,29 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
     }
 
     public async getChildren(element?: DeepnoteTreeItem): Promise<DeepnoteTreeItem[]> {
+        // If element is provided, we can return children regardless of workspace
+        if (element) {
+            if (element.type === DeepnoteTreeItemType.ProjectFile) {
+                return this.getNotebooksForProject(element);
+            }
+
+            return [];
+        }
+
+        // For root level, we need workspace folders
         if (!workspace.workspaceFolders || workspace.workspaceFolders.length === 0) {
             return [];
         }
 
-        if (!element) {
-            if (!this.isInitialScanComplete) {
-                if (!this.initialScanPromise) {
-                    this.initialScanPromise = this.performInitialScan();
-                }
-
-                // Show loading item
-                return [this.createLoadingTreeItem()];
+        if (!this.isInitialScanComplete) {
+            if (!this.initialScanPromise) {
+                this.initialScanPromise = this.performInitialScan();
             }
 
-            return this.getDeepnoteProjectFiles();
+            return [this.createLoadingTreeItem()];
         }
 
-        if (element.type === DeepnoteTreeItemType.ProjectFile) {
-            return this.getNotebooksForProject(element);
-        }
-
-        return [];
+        return this.getDeepnoteProjectFiles();
     }
 
     private createLoadingTreeItem(): DeepnoteTreeItem {

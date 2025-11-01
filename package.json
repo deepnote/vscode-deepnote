@@ -2464,7 +2464,7 @@
         "@jupyterlab/services": "^7.2.4",
         "@lumino/widgets": "^2.4.0",
         "@nteract/messaging": "^7.0.0",
-        "@vscode/extension-telemetry": "^0.7.7",
+        "@vscode/extension-telemetry": "^0.9.0",
         "@vscode/python-extension": "^1.0.4",
         "ansi-to-html": "^0.6.7",
         "bootstrap": "^5.0.0",

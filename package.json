@@ -2466,7 +2466,7 @@
         "@nteract/messaging": "^7.0.0",
         "@vscode/extension-telemetry": "^0.7.7",
         "@vscode/python-extension": "^1.0.4",
-        "ansi-to-html": "^0.6.7",
+        "ansi-to-html": "^0.7.0",
         "bootstrap": "^5.0.0",
         "bootstrap-less": "^3.3.8",
         "clsx": "^2.1.1",

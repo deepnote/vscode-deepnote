@@ -13,7 +13,7 @@ import {
     LegacyIntegrationConfig,
     IntegrationStatus,
     IntegrationWithStatus,
-    RawIntegrationType
+    RawLegacyIntegrationType
 } from '../../../platform/notebooks/deepnote/integrationTypes';
 
 /**
@@ -357,7 +357,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 }
 
                 // Map to Deepnote integration type
-                const deepnoteType: RawIntegrationType | undefined = LEGACY_INTEGRATION_TYPE_TO_DEEPNOTE[type];
+                const deepnoteType: RawLegacyIntegrationType | undefined = LEGACY_INTEGRATION_TYPE_TO_DEEPNOTE[type];
                 if (!deepnoteType) {
                     logger.warn(`IntegrationWebviewProvider: Cannot map type ${type} for integration ${id}, skipping`);
                     return null;

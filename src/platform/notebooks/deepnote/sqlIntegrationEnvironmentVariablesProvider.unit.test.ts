@@ -7,9 +7,9 @@ import { IntegrationStorage } from './integrationStorage';
 import { SqlIntegrationEnvironmentVariablesProvider } from './sqlIntegrationEnvironmentVariablesProvider';
 import {
     LegacyIntegrationType,
-    PostgresIntegrationConfig,
-    BigQueryIntegrationConfig,
-    SnowflakeIntegrationConfig,
+    LegacyPostgresIntegrationConfig,
+    LegacyBigQueryIntegrationConfig,
+    LegacySnowflakeIntegrationConfig,
     SnowflakeAuthMethods
 } from './integrationTypes';
 import { IPlatformNotebookEditorProvider, IPlatformDeepnoteNotebookManager } from './types';
@@ -131,7 +131,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
     test('Returns environment variable for PostgreSQL integration', async () => {
         const uri = Uri.file('/test/notebook.deepnote');
         const integrationId = 'my-postgres-db';
-        const config: PostgresIntegrationConfig = {
+        const config: LegacyPostgresIntegrationConfig = {
             id: integrationId,
             name: 'My Postgres DB',
             type: LegacyIntegrationType.Postgres,
@@ -164,7 +164,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         const uri = Uri.file('/test/notebook.deepnote');
         const integrationId = 'my-bigquery';
         const serviceAccountJson = JSON.stringify({ type: 'service_account', project_id: 'my-project' });
-        const config: BigQueryIntegrationConfig = {
+        const config: LegacyBigQueryIntegrationConfig = {
             id: integrationId,
             name: 'My BigQuery',
             type: LegacyIntegrationType.BigQuery,
@@ -197,7 +197,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         const postgresId = 'my-postgres-db';
         const bigqueryId = 'my-bigquery';
 
-        const postgresConfig: PostgresIntegrationConfig = {
+        const postgresConfig: LegacyPostgresIntegrationConfig = {
             id: postgresId,
             name: 'My Postgres DB',
             type: LegacyIntegrationType.Postgres,
@@ -208,7 +208,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             password: 'pass'
         };
 
-        const bigqueryConfig: BigQueryIntegrationConfig = {
+        const bigqueryConfig: LegacyBigQueryIntegrationConfig = {
             id: bigqueryId,
             name: 'My BigQuery',
             type: LegacyIntegrationType.BigQuery,
@@ -238,7 +238,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
     test('Properly encodes special characters in PostgreSQL credentials', async () => {
         const uri = Uri.file('/test/notebook.deepnote');
         const integrationId = 'special-chars-db';
-        const config: PostgresIntegrationConfig = {
+        const config: LegacyPostgresIntegrationConfig = {
             id: integrationId,
             name: 'Special Chars DB',
             type: LegacyIntegrationType.Postgres,
@@ -275,7 +275,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
     test('Normalizes integration ID with spaces and mixed case for env var name', async () => {
         const uri = Uri.file('/test/notebook.deepnote');
         const integrationId = 'My Production DB';
-        const config: PostgresIntegrationConfig = {
+        const config: LegacyPostgresIntegrationConfig = {
             id: integrationId,
             name: 'Production Database',
             type: LegacyIntegrationType.Postgres,
@@ -308,7 +308,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
     test('Normalizes integration ID with special characters for env var name', async () => {
         const uri = Uri.file('/test/notebook.deepnote');
         const integrationId = 'my-db@2024!';
-        const config: PostgresIntegrationConfig = {
+        const config: LegacyPostgresIntegrationConfig = {
             id: integrationId,
             name: 'Test DB',
             type: LegacyIntegrationType.Postgres,
@@ -348,7 +348,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         test('Returns environment variable for Snowflake with PASSWORD auth', async () => {
             const uri = Uri.file('/test/notebook.deepnote');
             const integrationId = 'my-snowflake';
-            const config: SnowflakeIntegrationConfig = {
+            const config: LegacySnowflakeIntegrationConfig = {
                 id: integrationId,
                 name: 'My Snowflake',
                 type: LegacyIntegrationType.Snowflake,
@@ -383,7 +383,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         test('Returns environment variable for Snowflake with legacy null auth (username+password)', async () => {
             const uri = Uri.file('/test/notebook.deepnote');
             const integrationId = 'legacy-snowflake';
-            const config: SnowflakeIntegrationConfig = {
+            const config: LegacySnowflakeIntegrationConfig = {
                 id: integrationId,
                 name: 'Legacy Snowflake',
                 type: LegacyIntegrationType.Snowflake,
@@ -418,7 +418,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             const integrationId = 'snowflake-keypair';
             const privateKey =
                 '-----BEGIN ' + 'PRIVATE KEY-----\nfakekey-MIIEvQIBADANBg...\n-----END ' + 'PRIVATE KEY-----';
-            const config: SnowflakeIntegrationConfig = {
+            const config: LegacySnowflakeIntegrationConfig = {
                 id: integrationId,
                 name: 'Snowflake KeyPair',
                 type: LegacyIntegrationType.Snowflake,
@@ -459,7 +459,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             const integrationId = 'snowflake-keypair-no-pass';
             const privateKey =
                 '-----BEGIN ' + 'PRIVATE KEY-----\nfakekey-MIIEvQIBADANBg...\n-----END ' + 'PRIVATE KEY-----';
-            const config: SnowflakeIntegrationConfig = {
+            const config: LegacySnowflakeIntegrationConfig = {
                 id: integrationId,
                 name: 'Snowflake KeyPair No Pass',
                 type: LegacyIntegrationType.Snowflake,
@@ -496,7 +496,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         test('Properly encodes special characters in Snowflake credentials', async () => {
             const uri = Uri.file('/test/notebook.deepnote');
             const integrationId = 'snowflake-special';
-            const config: SnowflakeIntegrationConfig = {
+            const config: LegacySnowflakeIntegrationConfig = {
                 id: integrationId,
                 name: 'Snowflake Special',
                 type: LegacyIntegrationType.Snowflake,
@@ -530,7 +530,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         test('Handles Snowflake with minimal optional fields', async () => {
             const uri = Uri.file('/test/notebook.deepnote');
             const integrationId = 'snowflake-minimal';
-            const config: SnowflakeIntegrationConfig = {
+            const config: LegacySnowflakeIntegrationConfig = {
                 id: integrationId,
                 name: 'Snowflake Minimal',
                 type: LegacyIntegrationType.Snowflake,
@@ -559,7 +559,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         test('Skips unsupported Snowflake auth method (OKTA)', async () => {
             const uri = Uri.file('/test/notebook.deepnote');
             const integrationId = 'snowflake-okta';
-            const config: SnowflakeIntegrationConfig = {
+            const config: LegacySnowflakeIntegrationConfig = {
                 id: integrationId,
                 name: 'Snowflake OKTA',
                 type: LegacyIntegrationType.Snowflake,
@@ -582,7 +582,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         test('Skips unsupported Snowflake auth method (AZURE_AD)', async () => {
             const uri = Uri.file('/test/notebook.deepnote');
             const integrationId = 'snowflake-azure';
-            const config: SnowflakeIntegrationConfig = {
+            const config: LegacySnowflakeIntegrationConfig = {
                 id: integrationId,
                 name: 'Snowflake Azure',
                 type: LegacyIntegrationType.Snowflake,
@@ -604,7 +604,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         test('Skips unsupported Snowflake auth method (KEY_PAIR)', async () => {
             const uri = Uri.file('/test/notebook.deepnote');
             const integrationId = 'snowflake-keypair-user';
-            const config: SnowflakeIntegrationConfig = {
+            const config: LegacySnowflakeIntegrationConfig = {
                 id: integrationId,
                 name: 'Snowflake KeyPair User',
                 type: LegacyIntegrationType.Snowflake,

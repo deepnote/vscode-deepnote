@@ -10,7 +10,7 @@ import {
     IntegrationStatus,
     LegacyIntegrationType,
     IntegrationWithStatus,
-    RawIntegrationType
+    RawLegacyIntegrationType
 } from '../../../platform/notebooks/deepnote/integrationTypes';
 import { BlockWithIntegration, scanBlocksForIntegrations } from './integrationUtils';
 import { IDeepnoteNotebookManager } from '../../types';
@@ -173,7 +173,7 @@ export class IntegrationManager implements IIntegrationManager {
                 if (projectIntegration.type in DEEPNOTE_TO_LEGACY_INTEGRATION_TYPE) {
                     // Map the Deepnote integration type to our IntegrationType
                     integrationType =
-                        DEEPNOTE_TO_LEGACY_INTEGRATION_TYPE[projectIntegration.type as RawIntegrationType];
+                        DEEPNOTE_TO_LEGACY_INTEGRATION_TYPE[projectIntegration.type as RawLegacyIntegrationType];
                 } else {
                     logger.warn(
                         `IntegrationManager: Unknown integration type '${projectIntegration.type}' for integration ID '${selectedIntegrationId}' in project '${projectId}'. Integration type will be undefined.`

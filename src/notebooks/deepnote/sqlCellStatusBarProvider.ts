@@ -26,7 +26,7 @@ import {
     DATAFRAME_SQL_INTEGRATION_ID,
     DEEPNOTE_TO_LEGACY_INTEGRATION_TYPE,
     LegacyIntegrationType,
-    RawIntegrationType
+    RawLegacyIntegrationType
 } from '../../platform/notebooks/deepnote/integrationTypes';
 import { IDeepnoteNotebookManager } from '../types';
 
@@ -347,7 +347,8 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
                 continue;
             }
 
-            const integrationType = DEEPNOTE_TO_LEGACY_INTEGRATION_TYPE[projectIntegration.type as RawIntegrationType];
+            const integrationType =
+                DEEPNOTE_TO_LEGACY_INTEGRATION_TYPE[projectIntegration.type as RawLegacyIntegrationType];
             const typeLabel = integrationType ? this.getIntegrationTypeLabel(integrationType) : projectIntegration.type;
 
             const item: LocalQuickPickItem = {

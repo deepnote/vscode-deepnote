@@ -3,7 +3,8 @@ import { IVsCodeApi } from '../react-common/postOffice';
 import { getLocString, storeLocStrings } from '../react-common/locReactSide';
 import { IntegrationList } from './IntegrationList';
 import { ConfigurationForm } from './ConfigurationForm';
-import { IntegrationWithStatus, WebviewMessage, IntegrationConfig, IntegrationType } from './types';
+import { IntegrationWithStatus, WebviewMessage } from './types';
+import { DatabaseIntegrationConfig, DatabaseIntegrationType } from '@deepnote/database-integrations';
 
 export interface IIntegrationPanelProps {
     baseTheme: string;
@@ -13,9 +14,11 @@ export interface IIntegrationPanelProps {
 export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, vscodeApi }) => {
     const [integrations, setIntegrations] = React.useState<IntegrationWithStatus[]>([]);
     const [selectedIntegrationId, setSelectedIntegrationId] = React.useState<string | null>(null);
-    const [selectedConfig, setSelectedConfig] = React.useState<IntegrationConfig | null>(null);
-    const [selectedIntegrationName, setSelectedIntegrationName] = React.useState<string | undefined>(undefined);
-    const [selectedIntegrationType, setSelectedIntegrationType] = React.useState<IntegrationType | undefined>(
+    const [selectedConfig, setSelectedConfig] = React.useState<DatabaseIntegrationConfig | null>(null);
+    const [selectedIntegrationDefaultName, setSelectedIntegrationDefaultName] = React.useState<string | undefined>(
+        undefined
+    );
+    const [selectedIntegrationType, setSelectedIntegrationType] = React.useState<DatabaseIntegrationType | undefined>(
         undefined
     );
     const [message, setMessage] = React.useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -55,7 +58,7 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
                 case 'showForm':
                     setSelectedIntegrationId(msg.integrationId);
                     setSelectedConfig(msg.config);
-                    setSelectedIntegrationName(msg.integrationName);
+                    setSelectedIntegrationDefaultName(msg.integrationName);
                     setSelectedIntegrationType(msg.integrationType);
                     break;
 
@@ -123,7 +126,7 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
         setConfirmDelete(null);
     };
 
-    const handleSave = (config: IntegrationConfig) => {
+    const handleSave = (config: DatabaseIntegrationConfig) => {
         vscodeApi.postMessage({
             type: 'save',
             integrationId: config.id,
@@ -146,11 +149,11 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
 
             <IntegrationList integrations={integrations} onConfigure={handleConfigure} onDelete={handleDelete} />
 
-            {selectedIntegrationId && (
+            {selectedIntegrationId && selectedIntegrationType && (
                 <ConfigurationForm
                     integrationId={selectedIntegrationId}
                     existingConfig={selectedConfig}
-                    integrationName={selectedIntegrationName}
+                    defaultName={selectedIntegrationDefaultName}
                     integrationType={selectedIntegrationType}
                     onSave={handleSave}
                     onCancel={handleCancel}

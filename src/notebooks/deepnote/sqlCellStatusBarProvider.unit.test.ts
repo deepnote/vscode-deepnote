@@ -14,10 +14,7 @@ import {
 import { IDisposableRegistry } from '../../platform/common/types';
 import { IIntegrationStorage } from './integrations/types';
 import { SqlCellStatusBarProvider } from './sqlCellStatusBarProvider';
-import {
-    DATAFRAME_SQL_INTEGRATION_ID,
-    LegacyIntegrationType
-} from '../../platform/notebooks/deepnote/integrationTypes';
+import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { createEventHandler } from '../../test/common';
 import { Commands } from '../../platform/common/constants';
@@ -137,12 +134,15 @@ suite('SqlCellStatusBarProvider', () => {
         when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve({
             id: integrationId,
             name: 'My Postgres DB',
-            type: LegacyIntegrationType.Postgres,
-            host: 'localhost',
-            port: 5432,
-            database: 'test',
-            username: 'user',
-            password: 'pass'
+            type: 'pgsql',
+            metadata: {
+                host: 'localhost',
+                port: '5432',
+                database: 'test',
+                user: 'user',
+                password: 'pass',
+                sslEnabled: false
+            }
         });
 
         const result = await provider.provideCellStatusBarItems(cell, cancellationToken);
@@ -285,12 +285,15 @@ suite('SqlCellStatusBarProvider', () => {
         when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve({
             id: integrationId,
             name: 'My Postgres DB',
-            type: LegacyIntegrationType.Postgres,
-            host: 'localhost',
-            port: 5432,
-            database: 'test',
-            username: 'user',
-            password: 'pass'
+            type: 'pgsql',
+            metadata: {
+                host: 'localhost',
+                port: '5432',
+                database: 'test',
+                user: 'user',
+                password: 'pass',
+                sslEnabled: false
+            }
         });
 
         const result = await provider.provideCellStatusBarItems(cell, cancellationToken);

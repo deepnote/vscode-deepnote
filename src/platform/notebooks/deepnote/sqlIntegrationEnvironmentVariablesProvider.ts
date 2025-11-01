@@ -1,9 +1,8 @@
 import { inject, injectable } from 'inversify';
-import { CancellationToken, Event, EventEmitter, l10n } from 'vscode';
+import { CancellationToken, Event, EventEmitter } from 'vscode';
 
 import { IDisposableRegistry, Resource } from '../../common/types';
 import { EnvironmentVariables } from '../../common/variables/types';
-import { UnsupportedIntegrationError } from '../../errors/unsupportedIntegrationError';
 import { logger } from '../../logging';
 import {
     IIntegrationStorage,
@@ -11,13 +10,7 @@ import {
     IPlatformNotebookEditorProvider,
     IPlatformDeepnoteNotebookManager
 } from './types';
-import {
-    LegacyIntegrationConfig,
-    LegacyIntegrationType,
-    SnowflakeAuthMethods,
-    LegacyDuckDBIntegrationConfig,
-    DATAFRAME_SQL_INTEGRATION_ID
-} from './integrationTypes';
+import { DATAFRAME_SQL_INTEGRATION_ID } from './integrationTypes';
 import { getEnvironmentVariablesForIntegrations } from '@deepnote/database-integrations';
 
 /**

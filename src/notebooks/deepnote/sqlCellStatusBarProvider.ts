@@ -22,13 +22,9 @@ import { IExtensionSyncActivationService } from '../../platform/activation/types
 import { IDisposableRegistry } from '../../platform/common/types';
 import { IIntegrationStorage } from './integrations/types';
 import { Commands } from '../../platform/common/constants';
-import {
-    DATAFRAME_SQL_INTEGRATION_ID,
-    DEEPNOTE_TO_LEGACY_INTEGRATION_TYPE,
-    LegacyIntegrationType,
-    RawLegacyIntegrationType
-} from '../../platform/notebooks/deepnote/integrationTypes';
+import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
 import { IDeepnoteNotebookManager } from '../types';
+import { DatabaseIntegrationType, databaseIntegrationTypes } from '@deepnote/database-integrations';
 
 /**
  * QuickPick item with an integration ID
@@ -347,9 +343,11 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
                 continue;
             }
 
-            const integrationType =
-                DEEPNOTE_TO_LEGACY_INTEGRATION_TYPE[projectIntegration.type as RawLegacyIntegrationType];
-            const typeLabel = integrationType ? this.getIntegrationTypeLabel(integrationType) : projectIntegration.type;
+            const integrationType = projectIntegration.type;
+            const typeLabel =
+                integrationType && (databaseIntegrationTypes as readonly string[]).includes(integrationType)
+                    ? this.getIntegrationTypeLabel(integrationType as DatabaseIntegrationType)
+                    : projectIntegration.type;
 
             const item: LocalQuickPickItem = {
                 label: projectIntegration.name || projectIntegration.id,
@@ -432,13 +430,13 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         this._onDidChangeCellStatusBarItems.fire();
     }
 
-    private getIntegrationTypeLabel(type: LegacyIntegrationType): string {
+    private getIntegrationTypeLabel(type: DatabaseIntegrationType): string {
         switch (type) {
-            case LegacyIntegrationType.Postgres:
+            case 'pgsql':
                 return l10n.t('PostgreSQL');
-            case LegacyIntegrationType.BigQuery:
+            case 'big-query':
                 return l10n.t('BigQuery');
-            case LegacyIntegrationType.Snowflake:
+            case 'snowflake':
                 return l10n.t('Snowflake');
             default:
                 return String(type);

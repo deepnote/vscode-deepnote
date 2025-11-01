@@ -1,19 +1,13 @@
 import { inject, injectable } from 'inversify';
-import { commands, l10n, NotebookDocument, window, workspace } from 'vscode';
+import { commands, l10n, window, workspace } from 'vscode';
 
 import { IExtensionContext } from '../../../platform/common/types';
 import { Commands } from '../../../platform/common/constants';
 import { logger } from '../../../platform/logging';
 import { IIntegrationDetector, IIntegrationManager, IIntegrationStorage, IIntegrationWebviewProvider } from './types';
-import {
-    DEEPNOTE_TO_LEGACY_INTEGRATION_TYPE,
-    IntegrationStatus,
-    LegacyIntegrationType,
-    IntegrationWithStatus,
-    RawLegacyIntegrationType
-} from '../../../platform/notebooks/deepnote/integrationTypes';
-import { BlockWithIntegration, scanBlocksForIntegrations } from './integrationUtils';
+import { IntegrationStatus } from '../../../platform/notebooks/deepnote/integrationTypes';
 import { IDeepnoteNotebookManager } from '../../types';
+import { DatabaseIntegrationType, databaseIntegrationTypes } from '@deepnote/database-integrations';
 
 /**
  * Manages integration UI and commands for Deepnote notebooks
@@ -143,14 +137,6 @@ export class IntegrationManager implements IIntegrationManager {
 
         // First try to detect integrations from the stored project
         let integrations = await this.integrationDetector.detectIntegrations(projectId);
-
-        // If no integrations found in stored project, scan cells directly
-        // This handles the case where the notebook was already open when the extension loaded
-        if (integrations.size === 0) {
-            logger.debug(`IntegrationManager: No integrations found in stored project, scanning cells directly`);
-            integrations = await this.detectIntegrationsFromCells(activeNotebook);
-        }
-
         logger.debug(`IntegrationManager: Found ${integrations.size} integrations`);
 
         // If a specific integration was requested (e.g., from status bar click),
@@ -164,21 +150,15 @@ export class IntegrationManager implements IIntegrationManager {
             const projectIntegration = project?.project.integrations?.find((i) => i.id === selectedIntegrationId);
 
             let integrationName: string | undefined;
-            let integrationType: LegacyIntegrationType | undefined;
+            let integrationType: DatabaseIntegrationType | undefined;
 
-            if (projectIntegration) {
+            // Validate that projectIntegration.type against supported types
+            if (
+                projectIntegration &&
+                (databaseIntegrationTypes as readonly string[]).includes(projectIntegration.type)
+            ) {
                 integrationName = projectIntegration.name;
-
-                // Validate that projectIntegration.type exists in the mapping before lookup
-                if (projectIntegration.type in DEEPNOTE_TO_LEGACY_INTEGRATION_TYPE) {
-                    // Map the Deepnote integration type to our IntegrationType
-                    integrationType =
-                        DEEPNOTE_TO_LEGACY_INTEGRATION_TYPE[projectIntegration.type as RawLegacyIntegrationType];
-                } else {
-                    logger.warn(
-                        `IntegrationManager: Unknown integration type '${projectIntegration.type}' for integration ID '${selectedIntegrationId}' in project '${projectId}'. Integration type will be undefined.`
-                    );
-                }
+                integrationType = projectIntegration.type as DatabaseIntegrationType;
             }
 
             integrations.set(selectedIntegrationId, {
@@ -196,36 +176,5 @@ export class IntegrationManager implements IIntegrationManager {
 
         // Show the webview with optional selected integration
         await this.webviewProvider.show(projectId, integrations, selectedIntegrationId);
-    }
-
-    /**
-     * Detect integrations by scanning cells directly (fallback method)
-     * This is used when the project isn't stored in the notebook manager
-     */
-    private async detectIntegrationsFromCells(notebook: NotebookDocument): Promise<Map<string, IntegrationWithStatus>> {
-        // Collect all cells with SQL integration metadata
-        const blocksWithIntegrations: BlockWithIntegration[] = [];
-
-        for (const cell of notebook.getCells()) {
-            const metadata = cell.metadata;
-            logger.trace(`IntegrationManager: Cell ${cell.index} metadata:`, metadata);
-
-            // Check cell metadata for sql_integration_id
-            if (metadata && typeof metadata === 'object') {
-                const integrationId = (metadata as Record<string, unknown>).sql_integration_id;
-                if (typeof integrationId === 'string') {
-                    logger.debug(`IntegrationManager: Found integration ${integrationId} in cell ${cell.index}`);
-                    blocksWithIntegrations.push({
-                        id: `cell-${cell.index}`,
-                        sql_integration_id: integrationId
-                    });
-                }
-            }
-        }
-
-        logger.debug(`IntegrationManager: Found ${blocksWithIntegrations.length} cells with integrations`);
-
-        // Use the shared utility to scan blocks and build the status map
-        return scanBlocksForIntegrations(blocksWithIntegrations, this.integrationStorage, 'IntegrationManager');
     }
 }

@@ -3,50 +3,25 @@ import { getLocString } from '../react-common/locReactSide';
 import { PostgresForm } from './PostgresForm';
 import { BigQueryForm } from './BigQueryForm';
 import { SnowflakeForm } from './SnowflakeForm';
-import { IntegrationConfig, IntegrationType } from './types';
+import { DatabaseIntegrationConfig, DatabaseIntegrationType } from '@deepnote/database-integrations';
 
 export interface IConfigurationFormProps {
     integrationId: string;
-    existingConfig: IntegrationConfig | null;
-    integrationName?: string;
-    integrationType?: IntegrationType;
-    onSave: (config: IntegrationConfig) => void;
+    existingConfig: DatabaseIntegrationConfig | null;
+    defaultName?: string;
+    integrationType: DatabaseIntegrationType;
+    onSave: (config: DatabaseIntegrationConfig) => void;
     onCancel: () => void;
 }
 
 export const ConfigurationForm: React.FC<IConfigurationFormProps> = ({
     integrationId,
     existingConfig,
-    integrationName,
+    defaultName,
     integrationType,
     onSave,
     onCancel
 }) => {
-    // Determine integration type from existing config, integration metadata from project, or ID
-    const getIntegrationType = (): 'postgres' | 'bigquery' | 'snowflake' => {
-        if (existingConfig) {
-            return existingConfig.type;
-        }
-        // Use integration type from project if available
-        if (integrationType) {
-            return integrationType;
-        }
-        // Infer from integration ID
-        if (integrationId.includes('postgres')) {
-            return 'postgres';
-        }
-        if (integrationId.includes('bigquery')) {
-            return 'bigquery';
-        }
-        if (integrationId.includes('snowflake')) {
-            return 'snowflake';
-        }
-        // Default to postgres
-        return 'postgres';
-    };
-
-    const selectedIntegrationType = getIntegrationType();
-
     const title = getLocString('integrationsConfigureTitle', 'Configure Integration: {0}').replace(
         '{0}',
         integrationId
@@ -63,31 +38,42 @@ export const ConfigurationForm: React.FC<IConfigurationFormProps> = ({
                 </div>
 
                 <div className="configuration-form-body">
-                    {selectedIntegrationType === 'postgres' ? (
-                        <PostgresForm
-                            integrationId={integrationId}
-                            existingConfig={existingConfig?.type === 'postgres' ? existingConfig : null}
-                            integrationName={integrationName}
-                            onSave={onSave}
-                            onCancel={onCancel}
-                        />
-                    ) : selectedIntegrationType === 'bigquery' ? (
-                        <BigQueryForm
-                            integrationId={integrationId}
-                            existingConfig={existingConfig?.type === 'bigquery' ? existingConfig : null}
-                            integrationName={integrationName}
-                            onSave={onSave}
-                            onCancel={onCancel}
-                        />
-                    ) : (
-                        <SnowflakeForm
-                            integrationId={integrationId}
-                            existingConfig={existingConfig?.type === 'snowflake' ? existingConfig : null}
-                            integrationName={integrationName}
-                            onSave={onSave}
-                            onCancel={onCancel}
-                        />
-                    )}
+                    {(() => {
+                        switch (integrationType) {
+                            case 'pgsql':
+                                return (
+                                    <PostgresForm
+                                        integrationId={integrationId}
+                                        existingConfig={existingConfig?.type === 'pgsql' ? existingConfig : null}
+                                        defaultName={defaultName}
+                                        onSave={onSave}
+                                        onCancel={onCancel}
+                                    />
+                                );
+                            case 'big-query':
+                                return (
+                                    <BigQueryForm
+                                        integrationId={integrationId}
+                                        existingConfig={existingConfig?.type === 'big-query' ? existingConfig : null}
+                                        defaultName={defaultName}
+                                        onSave={onSave}
+                                        onCancel={onCancel}
+                                    />
+                                );
+                            case 'snowflake':
+                                return (
+                                    <SnowflakeForm
+                                        integrationId={integrationId}
+                                        existingConfig={existingConfig?.type === 'snowflake' ? existingConfig : null}
+                                        defaultName={defaultName}
+                                        onSave={onSave}
+                                        onCancel={onCancel}
+                                    />
+                                );
+                            default:
+                                return <div>Unsupported integration type: {integrationType}</div>;
+                        }
+                    })()}
                 </div>
             </div>
         </div>

@@ -1,177 +1,241 @@
 import * as React from 'react';
 import { format, getLocString } from '../react-common/locReactSide';
-import {
-    SnowflakeIntegrationConfig,
-    SnowflakeAuthMethod,
-    SnowflakeAuthMethods,
-    isSupportedSnowflakeAuthMethod
-} from './types';
+import { DatabaseIntegrationConfig, SnowflakeAuthMethods } from '@deepnote/database-integrations';
+
+type SnowflakeConfig = Extract<DatabaseIntegrationConfig, { type: 'snowflake' }>;
+type SnowflakeAuthMethod = SnowflakeConfig['metadata']['authMethod'];
+
+const SUPPORTED_AUTH_METHODS = [SnowflakeAuthMethods.Password, SnowflakeAuthMethods.ServiceAccountKeyPair] as const;
+
+function isSupportedSnowflakeAuthMethod(authMethod: SnowflakeAuthMethod): boolean {
+    return (SUPPORTED_AUTH_METHODS as readonly SnowflakeAuthMethod[]).includes(authMethod);
+}
+
+function createEmptySnowflakeConfig(params: { id: string; name?: string }): SnowflakeConfig {
+    const unnamedIntegration = getLocString('integrationsUnnamedIntegration', 'Unnamed Integration ({0})');
+
+    return {
+        id: params.id,
+        name: (params.name || format(unnamedIntegration, params.id)).trim(),
+        type: 'snowflake',
+        metadata: {
+            authMethod: SnowflakeAuthMethods.Password,
+            accountName: '',
+            username: '',
+            password: ''
+        }
+    };
+}
 
 export interface ISnowflakeFormProps {
     integrationId: string;
-    existingConfig: SnowflakeIntegrationConfig | null;
-    integrationName?: string;
-    onSave: (config: SnowflakeIntegrationConfig) => void;
+    existingConfig: SnowflakeConfig | null;
+    defaultName?: string;
+    onSave: (config: SnowflakeConfig) => void;
     onCancel: () => void;
-}
-
-// Helper to get initial values from existing config
-function getInitialValues(existingConfig: SnowflakeIntegrationConfig | null) {
-    if (!existingConfig) {
-        return {
-            username: '',
-            password: '',
-            privateKey: '',
-            privateKeyPassphrase: ''
-        };
-    }
-
-    // Type narrowing based on authMethod
-    // Note: existingConfig can have authMethod === null (legacy configs from backend)
-    if (existingConfig.authMethod === null || existingConfig.authMethod === SnowflakeAuthMethods.PASSWORD) {
-        return {
-            username: existingConfig.username || '',
-            password: existingConfig.password || '',
-            privateKey: '',
-            privateKeyPassphrase: ''
-        };
-    } else if (existingConfig.authMethod === SnowflakeAuthMethods.SERVICE_ACCOUNT_KEY_PAIR) {
-        return {
-            username: existingConfig.username || '',
-            password: '',
-            privateKey: existingConfig.privateKey || '',
-            privateKeyPassphrase: existingConfig.privateKeyPassphrase || ''
-        };
-    } else {
-        // Unsupported auth method - try to extract username if available
-        return {
-            username: 'username' in existingConfig ? String(existingConfig.username || '') : '',
-            password: '',
-            privateKey: '',
-            privateKeyPassphrase: ''
-        };
-    }
 }
 
 export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
     integrationId,
     existingConfig,
-    integrationName,
+    defaultName,
     onSave,
     onCancel
 }) => {
-    const isUnsupported = existingConfig ? !isSupportedSnowflakeAuthMethod(existingConfig.authMethod) : false;
-    const initialValues = getInitialValues(existingConfig);
-
-    const [name, setName] = React.useState(existingConfig?.name || integrationName || '');
-    const [account, setAccount] = React.useState(existingConfig?.account || '');
-    const [authMethod, setAuthMethod] = React.useState<SnowflakeAuthMethod>(
-        existingConfig?.authMethod ?? SnowflakeAuthMethods.PASSWORD
+    const [pendingConfig, setPendingConfig] = React.useState<SnowflakeConfig>(
+        existingConfig && isSupportedSnowflakeAuthMethod(existingConfig.metadata.authMethod)
+            ? structuredClone(existingConfig)
+            : createEmptySnowflakeConfig({ id: integrationId, name: defaultName })
     );
-    const [username, setUsername] = React.useState(initialValues.username);
-    const [password, setPassword] = React.useState(initialValues.password);
-    const [privateKey, setPrivateKey] = React.useState(initialValues.privateKey);
-    const [privateKeyPassphrase, setPrivateKeyPassphrase] = React.useState(initialValues.privateKeyPassphrase);
-    const [database, setDatabase] = React.useState(existingConfig?.database || '');
-    const [warehouse, setWarehouse] = React.useState(existingConfig?.warehouse || '');
-    const [role, setRole] = React.useState(existingConfig?.role || '');
 
-    // Update form fields when existingConfig or integrationName changes
     React.useEffect(() => {
-        if (existingConfig) {
-            const values = getInitialValues(existingConfig);
-            setName(existingConfig.name || '');
-            setAccount(existingConfig.account || '');
-            setAuthMethod(existingConfig.authMethod ?? SnowflakeAuthMethods.PASSWORD);
-            setUsername(values.username);
-            setPassword(values.password);
-            setPrivateKey(values.privateKey);
-            setPrivateKeyPassphrase(values.privateKeyPassphrase);
-            setDatabase(existingConfig.database || '');
-            setWarehouse(existingConfig.warehouse || '');
-            setRole(existingConfig.role || '');
-        } else {
-            setName(integrationName || '');
-            setAccount('');
-            setAuthMethod(SnowflakeAuthMethods.PASSWORD);
-            setUsername('');
-            setPassword('');
-            setPrivateKey('');
-            setPrivateKeyPassphrase('');
-            setDatabase('');
-            setWarehouse('');
-            setRole('');
-        }
-    }, [existingConfig, integrationName]);
+        setPendingConfig(
+            existingConfig && isSupportedSnowflakeAuthMethod(existingConfig.metadata.authMethod)
+                ? structuredClone(existingConfig)
+                : createEmptySnowflakeConfig({ id: integrationId, name: defaultName })
+        );
+    }, [existingConfig, integrationId, defaultName]);
+
+    // Extract values for form fields with proper type narrowing
+    const usernameValue =
+        pendingConfig.metadata.authMethod === SnowflakeAuthMethods.Password ||
+        pendingConfig.metadata.authMethod === SnowflakeAuthMethods.ServiceAccountKeyPair
+            ? pendingConfig.metadata.username
+            : '';
+
+    const passwordValue =
+        pendingConfig.metadata.authMethod === SnowflakeAuthMethods.Password ? pendingConfig.metadata.password : '';
+
+    const privateKeyValue =
+        pendingConfig.metadata.authMethod === SnowflakeAuthMethods.ServiceAccountKeyPair
+            ? pendingConfig.metadata.privateKey
+            : '';
+
+    const privateKeyPassphraseValue =
+        pendingConfig.metadata.authMethod === SnowflakeAuthMethods.ServiceAccountKeyPair
+            ? pendingConfig.metadata.privateKeyPassphrase || ''
+            : '';
+
+    const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            name: e.target.value
+        }));
+    };
+
+    const handleAccountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: {
+                ...prev.metadata,
+                accountName: e.target.value
+            }
+        }));
+    };
+
+    const handleAuthMethodChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const newAuthMethod = e.target.value as SnowflakeAuthMethod;
+
+        setPendingConfig((prev) => {
+            if (newAuthMethod === SnowflakeAuthMethods.Password) {
+                return {
+                    ...prev,
+                    metadata: {
+                        authMethod: SnowflakeAuthMethods.Password,
+                        accountName: prev.metadata.accountName,
+                        username: '',
+                        password: '',
+                        warehouse: prev.metadata.warehouse,
+                        database: prev.metadata.database,
+                        role: prev.metadata.role
+                    }
+                };
+            } else {
+                return {
+                    ...prev,
+                    metadata: {
+                        authMethod: SnowflakeAuthMethods.ServiceAccountKeyPair,
+                        accountName: prev.metadata.accountName,
+                        username: '',
+                        privateKey: '',
+                        warehouse: prev.metadata.warehouse,
+                        database: prev.metadata.database,
+                        role: prev.metadata.role
+                    }
+                };
+            }
+        });
+    };
+
+    const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setPendingConfig((prev) => {
+            if (
+                prev.metadata.authMethod === SnowflakeAuthMethods.Password ||
+                prev.metadata.authMethod === SnowflakeAuthMethods.ServiceAccountKeyPair
+            ) {
+                return {
+                    ...prev,
+                    metadata: {
+                        ...prev.metadata,
+                        username: e.target.value
+                    }
+                };
+            }
+            return prev;
+        });
+    };
+
+    const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setPendingConfig((prev) => {
+            if (prev.metadata.authMethod === SnowflakeAuthMethods.Password) {
+                return {
+                    ...prev,
+                    metadata: {
+                        ...prev.metadata,
+                        password: e.target.value
+                    }
+                };
+            }
+            return prev;
+        });
+    };
+
+    const handlePrivateKeyChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        setPendingConfig((prev) => {
+            if (prev.metadata.authMethod === SnowflakeAuthMethods.ServiceAccountKeyPair) {
+                return {
+                    ...prev,
+                    metadata: {
+                        ...prev.metadata,
+                        privateKey: e.target.value
+                    }
+                };
+            }
+            return prev;
+        });
+    };
+
+    const handlePrivateKeyPassphraseChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setPendingConfig((prev) => {
+            if (prev.metadata.authMethod === SnowflakeAuthMethods.ServiceAccountKeyPair) {
+                return {
+                    ...prev,
+                    metadata: {
+                        ...prev.metadata,
+                        privateKeyPassphrase: e.target.value
+                    }
+                };
+            }
+            return prev;
+        });
+    };
+
+    const handleDatabaseChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: {
+                ...prev.metadata,
+                database: e.target.value || undefined
+            }
+        }));
+    };
+
+    const handleWarehouseChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: {
+                ...prev.metadata,
+                warehouse: e.target.value || undefined
+            }
+        }));
+    };
+
+    const handleRoleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: {
+                ...prev.metadata,
+                role: e.target.value || undefined
+            }
+        }));
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-
-        const unnamedIntegration = getLocString('integrationsUnnamedIntegration', 'Unnamed Integration ({0})');
-
-        let config: SnowflakeIntegrationConfig;
-
-        if (authMethod === SnowflakeAuthMethods.PASSWORD) {
-            config = {
-                id: integrationId,
-                name: (name || format(unnamedIntegration, integrationId)).trim(),
-                type: 'snowflake',
-                account: account.trim(),
-                authMethod: authMethod,
-                username: username.trim(),
-                password: password.trim(),
-                database: database.trim() || undefined,
-                warehouse: warehouse.trim() || undefined,
-                role: role.trim() || undefined
-            };
-        } else if (authMethod === SnowflakeAuthMethods.SERVICE_ACCOUNT_KEY_PAIR) {
-            // Guard against empty private key
-            if (!privateKey.trim()) {
-                return;
-            }
-
-            config = {
-                id: integrationId,
-                name: (name || format(unnamedIntegration, integrationId)).trim(),
-                type: 'snowflake',
-                account: account.trim(),
-                authMethod: authMethod,
-                username: username.trim(),
-                privateKey: privateKey.trim(),
-                privateKeyPassphrase: privateKeyPassphrase.trim() || undefined,
-                database: database.trim() || undefined,
-                warehouse: warehouse.trim() || undefined,
-                role: role.trim() || undefined
-            };
-        } else {
-            // This shouldn't happen as we disable the form for unsupported methods
-            return;
-        }
-
-        onSave(config);
+        onSave(pendingConfig);
     };
 
     return (
         <form onSubmit={handleSubmit}>
-            {isUnsupported && (
-                <div className="message message-error" style={{ marginBottom: '16px' }}>
-                    {getLocString(
-                        'integrationsSnowflakeUnsupportedAuthMethod',
-                        'This Snowflake integration uses an authentication method that is not supported in VS Code. You can view the integration details but cannot edit or use it.'
-                    )}
-                </div>
-            )}
-
             <div className="form-group">
-                <label htmlFor="name">{getLocString('integrationsSnowflakeNameLabel', 'Integration name')}</label>
+                <label htmlFor="name">{getLocString('integrationsSnowflakeNameLabel', 'Name (optional)')}</label>
                 <input
                     type="text"
                     id="name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder={getLocString('integrationsSnowflakeNamePlaceholder', '')}
+                    value={pendingConfig.name}
+                    onChange={handleNameChange}
+                    placeholder={getLocString('integrationsSnowflakeNamePlaceholder', 'My Snowflake Database')}
                     autoComplete="off"
-                    disabled={isUnsupported}
                 />
             </div>
 
@@ -183,13 +247,12 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
                 <input
                     type="text"
                     id="account"
-                    value={account}
-                    onChange={(e) => setAccount(e.target.value)}
+                    value={pendingConfig.metadata.accountName}
+                    onChange={handleAccountChange}
                     placeholder={getLocString('integrationsSnowflakeAccountPlaceholder', 'abcd.us-east-1')}
                     autoComplete="off"
                     required
                     pattern=".*\S.*"
-                    disabled={isUnsupported}
                 />
             </div>
 
@@ -197,138 +260,132 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
                 <label htmlFor="authMethod">
                     {getLocString('integrationsSnowflakeAuthMethodLabel', 'Authentication')}
                 </label>
-                <select
-                    id="authMethod"
-                    value={authMethod}
-                    onChange={(e) => setAuthMethod(e.target.value as SnowflakeAuthMethod)}
-                    disabled={isUnsupported}
-                >
-                    <option value={SnowflakeAuthMethods.PASSWORD}>
+                <select id="authMethod" value={pendingConfig.metadata.authMethod} onChange={handleAuthMethodChange}>
+                    <option value={SnowflakeAuthMethods.Password}>
                         {getLocString('integrationsSnowflakeAuthMethodUsernamePassword', 'Username & password')}
                     </option>
-                    <option value={SnowflakeAuthMethods.SERVICE_ACCOUNT_KEY_PAIR}>
+                    <option value={SnowflakeAuthMethods.ServiceAccountKeyPair}>
                         {getLocString('integrationsSnowflakeAuthMethodKeyPair', 'Key-pair (service account)')}
                     </option>
                 </select>
             </div>
 
-            {!isUnsupported &&
-                (authMethod === SnowflakeAuthMethods.PASSWORD ? (
-                    <>
-                        <div className="form-group">
-                            <label htmlFor="username">
-                                {getLocString('integrationsSnowflakeUsernameLabel', 'Username')}{' '}
-                                <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
-                            </label>
-                            <input
-                                type="text"
-                                id="username"
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
-                                autoComplete="username"
-                                required
-                                pattern=".*\S.*"
-                            />
-                        </div>
+            {pendingConfig.metadata.authMethod === SnowflakeAuthMethods.Password ? (
+                <>
+                    <div className="form-group">
+                        <label htmlFor="username">
+                            {getLocString('integrationsSnowflakeUsernameLabel', 'Username')}{' '}
+                            <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
+                        </label>
+                        <input
+                            type="text"
+                            id="username"
+                            value={usernameValue}
+                            onChange={handleUsernameChange}
+                            autoComplete="username"
+                            required
+                            pattern=".*\S.*"
+                        />
+                    </div>
 
-                        <div className="form-group">
-                            <label htmlFor="password">
-                                {getLocString('integrationsSnowflakePasswordLabel', 'Password')}{' '}
-                                <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
-                            </label>
-                            <input
-                                type="password"
-                                id="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                placeholder={getLocString('integrationsSnowflakePasswordPlaceholder', '••••••••')}
-                                autoComplete="current-password"
-                                required
-                                pattern=".*\S.*"
-                            />
-                        </div>
-                    </>
-                ) : (
-                    <>
-                        <div className="form-group">
-                            <label htmlFor="username">
-                                {getLocString(
-                                    'integrationsSnowflakeServiceAccountUsernameLabel',
-                                    'Service Account Username'
-                                )}{' '}
-                                <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
-                            </label>
-                            <p className="form-help-text" id="username-help">
-                                {getLocString(
-                                    'integrationsSnowflakeServiceAccountUsernameHelp',
-                                    'The username of the service account that will be used to connect to Snowflake'
-                                )}
-                            </p>
-                            <input
-                                type="text"
-                                id="username"
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
-                                autoComplete="username"
-                                required
-                                pattern=".*\S.*"
-                                aria-describedby="username-help"
-                            />
-                        </div>
+                    <div className="form-group">
+                        <label htmlFor="password">
+                            {getLocString('integrationsSnowflakePasswordLabel', 'Password')}{' '}
+                            <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
+                        </label>
+                        <input
+                            type="password"
+                            id="password"
+                            value={passwordValue}
+                            onChange={handlePasswordChange}
+                            placeholder={getLocString('integrationsSnowflakePasswordPlaceholder', '••••••••')}
+                            autoComplete="current-password"
+                            required
+                            pattern=".*\S.*"
+                        />
+                    </div>
+                </>
+            ) : (
+                <>
+                    <div className="form-group">
+                        <label htmlFor="username">
+                            {getLocString(
+                                'integrationsSnowflakeServiceAccountUsernameLabel',
+                                'Service Account Username'
+                            )}{' '}
+                            <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
+                        </label>
+                        <p className="form-help-text" id="username-help">
+                            {getLocString(
+                                'integrationsSnowflakeServiceAccountUsernameHelp',
+                                'The username of the service account that will be used to connect to Snowflake'
+                            )}
+                        </p>
+                        <input
+                            type="text"
+                            id="username"
+                            value={usernameValue}
+                            onChange={handleUsernameChange}
+                            autoComplete="username"
+                            required
+                            pattern=".*\S.*"
+                            aria-describedby="username-help"
+                        />
+                    </div>
 
-                        <div className="form-group">
-                            <label htmlFor="privateKey">
-                                {getLocString('integrationsSnowflakePrivateKeyLabel', 'Private Key')}{' '}
-                                <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
-                            </label>
-                            <p className="form-help-text" id="privateKey-help">
-                                {getLocString(
-                                    'integrationsSnowflakePrivateKeyHelp',
-                                    'The private key in PEM format. Make sure to include the entire key, including BEGIN and END markers.'
-                                )}
-                            </p>
-                            <textarea
-                                id="privateKey"
-                                value={privateKey}
-                                onChange={(e) => setPrivateKey(e.target.value)}
-                                placeholder={getLocString(
-                                    'integrationsSnowflakePrivateKeyPlaceholder',
-                                    "Begins with '-----BEGIN PRIVATE KEY-----'"
-                                )}
-                                rows={8}
-                                autoComplete="off"
-                                spellCheck={false}
-                                autoCorrect="off"
-                                autoCapitalize="off"
-                                required
-                                aria-describedby="privateKey-help"
-                            />
-                        </div>
+                    <div className="form-group">
+                        <label htmlFor="privateKey">
+                            {getLocString('integrationsSnowflakePrivateKeyLabel', 'Private Key')}{' '}
+                            <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
+                        </label>
+                        <p className="form-help-text" id="privateKey-help">
+                            {getLocString(
+                                'integrationsSnowflakePrivateKeyHelp',
+                                'The private key in PEM format. Make sure to include the entire key, including BEGIN and END markers.'
+                            )}
+                        </p>
+                        <textarea
+                            id="privateKey"
+                            value={privateKeyValue}
+                            onChange={handlePrivateKeyChange}
+                            placeholder={getLocString(
+                                'integrationsSnowflakePrivateKeyPlaceholder',
+                                "Begins with '-----BEGIN PRIVATE KEY-----'"
+                            )}
+                            rows={8}
+                            autoComplete="off"
+                            spellCheck={false}
+                            autoCorrect="off"
+                            autoCapitalize="off"
+                            required
+                            aria-describedby="privateKey-help"
+                        />
+                    </div>
 
-                        <div className="form-group">
-                            <label htmlFor="privateKeyPassphrase">
-                                {getLocString(
-                                    'integrationsSnowflakePrivateKeyPassphraseLabel',
-                                    'Private Key Passphrase (optional)'
-                                )}
-                            </label>
-                            <p className="form-help-text" id="privateKeyPassphrase-help">
-                                {getLocString(
-                                    'integrationsSnowflakePrivateKeyPassphraseHelp',
-                                    'If the private key is encrypted, provide the passphrase to decrypt it'
-                                )}
-                            </p>
-                            <input
-                                type="password"
-                                id="privateKeyPassphrase"
-                                value={privateKeyPassphrase}
-                                onChange={(e) => setPrivateKeyPassphrase(e.target.value)}
-                                autoComplete="off"
-                                aria-describedby="privateKeyPassphrase-help"
-                            />
-                        </div>
-                    </>
-                ))}
+                    <div className="form-group">
+                        <label htmlFor="privateKeyPassphrase">
+                            {getLocString(
+                                'integrationsSnowflakePrivateKeyPassphraseLabel',
+                                'Private Key Passphrase (optional)'
+                            )}
+                        </label>
+                        <p className="form-help-text" id="privateKeyPassphrase-help">
+                            {getLocString(
+                                'integrationsSnowflakePrivateKeyPassphraseHelp',
+                                'If the private key is encrypted, provide the passphrase to decrypt it'
+                            )}
+                        </p>
+                        <input
+                            type="password"
+                            id="privateKeyPassphrase"
+                            value={privateKeyPassphraseValue}
+                            onChange={handlePrivateKeyPassphraseChange}
+                            autoComplete="off"
+                            aria-describedby="privateKeyPassphrase-help"
+                        />
+                    </div>
+                </>
+            )}
 
             <div className="form-group">
                 <label htmlFor="database">
@@ -337,11 +394,10 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
                 <input
                     type="text"
                     id="database"
-                    value={database}
-                    onChange={(e) => setDatabase(e.target.value)}
+                    value={pendingConfig.metadata.database || ''}
+                    onChange={handleDatabaseChange}
                     placeholder={getLocString('integrationsSnowflakeDatabasePlaceholder', '')}
                     autoComplete="off"
-                    disabled={isUnsupported}
                 />
             </div>
 
@@ -350,11 +406,10 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
                 <input
                     type="text"
                     id="role"
-                    value={role}
-                    onChange={(e) => setRole(e.target.value)}
+                    value={pendingConfig.metadata.role || ''}
+                    onChange={handleRoleChange}
                     placeholder={getLocString('integrationsSnowflakeRolePlaceholder', '')}
                     autoComplete="off"
-                    disabled={isUnsupported}
                 />
             </div>
 
@@ -365,16 +420,15 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
                 <input
                     type="text"
                     id="warehouse"
-                    value={warehouse}
-                    onChange={(e) => setWarehouse(e.target.value)}
+                    value={pendingConfig.metadata.warehouse || ''}
+                    onChange={handleWarehouseChange}
                     placeholder={getLocString('integrationsSnowflakeWarehousePlaceholder', '')}
                     autoComplete="off"
-                    disabled={isUnsupported}
                 />
             </div>
 
             <div className="form-actions">
-                <button type="submit" className="primary" disabled={isUnsupported}>
+                <button type="submit" className="primary">
                     {getLocString('integrationsSave', 'Save')}
                 </button>
                 <button type="button" className="secondary" onClick={onCancel}>

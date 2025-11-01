@@ -74,6 +74,7 @@ export interface LegacyDuckDBIntegrationConfig extends BaseLegacyIntegrationConf
     type: LegacyIntegrationType.DuckDB;
 }
 
+import { DatabaseIntegrationConfig, DatabaseIntegrationType } from '@deepnote/database-integrations';
 // Import and re-export Snowflake auth constants from shared module
 import {
     type SnowflakeAuthMethod,
@@ -148,7 +149,7 @@ export enum IntegrationStatus {
  * Integration with its current status
  */
 export interface IntegrationWithStatus {
-    config: LegacyIntegrationConfig | null;
+    config: DatabaseIntegrationConfig | null;
     status: IntegrationStatus;
     error?: string;
     /**
@@ -158,5 +159,5 @@ export interface IntegrationWithStatus {
     /**
      * Type from the project's integrations list (used for prefilling when config is null)
      */
-    integrationType?: LegacyIntegrationType;
+    integrationType?: DatabaseIntegrationType;
 }

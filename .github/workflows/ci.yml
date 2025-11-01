@@ -10,7 +10,6 @@ on:
 permissions:
   actions: read
   contents: read
-  packages: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -30,13 +29,9 @@ jobs:
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@deepnote'
 
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run ESLint
         run: npm run lint
@@ -57,13 +52,9 @@ jobs:
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@deepnote'
 
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run TypeScript type checking
         run: npm run typecheck
@@ -95,7 +86,6 @@ jobs:
     permissions:
       id-token: write
       contents: read
-      packages: read
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
@@ -105,13 +95,9 @@ jobs:
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@deepnote'
 
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Compile TypeScript
         run: npm run compile
@@ -155,13 +141,9 @@ jobs:
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@deepnote'
 
       - name: Install dependencies
         run: npm ci
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check Licenses
         run: npm run check-licenses
@@ -179,13 +161,9 @@ jobs:
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@deepnote'
 
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run spell check
         run: npm run spell-check
@@ -203,13 +181,9 @@ jobs:
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@deepnote'
 
       - name: Install dependencies
         run: npm install
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check package lock drift
         run: |
@@ -228,13 +202,9 @@ jobs:
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@deepnote'
 
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run audit for production dependencies
         run: npm audit --production
@@ -252,13 +222,9 @@ jobs:
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@deepnote'
 
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run audit for all dependencies
         run: npm audit

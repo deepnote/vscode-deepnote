@@ -177,7 +177,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsSnowflakeRolePlaceholder: localize.Integrations.snowflakeRolePlaceholder,
             integrationsSnowflakeWarehouseLabel: localize.Integrations.snowflakeWarehouseLabel,
             integrationsSnowflakeWarehousePlaceholder: localize.Integrations.snowflakeWarehousePlaceholder,
-            integrationsUnnamedIntegration: localize.Integrations.unnamedIntegration('{0}')
+            integrationsUnnamedIntegration: localize.Integrations.unnamedIntegration('{0}'),
+            integrationsUnsupportedIntegrationType: localize.Integrations.unsupportedIntegrationType('{0}')
         };
 
         await this.currentPanel.webview.postMessage({

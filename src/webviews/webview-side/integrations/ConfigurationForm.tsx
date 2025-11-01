@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { getLocString } from '../react-common/locReactSide';
+import { format, getLocString } from '../react-common/locReactSide';
 import { PostgresForm } from './PostgresForm';
 import { BigQueryForm } from './BigQueryForm';
 import { SnowflakeForm } from './SnowflakeForm';
@@ -70,8 +70,13 @@ export const ConfigurationForm: React.FC<IConfigurationFormProps> = ({
                                         onCancel={onCancel}
                                     />
                                 );
-                            default:
-                                return <div>Unsupported integration type: {integrationType}</div>;
+                            default: {
+                                const unsupportedMessage = getLocString(
+                                    'integrationsUnsupportedIntegrationType',
+                                    'Unsupported integration type: {0}'
+                                );
+                                return <div>{format(unsupportedMessage, integrationType)}</div>;
+                            }
                         }
                     })()}
                 </div>

@@ -12,7 +12,7 @@ import {
     SnowflakeIntegrationConfig,
     SnowflakeAuthMethods
 } from './integrationTypes';
-import { INotebookEditorProvider, IDeepnoteNotebookManager } from '../../../notebooks/types';
+import { IPlatformNotebookEditorProvider, IPlatformDeepnoteNotebookManager } from './types';
 
 const EXPECTED_DATAFRAME_ONLY_ENV_VARS = {
     SQL_DEEPNOTE_DATAFRAME_SQL: '{"url":"deepnote+duckdb:///:memory:","params":{},"param_style":"qmark"}'
@@ -42,15 +42,15 @@ function createMockNotebook(projectId: string): NotebookDocument {
 suite('SqlIntegrationEnvironmentVariablesProvider', () => {
     let provider: SqlIntegrationEnvironmentVariablesProvider;
     let integrationStorage: IntegrationStorage;
-    let notebookEditorProvider: INotebookEditorProvider;
-    let notebookManager: IDeepnoteNotebookManager;
+    let notebookEditorProvider: IPlatformNotebookEditorProvider;
+    let notebookManager: IPlatformDeepnoteNotebookManager;
     let disposables: IDisposableRegistry;
 
     setup(() => {
         disposables = [];
         integrationStorage = mock(IntegrationStorage);
-        notebookEditorProvider = mock<INotebookEditorProvider>();
-        notebookManager = mock<IDeepnoteNotebookManager>();
+        notebookEditorProvider = mock<IPlatformNotebookEditorProvider>();
+        notebookManager = mock<IPlatformDeepnoteNotebookManager>();
 
         when(integrationStorage.onDidChangeIntegrations).thenReturn(new EventEmitter<void>().event);
 

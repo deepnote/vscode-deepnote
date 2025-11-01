@@ -1,41 +1,67 @@
 import * as React from 'react';
 import { format, getLocString } from '../react-common/locReactSide';
-import { BigQueryIntegrationConfig } from './types';
+import { BigQueryAuthMethods, DatabaseIntegrationConfig } from '@deepnote/database-integrations';
+
+type BigQueryConfig = Extract<DatabaseIntegrationConfig, { type: 'big-query' }>;
+
+function createEmptyBigQueryConfig(params: { id: string; name?: string }): BigQueryConfig {
+    const unnamedIntegration = getLocString('integrationsUnnamedIntegration', 'Unnamed Integration ({0})');
+
+    return {
+        id: params.id,
+        name: (params.name || format(unnamedIntegration, params.id)).trim(),
+        type: 'big-query',
+        metadata: {
+            authMethod: BigQueryAuthMethods.ServiceAccount,
+            service_account: ''
+        }
+    };
+}
 
 export interface IBigQueryFormProps {
     integrationId: string;
-    existingConfig: BigQueryIntegrationConfig | null;
-    integrationName?: string;
-    onSave: (config: BigQueryIntegrationConfig) => void;
+    existingConfig: BigQueryConfig | null;
+    defaultName?: string;
+    onSave: (config: BigQueryConfig) => void;
     onCancel: () => void;
 }
 
 export const BigQueryForm: React.FC<IBigQueryFormProps> = ({
     integrationId,
     existingConfig,
-    integrationName,
+    defaultName,
     onSave,
     onCancel
 }) => {
-    const [name, setName] = React.useState(existingConfig?.name || integrationName || '');
-    const [projectId, setProjectId] = React.useState(existingConfig?.projectId || '');
-    const [credentials, setCredentials] = React.useState(existingConfig?.credentials || '');
+    const [pendingConfig, setPendingConfig] = React.useState<BigQueryConfig>(
+        existingConfig && existingConfig.metadata.authMethod === BigQueryAuthMethods.ServiceAccount
+            ? structuredClone(existingConfig)
+            : createEmptyBigQueryConfig({ id: integrationId, name: defaultName })
+    );
+
     const [credentialsError, setCredentialsError] = React.useState<string | null>(null);
 
-    // Update form fields when existingConfig or integrationName changes
     React.useEffect(() => {
-        if (existingConfig) {
-            setName(existingConfig.name || '');
-            setProjectId(existingConfig.projectId || '');
-            setCredentials(existingConfig.credentials || '');
-            setCredentialsError(null);
-        } else {
-            setName(integrationName || '');
-            setProjectId('');
-            setCredentials('');
-            setCredentialsError(null);
-        }
-    }, [existingConfig, integrationName]);
+        setPendingConfig(
+            existingConfig && existingConfig.metadata.authMethod === BigQueryAuthMethods.ServiceAccount
+                ? structuredClone(existingConfig)
+                : createEmptyBigQueryConfig({ id: integrationId, name: defaultName })
+        );
+        setCredentialsError(null);
+    }, [existingConfig, integrationId, defaultName]);
+
+    // Extract service account value with proper type narrowing
+    const serviceAccountValue =
+        pendingConfig.metadata.authMethod === BigQueryAuthMethods.ServiceAccount
+            ? pendingConfig.metadata.service_account
+            : '';
+
+    const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            name: e.target.value
+        }));
+    };
 
     const validateCredentials = (value: string): boolean => {
         if (!value.trim()) {
@@ -57,31 +83,32 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({
 
     const handleCredentialsChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const value = e.target.value;
-        setCredentials(value);
+
+        setPendingConfig((prev) => {
+            if (prev.metadata.authMethod === BigQueryAuthMethods.ServiceAccount) {
+                return {
+                    ...prev,
+                    metadata: {
+                        ...prev.metadata,
+                        service_account: value
+                    }
+                };
+            }
+            return prev;
+        });
+
         validateCredentials(value);
     };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        const trimmedCredentials = credentials.trim();
-
         // Validate credentials before submitting
-        if (!validateCredentials(trimmedCredentials)) {
+        if (!validateCredentials(serviceAccountValue)) {
             return;
         }
 
-        const unnamedIntegration = getLocString('integrationsUnnamedIntegration', 'Unnamed Integration ({0})');
-
-        const config: BigQueryIntegrationConfig = {
-            id: integrationId,
-            name: (name || format(unnamedIntegration, integrationId)).trim(),
-            type: 'bigquery',
-            projectId: projectId.trim(),
-            credentials: trimmedCredentials
-        };
-
-        onSave(config);
+        onSave(pendingConfig);
     };
 
     return (
@@ -91,26 +118,10 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({
                 <input
                     type="text"
                     id="name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    value={pendingConfig.name}
+                    onChange={handleNameChange}
                     placeholder={getLocString('integrationsBigQueryNamePlaceholder', 'My BigQuery Project')}
                     autoComplete="off"
-                />
-            </div>
-
-            <div className="form-group">
-                <label htmlFor="projectId">
-                    {getLocString('integrationsBigQueryProjectIdLabel', 'Project ID')}{' '}
-                    <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
-                </label>
-                <input
-                    type="text"
-                    id="projectId"
-                    value={projectId}
-                    onChange={(e) => setProjectId(e.target.value)}
-                    placeholder={getLocString('integrationsBigQueryProjectIdPlaceholder', 'my-project-id')}
-                    autoComplete="off"
-                    required
                 />
             </div>
 
@@ -121,7 +132,7 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({
                 </label>
                 <textarea
                     id="credentials"
-                    value={credentials}
+                    value={serviceAccountValue}
                     onChange={handleCredentialsChange}
                     placeholder={getLocString(
                         'integrationsBigQueryCredentialsPlaceholder',

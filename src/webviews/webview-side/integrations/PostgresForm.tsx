@@ -1,69 +1,127 @@
 import * as React from 'react';
 import { format, getLocString } from '../react-common/locReactSide';
-import { PostgresIntegrationConfig } from './types';
+import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
+
+function createEmptyPostgresConfig(params: {
+    id: string;
+    name?: string;
+}): Extract<DatabaseIntegrationConfig, { type: 'pgsql' }> {
+    const unnamedIntegration = getLocString('integrationsUnnamedIntegration', 'Unnamed Integration ({0})');
+
+    return {
+        id: params.id,
+        name: (params.name || format(unnamedIntegration, params.id)).trim(),
+        type: 'pgsql',
+        metadata: {
+            host: '',
+            port: '5432',
+            database: '',
+            user: '',
+            password: '',
+            sslEnabled: false
+        }
+    };
+}
 
 export interface IPostgresFormProps {
     integrationId: string;
-    existingConfig: PostgresIntegrationConfig | null;
-    integrationName?: string;
-    onSave: (config: PostgresIntegrationConfig) => void;
+    existingConfig: Extract<DatabaseIntegrationConfig, { type: 'pgsql' }> | null;
+    defaultName?: string;
+    onSave: (config: Extract<DatabaseIntegrationConfig, { type: 'pgsql' }>) => void;
     onCancel: () => void;
 }
 
 export const PostgresForm: React.FC<IPostgresFormProps> = ({
     integrationId,
     existingConfig,
-    integrationName,
+    defaultName,
     onSave,
     onCancel
 }) => {
-    const [name, setName] = React.useState(existingConfig?.name || integrationName || '');
-    const [host, setHost] = React.useState(existingConfig?.host || '');
-    const [port, setPort] = React.useState(existingConfig?.port?.toString() || '5432');
-    const [database, setDatabase] = React.useState(existingConfig?.database || '');
-    const [username, setUsername] = React.useState(existingConfig?.username || '');
-    const [password, setPassword] = React.useState(existingConfig?.password || '');
-    const [ssl, setSsl] = React.useState(existingConfig?.ssl || false);
+    const [pendingConfig, setPendingConfig] = React.useState<Extract<DatabaseIntegrationConfig, { type: 'pgsql' }>>(
+        existingConfig
+            ? structuredClone(existingConfig)
+            : createEmptyPostgresConfig({ id: integrationId, name: defaultName })
+    );
 
-    // Update form fields when existingConfig or integrationName changes
     React.useEffect(() => {
-        if (existingConfig) {
-            setName(existingConfig.name || '');
-            setHost(existingConfig.host || '');
-            setPort(existingConfig.port?.toString() || '5432');
-            setDatabase(existingConfig.database || '');
-            setUsername(existingConfig.username || '');
-            setPassword(existingConfig.password || '');
-            setSsl(existingConfig.ssl || false);
-        } else {
-            setName(integrationName || '');
-            setHost('');
-            setPort('5432');
-            setDatabase('');
-            setUsername('');
-            setPassword('');
-            setSsl(false);
-        }
-    }, [existingConfig, integrationName]);
+        setPendingConfig(
+            existingConfig
+                ? structuredClone(existingConfig)
+                : createEmptyPostgresConfig({ id: integrationId, name: defaultName })
+        );
+    }, [existingConfig, integrationId, defaultName]);
+
+    const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            name: e.target.value
+        }));
+    };
+
+    const handleHostChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: {
+                ...prev.metadata,
+                host: e.target.value
+            }
+        }));
+    };
+
+    const handlePortChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: {
+                ...prev.metadata,
+                port: e.target.value
+            }
+        }));
+    };
+
+    const handleDatabaseChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: {
+                ...prev.metadata,
+                database: e.target.value
+            }
+        }));
+    };
+
+    const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: {
+                ...prev.metadata,
+                user: e.target.value
+            }
+        }));
+    };
+
+    const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: {
+                ...prev.metadata,
+                password: e.target.value
+            }
+        }));
+    };
+
+    const handleSslChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: {
+                ...prev.metadata,
+                sslEnabled: e.target.checked
+            }
+        }));
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-
-        const unnamedIntegration = getLocString('integrationsUnnamedIntegration', 'Unnamed Integration ({0})');
-
-        const config: PostgresIntegrationConfig = {
-            id: integrationId,
-            name: (name || format(unnamedIntegration, integrationId)).trim(),
-            type: 'postgres',
-            host,
-            port: parseInt(port, 10),
-            database: database.trim(),
-            username: username.trim(),
-            password: password.trim(),
-            ssl
-        };
-
-        onSave(config);
+        onSave(pendingConfig);
     };
 
     return (
@@ -73,8 +131,8 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({
                 <input
                     type="text"
                     id="name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    value={pendingConfig.name}
+                    onChange={handleNameChange}
                     placeholder={getLocString('integrationsPostgresNamePlaceholder', 'My PostgreSQL Database')}
                     autoComplete="off"
                 />
@@ -88,8 +146,8 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({
                 <input
                     type="text"
                     id="host"
-                    value={host}
-                    onChange={(e) => setHost(e.target.value)}
+                    value={pendingConfig.metadata.host}
+                    onChange={handleHostChange}
                     placeholder={getLocString('integrationsPostgresHostPlaceholder', 'localhost')}
                     autoComplete="off"
                     required
@@ -104,8 +162,8 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({
                 <input
                     type="number"
                     id="port"
-                    value={port}
-                    onChange={(e) => setPort(e.target.value)}
+                    value={pendingConfig.metadata.port}
+                    onChange={handlePortChange}
                     placeholder={getLocString('integrationsPostgresPortPlaceholder', '5432')}
                     min={1}
                     max={65535}
@@ -123,8 +181,8 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({
                 <input
                     type="text"
                     id="database"
-                    value={database}
-                    onChange={(e) => setDatabase(e.target.value)}
+                    value={pendingConfig.metadata.database}
+                    onChange={handleDatabaseChange}
                     placeholder={getLocString('integrationsPostgresDatabasePlaceholder', 'mydb')}
                     autoComplete="off"
                     required
@@ -139,8 +197,8 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({
                 <input
                     type="text"
                     id="username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    value={pendingConfig.metadata.user}
+                    onChange={handleUsernameChange}
                     placeholder={getLocString('integrationsPostgresUsernamePlaceholder', 'postgres')}
                     autoComplete="username"
                     required
@@ -155,8 +213,8 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({
                 <input
                     type="password"
                     id="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    value={pendingConfig.metadata.password}
+                    onChange={handlePasswordChange}
                     placeholder={getLocString('integrationsPostgresPasswordPlaceholder', '••••••••')}
                     autoComplete="current-password"
                     required
@@ -165,7 +223,7 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({
 
             <div className="form-group checkbox-group">
                 <label>
-                    <input type="checkbox" checked={ssl} onChange={(e) => setSsl(e.target.checked)} />
+                    <input type="checkbox" checked={pendingConfig.metadata.sslEnabled} onChange={handleSslChange} />
                     {getLocString('integrationsPostgresSslLabel', 'Use SSL')}
                 </label>
             </div>

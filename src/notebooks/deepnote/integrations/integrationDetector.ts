@@ -2,14 +2,9 @@ import { inject, injectable } from 'inversify';
 
 import { logger } from '../../../platform/logging';
 import { IDeepnoteNotebookManager } from '../../types';
-import {
-    DATAFRAME_SQL_INTEGRATION_ID,
-    DEEPNOTE_TO_LEGACY_INTEGRATION_TYPE,
-    IntegrationStatus,
-    IntegrationWithStatus,
-    RawLegacyIntegrationType
-} from '../../../platform/notebooks/deepnote/integrationTypes';
+import { IntegrationStatus, IntegrationWithStatus } from '../../../platform/notebooks/deepnote/integrationTypes';
 import { IIntegrationDetector, IIntegrationStorage } from './types';
+import { DatabaseIntegrationType, databaseIntegrationTypes } from '@deepnote/database-integrations';
 
 /**
  * Service for detecting integrations used in Deepnote notebooks
@@ -40,40 +35,25 @@ export class IntegrationDetector implements IIntegrationDetector {
         const integrations = new Map<string, IntegrationWithStatus>();
 
         // Use the project's integrations field as the source of truth
-        const projectIntegrations = project.project.integrations || [];
+        const projectIntegrations = project.project.integrations?.slice() ?? [];
         logger.debug(`IntegrationDetector: Found ${projectIntegrations.length} integrations in project.integrations`);
 
         for (const projectIntegration of projectIntegrations) {
             const integrationId = projectIntegration.id;
-
-            // Skip the internal DuckDB integration
-            if (integrationId === DATAFRAME_SQL_INTEGRATION_ID) {
-                continue;
-            }
-
-            logger.debug(`IntegrationDetector: Found integration: ${integrationId} (${projectIntegration.type})`);
-
-            // Map the Deepnote integration type to our IntegrationType
-            const integrationType =
-                DEEPNOTE_TO_LEGACY_INTEGRATION_TYPE[projectIntegration.type as RawLegacyIntegrationType];
-
-            // Skip unknown integration types
-            if (!integrationType) {
-                logger.warn(
-                    `IntegrationDetector: Unknown integration type '${projectIntegration.type}' for integration ID '${integrationId}'. Skipping.`
-                );
+            const integrationType = projectIntegration.type;
+            if (!(databaseIntegrationTypes as readonly string[]).includes(integrationType)) {
+                logger.debug(`IntegrationDetector: Skipping unsupported integration type: ${integrationType}`);
                 continue;
             }
 
             // Check if the integration is configured
             const config = await this.integrationStorage.getIntegrationConfig(integrationId);
-
             const status: IntegrationWithStatus = {
-                config: config || null,
+                config: config ?? null,
                 status: config ? IntegrationStatus.Connected : IntegrationStatus.Disconnected,
                 // Include integration metadata from project for prefilling when config is null
                 integrationName: projectIntegration.name,
-                integrationType: integrationType
+                integrationType: integrationType as DatabaseIntegrationType
             };
 
             integrations.set(integrationId, status);

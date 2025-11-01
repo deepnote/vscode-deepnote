@@ -1,20 +1,34 @@
 import { assert, expect } from 'chai';
 import * as sinon from 'sinon';
-import { anything, instance, mock, when } from 'ts-mockito';
+import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { Uri, workspace } from 'vscode';
 import * as yaml from 'js-yaml';
 
 import { DeepnoteExplorerView } from './deepnoteExplorerView';
 import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
-import type { DeepnoteTreeItemContext } from './deepnoteTreeItem';
+import { DeepnoteTreeItem, DeepnoteTreeItemType, type DeepnoteTreeItemContext } from './deepnoteTreeItem';
 import type { IExtensionContext } from '../../platform/common/types';
+import type { DeepnoteFile, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import * as uuidModule from '../../platform/common/uuid';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
+import { ILogger } from '../../platform/logging/types';
+
+function createMockLogger(): ILogger {
+    return {
+        error: () => undefined,
+        warn: () => undefined,
+        info: () => undefined,
+        debug: () => undefined,
+        trace: () => undefined,
+        ci: () => undefined
+    } as ILogger;
+}
 
 suite('DeepnoteExplorerView', () => {
     let explorerView: DeepnoteExplorerView;
     let mockExtensionContext: IExtensionContext;
     let manager: DeepnoteNotebookManager;
+    let mockLogger: ILogger;
 
     setup(() => {
         mockExtensionContext = {
@@ -22,7 +36,8 @@ suite('DeepnoteExplorerView', () => {
         } as any;
 
         manager = new DeepnoteNotebookManager();
-        explorerView = new DeepnoteExplorerView(mockExtensionContext, manager);
+        mockLogger = createMockLogger();
+        explorerView = new DeepnoteExplorerView(mockExtensionContext, manager, mockLogger);
     });
 
     suite('constructor', () => {
@@ -158,8 +173,10 @@ suite('DeepnoteExplorerView', () => {
 
             const manager1 = new DeepnoteNotebookManager();
             const manager2 = new DeepnoteNotebookManager();
-            const view1 = new DeepnoteExplorerView(context1, manager1);
-            const view2 = new DeepnoteExplorerView(context2, manager2);
+            const logger1 = createMockLogger();
+            const logger2 = createMockLogger();
+            const view1 = new DeepnoteExplorerView(context1, manager1, logger1);
+            const view2 = new DeepnoteExplorerView(context2, manager2, logger2);
 
             // Verify each view has its own context
             assert.strictEqual((view1 as any).extensionContext, context1);
@@ -199,7 +216,8 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         } as unknown as IExtensionContext;
 
         mockManager = new DeepnoteNotebookManager();
-        explorerView = new DeepnoteExplorerView(mockContext, mockManager);
+        const mockLogger = createMockLogger();
+        explorerView = new DeepnoteExplorerView(mockContext, mockManager, mockLogger);
     });
 
     teardown(() => {
@@ -733,6 +751,1012 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Verify success message was shown (indicating convert was called successfully)
             expect(infoMessageShown).to.be.true;
+        });
+    });
+
+    suite('createAndAddNotebookToProject', () => {
+        test('should create and add a new notebook to an existing project', async () => {
+            const projectId = 'test-project-id';
+            const existingNotebookId = 'existing-notebook-id';
+            const newNotebookId = 'new-notebook-id';
+            const blockGroupId = 'test-blockgroup-id';
+            const blockId = 'test-block-id';
+            const fileUri = Uri.file('/workspace/test-project.deepnote');
+            const notebookName = 'New Notebook';
+
+            // Mock existing project data
+            const existingProjectData = {
+                version: 1.0,
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
+                },
+                project: {
+                    id: projectId,
+                    name: 'Test Project',
+                    notebooks: [
+                        {
+                            id: existingNotebookId,
+                            name: 'Notebook 1',
+                            blocks: [],
+                            executionMode: 'block'
+                        }
+                    ]
+                }
+            };
+
+            const yamlContent = yaml.dump(existingProjectData);
+
+            // Mock file system
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yamlContent)));
+
+            let capturedWriteContent: Uint8Array | undefined;
+            when(mockFS.writeFile(anything(), anything())).thenCall((_uri: Uri, content: Uint8Array) => {
+                capturedWriteContent = content;
+                return Promise.resolve();
+            });
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            // Mock user input
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(notebookName));
+
+            // Mock UUID generation
+            const generateUuidStub = sandbox.stub(uuidModule, 'generateUuid');
+            generateUuidStub.onCall(0).returns(newNotebookId);
+            generateUuidStub.onCall(1).returns(blockGroupId);
+            generateUuidStub.onCall(2).returns(blockId);
+
+            // Mock notebook opening
+            const mockNotebook = { notebookType: 'deepnote' };
+            when(mockedVSCodeNamespaces.workspace.openNotebookDocument(anything())).thenReturn(
+                Promise.resolve(mockNotebook as any)
+            );
+            when(mockedVSCodeNamespaces.window.showNotebookDocument(anything(), anything())).thenReturn(
+                Promise.resolve(undefined as any)
+            );
+
+            // Execute the method
+            const result = await explorerView.createAndAddNotebookToProject(fileUri);
+
+            // Verify result
+            expect(result).to.exist;
+            expect(result?.id).to.equal(newNotebookId);
+            expect(result?.name).to.equal(notebookName);
+
+            // Verify file was written
+            expect(capturedWriteContent).to.exist;
+
+            // Verify YAML content
+            const updatedYamlContent = Buffer.from(capturedWriteContent!).toString('utf8');
+            const updatedProjectData = yaml.load(updatedYamlContent) as any;
+
+            expect(updatedProjectData.project.notebooks).to.have.lengthOf(2);
+            expect(updatedProjectData.project.notebooks[1].id).to.equal(newNotebookId);
+            expect(updatedProjectData.project.notebooks[1].name).to.equal(notebookName);
+            expect(updatedProjectData.project.notebooks[1].blocks).to.have.lengthOf(1);
+            expect(updatedProjectData.project.notebooks[1].executionMode).to.equal('block');
+        });
+
+        test('should return null if user cancels notebook name input', async () => {
+            const projectId = 'test-project-id';
+            const fileUri = Uri.file('/workspace/test-project.deepnote');
+
+            // Mock existing project data
+            const existingProjectData = {
+                version: 1.0,
+                project: {
+                    id: projectId,
+                    name: 'Test Project',
+                    notebooks: []
+                }
+            };
+
+            const yamlContent = yaml.dump(existingProjectData);
+
+            // Mock file system
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yamlContent)));
+            when(mockFS.writeFile(anything(), anything())).thenReturn(Promise.resolve());
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            // Mock user cancelling input
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(undefined));
+
+            // Execute the method
+            const result = await explorerView.createAndAddNotebookToProject(fileUri);
+
+            // Verify result is null and file was not written
+            expect(result).to.be.null;
+            verify(mockFS.writeFile(anything(), anything())).never();
+        });
+
+        test('should generate unique notebook name suggestions', async () => {
+            const projectId = 'test-project-id';
+            const fileUri = Uri.file('/workspace/test-project.deepnote');
+
+            // Mock existing project data with multiple notebooks
+            const existingProjectData = {
+                version: 1.0,
+                project: {
+                    id: projectId,
+                    name: 'Test Project',
+                    notebooks: [
+                        { id: 'nb1', name: 'Notebook 1', blocks: [], executionMode: 'block' },
+                        { id: 'nb2', name: 'Notebook 2', blocks: [], executionMode: 'block' }
+                    ]
+                }
+            };
+
+            const yamlContent = yaml.dump(existingProjectData);
+
+            // Mock file system
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yamlContent)));
+            when(mockFS.writeFile(anything(), anything())).thenReturn(Promise.resolve());
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            let capturedInputBoxOptions: any;
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenCall((options: any) => {
+                capturedInputBoxOptions = options;
+                return Promise.resolve('Test Notebook');
+            });
+
+            sandbox.stub(uuidModule, 'generateUuid').returns('test-id');
+
+            when(mockedVSCodeNamespaces.workspace.openNotebookDocument(anything())).thenReturn(
+                Promise.resolve({} as any)
+            );
+            when(mockedVSCodeNamespaces.window.showNotebookDocument(anything(), anything())).thenReturn(
+                Promise.resolve(undefined as any)
+            );
+
+            // Execute the method
+            await explorerView.createAndAddNotebookToProject(fileUri);
+
+            // Verify suggested name is 'Notebook 3' (next in sequence)
+            expect(capturedInputBoxOptions).to.exist;
+            expect(capturedInputBoxOptions.value).to.equal('Notebook 3');
+        });
+    });
+
+    suite('renameNotebook', () => {
+        test('should successfully rename a notebook with valid input', async () => {
+            const projectId = 'test-project-id';
+            const notebookId = 'notebook-to-rename';
+            const otherNotebookId = 'other-notebook-id';
+            const oldName = 'Old Notebook Name';
+            const newName = 'New Notebook Name';
+            const fileUri = Uri.file('/workspace/test-project.deepnote');
+
+            // Mock existing project data
+            const existingProjectData = {
+                version: 1.0,
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
+                },
+                project: {
+                    id: projectId,
+                    name: 'Test Project',
+                    notebooks: [
+                        {
+                            id: otherNotebookId,
+                            name: 'Other Notebook',
+                            blocks: [],
+                            executionMode: 'block'
+                        },
+                        {
+                            id: notebookId,
+                            name: oldName,
+                            blocks: [],
+                            executionMode: 'block'
+                        }
+                    ]
+                }
+            };
+
+            const yamlContent = yaml.dump(existingProjectData);
+
+            // Mock file system
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yamlContent)));
+
+            let capturedWriteContent: Uint8Array | undefined;
+            when(mockFS.writeFile(anything(), anything())).thenCall((_uri: Uri, content: Uint8Array) => {
+                capturedWriteContent = content;
+                return Promise.resolve();
+            });
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            // Mock user input for new name
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(newName));
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenReturn(
+                Promise.resolve(undefined)
+            );
+
+            // Create mock tree item
+            const mockTreeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.Notebook,
+                context: {
+                    filePath: fileUri.fsPath,
+                    projectId: projectId,
+                    notebookId: notebookId
+                },
+                data: {
+                    id: notebookId,
+                    name: oldName,
+                    blocks: [],
+                    executionMode: 'block'
+                }
+            };
+
+            // Execute the method
+            await explorerView.renameNotebook(mockTreeItem as DeepnoteTreeItem);
+
+            // Verify file was written
+            expect(capturedWriteContent).to.exist;
+
+            // Verify YAML content
+            const updatedYamlContent = Buffer.from(capturedWriteContent!).toString('utf8');
+            const updatedProjectData = yaml.load(updatedYamlContent) as DeepnoteFile;
+
+            // Find the renamed notebook
+            const renamedNotebook = updatedProjectData.project.notebooks.find((nb) => nb.id === notebookId);
+            expect(renamedNotebook).to.exist;
+            expect(renamedNotebook!.name).to.equal(newName);
+
+            // Verify other notebook was not affected
+            const otherNotebook = updatedProjectData.project.notebooks.find((nb) => nb.id === otherNotebookId);
+            expect(otherNotebook).to.exist;
+            expect(otherNotebook!.name).to.equal('Other Notebook');
+
+            // Verify metadata was updated
+            expect(updatedProjectData.metadata.modifiedAt).to.exist;
+
+            // Verify success message was shown
+            verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
+        });
+
+        test('should return early if tree item type is not Notebook', async () => {
+            const mockTreeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.ProjectFile,
+                context: {
+                    filePath: '/workspace/test-project.deepnote',
+                    projectId: 'test-project-id'
+                }
+            };
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from('')));
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            // Execute the method
+            await explorerView.renameNotebook(mockTreeItem as DeepnoteTreeItem);
+
+            // Verify that readFile was not called (early return)
+            verify(mockFS.readFile(anything())).never();
+        });
+
+        test('should return early if user cancels input or provides same name', async () => {
+            const projectId = 'test-project-id';
+            const notebookId = 'notebook-to-rename';
+            const currentName = 'Current Notebook Name';
+            const fileUri = Uri.file('/workspace/test-project.deepnote');
+
+            // Mock existing project data
+            const existingProjectData = {
+                version: 1.0,
+                project: {
+                    id: projectId,
+                    name: 'Test Project',
+                    notebooks: [
+                        {
+                            id: notebookId,
+                            name: currentName,
+                            blocks: [],
+                            executionMode: 'block'
+                        }
+                    ]
+                }
+            };
+
+            const yamlContent = yaml.dump(existingProjectData);
+
+            // Mock file system
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yamlContent)));
+            when(mockFS.writeFile(anything(), anything())).thenReturn(Promise.resolve());
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            // Mock user cancelling input (returns undefined)
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(undefined));
+
+            // Create mock tree item
+            const mockTreeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.Notebook,
+                context: {
+                    filePath: fileUri.fsPath,
+                    projectId: projectId,
+                    notebookId: notebookId
+                },
+                data: {
+                    id: notebookId,
+                    name: currentName,
+                    blocks: [],
+                    executionMode: 'block'
+                } as DeepnoteNotebook
+            };
+
+            // Execute the method
+            await explorerView.renameNotebook(mockTreeItem as DeepnoteTreeItem);
+
+            // Verify file was not written (early return)
+            verify(mockFS.writeFile(anything(), anything())).never();
+
+            // Test with same name
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(currentName));
+
+            await explorerView.renameNotebook(mockTreeItem as DeepnoteTreeItem);
+
+            // Verify file was not written (early return)
+            verify(mockFS.writeFile(anything(), anything())).never();
+        });
+    });
+
+    suite('deleteNotebook', () => {
+        test('should successfully delete a notebook with user confirmation', async () => {
+            const projectId = 'test-project-id';
+            const notebookToDeleteId = 'notebook-to-delete';
+            const remainingNotebookId = 'remaining-notebook-id';
+            const notebookToDeleteName = 'Notebook to Delete';
+            const fileUri = Uri.file('/workspace/test-project.deepnote');
+
+            // Mock existing project data
+            const existingProjectData = {
+                version: 1.0,
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
+                },
+                project: {
+                    id: projectId,
+                    name: 'Test Project',
+                    notebooks: [
+                        {
+                            id: remainingNotebookId,
+                            name: 'Remaining Notebook',
+                            blocks: [],
+                            executionMode: 'block'
+                        },
+                        {
+                            id: notebookToDeleteId,
+                            name: notebookToDeleteName,
+                            blocks: [],
+                            executionMode: 'block'
+                        }
+                    ]
+                }
+            };
+
+            const yamlContent = yaml.dump(existingProjectData);
+
+            // Mock file system
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yamlContent)));
+
+            let capturedWriteContent: Uint8Array | undefined;
+            when(mockFS.writeFile(anything(), anything())).thenCall((_uri: Uri, content: Uint8Array) => {
+                capturedWriteContent = content;
+                return Promise.resolve();
+            });
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            // Mock user confirmation
+            when(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).thenReturn(
+                Promise.resolve('Delete')
+            );
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenReturn(
+                Promise.resolve(undefined)
+            );
+
+            // Create mock tree item
+            const mockTreeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.Notebook,
+                context: {
+                    filePath: fileUri.fsPath,
+                    projectId: projectId,
+                    notebookId: notebookToDeleteId
+                },
+                data: {
+                    id: notebookToDeleteId,
+                    name: notebookToDeleteName,
+                    blocks: [],
+                    executionMode: 'block'
+                } as DeepnoteNotebook
+            };
+
+            // Execute the method
+            await explorerView.deleteNotebook(mockTreeItem as DeepnoteTreeItem);
+
+            // Verify file was written
+            expect(capturedWriteContent).to.exist;
+
+            // Verify YAML content
+            const updatedYamlContent = Buffer.from(capturedWriteContent!).toString('utf8');
+            const updatedProjectData = yaml.load(updatedYamlContent) as DeepnoteFile;
+
+            // Verify notebook was deleted
+            expect(updatedProjectData.project.notebooks).to.have.lengthOf(1);
+            expect(updatedProjectData.project.notebooks[0].id).to.equal(remainingNotebookId);
+
+            // Verify deleted notebook is not present
+            const deletedNotebook = updatedProjectData.project.notebooks.find((nb) => nb.id === notebookToDeleteId);
+            expect(deletedNotebook).to.be.undefined;
+
+            // Verify metadata was updated
+            expect(updatedProjectData.metadata.modifiedAt).to.exist;
+
+            // Verify success message was shown
+            verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
+        });
+
+        test('should return early if tree item type is not Notebook', async () => {
+            const mockTreeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.ProjectFile,
+                context: {
+                    filePath: '/workspace/test-project.deepnote',
+                    projectId: 'test-project-id'
+                }
+            };
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from('')));
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            // Execute the method
+            await explorerView.deleteNotebook(mockTreeItem as DeepnoteTreeItem);
+
+            // Verify that readFile was not called (early return)
+            verify(mockFS.readFile(anything())).never();
+            // Verify no warning message was shown
+            verify(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).never();
+        });
+
+        test('should return early if user cancels confirmation', async () => {
+            const projectId = 'test-project-id';
+            const notebookId = 'notebook-to-delete';
+            const notebookName = 'Notebook to Delete';
+            const fileUri = Uri.file('/workspace/test-project.deepnote');
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from('')));
+            when(mockFS.writeFile(anything(), anything())).thenReturn(Promise.resolve());
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            // Mock user cancelling confirmation
+            when(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).thenReturn(
+                Promise.resolve(undefined)
+            );
+
+            // Create mock tree item
+            const mockTreeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.Notebook,
+                context: {
+                    filePath: fileUri.fsPath,
+                    projectId: projectId,
+                    notebookId: notebookId
+                },
+                data: {
+                    id: notebookId,
+                    name: notebookName,
+                    blocks: [],
+                    executionMode: 'block'
+                } as DeepnoteNotebook
+            };
+
+            // Execute the method
+            await explorerView.deleteNotebook(mockTreeItem as DeepnoteTreeItem);
+
+            // Verify file operations were not called (user cancelled)
+            verify(mockFS.readFile(anything())).never();
+            verify(mockFS.writeFile(anything(), anything())).never();
+        });
+    });
+
+    suite('duplicateNotebook', () => {
+        test('should successfully duplicate a notebook', async () => {
+            const projectId = 'test-project-id';
+            const originalNotebookId = 'original-notebook-id';
+            const duplicatedNotebookId = 'duplicated-notebook-id';
+            const blockGroupId = 'new-blockgroup-id';
+            const blockId = 'new-block-id';
+            const originalName = 'Original Notebook';
+            const fileUri = Uri.file('/workspace/test-project.deepnote');
+
+            // Mock existing project data
+            const existingProjectData = {
+                version: 1.0,
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
+                },
+                project: {
+                    id: projectId,
+                    name: 'Test Project',
+                    notebooks: [
+                        {
+                            id: originalNotebookId,
+                            name: originalName,
+                            blocks: [
+                                {
+                                    id: 'original-block-id',
+                                    blockGroup: 'original-blockgroup-id',
+                                    content: 'print("hello")',
+                                    type: 'code',
+                                    executionCount: 1,
+                                    outputs: [],
+                                    sortingKey: '0',
+                                    version: 1,
+                                    metadata: { custom: 'data' }
+                                }
+                            ],
+                            executionMode: 'block'
+                        }
+                    ]
+                }
+            };
+
+            const yamlContent = yaml.dump(existingProjectData);
+
+            // Mock file system
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yamlContent)));
+
+            let capturedWriteContent: Uint8Array | undefined;
+            when(mockFS.writeFile(anything(), anything())).thenCall((_uri: Uri, content: Uint8Array) => {
+                capturedWriteContent = content;
+                return Promise.resolve();
+            });
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            // Mock UUID generation
+            const generateUuidStub = sandbox.stub(uuidModule, 'generateUuid');
+            generateUuidStub.onCall(0).returns(duplicatedNotebookId);
+            generateUuidStub.onCall(1).returns(blockId);
+            generateUuidStub.onCall(2).returns(blockGroupId);
+
+            // Mock notebook opening
+            const mockNotebook = { notebookType: 'deepnote' };
+            when(mockedVSCodeNamespaces.workspace.openNotebookDocument(anything())).thenReturn(
+                Promise.resolve(mockNotebook as any)
+            );
+            when(mockedVSCodeNamespaces.window.showNotebookDocument(anything(), anything())).thenReturn(
+                Promise.resolve(undefined as any)
+            );
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenReturn(
+                Promise.resolve(undefined)
+            );
+
+            // Create mock tree item
+            const mockTreeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.Notebook,
+                context: {
+                    filePath: fileUri.fsPath,
+                    projectId: projectId,
+                    notebookId: originalNotebookId
+                },
+                data: {
+                    id: originalNotebookId,
+                    name: originalName,
+                    blocks: existingProjectData.project.notebooks[0].blocks,
+                    executionMode: 'block'
+                } as DeepnoteNotebook
+            };
+
+            // Execute the method
+            await explorerView.duplicateNotebook(mockTreeItem as DeepnoteTreeItem);
+
+            // Verify file was written
+            expect(capturedWriteContent).to.exist;
+
+            // Verify YAML content
+            const updatedYamlContent = Buffer.from(capturedWriteContent!).toString('utf8');
+            const updatedProjectData = yaml.load(updatedYamlContent) as DeepnoteFile;
+
+            // Verify both notebooks exist
+            expect(updatedProjectData.project.notebooks).to.have.lengthOf(2);
+
+            // Verify original notebook is unchanged
+            const originalNotebook = updatedProjectData.project.notebooks.find((nb) => nb.id === originalNotebookId);
+            expect(originalNotebook).to.exist;
+            expect(originalNotebook!.name).to.equal(originalName);
+
+            // Verify duplicated notebook exists with correct name
+            const duplicatedNotebook = updatedProjectData.project.notebooks.find(
+                (nb) => nb.id === duplicatedNotebookId
+            );
+            expect(duplicatedNotebook).to.exist;
+            expect(duplicatedNotebook!.name).to.equal(`${originalName} (Copy)`);
+            expect(duplicatedNotebook!.blocks).to.have.lengthOf(1);
+            expect(duplicatedNotebook!.blocks[0].content).to.equal('print("hello")');
+            expect(duplicatedNotebook!.blocks[0].executionCount).to.be.undefined;
+
+            // Verify new IDs were generated
+            expect(duplicatedNotebook!.blocks[0].id).to.equal(blockId);
+            expect(duplicatedNotebook!.blocks[0].blockGroup).to.equal(blockGroupId);
+
+            // Verify metadata was updated
+            expect(updatedProjectData.metadata.modifiedAt).to.exist;
+
+            // Verify success message was shown
+            verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
+        });
+
+        test('should return early if tree item type is not Notebook', async () => {
+            const mockTreeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.ProjectFile,
+                context: {
+                    filePath: '/workspace/test-project.deepnote',
+                    projectId: 'test-project-id'
+                }
+            };
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from('')));
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            // Execute the method
+            await explorerView.duplicateNotebook(mockTreeItem as DeepnoteTreeItem);
+
+            // Verify that readFile was not called (early return)
+            verify(mockFS.readFile(anything())).never();
+        });
+
+        test('should show error if notebook is not found in project', async () => {
+            const projectId = 'test-project-id';
+            const nonExistentNotebookId = 'non-existent-notebook-id';
+            const fileUri = Uri.file('/workspace/test-project.deepnote');
+
+            // Mock existing project data without the target notebook
+            const existingProjectData = {
+                version: 1.0,
+                project: {
+                    id: projectId,
+                    name: 'Test Project',
+                    notebooks: [
+                        {
+                            id: 'other-notebook-id',
+                            name: 'Other Notebook',
+                            blocks: [],
+                            executionMode: 'block'
+                        }
+                    ]
+                }
+            };
+
+            const yamlContent = yaml.dump(existingProjectData);
+
+            // Mock file system
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yamlContent)));
+            when(mockFS.writeFile(anything(), anything())).thenReturn(Promise.resolve());
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+
+            // Create mock tree item
+            const mockTreeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.Notebook,
+                context: {
+                    filePath: fileUri.fsPath,
+                    projectId: projectId,
+                    notebookId: nonExistentNotebookId
+                },
+                data: {
+                    id: nonExistentNotebookId,
+                    name: 'Non-existent Notebook',
+                    blocks: [],
+                    executionMode: 'block'
+                } as DeepnoteNotebook
+            };
+
+            // Execute the method
+            await explorerView.duplicateNotebook(mockTreeItem as DeepnoteTreeItem);
+
+            // Verify file was not written
+            verify(mockFS.writeFile(anything(), anything())).never();
+
+            // Verify error message was shown
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+        });
+
+        test('should deep clone blocks to prevent shared references', async () => {
+            // This test verifies that duplicating a notebook creates truly independent copies
+            // of nested objects like outputs and metadata, not just shallow references
+            const projectData: DeepnoteFile = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00Z',
+                    modifiedAt: '2024-01-01T00:00:00Z'
+                },
+                project: {
+                    id: 'test-project-id',
+                    name: 'Test Project',
+                    notebooks: [
+                        {
+                            id: 'original-notebook-id',
+                            name: 'Original Notebook',
+                            blocks: [
+                                {
+                                    id: 'block-1',
+                                    blockGroup: 'group-1',
+                                    type: 'code',
+                                    content: 'print("test")',
+                                    sortingKey: '0',
+                                    version: 1,
+                                    executionCount: 5,
+                                    outputs: [{ type: 'stream', text: 'test output' }],
+                                    metadata: { cellId: 'cell-123', custom: { nested: 'value' } }
+                                }
+                            ],
+                            executionMode: 'block'
+                        }
+                    ]
+                }
+            };
+
+            const mockTreeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.Notebook,
+                context: {
+                    filePath: '/workspace/test-project.deepnote',
+                    projectId: 'test-project-id',
+                    notebookId: 'original-notebook-id'
+                },
+                data: projectData.project.notebooks[0]
+            };
+
+            // Mock file system
+            const mockFS = mock<typeof workspace.fs>();
+            const yamlContent = yaml.dump(projectData);
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yamlContent, 'utf-8')));
+
+            let capturedWriteContent: Uint8Array | undefined;
+            when(mockFS.writeFile(anything(), anything())).thenCall((_uri: Uri, content: Uint8Array) => {
+                capturedWriteContent = content;
+                return Promise.resolve();
+            });
+
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            // Stub generateUuid to return predictable IDs
+            const generateUuidStub = sinon.stub(uuidModule, 'generateUuid');
+            generateUuidStub.onCall(0).returns('duplicate-notebook-id');
+            generateUuidStub.onCall(1).returns('duplicate-block-id');
+            generateUuidStub.onCall(2).returns('duplicate-blockgroup-id');
+
+            // Execute duplication
+            await explorerView.duplicateNotebook(mockTreeItem as DeepnoteTreeItem);
+
+            // Parse the written data
+            assert.isDefined(capturedWriteContent, 'File should have been written');
+            const writtenYaml = Buffer.from(capturedWriteContent!).toString('utf-8');
+            const updatedProjectData = yaml.load(writtenYaml) as DeepnoteFile;
+
+            // Find original and duplicated notebooks
+            const originalNotebook = updatedProjectData.project.notebooks.find(
+                (nb) => nb.id === 'original-notebook-id'
+            );
+            const duplicateNotebook = updatedProjectData.project.notebooks.find(
+                (nb) => nb.id === 'duplicate-notebook-id'
+            );
+
+            assert.isDefined(originalNotebook, 'Original notebook should exist');
+            assert.isDefined(duplicateNotebook, 'Duplicate notebook should exist');
+
+            // Verify the blocks are truly independent (deep clone)
+            const originalBlock = originalNotebook!.blocks[0];
+            const duplicateBlock = duplicateNotebook!.blocks[0];
+
+            // Test 1: Verify outputs are not the same reference
+            assert.notStrictEqual(
+                originalBlock.outputs,
+                duplicateBlock.outputs,
+                'Outputs should be different array instances'
+            );
+
+            // Test 2: Verify metadata is not the same reference
+            if (originalBlock.metadata && duplicateBlock.metadata) {
+                assert.notStrictEqual(
+                    originalBlock.metadata,
+                    duplicateBlock.metadata,
+                    'Metadata should be different object instances'
+                );
+
+                // Test 3: Verify nested metadata properties are not shared
+                if (
+                    typeof originalBlock.metadata === 'object' &&
+                    'custom' in originalBlock.metadata &&
+                    typeof duplicateBlock.metadata === 'object' &&
+                    'custom' in duplicateBlock.metadata
+                ) {
+                    assert.notStrictEqual(
+                        (originalBlock.metadata as any).custom,
+                        (duplicateBlock.metadata as any).custom,
+                        'Nested metadata objects should be different instances'
+                    );
+                }
+            }
+
+            // Test 4: Verify that modifying duplicate doesn't affect original
+            // (This would fail with shallow copy)
+            duplicateBlock.outputs!.push({ type: 'stream', text: 'new output' });
+            assert.strictEqual(
+                originalBlock.outputs!.length,
+                1,
+                'Original outputs should not be affected by changes to duplicate'
+            );
+            assert.strictEqual(duplicateBlock.outputs!.length, 2, 'Duplicate outputs should have the new item');
+
+            generateUuidStub.restore();
+        });
+    });
+
+    suite('renameProject', () => {
+        test('should successfully rename a project with valid input', async () => {
+            const oldProjectName = 'Old Project Name';
+            const newProjectName = 'New Project Name';
+            const projectId = 'test-project-id';
+            const fileUri = Uri.file('/workspace/test-project.deepnote');
+
+            // Mock existing project data
+            const existingProjectData = {
+                version: 1.0,
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
+                },
+                project: {
+                    id: projectId,
+                    name: oldProjectName,
+                    notebooks: [
+                        {
+                            id: 'notebook-1',
+                            name: 'Notebook 1',
+                            blocks: [],
+                            executionMode: 'block'
+                        }
+                    ]
+                }
+            };
+
+            const yamlContent = yaml.dump(existingProjectData);
+
+            // Mock file system
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yamlContent)));
+
+            let capturedWriteContent: Uint8Array | undefined;
+            when(mockFS.writeFile(anything(), anything())).thenCall((_uri: Uri, content: Uint8Array) => {
+                capturedWriteContent = content;
+                return Promise.resolve();
+            });
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            // Mock user input for new name
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(newProjectName));
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenReturn(
+                Promise.resolve(undefined)
+            );
+
+            // Create mock tree item
+            const mockTreeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.ProjectFile,
+                context: {
+                    filePath: fileUri.fsPath,
+                    projectId: projectId
+                },
+                data: existingProjectData as unknown as DeepnoteFile
+            };
+
+            // Execute the method
+            await explorerView.renameProject(mockTreeItem as DeepnoteTreeItem);
+
+            // Verify file was written
+            expect(capturedWriteContent).to.exist;
+
+            // Verify YAML content
+            const updatedYamlContent = Buffer.from(capturedWriteContent!).toString('utf8');
+            const updatedProjectData = yaml.load(updatedYamlContent) as DeepnoteFile;
+
+            // Verify project was renamed
+            expect(updatedProjectData.project.name).to.equal(newProjectName);
+
+            // Verify notebooks were not affected
+            expect(updatedProjectData.project.notebooks).to.have.lengthOf(1);
+            expect(updatedProjectData.project.notebooks[0].name).to.equal('Notebook 1');
+
+            // Verify metadata was updated
+            expect(updatedProjectData.metadata.modifiedAt).to.exist;
+
+            // Verify success message was shown
+            verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
+        });
+
+        test('should return early if tree item type is not ProjectFile', async () => {
+            const mockTreeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.Notebook,
+                context: {
+                    filePath: '/workspace/test-project.deepnote',
+                    projectId: 'test-project-id',
+                    notebookId: 'test-notebook-id'
+                }
+            };
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from('')));
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            // Execute the method
+            await explorerView.renameProject(mockTreeItem as DeepnoteTreeItem);
+
+            // Verify that no input box was shown (early return)
+            verify(mockedVSCodeNamespaces.window.showInputBox(anything())).never();
+            // Verify that readFile was not called (early return)
+            verify(mockFS.readFile(anything())).never();
+        });
+
+        test('should return early if user cancels input or provides same name', async () => {
+            const projectId = 'test-project-id';
+            const currentName = 'Current Project Name';
+            const fileUri = Uri.file('/workspace/test-project.deepnote');
+
+            // Mock existing project data
+            const existingProjectData = {
+                version: 1.0,
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z'
+                },
+                project: {
+                    id: projectId,
+                    name: currentName,
+                    notebooks: []
+                }
+            };
+
+            const yamlContent = yaml.dump(existingProjectData);
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yamlContent)));
+            when(mockFS.writeFile(anything(), anything())).thenReturn(Promise.resolve());
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            // Test 1: User cancels input (returns undefined)
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(undefined));
+
+            // Create mock tree item
+            const mockTreeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.ProjectFile,
+                context: {
+                    filePath: fileUri.fsPath,
+                    projectId: projectId
+                },
+                data: existingProjectData as unknown as DeepnoteFile
+            };
+
+            // Execute the method
+            await explorerView.renameProject(mockTreeItem as DeepnoteTreeItem);
+
+            // Verify file was not written (early return)
+            verify(mockFS.writeFile(anything(), anything())).never();
+
+            // Test 2: User provides same name
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(currentName));
+
+            await explorerView.renameProject(mockTreeItem as DeepnoteTreeItem);
+
+            // Verify file was still not written (early return)
+            verify(mockFS.writeFile(anything(), anything())).never();
         });
     });
 });

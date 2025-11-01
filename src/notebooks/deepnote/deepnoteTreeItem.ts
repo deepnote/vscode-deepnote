@@ -26,7 +26,7 @@ export class DeepnoteTreeItem extends TreeItem {
     constructor(
         public readonly type: DeepnoteTreeItemType,
         public readonly context: DeepnoteTreeItemContext,
-        public readonly data: DeepnoteProject | DeepnoteNotebook | null,
+        public data: DeepnoteProject | DeepnoteNotebook | null,
         collapsibleState: TreeItemCollapsibleState
     ) {
         super('', collapsibleState);
@@ -103,5 +103,15 @@ export class DeepnoteTreeItem extends TreeItem {
         }
 
         return undefined;
+    }
+
+    /**
+     * Updates the tree item's visual fields (label, description, tooltip) based on current data.
+     * Call this after updating the data property to ensure the tree view reflects changes.
+     */
+    public updateVisualFields(): void {
+        this.label = this.getLabel();
+        this.description = this.getDescription();
+        this.tooltip = this.getTooltip();
     }
 }

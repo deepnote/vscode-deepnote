@@ -8,10 +8,10 @@ import { IIntegrationStorage } from './types';
 import { upgradeLegacyIntegrationConfig } from './legacyIntegrationConfigUtils';
 import {
     DatabaseIntegrationConfig,
-    DatabaseIntegrationType,
     databaseIntegrationTypes,
     databaseMetadataSchemasByType
 } from '@deepnote/database-integrations';
+import { DATAFRAME_SQL_INTEGRATION_ID } from './integrationTypes';
 
 const INTEGRATION_SERVICE_NAME = 'deepnote-integrations';
 
@@ -81,6 +81,11 @@ export class IntegrationStorage implements IIntegrationStorage {
      * Save or update an integration configuration
      */
     async save(config: DatabaseIntegrationConfig): Promise<void> {
+        if (config.type === 'pandas-dataframe' || config.id === DATAFRAME_SQL_INTEGRATION_ID) {
+            logger.warn(`IntegrationStorage: Skipping save for internal DuckDB integration ${config.id}`);
+            return;
+        }
+
         await this.ensureCacheLoaded();
 
         // Store the configuration as JSON in encrypted storage
@@ -165,6 +170,10 @@ export class IntegrationStorage implements IIntegrationStorage {
 
             // Load each integration configuration
             for (const id of integrationIds) {
+                if (id === DATAFRAME_SQL_INTEGRATION_ID) {
+                    continue;
+                }
+
                 const configJson = await this.encryptedStorage.retrieve(INTEGRATION_SERVICE_NAME, id);
                 if (configJson) {
                     try {
@@ -178,6 +187,11 @@ export class IntegrationStorage implements IIntegrationStorage {
                             const upgradedConfig = await upgradeLegacyIntegrationConfig(parsedData);
 
                             if (upgradedConfig) {
+                                if (upgradedConfig.type === 'pandas-dataframe') {
+                                    logger.warn(`IntegrationStorage: Skipping internal DuckDB integration ${id}`);
+                                    continue;
+                                }
+
                                 // Successfully upgraded - save the new config
                                 logger.info(`Successfully upgraded integration config for ${id}`);
                                 await storeEncryptedIntegrationConfig(this.encryptedStorage, id, {
@@ -193,9 +207,11 @@ export class IntegrationStorage implements IIntegrationStorage {
                         } else {
                             // Already versioned config - validate against current schema
                             const { version: _version, ...rawConfig } = parsedData;
-                            const config = databaseIntegrationTypes.includes(rawConfig.type)
-                                ? (rawConfig as DatabaseIntegrationConfig)
-                                : null;
+                            const config =
+                                databaseIntegrationTypes.includes(rawConfig.type) &&
+                                rawConfig.type !== 'pandas-dataframe'
+                                    ? (rawConfig as DatabaseIntegrationConfig)
+                                    : null;
                             const validMetadata = config
                                 ? databaseMetadataSchemasByType[config.type].safeParse(config.metadata).data
                                 : null;

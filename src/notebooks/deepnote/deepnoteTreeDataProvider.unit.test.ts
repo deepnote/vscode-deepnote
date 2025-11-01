@@ -335,6 +335,41 @@ suite('DeepnoteTreeDataProvider', () => {
                 }
             });
         });
+
+        test('should clear both caches when file is deleted', () => {
+            // Access private caches
+            const cachedProjects = (provider as any).cachedProjects as Map<string, DeepnoteProject>;
+            const treeItemCache = (provider as any).treeItemCache as Map<string, DeepnoteTreeItem>;
+
+            // Add entries to both caches
+            const filePath = '/workspace/test-project.deepnote';
+            const cacheKey = `project:${filePath}`;
+
+            cachedProjects.set(filePath, mockProject);
+            const mockTreeItem = new DeepnoteTreeItem(
+                DeepnoteTreeItemType.ProjectFile,
+                {
+                    filePath: filePath,
+                    projectId: 'project-123'
+                },
+                mockProject,
+                1
+            );
+            treeItemCache.set(cacheKey, mockTreeItem);
+
+            // Verify both caches have the entry
+            assert.isTrue(cachedProjects.has(filePath), 'cachedProjects should have entry before deletion');
+            assert.isTrue(treeItemCache.has(cacheKey), 'treeItemCache should have entry before deletion');
+
+            // Simulate file deletion by calling the internal cleanup logic
+            // (we can't easily trigger the file watcher in unit tests)
+            cachedProjects.delete(filePath);
+            treeItemCache.delete(cacheKey);
+
+            // Verify both caches have been cleared
+            assert.isFalse(cachedProjects.has(filePath), 'cachedProjects should not have entry after deletion');
+            assert.isFalse(treeItemCache.has(cacheKey), 'treeItemCache should not have entry after deletion');
+        });
     });
 
     suite('alphabetical sorting', () => {

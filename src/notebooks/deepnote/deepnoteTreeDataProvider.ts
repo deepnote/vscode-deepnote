@@ -16,6 +16,7 @@ import {
 import { DeepnoteTreeItem, DeepnoteTreeItemType, DeepnoteTreeItemContext } from './deepnoteTreeItem';
 import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { readDeepnoteProjectFile } from './deepnoteProjectUtils';
+import { ILogger } from '../../platform/logging/types';
 
 /**
  * Comparator function for sorting tree items alphabetically by label (case-insensitive)
@@ -41,8 +42,10 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
     private treeItemCache: Map<string, DeepnoteTreeItem> = new Map();
     private isInitialScanComplete: boolean = false;
     private initialScanPromise: Promise<void> | undefined;
+    private readonly logger?: ILogger;
 
-    constructor() {
+    constructor(logger?: ILogger) {
+        this.logger = logger;
         this.setupFileWatcher();
         this.updateContextKey();
     }
@@ -83,7 +86,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
                     cachedTreeItem.data = project;
                 }
             } catch (error) {
-                console.error(`Failed to reload project ${filePath}:`, error);
+                this.logger?.error(`Failed to reload project ${filePath}`, error);
             }
 
             // Fire change event with the existing cached tree item
@@ -124,7 +127,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
                     cachedTreeItem.data = project;
                 }
             } catch (error) {
-                console.error(`Failed to reload project ${filePath}:`, error);
+                this.logger?.error(`Failed to reload project ${filePath}`, error);
             }
 
             // Fire change event with the existing cached tree item to refresh its children
@@ -233,7 +236,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
 
                     deepnoteFiles.push(treeItem);
                 } catch (error) {
-                    console.error(`Failed to load Deepnote project from ${file.path}:`, error);
+                    this.logger?.error(`Failed to load Deepnote project from ${file.path}`, error);
                 }
             }
         }
@@ -287,7 +290,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
                 return project;
             }
         } catch (error) {
-            console.error(`Failed to parse Deepnote file ${filePath}:`, error);
+            this.logger?.error(`Failed to parse Deepnote file ${filePath}`, error);
         }
 
         return undefined;
@@ -317,8 +320,9 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         });
 
         this.fileWatcher.onDidDelete((uri) => {
-            // File deleted, clear cache and do full refresh
+            // File deleted, clear both caches and do full refresh
             this.cachedProjects.delete(uri.path);
+            this.treeItemCache.delete(`project:${uri.path}`);
             this._onDidChangeTreeData.fire();
         });
     }

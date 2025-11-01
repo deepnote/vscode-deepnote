@@ -12,6 +12,7 @@ import { generateUuid } from '../../platform/common/uuid';
 import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { Commands } from '../../platform/common/constants';
 import { readDeepnoteProjectFile } from './deepnoteProjectUtils';
+import { ILogger } from '../../platform/logging/types';
 
 /**
  * Manages the Deepnote explorer tree view and related commands
@@ -24,9 +25,10 @@ export class DeepnoteExplorerView {
 
     constructor(
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
-        @inject(IDeepnoteNotebookManager) private readonly manager: IDeepnoteNotebookManager
+        @inject(IDeepnoteNotebookManager) private readonly manager: IDeepnoteNotebookManager,
+        @inject(ILogger) logger: ILogger
     ) {
-        this.treeDataProvider = new DeepnoteTreeDataProvider();
+        this.treeDataProvider = new DeepnoteTreeDataProvider(logger);
     }
 
     public activate(): void {

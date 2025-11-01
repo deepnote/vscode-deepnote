@@ -11,11 +11,24 @@ import type { IExtensionContext } from '../../platform/common/types';
 import type { DeepnoteFile, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import * as uuidModule from '../../platform/common/uuid';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
+import { ILogger } from '../../platform/logging/types';
+
+function createMockLogger(): ILogger {
+    return {
+        error: () => undefined,
+        warn: () => undefined,
+        info: () => undefined,
+        debug: () => undefined,
+        trace: () => undefined,
+        ci: () => undefined
+    } as ILogger;
+}
 
 suite('DeepnoteExplorerView', () => {
     let explorerView: DeepnoteExplorerView;
     let mockExtensionContext: IExtensionContext;
     let manager: DeepnoteNotebookManager;
+    let mockLogger: ILogger;
 
     setup(() => {
         mockExtensionContext = {
@@ -23,7 +36,8 @@ suite('DeepnoteExplorerView', () => {
         } as any;
 
         manager = new DeepnoteNotebookManager();
-        explorerView = new DeepnoteExplorerView(mockExtensionContext, manager);
+        mockLogger = createMockLogger();
+        explorerView = new DeepnoteExplorerView(mockExtensionContext, manager, mockLogger);
     });
 
     suite('constructor', () => {
@@ -159,8 +173,10 @@ suite('DeepnoteExplorerView', () => {
 
             const manager1 = new DeepnoteNotebookManager();
             const manager2 = new DeepnoteNotebookManager();
-            const view1 = new DeepnoteExplorerView(context1, manager1);
-            const view2 = new DeepnoteExplorerView(context2, manager2);
+            const logger1 = createMockLogger();
+            const logger2 = createMockLogger();
+            const view1 = new DeepnoteExplorerView(context1, manager1, logger1);
+            const view2 = new DeepnoteExplorerView(context2, manager2, logger2);
 
             // Verify each view has its own context
             assert.strictEqual((view1 as any).extensionContext, context1);
@@ -200,7 +216,8 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         } as unknown as IExtensionContext;
 
         mockManager = new DeepnoteNotebookManager();
-        explorerView = new DeepnoteExplorerView(mockContext, mockManager);
+        const mockLogger = createMockLogger();
+        explorerView = new DeepnoteExplorerView(mockContext, mockManager, mockLogger);
     });
 
     teardown(() => {

@@ -1,7 +1,7 @@
 import { CancellationToken, Event } from 'vscode';
 import { IDisposable, Resource } from '../../common/types';
 import { EnvironmentVariables } from '../../common/variables/types';
-import { IntegrationConfig } from './integrationTypes';
+import { LegacyIntegrationConfig } from './integrationTypes';
 
 /**
  * Settings for select input blocks
@@ -30,7 +30,7 @@ export interface IIntegrationStorage extends IDisposable {
      */
     readonly onDidChangeIntegrations: Event<void>;
 
-    getAll(): Promise<IntegrationConfig[]>;
+    getAll(): Promise<LegacyIntegrationConfig[]>;
 
     /**
      * Retrieves the global (non-project-scoped) integration configuration by integration ID.
@@ -48,14 +48,14 @@ export interface IIntegrationStorage extends IDisposable {
      *          - The `IntegrationConfig` object if a global configuration exists for the given ID
      *          - `undefined` if no global configuration exists for the given integration ID
      */
-    getIntegrationConfig(integrationId: string): Promise<IntegrationConfig | undefined>;
+    getIntegrationConfig(integrationId: string): Promise<LegacyIntegrationConfig | undefined>;
 
     /**
      * Get integration configuration for a specific project and integration
      */
-    getProjectIntegrationConfig(projectId: string, integrationId: string): Promise<IntegrationConfig | undefined>;
+    getProjectIntegrationConfig(projectId: string, integrationId: string): Promise<LegacyIntegrationConfig | undefined>;
 
-    save(config: IntegrationConfig): Promise<void>;
+    save(config: LegacyIntegrationConfig): Promise<void>;
     delete(integrationId: string): Promise<void>;
     exists(integrationId: string): Promise<boolean>;
     clear(): Promise<void>;

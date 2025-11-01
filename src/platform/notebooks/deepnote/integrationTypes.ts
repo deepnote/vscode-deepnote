@@ -119,7 +119,10 @@ export type SnowflakeIntegrationConfig = BaseSnowflakeConfig &
 /**
  * Union type of all integration configurations
  */
-export type IntegrationConfig = PostgresIntegrationConfig | BigQueryIntegrationConfig | SnowflakeIntegrationConfig;
+export type LegacyIntegrationConfig =
+    | PostgresIntegrationConfig
+    | BigQueryIntegrationConfig
+    | SnowflakeIntegrationConfig;
 
 /**
  * Integration connection status
@@ -134,7 +137,7 @@ export enum IntegrationStatus {
  * Integration with its current status
  */
 export interface IntegrationWithStatus {
-    config: IntegrationConfig | null;
+    config: LegacyIntegrationConfig | null;
     status: IntegrationStatus;
     error?: string;
     /**

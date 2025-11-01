@@ -8,7 +8,7 @@ import { logger } from '../../logging';
 import { IIntegrationStorage, ISqlIntegrationEnvVarsProvider } from './types';
 import {
     DATAFRAME_SQL_INTEGRATION_ID,
-    IntegrationConfig,
+    LegacyIntegrationConfig,
     IntegrationType,
     SnowflakeAuthMethods
 } from './integrationTypes';
@@ -34,7 +34,7 @@ function getSqlEnvVarName(integrationId: string): string {
  *   "param_style": "qmark" | "format" | etc.
  * }
  */
-function convertIntegrationConfigToJson(config: IntegrationConfig): string {
+function convertIntegrationConfigToJson(config: LegacyIntegrationConfig): string {
     switch (config.type) {
         case IntegrationType.Postgres: {
             // Build PostgreSQL connection URL
@@ -141,7 +141,7 @@ function convertIntegrationConfigToJson(config: IntegrationConfig): string {
 
         default:
             throw new UnsupportedIntegrationError(
-                l10n.t('Unsupported integration type: {0}', (config as IntegrationConfig).type)
+                l10n.t('Unsupported integration type: {0}', (config as LegacyIntegrationConfig).type)
             );
     }
 }

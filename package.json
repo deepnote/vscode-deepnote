@@ -25,6 +25,9 @@
     "engines": {
         "vscode": "^1.95.0"
     },
+    "extensionDependencies": [
+        "ms-toolsai.jupyter-renderers"
+    ],
     "l10n": "./l10n",
     "extensionKind": [
         "workspace"

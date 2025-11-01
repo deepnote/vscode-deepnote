@@ -384,6 +384,11 @@ async function buildAll() {
             path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'selectInputSettings', 'index.tsx'),
             path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'selectInputSettings', 'index.js'),
             { target: 'web', watch: watchAll }
+        ),
+        build(
+            path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'bigNumberComparisonSettings', 'index.tsx'),
+            path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'bigNumberComparisonSettings', 'index.js'),
+            { target: 'web', watch: watchAll }
         )
     );
 

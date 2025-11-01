@@ -253,6 +253,20 @@ export type LocalizedMessages = {
     saveButton: string;
     cancelButton: string;
     failedToSave: string;
+    // Big number comparison settings strings
+    bigNumberComparisonTitle: string;
+    enableComparison: string;
+    comparisonTypeLabel: string;
+    percentageChange: string;
+    absoluteValue: string;
+    comparisonValueLabel: string;
+    comparisonValuePlaceholder: string;
+    comparisonTitleLabel: string;
+    comparisonTitlePlaceholder: string;
+    comparisonTitleHelp: string;
+    comparisonValueHelp: string;
+    comparisonFormatLabel: string;
+    comparisonFormatHelp: string;
 };
 // Map all messages to specific payloads
 export class IInteractiveWindowMapping {

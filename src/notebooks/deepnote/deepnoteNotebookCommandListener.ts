@@ -181,6 +181,11 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         this.disposableRegistry.push(
             commands.registerCommand(Commands.AddButtonBlock, () => this.addInputBlock('button'))
         );
+
+        // Intercept the built-in insertCodeCellBelow command to fix language for Deepnote notebooks
+        this.disposableRegistry.push(
+            commands.registerCommand('notebook.cell.insertCodeCellBelow', () => this.insertCodeCellBelowInterceptor())
+        );
     }
 
     public async addSqlBlock(): Promise<void> {
@@ -367,5 +372,56 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         editor.selection = notebookRange;
         // Enter edit mode on the new cell
         await commands.executeCommand('notebook.cell.edit');
+    }
+
+    /**
+     * Interceptor for the built-in notebook.cell.insertCodeCellBelow command.
+     * For Deepnote notebooks, ensures that new code cells use Python language instead of
+     * inheriting plaintext language from input-text/input-textarea blocks.
+     */
+    private async insertCodeCellBelowInterceptor(): Promise<void> {
+        const editor = window.activeNotebookEditor;
+        if (!editor || editor.notebook.notebookType !== 'deepnote') {
+            // Not a Deepnote notebook, use default behavior
+            await commands.executeCommand('default:notebook.cell.insertCodeCellBelow');
+            return;
+        }
+
+        // Get the current selection
+        const selection = editor.selection;
+        if (!selection) {
+            // No selection, use default behavior
+            await commands.executeCommand('default:notebook.cell.insertCodeCellBelow');
+            return;
+        }
+
+        // Get the current cell to check its language
+        const currentCell = editor.notebook.cellAt(selection.start);
+        const currentLanguage = currentCell.document.languageId;
+
+        // If the current cell is plaintext (input-text or input-textarea block),
+        // we need to insert a Python cell instead of inheriting plaintext
+        if (currentLanguage === 'plaintext') {
+            // Insert a new Python code cell below
+            const insertIndex = selection.end;
+            const document = editor.notebook;
+
+            const result = await chainWithPendingUpdates(document, (edit) => {
+                const newCell = new NotebookCellData(NotebookCellKind.Code, '', 'python');
+                newCell.metadata = {};
+                const nbEdit = NotebookEdit.insertCells(insertIndex, [newCell]);
+                edit.set(document.uri, [nbEdit]);
+            });
+
+            if (result === true) {
+                // Move selection to the new cell and enter edit mode
+                const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
+                editor.selection = notebookRange;
+                await commands.executeCommand('notebook.cell.edit');
+            }
+        } else {
+            // For all other languages, use default behavior
+            await commands.executeCommand('default:notebook.cell.insertCodeCellBelow');
+        }
     }
 }

@@ -6,7 +6,7 @@ import { IDisposableRegistry } from '../../common/types';
 import { IntegrationStorage } from './integrationStorage';
 import { SqlIntegrationEnvironmentVariablesProvider } from './sqlIntegrationEnvironmentVariablesProvider';
 import {
-    IntegrationType,
+    LegacyIntegrationType,
     PostgresIntegrationConfig,
     BigQueryIntegrationConfig,
     SnowflakeIntegrationConfig,
@@ -134,7 +134,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         const config: PostgresIntegrationConfig = {
             id: integrationId,
             name: 'My Postgres DB',
-            type: IntegrationType.Postgres,
+            type: LegacyIntegrationType.Postgres,
             host: 'localhost',
             port: 5432,
             database: 'mydb',
@@ -167,7 +167,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         const config: BigQueryIntegrationConfig = {
             id: integrationId,
             name: 'My BigQuery',
-            type: IntegrationType.BigQuery,
+            type: LegacyIntegrationType.BigQuery,
             projectId: 'my-project',
             credentials: serviceAccountJson
         };
@@ -200,7 +200,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         const postgresConfig: PostgresIntegrationConfig = {
             id: postgresId,
             name: 'My Postgres DB',
-            type: IntegrationType.Postgres,
+            type: LegacyIntegrationType.Postgres,
             host: 'localhost',
             port: 5432,
             database: 'mydb',
@@ -211,7 +211,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         const bigqueryConfig: BigQueryIntegrationConfig = {
             id: bigqueryId,
             name: 'My BigQuery',
-            type: IntegrationType.BigQuery,
+            type: LegacyIntegrationType.BigQuery,
             projectId: 'my-project',
             credentials: JSON.stringify({ type: 'service_account' })
         };
@@ -241,7 +241,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         const config: PostgresIntegrationConfig = {
             id: integrationId,
             name: 'Special Chars DB',
-            type: IntegrationType.Postgres,
+            type: LegacyIntegrationType.Postgres,
             host: 'db.example.com',
             port: 5432,
             database: 'my@db:name',
@@ -278,7 +278,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         const config: PostgresIntegrationConfig = {
             id: integrationId,
             name: 'Production Database',
-            type: IntegrationType.Postgres,
+            type: LegacyIntegrationType.Postgres,
             host: 'prod.example.com',
             port: 5432,
             database: 'proddb',
@@ -311,7 +311,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         const config: PostgresIntegrationConfig = {
             id: integrationId,
             name: 'Test DB',
-            type: IntegrationType.Postgres,
+            type: LegacyIntegrationType.Postgres,
             host: 'localhost',
             port: 5432,
             database: 'testdb',
@@ -351,7 +351,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             const config: SnowflakeIntegrationConfig = {
                 id: integrationId,
                 name: 'My Snowflake',
-                type: IntegrationType.Snowflake,
+                type: LegacyIntegrationType.Snowflake,
                 account: 'myorg-myaccount',
                 warehouse: 'COMPUTE_WH',
                 database: 'MYDB',
@@ -386,7 +386,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             const config: SnowflakeIntegrationConfig = {
                 id: integrationId,
                 name: 'Legacy Snowflake',
-                type: IntegrationType.Snowflake,
+                type: LegacyIntegrationType.Snowflake,
                 account: 'legacy-account',
                 warehouse: 'WH',
                 database: 'DB',
@@ -421,7 +421,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             const config: SnowflakeIntegrationConfig = {
                 id: integrationId,
                 name: 'Snowflake KeyPair',
-                type: IntegrationType.Snowflake,
+                type: LegacyIntegrationType.Snowflake,
                 account: 'keypair-account',
                 warehouse: 'ETL_WH',
                 database: 'PROD_DB',
@@ -462,7 +462,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             const config: SnowflakeIntegrationConfig = {
                 id: integrationId,
                 name: 'Snowflake KeyPair No Pass',
-                type: IntegrationType.Snowflake,
+                type: LegacyIntegrationType.Snowflake,
                 account: 'account123',
                 warehouse: 'WH',
                 database: 'DB',
@@ -499,7 +499,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             const config: SnowflakeIntegrationConfig = {
                 id: integrationId,
                 name: 'Snowflake Special',
-                type: IntegrationType.Snowflake,
+                type: LegacyIntegrationType.Snowflake,
                 account: 'my-org.account',
                 warehouse: 'WH@2024',
                 database: 'DB:TEST',
@@ -533,7 +533,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             const config: SnowflakeIntegrationConfig = {
                 id: integrationId,
                 name: 'Snowflake Minimal',
-                type: IntegrationType.Snowflake,
+                type: LegacyIntegrationType.Snowflake,
                 account: 'minimal-account',
                 authMethod: SnowflakeAuthMethods.PASSWORD,
                 username: 'user',
@@ -562,7 +562,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             const config: SnowflakeIntegrationConfig = {
                 id: integrationId,
                 name: 'Snowflake OKTA',
-                type: IntegrationType.Snowflake,
+                type: LegacyIntegrationType.Snowflake,
                 account: 'okta-account',
                 authMethod: SnowflakeAuthMethods.OKTA
             };
@@ -585,7 +585,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             const config: SnowflakeIntegrationConfig = {
                 id: integrationId,
                 name: 'Snowflake Azure',
-                type: IntegrationType.Snowflake,
+                type: LegacyIntegrationType.Snowflake,
                 account: 'azure-account',
                 authMethod: SnowflakeAuthMethods.AZURE_AD
             };
@@ -607,7 +607,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             const config: SnowflakeIntegrationConfig = {
                 id: integrationId,
                 name: 'Snowflake KeyPair User',
-                type: IntegrationType.Snowflake,
+                type: LegacyIntegrationType.Snowflake,
                 account: 'keypair-user-account',
                 authMethod: SnowflakeAuthMethods.KEY_PAIR
             };

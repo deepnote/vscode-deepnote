@@ -13,7 +13,7 @@ import {
 } from './types';
 import {
     LegacyIntegrationConfig,
-    IntegrationType,
+    LegacyIntegrationType,
     SnowflakeAuthMethods,
     DuckDBIntegrationConfig,
     DATAFRAME_SQL_INTEGRATION_ID

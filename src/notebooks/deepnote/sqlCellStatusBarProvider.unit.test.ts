@@ -14,7 +14,10 @@ import {
 import { IDisposableRegistry } from '../../platform/common/types';
 import { IIntegrationStorage } from './integrations/types';
 import { SqlCellStatusBarProvider } from './sqlCellStatusBarProvider';
-import { DATAFRAME_SQL_INTEGRATION_ID, IntegrationType } from '../../platform/notebooks/deepnote/integrationTypes';
+import {
+    DATAFRAME_SQL_INTEGRATION_ID,
+    LegacyIntegrationType
+} from '../../platform/notebooks/deepnote/integrationTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { createEventHandler } from '../../test/common';
 import { Commands } from '../../platform/common/constants';
@@ -134,7 +137,7 @@ suite('SqlCellStatusBarProvider', () => {
         when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve({
             id: integrationId,
             name: 'My Postgres DB',
-            type: IntegrationType.Postgres,
+            type: LegacyIntegrationType.Postgres,
             host: 'localhost',
             port: 5432,
             database: 'test',
@@ -282,7 +285,7 @@ suite('SqlCellStatusBarProvider', () => {
         when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve({
             id: integrationId,
             name: 'My Postgres DB',
-            type: IntegrationType.Postgres,
+            type: LegacyIntegrationType.Postgres,
             host: 'localhost',
             port: 5432,
             database: 'test',

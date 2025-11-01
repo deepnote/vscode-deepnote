@@ -8,8 +8,8 @@ import { LocalizedMessages, SharedMessages } from '../../../messageTypes';
 import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
 import { IIntegrationStorage, IIntegrationWebviewProvider } from './types';
 import {
-    INTEGRATION_TYPE_TO_DEEPNOTE,
-    IntegrationType,
+    LEGACY_INTEGRATION_TYPE_TO_DEEPNOTE,
+    LegacyIntegrationType,
     LegacyIntegrationConfig,
     IntegrationStatus,
     IntegrationWithStatus,
@@ -351,13 +351,13 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 }
 
                 // Skip DuckDB integration (internal, not a real Deepnote integration)
-                if (type === IntegrationType.DuckDB) {
+                if (type === LegacyIntegrationType.DuckDB) {
                     logger.trace(`IntegrationWebviewProvider: Skipping internal DuckDB integration ${id}`);
                     return null;
                 }
 
                 // Map to Deepnote integration type
-                const deepnoteType: RawIntegrationType | undefined = INTEGRATION_TYPE_TO_DEEPNOTE[type];
+                const deepnoteType: RawIntegrationType | undefined = LEGACY_INTEGRATION_TYPE_TO_DEEPNOTE[type];
                 if (!deepnoteType) {
                     logger.warn(`IntegrationWebviewProvider: Cannot map type ${type} for integration ${id}, skipping`);
                     return null;

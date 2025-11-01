@@ -4,10 +4,27 @@ import { EventEmitter } from 'vscode';
 import { IEncryptedStorage } from '../../common/application/types';
 import { IAsyncDisposableRegistry } from '../../common/types';
 import { logger } from '../../logging';
-import { LegacyIntegrationConfig, LegacyIntegrationType } from './integrationTypes';
 import { IIntegrationStorage } from './types';
+import { upgradeLegacyIntegrationConfig } from './legacyIntegrationConfigUtils';
+import {
+    DatabaseIntegrationConfig,
+    DatabaseIntegrationType,
+    databaseIntegrationTypes,
+    databaseMetadataSchemasByType
+} from '@deepnote/database-integrations';
 
 const INTEGRATION_SERVICE_NAME = 'deepnote-integrations';
+
+// NOTE: We need a way to upgrade existing configurations to the new format of deepnote/database-integrations.
+type VersionedDatabaseIntegrationConfig = DatabaseIntegrationConfig & { version: 1 };
+
+function storeEncryptedIntegrationConfig(
+    encryptedStorage: IEncryptedStorage,
+    integrationId: string,
+    config: VersionedDatabaseIntegrationConfig
+): Promise<void> {
+    return encryptedStorage.store(INTEGRATION_SERVICE_NAME, integrationId, JSON.stringify(config));
+}
 
 /**
  * Storage service for integration configurations.
@@ -16,7 +33,7 @@ const INTEGRATION_SERVICE_NAME = 'deepnote-integrations';
  */
 @injectable()
 export class IntegrationStorage implements IIntegrationStorage {
-    private readonly cache: Map<string, LegacyIntegrationConfig> = new Map();
+    private readonly cache: Map<string, DatabaseIntegrationConfig> = new Map();
 
     private cacheLoaded = false;
 
@@ -35,7 +52,7 @@ export class IntegrationStorage implements IIntegrationStorage {
     /**
      * Get all stored integration configurations.
      */
-    async getAll(): Promise<LegacyIntegrationConfig[]> {
+    async getAll(): Promise<DatabaseIntegrationConfig[]> {
         await this.ensureCacheLoaded();
         return Array.from(this.cache.values());
     }
@@ -43,7 +60,7 @@ export class IntegrationStorage implements IIntegrationStorage {
     /**
      * Get a specific integration configuration by ID
      */
-    async getIntegrationConfig(integrationId: string): Promise<LegacyIntegrationConfig | undefined> {
+    async getIntegrationConfig(integrationId: string): Promise<DatabaseIntegrationConfig | undefined> {
         await this.ensureCacheLoaded();
         return this.cache.get(integrationId);
     }
@@ -56,28 +73,18 @@ export class IntegrationStorage implements IIntegrationStorage {
     async getProjectIntegrationConfig(
         _projectId: string,
         integrationId: string
-    ): Promise<LegacyIntegrationConfig | undefined> {
+    ): Promise<DatabaseIntegrationConfig | undefined> {
         return this.getIntegrationConfig(integrationId);
-    }
-
-    /**
-     * Get all integrations of a specific type
-     */
-    async getByType(type: LegacyIntegrationType): Promise<LegacyIntegrationConfig[]> {
-        await this.ensureCacheLoaded();
-        return Array.from(this.cache.values()).filter((config) => config.type === type);
     }
 
     /**
      * Save or update an integration configuration
      */
-    async save(config: LegacyIntegrationConfig): Promise<void> {
+    async save(config: DatabaseIntegrationConfig): Promise<void> {
         await this.ensureCacheLoaded();
 
         // Store the configuration as JSON in encrypted storage
-        const configJson = JSON.stringify(config);
-        await this.encryptedStorage.store(INTEGRATION_SERVICE_NAME, config.id, configJson);
-
+        await storeEncryptedIntegrationConfig(this.encryptedStorage, config.id, { ...config, version: 1 });
         // Update cache
         this.cache.set(config.id, config);
 
@@ -154,18 +161,71 @@ export class IntegrationStorage implements IIntegrationStorage {
 
         try {
             const integrationIds: string[] = JSON.parse(indexJson);
+            const idsToDelete: string[] = [];
 
             // Load each integration configuration
             for (const id of integrationIds) {
                 const configJson = await this.encryptedStorage.retrieve(INTEGRATION_SERVICE_NAME, id);
                 if (configJson) {
                     try {
-                        const config: LegacyIntegrationConfig = JSON.parse(configJson);
-                        this.cache.set(id, config);
+                        const parsedData = JSON.parse(configJson);
+
+                        // Check if this is a legacy config (missing 'version' field)
+                        if (!('version' in parsedData)) {
+                            logger.info(`Upgrading legacy integration config for ${id}`);
+
+                            // Attempt to upgrade the legacy config
+                            const upgradedConfig = await upgradeLegacyIntegrationConfig(parsedData);
+
+                            if (upgradedConfig) {
+                                // Successfully upgraded - save the new config
+                                logger.info(`Successfully upgraded integration config for ${id}`);
+                                await storeEncryptedIntegrationConfig(this.encryptedStorage, id, {
+                                    ...upgradedConfig,
+                                    version: 1
+                                });
+                                this.cache.set(id, upgradedConfig);
+                            } else {
+                                // Upgrade failed - mark for deletion
+                                logger.warn(`Failed to upgrade integration ${id}, marking for deletion`);
+                                idsToDelete.push(id);
+                            }
+                        } else {
+                            // Already versioned config - validate against current schema
+                            const { version: _version, ...rawConfig } = parsedData;
+                            const config = databaseIntegrationTypes.includes(rawConfig.type)
+                                ? (rawConfig as DatabaseIntegrationConfig)
+                                : null;
+                            const validMetadata = config
+                                ? databaseMetadataSchemasByType[config.type].safeParse(config.metadata).data
+                                : null;
+                            if (config && validMetadata) {
+                                this.cache.set(
+                                    id,
+                                    // NOTE: We must cast here because there is no union-wide schema parser at the moment.
+                                    { ...config, metadata: validMetadata } as DatabaseIntegrationConfig
+                                );
+                            } else {
+                                logger.warn(`Invalid integration config for ${id}, marking for deletion`);
+                                idsToDelete.push(id);
+                            }
+                        }
                     } catch (error) {
                         logger.error(`Failed to parse integration config for ${id}:`, error);
+                        // Mark corrupted configs for deletion
+                        idsToDelete.push(id);
                     }
                 }
+            }
+
+            // Delete any configs that failed to upgrade or were corrupted
+            if (idsToDelete.length > 0) {
+                logger.info(`Deleting ${idsToDelete.length} invalid integration config(s)`);
+                for (const id of idsToDelete) {
+                    await this.encryptedStorage.store(INTEGRATION_SERVICE_NAME, id, undefined);
+                }
+                // Update the index to remove deleted IDs
+                await this.updateIndex();
             }
         } catch (error) {
             logger.error('Failed to parse integration index:', error);

@@ -1,5 +1,5 @@
 import { inject, injectable } from 'inversify';
-import { CancellationToken, Event, EventEmitter, l10n, NotebookDocument, workspace } from 'vscode';
+import { CancellationToken, Event, EventEmitter, l10n } from 'vscode';
 
 import { IDisposableRegistry, Resource } from '../../common/types';
 import { EnvironmentVariables } from '../../common/variables/types';
@@ -148,7 +148,7 @@ function convertIntegrationConfigToJson(config: LegacyIntegrationConfig): string
 
 /**
  * Provides environment variables for SQL integrations.
- * This service scans notebooks for SQL blocks and injects the necessary credentials
+ * This service provides credentials for all configured integrations in the project
  * as environment variables so they can be used during SQL block execution.
  */
 @injectable()
@@ -174,7 +174,8 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
     }
 
     /**
-     * Get environment variables for SQL integrations used in the given notebook.
+     * Get environment variables for SQL integrations.
+     * Provides credentials for all configured integrations in the project.
      */
     public async getEnvironmentVariables(resource: Resource, token?: CancellationToken): Promise<EnvironmentVariables> {
         const envVars: EnvironmentVariables = {};
@@ -188,16 +189,6 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
         }
 
         logger.trace(`SqlIntegrationEnvironmentVariablesProvider: Getting env vars for resource`);
-        logger.trace(
-            `SqlIntegrationEnvironmentVariablesProvider: Available notebooks count: ${workspace.notebookDocuments.length}`
-        );
-
-        // Find the notebook document for this resource
-        const notebook = workspace.notebookDocuments.find((nb) => nb.uri.toString() === resource.toString());
-        if (!notebook) {
-            logger.warn(`SqlIntegrationEnvironmentVariablesProvider: No notebook found for ${resource.toString()}`);
-            return envVars;
-        }
 
         // Always add the internal DuckDB integration
         const dataframeSqlIntegrationEnvVarName = convertToEnvironmentVariableName(
@@ -212,49 +203,40 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
         envVars[dataframeSqlIntegrationEnvVarName] = dataframeSqlIntegrationCredentialsJson;
         logger.debug(`SqlIntegrationEnvironmentVariablesProvider: Added env var for dataframe SQL integration`);
 
-        // Scan all cells for SQL integration IDs
-        const integrationIds = this.scanNotebookForIntegrations(notebook);
-        if (integrationIds.size === 0) {
-            logger.info(
-                `SqlIntegrationEnvironmentVariablesProvider: No SQL integrations found in ${resource.toString()}`
-            );
+        // Get all configured integrations from storage
+        const allIntegrations = await this.integrationStorage.getAll();
+        if (allIntegrations.length === 0) {
+            logger.info(`SqlIntegrationEnvironmentVariablesProvider: No configured integrations found`);
             return envVars;
         }
 
-        logger.trace(`SqlIntegrationEnvironmentVariablesProvider: Found ${integrationIds.size} SQL integrations`);
+        logger.trace(
+            `SqlIntegrationEnvironmentVariablesProvider: Found ${allIntegrations.length} configured integrations`
+        );
 
         // Get credentials for each integration and add to environment variables
-        for (const integrationId of integrationIds) {
+        for (const config of allIntegrations) {
             if (token?.isCancellationRequested) {
                 break;
             }
 
             try {
-                // Handle internal DuckDB integration specially
-                if (integrationId === DATAFRAME_SQL_INTEGRATION_ID) {
-                    // Internal DuckDB integration is handled above
-                    continue;
-                }
-
-                const config = await this.integrationStorage.getIntegrationConfig(integrationId);
-                if (!config) {
-                    logger.warn(
-                        `SqlIntegrationEnvironmentVariablesProvider: No configuration found for integration ${integrationId}`
-                    );
+                // Skip internal DuckDB integration (already handled above)
+                if (config.id === DATAFRAME_SQL_INTEGRATION_ID) {
                     continue;
                 }
 
                 // Convert integration config to JSON and add as environment variable
-                const envVarName = convertToEnvironmentVariableName(getSqlEnvVarName(integrationId));
+                const envVarName = convertToEnvironmentVariableName(getSqlEnvVarName(config.id));
                 const credentialsJson = convertIntegrationConfigToJson(config);
 
                 envVars[envVarName] = credentialsJson;
                 logger.debug(
-                    `SqlIntegrationEnvironmentVariablesProvider: Added env var ${envVarName} for integration ${integrationId}`
+                    `SqlIntegrationEnvironmentVariablesProvider: Added env var ${envVarName} for integration ${config.id}`
                 );
             } catch (error) {
                 logger.error(
-                    `SqlIntegrationEnvironmentVariablesProvider: Failed to get credentials for integration ${integrationId}`,
+                    `SqlIntegrationEnvironmentVariablesProvider: Failed to get credentials for integration ${config.id}`,
                     error
                 );
             }
@@ -263,32 +245,5 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
         logger.trace(`SqlIntegrationEnvironmentVariablesProvider: Returning ${Object.keys(envVars).length} env vars`);
 
         return envVars;
-    }
-
-    /**
-     * Scan a notebook for SQL integration IDs.
-     */
-    private scanNotebookForIntegrations(notebook: NotebookDocument): Set<string> {
-        const integrationIds = new Set<string>();
-
-        for (const cell of notebook.getCells()) {
-            // Only check SQL cells
-            if (cell.document.languageId !== 'sql') {
-                continue;
-            }
-
-            const metadata = cell.metadata;
-            if (metadata && typeof metadata === 'object') {
-                const integrationId = (metadata as Record<string, unknown>).sql_integration_id;
-                if (typeof integrationId === 'string') {
-                    integrationIds.add(integrationId);
-                    logger.trace(
-                        `SqlIntegrationEnvironmentVariablesProvider: Found integration ${integrationId} in cell ${cell.index}`
-                    );
-                }
-            }
-        }
-
-        return integrationIds;
     }
 }

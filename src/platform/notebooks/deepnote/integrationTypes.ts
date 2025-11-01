@@ -24,13 +24,13 @@ export const LEGACY_INTEGRATION_TYPE_TO_DEEPNOTE = {
     [LegacyIntegrationType.Snowflake]: 'snowflake'
 } as const satisfies { [type in Exclude<LegacyIntegrationType, LegacyIntegrationType.DuckDB>]: string };
 
-export type RawIntegrationType =
+export type RawLegacyIntegrationType =
     (typeof LEGACY_INTEGRATION_TYPE_TO_DEEPNOTE)[keyof typeof LEGACY_INTEGRATION_TYPE_TO_DEEPNOTE];
 
 /**
  * Map Deepnote integration type strings to our IntegrationType enum
  */
-export const DEEPNOTE_TO_LEGACY_INTEGRATION_TYPE: Record<RawIntegrationType, LegacyIntegrationType> = {
+export const DEEPNOTE_TO_LEGACY_INTEGRATION_TYPE: Record<RawLegacyIntegrationType, LegacyIntegrationType> = {
     pgsql: LegacyIntegrationType.Postgres,
     'big-query': LegacyIntegrationType.BigQuery,
     snowflake: LegacyIntegrationType.Snowflake
@@ -39,7 +39,7 @@ export const DEEPNOTE_TO_LEGACY_INTEGRATION_TYPE: Record<RawIntegrationType, Leg
 /**
  * Base interface for all integration configurations
  */
-export interface BaseIntegrationConfig {
+export interface BaseLegacyIntegrationConfig {
     id: string;
     name: string;
     type: LegacyIntegrationType;
@@ -48,7 +48,7 @@ export interface BaseIntegrationConfig {
 /**
  * PostgreSQL integration configuration
  */
-export interface PostgresIntegrationConfig extends BaseIntegrationConfig {
+export interface LegacyPostgresIntegrationConfig extends BaseLegacyIntegrationConfig {
     type: LegacyIntegrationType.Postgres;
     host: string;
     port: number;
@@ -61,7 +61,7 @@ export interface PostgresIntegrationConfig extends BaseIntegrationConfig {
 /**
  * BigQuery integration configuration
  */
-export interface BigQueryIntegrationConfig extends BaseIntegrationConfig {
+export interface LegacyBigQueryIntegrationConfig extends BaseLegacyIntegrationConfig {
     type: LegacyIntegrationType.BigQuery;
     projectId: string;
     credentials: string; // JSON string of service account credentials
@@ -70,7 +70,7 @@ export interface BigQueryIntegrationConfig extends BaseIntegrationConfig {
 /**
  * DuckDB integration configuration (internal, always available)
  */
-export interface DuckDBIntegrationConfig extends BaseIntegrationConfig {
+export interface LegacyDuckDBIntegrationConfig extends BaseLegacyIntegrationConfig {
     type: LegacyIntegrationType.DuckDB;
 }
 
@@ -91,7 +91,7 @@ export {
 /**
  * Base Snowflake configuration with common fields
  */
-interface BaseSnowflakeConfig extends BaseIntegrationConfig {
+interface BaseLegacySnowflakeConfig extends BaseLegacyIntegrationConfig {
     type: LegacyIntegrationType.Snowflake;
     account: string;
     warehouse?: string;
@@ -102,7 +102,7 @@ interface BaseSnowflakeConfig extends BaseIntegrationConfig {
 /**
  * Snowflake integration configuration (discriminated union)
  */
-export type SnowflakeIntegrationConfig = BaseSnowflakeConfig &
+export type LegacySnowflakeIntegrationConfig = BaseLegacySnowflakeConfig &
     (
         | {
               authMethod: typeof SnowflakeAuthMethods.PASSWORD | null;
@@ -130,10 +130,10 @@ export type SnowflakeIntegrationConfig = BaseSnowflakeConfig &
  * Union type of all integration configurations
  */
 export type LegacyIntegrationConfig =
-    | PostgresIntegrationConfig
-    | BigQueryIntegrationConfig
-    | SnowflakeIntegrationConfig
-    | DuckDBIntegrationConfig;
+    | LegacyPostgresIntegrationConfig
+    | LegacyBigQueryIntegrationConfig
+    | LegacySnowflakeIntegrationConfig
+    | LegacyDuckDBIntegrationConfig;
 
 /**
  * Integration connection status

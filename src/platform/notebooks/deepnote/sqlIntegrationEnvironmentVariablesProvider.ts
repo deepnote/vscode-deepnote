@@ -15,7 +15,7 @@ import {
     LegacyIntegrationConfig,
     LegacyIntegrationType,
     SnowflakeAuthMethods,
-    DuckDBIntegrationConfig,
+    LegacyDuckDBIntegrationConfig,
     DATAFRAME_SQL_INTEGRATION_ID
 } from './integrationTypes';
 

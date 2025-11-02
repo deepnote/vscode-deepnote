@@ -10,15 +10,15 @@ export interface ITrinoFormProps {
     onCancel: () => void;
 }
 
-function createEmptyTrinoConfig(
-    integrationId: string,
-    defaultName?: string
-): Extract<DatabaseIntegrationConfig, { type: 'trino' }> {
+function createEmptyTrinoConfig(params: {
+    id: string;
+    name?: string;
+}): Extract<DatabaseIntegrationConfig, { type: 'trino' }> {
     const unnamedIntegration = getLocString('integrationsUnnamedIntegration', 'Unnamed Integration ({0})');
 
     return {
-        id: integrationId,
-        name: (defaultName || format(unnamedIntegration, integrationId)).trim(),
+        id: params.id,
+        name: (params.name || format(unnamedIntegration, params.id)).trim(),
         type: 'trino',
         metadata: {
             host: '',
@@ -38,14 +38,18 @@ export const TrinoForm: React.FC<ITrinoFormProps> = ({
     onCancel
 }) => {
     const [pendingConfig, setPendingConfig] = React.useState<Extract<DatabaseIntegrationConfig, { type: 'trino' }>>(
-        () => existingConfig || createEmptyTrinoConfig(integrationId, defaultName)
+        existingConfig
+            ? structuredClone(existingConfig)
+            : createEmptyTrinoConfig({ id: integrationId, name: defaultName })
     );
 
     React.useEffect(() => {
-        if (existingConfig) {
-            setPendingConfig(existingConfig);
-        }
-    }, [existingConfig]);
+        setPendingConfig(
+            existingConfig
+                ? structuredClone(existingConfig)
+                : createEmptyTrinoConfig({ id: integrationId, name: defaultName })
+        );
+    }, [existingConfig, integrationId, defaultName]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();

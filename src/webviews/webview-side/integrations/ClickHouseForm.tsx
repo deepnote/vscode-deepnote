@@ -10,15 +10,15 @@ export interface IClickHouseFormProps {
     onCancel: () => void;
 }
 
-function createEmptyClickHouseConfig(
-    integrationId: string,
-    defaultName?: string
-): Extract<DatabaseIntegrationConfig, { type: 'clickhouse' }> {
+function createEmptyClickHouseConfig(params: {
+    id: string;
+    name?: string;
+}): Extract<DatabaseIntegrationConfig, { type: 'clickhouse' }> {
     const unnamedIntegration = getLocString('integrationsUnnamedIntegration', 'Unnamed Integration ({0})');
 
     return {
-        id: integrationId,
-        name: (defaultName || format(unnamedIntegration, integrationId)).trim(),
+        id: params.id,
+        name: (params.name || format(unnamedIntegration, params.id)).trim(),
         type: 'clickhouse',
         metadata: {
             host: '',
@@ -37,13 +37,19 @@ export const ClickHouseForm: React.FC<IClickHouseFormProps> = ({
 }) => {
     const [pendingConfig, setPendingConfig] = React.useState<
         Extract<DatabaseIntegrationConfig, { type: 'clickhouse' }>
-    >(() => existingConfig || createEmptyClickHouseConfig(integrationId, defaultName));
+    >(
+        existingConfig
+            ? structuredClone(existingConfig)
+            : createEmptyClickHouseConfig({ id: integrationId, name: defaultName })
+    );
 
     React.useEffect(() => {
-        if (existingConfig) {
-            setPendingConfig(existingConfig);
-        }
-    }, [existingConfig]);
+        setPendingConfig(
+            existingConfig
+                ? structuredClone(existingConfig)
+                : createEmptyClickHouseConfig({ id: integrationId, name: defaultName })
+        );
+    }, [existingConfig, integrationId, defaultName]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();

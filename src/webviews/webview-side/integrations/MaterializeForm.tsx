@@ -10,15 +10,15 @@ export interface IMaterializeFormProps {
     onCancel: () => void;
 }
 
-function createEmptyMaterializeConfig(
-    integrationId: string,
-    defaultName?: string
-): Extract<DatabaseIntegrationConfig, { type: 'materialize' }> {
+function createEmptyMaterializeConfig(params: {
+    id: string;
+    name?: string;
+}): Extract<DatabaseIntegrationConfig, { type: 'materialize' }> {
     const unnamedIntegration = getLocString('integrationsUnnamedIntegration', 'Unnamed Integration ({0})');
 
     return {
-        id: integrationId,
-        name: (defaultName || format(unnamedIntegration, integrationId)).trim(),
+        id: params.id,
+        name: (params.name || format(unnamedIntegration, params.id)).trim(),
         type: 'materialize',
         metadata: {
             host: '',
@@ -39,13 +39,19 @@ export const MaterializeForm: React.FC<IMaterializeFormProps> = ({
 }) => {
     const [pendingConfig, setPendingConfig] = React.useState<
         Extract<DatabaseIntegrationConfig, { type: 'materialize' }>
-    >(() => existingConfig || createEmptyMaterializeConfig(integrationId, defaultName));
+    >(
+        existingConfig
+            ? structuredClone(existingConfig)
+            : createEmptyMaterializeConfig({ id: integrationId, name: defaultName })
+    );
 
     React.useEffect(() => {
-        if (existingConfig) {
-            setPendingConfig(existingConfig);
-        }
-    }, [existingConfig]);
+        setPendingConfig(
+            existingConfig
+                ? structuredClone(existingConfig)
+                : createEmptyMaterializeConfig({ id: integrationId, name: defaultName })
+        );
+    }, [existingConfig, integrationId, defaultName]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();

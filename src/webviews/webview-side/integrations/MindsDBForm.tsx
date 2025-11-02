@@ -10,15 +10,15 @@ export interface IMindsDBFormProps {
     onCancel: () => void;
 }
 
-function createEmptyMindsDBConfig(
-    integrationId: string,
-    defaultName?: string
-): Extract<DatabaseIntegrationConfig, { type: 'mindsdb' }> {
+function createEmptyMindsDBConfig(params: {
+    id: string;
+    name?: string;
+}): Extract<DatabaseIntegrationConfig, { type: 'mindsdb' }> {
     const unnamedIntegration = getLocString('integrationsUnnamedIntegration', 'Unnamed Integration ({0})');
 
     return {
-        id: integrationId,
-        name: (defaultName || format(unnamedIntegration, integrationId)).trim(),
+        id: params.id,
+        name: (params.name || format(unnamedIntegration, params.id)).trim(),
         type: 'mindsdb',
         metadata: {
             host: '',
@@ -37,14 +37,18 @@ export const MindsDBForm: React.FC<IMindsDBFormProps> = ({
     onCancel
 }) => {
     const [pendingConfig, setPendingConfig] = React.useState<Extract<DatabaseIntegrationConfig, { type: 'mindsdb' }>>(
-        () => existingConfig || createEmptyMindsDBConfig(integrationId, defaultName)
+        existingConfig
+            ? structuredClone(existingConfig)
+            : createEmptyMindsDBConfig({ id: integrationId, name: defaultName })
     );
 
     React.useEffect(() => {
-        if (existingConfig) {
-            setPendingConfig(existingConfig);
-        }
-    }, [existingConfig]);
+        setPendingConfig(
+            existingConfig
+                ? structuredClone(existingConfig)
+                : createEmptyMindsDBConfig({ id: integrationId, name: defaultName })
+        );
+    }, [existingConfig, integrationId, defaultName]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();

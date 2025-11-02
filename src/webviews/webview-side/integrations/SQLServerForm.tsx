@@ -10,15 +10,15 @@ export interface ISQLServerFormProps {
     onCancel: () => void;
 }
 
-function createEmptySQLServerConfig(
-    integrationId: string,
-    defaultName?: string
-): Extract<DatabaseIntegrationConfig, { type: 'sql-server' }> {
+function createEmptySQLServerConfig(params: {
+    id: string;
+    name?: string;
+}): Extract<DatabaseIntegrationConfig, { type: 'sql-server' }> {
     const unnamedIntegration = getLocString('integrationsUnnamedIntegration', 'Unnamed Integration ({0})');
 
     return {
-        id: integrationId,
-        name: (defaultName || format(unnamedIntegration, integrationId)).trim(),
+        id: params.id,
+        name: (params.name || format(unnamedIntegration, params.id)).trim(),
         type: 'sql-server',
         metadata: {
             host: '',
@@ -39,13 +39,19 @@ export const SQLServerForm: React.FC<ISQLServerFormProps> = ({
 }) => {
     const [pendingConfig, setPendingConfig] = React.useState<
         Extract<DatabaseIntegrationConfig, { type: 'sql-server' }>
-    >(() => existingConfig || createEmptySQLServerConfig(integrationId, defaultName));
+    >(
+        existingConfig
+            ? structuredClone(existingConfig)
+            : createEmptySQLServerConfig({ id: integrationId, name: defaultName })
+    );
 
     React.useEffect(() => {
-        if (existingConfig) {
-            setPendingConfig(existingConfig);
-        }
-    }, [existingConfig]);
+        setPendingConfig(
+            existingConfig
+                ? structuredClone(existingConfig)
+                : createEmptySQLServerConfig({ id: integrationId, name: defaultName })
+        );
+    }, [existingConfig, integrationId, defaultName]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();

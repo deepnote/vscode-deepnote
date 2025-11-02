@@ -10,15 +10,15 @@ export interface IAlloyDBFormProps {
     onCancel: () => void;
 }
 
-function createEmptyAlloyDBConfig(
-    integrationId: string,
-    defaultName?: string
-): Extract<DatabaseIntegrationConfig, { type: 'alloydb' }> {
+function createEmptyAlloyDBConfig(params: {
+    id: string;
+    name?: string;
+}): Extract<DatabaseIntegrationConfig, { type: 'alloydb' }> {
     const unnamedIntegration = getLocString('integrationsUnnamedIntegration', 'Unnamed Integration ({0})');
 
     return {
-        id: integrationId,
-        name: (defaultName || format(unnamedIntegration, integrationId)).trim(),
+        id: params.id,
+        name: (params.name || format(unnamedIntegration, params.id)).trim(),
         type: 'alloydb',
         metadata: {
             host: '',
@@ -37,14 +37,18 @@ export const AlloyDBForm: React.FC<IAlloyDBFormProps> = ({
     onCancel
 }) => {
     const [pendingConfig, setPendingConfig] = React.useState<Extract<DatabaseIntegrationConfig, { type: 'alloydb' }>>(
-        () => existingConfig || createEmptyAlloyDBConfig(integrationId, defaultName)
+        existingConfig
+            ? structuredClone(existingConfig)
+            : createEmptyAlloyDBConfig({ id: integrationId, name: defaultName })
     );
 
     React.useEffect(() => {
-        if (existingConfig) {
-            setPendingConfig(existingConfig);
-        }
-    }, [existingConfig]);
+        setPendingConfig(
+            existingConfig
+                ? structuredClone(existingConfig)
+                : createEmptyAlloyDBConfig({ id: integrationId, name: defaultName })
+        );
+    }, [existingConfig, integrationId, defaultName]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();

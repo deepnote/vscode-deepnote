@@ -3,7 +3,7 @@ import { instance, mock, when } from 'ts-mockito';
 import { Uri, EventEmitter } from 'vscode';
 import { DeepnoteEnvironmentTreeDataProvider } from './deepnoteEnvironmentTreeDataProvider.node';
 import { IDeepnoteEnvironmentManager } from '../types';
-import { DeepnoteEnvironment, DeepnoteEnvironmentWithStatus, EnvironmentStatus } from './deepnoteEnvironment';
+import { DeepnoteEnvironment } from './deepnoteEnvironment';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
 import { EnvironmentTreeItemType } from './deepnoteEnvironmentTreeItem.node';
 
@@ -64,14 +64,8 @@ suite('DeepnoteEnvironmentTreeDataProvider', () => {
 
         test('should return environments and create action', async () => {
             when(mockConfigManager.listEnvironments()).thenReturn([testConfig1, testConfig2]);
-            when(mockConfigManager.getEnvironmentWithStatus('config-1')).thenReturn({
-                ...testConfig1,
-                status: EnvironmentStatus.Stopped
-            } as DeepnoteEnvironmentWithStatus);
-            when(mockConfigManager.getEnvironmentWithStatus('config-2')).thenReturn({
-                ...testConfig2,
-                status: EnvironmentStatus.Running
-            } as DeepnoteEnvironmentWithStatus);
+            when(mockConfigManager.getEnvironment('config-1')).thenReturn(testConfig1);
+            when(mockConfigManager.getEnvironment('config-2')).thenReturn(testConfig2);
 
             const children = await provider.getChildren();
 
@@ -80,66 +74,12 @@ suite('DeepnoteEnvironmentTreeDataProvider', () => {
             assert.strictEqual(children[1].type, EnvironmentTreeItemType.Environment);
             assert.strictEqual(children[2].type, EnvironmentTreeItemType.CreateAction);
         });
-
-        test('should include status for each environment', async () => {
-            when(mockConfigManager.listEnvironments()).thenReturn([testConfig1, testConfig2]);
-            when(mockConfigManager.getEnvironmentWithStatus('config-1')).thenReturn({
-                ...testConfig1,
-                status: EnvironmentStatus.Stopped
-            } as DeepnoteEnvironmentWithStatus);
-            when(mockConfigManager.getEnvironmentWithStatus('config-2')).thenReturn({
-                ...testConfig2,
-                status: EnvironmentStatus.Running
-            } as DeepnoteEnvironmentWithStatus);
-
-            const children = await provider.getChildren();
-
-            assert.strictEqual(children[0].status, EnvironmentStatus.Stopped);
-            assert.strictEqual(children[1].status, EnvironmentStatus.Running);
-        });
     });
 
     suite('getChildren - Environment Children', () => {
-        test('should return info items for stopped environment', async () => {
-            when(mockConfigManager.listEnvironments()).thenReturn([testConfig1]);
-            when(mockConfigManager.getEnvironmentWithStatus('config-1')).thenReturn({
-                ...testConfig1,
-                status: EnvironmentStatus.Stopped
-            } as DeepnoteEnvironmentWithStatus);
-
-            const rootChildren = await provider.getChildren();
-            const configItem = rootChildren[0];
-            const infoItems = await provider.getChildren(configItem);
-
-            assert.isAtLeast(infoItems.length, 3); // At least: Python, Venv, Last used
-            assert.isTrue(infoItems.every((item) => item.type === EnvironmentTreeItemType.InfoItem));
-        });
-
-        test('should include port and URL for running environment', async () => {
-            when(mockConfigManager.listEnvironments()).thenReturn([testConfig2]);
-            when(mockConfigManager.getEnvironmentWithStatus('config-2')).thenReturn({
-                ...testConfig2,
-                status: EnvironmentStatus.Running
-            } as DeepnoteEnvironmentWithStatus);
-
-            const rootChildren = await provider.getChildren();
-            const configItem = rootChildren[0];
-            const infoItems = await provider.getChildren(configItem);
-
-            const labels = infoItems.map((item) => item.label as string);
-            const hasPort = labels.some((label) => label.includes('Ports:') && label.includes('8888'));
-            const hasUrl = labels.some((label) => label.includes('URL:') && label.includes('http://localhost:8888'));
-
-            assert.isTrue(hasPort, 'Should include port info');
-            assert.isTrue(hasUrl, 'Should include URL info');
-        });
-
         test('should include packages when present', async () => {
             when(mockConfigManager.listEnvironments()).thenReturn([testConfig2]);
-            when(mockConfigManager.getEnvironmentWithStatus('config-2')).thenReturn({
-                ...testConfig2,
-                status: EnvironmentStatus.Running
-            } as DeepnoteEnvironmentWithStatus);
+            when(mockConfigManager.getEnvironment('config-2')).thenReturn(testConfig2);
 
             const rootChildren = await provider.getChildren();
             const configItem = rootChildren[0];
@@ -163,10 +103,7 @@ suite('DeepnoteEnvironmentTreeDataProvider', () => {
 
         test('should return empty array for info items', async () => {
             when(mockConfigManager.listEnvironments()).thenReturn([testConfig1]);
-            when(mockConfigManager.getEnvironmentWithStatus('config-1')).thenReturn({
-                ...testConfig1,
-                status: EnvironmentStatus.Stopped
-            } as DeepnoteEnvironmentWithStatus);
+            when(mockConfigManager.getEnvironment('config-1')).thenReturn(testConfig1);
 
             const rootChildren = await provider.getChildren();
             const configItem = rootChildren[0];
@@ -180,10 +117,7 @@ suite('DeepnoteEnvironmentTreeDataProvider', () => {
     suite('getTreeItem', () => {
         test('should return the same tree item', async () => {
             when(mockConfigManager.listEnvironments()).thenReturn([testConfig1]);
-            when(mockConfigManager.getEnvironmentWithStatus('config-1')).thenReturn({
-                ...testConfig1,
-                status: EnvironmentStatus.Stopped
-            } as DeepnoteEnvironmentWithStatus);
+            when(mockConfigManager.getEnvironment('config-1')).thenReturn(testConfig1);
 
             const children = await provider.getChildren();
             const item = children[0];

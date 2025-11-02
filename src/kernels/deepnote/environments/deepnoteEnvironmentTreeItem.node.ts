@@ -1,7 +1,6 @@
-import { l10n, ThemeColor, ThemeIcon, TreeItem, TreeItemCollapsibleState } from 'vscode';
+import { l10n, ThemeIcon, TreeItem, TreeItemCollapsibleState } from 'vscode';
 
-import { DeepnoteEnvironment, EnvironmentStatus } from './deepnoteEnvironment';
-import { getDeepnoteEnvironmentStatusVisual } from './deepnoteEnvironmentUi';
+import { DeepnoteEnvironment } from './deepnoteEnvironment';
 
 /**
  * Type of tree item in the environments view
@@ -12,15 +11,7 @@ export enum EnvironmentTreeItemType {
     CreateAction = 'create'
 }
 
-export type DeepnoteEnvironmentTreeInfoItemId =
-    | 'ports'
-    | 'url'
-    | 'python'
-    | 'venv'
-    | 'packages'
-    | 'toolkit'
-    | 'created'
-    | 'lastUsed';
+export type DeepnoteEnvironmentTreeInfoItemId = 'python' | 'venv' | 'packages' | 'toolkit' | 'created' | 'lastUsed';
 
 /**
  * Tree item for displaying environments and related info
@@ -29,7 +20,6 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
     constructor(
         public readonly type: EnvironmentTreeItemType,
         public readonly environment?: DeepnoteEnvironment,
-        public readonly status?: EnvironmentStatus,
         label?: string,
         collapsibleState?: TreeItemCollapsibleState
     ) {
@@ -53,7 +43,7 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
         label: string,
         icon?: string
     ): DeepnoteEnvironmentTreeItem {
-        const item = new DeepnoteEnvironmentTreeItem(EnvironmentTreeItemType.InfoItem, undefined, undefined, label);
+        const item = new DeepnoteEnvironmentTreeItem(EnvironmentTreeItemType.InfoItem, undefined, label);
         item.id = `info-${environmentId}-${id}`;
 
         if (icon) {
@@ -68,12 +58,8 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
             return;
         }
 
-        const statusVisual = getDeepnoteEnvironmentStatusVisual(this.status ?? EnvironmentStatus.Stopped);
-
         this.id = this.environment.id;
-        this.label = `${this.environment.name} [${statusVisual.text}]`;
-        this.iconPath = new ThemeIcon(statusVisual.icon, new ThemeColor(statusVisual.themeColorId));
-        this.contextValue = statusVisual.contextValue;
+        this.label = this.environment.name;
 
         // Make it collapsible to show info items
         this.collapsibleState = TreeItemCollapsibleState.Collapsed;
@@ -109,12 +95,9 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
             return '';
         }
 
-        const { text } = getDeepnoteEnvironmentStatusVisual(this.status ?? EnvironmentStatus.Stopped);
-
         const lines: string[] = [];
         lines.push(`**${this.environment.name}**`);
         lines.push('');
-        lines.push(l10n.t('Status: {0}', text));
         lines.push(l10n.t('Python: {0}', this.environment.pythonInterpreter.uri.toString(true)));
         lines.push(l10n.t('Venv: {0}', this.environment.venvPath.toString(true)));
 

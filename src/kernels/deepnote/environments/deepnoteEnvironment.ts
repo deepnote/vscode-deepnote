@@ -87,36 +87,3 @@ export interface CreateDeepnoteEnvironmentOptions {
     packages?: string[];
     description?: string;
 }
-
-/**
- * Status of a kernel environment
- */
-export enum EnvironmentStatus {
-    /**
-     * Environment exists but server is not running
-     */
-    Stopped = 'stopped',
-
-    /**
-     * Server is currently starting
-     */
-    Starting = 'starting',
-
-    /**
-     * Server is running and ready
-     */
-    Running = 'running',
-
-    /**
-     * Server encountered an error
-     */
-    Error = 'error'
-}
-
-/**
- * Extended environment with runtime status information
- */
-export interface DeepnoteEnvironmentWithStatus extends DeepnoteEnvironment {
-    status: EnvironmentStatus;
-    errorMessage?: string;
-}

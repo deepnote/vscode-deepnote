@@ -7,11 +7,7 @@ import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { JupyterServerProviderHandle } from '../jupyter/types';
 import { serializePythonEnvironment } from '../../platform/api/pythonApi';
 import { getTelemetrySafeHashedString } from '../../platform/telemetry/helpers';
-import {
-    CreateDeepnoteEnvironmentOptions,
-    DeepnoteEnvironment,
-    DeepnoteEnvironmentWithStatus
-} from './environments/deepnoteEnvironment';
+import { CreateDeepnoteEnvironmentOptions, DeepnoteEnvironment } from './environments/deepnoteEnvironment';
 
 export interface VenvAndToolkitInstallation {
     pythonInterpreter: PythonEnvironment;
@@ -32,6 +28,7 @@ export class DeepnoteKernelConnectionMetadata {
     public readonly serverProviderHandle: JupyterServerProviderHandle;
     public readonly serverInfo?: DeepnoteServerInfo; // Store server info for connection
     public readonly environmentName?: string; // Name of the Deepnote environment for display purposes
+    public readonly notebookName?: string; // Name of the notebook for display purposes
 
     private constructor(options: {
         interpreter?: PythonEnvironment;
@@ -41,6 +38,7 @@ export class DeepnoteKernelConnectionMetadata {
         serverProviderHandle: JupyterServerProviderHandle;
         serverInfo?: DeepnoteServerInfo;
         environmentName?: string;
+        notebookName?: string;
     }) {
         this.interpreter = options.interpreter;
         this.kernelSpec = options.kernelSpec;
@@ -49,6 +47,7 @@ export class DeepnoteKernelConnectionMetadata {
         this.serverProviderHandle = options.serverProviderHandle;
         this.serverInfo = options.serverInfo;
         this.environmentName = options.environmentName;
+        this.notebookName = options.notebookName;
     }
 
     public static create(options: {
@@ -59,6 +58,7 @@ export class DeepnoteKernelConnectionMetadata {
         serverProviderHandle: JupyterServerProviderHandle;
         serverInfo?: DeepnoteServerInfo;
         environmentName?: string;
+        notebookName?: string;
     }) {
         return new DeepnoteKernelConnectionMetadata(options);
     }
@@ -131,6 +131,7 @@ export interface IDeepnoteServerStarter {
      * @param interpreter The Python interpreter to use
      * @param venvPath The path to the venv
      * @param environmentId The environment ID (for server management)
+     * @param deepnoteFileUri The URI of the .deepnote file
      * @param token Cancellation token to cancel the operation
      * @returns Connection information (URL, port, etc.)
      */
@@ -138,6 +139,7 @@ export interface IDeepnoteServerStarter {
         interpreter: PythonEnvironment,
         venvPath: vscode.Uri,
         environmentId: string,
+        deepnoteFileUri: vscode.Uri,
         token?: vscode.CancellationToken
     ): Promise<DeepnoteServerInfo>;
 
@@ -146,7 +148,8 @@ export interface IDeepnoteServerStarter {
      * @param environmentId The environment ID
      * @param token Cancellation token to cancel the operation
      */
-    stopServer(environmentId: string, token?: vscode.CancellationToken): Promise<void>;
+    // stopServer(environmentId: string, token?: vscode.CancellationToken): Promise<void>;
+    stopServer(deepnoteFileUri: vscode.Uri, token?: vscode.CancellationToken): Promise<void>;
 
     /**
      * Disposes all server processes and resources.
@@ -237,11 +240,6 @@ export interface IDeepnoteEnvironmentManager {
     getEnvironment(id: string): DeepnoteEnvironment | undefined;
 
     /**
-     * Get environment with status information
-     */
-    getEnvironmentWithStatus(id: string): DeepnoteEnvironmentWithStatus | undefined;
-
-    /**
      * Update an environment's metadata
      */
     updateEnvironment(
@@ -257,26 +255,6 @@ export interface IDeepnoteEnvironmentManager {
     deleteEnvironment(id: string, token?: vscode.CancellationToken): Promise<void>;
 
     /**
-     * Start the Jupyter server for an environment
-     * @param id The environment ID
-     */
-    startServer(id: string, token?: vscode.CancellationToken): Promise<void>;
-
-    /**
-     * Stop the Jupyter server for an environment
-     * @param id The environment ID
-     * @param token Cancellation token to cancel the operation
-     */
-    stopServer(id: string, token?: vscode.CancellationToken): Promise<void>;
-
-    /**
-     * Restart the Jupyter server for an environment
-     * @param id The environment ID
-     * @param token Cancellation token to cancel the operation
-     */
-    restartServer(id: string, token?: vscode.CancellationToken): Promise<void>;
-
-    /**
      * Update the last used timestamp for an environment
      */
     updateLastUsed(id: string): Promise<void>;
@@ -290,16 +268,6 @@ export interface IDeepnoteEnvironmentManager {
      * Dispose of all resources
      */
     dispose(): void;
-}
-
-export const IDeepnoteEnvironmentPicker = Symbol('IDeepnoteEnvironmentPicker');
-export interface IDeepnoteEnvironmentPicker {
-    /**
-     * Show a quick pick to select an environment for a notebook
-     * @param notebookUri The notebook URI (for context in messages)
-     * @returns Selected environment, or undefined if cancelled
-     */
-    pickEnvironment(notebookUri: vscode.Uri): Promise<DeepnoteEnvironment | undefined>;
 }
 
 export const IDeepnoteNotebookEnvironmentMapper = Symbol('IDeepnoteNotebookEnvironmentMapper');

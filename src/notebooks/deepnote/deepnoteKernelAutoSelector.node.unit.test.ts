@@ -5,7 +5,6 @@ import { DeepnoteKernelAutoSelector } from './deepnoteKernelAutoSelector.node';
 import {
     IDeepnoteEnvironmentManager,
     IDeepnoteServerProvider,
-    IDeepnoteEnvironmentPicker,
     IDeepnoteNotebookEnvironmentMapper
 } from '../../kernels/deepnote/types';
 import { IControllerRegistration, IVSCodeNotebookController } from '../controllers/types';
@@ -34,7 +33,6 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
     let mockKernelProvider: IKernelProvider;
     let mockRequirementsHelper: IDeepnoteRequirementsHelper;
     let mockEnvironmentManager: IDeepnoteEnvironmentManager;
-    let mockEnvironmentPicker: IDeepnoteEnvironmentPicker;
     let mockNotebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper;
     let mockOutputChannel: IOutputChannel;
 
@@ -57,7 +55,6 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         mockKernelProvider = mock<IKernelProvider>();
         mockRequirementsHelper = mock<IDeepnoteRequirementsHelper>();
         mockEnvironmentManager = mock<IDeepnoteEnvironmentManager>();
-        mockEnvironmentPicker = mock<IDeepnoteEnvironmentPicker>();
         mockNotebookEnvironmentMapper = mock<IDeepnoteNotebookEnvironmentMapper>();
         mockOutputChannel = mock<IOutputChannel>();
 

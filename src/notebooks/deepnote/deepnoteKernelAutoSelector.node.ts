@@ -14,7 +14,8 @@ import {
     Uri,
     l10n,
     env,
-    notebooks
+    notebooks,
+    ProgressLocation
 } from 'vscode';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
@@ -23,10 +24,10 @@ import {
     IDeepnoteKernelAutoSelector,
     IDeepnoteServerProvider,
     IDeepnoteEnvironmentManager,
-    IDeepnoteEnvironmentPicker,
     IDeepnoteNotebookEnvironmentMapper,
     DEEPNOTE_NOTEBOOK_TYPE,
-    DeepnoteKernelConnectionMetadata
+    DeepnoteKernelConnectionMetadata,
+    IDeepnoteServerStarter
 } from '../../kernels/deepnote/types';
 import { IControllerRegistration, IVSCodeNotebookController } from '../controllers/types';
 import { JVSC_EXTENSION_ID } from '../../platform/common/constants';
@@ -82,7 +83,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         @inject(IKernelProvider) private readonly kernelProvider: IKernelProvider,
         @inject(IDeepnoteRequirementsHelper) private readonly requirementsHelper: IDeepnoteRequirementsHelper,
         @inject(IDeepnoteEnvironmentManager) private readonly configurationManager: IDeepnoteEnvironmentManager,
-        @inject(IDeepnoteEnvironmentPicker) private readonly configurationPicker: IDeepnoteEnvironmentPicker,
+        @inject(IDeepnoteServerStarter) private readonly serverStarter: IDeepnoteServerStarter,
         @inject(IDeepnoteNotebookEnvironmentMapper)
         private readonly notebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper,
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel
@@ -123,10 +124,22 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         // Always try to ensure kernel is selected (this will reuse existing controllers)
         // Don't await - let it happen in background so notebook opens quickly
-        void this.ensureKernelSelected(notebook).catch((error) => {
-            logger.error(`Failed to auto-select Deepnote kernel for ${getDisplayPath(notebook.uri)}`, error);
-            void this.handleKernelSelectionError(error);
-        });
+
+        void window.withProgress(
+            {
+                location: ProgressLocation.Notification,
+                title: l10n.t('Auto-selecting Deepnote kernel...'),
+                cancellable: false
+            },
+            async () => {
+                try {
+                    await this.ensureKernelSelected(notebook);
+                } catch (error) {
+                    logger.error(`Failed to auto-select Deepnote kernel for ${getDisplayPath(notebook.uri)}`, error);
+                    void this.handleKernelSelectionError(error);
+                }
+            }
+        );
     }
 
     private onControllerSelectionChanged(event: {
@@ -142,20 +155,20 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         const baseFileUri = event.notebook.uri.with({ query: '', fragment: '' });
         const notebookKey = baseFileUri.fsPath;
 
-        // // If the Deepnote controller for this notebook was deselected, try to reselect it
-        // // Since controllers are now protected from disposal, this should rarely happen
-        // if (!event.selected) {
-        //     const ourController = this.notebookControllers.get(notebookKey);
-        //     if (ourController && ourController.id === event.controller.id) {
-        //         logger.warn(
-        //             `Deepnote controller was unexpectedly deselected for ${getDisplayPath(
-        //                 event.notebook.uri
-        //             )}. Reselecting...`
-        //         );
-        //         // Reselect the controller
-        //         ourController.controller.updateNotebookAffinity(event.notebook, NotebookControllerAffinity.Preferred);
-        //     }
-        // }
+        // If the Deepnote controller for this notebook was deselected, try to reselect it
+        // Since controllers are now protected from disposal, this should rarely happen
+        if (!event.selected) {
+            const ourController = this.notebookControllers.get(notebookKey);
+            if (ourController && ourController.id === event.controller.id) {
+                logger.warn(
+                    `Deepnote controller was unexpectedly deselected for ${getDisplayPath(
+                        event.notebook.uri
+                    )}. Reselecting...`
+                );
+                // Reselect the controller
+                ourController.controller.updateNotebookAffinity(event.notebook, NotebookControllerAffinity.Preferred);
+            }
+        }
     }
 
     private onDidCloseNotebook(notebook: NotebookDocument) {
@@ -288,6 +301,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         const environment = environmentId ? this.configurationManager.getEnvironment(environmentId) : undefined;
 
         if (environment == null) {
+            await this.notebookEnvironmentMapper.removeEnvironmentForNotebook(baseFileUri);
             logger.error(`No environment found for notebook ${getDisplayPath(notebook.uri)}`);
             return;
         }
@@ -347,10 +361,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         progress: { report(value: { message?: string; increment?: number }): void },
         progressToken: CancellationToken
     ): Promise<void> {
-        // TODO - maybe create loading controller only if registry is empty
-        // TODO - cause it doesn't work if there is already a controller for the notebook
-        // this.createLoadingController(notebook, notebookKey);
-
         logger.info(`Setting up kernel using configuration: ${configuration.name} (${configuration.id})`);
         progress.report({ message: `Using ${configuration.name}...` });
 
@@ -363,21 +373,16 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         // Ensure server is running (startServer is idempotent - returns early if already running)
         // Note: startServer() will create the venv if it doesn't exist
-        // IMPORTANT: Always call this and refresh configuration to get current server info,
-        // as the configuration object may have stale serverInfo from a previous session
         logger.info(`Ensuring server is running for configuration ${configuration.id}`);
         progress.report({ message: 'Starting Deepnote server...' });
-        await this.configurationManager.startServer(configuration.id, progressToken);
+        const serverInfo = await this.serverStarter.startServer(
+            configuration.pythonInterpreter,
+            configuration.venvPath,
+            configuration.id,
+            baseFileUri,
+            progressToken
+        );
 
-        // ALWAYS refresh configuration to get current serverInfo
-        // This is critical because the configuration object may have been cached
-        const updatedConfig = this.configurationManager.getEnvironment(configuration.id);
-        if (!updatedConfig?.serverInfo) {
-            throw new Error('Failed to start server for configuration');
-        }
-        configuration = updatedConfig; // Use fresh configuration with current serverInfo
-        // TypeScript can't infer that serverInfo is non-null after the check above, so we use non-null assertion
-        const serverInfo = configuration.serverInfo!;
         logger.info(`Server running at ${serverInfo.url}`);
 
         // Update last used timestamp
@@ -387,7 +392,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         const serverProviderHandle: JupyterServerProviderHandle = {
             extensionId: JVSC_EXTENSION_ID,
             id: 'deepnote-server',
-            handle: `deepnote-config-server-${configuration.id}`
+            handle: `deepnote-config-server-${configuration.id}-${baseFileUri.fsPath}`
         };
 
         // Register the server with the provider
@@ -401,7 +406,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             {
                 baseUrl: serverInfo.url,
                 token: serverInfo.token || '',
-                displayName: `Deepnote: ${configuration.name}`,
+                displayName: `Deepnote: ${configuration.name} (${notebookKey})`,
                 authorizationHeader: {}
             },
             this.requestCreator,
@@ -445,7 +450,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             id: controllerId,
             serverProviderHandle,
             serverInfo,
-            environmentName: configuration.name
+            environmentName: configuration.name,
+            notebookName: notebookKey
         });
 
         // Store connection metadata for reuse
@@ -485,7 +491,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         }
 
         // Mark controller as protected
-        this.controllerRegistration.trackActiveInterpreterControllers(controllers);
+        this.controllerRegistration.trackActiveInterpreterControllers([controller]);
         logger.info(`Marked Deepnote controller as protected from automatic disposal`);
 
         // Listen to controller disposal
@@ -503,15 +509,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 );
             }
         });
-
-        // Dispose the loading controller BEFORE selecting the real one
-        // This ensures VS Code switches directly to our controller
-        const loadingController = this.loadingControllers.get(notebookKey);
-        if (loadingController) {
-            loadingController.dispose();
-            this.loadingControllers.delete(notebookKey);
-            logger.info(`Disposed loading controller for ${notebookKey}`);
-        }
 
         // Auto-select the controller
         controller.controller.updateNotebookAffinity(notebook, NotebookControllerAffinity.Preferred);

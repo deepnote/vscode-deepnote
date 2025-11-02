@@ -11,7 +11,7 @@ import {
 } from '../types';
 import { DeepnoteEnvironmentTreeDataProvider } from './deepnoteEnvironmentTreeDataProvider.node';
 import { DeepnoteEnvironmentTreeItem } from './deepnoteEnvironmentTreeItem.node';
-import { CreateDeepnoteEnvironmentOptions, DeepnoteEnvironment, EnvironmentStatus } from './deepnoteEnvironment';
+import { CreateDeepnoteEnvironmentOptions, DeepnoteEnvironment } from './deepnoteEnvironment';
 import {
     getCachedEnvironment,
     resolvedPythonEnvToJupyterEnv,
@@ -19,7 +19,6 @@ import {
 } from '../../../platform/interpreter/helpers';
 import { getDisplayPath } from '../../../platform/common/platform/fs-paths';
 import { IKernelProvider } from '../../types';
-import { getDeepnoteEnvironmentStatusVisual } from './deepnoteEnvironmentUi';
 
 /**
  * View controller for the Deepnote kernel environments tree view.
@@ -211,33 +210,6 @@ export class DeepnoteEnvironmentsView implements Disposable {
             })
         );
 
-        // Start server command
-        this.disposables.push(
-            commands.registerCommand('deepnote.environments.start', async (item: DeepnoteEnvironmentTreeItem) => {
-                if (item?.environment) {
-                    await this.startServer(item.environment.id);
-                }
-            })
-        );
-
-        // Stop server command
-        this.disposables.push(
-            commands.registerCommand('deepnote.environments.stop', async (item: DeepnoteEnvironmentTreeItem) => {
-                if (item?.environment) {
-                    await this.stopServer(item.environment.id);
-                }
-            })
-        );
-
-        // Restart server command
-        this.disposables.push(
-            commands.registerCommand('deepnote.environments.restart', async (item: DeepnoteEnvironmentTreeItem) => {
-                if (item?.environment) {
-                    await this.restartServer(item.environment.id);
-                }
-            })
-        );
-
         // Delete environment command
         this.disposables.push(
             commands.registerCommand('deepnote.environments.delete', async (item: DeepnoteEnvironmentTreeItem) => {
@@ -393,16 +365,10 @@ export class DeepnoteEnvironmentsView implements Disposable {
 
         // Build quick pick items
         const items: (QuickPickItem & { environmentId?: string })[] = environments.map((env) => {
-            const envWithStatus = this.environmentManager.getEnvironmentWithStatus(env.id);
-
-            const { icon, text } = getDeepnoteEnvironmentStatusVisual(
-                envWithStatus?.status ?? EnvironmentStatus.Stopped
-            );
-
             const isCurrent = currentEnvironment?.id === env.id;
 
             return {
-                label: `$(${icon}) ${env.name} [${text}]${isCurrent ? ' $(check)' : ''}`,
+                label: `${env.name} ${isCurrent ? ' $(check)' : ''}`,
                 description: getDisplayPath(env.pythonInterpreter.uri),
                 detail: env.packages?.length
                     ? l10n.t('Packages: {0}', env.packages.join(', '))
@@ -491,7 +457,8 @@ export class DeepnoteEnvironmentsView implements Disposable {
 
                     // Force rebuild the controller with the new environment
                     // This clears cached metadata and creates a fresh controller.
-                    await this.kernelAutoSelector.ensureKernelSelected(activeNotebook);
+                    // await this.kernelAutoSelector.ensureKernelSelected(activeNotebook);
+                    await this.kernelAutoSelector.rebuildController(activeNotebook);
 
                     logger.info(`Successfully switched to environment ${selectedEnvironmentId}`);
                 }
@@ -501,84 +468,6 @@ export class DeepnoteEnvironmentsView implements Disposable {
         } catch (error) {
             logger.error('Failed to switch environment', error);
             void window.showErrorMessage(l10n.t('Failed to switch environment. See output for details.'));
-        }
-    }
-
-    private async startServer(environmentId: string): Promise<void> {
-        const config = this.environmentManager.getEnvironment(environmentId);
-        if (!config) {
-            return;
-        }
-
-        try {
-            await window.withProgress(
-                {
-                    location: ProgressLocation.Notification,
-                    title: l10n.t('Starting server for "{0}"...', config.name),
-                    cancellable: true
-                },
-                async (_progress, token) => {
-                    await this.environmentManager.startServer(environmentId, token);
-                    logger.info(`Started server for environment: ${environmentId}`);
-                }
-            );
-
-            void window.showInformationMessage(l10n.t('Server started for "{0}"', config.name));
-        } catch (error) {
-            logger.error('Failed to start server', error);
-            void window.showErrorMessage(l10n.t('Failed to start server. See output for details.'));
-        }
-    }
-
-    private async stopServer(environmentId: string): Promise<void> {
-        const config = this.environmentManager.getEnvironment(environmentId);
-        if (!config) {
-            return;
-        }
-
-        try {
-            await window.withProgress(
-                {
-                    location: ProgressLocation.Notification,
-                    title: l10n.t('Stopping server for "{0}"...', config.name),
-                    cancellable: true
-                },
-                async (_progress, token) => {
-                    await this.environmentManager.stopServer(environmentId, token);
-                    logger.info(`Stopped server for environment: ${environmentId}`);
-                }
-            );
-
-            void window.showInformationMessage(l10n.t('Server stopped for "{0}"', config.name));
-        } catch (error) {
-            logger.error('Failed to stop server', error);
-            void window.showErrorMessage(l10n.t('Failed to stop server. See output for details.'));
-        }
-    }
-
-    private async restartServer(environmentId: string): Promise<void> {
-        const config = this.environmentManager.getEnvironment(environmentId);
-        if (!config) {
-            return;
-        }
-
-        try {
-            await window.withProgress(
-                {
-                    location: ProgressLocation.Notification,
-                    title: l10n.t('Restarting server for "{0}"...', config.name),
-                    cancellable: true
-                },
-                async (_progress, token) => {
-                    await this.environmentManager.restartServer(environmentId, token);
-                    logger.info(`Restarted server for environment: ${environmentId}`);
-                }
-            );
-
-            void window.showInformationMessage(l10n.t('Server restarted for "{0}"', config.name));
-        } catch (error) {
-            logger.error('Failed to restart server', error);
-            void window.showErrorMessage(l10n.t('Failed to restart server. See output for details.'));
         }
     }
 

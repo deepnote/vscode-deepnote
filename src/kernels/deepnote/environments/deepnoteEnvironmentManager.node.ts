@@ -5,12 +5,7 @@ import { IConfigurationService, IExtensionContext, IOutputChannel } from '../../
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
 import { logger } from '../../../platform/logging';
 import { DeepnoteEnvironmentStorage } from './deepnoteEnvironmentStorage.node';
-import {
-    CreateDeepnoteEnvironmentOptions,
-    DeepnoteEnvironment,
-    DeepnoteEnvironmentWithStatus,
-    EnvironmentStatus
-} from './deepnoteEnvironment';
+import { CreateDeepnoteEnvironmentOptions, DeepnoteEnvironment } from './deepnoteEnvironment';
 import {
     IDeepnoteEnvironmentManager,
     IDeepnoteServerProvider,
@@ -31,6 +26,8 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
     // private readonly notebookServerHandles = new Map<string, string>();
 
     private environments: Map<string, DeepnoteEnvironment> = new Map();
+    private environmentServers: Map<string, Uri[]> = new Map();
+    // private serversByFile: Map<string, DeepnoteServerInfo> = new Map();
     private tmpStartingServers: Map<string, boolean> = new Map();
     private readonly _onDidChangeEnvironments = new EventEmitter<void>();
     public readonly onDidChangeEnvironments = this._onDidChangeEnvironments.event;
@@ -140,30 +137,6 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
     }
 
     /**
-     * Get environment with status information
-     */
-    public getEnvironmentWithStatus(id: string): DeepnoteEnvironmentWithStatus | undefined {
-        const config = this.environments.get(id);
-        if (!config) {
-            return undefined;
-        }
-
-        let status: EnvironmentStatus;
-        if (config.serverInfo) {
-            status = EnvironmentStatus.Running;
-        } else if (this.tmpStartingServers.get(id)) {
-            status = EnvironmentStatus.Starting;
-        } else {
-            status = EnvironmentStatus.Stopped;
-        }
-
-        return {
-            ...config,
-            status
-        };
-    }
-
-    /**
      * Update an environment's metadata
      */
     public async updateEnvironment(
@@ -202,9 +175,13 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
             throw new Error(`Environment not found: ${id}`);
         }
 
-        // Stop the server if running
-        if (config.serverInfo) {
-            await this.stopServer(id, token);
+        // // Stop the server if running
+        // if (config.serverInfo) {
+        //     await this.stopServer(id, token);
+        // }
+        for (const fileKey of this.environmentServers.get(id) ?? []) {
+            await this.serverStarter.stopServer(fileKey, token);
+            Cancellation.throwIfCanceled(token);
         }
 
         Cancellation.throwIfCanceled(token);
@@ -216,99 +193,105 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
         logger.info(`Deleted environment: ${config.name} (${id})`);
     }
 
-    /**
-     * Start the Jupyter server for an environment
-     */
-    public async startServer(id: string, token?: CancellationToken): Promise<void> {
-        const config = this.environments.get(id);
-        if (!config) {
-            throw new Error(`Environment not found: ${id}`);
-        }
+    // /**
+    //  * Start the Jupyter server for an environment
+    //  */
+    // // public async startServer(id: string, token?: CancellationToken): Promise<void> {
+    // public async startServer(id: string, deepnoteFileUri: Uri, token?: CancellationToken): Promise<void> {
+    //     const config = this.environments.get(id);
+    //     if (!config) {
+    //         throw new Error(`Environment not found: ${id}`);
+    //     }
 
-        this.tmpStartingServers.set(id, true);
-        this._onDidChangeEnvironments.fire();
+    //     this.tmpStartingServers.set(id, true);
+    //     this._onDidChangeEnvironments.fire();
 
-        try {
-            logger.info(`Ensuring server is running for environment: ${config.name} (${id})`);
+    //     try {
+    //         logger.info(`Ensuring server is running for environment: ${config.name} (${id})`);
 
-            // First ensure venv is created and toolkit is installed
-            const { pythonInterpreter, toolkitVersion } = await this.toolkitInstaller.ensureVenvAndToolkit(
-                config.pythonInterpreter,
-                config.venvPath,
-                token
-            );
+    //         // First ensure venv is created and toolkit is installed
+    //         const { pythonInterpreter, toolkitVersion } = await this.toolkitInstaller.ensureVenvAndToolkit(
+    //             config.pythonInterpreter,
+    //             config.venvPath,
+    //             token
+    //         );
 
-            // Install additional packages if specified
-            if (config.packages && config.packages.length > 0) {
-                await this.toolkitInstaller.installAdditionalPackages(config.venvPath, config.packages, token);
-            }
+    //         // Install additional packages if specified
+    //         if (config.packages && config.packages.length > 0) {
+    //             await this.toolkitInstaller.installAdditionalPackages(config.venvPath, config.packages, token);
+    //         }
 
-            // Start the Jupyter server (serverStarter is idempotent - returns existing if running)
-            // IMPORTANT: Always call this to ensure we get the current server info
-            // Don't return early based on config.serverInfo - it may be stale!
-            const serverInfo = await this.serverStarter.startServer(pythonInterpreter, config.venvPath, id, token);
+    //         // Start the Jupyter server (serverStarter is idempotent - returns existing if running)
+    //         // IMPORTANT: Always call this to ensure we get the current server info
+    //         // Don't return early based on config.serverInfo - it may be stale!
+    //         const serverInfo = await this.serverStarter.startServer(
+    //             pythonInterpreter,
+    //             config.venvPath,
+    //             id,
+    //             deepnoteFileUri,
+    //             token
+    //         );
 
-            config.pythonInterpreter = pythonInterpreter;
-            config.toolkitVersion = toolkitVersion;
-            config.serverInfo = serverInfo;
-            config.lastUsedAt = new Date();
+    //         config.pythonInterpreter = pythonInterpreter;
+    //         config.toolkitVersion = toolkitVersion;
+    //         config.serverInfo = serverInfo;
+    //         config.lastUsedAt = new Date();
 
-            await this.persistEnvironments();
-            this._onDidChangeEnvironments.fire();
+    //         await this.persistEnvironments();
+    //         this._onDidChangeEnvironments.fire();
 
-            logger.info(`Server running for environment: ${config.name} (${id}) at ${serverInfo.url}`);
-        } catch (error) {
-            logger.error(`Failed to start server for environment: ${config.name} (${id})`, error);
-            throw error;
-        } finally {
-            this.tmpStartingServers.delete(id);
-        }
-    }
+    //         logger.info(`Server running for environment: ${config.name} (${id}) at ${serverInfo.url}`);
+    //     } catch (error) {
+    //         logger.error(`Failed to start server for environment: ${config.name} (${id})`, error);
+    //         throw error;
+    //     } finally {
+    //         this.tmpStartingServers.delete(id);
+    //     }
+    // }
 
-    /**
-     * Stop the Jupyter server for an environment
-     */
-    public async stopServer(id: string, token?: CancellationToken): Promise<void> {
-        Cancellation.throwIfCanceled(token);
+    // /**
+    //  * Stop the Jupyter server for an environment
+    //  */
+    // // public async stopServer(id: string, token?: CancellationToken): Promise<void> {
+    // public async stopServer(deepnoteFileUri: Uri, token?: CancellationToken): Promise<void> {
+    //     // const config = this.environments.get(id);
+    //     // if (!config) {
+    //     //     throw new Error(`Environment not found: ${id}`);
+    //     // }
 
-        const config = this.environments.get(id);
-        if (!config) {
-            throw new Error(`Environment not found: ${id}`);
-        }
+    //     // if (!config.serverInfo) {
+    //     //     logger.info(`No server running for environment: ${config.name} (${id})`);
+    //     //     return;
+    //     // }
 
-        if (!config.serverInfo) {
-            logger.info(`No server running for environment: ${config.name} (${id})`);
-            return;
-        }
+    //     try {
+    //         logger.info(`Stopping server for environment: ${deepnoteFileUri.fsPath}`);
 
-        try {
-            logger.info(`Stopping server for environment: ${config.name} (${id})`);
+    //         await this.serverStarter.stopServer(deepnoteFileUri, token);
 
-            await this.serverStarter.stopServer(id, token);
+    //         // config.serverInfo = undefined;
 
-            Cancellation.throwIfCanceled(token);
+    //         // await this.persistEnvironments();
+    //         // this._onDidChangeEnvironments.fire();
 
-            config.serverInfo = undefined;
+    //         logger.info(`Server stopped successfully for environment: ${deepnoteFileUri.fsPath}`);
+    //     } catch (error) {
+    //         logger.error(`Failed to stop server for environment: ${deepnoteFileUri.fsPath}`, error);
+    //         throw error;
+    //     }
+    // }
 
-            await this.persistEnvironments();
-            this._onDidChangeEnvironments.fire();
-
-            logger.info(`Server stopped successfully for environment: ${config.name} (${id})`);
-        } catch (error) {
-            logger.error(`Failed to stop server for environment: ${config.name} (${id})`, error);
-            throw error;
-        }
-    }
-
-    /**
-     * Restart the Jupyter server for an environment
-     */
-    public async restartServer(id: string, token?: CancellationToken): Promise<void> {
-        logger.info(`Restarting server for environment: ${id}`);
-        await this.stopServer(id, token);
-        Cancellation.throwIfCanceled(token);
-        await this.startServer(id, token);
-    }
+    // /**
+    //  * Restart the Jupyter server for an environment
+    //  */
+    // // public async restartServer(id: string, token?: CancellationToken): Promise<void> {
+    // public async restartServer(deepnoteFileUri: Uri, token?: CancellationToken): Promise<void> {
+    //     logger.info(`Restarting server for environment: ${deepnoteFileUri.fsPath}`);
+    //     await this.stopServer(deepnoteFileUri, token);
+    //     Cancellation.throwIfCanceled(token);
+    //     await this.startServer(deepnoteFileUri, token);
+    //     logger.info(`Server restarted successfully for environment: ${deepnoteFileUri.fsPath}`);
+    // }
 
     /**
      * Update the last used timestamp for an environment

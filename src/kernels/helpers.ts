@@ -301,6 +301,12 @@ export function getDisplayNameOrNameOfKernelConnection(kernelConnection: KernelC
                 return `Python ${pythonVersion}`.trim();
             }
         case 'startUsingDeepnoteKernel': {
+            if (kernelConnection.notebookName && kernelConnection.environmentName) {
+                return `Deepnote: ${kernelConnection.notebookName} (${kernelConnection.environmentName})`;
+            }
+            if (kernelConnection.notebookName) {
+                return `Deepnote: ${kernelConnection.notebookName}`;
+            }
             // For Deepnote kernels, use the environment name if available
             if (kernelConnection.environmentName) {
                 return `Deepnote: ${kernelConnection.environmentName}`;
@@ -596,7 +602,15 @@ export function areKernelConnectionsEqual(
     if (connection1 && !connection2) {
         return false;
     }
+    if (connection1?.kind === 'startUsingDeepnoteKernel' && connection2?.kind === 'startUsingDeepnoteKernel') {
+        return (
+            connection1?.id === connection2?.id &&
+            connection1?.environmentName === connection2?.environmentName &&
+            connection1?.notebookName === connection2?.notebookName
+        );
+    }
     return connection1?.id === connection2?.id;
+    // return connection1?.id === connection2?.id && connection1?.environmentName === connection2?.environmentName;
 }
 // Check if a name is a default python kernel name and pull the version
 export function detectDefaultKernelName(name: string) {

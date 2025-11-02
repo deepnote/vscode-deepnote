@@ -60,7 +60,6 @@ import {
     IDeepnoteKernelAutoSelector,
     IDeepnoteServerProvider,
     IDeepnoteEnvironmentManager,
-    IDeepnoteEnvironmentPicker,
     IDeepnoteNotebookEnvironmentMapper
 } from '../kernels/deepnote/types';
 import { DeepnoteToolkitInstaller } from '../kernels/deepnote/deepnoteToolkitInstaller.node';
@@ -73,7 +72,6 @@ import { DeepnoteEnvironmentManager } from '../kernels/deepnote/environments/dee
 import { DeepnoteEnvironmentStorage } from '../kernels/deepnote/environments/deepnoteEnvironmentStorage.node';
 import { DeepnoteEnvironmentsView } from '../kernels/deepnote/environments/deepnoteEnvironmentsView.node';
 import { DeepnoteEnvironmentsActivationService } from '../kernels/deepnote/environments/deepnoteEnvironmentsActivationService';
-import { DeepnoteEnvironmentPicker } from '../kernels/deepnote/environments/deepnoteEnvironmentPicker';
 import { DeepnoteNotebookEnvironmentMapper } from '../kernels/deepnote/environments/deepnoteNotebookEnvironmentMapper.node';
 import { DeepnoteNotebookCommandListener } from './deepnote/deepnoteNotebookCommandListener';
 import { DeepnoteInputBlockCellStatusBarItemProvider } from './deepnote/deepnoteInputBlockCellStatusBarProvider';
@@ -210,7 +208,6 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     );
 
     // Deepnote configuration selection
-    serviceManager.addSingleton<IDeepnoteEnvironmentPicker>(IDeepnoteEnvironmentPicker, DeepnoteEnvironmentPicker);
     serviceManager.addSingleton<IDeepnoteNotebookEnvironmentMapper>(
         IDeepnoteNotebookEnvironmentMapper,
         DeepnoteNotebookEnvironmentMapper

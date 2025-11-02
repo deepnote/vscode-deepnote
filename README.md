@@ -1,6 +1,6 @@
 <div align="center">
 
-![Deepnote VSCode cover image](./assets/deepnote-vscode-cover-image.png)
+![Deepnote cover image](./assets/deepnote-cover-image.png)
 
 [![CI](https://github.com/deepnote/vscode-deepnote/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/deepnote/vscode-deepnote/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/deepnote/vscode-deepnote/graph/badge.svg?token=NH066XG7JC)](https://codecov.io/gh/deepnote/vscode-deepnote)

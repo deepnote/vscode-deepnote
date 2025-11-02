@@ -440,12 +440,40 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
     private getIntegrationTypeLabel(type: ConfigurableDatabaseIntegrationType): string {
         switch (type) {
-            case 'pgsql':
-                return l10n.t('PostgreSQL');
+            case 'alloydb':
+                return l10n.t('AlloyDB');
+            case 'athena':
+                return l10n.t('Amazon Athena');
             case 'big-query':
                 return l10n.t('BigQuery');
+            case 'clickhouse':
+                return l10n.t('ClickHouse');
+            case 'databricks':
+                return l10n.t('Databricks');
+            case 'dremio':
+                return l10n.t('Dremio');
+            case 'mariadb':
+                return l10n.t('MariaDB');
+            case 'materialize':
+                return l10n.t('Materialize');
+            case 'mindsdb':
+                return l10n.t('MindsDB');
+            case 'mongodb':
+                return l10n.t('MongoDB');
+            case 'mysql':
+                return l10n.t('MySQL');
+            case 'pgsql':
+                return l10n.t('PostgreSQL');
+            case 'redshift':
+                return l10n.t('Amazon Redshift');
             case 'snowflake':
                 return l10n.t('Snowflake');
+            case 'spanner':
+                return l10n.t('Google Cloud Spanner');
+            case 'sql-server':
+                return l10n.t('SQL Server');
+            case 'trino':
+                return l10n.t('Trino');
             default:
                 return String(type);
         }

@@ -236,6 +236,8 @@ export class DeepnoteDataConverter {
             for (const item of output.items) {
                 if (item.mime === 'text/plain') {
                     data['text/plain'] = new TextDecoder().decode(item.data);
+                } else if (item.mime === 'text/markdown') {
+                    data['text/markdown'] = new TextDecoder().decode(item.data);
                 } else if (item.mime === 'text/html') {
                     data['text/html'] = new TextDecoder().decode(item.data);
                 } else if (item.mime === 'application/json') {
@@ -250,6 +252,8 @@ export class DeepnoteDataConverter {
                     );
                 } else if (item.mime === 'application/vnd.vega.v5+json') {
                     data['application/vnd.vega.v5+json'] = JSON.parse(new TextDecoder().decode(item.data));
+                } else if (item.mime === 'application/vnd.plotly.v1+json') {
+                    data['application/vnd.plotly.v1+json'] = JSON.parse(new TextDecoder().decode(item.data));
                 } else if (item.mime === 'application/vnd.deepnote.sql-output-metadata+json') {
                     data['application/vnd.deepnote.sql-output-metadata+json'] = JSON.parse(
                         new TextDecoder().decode(item.data)
@@ -340,6 +344,15 @@ export class DeepnoteDataConverter {
                             );
                         }
 
+                        if (data['application/vnd.plotly.v1+json']) {
+                            items.push(
+                                NotebookCellOutputItem.json(
+                                    data['application/vnd.plotly.v1+json'],
+                                    'application/vnd.plotly.v1+json'
+                                )
+                            );
+                        }
+
                         if (data['application/vnd.deepnote.sql-output-metadata+json']) {
                             items.push(
                                 NotebookCellOutputItem.json(
@@ -390,6 +403,10 @@ export class DeepnoteDataConverter {
                                     'image/jpeg'
                                 )
                             );
+                        }
+
+                        if (data['text/markdown']) {
+                            items.push(NotebookCellOutputItem.text(data['text/markdown'] as string, 'text/markdown'));
                         }
 
                         if (data['text/plain']) {

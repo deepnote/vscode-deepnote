@@ -6,7 +6,8 @@ import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/
  */
 export enum DeepnoteTreeItemType {
     ProjectFile = 'projectFile',
-    Notebook = 'notebook'
+    Notebook = 'notebook',
+    Loading = 'loading'
 }
 
 /**
@@ -25,16 +26,20 @@ export class DeepnoteTreeItem extends TreeItem {
     constructor(
         public readonly type: DeepnoteTreeItemType,
         public readonly context: DeepnoteTreeItemContext,
-        public readonly data: DeepnoteProject | DeepnoteNotebook,
+        public data: DeepnoteProject | DeepnoteNotebook | null,
         collapsibleState: TreeItemCollapsibleState
     ) {
         super('', collapsibleState);
 
         this.contextValue = this.type;
-        this.tooltip = this.getTooltip();
-        this.iconPath = this.getIcon();
-        this.label = this.getLabel();
-        this.description = this.getDescription();
+
+        // Skip initialization for loading items as they don't have real data
+        if (this.type !== DeepnoteTreeItemType.Loading) {
+            this.tooltip = this.getTooltip();
+            this.iconPath = this.getIcon();
+            this.label = this.getLabel();
+            this.description = this.getDescription();
+        }
 
         if (this.type === DeepnoteTreeItemType.Notebook) {
             this.resourceUri = this.getNotebookUri();
@@ -98,5 +103,15 @@ export class DeepnoteTreeItem extends TreeItem {
         }
 
         return undefined;
+    }
+
+    /**
+     * Updates the tree item's visual fields (label, description, tooltip) based on current data.
+     * Call this after updating the data property to ensure the tree view reflects changes.
+     */
+    public updateVisualFields(): void {
+        this.label = this.getLabel();
+        this.description = this.getDescription();
+        this.tooltip = this.getTooltip();
     }
 }

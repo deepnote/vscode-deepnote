@@ -2,15 +2,31 @@
 // Licensed under the MIT License.
 
 import {
+    CancellationToken,
     Disposable,
-    notebooks,
+    EventEmitter,
     NotebookCell,
     NotebookCellStatusBarItem,
-    NotebookCellStatusBarItemProvider
+    NotebookCellStatusBarItemProvider,
+    NotebookEdit,
+    Position,
+    QuickPickItem,
+    Range,
+    ThemeIcon,
+    WorkspaceEdit,
+    commands,
+    l10n,
+    notebooks,
+    window,
+    workspace
 } from 'vscode';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
-import { injectable } from 'inversify';
+import { inject, injectable } from 'inversify';
 import type { Pocket } from '../../platform/deepnote/pocket';
+import { formatInputBlockCellContent } from './inputBlockContentFormatter';
+import { SelectInputSettingsWebviewProvider } from './selectInputSettingsWebview';
+import { IExtensionContext } from '../../platform/common/types';
+import { getFilePath } from '../../platform/common/platform/fs-paths';
 
 /**
  * Provides status bar items for Deepnote input block cells to display their block type.
@@ -21,6 +37,14 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
     implements NotebookCellStatusBarItemProvider, IExtensionSyncActivationService
 {
     private readonly disposables: Disposable[] = [];
+    private readonly _onDidChangeCellStatusBarItems = new EventEmitter<void>();
+    private readonly selectInputSettingsWebview: SelectInputSettingsWebviewProvider;
+
+    public readonly onDidChangeCellStatusBarItems = this._onDidChangeCellStatusBarItems.event;
+
+    constructor(@inject(IExtensionContext) extensionContext: IExtensionContext) {
+        this.selectInputSettingsWebview = new SelectInputSettingsWebviewProvider(extensionContext);
+    }
 
     // List of supported Deepnote input block types
     private readonly INPUT_BLOCK_TYPES = [
@@ -38,9 +62,158 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
     activate(): void {
         // Register the status bar item provider for Deepnote notebooks
         this.disposables.push(notebooks.registerNotebookCellStatusBarItemProvider('deepnote', this));
+
+        // Listen for notebook changes to update status bar
+        this.disposables.push(
+            workspace.onDidChangeNotebookDocument((e) => {
+                if (e.notebook.notebookType === 'deepnote') {
+                    this._onDidChangeCellStatusBarItems.fire();
+                }
+            })
+        );
+
+        // Register command to update input block variable name
+        this.disposables.push(
+            commands.registerCommand('deepnote.updateInputBlockVariableName', async (cell?: NotebookCell) => {
+                if (!cell) {
+                    // Fall back to the active notebook cell
+                    const activeEditor = window.activeNotebookEditor;
+                    if (activeEditor && activeEditor.selection) {
+                        cell = activeEditor.notebook.cellAt(activeEditor.selection.start);
+                    }
+                }
+
+                if (!cell) {
+                    void window.showErrorMessage(l10n.t('No active notebook cell'));
+                    return;
+                }
+
+                await this.updateVariableName(cell);
+            })
+        );
+
+        // Register commands for type-specific actions
+        this.registerTypeSpecificCommands();
+
+        // Dispose our emitter with the extension
+        this.disposables.push(this._onDidChangeCellStatusBarItems);
     }
 
-    provideCellStatusBarItems(cell: NotebookCell): NotebookCellStatusBarItem | undefined {
+    private registerTypeSpecificCommands(): void {
+        // Select input: choose option(s)
+        this.disposables.push(
+            commands.registerCommand('deepnote.selectInputChooseOption', async (cell?: NotebookCell) => {
+                const activeCell = cell || this.getActiveCell();
+                if (activeCell) {
+                    await this.selectInputChooseOption(activeCell);
+                }
+            })
+        );
+
+        // Slider: set min value
+        this.disposables.push(
+            commands.registerCommand('deepnote.sliderSetMin', async (cell?: NotebookCell) => {
+                const activeCell = cell || this.getActiveCell();
+                if (activeCell) {
+                    await this.sliderSetMin(activeCell);
+                }
+            })
+        );
+
+        // Slider: set max value
+        this.disposables.push(
+            commands.registerCommand('deepnote.sliderSetMax', async (cell?: NotebookCell) => {
+                const activeCell = cell || this.getActiveCell();
+                if (activeCell) {
+                    await this.sliderSetMax(activeCell);
+                }
+            })
+        );
+
+        // Slider: set step value
+        this.disposables.push(
+            commands.registerCommand('deepnote.sliderSetStep', async (cell?: NotebookCell) => {
+                const activeCell = cell || this.getActiveCell();
+                if (activeCell) {
+                    await this.sliderSetStep(activeCell);
+                }
+            })
+        );
+
+        // File input: choose file
+        this.disposables.push(
+            commands.registerCommand('deepnote.fileInputChooseFile', async (cell?: NotebookCell) => {
+                const activeCell = cell || this.getActiveCell();
+                if (activeCell) {
+                    await this.fileInputChooseFile(activeCell);
+                }
+            })
+        );
+
+        // Select input: configure settings
+        this.disposables.push(
+            commands.registerCommand('deepnote.selectInputSettings', async (cell?: NotebookCell) => {
+                const activeCell = cell || this.getActiveCell();
+                if (activeCell) {
+                    await this.selectInputSettings(activeCell);
+                }
+            })
+        );
+
+        // Checkbox: toggle value
+        this.disposables.push(
+            commands.registerCommand('deepnote.checkboxToggle', async (cell?: NotebookCell) => {
+                const activeCell = cell || this.getActiveCell();
+                if (activeCell) {
+                    await this.checkboxToggle(activeCell);
+                }
+            })
+        );
+
+        // Date input: choose date
+        this.disposables.push(
+            commands.registerCommand('deepnote.dateInputChooseDate', async (cell?: NotebookCell) => {
+                const activeCell = cell || this.getActiveCell();
+                if (activeCell) {
+                    await this.dateInputChooseDate(activeCell);
+                }
+            })
+        );
+
+        // Date range: choose start date
+        this.disposables.push(
+            commands.registerCommand('deepnote.dateRangeChooseStart', async (cell?: NotebookCell) => {
+                const activeCell = cell || this.getActiveCell();
+                if (activeCell) {
+                    await this.dateRangeChooseStart(activeCell);
+                }
+            })
+        );
+
+        // Date range: choose end date
+        this.disposables.push(
+            commands.registerCommand('deepnote.dateRangeChooseEnd', async (cell?: NotebookCell) => {
+                const activeCell = cell || this.getActiveCell();
+                if (activeCell) {
+                    await this.dateRangeChooseEnd(activeCell);
+                }
+            })
+        );
+    }
+
+    private getActiveCell(): NotebookCell | undefined {
+        const activeEditor = window.activeNotebookEditor;
+        if (activeEditor && activeEditor.selection) {
+            return activeEditor.notebook.cellAt(activeEditor.selection.start);
+        }
+        return undefined;
+    }
+
+    provideCellStatusBarItems(cell: NotebookCell, token: CancellationToken): NotebookCellStatusBarItem[] | undefined {
+        if (token.isCancellationRequested) {
+            return undefined;
+        }
+
         // Check if this cell is a Deepnote input block
         // Get the block type from the __deepnotePocket metadata field
         const pocket = cell.metadata?.__deepnotePocket as Pocket | undefined;
@@ -50,17 +223,445 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
             return undefined;
         }
 
+        const items: NotebookCellStatusBarItem[] = [];
+
         const formattedName = this.formatBlockTypeName(blockType);
 
-        // Create a status bar item showing the block type
-        // Using alignment value 2 (NotebookCellStatusBarAlignment.Right)
-        const statusBarItem: NotebookCellStatusBarItem = {
-            text: formattedName,
-            alignment: 2, // NotebookCellStatusBarAlignment.Right
-            tooltip: `Deepnote ${formattedName}`
+        // Extract additional metadata for display
+        const metadata = cell.metadata as Record<string, unknown> | undefined;
+        const label = metadata?.deepnote_input_label as string | undefined;
+        const buttonTitle = metadata?.deepnote_button_title as string | undefined;
+
+        // Build status bar text with additional info
+        let statusText = formattedName;
+        if (label) {
+            statusText += `: ${label}`;
+        } else if (buttonTitle) {
+            statusText += `: ${buttonTitle}`;
+        }
+
+        // Build detailed tooltip
+        const tooltipLines = [l10n.t('Deepnote {0}', formattedName)];
+        if (label) {
+            tooltipLines.push(l10n.t('Label: {0}', label));
+        }
+        if (buttonTitle) {
+            tooltipLines.push(l10n.t('Title: {0}', buttonTitle));
+        }
+
+        // Add type-specific metadata to tooltip
+        this.addTypeSpecificTooltip(tooltipLines, blockType, metadata);
+
+        // Create a status bar item showing the block type and metadata on the left
+        items.push({
+            text: statusText,
+            alignment: 1, // NotebookCellStatusBarAlignment.Left
+            priority: 100,
+            tooltip: tooltipLines.join('\n')
+        });
+
+        // Add variable name status bar item (clickable)
+        items.push(this.createVariableStatusBarItem(cell));
+
+        // Add type-specific status bar items
+        this.addTypeSpecificStatusBarItems(items, blockType, cell, metadata);
+
+        return items;
+    }
+
+    /**
+     * Adds type-specific status bar items based on the block type
+     */
+    private addTypeSpecificStatusBarItems(
+        items: NotebookCellStatusBarItem[],
+        blockType: string,
+        cell: NotebookCell,
+        metadata: Record<string, unknown> | undefined
+    ): void {
+        if (!metadata) {
+            return;
+        }
+
+        switch (blockType) {
+            case 'input-select':
+                this.addSelectInputStatusBarItems(items, cell, metadata);
+                break;
+
+            case 'input-slider':
+                this.addSliderInputStatusBarItems(items, cell, metadata);
+                break;
+
+            case 'input-checkbox':
+                this.addCheckboxInputStatusBarItems(items, cell, metadata);
+                break;
+
+            case 'input-date':
+                this.addDateInputStatusBarItems(items, cell, metadata);
+                break;
+
+            case 'input-date-range':
+                this.addDateRangeInputStatusBarItems(items, cell, metadata);
+                break;
+
+            case 'input-file':
+                this.addFileInputStatusBarItems(items, cell, metadata);
+                break;
+
+            // input-text, input-textarea, and button don't have additional buttons
+        }
+    }
+
+    private addSelectInputStatusBarItems(
+        items: NotebookCellStatusBarItem[],
+        cell: NotebookCell,
+        metadata: Record<string, unknown>
+    ): void {
+        const selectType = metadata.deepnote_variable_select_type as string | undefined;
+        const sourceVariable = metadata.deepnote_variable_selected_variable as string | undefined;
+        const value = metadata.deepnote_variable_value;
+        const allowMultiple = metadata.deepnote_allow_multiple_values as boolean | undefined;
+
+        // Show current selection
+        let selectionText = '';
+        if (Array.isArray(value)) {
+            selectionText = value.length > 0 ? value.join(', ') : l10n.t('None');
+        } else if (typeof value === 'string') {
+            selectionText = value || l10n.t('None');
+        }
+
+        items.push({
+            text: l10n.t('Selection: {0}', selectionText),
+            alignment: 1,
+            priority: 80,
+            tooltip: allowMultiple
+                ? l10n.t('Current selection (multi-select)\nClick to change')
+                : l10n.t('Current selection\nClick to change'),
+            command: {
+                title: l10n.t('Choose Option'),
+                command: 'deepnote.selectInputChooseOption',
+                arguments: [cell]
+            }
+        });
+
+        // Settings button
+        items.push({
+            text: l10n.t('$(gear) Settings'),
+            alignment: 1,
+            priority: 79,
+            tooltip: l10n.t('Configure select input settings\nClick to open'),
+            command: {
+                title: l10n.t('Settings'),
+                command: 'deepnote.selectInputSettings',
+                arguments: [cell]
+            }
+        });
+
+        // Show source variable if select type is from-variable
+        if (selectType === 'from-variable' && sourceVariable) {
+            items.push({
+                text: l10n.t('Source: {0}', sourceVariable),
+                alignment: 1,
+                priority: 75,
+                tooltip: l10n.t('Variable containing options')
+            });
+        }
+    }
+
+    private addSliderInputStatusBarItems(
+        items: NotebookCellStatusBarItem[],
+        cell: NotebookCell,
+        metadata: Record<string, unknown>
+    ): void {
+        const min = metadata.deepnote_slider_min_value as number | undefined;
+        const max = metadata.deepnote_slider_max_value as number | undefined;
+        const step = metadata.deepnote_slider_step as number | undefined;
+
+        items.push({
+            text: l10n.t('Min: {0}', min ?? 0),
+            alignment: 1,
+            priority: 80,
+            tooltip: l10n.t('Minimum value\nClick to change'),
+            command: {
+                title: l10n.t('Set Min'),
+                command: 'deepnote.sliderSetMin',
+                arguments: [cell]
+            }
+        });
+
+        items.push({
+            text: l10n.t('Max: {0}', max ?? 10),
+            alignment: 1,
+            priority: 79,
+            tooltip: l10n.t('Maximum value\nClick to change'),
+            command: {
+                title: l10n.t('Set Max'),
+                command: 'deepnote.sliderSetMax',
+                arguments: [cell]
+            }
+        });
+
+        items.push({
+            text: l10n.t('Step: {0}', step ?? 1),
+            alignment: 1,
+            priority: 78,
+            tooltip: l10n.t('Step size\nClick to change'),
+            command: {
+                title: l10n.t('Set Step'),
+                command: 'deepnote.sliderSetStep',
+                arguments: [cell]
+            }
+        });
+    }
+
+    private addCheckboxInputStatusBarItems(
+        items: NotebookCellStatusBarItem[],
+        cell: NotebookCell,
+        metadata: Record<string, unknown>
+    ): void {
+        const value = metadata.deepnote_variable_value as boolean | undefined;
+        const checked = value ?? false;
+
+        items.push({
+            text: checked ? l10n.t('$(check) Checked') : l10n.t('$(close) Unchecked'),
+            alignment: 1,
+            priority: 80,
+            tooltip: l10n.t('Click to toggle'),
+            command: {
+                title: l10n.t('Toggle'),
+                command: 'deepnote.checkboxToggle',
+                arguments: [cell]
+            }
+        });
+    }
+
+    private addFileInputStatusBarItems(
+        items: NotebookCellStatusBarItem[],
+        cell: NotebookCell,
+        _metadata: Record<string, unknown>
+    ): void {
+        items.push({
+            text: l10n.t('$(folder-opened) Choose File'),
+            alignment: 1,
+            priority: 80,
+            tooltip: l10n.t('Choose a file\nClick to browse'),
+            command: {
+                title: l10n.t('Choose File'),
+                command: 'deepnote.fileInputChooseFile',
+                arguments: [cell]
+            }
+        });
+    }
+
+    private addDateInputStatusBarItems(
+        items: NotebookCellStatusBarItem[],
+        cell: NotebookCell,
+        metadata: Record<string, unknown>
+    ): void {
+        const value = metadata.deepnote_variable_value as string | undefined;
+        const dateStr = value ? new Date(value).toLocaleDateString() : l10n.t('Not set');
+
+        items.push({
+            text: l10n.t('Date: {0}', dateStr),
+            alignment: 1,
+            priority: 80,
+            tooltip: l10n.t('Click to choose date'),
+            command: {
+                title: l10n.t('Choose Date'),
+                command: 'deepnote.dateInputChooseDate',
+                arguments: [cell]
+            }
+        });
+    }
+
+    private addDateRangeInputStatusBarItems(
+        items: NotebookCellStatusBarItem[],
+        cell: NotebookCell,
+        metadata: Record<string, unknown>
+    ): void {
+        const value = metadata.deepnote_variable_value;
+        let startDate = l10n.t('Not set');
+        let endDate = l10n.t('Not set');
+
+        if (Array.isArray(value) && value.length === 2) {
+            startDate = new Date(value[0]).toLocaleDateString();
+            endDate = new Date(value[1]).toLocaleDateString();
+        }
+
+        items.push({
+            text: l10n.t('Start: {0}', startDate),
+            alignment: 1,
+            priority: 80,
+            tooltip: l10n.t('Click to choose start date'),
+            command: {
+                title: l10n.t('Choose Start Date'),
+                command: 'deepnote.dateRangeChooseStart',
+                arguments: [cell]
+            }
+        });
+
+        items.push({
+            text: l10n.t('End: {0}', endDate),
+            alignment: 1,
+            priority: 79,
+            tooltip: l10n.t('Click to choose end date'),
+            command: {
+                title: l10n.t('Choose End Date'),
+                command: 'deepnote.dateRangeChooseEnd',
+                arguments: [cell]
+            }
+        });
+    }
+
+    /**
+     * Adds type-specific metadata to the tooltip
+     */
+    private addTypeSpecificTooltip(
+        tooltipLines: string[],
+        blockType: string,
+        metadata: Record<string, unknown> | undefined
+    ): void {
+        if (!metadata) {
+            return;
+        }
+
+        switch (blockType) {
+            case 'input-slider': {
+                const min = metadata.deepnote_slider_min_value;
+                const max = metadata.deepnote_slider_max_value;
+                const step = metadata.deepnote_slider_step;
+                if (min !== undefined && max !== undefined) {
+                    tooltipLines.push(
+                        l10n.t(
+                            'Range: {0} - {1}{2}',
+                            String(min),
+                            String(max),
+                            step !== undefined ? l10n.t(' (step: {0})', String(step)) : ''
+                        )
+                    );
+                }
+                break;
+            }
+
+            case 'input-select': {
+                const options = metadata.deepnote_variable_options as string[] | undefined;
+                if (options && options.length > 0) {
+                    tooltipLines.push(
+                        l10n.t('Options: {0}', `${options.slice(0, 3).join(', ')}${options.length > 3 ? '...' : ''}`)
+                    );
+                }
+                break;
+            }
+
+            case 'input-file': {
+                const extensions = metadata.deepnote_allowed_file_extensions as string | undefined;
+                if (extensions) {
+                    tooltipLines.push(l10n.t('Allowed extensions: {0}', extensions));
+                }
+                break;
+            }
+
+            case 'button': {
+                const behavior = metadata.deepnote_button_behavior as string | undefined;
+                const colorScheme = metadata.deepnote_button_color_scheme as string | undefined;
+                if (behavior) {
+                    tooltipLines.push(l10n.t('Behavior: {0}', behavior));
+                }
+                if (colorScheme) {
+                    tooltipLines.push(l10n.t('Color: {0}', colorScheme));
+                }
+                break;
+            }
+        }
+
+        // Add default value if present
+        const defaultValue = metadata.deepnote_variable_default_value;
+        if (defaultValue !== undefined && defaultValue !== null) {
+            const dv = typeof defaultValue === 'object' ? JSON.stringify(defaultValue) : String(defaultValue);
+            tooltipLines.push(l10n.t('Default: {0}', dv));
+        }
+    }
+
+    /**
+     * Creates a status bar item for the variable name with a clickable command
+     */
+    private createVariableStatusBarItem(cell: NotebookCell): NotebookCellStatusBarItem {
+        const variableName = this.getVariableName(cell);
+
+        const text = variableName ? l10n.t('Variable: {0}', variableName) : l10n.t('$(edit) Set variable name');
+
+        return {
+            text,
+            alignment: 1, // NotebookCellStatusBarAlignment.Left
+            priority: 90,
+            tooltip: l10n.t('Variable name for input block\nClick to change'),
+            command: {
+                title: l10n.t('Change Variable Name'),
+                command: 'deepnote.updateInputBlockVariableName',
+                arguments: [cell]
+            }
+        };
+    }
+
+    /**
+     * Gets the variable name from cell metadata or cell content
+     */
+    private getVariableName(cell: NotebookCell): string {
+        const metadata = cell.metadata;
+        if (metadata && typeof metadata === 'object') {
+            const variableName = (metadata as Record<string, unknown>).deepnote_variable_name;
+            if (typeof variableName === 'string' && variableName) {
+                return variableName;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Updates the variable name for an input block cell
+     */
+    private async updateVariableName(cell: NotebookCell): Promise<void> {
+        const currentVariableName = this.getVariableName(cell);
+
+        const newVariableNameInput = await window.showInputBox({
+            prompt: l10n.t('Enter variable name for input block'),
+            value: currentVariableName,
+            ignoreFocusOut: true,
+            validateInput: (value) => {
+                const trimmed = value.trim();
+                if (!trimmed) {
+                    return l10n.t('Variable name cannot be empty');
+                }
+                if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed)) {
+                    return l10n.t('Variable name must be a valid Python identifier');
+                }
+                return undefined;
+            }
+        });
+
+        const newVariableName = newVariableNameInput?.trim();
+        if (newVariableName === undefined || newVariableName === currentVariableName) {
+            return;
+        }
+
+        // Update both cell metadata and cell content
+        const edit = new WorkspaceEdit();
+        const updatedMetadata = {
+            ...cell.metadata,
+            deepnote_variable_name: newVariableName
         };
 
-        return statusBarItem;
+        // Update cell metadata
+        edit.set(cell.notebook.uri, [NotebookEdit.updateCellMetadata(cell.index, updatedMetadata)]);
+
+        const success = await workspace.applyEdit(edit);
+        if (!success) {
+            void window.showErrorMessage(l10n.t('Failed to update variable name'));
+            return;
+        }
+
+        // Trigger status bar update
+        this._onDidChangeCellStatusBarItems.fire();
     }
 
     /**
@@ -78,6 +679,526 @@ export class DeepnoteInputBlockCellStatusBarItemProvider
             .split('-')
             .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
             .join(' ');
+    }
+
+    /**
+     * Handler for select input: choose option(s)
+     */
+    private async selectInputChooseOption(cell: NotebookCell): Promise<void> {
+        const metadata = cell.metadata as Record<string, unknown> | undefined;
+        if (!metadata) {
+            return;
+        }
+
+        const selectType = metadata.deepnote_variable_select_type as string | undefined;
+        const allowMultiple = metadata.deepnote_allow_multiple_values as boolean | undefined;
+        const allowEmpty = metadata.deepnote_allow_empty_values as boolean | undefined;
+        const currentValue = metadata.deepnote_variable_value;
+
+        // Get options based on select type
+        let options: string[] = [];
+        if (selectType === 'from-variable') {
+            // For from-variable type, we can't easily get the options here
+            // Show a message to the user
+            void window.showInformationMessage(
+                l10n.t('This select input uses options from a variable. Edit the source variable to change options.')
+            );
+            return;
+        } else {
+            // from-options type
+            const optionsArray = metadata.deepnote_variable_options as string[] | undefined;
+            options = optionsArray || [];
+        }
+
+        if (options.length === 0) {
+            void window.showWarningMessage(l10n.t('No options available'));
+            return;
+        }
+
+        if (allowMultiple) {
+            // Multi-select using QuickPick with custom behavior for clear selection
+            const currentSelection = Array.isArray(currentValue) ? currentValue : [];
+
+            // Create quick pick items (only actual options, not "Clear selection")
+            const optionItems = options.map((opt) => ({
+                label: opt,
+                picked: currentSelection.includes(opt)
+            }));
+
+            // Use createQuickPick for more control
+            const quickPick = window.createQuickPick();
+            quickPick.items = optionItems;
+            quickPick.selectedItems = optionItems.filter((item) => item.picked);
+            quickPick.canSelectMany = true;
+            quickPick.placeholder = l10n.t('Select one or more options');
+
+            // Add "Clear selection" as a button if empty values are allowed
+            if (allowEmpty) {
+                const clearButton = {
+                    iconPath: new ThemeIcon('clear-all'),
+                    tooltip: l10n.t('Clear selection')
+                };
+                quickPick.buttons = [clearButton];
+
+                quickPick.onDidTriggerButton((button) => {
+                    if (button === clearButton) {
+                        // Clear selection and close
+                        quickPick.hide();
+                        void this.updateCellMetadata(cell, { deepnote_variable_value: [] });
+                    }
+                });
+            } else {
+                // If empty values are not allowed, ensure at least one item is always selected
+                // Track the most recent non-empty selection
+                let lastNonEmptySelection: readonly QuickPickItem[] = optionItems.filter((item) => item.picked);
+
+                quickPick.onDidChangeSelection((selectedItems) => {
+                    if (selectedItems.length === 0) {
+                        // Prevent deselecting the last item - restore most recent selection
+                        quickPick.selectedItems = lastNonEmptySelection;
+                    } else {
+                        // Update the last non-empty selection
+                        lastNonEmptySelection = selectedItems;
+                    }
+                });
+            }
+
+            quickPick.onDidAccept(() => {
+                const selected = quickPick.selectedItems;
+
+                // If empty values are not allowed, ensure at least one item is selected
+                if (!allowEmpty && selected.length === 0) {
+                    void window.showWarningMessage(l10n.t('At least one option must be selected'));
+                    return;
+                }
+
+                const newValue = selected.map((item) => item.label);
+                void this.updateCellMetadata(cell, { deepnote_variable_value: newValue });
+                quickPick.hide();
+            });
+
+            quickPick.onDidHide(() => {
+                quickPick.dispose();
+            });
+
+            quickPick.show();
+        } else {
+            // Single select
+            const quickPickItems = options.map((opt) => ({
+                label: opt,
+                description: typeof currentValue === 'string' && currentValue === opt ? l10n.t('(current)') : undefined
+            }));
+
+            // Add empty option if allowed
+            if (allowEmpty) {
+                quickPickItems.unshift({
+                    label: l10n.t('$(circle-slash) None'),
+                    description:
+                        currentValue === null || currentValue === undefined || currentValue === ''
+                            ? l10n.t('(current)')
+                            : undefined
+                });
+            }
+
+            const selected = await window.showQuickPick(quickPickItems, {
+                placeHolder: allowEmpty ? l10n.t('Select an option or none') : l10n.t('Select an option'),
+                canPickMany: false
+            });
+
+            if (selected === undefined) {
+                return;
+            }
+
+            // Check if "None" was chosen
+            const noneLabel = l10n.t('$(circle-slash) None');
+            if (selected.label === noneLabel) {
+                await this.updateCellMetadata(cell, { deepnote_variable_value: null });
+            } else {
+                await this.updateCellMetadata(cell, { deepnote_variable_value: selected.label });
+            }
+        }
+    }
+
+    /**
+     * Handler for slider: set min value
+     */
+    private async sliderSetMin(cell: NotebookCell): Promise<void> {
+        const metadata = cell.metadata as Record<string, unknown> | undefined;
+        const currentMin = (metadata?.deepnote_slider_min_value as number) ?? 0;
+
+        const input = await window.showInputBox({
+            prompt: l10n.t('Enter minimum value'),
+            value: String(currentMin),
+            validateInput: (value) => {
+                const num = parseFloat(value);
+                if (isNaN(num)) {
+                    return l10n.t('Please enter a valid number');
+                }
+                return undefined;
+            }
+        });
+
+        if (input === undefined) {
+            return;
+        }
+
+        const newMin = parseFloat(input);
+        const updates: Record<string, unknown> = { deepnote_slider_min_value: newMin };
+        const currentMax = metadata?.deepnote_slider_max_value as number | undefined;
+        if (currentMax !== undefined && newMin > currentMax) {
+            updates.deepnote_slider_max_value = newMin;
+            void window.showWarningMessage(l10n.t('Min exceeded max; max adjusted to {0}.', String(newMin)));
+        }
+        await this.updateCellMetadata(cell, updates);
+    }
+
+    /**
+     * Handler for slider: set max value
+     */
+    private async sliderSetMax(cell: NotebookCell): Promise<void> {
+        const metadata = cell.metadata as Record<string, unknown> | undefined;
+        const currentMax = (metadata?.deepnote_slider_max_value as number) ?? 10;
+
+        const input = await window.showInputBox({
+            prompt: l10n.t('Enter maximum value'),
+            value: String(currentMax),
+            validateInput: (value) => {
+                const num = parseFloat(value);
+                if (isNaN(num)) {
+                    return l10n.t('Please enter a valid number');
+                }
+                return undefined;
+            }
+        });
+
+        if (input === undefined) {
+            return;
+        }
+
+        const newMax = parseFloat(input);
+        const updates: Record<string, unknown> = { deepnote_slider_max_value: newMax };
+        const currentMin = metadata?.deepnote_slider_min_value as number | undefined;
+        if (currentMin !== undefined && newMax < currentMin) {
+            updates.deepnote_slider_min_value = newMax;
+            void window.showWarningMessage(l10n.t('Max exceeded min; min adjusted to {0}.', String(newMax)));
+        }
+        await this.updateCellMetadata(cell, updates);
+    }
+
+    /**
+     * Handler for slider: set step value
+     */
+    private async sliderSetStep(cell: NotebookCell): Promise<void> {
+        const metadata = cell.metadata as Record<string, unknown> | undefined;
+        const currentStep = (metadata?.deepnote_slider_step as number) ?? 1;
+
+        const input = await window.showInputBox({
+            prompt: l10n.t('Enter step size'),
+            value: String(currentStep),
+            validateInput: (value) => {
+                const num = parseFloat(value);
+                if (isNaN(num)) {
+                    return l10n.t('Please enter a valid number');
+                }
+                if (num <= 0) {
+                    return l10n.t('Step size must be greater than 0');
+                }
+                return undefined;
+            }
+        });
+
+        if (input === undefined) {
+            return;
+        }
+
+        const newStep = parseFloat(input);
+        await this.updateCellMetadata(cell, { deepnote_slider_step: newStep });
+    }
+
+    /**
+     * Handler for checkbox: toggle value
+     */
+    private async checkboxToggle(cell: NotebookCell): Promise<void> {
+        const metadata = cell.metadata as Record<string, unknown> | undefined;
+        const currentValue = (metadata?.deepnote_variable_value as boolean) ?? false;
+
+        await this.updateCellMetadata(cell, { deepnote_variable_value: !currentValue });
+    }
+
+    /**
+     * Handler for file input: choose file
+     */
+    private async fileInputChooseFile(cell: NotebookCell): Promise<void> {
+        const metadata = cell.metadata as Record<string, unknown> | undefined;
+        const allowedExtensions = metadata?.deepnote_allowed_file_extensions as string | undefined;
+
+        // Parse allowed extensions if provided
+        const filters: { [name: string]: string[] } = {};
+        if (allowedExtensions) {
+            // Split by comma and clean up
+            const extensions = allowedExtensions
+                .split(',')
+                .map((ext) => ext.trim().replace(/^\./, ''))
+                .filter((ext) => ext.length > 0);
+
+            if (extensions.length > 0) {
+                filters[l10n.t('Allowed Files')] = extensions;
+            }
+        }
+
+        // Add "All Files" option
+        filters[l10n.t('All Files')] = ['*'];
+
+        const uris = await window.showOpenDialog({
+            canSelectFiles: true,
+            canSelectFolders: false,
+            canSelectMany: false,
+            filters: Object.keys(filters).length > 1 ? filters : undefined,
+            openLabel: l10n.t('Select File')
+        });
+
+        if (!uris || uris.length === 0) {
+            return;
+        }
+
+        // Get the file path (using getFilePath for platform-correct path separators)
+        const filePath = getFilePath(uris[0]);
+
+        await this.updateCellMetadata(cell, { deepnote_variable_value: filePath });
+    }
+
+    /**
+     * Handler for select input: configure settings
+     */
+    private async selectInputSettings(cell: NotebookCell): Promise<void> {
+        await this.selectInputSettingsWebview.show(cell);
+        // The webview will handle saving the settings
+        // Trigger a status bar refresh after the webview closes
+        this._onDidChangeCellStatusBarItems.fire();
+    }
+
+    /**
+     * Convert a date value to YYYY-MM-DD format without timezone shifts.
+     * If the value already matches YYYY-MM-DD, use it directly.
+     * Otherwise, use local date components to construct the string.
+     */
+    private formatDateToYYYYMMDD(dateValue: string): string {
+        if (!dateValue) {
+            return '';
+        }
+
+        // If already in YYYY-MM-DD format, use it directly
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+            return dateValue;
+        }
+
+        // Otherwise, construct from local date components
+        const date = new Date(dateValue);
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    /**
+     * Strictly validate a YYYY-MM-DD date string.
+     * Returns the normalized string if valid, or null if invalid.
+     * Rejects out-of-range dates like "2023-02-30".
+     */
+    private validateStrictDate(value: string): string | null {
+        // 1) Match YYYY-MM-DD format
+        const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+        if (!match) {
+            return null;
+        }
+
+        // 2) Extract year, month, day as integers
+        const year = parseInt(match[1], 10);
+        const month = parseInt(match[2], 10);
+        const day = parseInt(match[3], 10);
+
+        // 3) Check month is 1..12
+        if (month < 1 || month > 12) {
+            return null;
+        }
+
+        // 4) Compute correct days-in-month (accounting for leap years)
+        const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+        const daysInMonth = [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        const maxDay = daysInMonth[month - 1];
+
+        // 5) Ensure day is within range
+        if (day < 1 || day > maxDay) {
+            return null;
+        }
+
+        // Return the normalized string
+        return value;
+    }
+
+    /**
+     * Handler for date input: choose date
+     */
+    private async dateInputChooseDate(cell: NotebookCell): Promise<void> {
+        const metadata = cell.metadata as Record<string, unknown> | undefined;
+        const currentValue = metadata?.deepnote_variable_value as string | undefined;
+        const currentDate = currentValue ? this.formatDateToYYYYMMDD(currentValue) : '';
+
+        const input = await window.showInputBox({
+            prompt: l10n.t('Enter date (YYYY-MM-DD)'),
+            value: currentDate,
+            validateInput: (value) => {
+                if (!value) {
+                    return l10n.t('Date cannot be empty');
+                }
+                if (this.validateStrictDate(value) === null) {
+                    return l10n.t('Invalid date');
+                }
+                return undefined;
+            }
+        });
+
+        if (input === undefined) {
+            return;
+        }
+
+        // Store as YYYY-MM-DD format (not full ISO string)
+        await this.updateCellMetadata(cell, { deepnote_variable_value: input });
+    }
+
+    /**
+     * Handler for date range: choose start date
+     */
+    private async dateRangeChooseStart(cell: NotebookCell): Promise<void> {
+        const metadata = cell.metadata as Record<string, unknown> | undefined;
+        const currentValue = metadata?.deepnote_variable_value;
+        let currentStart = '';
+        let currentEnd = '';
+
+        if (Array.isArray(currentValue) && currentValue.length === 2) {
+            currentStart = this.formatDateToYYYYMMDD(currentValue[0]);
+            currentEnd = this.formatDateToYYYYMMDD(currentValue[1]);
+        }
+
+        const input = await window.showInputBox({
+            prompt: l10n.t('Enter start date (YYYY-MM-DD)'),
+            value: currentStart,
+            validateInput: (value) => {
+                if (!value) {
+                    return l10n.t('Date cannot be empty');
+                }
+                if (this.validateStrictDate(value) === null) {
+                    return l10n.t('Invalid date');
+                }
+                return undefined;
+            }
+        });
+
+        if (input === undefined) {
+            return;
+        }
+
+        // Store as YYYY-MM-DD format (not full ISO string)
+        let newValue = currentEnd ? [input, currentEnd] : [input, input];
+        if (newValue[1] && newValue[0] > newValue[1]) {
+            newValue = [newValue[1], newValue[0]];
+            void window.showWarningMessage(l10n.t('Start date was after end date; the range was adjusted.'));
+        }
+        await this.updateCellMetadata(cell, { deepnote_variable_value: newValue });
+    }
+
+    /**
+     * Handler for date range: choose end date
+     */
+    private async dateRangeChooseEnd(cell: NotebookCell): Promise<void> {
+        const metadata = cell.metadata as Record<string, unknown> | undefined;
+        const currentValue = metadata?.deepnote_variable_value;
+        let currentStart = '';
+        let currentEnd = '';
+
+        if (Array.isArray(currentValue) && currentValue.length === 2) {
+            currentStart = this.formatDateToYYYYMMDD(currentValue[0]);
+            currentEnd = this.formatDateToYYYYMMDD(currentValue[1]);
+        }
+
+        const input = await window.showInputBox({
+            prompt: l10n.t('Enter end date (YYYY-MM-DD)'),
+            value: currentEnd,
+            validateInput: (value) => {
+                if (!value) {
+                    return l10n.t('Date cannot be empty');
+                }
+                if (this.validateStrictDate(value) === null) {
+                    return l10n.t('Invalid date');
+                }
+                return undefined;
+            }
+        });
+
+        if (input === undefined) {
+            return;
+        }
+
+        // Store as YYYY-MM-DD format (not full ISO string)
+        let newValue = currentStart ? [currentStart, input] : [input, input];
+        if (newValue[0] > newValue[1]) {
+            newValue = [newValue[1], newValue[0]];
+            void window.showWarningMessage(l10n.t('End date was before start date; the range was adjusted.'));
+        }
+        await this.updateCellMetadata(cell, { deepnote_variable_value: newValue });
+    }
+
+    /**
+     * Helper method to update cell metadata and cell content
+     */
+    private async updateCellMetadata(cell: NotebookCell, updates: Record<string, unknown>): Promise<void> {
+        const edit = new WorkspaceEdit();
+        const updatedMetadata = {
+            ...cell.metadata,
+            ...updates
+        };
+
+        // Update cell metadata
+        edit.set(cell.notebook.uri, [NotebookEdit.updateCellMetadata(cell.index, updatedMetadata)]);
+
+        // Update cell content if the value changed
+        if ('deepnote_variable_value' in updates) {
+            const newCellContent = this.formatCellContent(cell, updatedMetadata);
+            if (newCellContent !== null) {
+                const fullRange = new Range(
+                    new Position(0, 0),
+                    new Position(
+                        cell.document.lineCount - 1,
+                        cell.document.lineAt(cell.document.lineCount - 1).text.length
+                    )
+                );
+                edit.replace(cell.document.uri, fullRange, newCellContent);
+            }
+        }
+
+        const success = await workspace.applyEdit(edit);
+        if (!success) {
+            void window.showErrorMessage(l10n.t('Failed to update cell metadata'));
+            return;
+        }
+
+        // Trigger status bar update
+        this._onDidChangeCellStatusBarItems.fire();
+    }
+
+    /**
+     * Formats the cell content based on the block type and value
+     */
+    private formatCellContent(_cell: NotebookCell, metadata: Record<string, unknown>): string | null {
+        const pocket = metadata.__deepnotePocket as Pocket | undefined;
+        const blockType = pocket?.type;
+
+        if (!blockType) {
+            return null;
+        }
+
+        // Use shared formatter
+        return formatInputBlockCellContent(blockType, metadata);
     }
 
     dispose(): void {

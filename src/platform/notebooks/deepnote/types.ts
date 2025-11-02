@@ -3,6 +3,26 @@ import { IDisposable, Resource } from '../../common/types';
 import { EnvironmentVariables } from '../../common/variables/types';
 import { IntegrationConfig } from './integrationTypes';
 
+/**
+ * Settings for select input blocks
+ */
+export interface SelectInputSettings {
+    allowMultipleValues: boolean;
+    allowEmptyValue: boolean;
+    selectType: 'from-options' | 'from-variable';
+    options: string[];
+    selectedVariable: string;
+}
+
+/**
+ * Message types for select input settings webview
+ */
+export type SelectInputWebviewMessage =
+    | { type: 'init'; settings: SelectInputSettings }
+    | { type: 'save'; settings: SelectInputSettings }
+    | { type: 'locInit'; locStrings: Record<string, string> }
+    | { type: 'cancel' };
+
 export const IIntegrationStorage = Symbol('IIntegrationStorage');
 export interface IIntegrationStorage extends IDisposable {
     /**

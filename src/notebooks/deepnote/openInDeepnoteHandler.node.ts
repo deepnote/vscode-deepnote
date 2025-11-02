@@ -11,69 +11,71 @@ import * as fs from 'fs';
 import * as path from '../../platform/vscode-path/path';
 import { initImport, uploadFile, getErrorMessage, MAX_FILE_SIZE, getDeepnoteDomain } from './importClient.node';
 
-/**
- * Handler for the "Open in Deepnote" command
- * Uploads .deepnote files to Deepnote and opens them in the web app
- */
 @injectable()
 export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
     constructor(@inject(IExtensionContext) private readonly extensionContext: IExtensionContext) {}
 
-    /**
-     * Activates the handler by registering the command
-     */
     public activate(): void {
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.OpenInDeepnote, () => this.handleOpenInDeepnote())
         );
     }
 
-    /**
-     * Main handler for the Open in Deepnote command
-     */
     private async handleOpenInDeepnote(): Promise<void> {
         try {
-            // Get the active editor
-            const activeEditor = window.activeTextEditor;
-            if (!activeEditor) {
-                void window.showErrorMessage('Please open a .deepnote file first');
-                return;
+            let fileUri: Uri | undefined;
+            let isNotebook = false;
+
+            const activeNotebookEditor = window.activeNotebookEditor;
+            if (activeNotebookEditor) {
+                const notebook = activeNotebookEditor.notebook;
+                if (notebook.notebookType === 'deepnote') {
+                    fileUri = notebook.uri.with({ query: '', fragment: '' });
+                    isNotebook = true;
+                }
             }
 
-            const fileUri = activeEditor.document.uri;
+            if (!fileUri) {
+                const activeEditor = window.activeTextEditor;
+                if (!activeEditor) {
+                    void window.showErrorMessage('Please open a .deepnote file first');
+                    return;
+                }
 
-            // Validate that it's a .deepnote file
+                fileUri = activeEditor.document.uri;
+            }
+
             if (!fileUri.fsPath.endsWith('.deepnote')) {
                 void window.showErrorMessage('This command only works with .deepnote files');
                 return;
             }
 
-            // Ensure the file is saved
-            if (activeEditor.document.isDirty) {
-                const saved = await activeEditor.document.save();
-                if (!saved) {
-                    void window.showErrorMessage('Please save the file before opening in Deepnote');
-                    return;
+            if (isNotebook) {
+                await commands.executeCommand('workbench.action.files.save');
+            } else {
+                const activeEditor = window.activeTextEditor;
+                if (activeEditor && activeEditor.document.isDirty) {
+                    const saved = await activeEditor.document.save();
+                    if (!saved) {
+                        void window.showErrorMessage('Please save the file before opening in Deepnote');
+                        return;
+                    }
                 }
             }
 
-            // Read the file
             const filePath = fileUri.fsPath;
             const fileName = path.basename(filePath);
 
             logger.info(`Opening in Deepnote: ${fileName}`);
 
-            // Check file size
             const stats = await fs.promises.stat(filePath);
             if (stats.size > MAX_FILE_SIZE) {
                 void window.showErrorMessage(`File exceeds ${MAX_FILE_SIZE / (1024 * 1024)}MB limit`);
                 return;
             }
 
-            // Read file into buffer
             const fileBuffer = await fs.promises.readFile(filePath);
 
-            // Show progress
             await window.withProgress(
                 {
                     location: { viewId: 'workbench.view.extension.deepnoteExplorer' },
@@ -82,14 +84,12 @@ export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
                 },
                 async (progress) => {
                     try {
-                        // Step 1: Initialize import
                         progress.report({ message: l10n.t('Preparing upload...') });
                         logger.debug(`Initializing import for ${fileName} (${stats.size} bytes)`);
 
                         const initResponse = await initImport(fileName, stats.size);
                         logger.debug(`Import initialized: ${initResponse.importId}`);
 
-                        // Step 2: Upload file
                         progress.report({ message: l10n.t('Uploading file...') });
                         await uploadFile(initResponse.uploadUrl, fileBuffer, (uploadProgress) => {
                             progress.report({
@@ -98,7 +98,6 @@ export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
                         });
                         logger.debug('File uploaded successfully');
 
-                        // Step 3: Open in browser
                         progress.report({ message: l10n.t('Opening in Deepnote...') });
                         const domain = getDeepnoteDomain();
                         const deepnoteUrl = `https://${domain}/launch?importId=${initResponse.importId}`;

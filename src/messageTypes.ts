@@ -235,6 +235,24 @@ export type LocalizedMessages = {
     integrationsRequiredField: string;
     integrationsOptionalField: string;
     integrationsUnnamedIntegration: string;
+    // Select input settings strings
+    selectInputSettingsTitle: string;
+    allowMultipleValues: string;
+    allowEmptyValue: string;
+    valueSourceTitle: string;
+    fromOptions: string;
+    fromOptionsDescription: string;
+    addOptionPlaceholder: string;
+    addButton: string;
+    fromVariable: string;
+    fromVariableDescription: string;
+    variablePlaceholder: string;
+    optionNameLabel: string;
+    variableNameLabel: string;
+    removeOptionAriaLabel: string;
+    saveButton: string;
+    cancelButton: string;
+    failedToSave: string;
 };
 // Map all messages to specific payloads
 export class IInteractiveWindowMapping {

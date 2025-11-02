@@ -44,15 +44,18 @@
         "matplotlib",
         "millis",
         "nbformat",
+        "nbinsx",
         "numpy",
         "pgsql",
         "pids",
         "Pids",
+        "plotly",
         "PYTHONHOME",
         "Reselecting",
         "scipy",
         "sklearn",
         "taskkill",
+        "toolsai",
         "unconfigured",
         "Unconfigured",
         "unittests",
@@ -61,7 +64,11 @@
         "venv's",
         "Venv",
         "venvs",
-        "vscode"
+        "vscode",
+        "xanchor",
+        "xaxis",
+        "yanchor",
+        "yaxis"
     ],
     "useGitignore": true
 }

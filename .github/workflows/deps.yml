@@ -9,7 +9,6 @@ on:
 permissions:
   actions: read
   contents: read
-  packages: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -28,13 +27,9 @@ jobs:
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@deepnote'
 
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run security audit
         run: npm audit --json > audit-report.json || true

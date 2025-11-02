@@ -1,4 +1,4 @@
-import { assert } from 'chai';
+import assert from 'assert';
 import { instance, mock, when } from 'ts-mockito';
 import { CancellationTokenSource, EventEmitter, NotebookDocument, Uri } from 'vscode';
 

@@ -44,6 +44,11 @@ export const RedshiftForm: React.FC<IRedshiftFormProps> = ({
             ? structuredClone(existingConfig)
             : createEmptyRedshiftConfig({ id: integrationId, name: defaultName })
     );
+    // Store credentials temporarily when switching to individual-credentials
+    const [savedCredentials, setSavedCredentials] = React.useState<{ user: string; password: string }>({
+        user: '',
+        password: ''
+    });
 
     React.useEffect(() => {
         setPendingConfig(
@@ -67,11 +72,18 @@ export const RedshiftForm: React.FC<IRedshiftFormProps> = ({
                     host: prev.metadata.host,
                     port: prev.metadata.port,
                     database: prev.metadata.database,
-                    user: '',
-                    password: ''
+                    user: savedCredentials.user,
+                    password: savedCredentials.password
                 }
             }));
         } else {
+            // Save current credentials before switching
+            if (pendingConfig.metadata.authMethod === 'username-and-password') {
+                setSavedCredentials({
+                    user: pendingConfig.metadata.user,
+                    password: pendingConfig.metadata.password
+                });
+            }
             setPendingConfig((prev) => ({
                 ...prev,
                 metadata: {

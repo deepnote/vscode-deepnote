@@ -1,4 +1,4 @@
-import { assert } from 'chai';
+import assert from 'assert';
 import { anything, instance, mock, when } from 'ts-mockito';
 
 import { IEncryptedStorage } from '../../common/application/types';
@@ -217,7 +217,7 @@ suite('IntegrationStorage', () => {
             assert.strictEqual(result, undefined);
         });
 
-        test('Fires onDidChangeIntegrations event when saving', (done) => {
+        test('Fires onDidChangeIntegrations event when saving', async () => {
             const config: DatabaseIntegrationConfig = {
                 id: 'postgres-1',
                 name: 'My Postgres',
@@ -232,11 +232,13 @@ suite('IntegrationStorage', () => {
                 }
             };
 
+            let eventCount = 0;
             storage.onDidChangeIntegrations(() => {
-                done();
+                eventCount++;
             });
 
-            storage.save(config);
+            await storage.save(config);
+            assert.strictEqual(eventCount, 1);
         });
     });
 
@@ -263,7 +265,7 @@ suite('IntegrationStorage', () => {
             assert.strictEqual(result, undefined);
         });
 
-        test('Fires onDidChangeIntegrations event when deleting', (done) => {
+        test('Fires onDidChangeIntegrations event when deleting', async () => {
             const config: DatabaseIntegrationConfig = {
                 id: 'postgres-1',
                 name: 'My Postgres',
@@ -281,13 +283,10 @@ suite('IntegrationStorage', () => {
             let eventCount = 0;
             storage.onDidChangeIntegrations(() => {
                 eventCount++;
-                if (eventCount === 2) {
-                    // First event is from save, second is from delete
-                    done();
-                }
             });
 
-            storage.save(config).then(() => storage.delete('postgres-1'));
+            await storage.save(config).then(() => storage.delete('postgres-1'));
+            assert.strictEqual(eventCount, 2);
         });
     });
 
@@ -352,12 +351,14 @@ suite('IntegrationStorage', () => {
             assert.deepStrictEqual(result, []);
         });
 
-        test('Fires onDidChangeIntegrations event when clearing', (done) => {
+        test('Fires onDidChangeIntegrations event when clearing', async () => {
+            let eventCount = 0;
             storage.onDidChangeIntegrations(() => {
-                done();
+                eventCount++;
             });
 
-            storage.clear();
+            await storage.clear();
+            assert.strictEqual(eventCount, 1);
         });
     });
 

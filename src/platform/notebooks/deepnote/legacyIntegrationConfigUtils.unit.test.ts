@@ -1,4 +1,4 @@
-import { assert } from 'chai';
+import assert from 'assert';
 
 import { upgradeLegacyIntegrationConfig } from './legacyIntegrationConfigUtils';
 import {
@@ -54,6 +54,7 @@ suite('upgradeLegacyIntegrationConfig', () => {
             const result = await upgradeLegacyIntegrationConfig(legacyConfig);
 
             assert.ok(result);
+            assert.strictEqual(result.type, 'pgsql');
             assert.strictEqual(result.metadata.sslEnabled, false);
         });
 
@@ -72,6 +73,7 @@ suite('upgradeLegacyIntegrationConfig', () => {
             const result = await upgradeLegacyIntegrationConfig(legacyConfig);
 
             assert.ok(result);
+            assert.strictEqual(result.type, 'pgsql');
             assert.strictEqual(result.metadata.port, '5433');
             assert.strictEqual(typeof result.metadata.port, 'string');
         });
@@ -161,7 +163,7 @@ suite('upgradeLegacyIntegrationConfig', () => {
             assert.strictEqual(result.name, 'My Snowflake');
             assert.strictEqual(result.type, 'snowflake');
             // The authMethod is converted to the database-integrations format (lowercase/kebab-case)
-            assert.ok(result.metadata.authMethod);
+            assert.strictEqual(result.metadata.authMethod, 'password');
             assert.strictEqual(result.metadata.accountName, 'myaccount');
             assert.strictEqual(result.metadata.warehouse, 'mywarehouse');
             assert.strictEqual(result.metadata.database, 'mydb');
@@ -184,7 +186,8 @@ suite('upgradeLegacyIntegrationConfig', () => {
             const result = await upgradeLegacyIntegrationConfig(legacyConfig);
 
             assert.ok(result);
-            assert.ok(result.metadata.authMethod);
+            assert.strictEqual(result.type, 'snowflake');
+            assert.strictEqual(result.metadata.authMethod, 'password');
             assert.strictEqual(result.metadata.accountName, 'myaccount');
             assert.strictEqual(result.metadata.username, 'myuser');
             assert.strictEqual(result.metadata.password, 'mypass');
@@ -228,7 +231,7 @@ suite('upgradeLegacyIntegrationConfig', () => {
             assert.strictEqual(result.id, 'snowflake-keypair-1');
             assert.strictEqual(result.name, 'My Snowflake KeyPair');
             assert.strictEqual(result.type, 'snowflake');
-            assert.ok(result.metadata.authMethod);
+            assert.strictEqual(result.metadata.authMethod, 'service-account-key-pair');
             assert.strictEqual(result.metadata.accountName, 'myaccount');
             assert.strictEqual(result.metadata.username, 'myuser');
             assert.strictEqual(
@@ -252,6 +255,7 @@ suite('upgradeLegacyIntegrationConfig', () => {
             const result = await upgradeLegacyIntegrationConfig(legacyConfig);
 
             assert.ok(result);
+            assert.strictEqual(result.type, 'snowflake');
             assert.ok(result.metadata.authMethod);
         });
 

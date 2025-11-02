@@ -98,22 +98,20 @@ export const ClickHouseForm: React.FC<IClickHouseFormProps> = ({
     return (
         <form onSubmit={handleSubmit}>
             <div className="form-group">
-                <label htmlFor="name">
-                    {getLocString('integrationsClickHouseNameLabel' as any, 'Name (optional)')}
-                </label>
+                <label htmlFor="name">{getLocString('integrationsClickHouseNameLabel', 'Name (optional)')}</label>
                 <input
                     type="text"
                     id="name"
                     value={pendingConfig.name}
                     onChange={handleNameChange}
-                    placeholder={getLocString('integrationsClickHouseNamePlaceholder' as any, 'My ClickHouse Database')}
+                    placeholder={getLocString('integrationsClickHouseNamePlaceholder', 'My ClickHouse Database')}
                     autoComplete="off"
                 />
             </div>
 
             <div className="form-group">
                 <label htmlFor="host">
-                    {getLocString('integrationsClickHouseHostLabel' as any, 'Host')}{' '}
+                    {getLocString('integrationsClickHouseHostLabel', 'Host')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -121,14 +119,14 @@ export const ClickHouseForm: React.FC<IClickHouseFormProps> = ({
                     id="host"
                     value={pendingConfig.metadata.host}
                     onChange={handleHostChange}
-                    placeholder={getLocString('integrationsClickHouseHostPlaceholder' as any, 'localhost')}
+                    placeholder={getLocString('integrationsClickHouseHostPlaceholder', 'localhost')}
                     autoComplete="off"
                     required
                 />
             </div>
 
             <div className="form-group">
-                <label htmlFor="port">{getLocString('integrationsClickHousePortLabel' as any, 'Port')}</label>
+                <label htmlFor="port">{getLocString('integrationsClickHousePortLabel', 'Port')}</label>
                 <input
                     type="text"
                     id="port"
@@ -141,7 +139,7 @@ export const ClickHouseForm: React.FC<IClickHouseFormProps> = ({
 
             <div className="form-group">
                 <label htmlFor="database">
-                    {getLocString('integrationsClickHouseDatabaseLabel' as any, 'Database')}{' '}
+                    {getLocString('integrationsClickHouseDatabaseLabel', 'Database')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -149,7 +147,7 @@ export const ClickHouseForm: React.FC<IClickHouseFormProps> = ({
                     id="database"
                     value={pendingConfig.metadata.database}
                     onChange={handleDatabaseChange}
-                    placeholder={getLocString('integrationsClickHouseDatabasePlaceholder' as any, 'my_database')}
+                    placeholder={getLocString('integrationsClickHouseDatabasePlaceholder', 'my_database')}
                     autoComplete="off"
                     required
                 />
@@ -157,7 +155,7 @@ export const ClickHouseForm: React.FC<IClickHouseFormProps> = ({
 
             <div className="form-group">
                 <label htmlFor="username">
-                    {getLocString('integrationsClickHouseUsernameLabel' as any, 'Username')}{' '}
+                    {getLocString('integrationsClickHouseUsernameLabel', 'Username')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -165,22 +163,20 @@ export const ClickHouseForm: React.FC<IClickHouseFormProps> = ({
                     id="username"
                     value={pendingConfig.metadata.user}
                     onChange={handleUsernameChange}
-                    placeholder={getLocString('integrationsClickHouseUsernamePlaceholder' as any, 'username')}
+                    placeholder={getLocString('integrationsClickHouseUsernamePlaceholder', 'username')}
                     autoComplete="username"
                     required
                 />
             </div>
 
             <div className="form-group">
-                <label htmlFor="password">
-                    {getLocString('integrationsClickHousePasswordLabel' as any, 'Password')}
-                </label>
+                <label htmlFor="password">{getLocString('integrationsClickHousePasswordLabel', 'Password')}</label>
                 <input
                     type="password"
                     id="password"
                     value={pendingConfig.metadata.password || ''}
                     onChange={handlePasswordChange}
-                    placeholder={getLocString('integrationsClickHousePasswordPlaceholder' as any, '••••••••')}
+                    placeholder={getLocString('integrationsClickHousePasswordPlaceholder', '••••••••')}
                     autoComplete="current-password"
                 />
             </div>

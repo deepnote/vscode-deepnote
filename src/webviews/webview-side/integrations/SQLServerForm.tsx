@@ -100,20 +100,20 @@ export const SQLServerForm: React.FC<ISQLServerFormProps> = ({
     return (
         <form onSubmit={handleSubmit}>
             <div className="form-group">
-                <label htmlFor="name">{getLocString('integrationsSQLServerNameLabel' as any, 'Name (optional)')}</label>
+                <label htmlFor="name">{getLocString('integrationsSQLServerNameLabel', 'Name (optional)')}</label>
                 <input
                     type="text"
                     id="name"
                     value={pendingConfig.name}
                     onChange={handleNameChange}
-                    placeholder={getLocString('integrationsSQLServerNamePlaceholder' as any, 'My SQL Server Database')}
+                    placeholder={getLocString('integrationsSQLServerNamePlaceholder', 'My SQL Server Database')}
                     autoComplete="off"
                 />
             </div>
 
             <div className="form-group">
                 <label htmlFor="host">
-                    {getLocString('integrationsSQLServerHostLabel' as any, 'Host')}{' '}
+                    {getLocString('integrationsSQLServerHostLabel', 'Host')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -121,7 +121,7 @@ export const SQLServerForm: React.FC<ISQLServerFormProps> = ({
                     id="host"
                     value={pendingConfig.metadata.host}
                     onChange={handleHostChange}
-                    placeholder={getLocString('integrationsSQLServerHostPlaceholder' as any, 'localhost')}
+                    placeholder={getLocString('integrationsSQLServerHostPlaceholder', 'localhost')}
                     autoComplete="off"
                     required
                 />
@@ -129,7 +129,7 @@ export const SQLServerForm: React.FC<ISQLServerFormProps> = ({
 
             <div className="form-group">
                 <label htmlFor="port">
-                    {getLocString('integrationsSQLServerPortLabel' as any, 'Port')}{' '}
+                    {getLocString('integrationsSQLServerPortLabel', 'Port')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -145,7 +145,7 @@ export const SQLServerForm: React.FC<ISQLServerFormProps> = ({
 
             <div className="form-group">
                 <label htmlFor="database">
-                    {getLocString('integrationsSQLServerDatabaseLabel' as any, 'Database')}{' '}
+                    {getLocString('integrationsSQLServerDatabaseLabel', 'Database')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -153,7 +153,7 @@ export const SQLServerForm: React.FC<ISQLServerFormProps> = ({
                     id="database"
                     value={pendingConfig.metadata.database}
                     onChange={handleDatabaseChange}
-                    placeholder={getLocString('integrationsSQLServerDatabasePlaceholder' as any, 'my_database')}
+                    placeholder={getLocString('integrationsSQLServerDatabasePlaceholder', 'my_database')}
                     autoComplete="off"
                     required
                 />
@@ -161,7 +161,7 @@ export const SQLServerForm: React.FC<ISQLServerFormProps> = ({
 
             <div className="form-group">
                 <label htmlFor="username">
-                    {getLocString('integrationsSQLServerUsernameLabel' as any, 'Username')}{' '}
+                    {getLocString('integrationsSQLServerUsernameLabel', 'Username')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -169,7 +169,7 @@ export const SQLServerForm: React.FC<ISQLServerFormProps> = ({
                     id="username"
                     value={pendingConfig.metadata.user}
                     onChange={handleUsernameChange}
-                    placeholder={getLocString('integrationsSQLServerUsernamePlaceholder' as any, 'username')}
+                    placeholder={getLocString('integrationsSQLServerUsernamePlaceholder', 'username')}
                     autoComplete="username"
                     required
                 />
@@ -177,7 +177,7 @@ export const SQLServerForm: React.FC<ISQLServerFormProps> = ({
 
             <div className="form-group">
                 <label htmlFor="password">
-                    {getLocString('integrationsSQLServerPasswordLabel' as any, 'Password')}{' '}
+                    {getLocString('integrationsSQLServerPasswordLabel', 'Password')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -185,7 +185,7 @@ export const SQLServerForm: React.FC<ISQLServerFormProps> = ({
                     id="password"
                     value={pendingConfig.metadata.password}
                     onChange={handlePasswordChange}
-                    placeholder={getLocString('integrationsSQLServerPasswordPlaceholder' as any, '••••••••')}
+                    placeholder={getLocString('integrationsSQLServerPasswordPlaceholder', '••••••••')}
                     autoComplete="current-password"
                     required
                 />

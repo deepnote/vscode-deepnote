@@ -107,25 +107,20 @@ export const MaterializeForm: React.FC<IMaterializeFormProps> = ({
     return (
         <form onSubmit={handleSubmit}>
             <div className="form-group">
-                <label htmlFor="name">
-                    {getLocString('integrationsMaterializeNameLabel' as any, 'Name (optional)')}
-                </label>
+                <label htmlFor="name">{getLocString('integrationsMaterializeNameLabel', 'Name (optional)')}</label>
                 <input
                     type="text"
                     id="name"
                     value={pendingConfig.name}
                     onChange={handleNameChange}
-                    placeholder={getLocString(
-                        'integrationsMaterializeNamePlaceholder' as any,
-                        'My Materialize Database'
-                    )}
+                    placeholder={getLocString('integrationsMaterializeNamePlaceholder', 'My Materialize Database')}
                     autoComplete="off"
                 />
             </div>
 
             <div className="form-group">
                 <label htmlFor="host">
-                    {getLocString('integrationsMaterializeHostLabel' as any, 'Host')}{' '}
+                    {getLocString('integrationsMaterializeHostLabel', 'Host')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -133,14 +128,14 @@ export const MaterializeForm: React.FC<IMaterializeFormProps> = ({
                     id="host"
                     value={pendingConfig.metadata.host}
                     onChange={handleHostChange}
-                    placeholder={getLocString('integrationsMaterializeHostPlaceholder' as any, 'localhost')}
+                    placeholder={getLocString('integrationsMaterializeHostPlaceholder', 'localhost')}
                     autoComplete="off"
                     required
                 />
             </div>
 
             <div className="form-group">
-                <label htmlFor="port">{getLocString('integrationsMaterializePortLabel' as any, 'Port')}</label>
+                <label htmlFor="port">{getLocString('integrationsMaterializePortLabel', 'Port')}</label>
                 <input
                     type="text"
                     id="port"
@@ -153,7 +148,7 @@ export const MaterializeForm: React.FC<IMaterializeFormProps> = ({
 
             <div className="form-group">
                 <label htmlFor="database">
-                    {getLocString('integrationsMaterializeDatabaseLabel' as any, 'Database')}{' '}
+                    {getLocString('integrationsMaterializeDatabaseLabel', 'Database')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -161,7 +156,7 @@ export const MaterializeForm: React.FC<IMaterializeFormProps> = ({
                     id="database"
                     value={pendingConfig.metadata.database}
                     onChange={handleDatabaseChange}
-                    placeholder={getLocString('integrationsMaterializeDatabasePlaceholder' as any, 'my_database')}
+                    placeholder={getLocString('integrationsMaterializeDatabasePlaceholder', 'my_database')}
                     autoComplete="off"
                     required
                 />
@@ -169,7 +164,7 @@ export const MaterializeForm: React.FC<IMaterializeFormProps> = ({
 
             <div className="form-group">
                 <label htmlFor="cluster">
-                    {getLocString('integrationsMaterializeClusterLabel' as any, 'Cluster')}{' '}
+                    {getLocString('integrationsMaterializeClusterLabel', 'Cluster')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -177,7 +172,7 @@ export const MaterializeForm: React.FC<IMaterializeFormProps> = ({
                     id="cluster"
                     value={pendingConfig.metadata.cluster}
                     onChange={handleClusterChange}
-                    placeholder={getLocString('integrationsMaterializeClusterPlaceholder' as any, 'quickstart')}
+                    placeholder={getLocString('integrationsMaterializeClusterPlaceholder', 'quickstart')}
                     autoComplete="off"
                     required
                 />
@@ -185,7 +180,7 @@ export const MaterializeForm: React.FC<IMaterializeFormProps> = ({
 
             <div className="form-group">
                 <label htmlFor="username">
-                    {getLocString('integrationsMaterializeUsernameLabel' as any, 'Username')}{' '}
+                    {getLocString('integrationsMaterializeUsernameLabel', 'Username')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -193,7 +188,7 @@ export const MaterializeForm: React.FC<IMaterializeFormProps> = ({
                     id="username"
                     value={pendingConfig.metadata.user}
                     onChange={handleUsernameChange}
-                    placeholder={getLocString('integrationsMaterializeUsernamePlaceholder' as any, 'username')}
+                    placeholder={getLocString('integrationsMaterializeUsernamePlaceholder', 'username')}
                     autoComplete="username"
                     required
                 />
@@ -201,7 +196,7 @@ export const MaterializeForm: React.FC<IMaterializeFormProps> = ({
 
             <div className="form-group">
                 <label htmlFor="password">
-                    {getLocString('integrationsMaterializePasswordLabel' as any, 'Password')}{' '}
+                    {getLocString('integrationsMaterializePasswordLabel', 'Password')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -209,7 +204,7 @@ export const MaterializeForm: React.FC<IMaterializeFormProps> = ({
                     id="password"
                     value={pendingConfig.metadata.password}
                     onChange={handlePasswordChange}
-                    placeholder={getLocString('integrationsMaterializePasswordPlaceholder' as any, '••••••••')}
+                    placeholder={getLocString('integrationsMaterializePasswordPlaceholder', '••••••••')}
                     autoComplete="current-password"
                     required
                 />

@@ -97,20 +97,20 @@ export const MindsDBForm: React.FC<IMindsDBFormProps> = ({
     return (
         <form onSubmit={handleSubmit}>
             <div className="form-group">
-                <label htmlFor="name">{getLocString('integrationsMindsDBNameLabel' as any, 'Name (optional)')}</label>
+                <label htmlFor="name">{getLocString('integrationsMindsDBNameLabel', 'Name (optional)')}</label>
                 <input
                     type="text"
                     id="name"
                     value={pendingConfig.name}
                     onChange={handleNameChange}
-                    placeholder={getLocString('integrationsMindsDBNamePlaceholder' as any, 'My MindsDB Database')}
+                    placeholder={getLocString('integrationsMindsDBNamePlaceholder', 'My MindsDB Database')}
                     autoComplete="off"
                 />
             </div>
 
             <div className="form-group">
                 <label htmlFor="host">
-                    {getLocString('integrationsMindsDBHostLabel' as any, 'Host')}{' '}
+                    {getLocString('integrationsMindsDBHostLabel', 'Host')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -118,14 +118,14 @@ export const MindsDBForm: React.FC<IMindsDBFormProps> = ({
                     id="host"
                     value={pendingConfig.metadata.host}
                     onChange={handleHostChange}
-                    placeholder={getLocString('integrationsMindsDBHostPlaceholder' as any, 'localhost')}
+                    placeholder={getLocString('integrationsMindsDBHostPlaceholder', 'localhost')}
                     autoComplete="off"
                     required
                 />
             </div>
 
             <div className="form-group">
-                <label htmlFor="port">{getLocString('integrationsMindsDBPortLabel' as any, 'Port')}</label>
+                <label htmlFor="port">{getLocString('integrationsMindsDBPortLabel', 'Port')}</label>
                 <input
                     type="text"
                     id="port"
@@ -138,7 +138,7 @@ export const MindsDBForm: React.FC<IMindsDBFormProps> = ({
 
             <div className="form-group">
                 <label htmlFor="database">
-                    {getLocString('integrationsMindsDBDatabaseLabel' as any, 'Database')}{' '}
+                    {getLocString('integrationsMindsDBDatabaseLabel', 'Database')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -146,7 +146,7 @@ export const MindsDBForm: React.FC<IMindsDBFormProps> = ({
                     id="database"
                     value={pendingConfig.metadata.database}
                     onChange={handleDatabaseChange}
-                    placeholder={getLocString('integrationsMindsDBDatabasePlaceholder' as any, 'my_database')}
+                    placeholder={getLocString('integrationsMindsDBDatabasePlaceholder', 'my_database')}
                     autoComplete="off"
                     required
                 />
@@ -154,7 +154,7 @@ export const MindsDBForm: React.FC<IMindsDBFormProps> = ({
 
             <div className="form-group">
                 <label htmlFor="username">
-                    {getLocString('integrationsMindsDBUsernameLabel' as any, 'Username')}{' '}
+                    {getLocString('integrationsMindsDBUsernameLabel', 'Username')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -162,7 +162,7 @@ export const MindsDBForm: React.FC<IMindsDBFormProps> = ({
                     id="username"
                     value={pendingConfig.metadata.user}
                     onChange={handleUsernameChange}
-                    placeholder={getLocString('integrationsMindsDBUsernamePlaceholder' as any, 'username')}
+                    placeholder={getLocString('integrationsMindsDBUsernamePlaceholder', 'username')}
                     autoComplete="username"
                     required
                 />
@@ -170,7 +170,7 @@ export const MindsDBForm: React.FC<IMindsDBFormProps> = ({
 
             <div className="form-group">
                 <label htmlFor="password">
-                    {getLocString('integrationsMindsDBPasswordLabel' as any, 'Password')}{' '}
+                    {getLocString('integrationsMindsDBPasswordLabel', 'Password')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -178,7 +178,7 @@ export const MindsDBForm: React.FC<IMindsDBFormProps> = ({
                     id="password"
                     value={pendingConfig.metadata.password}
                     onChange={handlePasswordChange}
-                    placeholder={getLocString('integrationsMindsDBPasswordPlaceholder' as any, '••••••••')}
+                    placeholder={getLocString('integrationsMindsDBPasswordPlaceholder', '••••••••')}
                     autoComplete="current-password"
                     required
                 />

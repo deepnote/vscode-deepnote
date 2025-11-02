@@ -97,20 +97,20 @@ export const AlloyDBForm: React.FC<IAlloyDBFormProps> = ({
     return (
         <form onSubmit={handleSubmit}>
             <div className="form-group">
-                <label htmlFor="name">{getLocString('integrationsAlloyDBNameLabel' as any, 'Name (optional)')}</label>
+                <label htmlFor="name">{getLocString('integrationsAlloyDBNameLabel', 'Name (optional)')}</label>
                 <input
                     type="text"
                     id="name"
                     value={pendingConfig.name}
                     onChange={handleNameChange}
-                    placeholder={getLocString('integrationsAlloyDBNamePlaceholder' as any, 'My AlloyDB Database')}
+                    placeholder={getLocString('integrationsAlloyDBNamePlaceholder', 'My AlloyDB Database')}
                     autoComplete="off"
                 />
             </div>
 
             <div className="form-group">
                 <label htmlFor="host">
-                    {getLocString('integrationsAlloyDBHostLabel' as any, 'Host')}{' '}
+                    {getLocString('integrationsAlloyDBHostLabel', 'Host')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -118,14 +118,14 @@ export const AlloyDBForm: React.FC<IAlloyDBFormProps> = ({
                     id="host"
                     value={pendingConfig.metadata.host}
                     onChange={handleHostChange}
-                    placeholder={getLocString('integrationsAlloyDBHostPlaceholder' as any, 'localhost')}
+                    placeholder={getLocString('integrationsAlloyDBHostPlaceholder', 'localhost')}
                     autoComplete="off"
                     required
                 />
             </div>
 
             <div className="form-group">
-                <label htmlFor="port">{getLocString('integrationsAlloyDBPortLabel' as any, 'Port')}</label>
+                <label htmlFor="port">{getLocString('integrationsAlloyDBPortLabel', 'Port')}</label>
                 <input
                     type="text"
                     id="port"
@@ -138,7 +138,7 @@ export const AlloyDBForm: React.FC<IAlloyDBFormProps> = ({
 
             <div className="form-group">
                 <label htmlFor="database">
-                    {getLocString('integrationsAlloyDBDatabaseLabel' as any, 'Database')}{' '}
+                    {getLocString('integrationsAlloyDBDatabaseLabel', 'Database')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -146,7 +146,7 @@ export const AlloyDBForm: React.FC<IAlloyDBFormProps> = ({
                     id="database"
                     value={pendingConfig.metadata.database}
                     onChange={handleDatabaseChange}
-                    placeholder={getLocString('integrationsAlloyDBDatabasePlaceholder' as any, 'my_database')}
+                    placeholder={getLocString('integrationsAlloyDBDatabasePlaceholder', 'my_database')}
                     autoComplete="off"
                     required
                 />
@@ -154,7 +154,7 @@ export const AlloyDBForm: React.FC<IAlloyDBFormProps> = ({
 
             <div className="form-group">
                 <label htmlFor="username">
-                    {getLocString('integrationsAlloyDBUsernameLabel' as any, 'Username')}{' '}
+                    {getLocString('integrationsAlloyDBUsernameLabel', 'Username')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -162,7 +162,7 @@ export const AlloyDBForm: React.FC<IAlloyDBFormProps> = ({
                     id="username"
                     value={pendingConfig.metadata.user}
                     onChange={handleUsernameChange}
-                    placeholder={getLocString('integrationsAlloyDBUsernamePlaceholder' as any, 'username')}
+                    placeholder={getLocString('integrationsAlloyDBUsernamePlaceholder', 'username')}
                     autoComplete="username"
                     required
                 />
@@ -170,7 +170,7 @@ export const AlloyDBForm: React.FC<IAlloyDBFormProps> = ({
 
             <div className="form-group">
                 <label htmlFor="password">
-                    {getLocString('integrationsAlloyDBPasswordLabel' as any, 'Password')}{' '}
+                    {getLocString('integrationsAlloyDBPasswordLabel', 'Password')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -178,7 +178,7 @@ export const AlloyDBForm: React.FC<IAlloyDBFormProps> = ({
                     id="password"
                     value={pendingConfig.metadata.password}
                     onChange={handlePasswordChange}
-                    placeholder={getLocString('integrationsAlloyDBPasswordPlaceholder' as any, '••••••••')}
+                    placeholder={getLocString('integrationsAlloyDBPasswordPlaceholder', '••••••••')}
                     autoComplete="current-password"
                     required
                 />

@@ -98,20 +98,20 @@ export const TrinoForm: React.FC<ITrinoFormProps> = ({
     return (
         <form onSubmit={handleSubmit}>
             <div className="form-group">
-                <label htmlFor="name">{getLocString('integrationsTrinoNameLabel' as any, 'Name (optional)')}</label>
+                <label htmlFor="name">{getLocString('integrationsTrinoNameLabel', 'Name (optional)')}</label>
                 <input
                     type="text"
                     id="name"
                     value={pendingConfig.name}
                     onChange={handleNameChange}
-                    placeholder={getLocString('integrationsTrinoNamePlaceholder' as any, 'My Trino Database')}
+                    placeholder={getLocString('integrationsTrinoNamePlaceholder', 'My Trino Database')}
                     autoComplete="off"
                 />
             </div>
 
             <div className="form-group">
                 <label htmlFor="host">
-                    {getLocString('integrationsTrinoHostLabel' as any, 'Host')}{' '}
+                    {getLocString('integrationsTrinoHostLabel', 'Host')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -119,7 +119,7 @@ export const TrinoForm: React.FC<ITrinoFormProps> = ({
                     id="host"
                     value={pendingConfig.metadata.host}
                     onChange={handleHostChange}
-                    placeholder={getLocString('integrationsTrinoHostPlaceholder' as any, 'localhost')}
+                    placeholder={getLocString('integrationsTrinoHostPlaceholder', 'localhost')}
                     autoComplete="off"
                     required
                 />
@@ -127,7 +127,7 @@ export const TrinoForm: React.FC<ITrinoFormProps> = ({
 
             <div className="form-group">
                 <label htmlFor="port">
-                    {getLocString('integrationsTrinoPortLabel' as any, 'Port')}{' '}
+                    {getLocString('integrationsTrinoPortLabel', 'Port')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -143,7 +143,7 @@ export const TrinoForm: React.FC<ITrinoFormProps> = ({
 
             <div className="form-group">
                 <label htmlFor="database">
-                    {getLocString('integrationsTrinoDatabaseLabel' as any, 'Database')}{' '}
+                    {getLocString('integrationsTrinoDatabaseLabel', 'Database')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -151,7 +151,7 @@ export const TrinoForm: React.FC<ITrinoFormProps> = ({
                     id="database"
                     value={pendingConfig.metadata.database}
                     onChange={handleDatabaseChange}
-                    placeholder={getLocString('integrationsTrinoDatabasePlaceholder' as any, 'my_database')}
+                    placeholder={getLocString('integrationsTrinoDatabasePlaceholder', 'my_database')}
                     autoComplete="off"
                     required
                 />
@@ -159,7 +159,7 @@ export const TrinoForm: React.FC<ITrinoFormProps> = ({
 
             <div className="form-group">
                 <label htmlFor="username">
-                    {getLocString('integrationsTrinoUsernameLabel' as any, 'Username')}{' '}
+                    {getLocString('integrationsTrinoUsernameLabel', 'Username')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -167,7 +167,7 @@ export const TrinoForm: React.FC<ITrinoFormProps> = ({
                     id="username"
                     value={pendingConfig.metadata.user}
                     onChange={handleUsernameChange}
-                    placeholder={getLocString('integrationsTrinoUsernamePlaceholder' as any, 'username')}
+                    placeholder={getLocString('integrationsTrinoUsernamePlaceholder', 'username')}
                     autoComplete="username"
                     required
                 />
@@ -175,7 +175,7 @@ export const TrinoForm: React.FC<ITrinoFormProps> = ({
 
             <div className="form-group">
                 <label htmlFor="password">
-                    {getLocString('integrationsTrinoPasswordLabel' as any, 'Password')}{' '}
+                    {getLocString('integrationsTrinoPasswordLabel', 'Password')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -183,7 +183,7 @@ export const TrinoForm: React.FC<ITrinoFormProps> = ({
                     id="password"
                     value={pendingConfig.metadata.password}
                     onChange={handlePasswordChange}
-                    placeholder={getLocString('integrationsTrinoPasswordPlaceholder' as any, '••••••••')}
+                    placeholder={getLocString('integrationsTrinoPasswordPlaceholder', '••••••••')}
                     autoComplete="current-password"
                     required
                 />

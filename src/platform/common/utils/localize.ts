@@ -989,6 +989,17 @@ export namespace Integrations {
     export const mongoDBConnectionStringHelp = l10n.t(
         'Enter your MongoDB connection string. Example: mongodb://user:pass@host:27017/mydb or mongodb+srv://user:pass@cluster.mongodb.net/mydb'
     );
+    export const mongoDBOptionalFieldsNote = l10n.t(
+        'The following fields are optional and redundant with the connection string. They create environment variables for use in your code.'
+    );
+    export const mongoDBRawConnectionStringLabel = l10n.t('Raw Connection String (optional)');
+    export const mongoDBPrefixLabel = l10n.t('Prefix (optional)');
+    export const mongoDBHostLabel = l10n.t('Host (optional)');
+    export const mongoDBPortLabel = l10n.t('Port (optional)');
+    export const mongoDBUserLabel = l10n.t('User (optional)');
+    export const mongoDBPasswordLabel = l10n.t('Password (optional)');
+    export const mongoDBDatabaseLabel = l10n.t('Database (optional)');
+    export const mongoDBOptionsLabel = l10n.t('Options (optional)');
 
     // Redshift form strings
     export const redshiftNameLabel = l10n.t('Name (optional)');
@@ -1108,6 +1119,21 @@ export namespace Integrations {
     export const trinoUsernamePlaceholder = l10n.t('username');
     export const trinoPasswordLabel = l10n.t('Password');
     export const trinoPasswordPlaceholder = l10n.t('••••••••');
+
+    // SSH options strings
+    export const sshEnabled = l10n.t('Enable SSH Tunnel');
+    export const sshHost = l10n.t('SSH Host');
+    export const sshHostPlaceholder = l10n.t('ssh.example.com');
+    export const sshPort = l10n.t('SSH Port');
+    export const sshUser = l10n.t('SSH User');
+    export const sshUserPlaceholder = l10n.t('ubuntu');
+
+    // SSL/CA certificate strings
+    export const sslEnabled = l10n.t('Enable SSL');
+    export const caCertificateName = l10n.t('CA Certificate Name');
+    export const caCertificateNamePlaceholder = l10n.t('my-ca-certificate');
+    export const caCertificateText = l10n.t('CA Certificate (PEM)');
+    export const caCertificateTextPlaceholder = l10n.t('-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----');
 }
 
 export namespace SelectInputSettings {

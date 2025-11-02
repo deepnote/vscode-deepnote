@@ -313,6 +313,15 @@ export type LocalizedMessages = {
     integrationsMongoDBConnectionStringLabel: string;
     integrationsMongoDBConnectionStringPlaceholder: string;
     integrationsMongoDBConnectionStringHelp: string;
+    integrationsMongoDBOptionalFieldsNote: string;
+    integrationsMongoDBRawConnectionStringLabel: string;
+    integrationsMongoDBPrefixLabel: string;
+    integrationsMongoDBHostLabel: string;
+    integrationsMongoDBPortLabel: string;
+    integrationsMongoDBUserLabel: string;
+    integrationsMongoDBPasswordLabel: string;
+    integrationsMongoDBDatabaseLabel: string;
+    integrationsMongoDBOptionsLabel: string;
     // Redshift form strings
     integrationsRedshiftNameLabel: string;
     integrationsRedshiftNamePlaceholder: string;
@@ -416,6 +425,19 @@ export type LocalizedMessages = {
     integrationsTrinoUsernamePlaceholder: string;
     integrationsTrinoPasswordLabel: string;
     integrationsTrinoPasswordPlaceholder: string;
+    // SSH options strings
+    integrationsSshEnabled: string;
+    integrationsSshHost: string;
+    integrationsSshHostPlaceholder: string;
+    integrationsSshPort: string;
+    integrationsSshUser: string;
+    integrationsSshUserPlaceholder: string;
+    // SSL/CA certificate strings
+    integrationsSslEnabled: string;
+    integrationsCaCertificateName: string;
+    integrationsCaCertificateNamePlaceholder: string;
+    integrationsCaCertificateText: string;
+    integrationsCaCertificateTextPlaceholder: string;
     // Common form strings
     integrationsRequiredField: string;
     integrationsOptionalField: string;

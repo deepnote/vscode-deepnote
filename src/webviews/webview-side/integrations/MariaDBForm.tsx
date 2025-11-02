@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { format, getLocString } from '../react-common/locReactSide';
 import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
+import { SshOptionsFields } from './SshOptionsFields';
+import { CaCertificateFields } from './CaCertificateFields';
 
 function createEmptyMariaDBConfig(params: {
     id: string;
@@ -73,6 +75,41 @@ export const MariaDBForm: React.FC<IMariaDBFormProps> = ({
 
     const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, password: e.target.value } }));
+    };
+
+    const handleSshEnabledChange = (enabled: boolean) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, sshEnabled: enabled || undefined }
+        }));
+    };
+
+    const handleSshHostChange = (host: string) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, sshHost: host || undefined }
+        }));
+    };
+
+    const handleSshPortChange = (port: string) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, sshPort: port || undefined }
+        }));
+    };
+
+    const handleSshUserChange = (user: string) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, sshUser: user || undefined }
+        }));
+    };
+
+    const handleCaCertificateNameChange = (name: string) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, caCertificateName: name || undefined }
+        }));
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -169,6 +206,24 @@ export const MariaDBForm: React.FC<IMariaDBFormProps> = ({
                     required
                 />
             </div>
+
+            <SshOptionsFields
+                sshEnabled={pendingConfig.metadata.sshEnabled}
+                sshHost={pendingConfig.metadata.sshHost}
+                sshPort={pendingConfig.metadata.sshPort}
+                sshUser={pendingConfig.metadata.sshUser}
+                onSshEnabledChange={handleSshEnabledChange}
+                onSshHostChange={handleSshHostChange}
+                onSshPortChange={handleSshPortChange}
+                onSshUserChange={handleSshUserChange}
+            />
+
+            <CaCertificateFields
+                caCertificateName={pendingConfig.metadata.caCertificateName}
+                onCaCertificateNameChange={handleCaCertificateNameChange}
+                showSslEnabled={false}
+                showCertificateText={false}
+            />
 
             <div className="form-actions">
                 <button type="submit" className="primary">

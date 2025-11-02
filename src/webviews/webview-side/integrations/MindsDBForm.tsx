@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { format, getLocString } from '../react-common/locReactSide';
 import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
+import { SshOptionsFields } from './SshOptionsFields';
+import { CaCertificateFields } from './CaCertificateFields';
 
 export interface IMindsDBFormProps {
     integrationId: string;
@@ -94,6 +96,41 @@ export const MindsDBForm: React.FC<IMindsDBFormProps> = ({
         });
     };
 
+    const handleSshEnabledChange = (enabled: boolean) => {
+        setPendingConfig({
+            ...pendingConfig,
+            metadata: { ...pendingConfig.metadata, sshEnabled: enabled || undefined }
+        });
+    };
+
+    const handleSshHostChange = (host: string) => {
+        setPendingConfig({
+            ...pendingConfig,
+            metadata: { ...pendingConfig.metadata, sshHost: host || undefined }
+        });
+    };
+
+    const handleSshPortChange = (port: string) => {
+        setPendingConfig({
+            ...pendingConfig,
+            metadata: { ...pendingConfig.metadata, sshPort: port || undefined }
+        });
+    };
+
+    const handleSshUserChange = (user: string) => {
+        setPendingConfig({
+            ...pendingConfig,
+            metadata: { ...pendingConfig.metadata, sshUser: user || undefined }
+        });
+    };
+
+    const handleCaCertificateNameChange = (name: string) => {
+        setPendingConfig({
+            ...pendingConfig,
+            metadata: { ...pendingConfig.metadata, caCertificateName: name || undefined }
+        });
+    };
+
     return (
         <form onSubmit={handleSubmit}>
             <div className="form-group">
@@ -183,6 +220,24 @@ export const MindsDBForm: React.FC<IMindsDBFormProps> = ({
                     required
                 />
             </div>
+
+            <SshOptionsFields
+                sshEnabled={pendingConfig.metadata.sshEnabled}
+                sshHost={pendingConfig.metadata.sshHost}
+                sshPort={pendingConfig.metadata.sshPort}
+                sshUser={pendingConfig.metadata.sshUser}
+                onSshEnabledChange={handleSshEnabledChange}
+                onSshHostChange={handleSshHostChange}
+                onSshPortChange={handleSshPortChange}
+                onSshUserChange={handleSshUserChange}
+            />
+
+            <CaCertificateFields
+                caCertificateName={pendingConfig.metadata.caCertificateName}
+                onCaCertificateNameChange={handleCaCertificateNameChange}
+                showSslEnabled={false}
+                showCertificateText={false}
+            />
 
             <div className="form-actions">
                 <button type="button" className="secondary" onClick={onCancel}>

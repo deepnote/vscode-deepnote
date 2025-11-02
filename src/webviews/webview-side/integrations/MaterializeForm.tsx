@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { format, getLocString } from '../react-common/locReactSide';
 import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
+import { SshOptionsFields } from './SshOptionsFields';
+import { CaCertificateFields } from './CaCertificateFields';
 
 export interface IMaterializeFormProps {
     integrationId: string;
@@ -101,6 +103,55 @@ export const MaterializeForm: React.FC<IMaterializeFormProps> = ({
         setPendingConfig({
             ...pendingConfig,
             metadata: { ...pendingConfig.metadata, password: e.target.value }
+        });
+    };
+
+    const handleSshEnabledChange = (enabled: boolean) => {
+        setPendingConfig({
+            ...pendingConfig,
+            metadata: { ...pendingConfig.metadata, sshEnabled: enabled || undefined }
+        });
+    };
+
+    const handleSshHostChange = (host: string) => {
+        setPendingConfig({
+            ...pendingConfig,
+            metadata: { ...pendingConfig.metadata, sshHost: host || undefined }
+        });
+    };
+
+    const handleSshPortChange = (port: string) => {
+        setPendingConfig({
+            ...pendingConfig,
+            metadata: { ...pendingConfig.metadata, sshPort: port || undefined }
+        });
+    };
+
+    const handleSshUserChange = (user: string) => {
+        setPendingConfig({
+            ...pendingConfig,
+            metadata: { ...pendingConfig.metadata, sshUser: user || undefined }
+        });
+    };
+
+    const handleSslEnabledChange = (enabled: boolean) => {
+        setPendingConfig({
+            ...pendingConfig,
+            metadata: { ...pendingConfig.metadata, sslEnabled: enabled || undefined }
+        });
+    };
+
+    const handleCaCertificateNameChange = (name: string) => {
+        setPendingConfig({
+            ...pendingConfig,
+            metadata: { ...pendingConfig.metadata, caCertificateName: name || undefined }
+        });
+    };
+
+    const handleCaCertificateTextChange = (text: string) => {
+        setPendingConfig({
+            ...pendingConfig,
+            metadata: { ...pendingConfig.metadata, caCertificateText: text || undefined }
         });
     };
 
@@ -209,6 +260,28 @@ export const MaterializeForm: React.FC<IMaterializeFormProps> = ({
                     required
                 />
             </div>
+
+            <SshOptionsFields
+                sshEnabled={pendingConfig.metadata.sshEnabled}
+                sshHost={pendingConfig.metadata.sshHost}
+                sshPort={pendingConfig.metadata.sshPort}
+                sshUser={pendingConfig.metadata.sshUser}
+                onSshEnabledChange={handleSshEnabledChange}
+                onSshHostChange={handleSshHostChange}
+                onSshPortChange={handleSshPortChange}
+                onSshUserChange={handleSshUserChange}
+            />
+
+            <CaCertificateFields
+                sslEnabled={pendingConfig.metadata.sslEnabled}
+                caCertificateName={pendingConfig.metadata.caCertificateName}
+                caCertificateText={pendingConfig.metadata.caCertificateText}
+                onSslEnabledChange={handleSslEnabledChange}
+                onCaCertificateNameChange={handleCaCertificateNameChange}
+                onCaCertificateTextChange={handleCaCertificateTextChange}
+                showSslEnabled={true}
+                showCertificateText={true}
+            />
 
             <div className="form-actions">
                 <button type="button" className="secondary" onClick={onCancel}>

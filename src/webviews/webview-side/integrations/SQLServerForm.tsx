@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { format, getLocString } from '../react-common/locReactSide';
 import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
+import { SshOptionsFields } from './SshOptionsFields';
 
 export interface ISQLServerFormProps {
     integrationId: string;
@@ -97,6 +98,34 @@ export const SQLServerForm: React.FC<ISQLServerFormProps> = ({
         });
     };
 
+    const handleSshEnabledChange = (enabled: boolean) => {
+        setPendingConfig({
+            ...pendingConfig,
+            metadata: { ...pendingConfig.metadata, sshEnabled: enabled || undefined }
+        });
+    };
+
+    const handleSshHostChange = (host: string) => {
+        setPendingConfig({
+            ...pendingConfig,
+            metadata: { ...pendingConfig.metadata, sshHost: host || undefined }
+        });
+    };
+
+    const handleSshPortChange = (port: string) => {
+        setPendingConfig({
+            ...pendingConfig,
+            metadata: { ...pendingConfig.metadata, sshPort: port || undefined }
+        });
+    };
+
+    const handleSshUserChange = (user: string) => {
+        setPendingConfig({
+            ...pendingConfig,
+            metadata: { ...pendingConfig.metadata, sshUser: user || undefined }
+        });
+    };
+
     return (
         <form onSubmit={handleSubmit}>
             <div className="form-group">
@@ -190,6 +219,17 @@ export const SQLServerForm: React.FC<ISQLServerFormProps> = ({
                     required
                 />
             </div>
+
+            <SshOptionsFields
+                sshEnabled={pendingConfig.metadata.sshEnabled}
+                sshHost={pendingConfig.metadata.sshHost}
+                sshPort={pendingConfig.metadata.sshPort}
+                sshUser={pendingConfig.metadata.sshUser}
+                onSshEnabledChange={handleSshEnabledChange}
+                onSshHostChange={handleSshHostChange}
+                onSshPortChange={handleSshPortChange}
+                onSshUserChange={handleSshUserChange}
+            />
 
             <div className="form-actions">
                 <button type="button" className="secondary" onClick={onCancel}>

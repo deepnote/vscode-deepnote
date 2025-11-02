@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { format, getLocString } from '../react-common/locReactSide';
 import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
+import { SshOptionsFields } from './SshOptionsFields';
+import { CaCertificateFields } from './CaCertificateFields';
 
 function createEmptyMongoDBConfig(params: {
     id: string;
@@ -55,6 +57,111 @@ export const MongoDBForm: React.FC<IMongoDBFormProps> = ({
         setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, connection_string: e.target.value } }));
     };
 
+    const handleRawConnectionStringChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, rawConnectionString: e.target.value || undefined }
+        }));
+    };
+
+    const handlePrefixChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, prefix: e.target.value || undefined }
+        }));
+    };
+
+    const handleHostChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, host: e.target.value || undefined }
+        }));
+    };
+
+    const handlePortChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, port: e.target.value || undefined }
+        }));
+    };
+
+    const handleUserChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, user: e.target.value || undefined }
+        }));
+    };
+
+    const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, password: e.target.value || undefined }
+        }));
+    };
+
+    const handleDatabaseChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, database: e.target.value || undefined }
+        }));
+    };
+
+    const handleOptionsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, options: e.target.value || undefined }
+        }));
+    };
+
+    const handleSshEnabledChange = (enabled: boolean) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, sshEnabled: enabled || undefined }
+        }));
+    };
+
+    const handleSshHostChange = (host: string) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, sshHost: host || undefined }
+        }));
+    };
+
+    const handleSshPortChange = (port: string) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, sshPort: port || undefined }
+        }));
+    };
+
+    const handleSshUserChange = (user: string) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, sshUser: user || undefined }
+        }));
+    };
+
+    const handleSslEnabledChange = (enabled: boolean) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, sslEnabled: enabled || undefined }
+        }));
+    };
+
+    const handleCaCertificateNameChange = (name: string) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, caCertificateName: name || undefined }
+        }));
+    };
+
+    const handleCaCertificateTextChange = (text: string) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, caCertificateText: text || undefined }
+        }));
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         onSave(pendingConfig);
@@ -97,6 +204,129 @@ export const MongoDBForm: React.FC<IMongoDBFormProps> = ({
                     )}
                 </small>
             </div>
+
+            <div className="form-section-note">
+                {getLocString(
+                    'integrationsMongoDBOptionalFieldsNote',
+                    'The following fields are optional and redundant with the connection string. They create environment variables for use in your code.'
+                )}
+            </div>
+
+            <div className="form-group">
+                <label htmlFor="rawConnectionString">
+                    {getLocString('integrationsMongoDBRawConnectionStringLabel', 'Raw Connection String (optional)')}
+                </label>
+                <input
+                    type="text"
+                    id="rawConnectionString"
+                    value={pendingConfig.metadata.rawConnectionString || ''}
+                    onChange={handleRawConnectionStringChange}
+                    autoComplete="off"
+                />
+            </div>
+
+            <div className="form-group">
+                <label htmlFor="prefix">{getLocString('integrationsMongoDBPrefixLabel', 'Prefix (optional)')}</label>
+                <input
+                    type="text"
+                    id="prefix"
+                    value={pendingConfig.metadata.prefix || ''}
+                    onChange={handlePrefixChange}
+                    autoComplete="off"
+                />
+            </div>
+
+            <div className="form-group">
+                <label htmlFor="host">{getLocString('integrationsMongoDBHostLabel', 'Host (optional)')}</label>
+                <input
+                    type="text"
+                    id="host"
+                    value={pendingConfig.metadata.host || ''}
+                    onChange={handleHostChange}
+                    autoComplete="off"
+                />
+            </div>
+
+            <div className="form-group">
+                <label htmlFor="port">{getLocString('integrationsMongoDBPortLabel', 'Port (optional)')}</label>
+                <input
+                    type="text"
+                    id="port"
+                    value={pendingConfig.metadata.port || ''}
+                    onChange={handlePortChange}
+                    autoComplete="off"
+                />
+            </div>
+
+            <div className="form-group">
+                <label htmlFor="user">{getLocString('integrationsMongoDBUserLabel', 'User (optional)')}</label>
+                <input
+                    type="text"
+                    id="user"
+                    value={pendingConfig.metadata.user || ''}
+                    onChange={handleUserChange}
+                    autoComplete="off"
+                />
+            </div>
+
+            <div className="form-group">
+                <label htmlFor="password">
+                    {getLocString('integrationsMongoDBPasswordLabel', 'Password (optional)')}
+                </label>
+                <input
+                    type="password"
+                    id="password"
+                    value={pendingConfig.metadata.password || ''}
+                    onChange={handlePasswordChange}
+                    autoComplete="current-password"
+                />
+            </div>
+
+            <div className="form-group">
+                <label htmlFor="database">
+                    {getLocString('integrationsMongoDBDatabaseLabel', 'Database (optional)')}
+                </label>
+                <input
+                    type="text"
+                    id="database"
+                    value={pendingConfig.metadata.database || ''}
+                    onChange={handleDatabaseChange}
+                    autoComplete="off"
+                />
+            </div>
+
+            <div className="form-group">
+                <label htmlFor="options">{getLocString('integrationsMongoDBOptionsLabel', 'Options (optional)')}</label>
+                <input
+                    type="text"
+                    id="options"
+                    value={pendingConfig.metadata.options || ''}
+                    onChange={handleOptionsChange}
+                    autoComplete="off"
+                />
+            </div>
+
+            <SshOptionsFields
+                sshEnabled={pendingConfig.metadata.sshEnabled}
+                sshHost={pendingConfig.metadata.sshHost}
+                sshPort={pendingConfig.metadata.sshPort}
+                sshUser={pendingConfig.metadata.sshUser}
+                onSshEnabledChange={handleSshEnabledChange}
+                onSshHostChange={handleSshHostChange}
+                onSshPortChange={handleSshPortChange}
+                onSshUserChange={handleSshUserChange}
+            />
+
+            <CaCertificateFields
+                sslEnabled={pendingConfig.metadata.sslEnabled}
+                caCertificateName={pendingConfig.metadata.caCertificateName}
+                caCertificateText={pendingConfig.metadata.caCertificateText}
+                onSslEnabledChange={handleSslEnabledChange}
+                onCaCertificateNameChange={handleCaCertificateNameChange}
+                onCaCertificateTextChange={handleCaCertificateTextChange}
+                showSslEnabled={true}
+                showCertificateText={true}
+            />
 
             <div className="form-actions">
                 <button type="submit" className="primary">

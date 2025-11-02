@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { format, getLocString } from '../react-common/locReactSide';
 import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
+import { SshOptionsFields } from './SshOptionsFields';
+import { CaCertificateFields } from './CaCertificateFields';
 
 type RedshiftConfig = Extract<DatabaseIntegrationConfig, { type: 'redshift' }>;
 
@@ -104,6 +106,55 @@ export const RedshiftForm: React.FC<IRedshiftFormProps> = ({
         if (pendingConfig.metadata.authMethod === 'username-and-password') {
             setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, password: e.target.value } }));
         }
+    };
+
+    const handleSshEnabledChange = (enabled: boolean) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, sshEnabled: enabled || undefined }
+        }));
+    };
+
+    const handleSshHostChange = (host: string) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, sshHost: host || undefined }
+        }));
+    };
+
+    const handleSshPortChange = (port: string) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, sshPort: port || undefined }
+        }));
+    };
+
+    const handleSshUserChange = (user: string) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, sshUser: user || undefined }
+        }));
+    };
+
+    const handleSslEnabledChange = (enabled: boolean) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, sslEnabled: enabled || undefined }
+        }));
+    };
+
+    const handleCaCertificateNameChange = (name: string) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, caCertificateName: name || undefined }
+        }));
+    };
+
+    const handleCaCertificateTextChange = (text: string) => {
+        setPendingConfig((prev) => ({
+            ...prev,
+            metadata: { ...prev.metadata, caCertificateText: text || undefined }
+        }));
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -231,6 +282,28 @@ export const RedshiftForm: React.FC<IRedshiftFormProps> = ({
                     </div>
                 </>
             )}
+
+            <SshOptionsFields
+                sshEnabled={pendingConfig.metadata.sshEnabled}
+                sshHost={pendingConfig.metadata.sshHost}
+                sshPort={pendingConfig.metadata.sshPort}
+                sshUser={pendingConfig.metadata.sshUser}
+                onSshEnabledChange={handleSshEnabledChange}
+                onSshHostChange={handleSshHostChange}
+                onSshPortChange={handleSshPortChange}
+                onSshUserChange={handleSshUserChange}
+            />
+
+            <CaCertificateFields
+                sslEnabled={pendingConfig.metadata.sslEnabled}
+                caCertificateName={pendingConfig.metadata.caCertificateName}
+                caCertificateText={pendingConfig.metadata.caCertificateText}
+                onSslEnabledChange={handleSslEnabledChange}
+                onCaCertificateNameChange={handleCaCertificateNameChange}
+                onCaCertificateTextChange={handleCaCertificateTextChange}
+                showSslEnabled={true}
+                showCertificateText={true}
+            />
 
             <div className="form-actions">
                 <button type="submit" className="primary">

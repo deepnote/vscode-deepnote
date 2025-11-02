@@ -189,6 +189,7 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
 
         config.lastUsedAt = new Date();
         await this.persistEnvironments();
+        this._onDidChangeEnvironments.fire();
     }
 
     /**

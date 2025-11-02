@@ -1,7 +1,7 @@
 import { assert } from 'chai';
 import * as sinon from 'sinon';
 import { anything, capture, instance, mock, when, verify, deepEqual, resetCalls } from 'ts-mockito';
-import { CancellationToken, Disposable, ProgressOptions, Uri } from 'vscode';
+import { CancellationToken, Disposable, NotebookDocument, ProgressOptions, Uri } from 'vscode';
 import { DeepnoteEnvironmentsView } from './deepnoteEnvironmentsView.node';
 import { IDeepnoteEnvironmentManager, IDeepnoteKernelAutoSelector, IDeepnoteNotebookEnvironmentMapper } from '../types';
 import { IPythonApiProvider } from '../../../platform/api/types';
@@ -660,7 +660,7 @@ suite('DeepnoteEnvironmentsView', () => {
             when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenResolve(undefined);
 
             // Execute the command
-            await view.selectEnvironmentForNotebook();
+            await view.selectEnvironmentForNotebook({ notebook: mockNotebook as NotebookDocument });
 
             // Verify API calls
             verify(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri)).once();

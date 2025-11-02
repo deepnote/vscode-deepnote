@@ -1,5 +1,15 @@
 import { inject, injectable } from 'inversify';
-import { commands, Disposable, l10n, ProgressLocation, QuickPickItem, TreeView, window, workspace } from 'vscode';
+import {
+    commands,
+    Disposable,
+    l10n,
+    NotebookDocument,
+    ProgressLocation,
+    QuickPickItem,
+    TreeView,
+    window,
+    workspace
+} from 'vscode';
 import { IDisposableRegistry } from '../../../platform/common/types';
 import { logger } from '../../../platform/logging';
 import { IPythonApiProvider } from '../../../platform/api/types';
@@ -243,9 +253,19 @@ export class DeepnoteEnvironmentsView implements Disposable {
 
         // Switch environment for notebook command
         this.disposables.push(
-            commands.registerCommand('deepnote.environments.selectForNotebook', async () => {
-                await this.selectEnvironmentForNotebook();
-            })
+            commands.registerCommand(
+                'deepnote.environments.selectForNotebook',
+                async (options?: { notebook?: NotebookDocument }) => {
+                    // Get the active notebook
+                    const activeNotebook = options?.notebook ?? window.activeNotebookEditor?.notebook;
+                    if (!activeNotebook || activeNotebook.notebookType !== 'deepnote') {
+                        void window.showWarningMessage(l10n.t('No active Deepnote notebook found'));
+                        return;
+                    }
+
+                    await this.selectEnvironmentForNotebook({ notebook: activeNotebook });
+                }
+            )
         );
     }
 
@@ -344,16 +364,11 @@ export class DeepnoteEnvironmentsView implements Disposable {
         }
     }
 
-    public async selectEnvironmentForNotebook(): Promise<void> {
-        // Get the active notebook
-        const activeNotebook = window.activeNotebookEditor?.notebook;
-        if (!activeNotebook || activeNotebook.notebookType !== 'deepnote') {
-            void window.showWarningMessage(l10n.t('No active Deepnote notebook found'));
-            return;
-        }
+    public async selectEnvironmentForNotebook({ notebook }: { notebook: NotebookDocument }): Promise<void> {
+        logger.info('Selecting environment for notebook:', notebook);
 
         // Get base file URI (without query/fragment)
-        const baseFileUri = activeNotebook.uri.with({ query: '', fragment: '' });
+        const baseFileUri = notebook.uri.with({ query: '', fragment: '' });
 
         // Get current environment selection
         const currentEnvironmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri);
@@ -421,7 +436,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
 
         // Check if any cells are currently executing using the kernel execution state
         // This is more reliable than checking executionSummary
-        const kernel = this.kernelProvider.get(activeNotebook);
+        const kernel = this.kernelProvider.get(notebook);
         const hasExecutingCells = kernel
             ? this.kernelProvider.getKernelExecution(kernel).pendingCells.length > 0
             : false;
@@ -443,7 +458,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
         }
 
         // User selected a different environment - switch to it
-        logger.info(`Switching notebook ${getDisplayPath(activeNotebook.uri)} to environment ${selectedEnvironmentId}`);
+        logger.info(`Switching notebook ${getDisplayPath(notebook.uri)} to environment ${selectedEnvironmentId}`);
 
         try {
             await window.withProgress(
@@ -459,7 +474,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
                     // Force rebuild the controller with the new environment
                     // This clears cached metadata and creates a fresh controller.
                     // await this.kernelAutoSelector.ensureKernelSelected(activeNotebook);
-                    await this.kernelAutoSelector.rebuildController(activeNotebook);
+                    await this.kernelAutoSelector.rebuildController(notebook);
 
                     logger.info(`Successfully switched to environment ${selectedEnvironmentId}`);
                 }

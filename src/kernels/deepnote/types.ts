@@ -189,7 +189,11 @@ export interface IDeepnoteKernelAutoSelector {
      * @param notebook The notebook document
      * @param token Cancellation token to cancel the operation
      */
-    ensureKernelSelected(notebook: vscode.NotebookDocument, token?: vscode.CancellationToken): Promise<boolean>;
+    ensureKernelSelected(
+        notebook: vscode.NotebookDocument,
+        progress: { report(value: { message?: string; increment?: number }): void },
+        token: vscode.CancellationToken
+    ): Promise<boolean>;
 
     /**
      * Force rebuild the controller for a notebook by clearing cached controller and metadata.

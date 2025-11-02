@@ -286,7 +286,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 'ensureKernelSelected should be called with the notebook'
             );
             assert.strictEqual(
-                ensureKernelSelectedStub.firstCall.args[1],
+                ensureKernelSelectedStub.firstCall.args[2],
                 instance(mockCancellationToken),
                 'ensureKernelSelected should be called with the cancellation token'
             );

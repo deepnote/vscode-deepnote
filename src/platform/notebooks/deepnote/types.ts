@@ -2,7 +2,7 @@ import { CancellationToken, Event, NotebookDocument, Uri } from 'vscode';
 import { IDisposable, Resource } from '../../common/types';
 import { EnvironmentVariables } from '../../common/variables/types';
 import { DeepnoteProject } from '../../deepnote/deepnoteTypes';
-import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
+import { ConfigurableDatabaseIntegrationConfig } from './integrationTypes';
 
 /**
  * Settings for select input blocks
@@ -31,7 +31,7 @@ export interface IIntegrationStorage extends IDisposable {
      */
     readonly onDidChangeIntegrations: Event<void>;
 
-    getAll(): Promise<DatabaseIntegrationConfig[]>;
+    getAll(): Promise<ConfigurableDatabaseIntegrationConfig[]>;
 
     /**
      * Retrieves the global (non-project-scoped) integration configuration by integration ID.
@@ -49,7 +49,7 @@ export interface IIntegrationStorage extends IDisposable {
      *          - The `IntegrationConfig` object if a global configuration exists for the given ID
      *          - `undefined` if no global configuration exists for the given integration ID
      */
-    getIntegrationConfig(integrationId: string): Promise<DatabaseIntegrationConfig | undefined>;
+    getIntegrationConfig(integrationId: string): Promise<ConfigurableDatabaseIntegrationConfig | undefined>;
 
     /**
      * Get integration configuration for a specific project and integration
@@ -57,9 +57,9 @@ export interface IIntegrationStorage extends IDisposable {
     getProjectIntegrationConfig(
         projectId: string,
         integrationId: string
-    ): Promise<DatabaseIntegrationConfig | undefined>;
+    ): Promise<ConfigurableDatabaseIntegrationConfig | undefined>;
 
-    save(config: DatabaseIntegrationConfig): Promise<void>;
+    save(config: ConfigurableDatabaseIntegrationConfig): Promise<void>;
     delete(integrationId: string): Promise<void>;
     exists(integrationId: string): Promise<boolean>;
     clear(): Promise<void>;

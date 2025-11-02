@@ -197,7 +197,7 @@ suite('IntegrationStorage', () => {
                 metadata: {}
             };
 
-            await storage.save(config);
+            await storage.save(config as any);
             const result = await storage.getIntegrationConfig('dataframe-1');
 
             assert.strictEqual(result, undefined);
@@ -211,7 +211,7 @@ suite('IntegrationStorage', () => {
                 metadata: {}
             };
 
-            await storage.save(config);
+            await storage.save(config as any);
             const result = await storage.getIntegrationConfig(DATAFRAME_SQL_INTEGRATION_ID);
 
             assert.strictEqual(result, undefined);

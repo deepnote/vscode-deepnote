@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { getLocString } from '../react-common/locReactSide';
-import { IntegrationWithStatus } from './types';
-import { DatabaseIntegrationType } from '@deepnote/database-integrations';
+import { ConfigurableDatabaseIntegrationType, IntegrationWithStatus } from './types';
 
 export interface IIntegrationItemProps {
     integration: IntegrationWithStatus;
@@ -9,7 +8,7 @@ export interface IIntegrationItemProps {
     onDelete: (integrationId: string) => void;
 }
 
-const getIntegrationTypeLabel = (type: DatabaseIntegrationType): string => {
+const getIntegrationTypeLabel = (type: ConfigurableDatabaseIntegrationType): string => {
     switch (type) {
         case 'pgsql':
             return getLocString('integrationsPostgresTypeLabel', 'PostgreSQL');

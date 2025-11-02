@@ -2,6 +2,7 @@ import * as assert from 'assert';
 
 import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
 import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
+import { ProjectIntegration } from '../types';
 
 suite('DeepnoteNotebookManager', () => {
     let manager: DeepnoteNotebookManager;
@@ -187,7 +188,7 @@ suite('DeepnoteNotebookManager', () => {
         test('should update integrations list for existing project and return true', () => {
             manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
 
-            const integrations = [
+            const integrations: ProjectIntegration[] = [
                 { id: 'int-1', name: 'PostgreSQL', type: 'pgsql' },
                 { id: 'int-2', name: 'BigQuery', type: 'big-query' }
             ];
@@ -211,7 +212,7 @@ suite('DeepnoteNotebookManager', () => {
 
             manager.storeOriginalProject('project-123', projectWithIntegrations, 'notebook-456');
 
-            const newIntegrations = [
+            const newIntegrations: ProjectIntegration[] = [
                 { id: 'new-int-1', name: 'New Integration 1', type: 'pgsql' },
                 { id: 'new-int-2', name: 'New Integration 2', type: 'big-query' }
             ];
@@ -257,7 +258,7 @@ suite('DeepnoteNotebookManager', () => {
         test('should preserve other project properties and return true', () => {
             manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
 
-            const integrations = [{ id: 'int-1', name: 'PostgreSQL', type: 'pgsql' }];
+            const integrations: ProjectIntegration[] = [{ id: 'int-1', name: 'PostgreSQL', type: 'pgsql' }];
 
             const result = manager.updateProjectIntegrations('project-123', integrations);
 
@@ -275,7 +276,7 @@ suite('DeepnoteNotebookManager', () => {
             manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
             manager.updateCurrentNotebookId('project-123', undefined as any);
 
-            const integrations = [
+            const integrations: ProjectIntegration[] = [
                 { id: 'int-1', name: 'PostgreSQL', type: 'pgsql' },
                 { id: 'int-2', name: 'BigQuery', type: 'big-query' }
             ];

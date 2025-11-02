@@ -161,6 +161,11 @@ export class IntegrationManager implements IIntegrationManager {
                 integrationType = projectIntegration.type as DatabaseIntegrationType;
             }
 
+            if (integrationType === 'pandas-dataframe') {
+                logger.debug(`IntegrationManager: Skipping internal DuckDB integration ${selectedIntegrationId}`);
+                return;
+            }
+
             integrations.set(selectedIntegrationId, {
                 config: config || null,
                 status: config ? IntegrationStatus.Connected : IntegrationStatus.Disconnected,

@@ -3,14 +3,14 @@ import { format, getLocString } from '../react-common/locReactSide';
 import { PostgresForm } from './PostgresForm';
 import { BigQueryForm } from './BigQueryForm';
 import { SnowflakeForm } from './SnowflakeForm';
-import { DatabaseIntegrationConfig, DatabaseIntegrationType } from '@deepnote/database-integrations';
+import { ConfigurableDatabaseIntegrationConfig, ConfigurableDatabaseIntegrationType } from './types';
 
 export interface IConfigurationFormProps {
     integrationId: string;
-    existingConfig: DatabaseIntegrationConfig | null;
+    existingConfig: ConfigurableDatabaseIntegrationConfig | null;
     defaultName?: string;
-    integrationType: DatabaseIntegrationType;
-    onSave: (config: DatabaseIntegrationConfig) => void;
+    integrationType: ConfigurableDatabaseIntegrationType;
+    onSave: (config: ConfigurableDatabaseIntegrationConfig) => void;
     onCancel: () => void;
 }
 

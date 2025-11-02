@@ -136,6 +136,13 @@ export type LegacyIntegrationConfig =
     | LegacySnowflakeIntegrationConfig
     | LegacyDuckDBIntegrationConfig;
 
+export type ConfigurableDatabaseIntegrationConfig = Extract<
+    DatabaseIntegrationConfig,
+    { type: ConfigurableDatabaseIntegrationType }
+>;
+
+export type ConfigurableDatabaseIntegrationType = Exclude<DatabaseIntegrationType, 'pandas-dataframe'>;
+
 /**
  * Integration connection status
  */
@@ -149,7 +156,7 @@ export enum IntegrationStatus {
  * Integration with its current status
  */
 export interface IntegrationWithStatus {
-    config: DatabaseIntegrationConfig | null;
+    config: ConfigurableDatabaseIntegrationConfig | null;
     status: IntegrationStatus;
     error?: string;
     /**
@@ -159,5 +166,5 @@ export interface IntegrationWithStatus {
     /**
      * Type from the project's integrations list (used for prefilling when config is null)
      */
-    integrationType?: DatabaseIntegrationType;
+    integrationType?: ConfigurableDatabaseIntegrationType;
 }

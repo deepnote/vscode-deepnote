@@ -1,13 +1,17 @@
 import { DatabaseIntegrationConfig, type DatabaseIntegrationType } from '@deepnote/database-integrations';
 
+export type ConfigurableDatabaseIntegrationType = Exclude<DatabaseIntegrationType, 'pandas-dataframe'>;
+
+export type ConfigurableDatabaseIntegrationConfig = Exclude<DatabaseIntegrationConfig, { type: 'pandas-dataframe' }>;
+
 export type IntegrationStatus = 'connected' | 'disconnected' | 'error';
 
 export interface IntegrationWithStatus {
     id: string;
-    config: DatabaseIntegrationConfig | null;
+    config: ConfigurableDatabaseIntegrationConfig | null;
     status: IntegrationStatus;
     integrationName?: string;
-    integrationType?: DatabaseIntegrationType;
+    integrationType?: ConfigurableDatabaseIntegrationType;
 }
 
 export interface IVsCodeMessage {
@@ -24,9 +28,9 @@ export interface UpdateMessage {
 export interface ShowFormMessage {
     type: 'showForm';
     integrationId: string;
-    config: DatabaseIntegrationConfig | null;
+    config: ConfigurableDatabaseIntegrationConfig | null;
     integrationName?: string;
-    integrationType?: DatabaseIntegrationType;
+    integrationType?: ConfigurableDatabaseIntegrationType;
 }
 
 export interface StatusMessage {

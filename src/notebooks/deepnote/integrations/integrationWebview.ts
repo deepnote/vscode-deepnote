@@ -7,8 +7,11 @@ import { logger } from '../../../platform/logging';
 import { LocalizedMessages, SharedMessages } from '../../../messageTypes';
 import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
 import { IIntegrationStorage, IIntegrationWebviewProvider } from './types';
-import { IntegrationStatus, IntegrationWithStatus } from '../../../platform/notebooks/deepnote/integrationTypes';
-import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
+import {
+    ConfigurableDatabaseIntegrationConfig,
+    IntegrationStatus,
+    IntegrationWithStatus
+} from '../../../platform/notebooks/deepnote/integrationTypes';
 
 /**
  * Manages the webview panel for integration configuration
@@ -217,7 +220,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     private async handleMessage(message: {
         type: string;
         integrationId?: string;
-        config?: DatabaseIntegrationConfig;
+        config?: ConfigurableDatabaseIntegrationConfig;
     }): Promise<void> {
         switch (message.type) {
             case 'configure':
@@ -259,7 +262,10 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     /**
      * Save the configuration for an integration
      */
-    private async saveConfiguration(integrationId: string, config: DatabaseIntegrationConfig): Promise<void> {
+    private async saveConfiguration(
+        integrationId: string,
+        config: ConfigurableDatabaseIntegrationConfig
+    ): Promise<void> {
         try {
             await this.integrationStorage.save(config);
 
@@ -342,12 +348,6 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 const type = integration.config?.type || integration.integrationType;
                 if (!type) {
                     logger.warn(`IntegrationWebviewProvider: No type found for integration ${id}, skipping`);
-                    return null;
-                }
-
-                // Skip DuckDB integration (internal, not a real Deepnote integration)
-                if (type === 'pandas-dataframe') {
-                    logger.trace(`IntegrationWebviewProvider: Skipping internal DuckDB integration ${id}`);
                     return null;
                 }
 

@@ -772,7 +772,7 @@ User executes SQL cell
 
 ### Migration to @deepnote/database-integrations
 
-The system was refactored to use the `@deepnote/database-integrations` package (v1.1.0) as the source of truth for integration types and credential formatting. This provides:
+The system was refactored to use the `@deepnote/database-integrations` package as the source of truth for integration types and credential formatting. This provides:
 
 **Benefits:**
 

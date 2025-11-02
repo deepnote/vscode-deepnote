@@ -52,15 +52,18 @@ export const SpannerForm: React.FC<ISpannerFormProps> = ({
     }, [existingConfig, integrationId, defaultName]);
 
     const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPendingConfig((prev) => ({ ...prev, name: e.target.value }));
+        const value = e.target.value;
+        setPendingConfig((prev) => ({ ...prev, name: value }));
     };
 
     const handleInstanceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, instance: e.target.value } }));
+        const value = e.target.value;
+        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, instance: value } }));
     };
 
     const handleDatabaseChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, database: e.target.value } }));
+        const value = e.target.value;
+        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, database: value } }));
     };
 
     const handleServiceAccountChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -82,7 +85,8 @@ export const SpannerForm: React.FC<ISpannerFormProps> = ({
     };
 
     const handleDataBoostChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, dataBoostEnabled: e.target.checked } }));
+        const checked = e.target.checked;
+        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, dataBoostEnabled: checked } }));
     };
 
     const handleSubmit = (e: React.FormEvent) => {

@@ -50,66 +50,76 @@ export const MongoDBForm: React.FC<IMongoDBFormProps> = ({
     }, [existingConfig, integrationId, defaultName]);
 
     const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPendingConfig((prev) => ({ ...prev, name: e.target.value }));
+        const value = e.target.value;
+        setPendingConfig((prev) => ({ ...prev, name: value }));
     };
 
     const handleConnectionStringChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, connection_string: e.target.value } }));
+        const value = e.target.value;
+        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, connection_string: value } }));
     };
 
     const handleRawConnectionStringChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig((prev) => ({
             ...prev,
-            metadata: { ...prev.metadata, rawConnectionString: e.target.value || undefined }
+            metadata: { ...prev.metadata, rawConnectionString: value || undefined }
         }));
     };
 
     const handlePrefixChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig((prev) => ({
             ...prev,
-            metadata: { ...prev.metadata, prefix: e.target.value || undefined }
+            metadata: { ...prev.metadata, prefix: value || undefined }
         }));
     };
 
     const handleHostChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig((prev) => ({
             ...prev,
-            metadata: { ...prev.metadata, host: e.target.value || undefined }
+            metadata: { ...prev.metadata, host: value || undefined }
         }));
     };
 
     const handlePortChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig((prev) => ({
             ...prev,
-            metadata: { ...prev.metadata, port: e.target.value || undefined }
+            metadata: { ...prev.metadata, port: value || undefined }
         }));
     };
 
     const handleUserChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig((prev) => ({
             ...prev,
-            metadata: { ...prev.metadata, user: e.target.value || undefined }
+            metadata: { ...prev.metadata, user: value || undefined }
         }));
     };
 
     const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig((prev) => ({
             ...prev,
-            metadata: { ...prev.metadata, password: e.target.value || undefined }
+            metadata: { ...prev.metadata, password: value || undefined }
         }));
     };
 
     const handleDatabaseChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig((prev) => ({
             ...prev,
-            metadata: { ...prev.metadata, database: e.target.value || undefined }
+            metadata: { ...prev.metadata, database: value || undefined }
         }));
     };
 
     const handleOptionsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig((prev) => ({
             ...prev,
-            metadata: { ...prev.metadata, options: e.target.value || undefined }
+            metadata: { ...prev.metadata, options: value || undefined }
         }));
     };
 

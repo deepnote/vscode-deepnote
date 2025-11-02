@@ -56,31 +56,38 @@ export const DatabricksForm: React.FC<IDatabricksFormProps> = ({
     }, [existingConfig, integrationId, defaultName]);
 
     const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPendingConfig((prev) => ({ ...prev, name: e.target.value }));
+        const value = e.target.value;
+        setPendingConfig((prev) => ({ ...prev, name: value }));
     };
 
     const handleHostChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, host: e.target.value } }));
+        const value = e.target.value;
+        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, host: value } }));
     };
 
     const handlePortChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, port: e.target.value } }));
+        const value = e.target.value;
+        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, port: value } }));
     };
 
     const handleHttpPathChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, httpPath: e.target.value } }));
+        const value = e.target.value;
+        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, httpPath: value } }));
     };
 
     const handleTokenChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, token: e.target.value } }));
+        const value = e.target.value;
+        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, token: value } }));
     };
 
     const handleSchemaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, schema: e.target.value } }));
+        const value = e.target.value;
+        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, schema: value } }));
     };
 
     const handleCatalogChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, catalog: e.target.value } }));
+        const value = e.target.value;
+        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, catalog: value } }));
     };
 
     const handleSshEnabledChange = (enabled: boolean) => {

@@ -58,41 +58,47 @@ export const MindsDBForm: React.FC<IMindsDBFormProps> = ({
     };
 
     const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPendingConfig({ ...pendingConfig, name: e.target.value });
+        const value = e.target.value;
+        setPendingConfig({ ...pendingConfig, name: value });
     };
 
     const handleHostChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig({
             ...pendingConfig,
-            metadata: { ...pendingConfig.metadata, host: e.target.value }
+            metadata: { ...pendingConfig.metadata, host: value }
         });
     };
 
     const handlePortChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig({
             ...pendingConfig,
-            metadata: { ...pendingConfig.metadata, port: e.target.value || undefined }
+            metadata: { ...pendingConfig.metadata, port: value || undefined }
         });
     };
 
     const handleDatabaseChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig({
             ...pendingConfig,
-            metadata: { ...pendingConfig.metadata, database: e.target.value }
+            metadata: { ...pendingConfig.metadata, database: value }
         });
     };
 
     const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig({
             ...pendingConfig,
-            metadata: { ...pendingConfig.metadata, user: e.target.value }
+            metadata: { ...pendingConfig.metadata, user: value }
         });
     };
 
     const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig({
             ...pendingConfig,
-            metadata: { ...pendingConfig.metadata, password: e.target.value }
+            metadata: { ...pendingConfig.metadata, password: value }
         });
     };
 

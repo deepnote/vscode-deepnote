@@ -54,27 +54,33 @@ export const MySQLForm: React.FC<IMySQLFormProps> = ({
     }, [existingConfig, integrationId, defaultName]);
 
     const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPendingConfig((prev) => ({ ...prev, name: e.target.value }));
+        const value = e.target.value;
+        setPendingConfig((prev) => ({ ...prev, name: value }));
     };
 
     const handleHostChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, host: e.target.value } }));
+        const value = e.target.value;
+        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, host: value } }));
     };
 
     const handlePortChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, port: e.target.value } }));
+        const value = e.target.value;
+        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, port: value } }));
     };
 
     const handleDatabaseChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, database: e.target.value } }));
+        const value = e.target.value;
+        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, database: value } }));
     };
 
     const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, user: e.target.value } }));
+        const value = e.target.value;
+        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, user: value } }));
     };
 
     const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, password: e.target.value } }));
+        const value = e.target.value;
+        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, password: value } }));
     };
 
     const handleSshEnabledChange = (enabled: boolean) => {

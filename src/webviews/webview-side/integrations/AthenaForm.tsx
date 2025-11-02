@@ -52,27 +52,33 @@ export const AthenaForm: React.FC<IAthenaFormProps> = ({
     }, [existingConfig, integrationId, defaultName]);
 
     const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPendingConfig((prev) => ({ ...prev, name: e.target.value }));
+        const value = e.target.value;
+        setPendingConfig((prev) => ({ ...prev, name: value }));
     };
 
     const handleAccessKeyIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, access_key_id: e.target.value } }));
+        const value = e.target.value;
+        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, access_key_id: value } }));
     };
 
     const handleSecretAccessKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, secret_access_key: e.target.value } }));
+        const value = e.target.value;
+        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, secret_access_key: value } }));
     };
 
     const handleRegionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, region: e.target.value } }));
+        const value = e.target.value;
+        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, region: value } }));
     };
 
     const handleS3OutputPathChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, s3_output_path: e.target.value } }));
+        const value = e.target.value;
+        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, s3_output_path: value } }));
     };
 
     const handleWorkgroupChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, workgroup: e.target.value } }));
+        const value = e.target.value;
+        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, workgroup: value } }));
     };
 
     const handleSubmit = (e: React.FormEvent) => {

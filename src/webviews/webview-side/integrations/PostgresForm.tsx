@@ -55,58 +55,64 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({
     }, [existingConfig, integrationId, defaultName]);
 
     const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig((prev) => ({
             ...prev,
-            name: e.target.value
+            name: value
         }));
     };
 
     const handleHostChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig((prev) => ({
             ...prev,
             metadata: {
                 ...prev.metadata,
-                host: e.target.value
+                host: value
             }
         }));
     };
 
     const handlePortChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig((prev) => ({
             ...prev,
             metadata: {
                 ...prev.metadata,
-                port: e.target.value
+                port: value
             }
         }));
     };
 
     const handleDatabaseChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig((prev) => ({
             ...prev,
             metadata: {
                 ...prev.metadata,
-                database: e.target.value
+                database: value
             }
         }));
     };
 
     const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig((prev) => ({
             ...prev,
             metadata: {
                 ...prev.metadata,
-                user: e.target.value
+                user: value
             }
         }));
     };
 
     const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig((prev) => ({
             ...prev,
             metadata: {
                 ...prev.metadata,
-                password: e.target.value
+                password: value
             }
         }));
     };

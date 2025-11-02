@@ -159,7 +159,9 @@ export const AthenaForm: React.FC<IAthenaFormProps> = ({
             </div>
 
             <div className="form-group">
-                <label htmlFor="workgroup">{getLocString('integrationsAthenaWorkgroupLabel', 'Workgroup (optional)')}</label>
+                <label htmlFor="workgroup">
+                    {getLocString('integrationsAthenaWorkgroupLabel', 'Workgroup (optional)')}
+                </label>
                 <input
                     type="text"
                     id="workgroup"
@@ -181,4 +183,3 @@ export const AthenaForm: React.FC<IAthenaFormProps> = ({
         </form>
     );
 };
-

@@ -35,9 +35,9 @@ export const ClickHouseForm: React.FC<IClickHouseFormProps> = ({
     onSave,
     onCancel
 }) => {
-    const [pendingConfig, setPendingConfig] = React.useState<Extract<DatabaseIntegrationConfig, { type: 'clickhouse' }>>(
-        () => existingConfig || createEmptyClickHouseConfig(integrationId, defaultName)
-    );
+    const [pendingConfig, setPendingConfig] = React.useState<
+        Extract<DatabaseIntegrationConfig, { type: 'clickhouse' }>
+    >(() => existingConfig || createEmptyClickHouseConfig(integrationId, defaultName));
 
     React.useEffect(() => {
         if (existingConfig) {
@@ -166,7 +166,9 @@ export const ClickHouseForm: React.FC<IClickHouseFormProps> = ({
             </div>
 
             <div className="form-group">
-                <label htmlFor="password">{getLocString('integrationsClickHousePasswordLabel' as any, 'Password')}</label>
+                <label htmlFor="password">
+                    {getLocString('integrationsClickHousePasswordLabel' as any, 'Password')}
+                </label>
                 <input
                     type="password"
                     id="password"
@@ -188,4 +190,3 @@ export const ClickHouseForm: React.FC<IClickHouseFormProps> = ({
         </form>
     );
 };
-

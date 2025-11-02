@@ -38,7 +38,9 @@ export const DatabricksForm: React.FC<IDatabricksFormProps> = ({
     onSave,
     onCancel
 }) => {
-    const [pendingConfig, setPendingConfig] = React.useState<Extract<DatabaseIntegrationConfig, { type: 'databricks' }>>(
+    const [pendingConfig, setPendingConfig] = React.useState<
+        Extract<DatabaseIntegrationConfig, { type: 'databricks' }>
+    >(
         existingConfig
             ? structuredClone(existingConfig)
             : createEmptyDatabricksConfig({ id: integrationId, name: defaultName })
@@ -109,7 +111,10 @@ export const DatabricksForm: React.FC<IDatabricksFormProps> = ({
                     id="host"
                     value={pendingConfig.metadata.host}
                     onChange={handleHostChange}
-                    placeholder={getLocString('integrationsDatabricksHostPlaceholder', 'dbc-1234abcd-5678.cloud.databricks.com')}
+                    placeholder={getLocString(
+                        'integrationsDatabricksHostPlaceholder',
+                        'dbc-1234abcd-5678.cloud.databricks.com'
+                    )}
                     autoComplete="off"
                     required
                 />
@@ -125,7 +130,10 @@ export const DatabricksForm: React.FC<IDatabricksFormProps> = ({
                     id="httpPath"
                     value={pendingConfig.metadata.httpPath}
                     onChange={handleHttpPathChange}
-                    placeholder={getLocString('integrationsDatabricksHttpPathPlaceholder', '/sql/1.0/warehouses/abc123')}
+                    placeholder={getLocString(
+                        'integrationsDatabricksHttpPathPlaceholder',
+                        '/sql/1.0/warehouses/abc123'
+                    )}
                     autoComplete="off"
                     required
                 />
@@ -160,7 +168,9 @@ export const DatabricksForm: React.FC<IDatabricksFormProps> = ({
             </div>
 
             <div className="form-group">
-                <label htmlFor="catalog">{getLocString('integrationsDatabricksCatalogLabel', 'Catalog (optional)')}</label>
+                <label htmlFor="catalog">
+                    {getLocString('integrationsDatabricksCatalogLabel', 'Catalog (optional)')}
+                </label>
                 <input
                     type="text"
                     id="catalog"
@@ -194,4 +204,3 @@ export const DatabricksForm: React.FC<IDatabricksFormProps> = ({
         </form>
     );
 };
-

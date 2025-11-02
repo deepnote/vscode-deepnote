@@ -37,9 +37,9 @@ export const SQLServerForm: React.FC<ISQLServerFormProps> = ({
     onSave,
     onCancel
 }) => {
-    const [pendingConfig, setPendingConfig] = React.useState<Extract<DatabaseIntegrationConfig, { type: 'sql-server' }>>(
-        () => existingConfig || createEmptySQLServerConfig(integrationId, defaultName)
-    );
+    const [pendingConfig, setPendingConfig] = React.useState<
+        Extract<DatabaseIntegrationConfig, { type: 'sql-server' }>
+    >(() => existingConfig || createEmptySQLServerConfig(integrationId, defaultName));
 
     React.useEffect(() => {
         if (existingConfig) {
@@ -94,9 +94,7 @@ export const SQLServerForm: React.FC<ISQLServerFormProps> = ({
     return (
         <form onSubmit={handleSubmit}>
             <div className="form-group">
-                <label htmlFor="name">
-                    {getLocString('integrationsSQLServerNameLabel' as any, 'Name (optional)')}
-                </label>
+                <label htmlFor="name">{getLocString('integrationsSQLServerNameLabel' as any, 'Name (optional)')}</label>
                 <input
                     type="text"
                     id="name"
@@ -198,4 +196,3 @@ export const SQLServerForm: React.FC<ISQLServerFormProps> = ({
         </form>
     );
 };
-

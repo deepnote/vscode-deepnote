@@ -181,8 +181,7 @@ export const SpannerForm: React.FC<ISpannerFormProps> = ({
                         type="checkbox"
                         checked={pendingConfig.metadata.dataBoostEnabled}
                         onChange={handleDataBoostChange}
-                    />
-                    {' '}
+                    />{' '}
                     {getLocString('integrationsSpannerDataBoostLabel', 'Enable Data Boost')}
                 </label>
                 <small className="form-help">
@@ -204,4 +203,3 @@ export const SpannerForm: React.FC<ISpannerFormProps> = ({
         </form>
     );
 };
-

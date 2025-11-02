@@ -181,4 +181,3 @@ export const MariaDBForm: React.FC<IMariaDBFormProps> = ({
         </form>
     );
 };
-

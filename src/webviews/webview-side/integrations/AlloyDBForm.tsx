@@ -93,9 +93,7 @@ export const AlloyDBForm: React.FC<IAlloyDBFormProps> = ({
     return (
         <form onSubmit={handleSubmit}>
             <div className="form-group">
-                <label htmlFor="name">
-                    {getLocString('integrationsAlloyDBNameLabel' as any, 'Name (optional)')}
-                </label>
+                <label htmlFor="name">{getLocString('integrationsAlloyDBNameLabel' as any, 'Name (optional)')}</label>
                 <input
                     type="text"
                     id="name"
@@ -193,4 +191,3 @@ export const AlloyDBForm: React.FC<IAlloyDBFormProps> = ({
         </form>
     );
 };
-

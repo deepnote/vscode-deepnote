@@ -30,7 +30,13 @@ function createEmptyTrinoConfig(
     };
 }
 
-export const TrinoForm: React.FC<ITrinoFormProps> = ({ integrationId, existingConfig, defaultName, onSave, onCancel }) => {
+export const TrinoForm: React.FC<ITrinoFormProps> = ({
+    integrationId,
+    existingConfig,
+    defaultName,
+    onSave,
+    onCancel
+}) => {
     const [pendingConfig, setPendingConfig] = React.useState<Extract<DatabaseIntegrationConfig, { type: 'trino' }>>(
         () => existingConfig || createEmptyTrinoConfig(integrationId, defaultName)
     );
@@ -190,4 +196,3 @@ export const TrinoForm: React.FC<ITrinoFormProps> = ({ integrationId, existingCo
         </form>
     );
 };
-

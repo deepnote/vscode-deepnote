@@ -37,9 +37,9 @@ export const MaterializeForm: React.FC<IMaterializeFormProps> = ({
     onSave,
     onCancel
 }) => {
-    const [pendingConfig, setPendingConfig] = React.useState<Extract<DatabaseIntegrationConfig, { type: 'materialize' }>>(
-        () => existingConfig || createEmptyMaterializeConfig(integrationId, defaultName)
-    );
+    const [pendingConfig, setPendingConfig] = React.useState<
+        Extract<DatabaseIntegrationConfig, { type: 'materialize' }>
+    >(() => existingConfig || createEmptyMaterializeConfig(integrationId, defaultName));
 
     React.useEffect(() => {
         if (existingConfig) {
@@ -220,4 +220,3 @@ export const MaterializeForm: React.FC<IMaterializeFormProps> = ({
         </form>
     );
 };
-

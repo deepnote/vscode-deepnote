@@ -38,7 +38,9 @@ export const RedshiftForm: React.FC<IRedshiftFormProps> = ({
     onCancel
 }) => {
     const [pendingConfig, setPendingConfig] = React.useState<RedshiftConfig>(
-        existingConfig ? structuredClone(existingConfig) : createEmptyRedshiftConfig({ id: integrationId, name: defaultName })
+        existingConfig
+            ? structuredClone(existingConfig)
+            : createEmptyRedshiftConfig({ id: integrationId, name: defaultName })
     );
 
     React.useEffect(() => {
@@ -133,7 +135,10 @@ export const RedshiftForm: React.FC<IRedshiftFormProps> = ({
                         {getLocString('integrationsRedshiftAuthMethodUsernamePassword', 'Username and Password')}
                     </option>
                     <option value="individual-credentials">
-                        {getLocString('integrationsRedshiftAuthMethodIndividualCredentials', 'Individual Credentials (IAM)')}
+                        {getLocString(
+                            'integrationsRedshiftAuthMethodIndividualCredentials',
+                            'Individual Credentials (IAM)'
+                        )}
                     </option>
                 </select>
                 <small className="form-help">
@@ -154,7 +159,10 @@ export const RedshiftForm: React.FC<IRedshiftFormProps> = ({
                     id="host"
                     value={pendingConfig.metadata.host}
                     onChange={handleHostChange}
-                    placeholder={getLocString('integrationsRedshiftHostPlaceholder', 'my-cluster.abc123.us-east-1.redshift.amazonaws.com')}
+                    placeholder={getLocString(
+                        'integrationsRedshiftHostPlaceholder',
+                        'my-cluster.abc123.us-east-1.redshift.amazonaws.com'
+                    )}
                     autoComplete="off"
                     required
                 />
@@ -235,4 +243,3 @@ export const RedshiftForm: React.FC<IRedshiftFormProps> = ({
         </form>
     );
 };
-

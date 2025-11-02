@@ -38,7 +38,9 @@ export const MySQLForm: React.FC<IMySQLFormProps> = ({
     onCancel
 }) => {
     const [pendingConfig, setPendingConfig] = React.useState<Extract<DatabaseIntegrationConfig, { type: 'mysql' }>>(
-        existingConfig ? structuredClone(existingConfig) : createEmptyMySQLConfig({ id: integrationId, name: defaultName })
+        existingConfig
+            ? structuredClone(existingConfig)
+            : createEmptyMySQLConfig({ id: integrationId, name: defaultName })
     );
 
     React.useEffect(() => {
@@ -179,4 +181,3 @@ export const MySQLForm: React.FC<IMySQLFormProps> = ({
         </form>
     );
 };
-

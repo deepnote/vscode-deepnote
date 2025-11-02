@@ -1,6 +1,6 @@
 <div align="center">
 
-![Deepnote Toolkit cover image](./assets/deepnote-vscode-cover-image.png)
+![Deepnote VSCode cover image](./assets/deepnote-vscode-cover-image.png)
 
 [![CI](https://github.com/deepnote/vscode-deepnote/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/deepnote/vscode-deepnote/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/deepnote/vscode-deepnote/graph/badge.svg?token=NH066XG7JC)](https://codecov.io/gh/deepnote/vscode-deepnote)
@@ -19,13 +19,13 @@ A powerful [Visual Studio Code](https://marketplace.visualstudio.com/items?itemN
 
 Run Deepnote locally inside your IDE and unlock the next generation of data workflows:
 
-- **Rich block types** — Combine Python, Markdown, data visualizations, tables, and more — all in one place
-- **SQL blocks** — Run SQL queries out of the box, no extensions needed
-- **Native database connections** — Securely connect to Snowflake, BigQuery, Postgres, and 60+ other sources via VS Code’s encrypted SecretStorage API
-- **Init notebooks** — Auto-run setup code (dependencies, env setup) before execution
-- **Smart requirements** — Generate `requirements.txt` automatically for reproducible runs
-- **Deepnote kernel** — Fully `.ipynb` compatible, tuned for modern data workflows
-- **Cloud collaboration** — Switch between local VS Code and Deepnote Cloud to collaborate live on the same file with your team
+- **Rich block types:** Combine Python, Markdown, data visualizations, tables, and more — all in one place
+- **SQL blocks:** Run SQL queries out of the box, no extensions needed
+- **Native database connections:** Securely connect to Snowflake, BigQuery, Postgres, and 60+ other sources via VS Code’s encrypted SecretStorage API
+- **Init notebooks:** Auto-run setup code (dependencies, env setup) before execution
+- **Smart requirements:** Generate `requirements.txt` automatically for reproducible runs
+- **Deepnote kernel:** Fully `.ipynb` compatible, tuned for modern data workflows
+- **Cloud collaboration:** Switch between local VS Code and Deepnote Cloud to collaborate live on the same file with your team
 
 ## Getting started
 
@@ -89,27 +89,22 @@ SELECT * FROM users WHERE created_at > '2024-01-01'
 
 Results are displayed as interactive tables that you can explore and export.
 
-## Quick start for developers
+## Need help?
+
+- Join our [Community](https://github.com/deepnote/deepnote/discussions)!
+- Open an [Issue](https://github.com/deepnote/vscode-deepnote/issues) for bug reports or feature requests
+- Have a look at [Architecture](architecture.md) for technical and design decisions
+- Visit [Deepnote kernel implementation](DEEPNOTE_KERNEL_IMPLEMENTATION.md) for the custom Jupyter kernel
+- Learn how database integrations work in [Integrations & credentials](INTEGRATIONS_CREDENTIALS.md)
+
+## Contributing
 
 Want to contribute? Check out our [Contributing guide](CONTRIBUTING.md) for detailed setup instructions.
-
-## Documentation
-
-- **[Architecture](architecture.md)** - Technical architecture and design decisions
-- **[Deepnote kernel implementation](DEEPNOTE_KERNEL_IMPLEMENTATION.md)** - Details on the custom Jupyter kernel
-- **[Integrations & credentials](INTEGRATIONS_CREDENTIALS.md)** - How database integrations work
-- **[Contributing guide](CONTRIBUTING.md)** - How to contribute to the project
-
-## Issues & support
-
-- **Bug reports**: [GitHub issues](https://github.com/deepnote/vscode-deepnote/issues)
-- **Feature requests**: [GitHub discussions](https://github.com/deepnote/deepnote/discussions)
-- **Questions**: [GitHub discussions](https://github.com/deepnote/deepnote/discussions)
 
 ---
 
 <div align="center">
 
-Built with 💙 by the data driven team
+Built with 💙
 
 </div>

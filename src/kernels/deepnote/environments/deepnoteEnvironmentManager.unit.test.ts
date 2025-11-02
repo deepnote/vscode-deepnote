@@ -1,19 +1,12 @@
 import { assert, use } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
-import { anything, instance, mock, when, verify, deepEqual } from 'ts-mockito';
+import { anything, instance, mock, when, verify } from 'ts-mockito';
 import { Uri } from 'vscode';
 import { DeepnoteEnvironmentManager } from './deepnoteEnvironmentManager.node';
 import { DeepnoteEnvironmentStorage } from './deepnoteEnvironmentStorage.node';
 import { IExtensionContext, IOutputChannel } from '../../../platform/common/types';
-import {
-    IDeepnoteServerStarter,
-    IDeepnoteToolkitInstaller,
-    DeepnoteServerInfo,
-    VenvAndToolkitInstallation,
-    DEEPNOTE_TOOLKIT_VERSION
-} from '../types';
+import { IDeepnoteServerStarter } from '../types';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
-import { EnvironmentStatus } from './deepnoteEnvironment';
 
 use(chaiAsPromised);
 
@@ -21,7 +14,6 @@ suite('DeepnoteEnvironmentManager', () => {
     let manager: DeepnoteEnvironmentManager;
     let mockContext: IExtensionContext;
     let mockStorage: DeepnoteEnvironmentStorage;
-    let mockToolkitInstaller: IDeepnoteToolkitInstaller;
     let mockServerStarter: IDeepnoteServerStarter;
     let mockOutputChannel: IOutputChannel;
 
@@ -31,22 +23,9 @@ suite('DeepnoteEnvironmentManager', () => {
         version: { major: 3, minor: 11, patch: 0, raw: '3.11.0' }
     } as PythonEnvironment;
 
-    const testServerInfo: DeepnoteServerInfo = {
-        url: 'http://localhost:8888',
-        jupyterPort: 8888,
-        lspPort: 8889,
-        token: 'test-token'
-    };
-
-    const testVenvAndToolkit: VenvAndToolkitInstallation = {
-        pythonInterpreter: testInterpreter,
-        toolkitVersion: DEEPNOTE_TOOLKIT_VERSION
-    };
-
     setup(() => {
         mockContext = mock<IExtensionContext>();
         mockStorage = mock<DeepnoteEnvironmentStorage>();
-        mockToolkitInstaller = mock<IDeepnoteToolkitInstaller>();
         mockServerStarter = mock<IDeepnoteServerStarter>();
         mockOutputChannel = mock<IOutputChannel>();
 
@@ -56,7 +35,6 @@ suite('DeepnoteEnvironmentManager', () => {
         manager = new DeepnoteEnvironmentManager(
             instance(mockContext),
             instance(mockStorage),
-            instance(mockToolkitInstaller),
             instance(mockServerStarter),
             instance(mockOutputChannel)
         );
@@ -180,40 +158,6 @@ suite('DeepnoteEnvironmentManager', () => {
         });
     });
 
-    suite('getEnvironmentWithStatus', () => {
-        test('should return environment with stopped status when server is not running', async () => {
-            when(mockStorage.saveEnvironments(anything())).thenResolve();
-
-            const created = await manager.createEnvironment({
-                name: 'Test',
-                pythonInterpreter: testInterpreter
-            });
-
-            const withStatus = manager.getEnvironmentWithStatus(created.id);
-            assert.strictEqual(withStatus?.status, EnvironmentStatus.Stopped);
-        });
-
-        test('should return environment with running status when server is running', async () => {
-            when(mockStorage.saveEnvironments(anything())).thenResolve();
-            when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testVenvAndToolkit
-            );
-            when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
-                testServerInfo
-            );
-
-            const created = await manager.createEnvironment({
-                name: 'Test',
-                pythonInterpreter: testInterpreter
-            });
-
-            await manager.startServer(created.id);
-
-            const withStatus = manager.getEnvironmentWithStatus(created.id);
-            assert.strictEqual(withStatus?.status, EnvironmentStatus.Running);
-        });
-    });
-
     suite('updateEnvironment', () => {
         test('should update environment name', async () => {
             when(mockStorage.saveEnvironments(anything())).thenResolve();
@@ -288,240 +232,8 @@ suite('DeepnoteEnvironmentManager', () => {
             verify(mockStorage.saveEnvironments(anything())).atLeast(1);
         });
 
-        test('should stop server before deleting if running', async () => {
-            when(mockStorage.saveEnvironments(anything())).thenResolve();
-            when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testVenvAndToolkit
-            );
-            when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
-                testServerInfo
-            );
-            when(mockServerStarter.stopServer(anything(), anything())).thenResolve();
-
-            const config = await manager.createEnvironment({
-                name: 'Test',
-                pythonInterpreter: testInterpreter
-            });
-
-            await manager.startServer(config.id);
-            await manager.deleteEnvironment(config.id);
-
-            verify(mockServerStarter.stopServer(config.id, anything())).once();
-        });
-
         test('should throw error for non-existent environment', async () => {
             await assert.isRejected(manager.deleteEnvironment('non-existent'), 'Environment not found: non-existent');
-        });
-    });
-
-    suite('startServer', () => {
-        test('should start server for environment', async () => {
-            when(mockStorage.saveEnvironments(anything())).thenResolve();
-            when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testVenvAndToolkit
-            );
-            when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
-                testServerInfo
-            );
-
-            const config = await manager.createEnvironment({
-                name: 'Test',
-                pythonInterpreter: testInterpreter
-            });
-
-            await manager.startServer(config.id);
-
-            const updated = manager.getEnvironment(config.id);
-            assert.deepStrictEqual(updated?.serverInfo, testServerInfo);
-
-            verify(mockToolkitInstaller.ensureVenvAndToolkit(testInterpreter, anything(), anything())).once();
-            verify(mockServerStarter.startServer(testInterpreter, anything(), config.id, anything())).once();
-        });
-
-        test('should install additional packages when specified', async () => {
-            when(mockStorage.saveEnvironments(anything())).thenResolve();
-            when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testVenvAndToolkit
-            );
-            when(mockToolkitInstaller.installAdditionalPackages(anything(), anything(), anything())).thenResolve();
-            when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
-                testServerInfo
-            );
-
-            const config = await manager.createEnvironment({
-                name: 'Test',
-                pythonInterpreter: testInterpreter,
-                packages: ['numpy', 'pandas']
-            });
-
-            await manager.startServer(config.id);
-
-            verify(
-                mockToolkitInstaller.installAdditionalPackages(anything(), deepEqual(['numpy', 'pandas']), anything())
-            ).once();
-        });
-
-        test('should always call serverStarter.startServer to ensure fresh serverInfo (UT-6)', async () => {
-            when(mockStorage.saveEnvironments(anything())).thenResolve();
-            when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testVenvAndToolkit
-            );
-            when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
-                testServerInfo
-            );
-
-            const config = await manager.createEnvironment({
-                name: 'Test',
-                pythonInterpreter: testInterpreter
-            });
-
-            await manager.startServer(config.id);
-            await manager.startServer(config.id);
-
-            // IMPORTANT: Should call TWICE - this ensures we always get fresh serverInfo
-            // The serverStarter itself is idempotent and returns existing server if running
-            // But the environment manager always calls it to ensure config.serverInfo is updated
-            verify(mockServerStarter.startServer(anything(), anything(), anything(), anything())).twice();
-        });
-
-        test('should update environment.serverInfo even if server was already running (INV-10)', async () => {
-            // This test explicitly verifies INV-10: serverInfo must always reflect current server state
-            // This is critical for environment switching - prevents using stale serverInfo
-
-            when(mockStorage.saveEnvironments(anything())).thenResolve();
-            when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testVenvAndToolkit
-            );
-
-            // First call returns initial serverInfo
-            const initialServerInfo: DeepnoteServerInfo = {
-                url: 'http://localhost:8888',
-                jupyterPort: 8888,
-                lspPort: 8889,
-                token: 'initial-token'
-            };
-
-            // Second call returns updated serverInfo (simulating server restart or port change)
-            const updatedServerInfo: DeepnoteServerInfo = {
-                url: 'http://localhost:9999',
-                jupyterPort: 9999,
-                lspPort: 10000,
-                token: 'updated-token'
-            };
-
-            when(mockServerStarter.startServer(anything(), anything(), anything(), anything()))
-                .thenResolve(initialServerInfo)
-                .thenResolve(updatedServerInfo);
-
-            const config = await manager.createEnvironment({
-                name: 'Test',
-                pythonInterpreter: testInterpreter
-            });
-
-            // First startServer call
-            await manager.startServer(config.id);
-            let retrieved = manager.getEnvironment(config.id);
-            assert.deepStrictEqual(retrieved?.serverInfo, initialServerInfo, 'Should have initial serverInfo');
-
-            // Second startServer call - should update to new serverInfo
-            await manager.startServer(config.id);
-            retrieved = manager.getEnvironment(config.id);
-            assert.deepStrictEqual(retrieved?.serverInfo, updatedServerInfo, 'Should have updated serverInfo');
-
-            // This proves that getEnvironment() after startServer() always returns fresh data
-            // which is exactly what the kernel selector relies on (see deepnoteKernelAutoSelector.node.ts:454-467)
-        });
-
-        test('should update lastUsedAt timestamp', async () => {
-            when(mockStorage.saveEnvironments(anything())).thenResolve();
-            when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testVenvAndToolkit
-            );
-            when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
-                testServerInfo
-            );
-
-            const config = await manager.createEnvironment({
-                name: 'Test',
-                pythonInterpreter: testInterpreter
-            });
-
-            const originalLastUsed = config.lastUsedAt.getTime();
-            await manager.startServer(config.id);
-            const updated = manager.getEnvironment(config.id)!;
-            assert.isAtLeast(updated.lastUsedAt.getTime(), originalLastUsed);
-        });
-
-        test('should throw error for non-existent environment', async () => {
-            await assert.isRejected(manager.startServer('non-existent'), 'Environment not found: non-existent');
-        });
-    });
-
-    suite('stopServer', () => {
-        test('should stop running server', async () => {
-            when(mockStorage.saveEnvironments(anything())).thenResolve();
-            when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testVenvAndToolkit
-            );
-            when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
-                testServerInfo
-            );
-            when(mockServerStarter.stopServer(anything(), anything())).thenResolve();
-
-            const config = await manager.createEnvironment({
-                name: 'Test',
-                pythonInterpreter: testInterpreter
-            });
-
-            await manager.startServer(config.id);
-            await manager.stopServer(config.id);
-
-            const updated = manager.getEnvironment(config.id);
-            assert.isUndefined(updated?.serverInfo);
-
-            verify(mockServerStarter.stopServer(config.id, anything())).once();
-        });
-
-        test('should do nothing if server is not running', async () => {
-            when(mockStorage.saveEnvironments(anything())).thenResolve();
-
-            const config = await manager.createEnvironment({
-                name: 'Test',
-                pythonInterpreter: testInterpreter
-            });
-
-            await manager.stopServer(config.id);
-
-            verify(mockServerStarter.stopServer(anything(), anything())).never();
-        });
-
-        test('should throw error for non-existent environment', async () => {
-            await assert.isRejected(manager.stopServer('non-existent'), 'Environment not found: non-existent');
-        });
-    });
-
-    suite('restartServer', () => {
-        test('should stop and start server', async () => {
-            when(mockStorage.saveEnvironments(anything())).thenResolve();
-            when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testVenvAndToolkit
-            );
-            when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
-                testServerInfo
-            );
-            when(mockServerStarter.stopServer(anything(), anything())).thenResolve();
-
-            const config = await manager.createEnvironment({
-                name: 'Test',
-                pythonInterpreter: testInterpreter
-            });
-
-            await manager.startServer(config.id);
-            await manager.restartServer(config.id);
-
-            verify(mockServerStarter.stopServer(config.id, anything())).once();
-            // Called twice: once for initial start, once for restart
-            verify(mockServerStarter.startServer(anything(), anything(), anything(), anything())).twice();
         });
     });
 

@@ -320,7 +320,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
             const connectionMetadata = kernel.kernelConnectionMetadata;
             if (connectionMetadata.kind === 'startUsingDeepnoteKernel') {
                 const deepnoteMetadata = connectionMetadata as DeepnoteKernelConnectionMetadata;
-                const expectedHandle = `deepnote-config-server-${environmentId}`;
+                const expectedHandle = `deepnote-config-server-${environmentId}-${notebook.uri.fsPath}`;
 
                 if (deepnoteMetadata.serverProviderHandle.handle === expectedHandle) {
                     logger.info(

@@ -15,7 +15,9 @@ import {
     l10n,
     env,
     notebooks,
-    ProgressLocation
+    ProgressLocation,
+    QuickPickItem,
+    commands
 } from 'vscode';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
@@ -82,7 +84,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
         @inject(IKernelProvider) private readonly kernelProvider: IKernelProvider,
         @inject(IDeepnoteRequirementsHelper) private readonly requirementsHelper: IDeepnoteRequirementsHelper,
-        @inject(IDeepnoteEnvironmentManager) private readonly configurationManager: IDeepnoteEnvironmentManager,
+        @inject(IDeepnoteEnvironmentManager) private readonly environmentManager: IDeepnoteEnvironmentManager,
         @inject(IDeepnoteServerStarter) private readonly serverStarter: IDeepnoteServerStarter,
         @inject(IDeepnoteNotebookEnvironmentMapper)
         private readonly notebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper,
@@ -131,15 +133,84 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 title: l10n.t('Auto-selecting Deepnote kernel...'),
                 cancellable: false
             },
-            async () => {
+            async (progress, token) => {
                 try {
-                    await this.ensureKernelSelected(notebook);
+                    const result = await this.ensureKernelSelected(notebook);
+                    if (!result) {
+                        const selectedEnvironment = await this.pickEnvironment(notebook.uri);
+                        if (selectedEnvironment) {
+                            await this.notebookEnvironmentMapper.setEnvironmentForNotebook(
+                                notebook.uri,
+                                selectedEnvironment.id
+                            );
+                            await this.ensureKernelSelectedWithConfiguration(
+                                notebook,
+                                selectedEnvironment,
+                                notebook.uri,
+                                notebook.uri.fsPath,
+                                progress,
+                                token
+                            );
+                        }
+                    }
                 } catch (error) {
                     logger.error(`Failed to auto-select Deepnote kernel for ${getDisplayPath(notebook.uri)}`, error);
                     void this.handleKernelSelectionError(error);
                 }
             }
         );
+    }
+
+    public async pickEnvironment(notebookUri: Uri): Promise<DeepnoteEnvironment | undefined> {
+        logger.info(`Picking environment for notebook ${getDisplayPath(notebookUri)}`);
+        // Wait for environment manager to finish loading environments from storage
+        await this.environmentManager.waitForInitialization();
+        const environments = this.environmentManager.listEnvironments();
+        // Build quick pick items
+        const items: (QuickPickItem & { environment?: DeepnoteEnvironment })[] = environments.map((env) => {
+            return {
+                label: env.name,
+                description: getDisplayPath(env.pythonInterpreter.uri),
+                detail: env.packages?.length
+                    ? l10n.t('Packages: {0}', env.packages.join(', '))
+                    : l10n.t('No additional packages'),
+                environment: env
+            };
+        });
+        // Add "Create new" option at the end
+        items.push({
+            label: '$(add) Create New Environment',
+            description: 'Set up a new kernel environment',
+            alwaysShow: true
+        });
+        const selected = await window.showQuickPick(items, {
+            placeHolder: `Select an environment for ${getDisplayPath(notebookUri)}`,
+            matchOnDescription: true,
+            matchOnDetail: true
+        });
+
+        if (!selected) {
+            logger.info('User cancelled environment selection');
+            return undefined; // User cancelled
+        }
+
+        if (!selected.environment) {
+            // User chose "Create new" - execute the create command and retry
+            logger.info('User chose to create new environment - triggering create command');
+            await commands.executeCommand('deepnote.environments.create');
+            // After creation, refresh the list and show picker again
+            const newEnvironments = this.environmentManager.listEnvironments();
+            if (newEnvironments.length > environments.length) {
+                // A new environment was created, show the picker again
+                logger.info('Environment created, showing picker again');
+                return this.pickEnvironment(notebookUri);
+            }
+            // User cancelled creation
+            logger.info('No new environment created');
+            return undefined;
+        }
+        logger.info(`Selected environment "${selected.environment.name}" for notebook ${getDisplayPath(notebookUri)}`);
+        return selected.environment;
     }
 
     private onControllerSelectionChanged(event: {
@@ -298,7 +369,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         // on the existing controller instead of creating a new one
         // await this.ensureKernelSelected(notebook, token);
         const environmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri);
-        const environment = environmentId ? this.configurationManager.getEnvironment(environmentId) : undefined;
+        const environment = environmentId ? this.environmentManager.getEnvironment(environmentId) : undefined;
 
         if (environment == null) {
             await this.notebookEnvironmentMapper.removeEnvironmentForNotebook(baseFileUri);
@@ -324,15 +395,23 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         logger.info(`Controller successfully switched to new environment`);
     }
 
-    public async ensureKernelSelected(notebook: NotebookDocument, _token?: CancellationToken): Promise<void> {
+    public async ensureKernelSelected(notebook: NotebookDocument, _token?: CancellationToken): Promise<boolean> {
         const baseFileUri = notebook.uri.with({ query: '', fragment: '' });
         const notebookKey = baseFileUri.fsPath;
 
         const environmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri);
-        const environment = environmentId ? this.configurationManager.getEnvironment(environmentId) : undefined;
+
+        if (environmentId == null) {
+            // throw new DeepnoteEnvironmentNotebookNotAssigned();
+            return false;
+        }
+
+        const environment = environmentId ? this.environmentManager.getEnvironment(environmentId) : undefined;
         if (environment == null) {
             logger.info(`No environment found for notebook ${getDisplayPath(notebook.uri)}`);
-            return;
+            await this.notebookEnvironmentMapper.removeEnvironmentForNotebook(baseFileUri);
+            // throw new DeepnoteEnvironmentNotebookNotAssigned();
+            return false;
         }
 
         const tmpCancellationToken = new CancellationTokenSource();
@@ -351,6 +430,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             },
             tmpCancellationToken.token
         );
+
+        return true;
     }
 
     private async ensureKernelSelectedWithConfiguration(
@@ -386,7 +467,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         logger.info(`Server running at ${serverInfo.url}`);
 
         // Update last used timestamp
-        await this.configurationManager.updateLastUsed(configuration.id);
+        await this.environmentManager.updateLastUsed(configuration.id);
 
         // Create server provider handle
         const serverProviderHandle: JupyterServerProviderHandle = {

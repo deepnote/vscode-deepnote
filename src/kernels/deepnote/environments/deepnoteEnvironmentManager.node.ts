@@ -1,20 +1,14 @@
-import { injectable, inject, named, optional } from 'inversify';
+import { injectable, inject, named } from 'inversify';
 import { EventEmitter, Uri, CancellationToken, l10n } from 'vscode';
 import { generateUuid as uuid } from '../../../platform/common/uuid';
-import { IConfigurationService, IExtensionContext, IOutputChannel } from '../../../platform/common/types';
+import { IExtensionContext, IOutputChannel } from '../../../platform/common/types';
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
 import { logger } from '../../../platform/logging';
 import { DeepnoteEnvironmentStorage } from './deepnoteEnvironmentStorage.node';
 import { CreateDeepnoteEnvironmentOptions, DeepnoteEnvironment } from './deepnoteEnvironment';
-import {
-    IDeepnoteEnvironmentManager,
-    IDeepnoteServerProvider,
-    IDeepnoteServerStarter,
-    IDeepnoteToolkitInstaller
-} from '../types';
+import { IDeepnoteEnvironmentManager, IDeepnoteServerStarter } from '../types';
 import { Cancellation } from '../../../platform/common/cancellation';
 import { STANDARD_OUTPUT_CHANNEL } from '../../../platform/common/constants';
-import { IJupyterRequestAgentCreator, IJupyterRequestCreator } from '../../jupyter/types';
 
 /**
  * Manager for Deepnote kernel environments.
@@ -27,8 +21,6 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
 
     private environments: Map<string, DeepnoteEnvironment> = new Map();
     private environmentServers: Map<string, Uri[]> = new Map();
-    // private serversByFile: Map<string, DeepnoteServerInfo> = new Map();
-    private tmpStartingServers: Map<string, boolean> = new Map();
     private readonly _onDidChangeEnvironments = new EventEmitter<void>();
     public readonly onDidChangeEnvironments = this._onDidChangeEnvironments.event;
     private initializationPromise: Promise<void> | undefined;
@@ -36,14 +28,7 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
     constructor(
         @inject(IExtensionContext) private readonly context: IExtensionContext,
         @inject(DeepnoteEnvironmentStorage) private readonly storage: DeepnoteEnvironmentStorage,
-        @inject(IDeepnoteToolkitInstaller) private readonly toolkitInstaller: IDeepnoteToolkitInstaller,
         @inject(IDeepnoteServerStarter) private readonly serverStarter: IDeepnoteServerStarter,
-        @inject(IDeepnoteServerProvider) private readonly serverProvider: IDeepnoteServerProvider,
-        @inject(IJupyterRequestCreator) private readonly requestCreator: IJupyterRequestCreator,
-        @inject(IJupyterRequestAgentCreator)
-        @optional()
-        private readonly requestAgentCreator: IJupyterRequestAgentCreator | undefined,
-        @inject(IConfigurationService) private readonly configService: IConfigurationService,
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel
     ) {}
 
@@ -192,106 +177,6 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
 
         logger.info(`Deleted environment: ${config.name} (${id})`);
     }
-
-    // /**
-    //  * Start the Jupyter server for an environment
-    //  */
-    // // public async startServer(id: string, token?: CancellationToken): Promise<void> {
-    // public async startServer(id: string, deepnoteFileUri: Uri, token?: CancellationToken): Promise<void> {
-    //     const config = this.environments.get(id);
-    //     if (!config) {
-    //         throw new Error(`Environment not found: ${id}`);
-    //     }
-
-    //     this.tmpStartingServers.set(id, true);
-    //     this._onDidChangeEnvironments.fire();
-
-    //     try {
-    //         logger.info(`Ensuring server is running for environment: ${config.name} (${id})`);
-
-    //         // First ensure venv is created and toolkit is installed
-    //         const { pythonInterpreter, toolkitVersion } = await this.toolkitInstaller.ensureVenvAndToolkit(
-    //             config.pythonInterpreter,
-    //             config.venvPath,
-    //             token
-    //         );
-
-    //         // Install additional packages if specified
-    //         if (config.packages && config.packages.length > 0) {
-    //             await this.toolkitInstaller.installAdditionalPackages(config.venvPath, config.packages, token);
-    //         }
-
-    //         // Start the Jupyter server (serverStarter is idempotent - returns existing if running)
-    //         // IMPORTANT: Always call this to ensure we get the current server info
-    //         // Don't return early based on config.serverInfo - it may be stale!
-    //         const serverInfo = await this.serverStarter.startServer(
-    //             pythonInterpreter,
-    //             config.venvPath,
-    //             id,
-    //             deepnoteFileUri,
-    //             token
-    //         );
-
-    //         config.pythonInterpreter = pythonInterpreter;
-    //         config.toolkitVersion = toolkitVersion;
-    //         config.serverInfo = serverInfo;
-    //         config.lastUsedAt = new Date();
-
-    //         await this.persistEnvironments();
-    //         this._onDidChangeEnvironments.fire();
-
-    //         logger.info(`Server running for environment: ${config.name} (${id}) at ${serverInfo.url}`);
-    //     } catch (error) {
-    //         logger.error(`Failed to start server for environment: ${config.name} (${id})`, error);
-    //         throw error;
-    //     } finally {
-    //         this.tmpStartingServers.delete(id);
-    //     }
-    // }
-
-    // /**
-    //  * Stop the Jupyter server for an environment
-    //  */
-    // // public async stopServer(id: string, token?: CancellationToken): Promise<void> {
-    // public async stopServer(deepnoteFileUri: Uri, token?: CancellationToken): Promise<void> {
-    //     // const config = this.environments.get(id);
-    //     // if (!config) {
-    //     //     throw new Error(`Environment not found: ${id}`);
-    //     // }
-
-    //     // if (!config.serverInfo) {
-    //     //     logger.info(`No server running for environment: ${config.name} (${id})`);
-    //     //     return;
-    //     // }
-
-    //     try {
-    //         logger.info(`Stopping server for environment: ${deepnoteFileUri.fsPath}`);
-
-    //         await this.serverStarter.stopServer(deepnoteFileUri, token);
-
-    //         // config.serverInfo = undefined;
-
-    //         // await this.persistEnvironments();
-    //         // this._onDidChangeEnvironments.fire();
-
-    //         logger.info(`Server stopped successfully for environment: ${deepnoteFileUri.fsPath}`);
-    //     } catch (error) {
-    //         logger.error(`Failed to stop server for environment: ${deepnoteFileUri.fsPath}`, error);
-    //         throw error;
-    //     }
-    // }
-
-    // /**
-    //  * Restart the Jupyter server for an environment
-    //  */
-    // // public async restartServer(id: string, token?: CancellationToken): Promise<void> {
-    // public async restartServer(deepnoteFileUri: Uri, token?: CancellationToken): Promise<void> {
-    //     logger.info(`Restarting server for environment: ${deepnoteFileUri.fsPath}`);
-    //     await this.stopServer(deepnoteFileUri, token);
-    //     Cancellation.throwIfCanceled(token);
-    //     await this.startServer(deepnoteFileUri, token);
-    //     logger.info(`Server restarted successfully for environment: ${deepnoteFileUri.fsPath}`);
-    // }
 
     /**
      * Update the last used timestamp for an environment

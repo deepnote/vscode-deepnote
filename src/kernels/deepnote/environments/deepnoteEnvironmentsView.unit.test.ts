@@ -7,7 +7,7 @@ import { IDeepnoteEnvironmentManager, IDeepnoteKernelAutoSelector, IDeepnoteNote
 import { IPythonApiProvider } from '../../../platform/api/types';
 import { IDisposableRegistry } from '../../../platform/common/types';
 import { IKernelProvider } from '../../../kernels/types';
-import { DeepnoteEnvironment, EnvironmentStatus } from './deepnoteEnvironment';
+import { DeepnoteEnvironment } from './deepnoteEnvironment';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 import { DeepnoteEnvironmentTreeDataProvider } from './deepnoteEnvironmentTreeDataProvider.node';
@@ -624,14 +624,8 @@ suite('DeepnoteEnvironmentsView', () => {
             when(mockConfigManager.listEnvironments()).thenReturn([currentEnvironment, newEnvironment]);
 
             // Mock environment status
-            when(mockConfigManager.getEnvironmentWithStatus(currentEnvironment.id)).thenReturn({
-                ...currentEnvironment,
-                status: EnvironmentStatus.Stopped
-            });
-            when(mockConfigManager.getEnvironmentWithStatus(newEnvironment.id)).thenReturn({
-                ...newEnvironment,
-                status: EnvironmentStatus.Running
-            });
+            when(mockConfigManager.getEnvironment(currentEnvironment.id)).thenReturn(currentEnvironment);
+            when(mockConfigManager.getEnvironment(newEnvironment.id)).thenReturn(newEnvironment);
 
             // Mock user selecting the new environment
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenCall((items: any[]) => {
@@ -671,8 +665,8 @@ suite('DeepnoteEnvironmentsView', () => {
             verify(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri)).once();
             verify(mockConfigManager.getEnvironment(currentEnvironment.id)).once();
             verify(mockConfigManager.listEnvironments()).once();
-            verify(mockConfigManager.getEnvironmentWithStatus(currentEnvironment.id)).once();
-            verify(mockConfigManager.getEnvironmentWithStatus(newEnvironment.id)).once();
+            verify(mockConfigManager.getEnvironment(currentEnvironment.id)).once();
+            verify(mockConfigManager.getEnvironment(newEnvironment.id)).once();
             verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).once();
             verify(mockKernelProvider.get(mockNotebook as any)).once();
             verify(mockKernelProvider.getKernelExecution(mockKernel as any)).once();
@@ -684,77 +678,6 @@ suite('DeepnoteEnvironmentsView', () => {
 
             // Verify success message was shown
             verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
-        });
-    });
-
-    suite('Server Management (startServer, stopServer, restartServer)', () => {
-        const testEnvironmentId = 'test-env-id';
-        const testInterpreter: PythonEnvironment = {
-            id: 'test-python-id',
-            uri: Uri.file('/usr/bin/python3'),
-            version: { major: 3, minor: 11, patch: 0, raw: '3.11.0' }
-        } as PythonEnvironment;
-
-        const testEnvironment: DeepnoteEnvironment = {
-            id: testEnvironmentId,
-            name: 'Test Environment',
-            pythonInterpreter: testInterpreter,
-            venvPath: Uri.file('/path/to/venv'),
-            createdAt: new Date(),
-            lastUsedAt: new Date()
-        };
-
-        setup(() => {
-            resetCalls(mockConfigManager);
-            resetCalls(mockedVSCodeNamespaces.window);
-
-            // Common mocks for all server management operations
-            when(mockConfigManager.getEnvironment(testEnvironmentId)).thenReturn(testEnvironment);
-
-            when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall(
-                (_options: ProgressOptions, callback: Function) => {
-                    const mockProgress = {
-                        report: () => {
-                            // Mock progress reporting
-                        }
-                    };
-                    const mockToken: CancellationToken = {
-                        isCancellationRequested: false,
-                        onCancellationRequested: () => ({
-                            dispose: () => {
-                                // Mock disposable
-                            }
-                        })
-                    };
-                    return callback(mockProgress, mockToken);
-                }
-            );
-
-            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenResolve(undefined);
-        });
-
-        test('should call environmentManager.startServer', async () => {
-            when(mockConfigManager.startServer(testEnvironmentId, anything())).thenResolve();
-
-            await (view as any).startServer(testEnvironmentId);
-
-            verify(mockConfigManager.startServer(testEnvironmentId, anything())).once();
-        });
-
-        test('should call environmentManager.stopServer', async () => {
-            when(mockConfigManager.stopServer(testEnvironmentId, anything())).thenResolve();
-
-            await (view as any).stopServer(testEnvironmentId);
-
-            verify(mockConfigManager.stopServer(testEnvironmentId, anything())).once();
-        });
-
-        test('should call environmentManager.restartServer', async () => {
-            when(mockConfigManager.restartServer(testEnvironmentId, anything())).thenResolve();
-
-            await (view as any).restartServer(testEnvironmentId);
-
-            verify(mockConfigManager.restartServer(testEnvironmentId, anything())).once();
         });
     });
 

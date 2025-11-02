@@ -299,16 +299,6 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
         const oldConnection = this.kernelConnection;
         const hasChanged = !areKernelConnectionsEqual(oldConnection, kernelConnection);
 
-        logger.info(
-            `Updating controller ${this.id} connection. Changed: ${hasChanged}. ` +
-                `Old interpreter: ${
-                    oldConnection.interpreter ? getDisplayPath(oldConnection.interpreter.uri) : 'none'
-                }, ` +
-                `New interpreter: ${
-                    kernelConnection.interpreter ? getDisplayPath(kernelConnection.interpreter.uri) : 'none'
-                }`
-        );
-
         // Update the stored connection metadata
         this.kernelConnection = kernelConnection;
 

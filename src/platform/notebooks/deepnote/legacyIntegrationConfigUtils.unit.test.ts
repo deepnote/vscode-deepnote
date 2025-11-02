@@ -47,8 +47,7 @@ suite('upgradeLegacyIntegrationConfig', () => {
                 port: 5432,
                 database: 'testdb',
                 username: 'testuser',
-                password: 'testpass',
-                ssl: false
+                password: 'testpass'
             };
 
             const result = await upgradeLegacyIntegrationConfig(legacyConfig);

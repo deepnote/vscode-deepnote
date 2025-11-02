@@ -18,7 +18,7 @@ export async function upgradeLegacyIntegrationConfig(
                 database: config.database,
                 user: config.username,
                 password: config.password,
-                sslEnabled: config.ssl
+                sslEnabled: Boolean(config.ssl)
             }).data;
 
             return metadata

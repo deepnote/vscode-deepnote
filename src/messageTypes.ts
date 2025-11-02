@@ -235,6 +235,7 @@ export type LocalizedMessages = {
     integrationsRequiredField: string;
     integrationsOptionalField: string;
     integrationsUnnamedIntegration: string;
+    integrationsUnsupportedIntegrationType: string;
     // Select input settings strings
     selectInputSettingsTitle: string;
     allowMultipleValues: string;

@@ -831,6 +831,7 @@ export namespace Integrations {
     export const requiredField = l10n.t('*');
     export const optionalField = l10n.t('(optional)');
     export const unnamedIntegration = (id: string) => l10n.t('Unnamed Integration ({0})', id);
+    export const unsupportedIntegrationType = (type: string) => l10n.t('Unsupported integration type: {0}', type);
 
     // Integration type labels
     export const postgresTypeLabel = l10n.t('PostgreSQL');

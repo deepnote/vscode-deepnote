@@ -7,46 +7,49 @@ export const DATAFRAME_SQL_INTEGRATION_ID = 'deepnote-dataframe-sql';
 /**
  * Supported integration types
  */
-export enum IntegrationType {
+export enum LegacyIntegrationType {
     Postgres = 'postgres',
     BigQuery = 'bigquery',
-    Snowflake = 'snowflake'
+    Snowflake = 'snowflake',
+    DuckDB = 'duckdb'
 }
 
 /**
  * Map our IntegrationType enum to Deepnote integration type strings
+ * Note: DuckDB is not included as it's an internal integration that doesn't exist in Deepnote
  */
-export const INTEGRATION_TYPE_TO_DEEPNOTE = {
-    [IntegrationType.Postgres]: 'pgsql',
-    [IntegrationType.BigQuery]: 'big-query',
-    [IntegrationType.Snowflake]: 'snowflake'
-} as const satisfies { [type in IntegrationType]: string };
+export const LEGACY_INTEGRATION_TYPE_TO_DEEPNOTE = {
+    [LegacyIntegrationType.Postgres]: 'pgsql',
+    [LegacyIntegrationType.BigQuery]: 'big-query',
+    [LegacyIntegrationType.Snowflake]: 'snowflake'
+} as const satisfies { [type in Exclude<LegacyIntegrationType, LegacyIntegrationType.DuckDB>]: string };
 
-export type RawIntegrationType = (typeof INTEGRATION_TYPE_TO_DEEPNOTE)[keyof typeof INTEGRATION_TYPE_TO_DEEPNOTE];
+export type RawLegacyIntegrationType =
+    (typeof LEGACY_INTEGRATION_TYPE_TO_DEEPNOTE)[keyof typeof LEGACY_INTEGRATION_TYPE_TO_DEEPNOTE];
 
 /**
  * Map Deepnote integration type strings to our IntegrationType enum
  */
-export const DEEPNOTE_TO_INTEGRATION_TYPE: Record<RawIntegrationType, IntegrationType> = {
-    pgsql: IntegrationType.Postgres,
-    'big-query': IntegrationType.BigQuery,
-    snowflake: IntegrationType.Snowflake
+export const DEEPNOTE_TO_LEGACY_INTEGRATION_TYPE: Record<RawLegacyIntegrationType, LegacyIntegrationType> = {
+    pgsql: LegacyIntegrationType.Postgres,
+    'big-query': LegacyIntegrationType.BigQuery,
+    snowflake: LegacyIntegrationType.Snowflake
 };
 
 /**
  * Base interface for all integration configurations
  */
-export interface BaseIntegrationConfig {
+export interface BaseLegacyIntegrationConfig {
     id: string;
     name: string;
-    type: IntegrationType;
+    type: LegacyIntegrationType;
 }
 
 /**
  * PostgreSQL integration configuration
  */
-export interface PostgresIntegrationConfig extends BaseIntegrationConfig {
-    type: IntegrationType.Postgres;
+export interface LegacyPostgresIntegrationConfig extends BaseLegacyIntegrationConfig {
+    type: LegacyIntegrationType.Postgres;
     host: string;
     port: number;
     database: string;
@@ -58,12 +61,20 @@ export interface PostgresIntegrationConfig extends BaseIntegrationConfig {
 /**
  * BigQuery integration configuration
  */
-export interface BigQueryIntegrationConfig extends BaseIntegrationConfig {
-    type: IntegrationType.BigQuery;
+export interface LegacyBigQueryIntegrationConfig extends BaseLegacyIntegrationConfig {
+    type: LegacyIntegrationType.BigQuery;
     projectId: string;
     credentials: string; // JSON string of service account credentials
 }
 
+/**
+ * DuckDB integration configuration (internal, always available)
+ */
+export interface LegacyDuckDBIntegrationConfig extends BaseLegacyIntegrationConfig {
+    type: LegacyIntegrationType.DuckDB;
+}
+
+import { DatabaseIntegrationConfig, DatabaseIntegrationType } from '@deepnote/database-integrations';
 // Import and re-export Snowflake auth constants from shared module
 import {
     type SnowflakeAuthMethod,
@@ -81,8 +92,8 @@ export {
 /**
  * Base Snowflake configuration with common fields
  */
-interface BaseSnowflakeConfig extends BaseIntegrationConfig {
-    type: IntegrationType.Snowflake;
+interface BaseLegacySnowflakeConfig extends BaseLegacyIntegrationConfig {
+    type: LegacyIntegrationType.Snowflake;
     account: string;
     warehouse?: string;
     database?: string;
@@ -92,7 +103,7 @@ interface BaseSnowflakeConfig extends BaseIntegrationConfig {
 /**
  * Snowflake integration configuration (discriminated union)
  */
-export type SnowflakeIntegrationConfig = BaseSnowflakeConfig &
+export type LegacySnowflakeIntegrationConfig = BaseLegacySnowflakeConfig &
     (
         | {
               authMethod: typeof SnowflakeAuthMethods.PASSWORD | null;
@@ -119,7 +130,11 @@ export type SnowflakeIntegrationConfig = BaseSnowflakeConfig &
 /**
  * Union type of all integration configurations
  */
-export type IntegrationConfig = PostgresIntegrationConfig | BigQueryIntegrationConfig | SnowflakeIntegrationConfig;
+export type LegacyIntegrationConfig =
+    | LegacyPostgresIntegrationConfig
+    | LegacyBigQueryIntegrationConfig
+    | LegacySnowflakeIntegrationConfig
+    | LegacyDuckDBIntegrationConfig;
 
 /**
  * Integration connection status
@@ -134,7 +149,7 @@ export enum IntegrationStatus {
  * Integration with its current status
  */
 export interface IntegrationWithStatus {
-    config: IntegrationConfig | null;
+    config: DatabaseIntegrationConfig | null;
     status: IntegrationStatus;
     error?: string;
     /**
@@ -144,5 +159,5 @@ export interface IntegrationWithStatus {
     /**
      * Type from the project's integrations list (used for prefilling when config is null)
      */
-    integrationType?: IntegrationType;
+    integrationType?: DatabaseIntegrationType;
 }

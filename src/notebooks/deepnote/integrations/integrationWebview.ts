@@ -7,13 +7,8 @@ import { logger } from '../../../platform/logging';
 import { LocalizedMessages, SharedMessages } from '../../../messageTypes';
 import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
 import { IIntegrationStorage, IIntegrationWebviewProvider } from './types';
-import {
-    INTEGRATION_TYPE_TO_DEEPNOTE,
-    IntegrationConfig,
-    IntegrationStatus,
-    IntegrationWithStatus,
-    RawIntegrationType
-} from '../../../platform/notebooks/deepnote/integrationTypes';
+import { IntegrationStatus, IntegrationWithStatus } from '../../../platform/notebooks/deepnote/integrationTypes';
+import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
 
 /**
  * Manages the webview panel for integration configuration
@@ -182,7 +177,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsSnowflakeRolePlaceholder: localize.Integrations.snowflakeRolePlaceholder,
             integrationsSnowflakeWarehouseLabel: localize.Integrations.snowflakeWarehouseLabel,
             integrationsSnowflakeWarehousePlaceholder: localize.Integrations.snowflakeWarehousePlaceholder,
-            integrationsUnnamedIntegration: localize.Integrations.unnamedIntegration('{0}')
+            integrationsUnnamedIntegration: localize.Integrations.unnamedIntegration('{0}'),
+            integrationsUnsupportedIntegrationType: localize.Integrations.unsupportedIntegrationType('{0}')
         };
 
         await this.currentPanel.webview.postMessage({
@@ -221,7 +217,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     private async handleMessage(message: {
         type: string;
         integrationId?: string;
-        config?: IntegrationConfig;
+        config?: DatabaseIntegrationConfig;
     }): Promise<void> {
         switch (message.type) {
             case 'configure':
@@ -263,7 +259,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     /**
      * Save the configuration for an integration
      */
-    private async saveConfiguration(integrationId: string, config: IntegrationConfig): Promise<void> {
+    private async saveConfiguration(integrationId: string, config: DatabaseIntegrationConfig): Promise<void> {
         try {
             await this.integrationStorage.save(config);
 
@@ -349,17 +345,16 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                     return null;
                 }
 
-                // Map to Deepnote integration type
-                const deepnoteType: RawIntegrationType | undefined = INTEGRATION_TYPE_TO_DEEPNOTE[type];
-                if (!deepnoteType) {
-                    logger.warn(`IntegrationWebviewProvider: Cannot map type ${type} for integration ${id}, skipping`);
+                // Skip DuckDB integration (internal, not a real Deepnote integration)
+                if (type === 'pandas-dataframe') {
+                    logger.trace(`IntegrationWebviewProvider: Skipping internal DuckDB integration ${id}`);
                     return null;
                 }
 
                 return {
                     id,
                     name: integration.config?.name || integration.integrationName || id,
-                    type: deepnoteType
+                    type
                 };
             })
             .filter((integration): integration is ProjectIntegration => integration !== null);

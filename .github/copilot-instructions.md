@@ -40,7 +40,6 @@ Read `.github/typescript-instructions.md` for detailed TypeScript development st
 - Preserve error details, scrub PII
 
 ### Code Quality
-- Include Microsoft copyright header
 - Prefer async/await, handle cancellation with CancellationToken
 - Use lint/format tools
 

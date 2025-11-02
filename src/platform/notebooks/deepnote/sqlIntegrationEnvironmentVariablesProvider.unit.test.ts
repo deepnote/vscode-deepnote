@@ -359,6 +359,53 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 const expectedEnvVarName = `SQL_${DATAFRAME_SQL_INTEGRATION_ID.toUpperCase().replace(/-/g, '_')}`;
                 assert.ok(result[expectedEnvVarName], `Should have ${expectedEnvVarName} env var for DuckDB`);
             });
+
+            test('Snowflake integration includes partner identifier in URL as application parameter', async () => {
+                const resource = Uri.file('/test/notebook.deepnote');
+                const notebook = mock<NotebookDocument>();
+                const snowflakeConfig: DatabaseIntegrationConfig = {
+                    id: 'my-snowflake',
+                    name: 'Snowflake DB',
+                    type: 'snowflake',
+                    metadata: {
+                        authMethod: 'password',
+                        accountName: 'test-account.us-east-1',
+                        warehouse: 'test_warehouse',
+                        database: 'test_db',
+                        role: 'test_role',
+                        username: 'test_user',
+                        password: 'test_pass'
+                    }
+                };
+                const project = createMockProject('project-123', [
+                    { id: 'my-snowflake', name: 'Snowflake DB', type: 'snowflake' }
+                ]);
+
+                when(notebook.metadata).thenReturn({ deepnoteProjectId: 'project-123' });
+                when(notebookEditorProvider.findAssociatedNotebookDocument(resource)).thenReturn(instance(notebook));
+                when(notebookManager.getOriginalProject('project-123')).thenReturn(project);
+                when(integrationStorage.getIntegrationConfig('my-snowflake')).thenResolve(snowflakeConfig);
+
+                const result = await provider.getEnvironmentVariables(resource);
+
+                const expectedEnvVarName = 'SQL_MY_SNOWFLAKE';
+                assert.ok(result[expectedEnvVarName], `Should have ${expectedEnvVarName} env var`);
+
+                const envVarValue = result[expectedEnvVarName];
+                assert.ok(typeof envVarValue === 'string', 'Env var value should be a string');
+                assert.ok(envVarValue, 'Env var value should not be undefined');
+
+                // Parse and verify the structure
+                const parsed = JSON.parse(envVarValue!);
+                assert.ok(parsed.url, 'Should have url field');
+                assert.ok(parsed.url.includes('snowflake://'), 'URL should be Snowflake connection string');
+
+                // Verify that the application parameter is set to the Snowflake partner identifier
+                assert.ok(
+                    parsed.url.includes('application=Deepnote_Workspaces'),
+                    'URL should contain application=Deepnote_Workspaces parameter'
+                );
+            });
         });
     });
 

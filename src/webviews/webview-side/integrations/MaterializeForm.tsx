@@ -24,6 +24,7 @@ function createEmptyMaterializeConfig(params: {
         type: 'materialize',
         metadata: {
             host: '',
+            port: '6875',
             user: '',
             password: '',
             database: '',

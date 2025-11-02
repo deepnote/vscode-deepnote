@@ -105,7 +105,8 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
         });
 
         const { envVars: envVarList, errors } = getEnvironmentVariablesForIntegrations(projectIntegrationConfigs, {
-            projectRootDirectory: ''
+            projectRootDirectory: '',
+            snowflakePartnerIdentifier: 'Deepnote_Workspaces'
         });
 
         errors.forEach((error) => {

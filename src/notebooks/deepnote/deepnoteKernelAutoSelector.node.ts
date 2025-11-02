@@ -8,13 +8,11 @@ import {
     workspace,
     NotebookControllerAffinity,
     window,
-    NotebookController,
     CancellationTokenSource,
     Disposable,
     Uri,
     l10n,
     env,
-    notebooks,
     ProgressLocation,
     QuickPickItem,
     commands
@@ -50,6 +48,7 @@ import { DeepnoteKernelError } from '../../platform/errors/deepnoteKernelErrors'
 import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnoteEnvironment';
 import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
 import { IOutputChannel } from '../../platform/common/types';
+import { createDeepnoteServerConfigHandle } from '../../platform/deepnote/deepnoteServerUtils.node';
 
 /**
  * Automatically selects and starts Deepnote kernel for .deepnote notebooks
@@ -62,8 +61,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     private readonly notebookControllers = new Map<string, IVSCodeNotebookController>();
     // Track connection metadata per notebook file for reuse
     private readonly notebookConnectionMetadata = new Map<string, DeepnoteKernelConnectionMetadata>();
-    // Track temporary loading controllers that get disposed when real controller is ready
-    private readonly loadingControllers = new Map<string, NotebookController>();
     // Track projects where we need to run init notebook (set during controller setup)
     private readonly projectsPendingInitNotebook = new Map<
         string,
@@ -133,25 +130,26 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 title: l10n.t('Auto-selecting Deepnote kernel...'),
                 cancellable: false
             },
-            async (progress, token) => {
+            // async (progress, token) => {
+            async () => {
                 try {
                     const result = await this.ensureKernelSelected(notebook);
                     if (!result) {
-                        const selectedEnvironment = await this.pickEnvironment(notebook.uri);
-                        if (selectedEnvironment) {
-                            await this.notebookEnvironmentMapper.setEnvironmentForNotebook(
-                                notebook.uri,
-                                selectedEnvironment.id
-                            );
-                            await this.ensureKernelSelectedWithConfiguration(
-                                notebook,
-                                selectedEnvironment,
-                                notebook.uri,
-                                notebook.uri.fsPath,
-                                progress,
-                                token
-                            );
-                        }
+                        // const selectedEnvironment = await this.pickEnvironment(notebook.uri);
+                        // if (selectedEnvironment) {
+                        //     await this.notebookEnvironmentMapper.setEnvironmentForNotebook(
+                        //         notebook.uri,
+                        //         selectedEnvironment.id
+                        //     );
+                        //     await this.ensureKernelSelectedWithConfiguration(
+                        //         notebook,
+                        //         selectedEnvironment,
+                        //         notebook.uri,
+                        //         notebook.uri.fsPath,
+                        //         progress,
+                        //         token
+                        //     );
+                        // }
                     }
                 } catch (error) {
                     logger.error(`Failed to auto-select Deepnote kernel for ${getDisplayPath(notebook.uri)}`, error);
@@ -459,6 +457,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         const serverInfo = await this.serverStarter.startServer(
             configuration.pythonInterpreter,
             configuration.venvPath,
+            configuration.packages ?? [],
             configuration.id,
             baseFileUri,
             progressToken
@@ -473,7 +472,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         const serverProviderHandle: JupyterServerProviderHandle = {
             extensionId: JVSC_EXTENSION_ID,
             id: 'deepnote-server',
-            handle: `deepnote-config-server-${configuration.id}-${baseFileUri.fsPath}`
+            handle: createDeepnoteServerConfigHandle(configuration.id, baseFileUri)
         };
 
         // Register the server with the provider
@@ -643,7 +642,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             return;
         }
 
-        const expectedHandle = `deepnote-config-server-${environmentId}`;
+        const expectedHandle = createDeepnoteServerConfigHandle(environmentId, notebook.uri);
 
         if (selectedController.connection.serverProviderHandle.handle === expectedHandle) {
             // Unselect the controller by setting affinity to Default
@@ -652,31 +651,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 `Cleared controller for notebook ${getDisplayPath(notebook.uri)} (environment ${environmentId})`
             );
         }
-    }
-
-    private createLoadingController(notebook: NotebookDocument, notebookKey: string): void {
-        // Create a temporary controller that shows "Loading..." and prevents kernel selection prompt
-        const loadingController = notebooks.createNotebookController(
-            `deepnote-loading-${notebookKey}`,
-            DEEPNOTE_NOTEBOOK_TYPE,
-            l10n.t('Loading Deepnote Kernel...')
-        );
-
-        // Set it as the preferred controller immediately
-        loadingController.supportsExecutionOrder = false;
-        loadingController.supportedLanguages = ['python'];
-
-        // Execution handler that does nothing - cells will just sit there until real kernel is ready
-        loadingController.executeHandler = () => {
-            // No-op: execution is blocked until the real controller takes over
-        };
-
-        // Select this controller for the notebook
-        loadingController.updateNotebookAffinity(notebook, NotebookControllerAffinity.Preferred);
-
-        // Store it so we can dispose it later
-        this.loadingControllers.set(notebookKey, loadingController);
-        logger.info(`Created loading controller for ${notebookKey}`);
     }
 
     /**

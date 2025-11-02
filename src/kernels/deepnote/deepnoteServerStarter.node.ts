@@ -102,6 +102,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
     public async startServer(
         interpreter: PythonEnvironment,
         venvPath: Uri,
+        additionalPackages: string[],
         environmentId: string,
         deepnoteFileUri: Uri,
         token?: CancellationToken
@@ -110,9 +111,9 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         const serverKey = `${fileKey}-${environmentId}`;
 
         // Wait for any pending operations on this environment to complete
-        let pendingOp = this.pendingOperations.get(fileKey);
+        let pendingOp = this.pendingOperations.get(serverKey);
         if (pendingOp) {
-            logger.info(`Waiting for pending operation on ${fileKey} to complete...`);
+            logger.info(`Waiting for pending operation on ${serverKey} to complete...`);
             try {
                 await pendingOp.promise;
             } catch {
@@ -131,7 +132,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                 }
 
                 // Start the operation if not already pending
-                pendingOp = this.pendingOperations.get(fileKey);
+                pendingOp = this.pendingOperations.get(serverKey);
 
                 if (pendingOp && pendingOp.type === 'start') {
                     // TODO - check pending operation environment id ?
@@ -140,7 +141,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             } else {
                 // Stop the existing server
                 logger.info(
-                    `Stopping existing server for ${fileKey} with environmentId ${existingEnvironmentId} to start new one with environmentId ${environmentId}...`
+                    `Stopping existing server for ${serverKey} with environmentId ${existingEnvironmentId} to start new one with environmentId ${environmentId}...`
                 );
                 await this.stopServerForEnvironment(existingContext, deepnoteFileUri, token);
                 // TODO - Clear controllers for the notebook ?
@@ -157,26 +158,6 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             existingContext = newContext;
         }
 
-        // if (existingContext == null) {
-        //     // TODO - solve with better typing
-        //     throw new Error('Invariant violation: existingContext should not be null here');
-        // }
-
-        // // If server is already running for this environment, return existing info
-        // // const existingServerInfo = this.serverInfos.get(environmentId);
-        // const existingServerInfo = this.serverInfos.get(fileKey);
-        // if (existingServerInfo && (await this.isServerRunning(existingServerInfo))) {
-        //     logger.info(`Deepnote server already running at ${existingServerInfo.url} for ${fileKey}`);
-        //     return existingServerInfo;
-        // }
-
-        // // Start the operation if not already pending
-        // pendingOp = this.pendingOperations.get(fileKey);
-
-        // if (pendingOp && pendingOp.type === 'start') {
-        //     return await pendingOp.promise;
-        // }
-
         // Start the operation and track it
         const operation = {
             type: 'start' as const,
@@ -184,12 +165,13 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                 existingContext,
                 interpreter,
                 venvPath,
+                additionalPackages,
                 environmentId,
                 deepnoteFileUri,
                 token
             )
         };
-        this.pendingOperations.set(fileKey, operation);
+        this.pendingOperations.set(serverKey, operation);
 
         try {
             const result = await operation.promise;
@@ -199,8 +181,8 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             return result;
         } finally {
             // Remove from pending operations when done
-            if (this.pendingOperations.get(fileKey) === operation) {
-                this.pendingOperations.delete(fileKey);
+            if (this.pendingOperations.get(serverKey) === operation) {
+                this.pendingOperations.delete(serverKey);
             }
         }
     }
@@ -253,6 +235,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         projectContext: ProjectContext,
         interpreter: PythonEnvironment,
         venvPath: Uri,
+        additionalPackages: string[],
         environmentId: string,
         deepnoteFileUri: Uri,
         token?: CancellationToken
@@ -269,6 +252,10 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             venvPath,
             token
         );
+
+        Cancellation.throwIfCanceled(token);
+
+        await this.toolkitInstaller.installAdditionalPackages(venvPath, additionalPackages, token);
 
         Cancellation.throwIfCanceled(token);
 

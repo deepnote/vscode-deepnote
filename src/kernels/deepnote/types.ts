@@ -138,6 +138,7 @@ export interface IDeepnoteServerStarter {
     startServer(
         interpreter: PythonEnvironment,
         venvPath: vscode.Uri,
+        additionalPackages: string[],
         environmentId: string,
         deepnoteFileUri: vscode.Uri,
         token?: vscode.CancellationToken

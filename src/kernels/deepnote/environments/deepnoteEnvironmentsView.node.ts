@@ -19,6 +19,7 @@ import {
 } from '../../../platform/interpreter/helpers';
 import { getDisplayPath } from '../../../platform/common/platform/fs-paths';
 import { IKernelProvider } from '../../types';
+import { createDeepnoteServerConfigHandle } from '../../../platform/deepnote/deepnoteServerUtils.node';
 
 /**
  * View controller for the Deepnote kernel environments tree view.
@@ -320,7 +321,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
             const connectionMetadata = kernel.kernelConnectionMetadata;
             if (connectionMetadata.kind === 'startUsingDeepnoteKernel') {
                 const deepnoteMetadata = connectionMetadata as DeepnoteKernelConnectionMetadata;
-                const expectedHandle = `deepnote-config-server-${environmentId}-${notebook.uri.fsPath}`;
+                const expectedHandle = createDeepnoteServerConfigHandle(environmentId, notebook.uri);
 
                 if (deepnoteMetadata.serverProviderHandle.handle === expectedHandle) {
                     logger.info(

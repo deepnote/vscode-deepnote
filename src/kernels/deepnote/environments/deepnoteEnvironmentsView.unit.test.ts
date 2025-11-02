@@ -12,6 +12,7 @@ import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 import { DeepnoteEnvironmentTreeDataProvider } from './deepnoteEnvironmentTreeDataProvider.node';
 import * as interpreterHelpers from '../../../platform/interpreter/helpers';
+import { createDeepnoteServerConfigHandle } from '../../../platform/deepnote/deepnoteServerUtils.node';
 
 suite('DeepnoteEnvironmentsView', () => {
     let view: DeepnoteEnvironmentsView;
@@ -501,7 +502,7 @@ suite('DeepnoteEnvironmentsView', () => {
                 kernelConnectionMetadata: {
                     kind: 'startUsingDeepnoteKernel',
                     serverProviderHandle: {
-                        handle: `deepnote-config-server-${testEnvironmentId}`
+                        handle: createDeepnoteServerConfigHandle(testEnvironmentId, openNotebook1.uri)
                     }
                 },
                 dispose: sinon.stub().resolves()
@@ -511,7 +512,7 @@ suite('DeepnoteEnvironmentsView', () => {
                 kernelConnectionMetadata: {
                     kind: 'startUsingDeepnoteKernel',
                     serverProviderHandle: {
-                        handle: 'deepnote-config-server-different-env'
+                        handle: createDeepnoteServerConfigHandle('different-env-id', openNotebook3.uri)
                     }
                 },
                 dispose: sinon.stub().resolves()

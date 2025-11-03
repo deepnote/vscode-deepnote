@@ -30,7 +30,7 @@ import {
 import { getDisplayPath } from '../../../platform/common/platform/fs-paths';
 import { IKernelProvider } from '../../types';
 import { createDeepnoteServerConfigHandle } from '../../../platform/deepnote/deepnoteServerUtils.node';
-import { getDeepnoteProjectStorageKey } from '../../../platform/deepnote/deepnoteUriUtils';
+import { getDeepnoteProjectStorageKey } from '../../../platform/deepnote/deepnoteUriUtils.node';
 
 /**
  * View controller for the Deepnote kernel environments tree view.

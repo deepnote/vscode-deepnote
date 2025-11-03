@@ -780,7 +780,6 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             // REAL TEST: This will FAIL if disposal happens too early
             //
             // Setup: Create a scenario where we have an old controller and create a new one
-            const baseFileUri = mockNotebook.uri.with({ query: '', fragment: '' });
             // const notebookKey = baseFileUri.fsPath;
             const newEnv = createMockEnvironment('env-new', 'New Environment', true);
 

@@ -19,7 +19,7 @@ import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnot
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import * as path from '../../platform/vscode-path/path';
 import { DEEPNOTE_DEFAULT_PORT, DeepnoteServerInfo, IDeepnoteServerStarter, IDeepnoteToolkitInstaller } from './types';
-import { getDeepnoteNotebookStorageKey } from '../../platform/deepnote/deepnoteUriUtils';
+import { getDeepnoteNotebookStorageKey } from '../../platform/deepnote/deepnoteUriUtils.node';
 
 /**
  * Lock file data structure for tracking server ownership
@@ -255,7 +255,6 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         token?: CancellationToken
     ): Promise<DeepnoteServerInfo> {
         const filePath = deepnoteFileUri.with({ query: '', fragment: '' }).fsPath;
-        const legacyKey = getDeepnoteNotebookStorageKey(deepnoteFileUri.with({ query: '', fragment: '' }));
 
         Cancellation.throwIfCanceled(token);
 
@@ -445,6 +444,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         token?: CancellationToken
     ): Promise<void> {
         const filePath = deepnoteFileUri.with({ query: '', fragment: '' }).fsPath;
+        const legacyKey = getDeepnoteNotebookStorageKey(deepnoteFileUri.with({ query: '', fragment: '' }));
 
         Cancellation.throwIfCanceled(token);
 

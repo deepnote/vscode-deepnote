@@ -8,7 +8,7 @@ import { logger } from '../../../platform/logging';
 import {
     getDeepnoteNotebookStorageKey,
     getLegacyDeepnoteNotebookStorageKey
-} from '../../../platform/deepnote/deepnoteUriUtils';
+} from '../../../platform/deepnote/deepnoteUriUtils.node';
 
 /**
  * Manages the mapping between notebooks and their selected environments

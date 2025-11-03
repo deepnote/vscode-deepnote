@@ -13,7 +13,7 @@ import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-m
 import { DeepnoteEnvironmentTreeDataProvider } from './deepnoteEnvironmentTreeDataProvider.node';
 import * as interpreterHelpers from '../../../platform/interpreter/helpers';
 import { createDeepnoteServerConfigHandle } from '../../../platform/deepnote/deepnoteServerUtils.node';
-import { getDeepnoteProjectStorageKey } from '../../../platform/deepnote/deepnoteUriUtils';
+import { getDeepnoteProjectStorageKey } from '../../../platform/deepnote/deepnoteUriUtils.node';
 
 suite('DeepnoteEnvironmentsView', () => {
     let view: DeepnoteEnvironmentsView;
@@ -621,9 +621,7 @@ suite('DeepnoteEnvironmentsView', () => {
             when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(mockNotebookEditor as any);
 
             // Mock current environment mapping
-            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).thenReturn(
-                currentEnvironment.id
-            );
+            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).thenReturn(currentEnvironment.id);
             when(mockConfigManager.getEnvironment(currentEnvironment.id)).thenReturn(currentEnvironment);
 
             // Mock available environments

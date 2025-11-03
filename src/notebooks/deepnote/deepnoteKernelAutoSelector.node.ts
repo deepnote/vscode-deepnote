@@ -54,7 +54,7 @@ import {
     getDeepnoteNotebookKeyHash,
     getDeepnoteNotebookStorageKey,
     getDeepnoteProjectStorageKey
-} from '../../platform/deepnote/deepnoteUriUtils';
+} from '../../platform/deepnote/deepnoteUriUtils.node';
 
 /**
  * Automatically selects and starts Deepnote kernel for .deepnote notebooks
@@ -455,13 +455,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             return false;
         }
 
-        await this.ensureKernelSelectedWithConfiguration(
-            notebook,
-            environment,
-            notebookKey,
-            progress,
-            token
-        );
+        await this.ensureKernelSelectedWithConfiguration(notebook, environment, notebookKey, progress, token);
 
         return true;
     }
@@ -676,13 +670,17 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         };
 
         const waitForSelection = async () =>
-            waitForCondition(async () => {
-                if (token.isCancellationRequested) {
-                    return true;
-                }
-                const selected = this.controllerRegistration.getSelected(notebook);
-                return selected?.id === controller.id;
-            }, 2000, 100);
+            waitForCondition(
+                async () => {
+                    if (token.isCancellationRequested) {
+                        return true;
+                    }
+                    const selected = this.controllerRegistration.getSelected(notebook);
+                    return selected?.id === controller.id;
+                },
+                2000,
+                100
+            );
 
         let success = (await trySelect(1)) ? await waitForSelection() : true;
 
@@ -699,9 +697,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         }
 
         if (success) {
-            logger.info(
-                `Confirmed Deepnote controller ${controller.id} selected for ${getDisplayPath(notebook.uri)}`
-            );
+            logger.info(`Confirmed Deepnote controller ${controller.id} selected for ${getDisplayPath(notebook.uri)}`);
         } else if (!token.isCancellationRequested) {
             logger.error(
                 `Failed to confirm Deepnote controller selection for ${getDisplayPath(notebook.uri)} after retry`

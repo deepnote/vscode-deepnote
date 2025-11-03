@@ -3,6 +3,7 @@ import * as sinon from 'sinon';
 import { Uri, Memento } from 'vscode';
 
 import { DeepnoteNotebookEnvironmentMapper } from './deepnoteNotebookEnvironmentMapper.node';
+import { IExtensionContext } from '../../../platform/common/types';
 
 class InMemoryMemento implements Memento {
     private storage = new Map<string, unknown>();
@@ -28,14 +29,17 @@ class InMemoryMemento implements Memento {
     }
 }
 
+function createExtensionContextStub(workspaceState: Memento): IExtensionContext {
+    return { workspaceState } as unknown as IExtensionContext;
+}
+
 suite('DeepnoteNotebookEnvironmentMapper', () => {
     let workspaceState: InMemoryMemento;
     let mapper: DeepnoteNotebookEnvironmentMapper;
 
     setup(() => {
         workspaceState = new InMemoryMemento();
-        const context = { workspaceState } as unknown as { workspaceState: Memento };
-        mapper = new DeepnoteNotebookEnvironmentMapper(context);
+        mapper = new DeepnoteNotebookEnvironmentMapper(createExtensionContextStub(workspaceState));
     });
 
     teardown(() => {
@@ -59,11 +63,8 @@ suite('DeepnoteNotebookEnvironmentMapper', () => {
 
         await workspaceState.update('deepnote.notebookEnvironmentMappings', { [legacyKey]: 'env-legacy' });
 
-        const freshMapper = new DeepnoteNotebookEnvironmentMapper({ workspaceState } as unknown as {
-            workspaceState: Memento;
-        });
+        const freshMapper = new DeepnoteNotebookEnvironmentMapper(createExtensionContextStub(workspaceState));
 
         assert.strictEqual(freshMapper.getEnvironmentForNotebook(legacyUri), 'env-legacy');
     });
 });
-

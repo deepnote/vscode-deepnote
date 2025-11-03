@@ -1,18 +1,17 @@
 import * as React from 'react';
-import { format, getLocString } from '../react-common/locReactSide';
+import { getLocString } from '../react-common/locReactSide';
 import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
 import { SshOptionsFields } from './SshOptionsFields';
 import { CaCertificateFields } from './CaCertificateFields';
+import { getDefaultIntegrationName } from './integrationUtils';
 
 function createEmptyMySQLConfig(params: {
     id: string;
     name?: string;
 }): Extract<DatabaseIntegrationConfig, { type: 'mysql' }> {
-    const unnamedIntegration = getLocString('integrationsUnnamedIntegration', 'Unnamed Integration ({0})');
-
     return {
         id: params.id,
-        name: (params.name || format(unnamedIntegration, params.id)).trim(),
+        name: (params.name || getDefaultIntegrationName('mysql')).trim(),
         type: 'mysql',
         metadata: {
             host: '',

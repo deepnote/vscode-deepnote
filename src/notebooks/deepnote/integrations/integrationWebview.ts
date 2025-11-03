@@ -123,10 +123,18 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsConfigure: localize.Integrations.configure,
             integrationsReconfigure: localize.Integrations.reconfigure,
             integrationsReset: localize.Integrations.reset,
+            integrationsDelete: localize.Integrations.deleteIntegration,
             integrationsConfirmResetTitle: localize.Integrations.confirmResetTitle,
             integrationsConfirmResetMessage: localize.Integrations.confirmResetMessage,
             integrationsConfirmResetDetails: localize.Integrations.confirmResetDetails,
+            integrationsConfirmDeleteTitle: localize.Integrations.confirmDeleteTitle,
+            integrationsConfirmDeleteMessage: localize.Integrations.confirmDeleteMessage,
+            integrationsConfirmDeleteDetails: localize.Integrations.confirmDeleteDetails,
             integrationsConfigureTitle: localize.Integrations.configureTitle,
+            integrationsAddNewIntegration: localize.Integrations.addNewIntegration,
+            integrationsDatabase: localize.Integrations.database,
+            integrationsDataWarehousesLakes: localize.Integrations.dataWarehousesLakes,
+            integrationsDatabases: localize.Integrations.databases,
             integrationsPostgresTypeLabel: localize.Integrations.postgresTypeLabel,
             integrationsBigQueryTypeLabel: localize.Integrations.bigQueryTypeLabel,
             integrationsSnowflakeTypeLabel: localize.Integrations.snowflakeTypeLabel,
@@ -373,6 +381,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsCaCertificateText: localize.Integrations.caCertificateText,
             integrationsCaCertificateTextPlaceholder: localize.Integrations.caCertificateTextPlaceholder,
             integrationsUnnamedIntegration: localize.Integrations.unnamedIntegration('{0}'),
+            integrationsDefaultName: localize.Integrations.defaultName('{0}'),
             integrationsUnsupportedIntegrationType: localize.Integrations.unsupportedIntegrationType('{0}')
         };
 
@@ -400,8 +409,16 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         }));
         logger.debug(`IntegrationWebviewProvider: Sending ${integrationsData.length} integrations to webview`);
 
+        // Get the project name from the notebook manager
+        let projectName: string | undefined;
+        if (this.projectId) {
+            const project = this.notebookManager.getOriginalProject(this.projectId);
+            projectName = project?.project.name;
+        }
+
         await this.currentPanel.webview.postMessage({
             integrations: integrationsData,
+            projectName,
             type: 'update'
         });
     }
@@ -423,6 +440,11 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             case 'save':
                 if (message.integrationId && message.config) {
                     await this.saveConfiguration(message.integrationId, message.config);
+                }
+                break;
+            case 'reset':
+                if (message.integrationId) {
+                    await this.resetConfiguration(message.integrationId);
                 }
                 break;
             case 'delete':
@@ -464,9 +486,20 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             // Update local state
             const integration = this.integrations.get(integrationId);
             if (integration) {
+                // Existing integration - update it
                 integration.config = config;
                 integration.status = IntegrationStatus.Connected;
+                integration.integrationName = config.name;
+                integration.integrationType = config.type;
                 this.integrations.set(integrationId, integration);
+            } else {
+                // New integration - add it to the map
+                this.integrations.set(integrationId, {
+                    config,
+                    status: IntegrationStatus.Connected,
+                    integrationName: config.name,
+                    integrationType: config.type
+                });
             }
 
             // Update the project's integrations list
@@ -490,9 +523,9 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     }
 
     /**
-     * Delete the configuration for an integration
+     * Reset the configuration for an integration (clears credentials but keeps the integration entry)
      */
-    private async deleteConfiguration(integrationId: string): Promise<void> {
+    private async resetConfiguration(integrationId: string): Promise<void> {
         try {
             await this.integrationStorage.delete(integrationId);
 
@@ -509,14 +542,44 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
 
             await this.updateWebview();
             await this.currentPanel?.webview.postMessage({
-                message: l10n.t('Configuration deleted successfully'),
+                message: l10n.t('Configuration reset successfully'),
                 type: 'success'
             });
         } catch (error) {
-            logger.error('Failed to delete integration configuration', error);
+            logger.error('Failed to reset integration configuration', error);
             await this.currentPanel?.webview.postMessage({
                 message: l10n.t(
-                    'Failed to delete configuration: {0}',
+                    'Failed to reset configuration: {0}',
+                    error instanceof Error ? error.message : 'Unknown error'
+                ),
+                type: 'error'
+            });
+        }
+    }
+
+    /**
+     * Delete the integration completely (removes credentials and integration entry)
+     */
+    private async deleteConfiguration(integrationId: string): Promise<void> {
+        try {
+            await this.integrationStorage.delete(integrationId);
+
+            // Remove from local state
+            this.integrations.delete(integrationId);
+
+            // Update the project's integrations list
+            await this.updateProjectIntegrationsList();
+
+            await this.updateWebview();
+            await this.currentPanel?.webview.postMessage({
+                message: l10n.t('Integration deleted successfully'),
+                type: 'success'
+            });
+        } catch (error) {
+            logger.error('Failed to delete integration', error);
+            await this.currentPanel?.webview.postMessage({
+                message: l10n.t(
+                    'Failed to delete integration: {0}',
                     error instanceof Error ? error.message : 'Unknown error'
                 ),
                 type: 'error'
@@ -590,16 +653,6 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 'index.js'
             )
         );
-        const styleUri = webview.asWebviewUri(
-            Uri.joinPath(
-                this.extensionContext.extensionUri,
-                'dist',
-                'webviews',
-                'webview-side',
-                'integrations',
-                'integrations.css'
-            )
-        );
         const codiconUri = webview.asWebviewUri(
             Uri.joinPath(
                 this.extensionContext.extensionUri,
@@ -617,9 +670,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${webview.cspSource};">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${webview.cspSource};">
     <link rel="stylesheet" href="${codiconUri}">
-    <link rel="stylesheet" href="${styleUri}">
     <title>Deepnote Integrations</title>
 </head>
 <body>

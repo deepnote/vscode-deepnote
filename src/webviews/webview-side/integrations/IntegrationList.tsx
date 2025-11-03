@@ -6,10 +6,11 @@ import { IntegrationWithStatus } from './types';
 export interface IIntegrationListProps {
     integrations: IntegrationWithStatus[];
     onConfigure: (integrationId: string) => void;
+    onReset: (integrationId: string) => void;
     onDelete: (integrationId: string) => void;
 }
 
-export const IntegrationList: React.FC<IIntegrationListProps> = ({ integrations, onConfigure, onDelete }) => {
+export const IntegrationList: React.FC<IIntegrationListProps> = ({ integrations, onConfigure, onReset, onDelete }) => {
     if (integrations.length === 0) {
         return (
             <p className="no-integrations">
@@ -25,6 +26,7 @@ export const IntegrationList: React.FC<IIntegrationListProps> = ({ integrations,
                     key={integration.id}
                     integration={integration}
                     onConfigure={onConfigure}
+                    onReset={onReset}
                     onDelete={onDelete}
                 />
             ))}

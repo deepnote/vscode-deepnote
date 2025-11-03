@@ -1,17 +1,16 @@
 import * as React from 'react';
-import { format, getLocString } from '../react-common/locReactSide';
+import { getLocString } from '../react-common/locReactSide';
 import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
 import { SshOptionsFields } from './SshOptionsFields';
 import { CaCertificateFields } from './CaCertificateFields';
+import { getDefaultIntegrationName } from './integrationUtils';
 
 type RedshiftConfig = Extract<DatabaseIntegrationConfig, { type: 'redshift' }>;
 
 function createEmptyRedshiftConfig(params: { id: string; name?: string }): RedshiftConfig {
-    const unnamedIntegration = getLocString('integrationsUnnamedIntegration', 'Unnamed Integration ({0})');
-
     return {
         id: params.id,
-        name: (params.name || format(unnamedIntegration, params.id)).trim(),
+        name: (params.name || getDefaultIntegrationName('redshift')).trim(),
         type: 'redshift',
         metadata: {
             authMethod: 'username-and-password',

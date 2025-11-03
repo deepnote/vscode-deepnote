@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { format, getLocString } from '../react-common/locReactSide';
+import { getLocString } from '../react-common/locReactSide';
 import { DatabaseIntegrationConfig, SnowflakeAuthMethods } from '@deepnote/database-integrations';
+import { getDefaultIntegrationName } from './integrationUtils';
 
 type SnowflakeConfig = Extract<DatabaseIntegrationConfig, { type: 'snowflake' }>;
 type SnowflakeAuthMethod = SnowflakeConfig['metadata']['authMethod'];
@@ -12,11 +13,9 @@ function isSupportedSnowflakeAuthMethod(authMethod: SnowflakeAuthMethod): boolea
 }
 
 function createEmptySnowflakeConfig(params: { id: string; name?: string }): SnowflakeConfig {
-    const unnamedIntegration = getLocString('integrationsUnnamedIntegration', 'Unnamed Integration ({0})');
-
     return {
         id: params.id,
-        name: (params.name || format(unnamedIntegration, params.id)).trim(),
+        name: (params.name || getDefaultIntegrationName('snowflake')).trim(),
         type: 'snowflake',
         metadata: {
             authMethod: SnowflakeAuthMethods.Password,

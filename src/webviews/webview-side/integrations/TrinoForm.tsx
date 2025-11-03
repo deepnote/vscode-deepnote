@@ -1,8 +1,9 @@
 import * as React from 'react';
-import { format, getLocString } from '../react-common/locReactSide';
+import { getLocString } from '../react-common/locReactSide';
 import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
 import { SshOptionsFields } from './SshOptionsFields';
 import { CaCertificateFields } from './CaCertificateFields';
+import { getDefaultIntegrationName } from './integrationUtils';
 
 export interface ITrinoFormProps {
     integrationId: string;
@@ -16,11 +17,9 @@ function createEmptyTrinoConfig(params: {
     id: string;
     name?: string;
 }): Extract<DatabaseIntegrationConfig, { type: 'trino' }> {
-    const unnamedIntegration = getLocString('integrationsUnnamedIntegration', 'Unnamed Integration ({0})');
-
     return {
         id: params.id,
-        name: (params.name || format(unnamedIntegration, params.id)).trim(),
+        name: (params.name || getDefaultIntegrationName('trino')).trim(),
         type: 'trino',
         metadata: {
             host: '',

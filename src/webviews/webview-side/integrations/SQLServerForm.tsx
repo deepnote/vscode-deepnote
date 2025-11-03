@@ -1,7 +1,8 @@
 import * as React from 'react';
-import { format, getLocString } from '../react-common/locReactSide';
+import { getLocString } from '../react-common/locReactSide';
 import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
 import { SshOptionsFields } from './SshOptionsFields';
+import { getDefaultIntegrationName } from './integrationUtils';
 
 export interface ISQLServerFormProps {
     integrationId: string;
@@ -15,11 +16,9 @@ function createEmptySQLServerConfig(params: {
     id: string;
     name?: string;
 }): Extract<DatabaseIntegrationConfig, { type: 'sql-server' }> {
-    const unnamedIntegration = getLocString('integrationsUnnamedIntegration', 'Unnamed Integration ({0})');
-
     return {
         id: params.id,
-        name: (params.name || format(unnamedIntegration, params.id)).trim(),
+        name: (params.name || getDefaultIntegrationName('sql-server')).trim(),
         type: 'sql-server',
         metadata: {
             host: '',

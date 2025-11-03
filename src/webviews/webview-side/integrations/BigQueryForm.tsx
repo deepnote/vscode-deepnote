@@ -1,15 +1,14 @@
 import * as React from 'react';
 import { format, getLocString } from '../react-common/locReactSide';
 import { BigQueryAuthMethods, DatabaseIntegrationConfig } from '@deepnote/database-integrations';
+import { getDefaultIntegrationName } from './integrationUtils';
 
 type BigQueryConfig = Extract<DatabaseIntegrationConfig, { type: 'big-query' }>;
 
 function createEmptyBigQueryConfig(params: { id: string; name?: string }): BigQueryConfig {
-    const unnamedIntegration = getLocString('integrationsUnnamedIntegration', 'Unnamed Integration ({0})');
-
     return {
         id: params.id,
-        name: (params.name || format(unnamedIntegration, params.id)).trim(),
+        name: (params.name || getDefaultIntegrationName('big-query')).trim(),
         type: 'big-query',
         metadata: {
             authMethod: BigQueryAuthMethods.ServiceAccount,

@@ -300,6 +300,18 @@ export function getDisplayNameOrNameOfKernelConnection(kernelConnection: KernelC
             } else {
                 return `Python ${pythonVersion}`.trim();
             }
+        case 'startUsingDeepnoteKernel': {
+            // Display as "Project Title"
+            if (kernelConnection.projectName) {
+                return kernelConnection.projectName;
+            }
+            // For Deepnote kernels, use the environment name if available
+            if (kernelConnection.environmentName) {
+                return `Deepnote: ${kernelConnection.environmentName}`;
+            }
+            // Fallback to kernelspec display name
+            return oldDisplayName;
+        }
     }
     return oldDisplayName;
 }
@@ -587,6 +599,13 @@ export function areKernelConnectionsEqual(
     }
     if (connection1 && !connection2) {
         return false;
+    }
+    if (connection1?.kind === 'startUsingDeepnoteKernel' && connection2?.kind === 'startUsingDeepnoteKernel') {
+        return (
+            connection1?.id === connection2?.id &&
+            connection1?.environmentName === connection2?.environmentName &&
+            connection1?.notebookName === connection2?.notebookName
+        );
     }
     return connection1?.id === connection2?.id;
 }

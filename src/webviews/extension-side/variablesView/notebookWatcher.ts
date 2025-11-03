@@ -9,7 +9,7 @@ import { IInteractiveWindowProvider } from '../../../interactive-window/types';
 import { IDisposableRegistry } from '../../../platform/common/types';
 import { IDataViewerFactory } from '../dataviewer/types';
 import { JupyterNotebookView } from '../../../platform/common/constants';
-import { isJupyterNotebook } from '../../../platform/common/utils';
+import { isDeepnoteNotebook, isJupyterNotebook } from '../../../platform/common/utils';
 import {
     NotebookCellExecutionState,
     notebookCellExecutions,
@@ -110,7 +110,7 @@ export class NotebookWatcher implements INotebookWatcher {
 
     // Handle when a cell finishes execution
     private onDidChangeNotebookCellExecutionState(cellStateChange: NotebookCellExecutionStateChangeEvent) {
-        if (!isJupyterNotebook(cellStateChange.cell.notebook)) {
+        if (!isJupyterNotebook(cellStateChange.cell.notebook) && !isDeepnoteNotebook(cellStateChange.cell.notebook)) {
             return;
         }
 
@@ -174,7 +174,7 @@ export class NotebookWatcher implements INotebookWatcher {
     private activeEditorChanged(editor: NotebookEditor | undefined) {
         const changeEvent: IActiveNotebookChangedEvent = {};
 
-        if (editor && isJupyterNotebook(editor.notebook)) {
+        if (editor && (isJupyterNotebook(editor.notebook) || isDeepnoteNotebook(editor.notebook))) {
             const executionCount = this._executionCountTracker.get(editor.notebook);
             executionCount && (changeEvent.executionCount = executionCount);
         }

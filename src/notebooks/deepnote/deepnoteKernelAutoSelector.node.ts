@@ -181,11 +181,13 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     private async showNoEnvironmentWarning(notebook: NotebookDocument): Promise<void> {
         logger.info(`Showing no environment warning for ${getDisplayPath(notebook.uri)}`);
         const selectEnvironmentAction = l10n.t('Select Environment');
+        const cancelAction = l10n.t('Cancel');
 
         const selectedAction = await window.showWarningMessage(
             l10n.t('No environment configured for this notebook. Please select an environment to continue.'),
-            { modal: true },
-            selectEnvironmentAction
+            { modal: false },
+            selectEnvironmentAction,
+            cancelAction
         );
 
         logger.info(`Selected action: ${selectedAction}`);

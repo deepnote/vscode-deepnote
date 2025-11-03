@@ -14,6 +14,22 @@ import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/
 import { IKernelProvider } from '../../kernels/types';
 import { getDisplayPath } from '../../platform/common/platform/fs-paths';
 
+const DEEPNOTE_CLOUD_INIT_NOTEBOOK_BLOCK_CONTENT = `%%bash
+# If your project has a 'requirements.txt' file, we'll install it here.
+if test -f requirements.txt
+  then
+    pip install -r ./requirements.txt
+  else echo "There's no requirements.txt, so nothing to install."
+fi`.trim();
+
+const VSCODE_INIT_NOTEBOOK_BLOCK_CONTENT = `import os, sys, subprocess
+
+if os.path.exists("requirements.txt"):
+    print("Installing requirements.txt")
+    subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], check=False)
+else:
+    print("There's no requirements.txt, so nothing to install.")`.trim();
+
 /**
  * Service responsible for running init notebooks before the main notebook starts.
  * Init notebooks typically contain setup code like pip installs.
@@ -253,8 +269,20 @@ export class DeepnoteInitNotebookRunner {
                 logger.info(`Executing init notebook block ${i + 1}/${codeBlocks.length}`);
 
                 try {
+                    // Make sure the init notebook execution works cross-platform
+                    let blockContent = block.content ?? '';
+                    const isWindows = process.platform === 'win32';
+                    if (isWindows && blockContent.trim() === DEEPNOTE_CLOUD_INIT_NOTEBOOK_BLOCK_CONTENT) {
+                        blockContent = VSCODE_INIT_NOTEBOOK_BLOCK_CONTENT;
+                        logger.info(
+                            `Replacing Deepnote Cloud init notebook block ${
+                                i + 1
+                            } content with VSCode init notebook block`
+                        );
+                    }
+
                     // Execute the code silently in the background
-                    const outputs = await kernelExecution.executeHidden(block.content ?? '');
+                    const outputs = await kernelExecution.executeHidden(blockContent);
 
                     // Log outputs for debugging
                     if (outputs && outputs.length > 0) {

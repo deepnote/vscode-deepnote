@@ -18,7 +18,7 @@ import {
     commands
 } from 'vscode';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
-import { IDisposableRegistry } from '../../platform/common/types';
+import { IDisposableRegistry, IExtensionContext } from '../../platform/common/types';
 import { logger } from '../../platform/logging';
 import {
     IDeepnoteKernelAutoSelector,
@@ -30,7 +30,6 @@ import {
     IDeepnoteServerStarter
 } from '../../kernels/deepnote/types';
 import { IControllerRegistration, IVSCodeNotebookController } from '../controllers/types';
-import { JVSC_EXTENSION_ID } from '../../platform/common/constants';
 import { getDisplayPath } from '../../platform/common/platform/fs-paths';
 import { JupyterServerProviderHandle } from '../../kernels/jupyter/types';
 import { IPythonExtensionChecker } from '../../platform/api/types';
@@ -85,7 +84,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         @inject(IDeepnoteServerStarter) private readonly serverStarter: IDeepnoteServerStarter,
         @inject(IDeepnoteNotebookEnvironmentMapper)
         private readonly notebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper,
-        @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel
+        @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel,
+        @inject(IExtensionContext) private readonly context: IExtensionContext
     ) {}
 
     public activate() {
@@ -489,7 +489,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 editor: notebook,
                 // id: existingController.controller.id,
                 id: existingController.connection.id,
-                extension: JVSC_EXTENSION_ID
+                extension: this.context.extension.id
             });
             return;
         }
@@ -514,7 +514,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         // Create server provider handle
         const serverProviderHandle: JupyterServerProviderHandle = {
-            extensionId: JVSC_EXTENSION_ID,
+            extensionId: this.context.extension.id,
             id: 'deepnote-server',
             handle: createDeepnoteServerConfigHandle(configuration.id, baseFileUri)
         };
@@ -639,7 +639,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             editor: notebook,
             // id: controller.controller.id,
             id: controller.connection.id,
-            extension: JVSC_EXTENSION_ID
+            extension: this.context.extension.id
         });
 
         logger.info(`Successfully set up kernel with configuration: ${configuration.name}`);

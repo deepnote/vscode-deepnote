@@ -5,9 +5,8 @@ import { inject, injectable } from 'inversify';
 import { CancellationToken, Uri, Event, EventEmitter } from 'vscode';
 import { JupyterServer, JupyterServerProvider } from '../../api';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
-import { IDisposableRegistry } from '../../platform/common/types';
+import { IDisposableRegistry, IExtensionContext } from '../../platform/common/types';
 import { IJupyterServerProviderRegistry } from '../jupyter/types';
-import { JVSC_EXTENSION_ID } from '../../platform/common/constants';
 import { logger } from '../../platform/logging';
 import { DeepnoteServerNotFoundError } from '../../platform/errors/deepnoteServerNotFoundError';
 import { DeepnoteServerInfo, IDeepnoteServerProvider } from './types';
@@ -30,13 +29,14 @@ export class DeepnoteServerProvider
     constructor(
         @inject(IJupyterServerProviderRegistry)
         private readonly jupyterServerProviderRegistry: IJupyterServerProviderRegistry,
-        @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry
+        @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
+        @inject(IExtensionContext) private readonly context: IExtensionContext
     ) {}
 
     public activate() {
         // Register this server provider
         const collection = this.jupyterServerProviderRegistry.createJupyterServerCollection(
-            JVSC_EXTENSION_ID,
+            this.context.extension.id,
             this.id,
             'Deepnote Toolkit Server',
             this

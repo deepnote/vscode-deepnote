@@ -402,7 +402,3 @@ form {
     flex: 1;
     color: var(--vscode-foreground);
 }
-
-.integration-type-category {
-    display: none;
-}

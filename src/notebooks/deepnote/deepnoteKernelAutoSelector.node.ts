@@ -96,20 +96,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         private readonly notebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper,
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel
     ) {
-        this.deepnoteLoadingKernelController = notebooks.createNotebookController(
-            `deepnote-loading-kernel`,
-            DEEPNOTE_NOTEBOOK_TYPE,
-            l10n.t('Loading Deepnote Kernel...')
-        );
-
-        // Set it as the preferred controller immediately
-        this.deepnoteLoadingKernelController.supportsExecutionOrder = false;
-        this.deepnoteLoadingKernelController.supportedLanguages = ['python'];
-
-        // Execution handler that does nothing - cells will just sit there until real kernel is ready
-        this.deepnoteLoadingKernelController.executeHandler = () => {
-            // No-op: execution is blocked until the real controller takes over
-        };
+        this.deepnoteLoadingKernelController = DeepnoteKernelAutoSelector.createDeepnoteLoadingKernelController();
     }
 
     public activate() {
@@ -198,7 +185,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         const selectedAction = await window.showWarningMessage(
             l10n.t('No environment configured for this notebook. Please select an environment to continue.'),
-            { modal: false },
+            { modal: true },
             selectEnvironmentAction,
             cancelAction
         );
@@ -860,5 +847,24 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             logger.warn(`Failed to read existing requirements.txt: ${error}`);
             return '';
         }
+    }
+
+    public static createDeepnoteLoadingKernelController(): NotebookController {
+        const controller = notebooks.createNotebookController(
+            `deepnote-loading-kernel`,
+            DEEPNOTE_NOTEBOOK_TYPE,
+            l10n.t('Loading Deepnote Kernel...')
+        );
+
+        // Set it as the preferred controller immediately
+        controller.supportsExecutionOrder = false;
+        controller.supportedLanguages = ['python'];
+
+        // Execution handler that does nothing - cells will just sit there until real kernel is ready
+        controller.executeHandler = () => {
+            // No-op: execution is blocked until the real controller takes over
+        };
+
+        return controller;
     }
 }

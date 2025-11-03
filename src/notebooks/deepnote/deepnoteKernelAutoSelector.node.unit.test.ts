@@ -49,6 +49,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
     setup(() => {
         sandbox = sinon.createSandbox();
+
         // Create mocks for all dependencies
         mockDisposableRegistry = mock<IDisposableRegistry>();
         mockControllerRegistration = mock<IControllerRegistration>();
@@ -97,6 +98,10 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
         // Mock disposable registry - push returns the index
         when(mockDisposableRegistry.push(anything())).thenReturn(0);
+
+        sandbox
+            .stub(DeepnoteKernelAutoSelector, 'createDeepnoteLoadingKernelController')
+            .returns(mock<NotebookController>());
 
         // Create selector instance
         selector = new DeepnoteKernelAutoSelector(

@@ -2,11 +2,11 @@
 // Licensed under the MIT License.
 
 import * as vscode from 'vscode';
-import { IJupyterKernelSpec } from '../types';
-import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
-import { JupyterServerProviderHandle } from '../jupyter/types';
 import { serializePythonEnvironment } from '../../platform/api/pythonApi';
+import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { getTelemetrySafeHashedString } from '../../platform/telemetry/helpers';
+import { JupyterServerProviderHandle } from '../jupyter/types';
+import { IJupyterKernelSpec } from '../types';
 import { CreateDeepnoteEnvironmentOptions, DeepnoteEnvironment } from './environments/deepnoteEnvironment';
 
 export interface VenvAndToolkitInstallation {
@@ -205,7 +205,11 @@ export interface IDeepnoteKernelAutoSelector {
      * @param notebook The notebook document
      * @param token Cancellation token to cancel the operation
      */
-    rebuildController(notebook: vscode.NotebookDocument, token?: vscode.CancellationToken): Promise<void>;
+    rebuildController(
+        notebook: vscode.NotebookDocument,
+        progress: { report(value: { message?: string; increment?: number }): void },
+        token: vscode.CancellationToken
+    ): Promise<void>;
 
     /**
      * Clear the controller selection for a notebook using a specific environment.

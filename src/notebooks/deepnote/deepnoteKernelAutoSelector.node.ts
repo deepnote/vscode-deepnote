@@ -1,55 +1,55 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { inject, injectable, optional, named } from 'inversify';
+import { inject, injectable, named, optional } from 'inversify';
 import {
     CancellationToken,
-    NotebookDocument,
-    workspace,
-    NotebookControllerAffinity,
-    window,
     CancellationTokenSource,
     Disposable,
-    Uri,
-    l10n,
-    env,
+    NotebookControllerAffinity,
+    NotebookDocument,
     ProgressLocation,
     QuickPickItem,
-    commands
+    Uri,
+    commands,
+    env,
+    l10n,
+    window,
+    workspace
 } from 'vscode';
-import { IExtensionSyncActivationService } from '../../platform/activation/types';
-import { IDisposableRegistry } from '../../platform/common/types';
-import { logger } from '../../platform/logging';
+import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnoteEnvironment';
 import {
-    IDeepnoteKernelAutoSelector,
-    IDeepnoteServerProvider,
-    IDeepnoteEnvironmentManager,
-    IDeepnoteNotebookEnvironmentMapper,
     DEEPNOTE_NOTEBOOK_TYPE,
     DeepnoteKernelConnectionMetadata,
+    IDeepnoteEnvironmentManager,
+    IDeepnoteKernelAutoSelector,
+    IDeepnoteNotebookEnvironmentMapper,
+    IDeepnoteServerProvider,
     IDeepnoteServerStarter
 } from '../../kernels/deepnote/types';
-import { IControllerRegistration, IVSCodeNotebookController } from '../controllers/types';
-import { JVSC_EXTENSION_ID } from '../../platform/common/constants';
-import { getDisplayPath } from '../../platform/common/platform/fs-paths';
-import { JupyterServerProviderHandle } from '../../kernels/jupyter/types';
-import { IPythonExtensionChecker } from '../../platform/api/types';
-import { JupyterLabHelper } from '../../kernels/jupyter/session/jupyterLabHelper';
 import { createJupyterConnectionInfo } from '../../kernels/jupyter/jupyterUtils';
-import { IJupyterRequestCreator, IJupyterRequestAgentCreator } from '../../kernels/jupyter/types';
-import { IConfigurationService } from '../../platform/common/types';
-import { disposeAsync } from '../../platform/common/utils';
-import { IDeepnoteInitNotebookRunner } from './deepnoteInitNotebookRunner.node';
-import { IDeepnoteNotebookManager } from '../types';
-import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
-import { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
-import { IKernelProvider, IKernel, IJupyterKernelSpec } from '../../kernels/types';
-import { DeepnoteKernelError } from '../../platform/errors/deepnoteKernelErrors';
-import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnoteEnvironment';
-import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
-import { IOutputChannel } from '../../platform/common/types';
-import { createDeepnoteServerConfigHandle } from '../../platform/deepnote/deepnoteServerUtils.node';
+import { JupyterLabHelper } from '../../kernels/jupyter/session/jupyterLabHelper';
+import {
+    IJupyterRequestAgentCreator,
+    IJupyterRequestCreator,
+    JupyterServerProviderHandle
+} from '../../kernels/jupyter/types';
+import { IJupyterKernelSpec, IKernel, IKernelProvider } from '../../kernels/types';
+import { IExtensionSyncActivationService } from '../../platform/activation/types';
+import { IPythonExtensionChecker } from '../../platform/api/types';
 import { Cancellation } from '../../platform/common/cancellation';
+import { JVSC_EXTENSION_ID, STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
+import { getDisplayPath } from '../../platform/common/platform/fs-paths';
+import { IConfigurationService, IDisposableRegistry, IOutputChannel } from '../../platform/common/types';
+import { disposeAsync } from '../../platform/common/utils';
+import { createDeepnoteServerConfigHandle } from '../../platform/deepnote/deepnoteServerUtils.node';
+import { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
+import { DeepnoteKernelError } from '../../platform/errors/deepnoteKernelErrors';
+import { logger } from '../../platform/logging';
+import { IControllerRegistration, IVSCodeNotebookController } from '../controllers/types';
+import { IDeepnoteNotebookManager } from '../types';
+import { IDeepnoteInitNotebookRunner } from './deepnoteInitNotebookRunner.node';
+import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
 
 /**
  * Automatically selects and starts Deepnote kernel for .deepnote notebooks
@@ -372,7 +372,11 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
      * and addOrUpdate will call updateConnection() on the existing controller instead of creating a new one.
      * This keeps VS Code bound to the same controller object, avoiding DISPOSED errors.
      */
-    public async rebuildController(notebook: NotebookDocument, token: CancellationToken): Promise<void> {
+    public async rebuildController(
+        notebook: NotebookDocument,
+        progress: { report(value: { message?: string; increment?: number }): void },
+        token: CancellationToken
+    ): Promise<void> {
         const baseFileUri = notebook.uri.with({ query: '', fragment: '' });
         const notebookKey = notebook.uri.toString();
         const projectKey = baseFileUri.fsPath;
@@ -419,13 +423,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             baseFileUri,
             notebookKey,
             projectKey,
-            {
-                report: (value) => {
-                    if (value.message != null) {
-                        logger.info(value.message);
-                    }
-                }
-            },
+            progress,
             token
         );
 

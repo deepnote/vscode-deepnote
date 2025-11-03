@@ -1,14 +1,14 @@
-import { injectable, inject, named } from 'inversify';
-import { EventEmitter, Uri, CancellationToken, l10n } from 'vscode';
-import { generateUuid as uuid } from '../../../platform/common/uuid';
-import { IExtensionContext, IOutputChannel } from '../../../platform/common/types';
+import { inject, injectable, named } from 'inversify';
+import { CancellationToken, EventEmitter, l10n, Uri } from 'vscode';
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
-import { logger } from '../../../platform/logging';
-import { DeepnoteEnvironmentStorage } from './deepnoteEnvironmentStorage.node';
-import { CreateDeepnoteEnvironmentOptions, DeepnoteEnvironment } from './deepnoteEnvironment';
-import { IDeepnoteEnvironmentManager, IDeepnoteServerStarter } from '../types';
 import { Cancellation } from '../../../platform/common/cancellation';
 import { STANDARD_OUTPUT_CHANNEL } from '../../../platform/common/constants';
+import { IExtensionContext, IOutputChannel } from '../../../platform/common/types';
+import { generateUuid as uuid } from '../../../platform/common/uuid';
+import { logger } from '../../../platform/logging';
+import { IDeepnoteEnvironmentManager, IDeepnoteServerStarter } from '../types';
+import { CreateDeepnoteEnvironmentOptions, DeepnoteEnvironment } from './deepnoteEnvironment';
+import { DeepnoteEnvironmentStorage } from './deepnoteEnvironmentStorage.node';
 
 /**
  * Manager for Deepnote kernel environments.
@@ -160,10 +160,7 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
             throw new Error(`Environment not found: ${id}`);
         }
 
-        // // Stop the server if running
-        // if (config.serverInfo) {
-        //     await this.stopServer(id, token);
-        // }
+        // Stop the server if running
         for (const fileKey of this.environmentServers.get(id) ?? []) {
             await this.serverStarter.stopServer(fileKey, token);
             Cancellation.throwIfCanceled(token);

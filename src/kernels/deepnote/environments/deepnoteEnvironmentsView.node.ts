@@ -465,16 +465,16 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 {
                     location: ProgressLocation.Notification,
                     title: l10n.t('Switching to environment...'),
-                    cancellable: false
+                    cancellable: true
                 },
-                async () => {
+                async (progress, token) => {
                     // Update the notebook-to-environment mapping
                     await this.notebookEnvironmentMapper.setEnvironmentForNotebook(baseFileUri, selectedEnvironmentId);
 
                     // Force rebuild the controller with the new environment
                     // This clears cached metadata and creates a fresh controller.
                     // await this.kernelAutoSelector.ensureKernelSelected(activeNotebook);
-                    await this.kernelAutoSelector.rebuildController(notebook);
+                    await this.kernelAutoSelector.rebuildController(notebook, progress, token);
 
                     logger.info(`Successfully switched to environment ${selectedEnvironmentId}`);
                 }

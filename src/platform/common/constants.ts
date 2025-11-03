@@ -21,7 +21,8 @@ export const NOTEBOOK_SELECTOR = [
 ];
 
 export const CodespaceExtensionId = 'GitHub.codespaces';
-export const JVSC_EXTENSION_ID = 'ms-toolsai.jupyter';
+// export const JVSC_EXTENSION_ID = 'ms-toolsai.jupyter';
+export const JVSC_EXTENSION_ID = 'Deepnote.vscode-deepnote';
 export const DATA_WRANGLER_EXTENSION_ID = 'ms-toolsai.datawrangler';
 export const PROPOSED_API_ALLOWED_PUBLISHERS = ['donjayamanne'];
 export const POWER_TOYS_EXTENSION_ID = 'ms-toolsai.vscode-jupyter-powertoys';

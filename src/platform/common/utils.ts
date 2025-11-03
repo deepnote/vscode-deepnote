@@ -132,6 +132,20 @@ export function isJupyterNotebook(option: NotebookDocument | string) {
         return option.notebookType === JupyterNotebookView || option.notebookType === InteractiveWindowView;
     }
 }
+/**
+ * Whether this is a Notebook we created/manage/use.
+ * Remember, there could be other notebooks such as GitHub Issues nb by VS Code.
+ */
+export function isDeepnoteNotebook(document: NotebookDocument): boolean;
+// eslint-disable-next-line @typescript-eslint/unified-signatures
+export function isDeepnoteNotebook(viewType: string): boolean;
+export function isDeepnoteNotebook(option: NotebookDocument | string) {
+    if (typeof option === 'string') {
+        return option === 'deepnote';
+    } else {
+        return option.notebookType === 'Deepnote';
+    }
+}
 export type NotebookMetadata = nbformat.INotebookMetadata & {
     /**
      * We used to store interpreter at this level.

@@ -17,7 +17,7 @@ import { IDeepnoteInitNotebookRunner } from './deepnoteInitNotebookRunner.node';
 import { IDeepnoteNotebookManager } from '../types';
 import { IKernelProvider, IKernel, IJupyterKernelSpec } from '../../kernels/types';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
-import { NotebookDocument, Uri, NotebookController, CancellationToken } from 'vscode';
+import { NotebookDocument, Uri, NotebookController, CancellationToken, workspace } from 'vscode';
 import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnoteEnvironment';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 
@@ -772,6 +772,116 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             } else {
                 assert.ok(true, 'Test did not capture call order due to mocking complexity');
             }
+        });
+    });
+
+    suite('Requirements Optimization', () => {
+        suite('computeRequirementsHash', () => {
+            test('should return empty string for null/undefined', () => {
+                const result1 = selector.computeRequirementsHash(null);
+                const result2 = selector.computeRequirementsHash(undefined);
+
+                assert.strictEqual(result1, '');
+                assert.strictEqual(result2, '');
+            });
+
+            test('should return empty string for non-array input', () => {
+                const result1 = selector.computeRequirementsHash('not-an-array' as any);
+                const result2 = selector.computeRequirementsHash(123 as any);
+                const result3 = selector.computeRequirementsHash({} as any);
+
+                assert.strictEqual(result1, '');
+                assert.strictEqual(result2, '');
+                assert.strictEqual(result3, '');
+            });
+
+            test('should return empty string for empty array', () => {
+                const result = selector.computeRequirementsHash([]);
+
+                assert.strictEqual(result, '');
+            });
+
+            test('should filter out non-string entries', () => {
+                const requirements = ['pandas', 123, 'numpy', null, 'scipy', undefined];
+                const result = selector.computeRequirementsHash(requirements);
+
+                // Should only include string entries
+                assert.strictEqual(result, 'numpy|pandas|scipy');
+            });
+
+            test('should trim whitespace from requirements', () => {
+                const requirements = ['  pandas  ', 'numpy\t', '\nscipy'];
+                const result = selector.computeRequirementsHash(requirements);
+
+                assert.strictEqual(result, 'numpy|pandas|scipy');
+            });
+
+            test('should filter out empty strings', () => {
+                const requirements = ['pandas', '', '  ', 'numpy', '\t\n'];
+                const result = selector.computeRequirementsHash(requirements);
+
+                assert.strictEqual(result, 'numpy|pandas');
+            });
+
+            test('should sort requirements alphabetically', () => {
+                const requirements = ['scipy', 'pandas', 'numpy', 'matplotlib'];
+                const result = selector.computeRequirementsHash(requirements);
+
+                assert.strictEqual(result, 'matplotlib|numpy|pandas|scipy');
+            });
+
+            test('should deduplicate requirements', () => {
+                const requirements = ['pandas', 'numpy', 'pandas', 'scipy', 'numpy'];
+                const result = selector.computeRequirementsHash(requirements);
+
+                // Should have each requirement only once
+                assert.strictEqual(result, 'numpy|pandas|scipy');
+            });
+
+            test('should handle version specifiers', () => {
+                const requirements = ['pandas>=1.0.0', 'numpy==1.21.0', 'scipy<2.0'];
+                const result = selector.computeRequirementsHash(requirements);
+
+                assert.strictEqual(result, 'numpy==1.21.0|pandas>=1.0.0|scipy<2.0');
+            });
+
+            test('should produce same hash for same requirements in different order', () => {
+                const requirements1 = ['pandas', 'numpy', 'scipy'];
+                const requirements2 = ['scipy', 'pandas', 'numpy'];
+
+                const hash1 = selector.computeRequirementsHash(requirements1);
+                const hash2 = selector.computeRequirementsHash(requirements2);
+
+                assert.strictEqual(hash1, hash2);
+            });
+
+            test('should produce different hash for different requirements', () => {
+                const requirements1 = ['pandas', 'numpy'];
+                const requirements2 = ['pandas', 'scipy'];
+
+                const hash1 = selector.computeRequirementsHash(requirements1);
+                const hash2 = selector.computeRequirementsHash(requirements2);
+
+                assert.notStrictEqual(hash1, hash2);
+            });
+        });
+
+        suite('getExistingRequirementsHash', () => {
+            test('parsing logic correctness', () => {
+                // Test the parsing logic directly by calling computeRequirementsHash
+                // with a parsed file-like array (mimics what getExistingRequirementsHash does)
+                const fileLines = ['# This is a comment', 'pandas', '', '  numpy  ', 'scipy', '# Another comment'];
+
+                // Filter out comments and empty lines (same logic as getExistingRequirementsHash)
+                const requirements = fileLines
+                    .map((line) => line.trim())
+                    .filter((line) => line.length > 0 && !line.startsWith('#'));
+
+                const hash = selector.computeRequirementsHash(requirements);
+
+                // Should have filtered and sorted correctly
+                assert.strictEqual(hash, 'numpy|pandas|scipy');
+            });
         });
     });
 });

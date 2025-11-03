@@ -590,16 +590,6 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 'index.js'
             )
         );
-        const styleUri = webview.asWebviewUri(
-            Uri.joinPath(
-                this.extensionContext.extensionUri,
-                'dist',
-                'webviews',
-                'webview-side',
-                'integrations',
-                'integrations.css'
-            )
-        );
         const codiconUri = webview.asWebviewUri(
             Uri.joinPath(
                 this.extensionContext.extensionUri,
@@ -619,7 +609,6 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${webview.cspSource};">
     <link rel="stylesheet" href="${codiconUri}">
-    <link rel="stylesheet" href="${styleUri}">
     <title>Deepnote Integrations</title>
 </head>
 <body>

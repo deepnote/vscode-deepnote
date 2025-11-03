@@ -822,9 +822,15 @@ export namespace Integrations {
     export const configure = l10n.t('Configure');
     export const reconfigure = l10n.t('Reconfigure');
     export const reset = l10n.t('Reset');
+    export const deleteIntegration = l10n.t('Delete');
     export const confirmResetTitle = l10n.t('Confirm Reset');
     export const confirmResetMessage = l10n.t('Are you sure you want to reset this integration configuration?');
     export const confirmResetDetails = l10n.t('This will remove the stored credentials. You can reconfigure it later.');
+    export const confirmDeleteTitle = l10n.t('Confirm Delete');
+    export const confirmDeleteMessage = l10n.t('Are you sure you want to permanently delete this integration?');
+    export const confirmDeleteDetails = l10n.t(
+        'This will permanently remove the integration from your project. This action cannot be undone.'
+    );
     export const configureTitle = l10n.t('Configure Integration: {0}');
     export const cancel = l10n.t('Cancel');
     export const save = l10n.t('Save');

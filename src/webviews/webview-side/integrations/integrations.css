@@ -118,6 +118,23 @@ button.primary {
     color: var(--vscode-button-foreground);
 }
 
+button.icon-button {
+    padding: 6px 8px;
+    min-width: auto;
+    background-color: transparent;
+    border: 1px solid transparent;
+    color: var(--vscode-foreground);
+}
+
+button.icon-button:hover {
+    background-color: var(--vscode-toolbar-hoverBackground);
+    border-color: var(--vscode-button-border);
+}
+
+button.icon-button .codicon {
+    font-size: 16px;
+}
+
 /* Configuration form overlay */
 .configuration-form-overlay {
     position: fixed;

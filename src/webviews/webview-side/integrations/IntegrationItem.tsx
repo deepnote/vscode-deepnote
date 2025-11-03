@@ -5,6 +5,7 @@ import { ConfigurableDatabaseIntegrationType, IntegrationWithStatus } from './ty
 export interface IIntegrationItemProps {
     integration: IntegrationWithStatus;
     onConfigure: (integrationId: string) => void;
+    onReset: (integrationId: string) => void;
     onDelete: (integrationId: string) => void;
 }
 
@@ -49,7 +50,7 @@ const getIntegrationTypeLabel = (type: ConfigurableDatabaseIntegrationType): str
     }
 };
 
-export const IntegrationItem: React.FC<IIntegrationItemProps> = ({ integration, onConfigure, onDelete }) => {
+export const IntegrationItem: React.FC<IIntegrationItemProps> = ({ integration, onConfigure, onReset, onDelete }) => {
     const statusClass = integration.status === 'connected' ? 'status-connected' : 'status-disconnected';
     const statusText =
         integration.status === 'connected'
@@ -79,8 +80,19 @@ export const IntegrationItem: React.FC<IIntegrationItemProps> = ({ integration, 
                     {configureText}
                 </button>
                 {integration.config && (
-                    <button type="button" className="secondary" onClick={() => onDelete(integration.id)}>
+                    <button type="button" className="secondary" onClick={() => onReset(integration.id)}>
                         {getLocString('integrationsReset', 'Reset')}
+                    </button>
+                )}
+                {integration.config && (
+                    <button
+                        type="button"
+                        className="icon-button"
+                        onClick={() => onDelete(integration.id)}
+                        title={getLocString('integrationsDelete', 'Delete')}
+                        aria-label={getLocString('integrationsDelete', 'Delete')}
+                    >
+                        <span className="codicon codicon-trash" />
                     </button>
                 )}
             </div>

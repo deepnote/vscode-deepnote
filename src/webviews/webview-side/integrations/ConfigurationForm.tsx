@@ -18,27 +18,7 @@ import { SpannerForm } from './SpannerForm';
 import { SQLServerForm } from './SQLServerForm';
 import { TrinoForm } from './TrinoForm';
 import { ConfigurableDatabaseIntegrationConfig, ConfigurableDatabaseIntegrationType } from './types';
-
-// Localized labels for integration types (duplicated from sqlCellStatusBarProvider.ts due to import restrictions)
-const integrationTypeLabels: Record<ConfigurableDatabaseIntegrationType, string> = {
-    alloydb: 'AlloyDB',
-    athena: 'Amazon Athena',
-    'big-query': 'BigQuery',
-    clickhouse: 'ClickHouse',
-    databricks: 'Databricks',
-    dremio: 'Dremio',
-    mariadb: 'MariaDB',
-    materialize: 'Materialize',
-    mindsdb: 'MindsDB',
-    mongodb: 'MongoDB',
-    mysql: 'MySQL',
-    pgsql: 'PostgreSQL',
-    redshift: 'Amazon Redshift',
-    snowflake: 'Snowflake',
-    spanner: 'Google Cloud Spanner',
-    'sql-server': 'SQL Server',
-    trino: 'Trino'
-};
+import { integrationTypeLabels } from './integrationUtils';
 
 export interface IConfigurationFormProps {
     integrationId: string;

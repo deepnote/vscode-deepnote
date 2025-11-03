@@ -1,8 +1,9 @@
 import * as React from 'react';
-import { format, getLocString } from '../react-common/locReactSide';
+import { getLocString } from '../react-common/locReactSide';
 import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
 import { SshOptionsFields } from './SshOptionsFields';
 import { CaCertificateFields } from './CaCertificateFields';
+import { getDefaultIntegrationName } from './integrationUtils';
 
 export interface IMaterializeFormProps {
     integrationId: string;
@@ -16,11 +17,9 @@ function createEmptyMaterializeConfig(params: {
     id: string;
     name?: string;
 }): Extract<DatabaseIntegrationConfig, { type: 'materialize' }> {
-    const unnamedIntegration = getLocString('integrationsUnnamedIntegration', 'Unnamed Integration ({0})');
-
     return {
         id: params.id,
-        name: (params.name || format(unnamedIntegration, params.id)).trim(),
+        name: (params.name || getDefaultIntegrationName('materialize')).trim(),
         type: 'materialize',
         metadata: {
             host: '',

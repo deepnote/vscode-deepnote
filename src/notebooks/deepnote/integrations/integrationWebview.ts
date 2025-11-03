@@ -375,6 +375,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsCaCertificateText: localize.Integrations.caCertificateText,
             integrationsCaCertificateTextPlaceholder: localize.Integrations.caCertificateTextPlaceholder,
             integrationsUnnamedIntegration: localize.Integrations.unnamedIntegration('{0}'),
+            integrationsDefaultName: localize.Integrations.defaultName('{0}'),
             integrationsUnsupportedIntegrationType: localize.Integrations.unsupportedIntegrationType('{0}')
         };
 

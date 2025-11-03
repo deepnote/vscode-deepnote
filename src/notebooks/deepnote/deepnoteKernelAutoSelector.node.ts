@@ -51,6 +51,7 @@ import { IControllerRegistration, IVSCodeNotebookController } from '../controlle
 import { IDeepnoteNotebookManager } from '../types';
 import { IDeepnoteInitNotebookRunner } from './deepnoteInitNotebookRunner.node';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
+import { computeRequirementsHash } from './deepnoteProjectUtils';
 
 /**
  * Automatically selects and starts Deepnote kernel for .deepnote notebooks
@@ -618,7 +619,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         if (project) {
             // Only create requirements.txt if requirements have changed from what's on disk
             const requirements = project.project.settings?.requirements;
-            const expectedHash = this.computeRequirementsHash(requirements);
+            const expectedHash = computeRequirementsHash(requirements);
             const existingFileHash = await this.getExistingRequirementsHash();
 
             if (expectedHash !== existingFileHash) {
@@ -800,28 +801,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     }
 
     /**
-     * Compute a hash of the requirements to detect changes.
-     * Returns a sorted, normalized string representation of requirements.
-     */
-    private computeRequirementsHash(requirements: unknown): string {
-        if (!requirements || !Array.isArray(requirements)) {
-            return '';
-        }
-
-        // Normalize requirements: filter strings, trim, remove empty, dedupe, and sort for consistency
-        const normalizedRequirements = Array.from(
-            new Set(
-                requirements
-                    .filter((req): req is string => typeof req === 'string')
-                    .map((req) => req.trim())
-                    .filter((req) => req.length > 0)
-            )
-        ).sort();
-
-        return normalizedRequirements.join('|');
-    }
-
-    /**
      * Read and hash the existing requirements.txt file if it exists.
      * Returns the same hash format as computeRequirementsHash for comparison.
      */
@@ -850,7 +829,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 .map((line) => line.trim())
                 .filter((line) => line.length > 0 && !line.startsWith('#'));
 
-            return this.computeRequirementsHash(requirementsArray);
+            return computeRequirementsHash(requirementsArray);
         } catch (error) {
             logger.warn(`Failed to read existing requirements.txt: ${error}`);
             return '';

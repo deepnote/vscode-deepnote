@@ -317,6 +317,6 @@ export interface IDeepnoteNotebookEnvironmentMapper {
     getNotebooksUsingEnvironment(environmentId: string): vscode.Uri[];
 }
 
-export const DEEPNOTE_TOOLKIT_VERSION = '1.0.0rc2';
+export const DEEPNOTE_TOOLKIT_VERSION = '1.0.0';
 export const DEEPNOTE_DEFAULT_PORT = 8888;
 export const DEEPNOTE_NOTEBOOK_TYPE = 'deepnote';

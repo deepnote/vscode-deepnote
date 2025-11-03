@@ -1,45 +1,33 @@
-![Deepnote VS Code cover image](deepnote-vscode-cover-image.png)
+<div align="center">
+
+![Deepnote cover image](./assets/deepnote-cover-image.png)
 
 [![CI](https://github.com/deepnote/vscode-deepnote/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/deepnote/vscode-deepnote/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/deepnote/vscode-deepnote/graph/badge.svg?token=NH066XG7JC)](https://codecov.io/gh/deepnote/vscode-deepnote)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![VS Code Marketplace](https://img.shields.io/badge/VS%20Code-Marketplace-blue)](https://marketplace.visualstudio.com/items?itemName=Deepnote.vscode-deepnote)
+
+[Website](https://deepnote.com/?utm_source=github&utm_medium=github&utm_campaign=github&utm_content=readme_main) • [Docs](https://deepnote.com/docs?utm_source=github&utm_medium=github&utm_campaign=github&utm_content=readme_main) • [Changelog](https://deepnote.com/changelog?utm_source=github&utm_medium=github&utm_campaign=github&utm_content=readme_main) • [X](https://x.com/DeepnoteHQ) • [Examples](https://deepnote.com/explore?utm_source=github&utm_medium=github&utm_campaign=github&utm_content=readme_main) • [Community](https://github.com/deepnote/deepnote/discussions)
+
+</div>
+
+# Deepnote in VS Code, Cursor and Windsurf
 
 A powerful [Visual Studio Code](https://marketplace.visualstudio.com/items?itemName=Deepnote.vscode-deepnote), [Cursor](https://open-vsx.org/extension/Deepnote/vscode-deepnote) and [Windsurf](https://open-vsx.org/extension/Deepnote/vscode-deepnote) extension that brings [Deepnote](https://deepnote.com/) notebook capabilities directly into your favorite editor. Work with sleek AI notebooks featuring SQL blocks, database integrations, and reactive blocks - all within VS Code.
 
----
+![Deepnote Projects](./assets/deepnote-projects.png)
 
-![Deepnote Projects](./images/deepnote-projects.png)
 
----
+Run Deepnote locally inside your IDE and unlock the next generation of data workflows:
 
-# 🚀 Deepnote in VS Code, Cursor and Windsurf - data notebook for AI era
+- **Rich block types:** Combine Python, Markdown, data visualizations, tables, and more — all in one place
+- **SQL blocks:** Run SQL queries out of the box, no extensions needed
+- **Native database connections:** Securely connect to Snowflake, BigQuery, Postgres, and 60+ other sources via VS Code’s encrypted SecretStorage API
+- **Init notebooks:** Auto-run setup code (dependencies, env setup) before execution
+- **Smart requirements:** Generate `requirements.txt` automatically for reproducible runs
+- **Deepnote kernel:** Fully `.ipynb` compatible, tuned for modern data workflows
+- **Cloud collaboration:** Switch between local VS Code and Deepnote Cloud to collaborate live on the same file with your team
 
-Run Deepnote locally inside VS Code, Cursor and Windsurf — not Jupyter — and unlock the next generation of data workflows:
-
-- 🧠 **SQL in VS Code** — Run SQL queries out of the box, no extensions needed
-- 🧩 **Rich block types** — Combine Python, Markdown, data visualizations, tables, and more — all in one place
-- 🔐 **Native database connections** — Securely connect to Snowflake, BigQuery, Postgres, and 60+ other sources via VS Code’s encrypted SecretStorage API
-- ⚙️ **Init notebooks** — Auto-run setup code (dependencies, env setup) before execution
-- 📦 **Smart requirements** — Generate `requirements.txt` automatically for reproducible runs
-
-🐍 **Jupyter kernel, upgraded**
-
-- ⚡ **Deepnote kernel** — Fully `.ipynb-compatible`, tuned for modern data workflows
-- 🔁 **Kernel control** — Restart, interrupt, and switch seamlessly
-
-🌐 **Deepnote ecosystem integrations**
-
-- 🔃 **Auto-refresh** — Instantly detects file and data changes
-- 🧮 **Multi-notebook support** — Work across multiple notebooks in one unified project
-- ☁ **Cloud collaboration** — Switch between local VS Code and Deepnote Cloud to collaborate live on the same file with your team
-
-## 📋 Requirements
-
-- **Visual Studio Code** 1.95.0 or higher
-- **Python** 3.10 or higher (for running notebooks)
-
-## 🎯 Getting started
+## Getting started
 
 1. Open the extensions tab and Search for Deepnote
 2. Or alternatively, press `Cmd+P` or `Ctrl+P` to open the command palette.
@@ -47,6 +35,11 @@ Run Deepnote locally inside VS Code, Cursor and Windsurf — not Jupyter — and
 4. Press Enter
 
 Or install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=Deepnote.vscode-deepnote)
+
+### Requirements
+
+- **Visual Studio Code** 1.95.0 or higher
+- **Python** 3.10 or higher (for running notebooks)
 
 ### Opening your first Deepnote notebook
 
@@ -56,7 +49,7 @@ Or install from the [VS Code Marketplace](https://marketplace.visualstudio.com/i
 4. Select a Python kernel when prompted
 5. Start coding!
 
-## 📖 Usage
+## Usage
 
 ### Command palette
 
@@ -96,36 +89,22 @@ SELECT * FROM users WHERE created_at > '2024-01-01'
 
 Results are displayed as interactive tables that you can explore and export.
 
-## 🛠️ Quick start for developers
+## Need help?
 
-Want to contribute? Check out our [Contributing Guide](CONTRIBUTING.md) for detailed setup instructions.
+- Join our [Community](https://github.com/deepnote/deepnote/discussions)!
+- Open an [Issue](https://github.com/deepnote/vscode-deepnote/issues) for bug reports or feature requests
+- Have a look at [Architecture](architecture.md) for technical and design decisions
+- Visit [Deepnote kernel implementation](DEEPNOTE_KERNEL_IMPLEMENTATION.md) for the custom Jupyter kernel
+- Learn how database integrations work in [Integrations & credentials](INTEGRATIONS_CREDENTIALS.md)
 
-- Setting up your development environment
-- Running tests
-- Building the extension
-- Submitting pull requests
+## Contributing
 
-## 📚 Documentation
-
-- **[Architecture](architecture.md)** - Technical architecture and design decisions
-- **[Deepnote Kernel Implementation](DEEPNOTE_KERNEL_IMPLEMENTATION.md)** - Details on the custom Jupyter kernel
-- **[Integrations & Credentials](INTEGRATIONS_CREDENTIALS.md)** - How database integrations work
-- **[Contributing Guide](CONTRIBUTING.md)** - How to contribute to the project
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🐛 Issues & support
-
-- **Bug reports**: [GitHub issues](https://github.com/deepnote/vscode-deepnote/issues)
-- **Feature requests**: [GitHub discussions](https://github.com/deepnote/deepnote/discussions)
-- **Questions**: [GitHub discussions](https://github.com/deepnote/deepnote/discussions)
+Want to contribute? Check out our [Contributing guide](CONTRIBUTING.md) for detailed setup instructions.
 
 ---
 
 <div align="center">
 
-**Built with 💙 by the Deepnote team**
+Built with 💙
 
 </div>

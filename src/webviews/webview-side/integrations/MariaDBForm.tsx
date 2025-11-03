@@ -4,186 +4,117 @@ import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
 import { SshOptionsFields } from './SshOptionsFields';
 import { CaCertificateFields } from './CaCertificateFields';
 
-function createEmptyPostgresConfig(params: {
+function createEmptyMariaDBConfig(params: {
     id: string;
     name?: string;
-}): Extract<DatabaseIntegrationConfig, { type: 'pgsql' }> {
+}): Extract<DatabaseIntegrationConfig, { type: 'mariadb' }> {
     const unnamedIntegration = getLocString('integrationsUnnamedIntegration', 'Unnamed Integration ({0})');
 
     return {
         id: params.id,
         name: (params.name || format(unnamedIntegration, params.id)).trim(),
-        type: 'pgsql',
+        type: 'mariadb',
         metadata: {
             host: '',
-            port: '5432',
+            port: '3306',
             database: '',
             user: '',
-            password: '',
-            sslEnabled: false
+            password: ''
         }
     };
 }
 
-export interface IPostgresFormProps {
+export interface IMariaDBFormProps {
     integrationId: string;
-    existingConfig: Extract<DatabaseIntegrationConfig, { type: 'pgsql' }> | null;
+    existingConfig: Extract<DatabaseIntegrationConfig, { type: 'mariadb' }> | null;
     defaultName?: string;
-    onSave: (config: Extract<DatabaseIntegrationConfig, { type: 'pgsql' }>) => void;
+    onSave: (config: Extract<DatabaseIntegrationConfig, { type: 'mariadb' }>) => void;
     onCancel: () => void;
 }
 
-export const PostgresForm: React.FC<IPostgresFormProps> = ({
+export const MariaDBForm: React.FC<IMariaDBFormProps> = ({
     integrationId,
     existingConfig,
     defaultName,
     onSave,
     onCancel
 }) => {
-    const [pendingConfig, setPendingConfig] = React.useState<Extract<DatabaseIntegrationConfig, { type: 'pgsql' }>>(
+    const [pendingConfig, setPendingConfig] = React.useState<Extract<DatabaseIntegrationConfig, { type: 'mariadb' }>>(
         existingConfig
             ? structuredClone(existingConfig)
-            : createEmptyPostgresConfig({ id: integrationId, name: defaultName })
+            : createEmptyMariaDBConfig({ id: integrationId, name: defaultName })
     );
 
     React.useEffect(() => {
         setPendingConfig(
             existingConfig
                 ? structuredClone(existingConfig)
-                : createEmptyPostgresConfig({ id: integrationId, name: defaultName })
+                : createEmptyMariaDBConfig({ id: integrationId, name: defaultName })
         );
     }, [existingConfig, integrationId, defaultName]);
 
     const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const value = e.target.value;
-        setPendingConfig((prev) => ({
-            ...prev,
-            name: value
-        }));
+        setPendingConfig((prev) => ({ ...prev, name: value }));
     };
 
     const handleHostChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const value = e.target.value;
-        setPendingConfig((prev) => ({
-            ...prev,
-            metadata: {
-                ...prev.metadata,
-                host: value
-            }
-        }));
+        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, host: value } }));
     };
 
     const handlePortChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const value = e.target.value;
-        setPendingConfig((prev) => ({
-            ...prev,
-            metadata: {
-                ...prev.metadata,
-                port: value
-            }
-        }));
+        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, port: value } }));
     };
 
     const handleDatabaseChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const value = e.target.value;
-        setPendingConfig((prev) => ({
-            ...prev,
-            metadata: {
-                ...prev.metadata,
-                database: value
-            }
-        }));
+        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, database: value } }));
     };
 
     const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const value = e.target.value;
-        setPendingConfig((prev) => ({
-            ...prev,
-            metadata: {
-                ...prev.metadata,
-                user: value
-            }
-        }));
+        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, user: value } }));
     };
 
     const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const value = e.target.value;
-        setPendingConfig((prev) => ({
-            ...prev,
-            metadata: {
-                ...prev.metadata,
-                password: value
-            }
-        }));
+        setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, password: value } }));
     };
 
     const handleSshEnabledChange = (enabled: boolean) => {
         setPendingConfig((prev) => ({
             ...prev,
-            metadata: {
-                ...prev.metadata,
-                sshEnabled: enabled || undefined
-            }
+            metadata: { ...prev.metadata, sshEnabled: enabled || undefined }
         }));
     };
 
     const handleSshHostChange = (host: string) => {
         setPendingConfig((prev) => ({
             ...prev,
-            metadata: {
-                ...prev.metadata,
-                sshHost: host || undefined
-            }
+            metadata: { ...prev.metadata, sshHost: host || undefined }
         }));
     };
 
     const handleSshPortChange = (port: string) => {
         setPendingConfig((prev) => ({
             ...prev,
-            metadata: {
-                ...prev.metadata,
-                sshPort: port || undefined
-            }
+            metadata: { ...prev.metadata, sshPort: port || undefined }
         }));
     };
 
     const handleSshUserChange = (user: string) => {
         setPendingConfig((prev) => ({
             ...prev,
-            metadata: {
-                ...prev.metadata,
-                sshUser: user || undefined
-            }
-        }));
-    };
-
-    const handleSslEnabledChange = (enabled: boolean) => {
-        setPendingConfig((prev) => ({
-            ...prev,
-            metadata: {
-                ...prev.metadata,
-                sslEnabled: enabled || undefined
-            }
+            metadata: { ...prev.metadata, sshUser: user || undefined }
         }));
     };
 
     const handleCaCertificateNameChange = (name: string) => {
         setPendingConfig((prev) => ({
             ...prev,
-            metadata: {
-                ...prev.metadata,
-                caCertificateName: name || undefined
-            }
-        }));
-    };
-
-    const handleCaCertificateTextChange = (text: string) => {
-        setPendingConfig((prev) => ({
-            ...prev,
-            metadata: {
-                ...prev.metadata,
-                caCertificateText: text || undefined
-            }
+            metadata: { ...prev.metadata, caCertificateName: name || undefined }
         }));
     };
 
@@ -195,20 +126,20 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({
     return (
         <form onSubmit={handleSubmit}>
             <div className="form-group">
-                <label htmlFor="name">{getLocString('integrationsPostgresNameLabel', 'Name (optional)')}</label>
+                <label htmlFor="name">{getLocString('integrationsMariaDBNameLabel', 'Name (optional)')}</label>
                 <input
                     type="text"
                     id="name"
                     value={pendingConfig.name}
                     onChange={handleNameChange}
-                    placeholder={getLocString('integrationsPostgresNamePlaceholder', 'My PostgreSQL Database')}
+                    placeholder={getLocString('integrationsMariaDBNamePlaceholder', 'My MariaDB Database')}
                     autoComplete="off"
                 />
             </div>
 
             <div className="form-group">
                 <label htmlFor="host">
-                    {getLocString('integrationsPostgresHostLabel', 'Host')}{' '}
+                    {getLocString('integrationsMariaDBHostLabel', 'Host')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -216,34 +147,27 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({
                     id="host"
                     value={pendingConfig.metadata.host}
                     onChange={handleHostChange}
-                    placeholder={getLocString('integrationsPostgresHostPlaceholder', 'localhost')}
+                    placeholder={getLocString('integrationsMariaDBHostPlaceholder', 'localhost')}
                     autoComplete="off"
                     required
                 />
             </div>
 
             <div className="form-group">
-                <label htmlFor="port">
-                    {getLocString('integrationsPostgresPortLabel', 'Port')}{' '}
-                    <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
-                </label>
+                <label htmlFor="port">{getLocString('integrationsMariaDBPortLabel', 'Port')}</label>
                 <input
-                    type="number"
+                    type="text"
                     id="port"
                     value={pendingConfig.metadata.port}
                     onChange={handlePortChange}
-                    placeholder={getLocString('integrationsPostgresPortPlaceholder', '5432')}
-                    min={1}
-                    max={65535}
-                    step={1}
+                    placeholder="3306"
                     autoComplete="off"
-                    required
                 />
             </div>
 
             <div className="form-group">
                 <label htmlFor="database">
-                    {getLocString('integrationsPostgresDatabaseLabel', 'Database')}{' '}
+                    {getLocString('integrationsMariaDBDatabaseLabel', 'Database')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -251,7 +175,7 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({
                     id="database"
                     value={pendingConfig.metadata.database}
                     onChange={handleDatabaseChange}
-                    placeholder={getLocString('integrationsPostgresDatabasePlaceholder', 'mydb')}
+                    placeholder={getLocString('integrationsMariaDBDatabasePlaceholder', 'my_database')}
                     autoComplete="off"
                     required
                 />
@@ -259,7 +183,7 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({
 
             <div className="form-group">
                 <label htmlFor="username">
-                    {getLocString('integrationsPostgresUsernameLabel', 'Username')}{' '}
+                    {getLocString('integrationsMariaDBUsernameLabel', 'Username')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -267,7 +191,7 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({
                     id="username"
                     value={pendingConfig.metadata.user}
                     onChange={handleUsernameChange}
-                    placeholder={getLocString('integrationsPostgresUsernamePlaceholder', 'postgres')}
+                    placeholder={getLocString('integrationsMariaDBUsernamePlaceholder', 'username')}
                     autoComplete="username"
                     required
                 />
@@ -275,7 +199,7 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({
 
             <div className="form-group">
                 <label htmlFor="password">
-                    {getLocString('integrationsPostgresPasswordLabel', 'Password')}{' '}
+                    {getLocString('integrationsMariaDBPasswordLabel', 'Password')}{' '}
                     <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                 </label>
                 <input
@@ -283,7 +207,7 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({
                     id="password"
                     value={pendingConfig.metadata.password}
                     onChange={handlePasswordChange}
-                    placeholder={getLocString('integrationsPostgresPasswordPlaceholder', '••••••••')}
+                    placeholder={getLocString('integrationsMariaDBPasswordPlaceholder', '••••••••')}
                     autoComplete="current-password"
                     required
                 />
@@ -301,14 +225,10 @@ export const PostgresForm: React.FC<IPostgresFormProps> = ({
             />
 
             <CaCertificateFields
-                sslEnabled={pendingConfig.metadata.sslEnabled}
                 caCertificateName={pendingConfig.metadata.caCertificateName}
-                caCertificateText={pendingConfig.metadata.caCertificateText}
-                onSslEnabledChange={handleSslEnabledChange}
                 onCaCertificateNameChange={handleCaCertificateNameChange}
-                onCaCertificateTextChange={handleCaCertificateTextChange}
-                showSslEnabled={true}
-                showCertificateText={true}
+                showSslEnabled={false}
+                showCertificateText={false}
             />
 
             <div className="form-actions">

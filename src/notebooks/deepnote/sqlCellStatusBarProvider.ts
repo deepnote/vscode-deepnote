@@ -23,12 +23,11 @@ import { IDisposableRegistry } from '../../platform/common/types';
 import { IIntegrationStorage } from './integrations/types';
 import { Commands } from '../../platform/common/constants';
 import {
-    DATAFRAME_SQL_INTEGRATION_ID,
-    DEEPNOTE_TO_INTEGRATION_TYPE,
-    IntegrationType,
-    RawIntegrationType
+    ConfigurableDatabaseIntegrationType,
+    DATAFRAME_SQL_INTEGRATION_ID
 } from '../../platform/notebooks/deepnote/integrationTypes';
 import { IDeepnoteNotebookManager } from '../types';
+import { DatabaseIntegrationType, databaseIntegrationTypes } from '@deepnote/database-integrations';
 
 /**
  * QuickPick item with an integration ID
@@ -342,13 +341,21 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
         // Add all project integrations
         for (const projectIntegration of projectIntegrations) {
+            const integrationType =
+                projectIntegration.type &&
+                (databaseIntegrationTypes as readonly string[]).includes(projectIntegration.type)
+                    ? (projectIntegration.type as DatabaseIntegrationType)
+                    : null;
+
             // Skip the internal DuckDB integration
-            if (projectIntegration.id === DATAFRAME_SQL_INTEGRATION_ID) {
+            if (projectIntegration.id === DATAFRAME_SQL_INTEGRATION_ID || integrationType === 'pandas-dataframe') {
                 continue;
             }
 
-            const integrationType = DEEPNOTE_TO_INTEGRATION_TYPE[projectIntegration.type as RawIntegrationType];
-            const typeLabel = integrationType ? this.getIntegrationTypeLabel(integrationType) : projectIntegration.type;
+            const typeLabel =
+                integrationType && (databaseIntegrationTypes as readonly string[]).includes(integrationType)
+                    ? this.getIntegrationTypeLabel(integrationType)
+                    : projectIntegration.type;
 
             const item: LocalQuickPickItem = {
                 label: projectIntegration.name || projectIntegration.id,
@@ -431,14 +438,42 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         this._onDidChangeCellStatusBarItems.fire();
     }
 
-    private getIntegrationTypeLabel(type: IntegrationType): string {
+    private getIntegrationTypeLabel(type: ConfigurableDatabaseIntegrationType): string {
         switch (type) {
-            case IntegrationType.Postgres:
-                return l10n.t('PostgreSQL');
-            case IntegrationType.BigQuery:
+            case 'alloydb':
+                return l10n.t('AlloyDB');
+            case 'athena':
+                return l10n.t('Amazon Athena');
+            case 'big-query':
                 return l10n.t('BigQuery');
-            case IntegrationType.Snowflake:
+            case 'clickhouse':
+                return l10n.t('ClickHouse');
+            case 'databricks':
+                return l10n.t('Databricks');
+            case 'dremio':
+                return l10n.t('Dremio');
+            case 'mariadb':
+                return l10n.t('MariaDB');
+            case 'materialize':
+                return l10n.t('Materialize');
+            case 'mindsdb':
+                return l10n.t('MindsDB');
+            case 'mongodb':
+                return l10n.t('MongoDB');
+            case 'mysql':
+                return l10n.t('MySQL');
+            case 'pgsql':
+                return l10n.t('PostgreSQL');
+            case 'redshift':
+                return l10n.t('Amazon Redshift');
+            case 'snowflake':
                 return l10n.t('Snowflake');
+            case 'spanner':
+                return l10n.t('Google Cloud Spanner');
+            case 'sql-server':
+                return l10n.t('SQL Server');
+            case 'trino':
+                return l10n.t('Trino');
             default:
                 return String(type);
         }

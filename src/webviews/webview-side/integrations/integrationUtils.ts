@@ -24,9 +24,9 @@ const trinoLogo: string = require('./icons/trino.svg');
 
 // Localized labels for integration types (duplicated from sqlCellStatusBarProvider.ts due to import restrictions)
 export const integrationTypeLabels: Record<ConfigurableDatabaseIntegrationType, string> = {
-    alloydb: 'AlloyDB',
+    alloydb: 'Google AlloyDB',
     athena: 'Amazon Athena',
-    'big-query': 'BigQuery',
+    'big-query': 'Google BigQuery',
     clickhouse: 'ClickHouse',
     databricks: 'Databricks',
     dremio: 'Dremio',
@@ -38,7 +38,7 @@ export const integrationTypeLabels: Record<ConfigurableDatabaseIntegrationType, 
     pgsql: 'PostgreSQL',
     redshift: 'Amazon Redshift',
     snowflake: 'Snowflake',
-    spanner: 'Google Cloud Spanner',
+    spanner: 'Google Spanner',
     'sql-server': 'Microsoft SQL Server',
     trino: 'Trino'
 };

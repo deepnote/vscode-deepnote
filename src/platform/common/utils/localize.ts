@@ -846,9 +846,9 @@ export namespace Integrations {
 
     // Integration type labels
     export const postgresTypeLabel = l10n.t('PostgreSQL');
-    export const bigQueryTypeLabel = l10n.t('BigQuery');
+    export const bigQueryTypeLabel = l10n.t('Google BigQuery');
     export const snowflakeTypeLabel = l10n.t('Snowflake');
-    export const alloyDBTypeLabel = l10n.t('AlloyDB');
+    export const alloyDBTypeLabel = l10n.t('Google AlloyDB');
     export const athenaTypeLabel = l10n.t('Amazon Athena');
     export const clickHouseTypeLabel = l10n.t('ClickHouse');
     export const databricksTypeLabel = l10n.t('Databricks');
@@ -860,7 +860,7 @@ export namespace Integrations {
     export const mySQLTypeLabel = l10n.t('MySQL');
     export const duckDBTypeLabel = l10n.t('DuckDB');
     export const redshiftTypeLabel = l10n.t('Amazon Redshift');
-    export const spannerTypeLabel = l10n.t('Google Cloud Spanner');
+    export const spannerTypeLabel = l10n.t('Google Spanner');
     export const sqlServerTypeLabel = l10n.t('Microsoft SQL Server');
     export const trinoTypeLabel = l10n.t('Trino');
 

@@ -13,11 +13,11 @@ export interface IIntegrationItemProps {
 const getIntegrationTypeLabel = (type: ConfigurableDatabaseIntegrationType): string => {
     switch (type) {
         case 'alloydb':
-            return getLocString('integrationsAlloyDBTypeLabel', 'AlloyDB');
+            return getLocString('integrationsAlloyDBTypeLabel', 'Google AlloyDB');
         case 'athena':
             return getLocString('integrationsAthenaTypeLabel', 'Amazon Athena');
         case 'big-query':
-            return getLocString('integrationsBigQueryTypeLabel', 'BigQuery');
+            return getLocString('integrationsBigQueryTypeLabel', 'Google BigQuery');
         case 'clickhouse':
             return getLocString('integrationsClickHouseTypeLabel', 'ClickHouse');
         case 'databricks':
@@ -41,7 +41,7 @@ const getIntegrationTypeLabel = (type: ConfigurableDatabaseIntegrationType): str
         case 'snowflake':
             return getLocString('integrationsSnowflakeTypeLabel', 'Snowflake');
         case 'spanner':
-            return getLocString('integrationsSpannerTypeLabel', 'Google Cloud Spanner');
+            return getLocString('integrationsSpannerTypeLabel', 'Google Spanner');
         case 'sql-server':
             return getLocString('integrationsSQLServerTypeLabel', 'Microsoft SQL Server');
         case 'trino':

@@ -37,9 +37,9 @@ interface LocalQuickPickItem extends QuickPickItem {
 }
 
 const integrationTypeLabels: Record<ConfigurableDatabaseIntegrationType, string> = {
-    alloydb: l10n.t('AlloyDB'),
+    alloydb: l10n.t('Google AlloyDB'),
     athena: l10n.t('Amazon Athena'),
-    'big-query': l10n.t('BigQuery'),
+    'big-query': l10n.t('Google BigQuery'),
     clickhouse: l10n.t('ClickHouse'),
     databricks: l10n.t('Databricks'),
     dremio: l10n.t('Dremio'),
@@ -51,7 +51,7 @@ const integrationTypeLabels: Record<ConfigurableDatabaseIntegrationType, string>
     pgsql: l10n.t('PostgreSQL'),
     redshift: l10n.t('Amazon Redshift'),
     snowflake: l10n.t('Snowflake'),
-    spanner: l10n.t('Google Cloud Spanner'),
+    spanner: l10n.t('Google Spanner'),
     'sql-server': l10n.t('Microsoft SQL Server'),
     trino: l10n.t('Trino')
 };

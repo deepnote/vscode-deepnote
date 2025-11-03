@@ -859,7 +859,7 @@ export namespace Integrations {
     export const duckDBTypeLabel = l10n.t('DuckDB');
     export const redshiftTypeLabel = l10n.t('Amazon Redshift');
     export const spannerTypeLabel = l10n.t('Google Cloud Spanner');
-    export const sqlServerTypeLabel = l10n.t('SQL Server');
+    export const sqlServerTypeLabel = l10n.t('Microsoft SQL Server');
     export const trinoTypeLabel = l10n.t('Trino');
 
     // PostgreSQL form strings

@@ -18,7 +18,7 @@ export const integrationTypeLabels: Record<ConfigurableDatabaseIntegrationType, 
     redshift: 'Amazon Redshift',
     snowflake: 'Snowflake',
     spanner: 'Google Cloud Spanner',
-    'sql-server': 'SQL Server',
+    'sql-server': 'Microsoft SQL Server',
     trino: 'Trino'
 };
 
@@ -31,4 +31,3 @@ export function getDefaultIntegrationName(type: ConfigurableDatabaseIntegrationT
     const typeLabel = integrationTypeLabels[type] || type;
     return getLocString('integrationsDefaultName', 'My {0} integration').replace('{0}', typeLabel);
 }
-

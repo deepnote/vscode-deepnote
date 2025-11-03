@@ -42,7 +42,7 @@ const getIntegrationTypeLabel = (type: ConfigurableDatabaseIntegrationType): str
         case 'spanner':
             return getLocString('integrationsSpannerTypeLabel', 'Google Cloud Spanner');
         case 'sql-server':
-            return getLocString('integrationsSQLServerTypeLabel', 'SQL Server');
+            return getLocString('integrationsSQLServerTypeLabel', 'Microsoft SQL Server');
         case 'trino':
             return getLocString('integrationsTrinoTypeLabel', 'Trino');
         default:

@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { getLocString } from '../react-common/locReactSide';
 import { ConfigurableDatabaseIntegrationType } from './types';
+import { integrationTypeLabels } from './integrationUtils';
 
 // Import integration logos
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -36,87 +37,87 @@ interface IntegrationTypeInfo {
 const INTEGRATION_TYPES: IntegrationTypeInfo[] = [
     {
         type: 'pgsql',
-        label: 'PostgreSQL',
+        label: integrationTypeLabels['pgsql'],
         icon: postgresqlLogo
     },
     {
         type: 'mysql',
-        label: 'MySQL',
+        label: integrationTypeLabels['mysql'],
         icon: mysqlLogo
     },
     {
         type: 'mariadb',
-        label: 'MariaDB',
+        label: integrationTypeLabels['mariadb'],
         icon: mariadbLogo
     },
     {
         type: 'mongodb',
-        label: 'MongoDB',
+        label: integrationTypeLabels['mongodb'],
         icon: mongodbLogo
     },
     {
         type: 'sql-server',
-        label: 'Microsoft SQL Server',
+        label: integrationTypeLabels['sql-server'],
         icon: sqlServerLogo
     },
     {
         type: 'big-query',
-        label: 'Google BigQuery',
+        label: integrationTypeLabels['big-query'],
         icon: bigqueryLogo
     },
     {
         type: 'snowflake',
-        label: 'Snowflake',
+        label: integrationTypeLabels['snowflake'],
         icon: snowflakeLogo
     },
     {
         type: 'alloydb',
-        label: 'Google AlloyDB',
+        label: integrationTypeLabels['alloydb'],
         icon: alloydbLogo
     },
     {
         type: 'spanner',
-        label: 'Google Cloud Spanner',
+        label: integrationTypeLabels['spanner'],
         icon: spannerLogo
     },
     {
         type: 'materialize',
-        label: 'Materialize',
+        label: integrationTypeLabels['materialize'],
         icon: materializeLogo
     },
     {
         type: 'clickhouse',
-        label: 'ClickHouse',
+        label: integrationTypeLabels['clickhouse'],
         icon: clickhouseLogo
     },
     {
         type: 'athena',
-        label: 'Amazon Athena',
+        label: integrationTypeLabels['athena'],
         icon: athenaLogo
     },
     {
         type: 'redshift',
-        label: 'Amazon Redshift',
+        label: integrationTypeLabels['redshift'],
         icon: redshiftLogo
     },
     {
         type: 'databricks',
-        label: 'Databricks',
+        label: integrationTypeLabels['databricks'],
         icon: databricksLogo
     },
     {
         type: 'dremio',
-        label: 'Dremio',
+        label: integrationTypeLabels['dremio'],
         icon: dremioLogo
     },
     {
         type: 'mindsdb',
-        label: 'MindsDB',
+        label: integrationTypeLabels['mindsdb'],
         icon: mindsdbLogo
     },
     {
         type: 'trino',
-        label: 'Trino',
+        label: integrationTypeLabels['trino'],
         icon: trinoLogo
     }
 ];

@@ -52,7 +52,7 @@ const integrationTypeLabels: Record<ConfigurableDatabaseIntegrationType, string>
     redshift: l10n.t('Amazon Redshift'),
     snowflake: l10n.t('Snowflake'),
     spanner: l10n.t('Google Cloud Spanner'),
-    'sql-server': l10n.t('SQL Server'),
+    'sql-server': l10n.t('Microsoft SQL Server'),
     trino: l10n.t('Trino')
 };
 

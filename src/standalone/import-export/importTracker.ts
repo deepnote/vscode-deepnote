@@ -11,7 +11,7 @@ import { IDisposableRegistry, type IDisposable } from '../../platform/common/typ
 import { noop } from '../../platform/common/utils/misc';
 import { EventName } from '../../platform/telemetry/constants';
 import { getTelemetrySafeHashedString } from '../../platform/telemetry/helpers';
-import { isJupyterNotebook } from '../../platform/common/utils';
+import { isDeepnoteNotebook, isJupyterNotebook } from '../../platform/common/utils';
 import { isTelemetryDisabled } from '../../telemetry';
 import { ResourceMap } from '../../platform/common/utils/map';
 import { Delayer } from '../../platform/common/utils/async';
@@ -133,7 +133,7 @@ export class ImportTracker implements IExtensionSyncActivationService {
 
     private async checkNotebookCell(cell: NotebookCell, when: 'onExecution' | 'onOpenCloseOrSave') {
         if (
-            !isJupyterNotebook(cell.notebook) ||
+            (!isJupyterNotebook(cell.notebook) && !isDeepnoteNotebook(cell.notebook)) ||
             cell.kind !== NotebookCellKind.Code ||
             cell.document.languageId !== PYTHON_LANGUAGE ||
             this.processedNotebookCells.get(cell) === cell.document.version

@@ -39,7 +39,7 @@ export namespace Experiments {
     export const inGroup = (groupName: string) => l10n.t("User belongs to experiment group '{0}'", groupName);
 }
 export namespace OutputChannelNames {
-    export const jupyter = l10n.t('Jupyter');
+    export const jupyter = l10n.t('Deepnote');
 }
 
 export namespace Logging {
@@ -706,7 +706,7 @@ export namespace DataScience {
 
     export const cellAtFormat = (filePath: string, lineNumber: number) => l10n.t('{0} Cell {1}', filePath, lineNumber);
 
-    export const jupyterServerConsoleOutputChannel = l10n.t(`Jupyter Server Console`);
+    export const jupyterServerConsoleOutputChannel = l10n.t(`Deepnote Server Console`);
 
     export const kernelConsoleOutputChannel = (kernelName: string) => l10n.t(`{0} Kernel Console Output`, kernelName);
     export const webNotSupported = l10n.t(`Operation not supported in web version of Jupyter Extension.`);
@@ -1165,6 +1165,25 @@ export namespace SelectInputSettings {
     export const saveButton = l10n.t('Save');
     export const cancelButton = l10n.t('Cancel');
     export const failedToSave = l10n.t('Failed to save select input settings');
+}
+
+export namespace BigNumberComparison {
+    export const title = l10n.t('Big Number Comparison Settings');
+    export const enableComparison = l10n.t('Enable comparison');
+    export const comparisonTypeLabel = l10n.t('Comparison type');
+    export const percentageChange = l10n.t('Percentage change');
+    export const absoluteValue = l10n.t('Absolute value');
+    export const comparisonValueLabel = l10n.t('Comparison value variable');
+    export const comparisonValuePlaceholder = l10n.t('e.g., last_month_revenue');
+    export const comparisonTitleLabel = l10n.t('Comparison title (optional)');
+    export const comparisonTitlePlaceholder = l10n.t('e.g., vs last month');
+    export const comparisonTitleHelp = l10n.t('You can use {{var}} syntax to reference variables');
+    export const comparisonValueHelp = l10n.t('Enter a variable name (not a literal value)');
+    export const comparisonFormatLabel = l10n.t('Comparison format (optional)');
+    export const comparisonFormatHelp = l10n.t('Leave empty to use the same format as the main value');
+    export const saveButton = l10n.t('Save');
+    export const cancelButton = l10n.t('Cancel');
+    export const failedToSave = l10n.t('Failed to save big number comparison settings');
 }
 
 export namespace Deprecated {

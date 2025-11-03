@@ -57,11 +57,11 @@ import { Cancellation } from '../../platform/common/cancellation';
  */
 @injectable()
 export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, IExtensionSyncActivationService {
-    // Track server handles per notebook URI for cleanup
-    private readonly notebookServerHandles = new Map<string, string>();
-    // Track registered controllers per notebook file (base URI) for reuse
+    // Track server handles per PROJECT (baseFileUri) - one server per project
+    private readonly projectServerHandles = new Map<string, string>();
+    // Track registered controllers per NOTEBOOK (full URI with query) - one controller per notebook
     private readonly notebookControllers = new Map<string, IVSCodeNotebookController>();
-    // Track connection metadata per notebook file for reuse
+    // Track connection metadata per NOTEBOOK for reuse
     private readonly notebookConnectionMetadata = new Map<string, DeepnoteKernelConnectionMetadata>();
     // Track projects where we need to run init notebook (set during controller setup)
     private readonly projectsPendingInitNotebook = new Map<
@@ -375,7 +375,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
      */
     public async rebuildController(notebook: NotebookDocument, token: CancellationToken): Promise<void> {
         const baseFileUri = notebook.uri.with({ query: '', fragment: '' });
-        const notebookKey = baseFileUri.fsPath;
+        const notebookKey = notebook.uri.toString();
+        const projectKey = baseFileUri.fsPath;
 
         logger.info(`Switching controller environment for ${getDisplayPath(notebook.uri)}`);
 
@@ -395,16 +396,15 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         this.notebookConnectionMetadata.delete(notebookKey);
 
         // Clear old server handle - new environment will register a new handle
-        const oldServerHandle = this.notebookServerHandles.get(notebookKey);
+        const oldServerHandle = this.projectServerHandles.get(projectKey);
         if (oldServerHandle) {
             logger.info(`Clearing old server handle from tracking: ${oldServerHandle}`);
-            this.notebookServerHandles.delete(notebookKey);
+            this.projectServerHandles.delete(projectKey);
         }
 
         // Update the controller with new environment's metadata
         // Because we use notebook-based controller IDs, addOrUpdate will call updateConnection()
         // on the existing controller instead of creating a new one
-        // await this.ensureKernelSelected(notebook, token);
         const environmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri);
         const environment = environmentId ? this.environmentManager.getEnvironment(environmentId) : undefined;
 
@@ -419,6 +419,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             environment,
             baseFileUri,
             notebookKey,
+            projectKey,
             {
                 report: (value) => {
                     if (value.message != null) {
@@ -437,8 +438,12 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         progress: { report(value: { message?: string; increment?: number }): void },
         token: CancellationToken
     ): Promise<boolean> {
+        // baseFileUri identifies the PROJECT (without query/fragment)
         const baseFileUri = notebook.uri.with({ query: '', fragment: '' });
-        const notebookKey = baseFileUri.fsPath;
+        // notebookKey uniquely identifies THIS NOTEBOOK (includes query with notebook ID)
+        const notebookKey = notebook.uri.toString();
+        // projectKey identifies the PROJECT for server tracking
+        const projectKey = baseFileUri.fsPath;
 
         const environmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri);
 
@@ -458,6 +463,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             environment,
             baseFileUri,
             notebookKey,
+            projectKey,
             progress,
             token
         );
@@ -470,6 +476,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         configuration: DeepnoteEnvironment,
         baseFileUri: Uri,
         notebookKey: string,
+        projectKey: string,
         progress: { report(value: { message?: string; increment?: number }): void },
         progressToken: CancellationToken
     ): Promise<void> {
@@ -516,9 +523,9 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             handle: createDeepnoteServerConfigHandle(configuration.id, baseFileUri)
         };
 
-        // Register the server with the provider
+        // Register the server with the provider (one server per PROJECT)
         this.serverProvider.registerServer(serverProviderHandle.handle, serverInfo);
-        this.notebookServerHandles.set(notebookKey, serverProviderHandle.handle);
+        this.projectServerHandles.set(projectKey, serverProviderHandle.handle);
 
         // Connect to the server and get available kernel specs
         progress.report({ message: 'Connecting to kernel...' });
@@ -558,11 +565,15 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 ? Uri.joinPath(configuration.venvPath, 'Scripts', 'python.exe')
                 : Uri.joinPath(configuration.venvPath, 'bin', 'python');
 
-        // CRITICAL: Use notebook-based ID instead of environment-based ID
-        // This ensures that when switching environments, addOrUpdate will call updateConnection()
-        // on the existing controller instead of creating a new one. This keeps VS Code bound to
-        // the same controller object, avoiding the DISPOSED error.
+        // CRITICAL: Use unique notebook-based ID (includes query with notebook ID)
+        // This ensures each notebook gets its own controller/kernel, even within the same project.
+        // When switching environments, addOrUpdate will call updateConnection() on the existing
+        // controller instead of creating a new one, avoiding the DISPOSED error.
         const controllerId = `deepnote-notebook-${notebookKey}`;
+
+        // Extract project and notebook titles from metadata for display
+        const projectTitle = notebook.metadata?.deepnoteProjectName || 'Untitled Project';
+        const notebookTitle = notebook.metadata?.deepnoteNotebookName || 'Untitled Notebook';
 
         const newConnectionMetadata = DeepnoteKernelConnectionMetadata.create({
             interpreter: { uri: venvInterpreter, id: venvInterpreter.fsPath },
@@ -572,7 +583,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             serverProviderHandle,
             serverInfo,
             environmentName: configuration.name,
-            notebookName: notebookKey
+            projectName: projectTitle,
+            notebookName: notebookTitle
         });
 
         // Store connection metadata for reuse

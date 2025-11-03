@@ -28,6 +28,12 @@ function normalizeDateString(dateValue: unknown): string {
         return dateValue;
     }
 
+    // Detect ISO-style strings that start with YYYY-MM-DD (e.g., "2025-09-30T00:00:00+02:00")
+    // and extract just the date portion to avoid timezone shifts
+    if (/^\d{4}-\d{2}-\d{2}/.test(dateValue)) {
+        return dateValue.substring(0, 10);
+    }
+
     try {
         const date = new Date(dateValue);
         if (isNaN(date.getTime())) {

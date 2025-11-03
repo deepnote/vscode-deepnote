@@ -201,7 +201,6 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
      * Dispose of all resources
      */
     public dispose(): void {
-        this.outputChannel.dispose();
         this._onDidChangeEnvironments.dispose();
     }
 }

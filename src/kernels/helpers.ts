@@ -608,7 +608,6 @@ export function areKernelConnectionsEqual(
         );
     }
     return connection1?.id === connection2?.id;
-    // return connection1?.id === connection2?.id && connection1?.environmentName === connection2?.environmentName;
 }
 // Check if a name is a default python kernel name and pull the version
 export function detectDefaultKernelName(name: string) {

@@ -143,7 +143,7 @@ export function isDeepnoteNotebook(option: NotebookDocument | string) {
     if (typeof option === 'string') {
         return option === 'deepnote';
     } else {
-        return option.notebookType === 'Deepnote';
+        return option.notebookType === 'deepnote';
     }
 }
 export type NotebookMetadata = nbformat.INotebookMetadata & {

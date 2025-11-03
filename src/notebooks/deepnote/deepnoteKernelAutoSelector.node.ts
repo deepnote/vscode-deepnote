@@ -105,7 +105,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         // Listen to kernel starts to run init notebooks
         // Kernels are created lazily when cells are executed, so this is the right time to run init notebook
-        this.kernelProvider.onDidStartKernel(this.onKernelStarted, this, this.disposables);
+        // this.kernelProvider.onDidStartKernel(this.onKernelStarted, this, this.disposables);
 
         // Handle currently open notebooks - await all async operations
         Promise.all(workspace.notebookDocuments.map((d) => this.onDidOpenNotebook(d))).catch((error) => {
@@ -129,7 +129,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             .withProgress<boolean>(
                 {
                     location: ProgressLocation.Notification,
-                    title: l10n.t('Auto-selecting Deepnote kernel...'),
+                    title: l10n.t('Auto-selecting Deepnote kernel... {0}', getDisplayPath(notebook.uri)),
                     cancellable: true
                 },
                 async (progress, token) => {
@@ -487,8 +487,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             logger.info(`Existing controller found for notebook ${getDisplayPath(notebook.uri)}, selecting it`);
             await commands.executeCommand('notebook.selectKernel', {
                 editor: notebook,
-                // id: existingController.controller.id,
-                id: existingController.connection.id,
+                id: existingController.controller.id,
+                // id: existingController.connection.id,
                 extension: JVSC_EXTENSION_ID
             });
             return;
@@ -637,8 +637,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         // Auto-select the controller
         await commands.executeCommand('notebook.selectKernel', {
             editor: notebook,
-            // id: controller.controller.id,
-            id: controller.connection.id,
+            id: controller.controller.id,
+            // id: controller.connection.id,
             extension: JVSC_EXTENSION_ID
         });
 

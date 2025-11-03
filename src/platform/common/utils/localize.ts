@@ -828,6 +828,8 @@ export namespace Integrations {
     export const configureTitle = l10n.t('Configure Integration: {0}');
     export const cancel = l10n.t('Cancel');
     export const save = l10n.t('Save');
+    export const addNewIntegration = l10n.t('Add New Integration');
+    export const database = l10n.t('Database');
     export const requiredField = l10n.t('*');
     export const optionalField = l10n.t('(optional)');
     export const unnamedIntegration = (id: string) => l10n.t('Unnamed Integration ({0})', id);

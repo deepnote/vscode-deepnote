@@ -127,6 +127,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsConfirmResetMessage: localize.Integrations.confirmResetMessage,
             integrationsConfirmResetDetails: localize.Integrations.confirmResetDetails,
             integrationsConfigureTitle: localize.Integrations.configureTitle,
+            integrationsAddNewIntegration: localize.Integrations.addNewIntegration,
+            integrationsDatabase: localize.Integrations.database,
             integrationsPostgresTypeLabel: localize.Integrations.postgresTypeLabel,
             integrationsBigQueryTypeLabel: localize.Integrations.bigQueryTypeLabel,
             integrationsSnowflakeTypeLabel: localize.Integrations.snowflakeTypeLabel,
@@ -464,9 +466,20 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             // Update local state
             const integration = this.integrations.get(integrationId);
             if (integration) {
+                // Existing integration - update it
                 integration.config = config;
                 integration.status = IntegrationStatus.Connected;
+                integration.integrationName = config.name;
+                integration.integrationType = config.type;
                 this.integrations.set(integrationId, integration);
+            } else {
+                // New integration - add it to the map
+                this.integrations.set(integrationId, {
+                    config,
+                    status: IntegrationStatus.Connected,
+                    integrationName: config.name,
+                    integrationType: config.type
+                });
             }
 
             // Update the project's integrations list

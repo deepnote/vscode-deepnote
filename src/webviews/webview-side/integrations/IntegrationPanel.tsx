@@ -2,6 +2,7 @@ import * as React from 'react';
 import { IVsCodeApi } from '../react-common/postOffice';
 import { getLocString, storeLocStrings } from '../react-common/locReactSide';
 import { IntegrationList } from './IntegrationList';
+import { IntegrationTypeSelector } from './IntegrationTypeSelector';
 import { ConfigurationForm } from './ConfigurationForm';
 import {
     ConfigurableDatabaseIntegrationConfig,
@@ -143,6 +144,19 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
     const handleCancel = () => {
         setSelectedIntegrationId(null);
         setSelectedConfig(null);
+        setSelectedIntegrationDefaultName(undefined);
+        setSelectedIntegrationType(undefined);
+    };
+
+    const handleSelectIntegrationType = (type: ConfigurableDatabaseIntegrationType) => {
+        // Generate a new UUID for the integration
+        const newId = crypto.randomUUID();
+
+        // Set up the form for creating a new integration
+        setSelectedIntegrationId(newId);
+        setSelectedConfig(null);
+        setSelectedIntegrationDefaultName(undefined);
+        setSelectedIntegrationType(type);
     };
 
     return (
@@ -152,6 +166,8 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
             {message && <div className={`message message-${message.type}`}>{message.text}</div>}
 
             <IntegrationList integrations={integrations} onConfigure={handleConfigure} onDelete={handleDelete} />
+
+            <IntegrationTypeSelector onSelectType={handleSelectIntegrationType} />
 
             {selectedIntegrationId && selectedIntegrationType && (
                 <ConfigurationForm

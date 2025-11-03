@@ -301,6 +301,11 @@ export function getDisplayNameOrNameOfKernelConnection(kernelConnection: KernelC
                 return `Python ${pythonVersion}`.trim();
             }
         case 'startUsingDeepnoteKernel': {
+            // Display as "Project Title → Notebook Title"
+            if (kernelConnection.projectName && kernelConnection.notebookName) {
+                return `${kernelConnection.projectName} → ${kernelConnection.notebookName}`;
+            }
+            // Fallback to old format if project/notebook names aren't available
             if (kernelConnection.notebookName && kernelConnection.environmentName) {
                 return `Deepnote: ${kernelConnection.notebookName} (${kernelConnection.environmentName})`;
             }

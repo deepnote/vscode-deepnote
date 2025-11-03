@@ -28,6 +28,7 @@ export class DeepnoteKernelConnectionMetadata {
     public readonly serverProviderHandle: JupyterServerProviderHandle;
     public readonly serverInfo?: DeepnoteServerInfo; // Store server info for connection
     public readonly environmentName?: string; // Name of the Deepnote environment for display purposes
+    public readonly projectName?: string; // Name of the project for display purposes
     public readonly notebookName?: string; // Name of the notebook for display purposes
 
     private constructor(options: {
@@ -38,6 +39,7 @@ export class DeepnoteKernelConnectionMetadata {
         serverProviderHandle: JupyterServerProviderHandle;
         serverInfo?: DeepnoteServerInfo;
         environmentName?: string;
+        projectName?: string;
         notebookName?: string;
     }) {
         this.interpreter = options.interpreter;
@@ -47,6 +49,7 @@ export class DeepnoteKernelConnectionMetadata {
         this.serverProviderHandle = options.serverProviderHandle;
         this.serverInfo = options.serverInfo;
         this.environmentName = options.environmentName;
+        this.projectName = options.projectName;
         this.notebookName = options.notebookName;
     }
 
@@ -58,6 +61,7 @@ export class DeepnoteKernelConnectionMetadata {
         serverProviderHandle: JupyterServerProviderHandle;
         serverInfo?: DeepnoteServerInfo;
         environmentName?: string;
+        projectName?: string;
         notebookName?: string;
     }) {
         return new DeepnoteKernelConnectionMetadata(options);

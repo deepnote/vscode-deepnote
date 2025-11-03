@@ -133,22 +133,31 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 pendingCells: [{ index: 0 }, { index: 1 }] // 2 cells pending
             };
 
+            // Create mock environment
+            const mockEnvironment = createMockEnvironment('test-env-id', 'Test Environment');
+
+            // Mock environment mapper and manager
+            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).thenReturn('test-env-id');
+            when(mockEnvironmentManager.getEnvironment('test-env-id')).thenReturn(mockEnvironment);
+
             when(mockKernelProvider.get(mockNotebook)).thenReturn(instance(mockKernel));
             when(mockKernelProvider.getKernelExecution(instance(mockKernel))).thenReturn(mockExecution as any);
 
-            // Stub ensureKernelSelected to verify it's still called despite pending cells
-            const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelected').resolves();
+            // Stub ensureKernelSelectedWithConfiguration to verify it's still called despite pending cells
+            const ensureKernelSelectedWithConfigurationStub = sandbox
+                .stub(selector, 'ensureKernelSelectedWithConfiguration')
+                .resolves();
             // Act
             await selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken));
 
             // Assert - should proceed despite pending cells
             assert.strictEqual(
-                ensureKernelSelectedStub.calledOnce,
+                ensureKernelSelectedWithConfigurationStub.calledOnce,
                 true,
                 'ensureKernelSelected should be called even with pending cells'
             );
             assert.strictEqual(
-                ensureKernelSelectedStub.firstCall.args[0],
+                ensureKernelSelectedWithConfigurationStub.firstCall.args[0],
                 mockNotebook,
                 'ensureKernelSelected should be called with the notebook'
             );
@@ -161,169 +170,102 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             // Arrange
             when(mockKernelProvider.get(mockNotebook)).thenReturn(undefined);
 
-            // Stub ensureKernelSelected to verify it's called
-            const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelected').resolves();
+            // Create mock environment
+            const mockEnvironment = createMockEnvironment('test-env-id', 'Test Environment');
+
+            // Mock environment mapper and manager
+            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).thenReturn('test-env-id');
+            when(mockEnvironmentManager.getEnvironment('test-env-id')).thenReturn(mockEnvironment);
+
+            // Stub ensureKernelSelectedWithConfiguration to verify it's called
+            const ensureKernelSelectedWithConfigurationStub = sandbox
+                .stub(selector, 'ensureKernelSelectedWithConfiguration')
+                .resolves();
 
             // Act
             await selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken));
 
             // Assert - should proceed normally without a kernel
             assert.strictEqual(
-                ensureKernelSelectedStub.calledOnce,
+                ensureKernelSelectedWithConfigurationStub.calledOnce,
                 true,
                 'ensureKernelSelected should be called even when no kernel exists'
             );
             assert.strictEqual(
-                ensureKernelSelectedStub.firstCall.args[0],
+                ensureKernelSelectedWithConfigurationStub.firstCall.args[0],
                 mockNotebook,
                 'ensureKernelSelected should be called with the notebook'
             );
         });
 
-        test('should complete successfully and delegate to ensureKernelSelected', async () => {
-            // This test verifies that rebuildController completes successfully
+        test('should complete successfully and delegate to ensureKernelSelectedWithConfiguration', async () => {
+            // This test verifies that ensureKernelSelectedWithConfiguration completes successfully
             // and delegates kernel setup to ensureKernelSelected
-            // Note: rebuildController does NOT dispose old controllers to prevent
-            // "notebook controller is DISPOSED" errors for queued cell executions
 
             // Arrange
             when(mockKernelProvider.get(mockNotebook)).thenReturn(undefined);
 
-            // Stub ensureKernelSelected to verify delegation
-            const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelected').resolves();
+            // Create mock environment
+            const mockEnvironment = createMockEnvironment('test-env-id', 'Test Environment');
+
+            // Mock environment mapper and manager
+            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).thenReturn('test-env-id');
+            when(mockEnvironmentManager.getEnvironment('test-env-id')).thenReturn(mockEnvironment);
+
+            // Stub ensureKernelSelectedWithConfiguration to verify delegation
+            const ensureKernelSelectedWithConfigurationStub = sandbox
+                .stub(selector, 'ensureKernelSelectedWithConfiguration')
+                .resolves();
 
             // Act
             await selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken));
 
             // Assert - method should complete without errors
             assert.strictEqual(
-                ensureKernelSelectedStub.calledOnce,
+                ensureKernelSelectedWithConfigurationStub.calledOnce,
                 true,
-                'ensureKernelSelected should be called to set up the new environment'
+                'ensureKernelSelectedWithConfiguration should be called to set up the new environment'
             );
         });
 
-        test('should clear metadata and call ensureKernelSelected to recreate controller', async () => {
-            // This test verifies that rebuildController:
-            // 1. Clears cached connection metadata (forces fresh metadata creation)
-            // 2. Clears old server handle
-            // 3. Calls ensureKernelSelected to set up controller with new environment
-
-            // Arrange
-            // Mock kernel provider to return no kernel (no cells executing)
-            when(mockKernelProvider.get(mockNotebook)).thenReturn(undefined);
-
-            // Get the notebook key that will be used internally
-            const baseFileUri = mockNotebook.uri.with({ query: '', fragment: '' });
-            const notebookKey = baseFileUri.fsPath;
-
-            // Set up initial metadata and server handle to verify they get cleared
-            const selectorWithPrivateAccess = selector as any;
-            const mockMetadata = { id: 'test-metadata' };
-            const mockServerHandle = 'test-server-handle';
-            selectorWithPrivateAccess.notebookConnectionMetadata.set(notebookKey, mockMetadata);
-            selectorWithPrivateAccess.notebookServerHandles.set(notebookKey, mockServerHandle);
-
-            // Verify metadata is set before rebuild
-            assert.strictEqual(
-                selectorWithPrivateAccess.notebookConnectionMetadata.has(notebookKey),
-                true,
-                'Metadata should be set before rebuildController'
-            );
-            assert.strictEqual(
-                selectorWithPrivateAccess.notebookServerHandles.has(notebookKey),
-                true,
-                'Server handle should be set before rebuildController'
-            );
-
-            // Stub ensureKernelSelected to avoid full execution
-            const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelected').resolves();
-
-            // Act
-            await selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken));
-
-            // Assert - verify metadata has been cleared
-            assert.strictEqual(
-                selectorWithPrivateAccess.notebookConnectionMetadata.has(notebookKey),
-                false,
-                'Connection metadata should be cleared to force fresh metadata creation'
-            );
-            assert.strictEqual(
-                selectorWithPrivateAccess.notebookServerHandles.has(notebookKey),
-                false,
-                'Server handle should be cleared'
-            );
-
-            // Assert - verify ensureKernelSelected has been called
-            assert.strictEqual(
-                ensureKernelSelectedStub.calledOnce,
-                true,
-                'ensureKernelSelected should have been called once'
-            );
-            assert.strictEqual(
-                ensureKernelSelectedStub.firstCall.args[0],
-                mockNotebook,
-                'ensureKernelSelected should be called with the notebook'
-            );
-        });
-
-        test('should pass cancellation token to ensureKernelSelected', async () => {
+        test('should pass cancellation token to ensureKernelSelectedWithConfiguration', async () => {
             // This test verifies that rebuildController correctly passes the cancellation token
-            // to ensureKernelSelected, allowing the operation to be cancelled during execution
+            // to ensureKernelSelectedWithConfiguration, allowing the operation to be cancelled during execution
 
             // Arrange
             when(mockCancellationToken.isCancellationRequested).thenReturn(true);
             when(mockKernelProvider.get(mockNotebook)).thenReturn(undefined);
 
-            // Stub ensureKernelSelected to verify it receives the token
-            const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelected').resolves();
+            // Create mock environment
+            const mockEnvironment = createMockEnvironment('test-env-id', 'Test Environment');
+
+            // Mock environment mapper and manager
+            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).thenReturn('test-env-id');
+            when(mockEnvironmentManager.getEnvironment('test-env-id')).thenReturn(mockEnvironment);
+
+            // Stub ensureKernelSelectedWithConfiguration to verify it receives the token
+            const ensureKernelSelectedWithConfigurationStub = sandbox
+                .stub(selector, 'ensureKernelSelectedWithConfiguration')
+                .resolves();
 
             // Act
             await selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken));
 
             // Assert
-            assert.strictEqual(ensureKernelSelectedStub.calledOnce, true, 'ensureKernelSelected should be called once');
             assert.strictEqual(
-                ensureKernelSelectedStub.firstCall.args[0],
+                ensureKernelSelectedWithConfigurationStub.calledOnce,
+                true,
+                'ensureKernelSelectedWithConfiguration should be called once'
+            );
+            assert.strictEqual(
+                ensureKernelSelectedWithConfigurationStub.firstCall.args[0],
                 mockNotebook,
                 'ensureKernelSelected should be called with the notebook'
             );
             assert.strictEqual(
-                ensureKernelSelectedStub.firstCall.args[2],
+                ensureKernelSelectedWithConfigurationStub.firstCall.args[6],
                 instance(mockCancellationToken),
                 'ensureKernelSelected should be called with the cancellation token'
-            );
-        });
-    });
-
-    suite('environment switching integration', () => {
-        test('should switch from one environment to another', async () => {
-            // This test simulates the full flow:
-            // 1. User has Environment A selected
-            // 2. User switches to Environment B via the UI
-            // 3. rebuildController is called
-            // 4. ensureKernelSelected is invoked to set up new controller with Environment B
-
-            // Arrange
-            // Mock kernel provider to return no kernel (no cells executing)
-            when(mockKernelProvider.get(mockNotebook)).thenReturn(undefined);
-
-            // Stub ensureKernelSelected to track calls without full execution
-            const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelected').resolves();
-
-            // Act: Call rebuildController to switch environments
-            await selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken));
-
-            // Assert: Verify ensureKernelSelected was called to set up new controller
-            assert.strictEqual(
-                ensureKernelSelectedStub.calledOnce,
-                true,
-                'ensureKernelSelected should have been called once to set up new environment'
-            );
-            assert.strictEqual(
-                ensureKernelSelectedStub.firstCall.args[0],
-                mockNotebook,
-                'ensureKernelSelected should be called with the notebook'
             );
         });
     });

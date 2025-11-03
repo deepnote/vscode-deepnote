@@ -472,7 +472,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         return true;
     }
 
-    private async ensureKernelSelectedWithConfiguration(
+    public async ensureKernelSelectedWithConfiguration(
         notebook: NotebookDocument,
         configuration: DeepnoteEnvironment,
         baseFileUri: Uri,
@@ -663,7 +663,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         progress.report({ message: 'Kernel ready!' });
     }
 
-    private async ensureControllerSelectedForNotebook(
+    public async ensureControllerSelectedForNotebook(
         notebook: NotebookDocument,
         controller: IVSCodeNotebookController,
         token: CancellationToken

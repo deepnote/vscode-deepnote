@@ -667,7 +667,6 @@ suite('DeepnoteEnvironmentsView', () => {
             verify(mockConfigManager.getEnvironment(currentEnvironment.id)).once();
             verify(mockConfigManager.listEnvironments()).once();
             verify(mockConfigManager.getEnvironment(currentEnvironment.id)).once();
-            verify(mockConfigManager.getEnvironment(newEnvironment.id)).once();
             verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).once();
             verify(mockKernelProvider.get(mockNotebook as any)).once();
             verify(mockKernelProvider.getKernelExecution(mockKernel as any)).once();

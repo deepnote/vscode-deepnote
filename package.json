@@ -106,24 +106,6 @@
                 "icon": "$(add)"
             },
             {
-                "command": "deepnote.environments.start",
-                "title": "%deepnote.commands.environments.start.title%",
-                "category": "Deepnote",
-                "icon": "$(debug-start)"
-            },
-            {
-                "command": "deepnote.environments.stop",
-                "title": "%deepnote.commands.environments.stop.title%",
-                "category": "Deepnote",
-                "icon": "$(debug-stop)"
-            },
-            {
-                "command": "deepnote.environments.restart",
-                "title": "%deepnote.commands.environments.restart.title%",
-                "category": "Deepnote",
-                "icon": "$(debug-restart)"
-            },
-            {
                 "command": "deepnote.environments.delete",
                 "title": "%deepnote.commands.environments.delete.title%",
                 "category": "Deepnote",

@@ -120,7 +120,7 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
             }
 
             vscodeApi.postMessage({
-                type: 'delete',
+                type: 'reset',
                 integrationId: confirmReset
             });
             setConfirmReset(null);

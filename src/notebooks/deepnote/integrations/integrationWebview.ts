@@ -432,6 +432,11 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                     await this.saveConfiguration(message.integrationId, message.config);
                 }
                 break;
+            case 'reset':
+                if (message.integrationId) {
+                    await this.resetConfiguration(message.integrationId);
+                }
+                break;
             case 'delete':
                 if (message.integrationId) {
                     await this.deleteConfiguration(message.integrationId);
@@ -508,9 +513,9 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     }
 
     /**
-     * Delete the configuration for an integration
+     * Reset the configuration for an integration (clears credentials but keeps the integration entry)
      */
-    private async deleteConfiguration(integrationId: string): Promise<void> {
+    private async resetConfiguration(integrationId: string): Promise<void> {
         try {
             await this.integrationStorage.delete(integrationId);
 
@@ -527,14 +532,44 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
 
             await this.updateWebview();
             await this.currentPanel?.webview.postMessage({
-                message: l10n.t('Configuration deleted successfully'),
+                message: l10n.t('Configuration reset successfully'),
                 type: 'success'
             });
         } catch (error) {
-            logger.error('Failed to delete integration configuration', error);
+            logger.error('Failed to reset integration configuration', error);
             await this.currentPanel?.webview.postMessage({
                 message: l10n.t(
-                    'Failed to delete configuration: {0}',
+                    'Failed to reset configuration: {0}',
+                    error instanceof Error ? error.message : 'Unknown error'
+                ),
+                type: 'error'
+            });
+        }
+    }
+
+    /**
+     * Delete the integration completely (removes credentials and integration entry)
+     */
+    private async deleteConfiguration(integrationId: string): Promise<void> {
+        try {
+            await this.integrationStorage.delete(integrationId);
+
+            // Remove from local state
+            this.integrations.delete(integrationId);
+
+            // Update the project's integrations list
+            await this.updateProjectIntegrationsList();
+
+            await this.updateWebview();
+            await this.currentPanel?.webview.postMessage({
+                message: l10n.t('Integration deleted successfully'),
+                type: 'success'
+            });
+        } catch (error) {
+            logger.error('Failed to delete integration', error);
+            await this.currentPanel?.webview.postMessage({
+                message: l10n.t(
+                    'Failed to delete integration: {0}',
                     error instanceof Error ? error.message : 'Unknown error'
                 ),
                 type: 'error'

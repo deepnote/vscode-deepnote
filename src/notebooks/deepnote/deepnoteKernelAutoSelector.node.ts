@@ -49,7 +49,6 @@ import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnot
 import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
 import { IOutputChannel } from '../../platform/common/types';
 import { createDeepnoteServerConfigHandle } from '../../platform/deepnote/deepnoteServerUtils.node';
-import { waitForCondition } from '../../platform/common/utils/async';
 import { Cancellation } from '../../platform/common/cancellation';
 
 /**
@@ -107,7 +106,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         // Listen to kernel starts to run init notebooks
         // Kernels are created lazily when cells are executed, so this is the right time to run init notebook
-        // this.kernelProvider.onDidStartKernel(this.onKernelStarted, this, this.disposables);
+        this.kernelProvider.onDidStartKernel(this.onKernelStarted, this, this.disposables);
 
         // Handle currently open notebooks - await all async operations
         Promise.all(workspace.notebookDocuments.map((d) => this.onDidOpenNotebook(d))).catch((error) => {
@@ -644,12 +643,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         });
 
         // Auto-select the controller
-        // await commands.executeCommand('notebook.selectKernel', {
-        //     editor: notebook,
-        //     id: controller.controller.id,
-        //     // id: controller.connection.id,
-        //     extension: JVSC_EXTENSION_ID
-        // });
         await this.ensureControllerSelectedForNotebook(notebook, controller, progressToken);
 
         logger.info(`Successfully set up kernel with configuration: ${configuration.name}`);
@@ -678,54 +671,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             // id: controller.controller.id,
             extension: JVSC_EXTENSION_ID
         });
-
-        // const trySelect = async (attempt: number) => {
-        //     Cancellation.throwIfCanceled(token);
-        //     logger.info(
-        //         `Attempt ${attempt} to select Deepnote controller ${controller.id} for ${getDisplayPath(notebook.uri)}`
-        //     );
-        //     await commands.executeCommand('notebook.selectKernel', {
-        //         notebookEditor: notebook,
-        //         id: controller.connection.id,
-        //         // id: controller.controller.id,
-        //         extension: JVSC_EXTENSION_ID
-        //     });
-        //     return true;
-        // };
-
-        // const waitForSelection = async () =>
-        //     waitForCondition(
-        //         async () => {
-        //             Cancellation.throwIfCanceled(token);
-        //             const selected = this.controllerRegistration.getSelected(notebook);
-        //             logger.info(
-        //                 `Selected controller: ${selected?.id}, with expected: ${controller.id} for ${getDisplayPath(
-        //                     notebook.uri
-        //                 )}`
-        //             );
-        //             return selected?.id === controller.id;
-        //         },
-        //         2000,
-        //         100
-        //     );
-
-        // let success = (await trySelect(1)) ? await waitForSelection() : true;
-
-        // if (!success) {
-        //     logger.warn(
-        //         `Kernel selection did not stick on first attempt for ${getDisplayPath(notebook.uri)}. Retrying...`
-        //     );
-        //     success = (await trySelect(2)) ? await waitForSelection() : true;
-        // }
-
-        // Cancellation.throwIfCanceled(token);
-
-        // if (success) {
-        //     logger.info(`Confirmed Deepnote controller ${controller.id} selected for ${getDisplayPath(notebook.uri)}`);
-        // } else {
-        //     `Kernel selection did not stick on second attempt for ${getDisplayPath(notebook.uri)}.`;
-        //     Cancellation.throwIfCanceled(token);
-        // }
     }
 
     /**

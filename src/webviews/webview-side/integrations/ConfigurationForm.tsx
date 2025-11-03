@@ -18,6 +18,7 @@ import { SpannerForm } from './SpannerForm';
 import { SQLServerForm } from './SQLServerForm';
 import { TrinoForm } from './TrinoForm';
 import { ConfigurableDatabaseIntegrationConfig, ConfigurableDatabaseIntegrationType } from './types';
+import { integrationTypeLabels } from './integrationUtils';
 
 export interface IConfigurationFormProps {
     integrationId: string;
@@ -36,10 +37,8 @@ export const ConfigurationForm: React.FC<IConfigurationFormProps> = ({
     onSave,
     onCancel
 }) => {
-    const title = getLocString('integrationsConfigureTitle', 'Configure Integration: {0}').replace(
-        '{0}',
-        integrationId
-    );
+    const typeLabel = integrationTypeLabels[integrationType] || integrationType;
+    const title = getLocString('integrationsConfigureTitle', '{0} integration').replace('{0}', typeLabel);
 
     return (
         <div className="configuration-form-overlay">

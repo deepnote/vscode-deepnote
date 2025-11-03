@@ -822,22 +822,33 @@ export namespace Integrations {
     export const configure = l10n.t('Configure');
     export const reconfigure = l10n.t('Reconfigure');
     export const reset = l10n.t('Reset');
+    export const deleteIntegration = l10n.t('Delete');
     export const confirmResetTitle = l10n.t('Confirm Reset');
     export const confirmResetMessage = l10n.t('Are you sure you want to reset this integration configuration?');
     export const confirmResetDetails = l10n.t('This will remove the stored credentials. You can reconfigure it later.');
+    export const confirmDeleteTitle = l10n.t('Confirm Delete');
+    export const confirmDeleteMessage = l10n.t('Are you sure you want to permanently delete this integration?');
+    export const confirmDeleteDetails = l10n.t(
+        'This will permanently remove the integration from your project. This action cannot be undone.'
+    );
     export const configureTitle = l10n.t('Configure Integration: {0}');
     export const cancel = l10n.t('Cancel');
     export const save = l10n.t('Save');
+    export const addNewIntegration = l10n.t('Add New Integration');
+    export const database = l10n.t('Database');
+    export const dataWarehousesLakes = l10n.t('Data Warehouses & Lakes');
+    export const databases = l10n.t('Databases');
     export const requiredField = l10n.t('*');
     export const optionalField = l10n.t('(optional)');
     export const unnamedIntegration = (id: string) => l10n.t('Unnamed Integration ({0})', id);
+    export const defaultName = (type: string) => l10n.t('My {0} integration', type);
     export const unsupportedIntegrationType = (type: string) => l10n.t('Unsupported integration type: {0}', type);
 
     // Integration type labels
     export const postgresTypeLabel = l10n.t('PostgreSQL');
-    export const bigQueryTypeLabel = l10n.t('BigQuery');
+    export const bigQueryTypeLabel = l10n.t('Google BigQuery');
     export const snowflakeTypeLabel = l10n.t('Snowflake');
-    export const alloyDBTypeLabel = l10n.t('AlloyDB');
+    export const alloyDBTypeLabel = l10n.t('Google AlloyDB');
     export const athenaTypeLabel = l10n.t('Amazon Athena');
     export const clickHouseTypeLabel = l10n.t('ClickHouse');
     export const databricksTypeLabel = l10n.t('Databricks');
@@ -849,8 +860,8 @@ export namespace Integrations {
     export const mySQLTypeLabel = l10n.t('MySQL');
     export const duckDBTypeLabel = l10n.t('DuckDB');
     export const redshiftTypeLabel = l10n.t('Amazon Redshift');
-    export const spannerTypeLabel = l10n.t('Google Cloud Spanner');
-    export const sqlServerTypeLabel = l10n.t('SQL Server');
+    export const spannerTypeLabel = l10n.t('Google Spanner');
+    export const sqlServerTypeLabel = l10n.t('Microsoft SQL Server');
     export const trinoTypeLabel = l10n.t('Trino');
 
     // PostgreSQL form strings

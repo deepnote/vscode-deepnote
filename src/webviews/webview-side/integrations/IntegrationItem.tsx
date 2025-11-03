@@ -1,21 +1,23 @@
 import * as React from 'react';
 import { getLocString } from '../react-common/locReactSide';
 import { ConfigurableDatabaseIntegrationType, IntegrationWithStatus } from './types';
+import { integrationTypeIcons } from './integrationUtils';
 
 export interface IIntegrationItemProps {
     integration: IntegrationWithStatus;
     onConfigure: (integrationId: string) => void;
+    onReset: (integrationId: string) => void;
     onDelete: (integrationId: string) => void;
 }
 
 const getIntegrationTypeLabel = (type: ConfigurableDatabaseIntegrationType): string => {
     switch (type) {
         case 'alloydb':
-            return getLocString('integrationsAlloyDBTypeLabel', 'AlloyDB');
+            return getLocString('integrationsAlloyDBTypeLabel', 'Google AlloyDB');
         case 'athena':
             return getLocString('integrationsAthenaTypeLabel', 'Amazon Athena');
         case 'big-query':
-            return getLocString('integrationsBigQueryTypeLabel', 'BigQuery');
+            return getLocString('integrationsBigQueryTypeLabel', 'Google BigQuery');
         case 'clickhouse':
             return getLocString('integrationsClickHouseTypeLabel', 'ClickHouse');
         case 'databricks':
@@ -39,9 +41,9 @@ const getIntegrationTypeLabel = (type: ConfigurableDatabaseIntegrationType): str
         case 'snowflake':
             return getLocString('integrationsSnowflakeTypeLabel', 'Snowflake');
         case 'spanner':
-            return getLocString('integrationsSpannerTypeLabel', 'Google Cloud Spanner');
+            return getLocString('integrationsSpannerTypeLabel', 'Google Spanner');
         case 'sql-server':
-            return getLocString('integrationsSQLServerTypeLabel', 'SQL Server');
+            return getLocString('integrationsSQLServerTypeLabel', 'Microsoft SQL Server');
         case 'trino':
             return getLocString('integrationsTrinoTypeLabel', 'Trino');
         default:
@@ -49,7 +51,7 @@ const getIntegrationTypeLabel = (type: ConfigurableDatabaseIntegrationType): str
     }
 };
 
-export const IntegrationItem: React.FC<IIntegrationItemProps> = ({ integration, onConfigure, onDelete }) => {
+export const IntegrationItem: React.FC<IIntegrationItemProps> = ({ integration, onConfigure, onReset, onDelete }) => {
     const statusClass = integration.status === 'connected' ? 'status-connected' : 'status-disconnected';
     const statusText =
         integration.status === 'connected'
@@ -65,22 +67,43 @@ export const IntegrationItem: React.FC<IIntegrationItemProps> = ({ integration, 
     // Get the type: prefer config type, then integration type from project
     const type = integration.config?.type || integration.integrationType;
 
-    // Build display name with type
-    const displayName = type ? `${name} (${getIntegrationTypeLabel(type)})` : name;
+    // Get the type label and icon
+    const typeLabel = type ? getIntegrationTypeLabel(type) : undefined;
+    const typeIcon = type ? integrationTypeIcons[type] : undefined;
 
     return (
         <div className="integration-item">
+            {typeIcon && (
+                <div className="integration-item-icon">
+                    <img src={typeIcon} alt={typeLabel || ''} />
+                </div>
+            )}
             <div className="integration-info">
-                <div className="integration-name">{displayName}</div>
-                <div className={`integration-status ${statusClass}`}>{statusText}</div>
+                <div className="integration-name">{name}</div>
+                <div className="integration-meta">
+                    {typeLabel && <span className="integration-type">{typeLabel}</span>}
+                    {typeLabel && <span className="integration-meta-separator"> • </span>}
+                    <span className={`integration-status ${statusClass}`}>{statusText}</span>
+                </div>
             </div>
             <div className="integration-actions">
                 <button type="button" onClick={() => onConfigure(integration.id)}>
                     {configureText}
                 </button>
                 {integration.config && (
-                    <button type="button" className="secondary" onClick={() => onDelete(integration.id)}>
+                    <button type="button" className="secondary" onClick={() => onReset(integration.id)}>
                         {getLocString('integrationsReset', 'Reset')}
+                    </button>
+                )}
+                {integration.config && (
+                    <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => onDelete(integration.id)}
+                        title={getLocString('integrationsDelete', 'Delete')}
+                        aria-label={getLocString('integrationsDelete', 'Delete')}
+                    >
+                        {getLocString('integrationsDelete', 'Delete')}
                     </button>
                 )}
             </div>

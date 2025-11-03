@@ -23,6 +23,7 @@ export interface IVsCodeMessage {
 export interface UpdateMessage {
     type: 'update';
     integrations: IntegrationWithStatus[];
+    projectName?: string;
 }
 
 export interface ShowFormMessage {

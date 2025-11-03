@@ -39,6 +39,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
     let mockNotebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper;
     let mockOutputChannel: IOutputChannel;
 
+    let mockProgress: { report(value: { message?: string; increment?: number }): void };
     let mockCancellationToken: CancellationToken;
 
     let mockNotebook: NotebookDocument;
@@ -64,6 +65,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         mockNotebookEnvironmentMapper = mock<IDeepnoteNotebookEnvironmentMapper>();
         mockOutputChannel = mock<IOutputChannel>();
 
+        mockProgress = { report: sandbox.stub() };
         mockCancellationToken = mock<CancellationToken>();
 
         // Create mock notebook
@@ -137,7 +139,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             // Stub ensureKernelSelected to verify it's still called despite pending cells
             const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelected').resolves();
             // Act
-            await selector.rebuildController(mockNotebook, instance(mockCancellationToken));
+            await selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken));
 
             // Assert - should proceed despite pending cells
             assert.strictEqual(
@@ -163,7 +165,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelected').resolves();
 
             // Act
-            await selector.rebuildController(mockNotebook, instance(mockCancellationToken));
+            await selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken));
 
             // Assert - should proceed normally without a kernel
             assert.strictEqual(
@@ -191,7 +193,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelected').resolves();
 
             // Act
-            await selector.rebuildController(mockNotebook, instance(mockCancellationToken));
+            await selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken));
 
             // Assert - method should complete without errors
             assert.strictEqual(
@@ -238,7 +240,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelected').resolves();
 
             // Act
-            await selector.rebuildController(mockNotebook, instance(mockCancellationToken));
+            await selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken));
 
             // Assert - verify metadata has been cleared
             assert.strictEqual(
@@ -277,7 +279,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelected').resolves();
 
             // Act
-            await selector.rebuildController(mockNotebook, instance(mockCancellationToken));
+            await selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken));
 
             // Assert
             assert.strictEqual(ensureKernelSelectedStub.calledOnce, true, 'ensureKernelSelected should be called once');
@@ -310,7 +312,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelected').resolves();
 
             // Act: Call rebuildController to switch environments
-            await selector.rebuildController(mockNotebook, instance(mockCancellationToken));
+            await selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken));
 
             // Assert: Verify ensureKernelSelected was called to set up new controller
             assert.strictEqual(
@@ -745,7 +747,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             // If OLD_CONTROLLER_DISPOSED happens before NEW_CONTROLLER_ADDED_TO_REGISTRATION,
             // then there's a window where no valid controller exists!
 
-            await selector.rebuildController(mockNotebook, instance(mockCancellationToken));
+            await selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken));
 
             // ASSERTION: If implementation is correct, call order should be:
             // 1. NEW_CONTROLLER_ADDED_TO_REGISTRATION (from ensureKernelSelected)

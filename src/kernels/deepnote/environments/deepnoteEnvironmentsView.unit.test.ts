@@ -654,7 +654,7 @@ suite('DeepnoteEnvironmentsView', () => {
             when(mockNotebookEnvironmentMapper.setEnvironmentForNotebook(baseFileUri, newEnvironment.id)).thenResolve();
 
             // Mock controller rebuild
-            when(mockKernelAutoSelector.rebuildController(mockNotebook as any)).thenResolve();
+            when(mockKernelAutoSelector.rebuildController(mockNotebook as any, anything(), anything())).thenResolve();
 
             // Mock success message
             when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenResolve(undefined);
@@ -675,7 +675,7 @@ suite('DeepnoteEnvironmentsView', () => {
             // Verify environment switch
             verify(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).once();
             verify(mockNotebookEnvironmentMapper.setEnvironmentForNotebook(baseFileUri, newEnvironment.id)).once();
-            verify(mockKernelAutoSelector.rebuildController(mockNotebook as any)).once();
+            verify(mockKernelAutoSelector.rebuildController(mockNotebook as any, anything(), anything())).once();
 
             // Verify success message was shown
             verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();

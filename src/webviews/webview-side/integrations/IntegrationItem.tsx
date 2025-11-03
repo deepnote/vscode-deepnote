@@ -87,12 +87,12 @@ export const IntegrationItem: React.FC<IIntegrationItemProps> = ({ integration, 
                 {integration.config && (
                     <button
                         type="button"
-                        className="icon-button"
+                        className="secondary"
                         onClick={() => onDelete(integration.id)}
                         title={getLocString('integrationsDelete', 'Delete')}
                         aria-label={getLocString('integrationsDelete', 'Delete')}
                     >
-                        <span className="codicon codicon-trash" />
+                        {getLocString('integrationsDelete', 'Delete')}
                     </button>
                 )}
             </div>

@@ -6,6 +6,7 @@ import {
     CancellationToken,
     CancellationTokenSource,
     Disposable,
+    NotebookController,
     NotebookControllerAffinity,
     NotebookDocument,
     ProgressLocation,
@@ -14,6 +15,7 @@ import {
     commands,
     env,
     l10n,
+    notebooks,
     window,
     workspace
 } from 'vscode';
@@ -72,6 +74,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         { notebook: NotebookDocument; project: DeepnoteProject }
     >();
 
+    private readonly deepnoteLoadingKernelController: NotebookController;
+
     constructor(
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
         @inject(IControllerRegistration) private readonly controllerRegistration: IControllerRegistration,
@@ -91,7 +95,22 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         @inject(IDeepnoteNotebookEnvironmentMapper)
         private readonly notebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper,
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel
-    ) {}
+    ) {
+        this.deepnoteLoadingKernelController = notebooks.createNotebookController(
+            `deepnote-loading-kernel`,
+            DEEPNOTE_NOTEBOOK_TYPE,
+            l10n.t('Loading Deepnote Kernel...')
+        );
+
+        // Set it as the preferred controller immediately
+        this.deepnoteLoadingKernelController.supportsExecutionOrder = false;
+        this.deepnoteLoadingKernelController.supportedLanguages = ['python'];
+
+        // Execution handler that does nothing - cells will just sit there until real kernel is ready
+        this.deepnoteLoadingKernelController.executeHandler = () => {
+            // No-op: execution is blocked until the real controller takes over
+        };
+    }
 
     public activate() {
         // Listen to notebook open events
@@ -439,6 +458,13 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         progress: { report(value: { message?: string; increment?: number }): void },
         token: CancellationToken
     ): Promise<boolean> {
+        this.deepnoteLoadingKernelController.updateNotebookAffinity(notebook, NotebookControllerAffinity.Preferred);
+        await commands.executeCommand('notebook.selectKernel', {
+            notebookEditor: notebook,
+            id: this.deepnoteLoadingKernelController.id,
+            extension: JVSC_EXTENSION_ID
+        });
+
         // baseFileUri identifies the PROJECT (without query/fragment)
         const baseFileUri = notebook.uri.with({ query: '', fragment: '' });
         // notebookKey uniquely identifies THIS NOTEBOOK (includes query with notebook ID)

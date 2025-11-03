@@ -20,6 +20,7 @@ export interface IIntegrationPanelProps {
 
 export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, vscodeApi }) => {
     const [integrations, setIntegrations] = React.useState<IntegrationWithStatus[]>([]);
+    const [projectName, setProjectName] = React.useState<string | undefined>(undefined);
     const [selectedIntegrationId, setSelectedIntegrationId] = React.useState<string | null>(null);
     const [selectedConfig, setSelectedConfig] = React.useState<ConfigurableDatabaseIntegrationConfig | null>(null);
     const [selectedIntegrationDefaultName, setSelectedIntegrationDefaultName] = React.useState<string | undefined>(
@@ -66,6 +67,7 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
 
                 case 'update':
                     setIntegrations(msg.integrations);
+                    setProjectName(msg.projectName);
                     break;
 
                 case 'showForm':
@@ -205,6 +207,7 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
     return (
         <div className={`integration-panel theme-${baseTheme}`}>
             <h1>{getLocString('integrationsTitle', 'Deepnote Integrations')}</h1>
+            {projectName && <p className="project-name">{projectName}</p>}
 
             {message && <div className={`message message-${message.type}`}>{message.text}</div>}
 

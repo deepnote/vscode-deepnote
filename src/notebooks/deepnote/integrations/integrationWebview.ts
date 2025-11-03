@@ -409,8 +409,16 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         }));
         logger.debug(`IntegrationWebviewProvider: Sending ${integrationsData.length} integrations to webview`);
 
+        // Get the project name from the notebook manager
+        let projectName: string | undefined;
+        if (this.projectId) {
+            const project = this.notebookManager.getOriginalProject(this.projectId);
+            projectName = project?.project.name;
+        }
+
         await this.currentPanel.webview.postMessage({
             integrations: integrationsData,
+            projectName,
             type: 'update'
         });
     }

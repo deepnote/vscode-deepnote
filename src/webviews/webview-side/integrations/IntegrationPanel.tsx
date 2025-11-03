@@ -3,8 +3,12 @@ import { IVsCodeApi } from '../react-common/postOffice';
 import { getLocString, storeLocStrings } from '../react-common/locReactSide';
 import { IntegrationList } from './IntegrationList';
 import { ConfigurationForm } from './ConfigurationForm';
-import { IntegrationWithStatus, WebviewMessage } from './types';
-import { DatabaseIntegrationConfig, DatabaseIntegrationType } from '@deepnote/database-integrations';
+import {
+    ConfigurableDatabaseIntegrationConfig,
+    ConfigurableDatabaseIntegrationType,
+    IntegrationWithStatus,
+    WebviewMessage
+} from './types';
 
 export interface IIntegrationPanelProps {
     baseTheme: string;
@@ -14,13 +18,13 @@ export interface IIntegrationPanelProps {
 export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, vscodeApi }) => {
     const [integrations, setIntegrations] = React.useState<IntegrationWithStatus[]>([]);
     const [selectedIntegrationId, setSelectedIntegrationId] = React.useState<string | null>(null);
-    const [selectedConfig, setSelectedConfig] = React.useState<DatabaseIntegrationConfig | null>(null);
+    const [selectedConfig, setSelectedConfig] = React.useState<ConfigurableDatabaseIntegrationConfig | null>(null);
     const [selectedIntegrationDefaultName, setSelectedIntegrationDefaultName] = React.useState<string | undefined>(
         undefined
     );
-    const [selectedIntegrationType, setSelectedIntegrationType] = React.useState<DatabaseIntegrationType | undefined>(
-        undefined
-    );
+    const [selectedIntegrationType, setSelectedIntegrationType] = React.useState<
+        ConfigurableDatabaseIntegrationType | undefined
+    >(undefined);
     const [message, setMessage] = React.useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [confirmDelete, setConfirmDelete] = React.useState<string | null>(null);
 
@@ -126,7 +130,7 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
         setConfirmDelete(null);
     };
 
-    const handleSave = (config: DatabaseIntegrationConfig) => {
+    const handleSave = (config: ConfigurableDatabaseIntegrationConfig) => {
         vscodeApi.postMessage({
             type: 'save',
             integrationId: config.id,

@@ -33,10 +33,43 @@ This ensures consistency between the VSCode extension and Deepnote's cloud platf
 
 **Supported Integration Types:**
 
+The extension supports all 18 database integration types from the `@deepnote/database-integrations` package:
+
+**SQL Databases (standard authentication):**
+
 - `'pgsql'` - PostgreSQL
-- `'big-query'` - BigQuery
-- `'snowflake'` - Snowflake
-- `'pandas-dataframe'` - DuckDB (internal)
+- `'mysql'` - MySQL
+- `'mariadb'` - MariaDB
+- `'alloydb'` - Google Cloud AlloyDB
+- `'clickhouse'` - ClickHouse
+- `'materialize'` - Materialize
+- `'mindsdb'` - MindsDB
+- `'sql-server'` - Microsoft SQL Server
+- `'trino'` - Trino
+
+**Cloud Databases (service account/key-based auth):**
+
+- `'big-query'` - Google BigQuery (service account JSON)
+- `'snowflake'` - Snowflake (password or key-pair auth)
+- `'spanner'` - Google Cloud Spanner (service account JSON)
+
+**Cloud Databases (AWS credentials):**
+
+- `'athena'` - Amazon Athena (access key and secret)
+- `'redshift'` - Amazon Redshift (username/password or IAM)
+
+**Cloud Databases (token-based auth):**
+
+- `'databricks'` - Databricks (personal access token)
+- `'dremio'` - Dremio (personal access token)
+
+**NoSQL:**
+
+- `'mongodb'` - MongoDB (connection string)
+
+**Internal:**
+
+- `'pandas-dataframe'` - DuckDB (automatically configured, not user-editable)
 
 ### Core Components
 
@@ -85,9 +118,121 @@ The system uses `DatabaseIntegrationConfig` from `@deepnote/database-integration
     host: string;
     port: string;
     database: string;
-    username: string;
+    user: string;
     password: string;
     sslEnabled: boolean;
+  }
+}
+
+// MySQL (type: 'mysql')
+{
+  id: string;
+  name: string;
+  type: 'mysql';
+  metadata: {
+    host: string;
+    port: string;
+    database: string;
+    user: string;
+    password: string;
+  }
+}
+
+// MariaDB (type: 'mariadb')
+{
+  id: string;
+  name: string;
+  type: 'mariadb';
+  metadata: {
+    host: string;
+    port: string;
+    database: string;
+    user: string;
+    password: string;
+  }
+}
+
+// AlloyDB (type: 'alloydb')
+{
+  id: string;
+  name: string;
+  type: 'alloydb';
+  metadata: {
+    host: string;
+    port: string;
+    database: string;
+    user: string;
+    password: string;
+  }
+}
+
+// ClickHouse (type: 'clickhouse')
+{
+  id: string;
+  name: string;
+  type: 'clickhouse';
+  metadata: {
+    host: string;
+    port: string;
+    database: string;
+    user: string;
+    password: string;
+  }
+}
+
+// Materialize (type: 'materialize')
+{
+  id: string;
+  name: string;
+  type: 'materialize';
+  metadata: {
+    host: string;
+    port: string;
+    database: string;
+    user: string;
+    password: string;
+  }
+}
+
+// MindsDB (type: 'mindsdb')
+{
+  id: string;
+  name: string;
+  type: 'mindsdb';
+  metadata: {
+    host: string;
+    port: string;
+    database: string;
+    user: string;
+    password: string;
+  }
+}
+
+// SQL Server (type: 'sql-server')
+{
+  id: string;
+  name: string;
+  type: 'sql-server';
+  metadata: {
+    host: string;
+    port: string;
+    database: string;
+    user: string;
+    password: string;
+  }
+}
+
+// Trino (type: 'trino')
+{
+  id: string;
+  name: string;
+  type: 'trino';
+  metadata: {
+    host: string;
+    port: string;
+    database: string;
+    user: string;
+    password: string;
   }
 }
 
@@ -122,7 +267,91 @@ The system uses `DatabaseIntegrationConfig` from `@deepnote/database-integration
     privateKeyPassphrase?: string;
   }
 }
+
+// Athena (type: 'athena')
+{
+  id: string;
+  name: string;
+  type: 'athena';
+  metadata: {
+    access_key_id: string;
+    secret_access_key: string;
+    region: string;
+    s3_output_path: string;
+    workgroup?: string;
+  }
+}
+
+// Databricks (type: 'databricks')
+{
+  id: string;
+  name: string;
+  type: 'databricks';
+  metadata: {
+    host: string;
+    port: string;
+    httpPath: string;
+    token: string;
+    schema?: string;
+    catalog?: string;
+  }
+}
+
+// Dremio (type: 'dremio')
+{
+  id: string;
+  name: string;
+  type: 'dremio';
+  metadata: {
+    host: string;
+    port: string;
+    schema: string;
+    token: string;
+  }
+}
+
+// MongoDB (type: 'mongodb')
+{
+  id: string;
+  name: string;
+  type: 'mongodb';
+  metadata: {
+    connection_string: string;
+  }
+}
+
+// Redshift (type: 'redshift')
+{
+  id: string;
+  name: string;
+  type: 'redshift';
+  metadata: {
+    authMethod: 'username-and-password' | 'individual-credentials';
+    host: string;
+    port?: string;
+    database: string;
+    // For username-and-password auth:
+    user: string;
+    password: string;
+    // For individual-credentials auth (uses AWS credentials from environment)
+  }
+}
+
+// Spanner (type: 'spanner')
+{
+  id: string;
+  name: string;
+  type: 'spanner';
+  metadata: {
+    instance: string;
+    database: string;
+    service_account: string; // JSON string
+    dataBoostEnabled: boolean;
+  }
+}
 ```
+
+**Note:** The `pandas-dataframe` type is an internal integration that is automatically configured and cannot be modified by users.
 
 **Legacy Config Upgrade:**
 
@@ -273,27 +502,41 @@ Main React component that manages the webview UI state.
 5. Extension removes credentials
 6. Panel updates status to "Disconnected"
 
-#### 6. **Configuration Forms** (`PostgresForm.tsx`, `BigQueryForm.tsx`)
+#### 6. **Configuration Forms**
 
 Type-specific forms for entering integration credentials.
 
-**PostgreSQL Form Fields:**
+**Standard Database Forms** (`PostgresForm.tsx`, `MySQLForm.tsx`, `MariaDBForm.tsx`, `GenericDatabaseForm.tsx`):
+
+Most SQL databases use a standard form with these fields:
 
 - Name (display name)
 - Host
-- Port (default: 5432)
+- Port (with database-specific defaults)
 - Database
 - Username
 - Password
-- SSL (checkbox)
+- SSL (PostgreSQL only)
 
-**BigQuery Form Fields:**
+Supported databases with standard forms:
+
+- PostgreSQL (port 5432, with SSL option)
+- MySQL (port 3306)
+- MariaDB (port 3306)
+- AlloyDB (port 5432)
+- ClickHouse (port 8123)
+- Materialize (port 6875)
+- MindsDB (port 47334)
+- SQL Server (port 1433)
+- Trino (port 8080)
+
+**BigQuery Form** (`BigQueryForm.tsx`):
 
 - Name (display name)
 - Project ID
 - Service Account Credentials (JSON textarea)
 
-**Snowflake Form Fields:**
+**Snowflake Form** (`SnowflakeForm.tsx`):
 
 - Name (display name)
 - Account Name
@@ -309,6 +552,24 @@ Type-specific forms for entering integration credentials.
 - For Key Pair auth:
   - Private Key (textarea)
   - Private Key Passphrase (optional)
+
+**AWS Integration Forms** (`AthenaForm.tsx`, `RedshiftForm.tsx`):
+
+- **Athena**: AWS Access Key ID, Secret Access Key, Region, S3 Output Path, Workgroup (optional)
+- **Redshift**: Authentication Method (username/password or IAM), Cluster Endpoint, Port, Database, Username/Password (for username/password auth)
+
+**Token-Based Forms** (`DatabricksForm.tsx`, `DremioForm.tsx`):
+
+- **Databricks**: Server Hostname, HTTP Path, Access Token, Port, Catalog (optional), Schema (optional)
+- **Dremio**: Host, Port, Schema, Personal Access Token
+
+**NoSQL Forms** (`MongoDBForm.tsx`):
+
+- **MongoDB**: Connection String (supports mongodb:// and mongodb+srv:// formats)
+
+**Google Cloud Forms** (`SpannerForm.tsx`):
+
+- **Spanner**: Instance ID, Database, Service Account JSON, Data Boost Enabled (checkbox)
 
 **Validation:**
 
@@ -511,7 +772,7 @@ User executes SQL cell
 
 ### Migration to @deepnote/database-integrations
 
-The system was refactored to use the `@deepnote/database-integrations` package (v1.1.0) as the source of truth for integration types and credential formatting. This provides:
+The system was refactored to use the `@deepnote/database-integrations` package as the source of truth for integration types and credential formatting. This provides:
 
 **Benefits:**
 
@@ -556,7 +817,7 @@ The system was refactored to use the `@deepnote/database-integrations` package (
 
 ## Adding New Integration Types
 
-To add a new integration type (e.g., MySQL):
+The extension now supports all 18 integration types from the `@deepnote/database-integrations` package (v1.1.1). To add support for a new integration type in the future:
 
 1. **Add support to `@deepnote/database-integrations` package** (if not already supported):
 
@@ -564,32 +825,61 @@ To add a new integration type (e.g., MySQL):
    - Add conversion logic for environment variables
    - This is the source of truth for integration types
 
-2. **Create UI form component** (`MySQLForm.tsx`):
+2. **Determine the form type needed**:
 
-   - Follow the pattern of `PostgresForm.tsx` or `BigQueryForm.tsx`
-   - Use the metadata structure from `@deepnote/database-integrations`
-   - Validate inputs according to the package's schema
+   - **Standard database** (host, port, database, user, password): Use `GenericDatabaseForm`
+   - **Complex authentication**: Create a custom form component or use `UnsupportedIntegrationForm`
 
-3. **Update `ConfigurationForm.tsx`** to render the new form:
+3. **For standard databases using `GenericDatabaseForm`**:
+
+   Update `ConfigurationForm.tsx` to add a case:
 
    ```typescript
-   case 'mysql':
-     return <MySQLForm ... />;
+   case 'new-database':
+     return (
+       <GenericDatabaseForm
+         integrationId={integrationId}
+         existingConfig={existingConfig?.type === 'new-database' ? existingConfig : null}
+         defaultName={defaultName}
+         formConfig={{
+           type: 'new-database',
+           displayName: 'New Database',
+           defaultPort: '5432',
+           localizationPrefix: 'integrationsNewDatabase'
+         }}
+         onSave={onSave}
+         onCancel={onCancel}
+       />
+     );
    ```
 
-4. **Update webview types** (`src/webviews/webview-side/integrations/types.ts`):
+4. **For complex authentication**:
 
-   - Import types from `@deepnote/database-integrations`
-   - Add any UI-specific types needed
+   Create a custom form component following the pattern of `BigQueryForm.tsx` or `SnowflakeForm.tsx`:
 
-5. **Add localization strings** for the new integration type:
+   - Use the metadata structure from `@deepnote/database-integrations`
+   - Validate inputs according to the package's schema
+   - Add the form to `ConfigurationForm.tsx`
+
+5. **Update type labels**:
+
+   - Add case to `getIntegrationTypeLabel()` in `sqlCellStatusBarProvider.ts`
+   - Add case to `getIntegrationTypeLabel()` in `IntegrationItem.tsx`
+
+6. **Add localization strings** for the new integration type:
 
    - Integration name
    - Form field labels
    - Error messages
 
-6. **Add tests**:
-   - Unit tests for the form component
+7. **Update documentation** (`integrations_credentials.md`):
+
+   - Add to supported integration types list
+   - Add metadata schema example
+   - Update configuration forms section
+
+8. **Add tests**:
+   - Unit tests for the form component (if custom)
    - Integration tests for storage and environment variable generation
 
 **Note:** The credential-to-environment-variable conversion is handled automatically by `@deepnote/database-integrations`, so no manual conversion logic is needed in the VSCode extension.

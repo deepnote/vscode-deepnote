@@ -57,9 +57,10 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({
             : '';
 
     const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig((prev) => ({
             ...prev,
-            name: e.target.value
+            name: value
         }));
     };
 

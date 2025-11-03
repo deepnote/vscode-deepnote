@@ -77,24 +77,27 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
             : '';
 
     const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig((prev) => ({
             ...prev,
-            name: e.target.value
+            name: value
         }));
     };
 
     const handleAccountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig((prev) => ({
             ...prev,
             metadata: {
                 ...prev.metadata,
-                accountName: e.target.value
+                accountName: value
             }
         }));
     };
 
     const handleAuthMethodChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const newAuthMethod = e.target.value as SnowflakeAuthMethod;
+        const value = e.target.value;
+        const newAuthMethod = value as SnowflakeAuthMethod;
 
         setPendingConfig((prev) => {
             if (newAuthMethod === SnowflakeAuthMethods.Password) {
@@ -128,6 +131,7 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
     };
 
     const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig((prev) => {
             if (
                 prev.metadata.authMethod === SnowflakeAuthMethods.Password ||
@@ -137,7 +141,7 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
                     ...prev,
                     metadata: {
                         ...prev.metadata,
-                        username: e.target.value
+                        username: value
                     }
                 };
             }
@@ -146,13 +150,14 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
     };
 
     const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig((prev) => {
             if (prev.metadata.authMethod === SnowflakeAuthMethods.Password) {
                 return {
                     ...prev,
                     metadata: {
                         ...prev.metadata,
-                        password: e.target.value
+                        password: value
                     }
                 };
             }
@@ -161,13 +166,14 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
     };
 
     const handlePrivateKeyChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const value = e.target.value;
         setPendingConfig((prev) => {
             if (prev.metadata.authMethod === SnowflakeAuthMethods.ServiceAccountKeyPair) {
                 return {
                     ...prev,
                     metadata: {
                         ...prev.metadata,
-                        privateKey: e.target.value
+                        privateKey: value
                     }
                 };
             }
@@ -176,13 +182,14 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
     };
 
     const handlePrivateKeyPassphraseChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig((prev) => {
             if (prev.metadata.authMethod === SnowflakeAuthMethods.ServiceAccountKeyPair) {
                 return {
                     ...prev,
                     metadata: {
                         ...prev.metadata,
-                        privateKeyPassphrase: e.target.value
+                        privateKeyPassphrase: value
                     }
                 };
             }
@@ -191,31 +198,34 @@ export const SnowflakeForm: React.FC<ISnowflakeFormProps> = ({
     };
 
     const handleDatabaseChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig((prev) => ({
             ...prev,
             metadata: {
                 ...prev.metadata,
-                database: e.target.value || undefined
+                database: value || undefined
             }
         }));
     };
 
     const handleWarehouseChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig((prev) => ({
             ...prev,
             metadata: {
                 ...prev.metadata,
-                warehouse: e.target.value || undefined
+                warehouse: value || undefined
             }
         }));
     };
 
     const handleRoleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         setPendingConfig((prev) => ({
             ...prev,
             metadata: {
                 ...prev.metadata,
-                role: e.target.value || undefined
+                role: value || undefined
             }
         }));
     };

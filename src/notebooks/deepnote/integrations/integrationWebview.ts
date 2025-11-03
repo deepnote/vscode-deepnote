@@ -7,8 +7,11 @@ import { logger } from '../../../platform/logging';
 import { LocalizedMessages, SharedMessages } from '../../../messageTypes';
 import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
 import { IIntegrationStorage, IIntegrationWebviewProvider } from './types';
-import { IntegrationStatus, IntegrationWithStatus } from '../../../platform/notebooks/deepnote/integrationTypes';
-import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
+import {
+    ConfigurableDatabaseIntegrationConfig,
+    IntegrationStatus,
+    IntegrationWithStatus
+} from '../../../platform/notebooks/deepnote/integrationTypes';
 
 /**
  * Manages the webview panel for integration configuration
@@ -127,6 +130,21 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsPostgresTypeLabel: localize.Integrations.postgresTypeLabel,
             integrationsBigQueryTypeLabel: localize.Integrations.bigQueryTypeLabel,
             integrationsSnowflakeTypeLabel: localize.Integrations.snowflakeTypeLabel,
+            integrationsAlloyDBTypeLabel: localize.Integrations.alloyDBTypeLabel,
+            integrationsAthenaTypeLabel: localize.Integrations.athenaTypeLabel,
+            integrationsClickHouseTypeLabel: localize.Integrations.clickHouseTypeLabel,
+            integrationsDatabricksTypeLabel: localize.Integrations.databricksTypeLabel,
+            integrationsDremioTypeLabel: localize.Integrations.dremioTypeLabel,
+            integrationsMariaDBTypeLabel: localize.Integrations.mariaDBTypeLabel,
+            integrationsMaterializeTypeLabel: localize.Integrations.materializeTypeLabel,
+            integrationsMindsDBTypeLabel: localize.Integrations.mindsDBTypeLabel,
+            integrationsMongoDBTypeLabel: localize.Integrations.mongoDBTypeLabel,
+            integrationsMySQLTypeLabel: localize.Integrations.mySQLTypeLabel,
+            integrationsDuckDBTypeLabel: localize.Integrations.duckDBTypeLabel,
+            integrationsRedshiftTypeLabel: localize.Integrations.redshiftTypeLabel,
+            integrationsSpannerTypeLabel: localize.Integrations.spannerTypeLabel,
+            integrationsSQLServerTypeLabel: localize.Integrations.sqlServerTypeLabel,
+            integrationsTrinoTypeLabel: localize.Integrations.trinoTypeLabel,
             integrationsCancel: localize.Integrations.cancel,
             integrationsSave: localize.Integrations.save,
             integrationsRequiredField: localize.Integrations.requiredField,
@@ -177,6 +195,183 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsSnowflakeRolePlaceholder: localize.Integrations.snowflakeRolePlaceholder,
             integrationsSnowflakeWarehouseLabel: localize.Integrations.snowflakeWarehouseLabel,
             integrationsSnowflakeWarehousePlaceholder: localize.Integrations.snowflakeWarehousePlaceholder,
+            integrationsMySQLNameLabel: localize.Integrations.mySQLNameLabel,
+            integrationsMySQLNamePlaceholder: localize.Integrations.mySQLNamePlaceholder,
+            integrationsMySQLHostLabel: localize.Integrations.mySQLHostLabel,
+            integrationsMySQLHostPlaceholder: localize.Integrations.mySQLHostPlaceholder,
+            integrationsMySQLPortLabel: localize.Integrations.mySQLPortLabel,
+            integrationsMySQLDatabaseLabel: localize.Integrations.mySQLDatabaseLabel,
+            integrationsMySQLDatabasePlaceholder: localize.Integrations.mySQLDatabasePlaceholder,
+            integrationsMySQLUsernameLabel: localize.Integrations.mySQLUsernameLabel,
+            integrationsMySQLUsernamePlaceholder: localize.Integrations.mySQLUsernamePlaceholder,
+            integrationsMySQLPasswordLabel: localize.Integrations.mySQLPasswordLabel,
+            integrationsMySQLPasswordPlaceholder: localize.Integrations.mySQLPasswordPlaceholder,
+            integrationsMariaDBNameLabel: localize.Integrations.mariaDBNameLabel,
+            integrationsMariaDBNamePlaceholder: localize.Integrations.mariaDBNamePlaceholder,
+            integrationsMariaDBHostLabel: localize.Integrations.mariaDBHostLabel,
+            integrationsMariaDBHostPlaceholder: localize.Integrations.mariaDBHostPlaceholder,
+            integrationsMariaDBPortLabel: localize.Integrations.mariaDBPortLabel,
+            integrationsMariaDBDatabaseLabel: localize.Integrations.mariaDBDatabaseLabel,
+            integrationsMariaDBDatabasePlaceholder: localize.Integrations.mariaDBDatabasePlaceholder,
+            integrationsMariaDBUsernameLabel: localize.Integrations.mariaDBUsernameLabel,
+            integrationsMariaDBUsernamePlaceholder: localize.Integrations.mariaDBUsernamePlaceholder,
+            integrationsMariaDBPasswordLabel: localize.Integrations.mariaDBPasswordLabel,
+            integrationsMariaDBPasswordPlaceholder: localize.Integrations.mariaDBPasswordPlaceholder,
+            integrationsAthenaNameLabel: localize.Integrations.athenaNameLabel,
+            integrationsAthenaNamePlaceholder: localize.Integrations.athenaNamePlaceholder,
+            integrationsAthenaAccessKeyIdLabel: localize.Integrations.athenaAccessKeyIdLabel,
+            integrationsAthenaAccessKeyIdPlaceholder: localize.Integrations.athenaAccessKeyIdPlaceholder,
+            integrationsAthenaSecretAccessKeyLabel: localize.Integrations.athenaSecretAccessKeyLabel,
+            integrationsAthenaSecretAccessKeyPlaceholder: localize.Integrations.athenaSecretAccessKeyPlaceholder,
+            integrationsAthenaRegionLabel: localize.Integrations.athenaRegionLabel,
+            integrationsAthenaRegionPlaceholder: localize.Integrations.athenaRegionPlaceholder,
+            integrationsAthenaS3OutputPathLabel: localize.Integrations.athenaS3OutputPathLabel,
+            integrationsAthenaS3OutputPathPlaceholder: localize.Integrations.athenaS3OutputPathPlaceholder,
+            integrationsAthenaWorkgroupLabel: localize.Integrations.athenaWorkgroupLabel,
+            integrationsAthenaWorkgroupPlaceholder: localize.Integrations.athenaWorkgroupPlaceholder,
+            integrationsDatabricksNameLabel: localize.Integrations.databricksNameLabel,
+            integrationsDatabricksNamePlaceholder: localize.Integrations.databricksNamePlaceholder,
+            integrationsDatabricksHostLabel: localize.Integrations.databricksHostLabel,
+            integrationsDatabricksHostPlaceholder: localize.Integrations.databricksHostPlaceholder,
+            integrationsDatabricksHttpPathLabel: localize.Integrations.databricksHttpPathLabel,
+            integrationsDatabricksHttpPathPlaceholder: localize.Integrations.databricksHttpPathPlaceholder,
+            integrationsDatabricksTokenLabel: localize.Integrations.databricksTokenLabel,
+            integrationsDatabricksTokenPlaceholder: localize.Integrations.databricksTokenPlaceholder,
+            integrationsDatabricksPortLabel: localize.Integrations.databricksPortLabel,
+            integrationsDatabricksCatalogLabel: localize.Integrations.databricksCatalogLabel,
+            integrationsDatabricksCatalogPlaceholder: localize.Integrations.databricksCatalogPlaceholder,
+            integrationsDatabricksSchemaLabel: localize.Integrations.databricksSchemaLabel,
+            integrationsDatabricksSchemaPlaceholder: localize.Integrations.databricksSchemaPlaceholder,
+            integrationsDremioNameLabel: localize.Integrations.dremioNameLabel,
+            integrationsDremioNamePlaceholder: localize.Integrations.dremioNamePlaceholder,
+            integrationsDremioHostLabel: localize.Integrations.dremioHostLabel,
+            integrationsDremioHostPlaceholder: localize.Integrations.dremioHostPlaceholder,
+            integrationsDremioPortLabel: localize.Integrations.dremioPortLabel,
+            integrationsDremioSchemaLabel: localize.Integrations.dremioSchemaLabel,
+            integrationsDremioSchemaPlaceholder: localize.Integrations.dremioSchemaPlaceholder,
+            integrationsDremioTokenLabel: localize.Integrations.dremioTokenLabel,
+            integrationsDremioTokenPlaceholder: localize.Integrations.dremioTokenPlaceholder,
+            integrationsMongoDBNameLabel: localize.Integrations.mongoDBNameLabel,
+            integrationsMongoDBNamePlaceholder: localize.Integrations.mongoDBNamePlaceholder,
+            integrationsMongoDBConnectionStringLabel: localize.Integrations.mongoDBConnectionStringLabel,
+            integrationsMongoDBConnectionStringPlaceholder: localize.Integrations.mongoDBConnectionStringPlaceholder,
+            integrationsMongoDBConnectionStringHelp: localize.Integrations.mongoDBConnectionStringHelp,
+            integrationsMongoDBOptionalFieldsNote: localize.Integrations.mongoDBOptionalFieldsNote,
+            integrationsMongoDBRawConnectionStringLabel: localize.Integrations.mongoDBRawConnectionStringLabel,
+            integrationsMongoDBPrefixLabel: localize.Integrations.mongoDBPrefixLabel,
+            integrationsMongoDBHostLabel: localize.Integrations.mongoDBHostLabel,
+            integrationsMongoDBPortLabel: localize.Integrations.mongoDBPortLabel,
+            integrationsMongoDBUserLabel: localize.Integrations.mongoDBUserLabel,
+            integrationsMongoDBPasswordLabel: localize.Integrations.mongoDBPasswordLabel,
+            integrationsMongoDBDatabaseLabel: localize.Integrations.mongoDBDatabaseLabel,
+            integrationsMongoDBOptionsLabel: localize.Integrations.mongoDBOptionsLabel,
+            integrationsRedshiftNameLabel: localize.Integrations.redshiftNameLabel,
+            integrationsRedshiftNamePlaceholder: localize.Integrations.redshiftNamePlaceholder,
+            integrationsRedshiftAuthMethodLabel: localize.Integrations.redshiftAuthMethodLabel,
+            integrationsRedshiftAuthMethodUsernamePassword: localize.Integrations.redshiftAuthMethodUsernamePassword,
+            integrationsRedshiftAuthMethodIndividualCredentials:
+                localize.Integrations.redshiftAuthMethodIndividualCredentials,
+            integrationsRedshiftAuthMethodHelp: localize.Integrations.redshiftAuthMethodHelp,
+            integrationsRedshiftHostLabel: localize.Integrations.redshiftHostLabel,
+            integrationsRedshiftHostPlaceholder: localize.Integrations.redshiftHostPlaceholder,
+            integrationsRedshiftPortLabel: localize.Integrations.redshiftPortLabel,
+            integrationsRedshiftDatabaseLabel: localize.Integrations.redshiftDatabaseLabel,
+            integrationsRedshiftDatabasePlaceholder: localize.Integrations.redshiftDatabasePlaceholder,
+            integrationsRedshiftUsernameLabel: localize.Integrations.redshiftUsernameLabel,
+            integrationsRedshiftUsernamePlaceholder: localize.Integrations.redshiftUsernamePlaceholder,
+            integrationsRedshiftPasswordLabel: localize.Integrations.redshiftPasswordLabel,
+            integrationsRedshiftPasswordPlaceholder: localize.Integrations.redshiftPasswordPlaceholder,
+            integrationsSpannerNameLabel: localize.Integrations.spannerNameLabel,
+            integrationsSpannerNamePlaceholder: localize.Integrations.spannerNamePlaceholder,
+            integrationsSpannerInstanceLabel: localize.Integrations.spannerInstanceLabel,
+            integrationsSpannerInstancePlaceholder: localize.Integrations.spannerInstancePlaceholder,
+            integrationsSpannerDatabaseLabel: localize.Integrations.spannerDatabaseLabel,
+            integrationsSpannerDatabasePlaceholder: localize.Integrations.spannerDatabasePlaceholder,
+            integrationsSpannerServiceAccountLabel: localize.Integrations.spannerServiceAccountLabel,
+            integrationsSpannerServiceAccountPlaceholder: localize.Integrations.spannerServiceAccountPlaceholder,
+            integrationsSpannerServiceAccountHelp: localize.Integrations.spannerServiceAccountHelp,
+            integrationsSpannerServiceAccountInvalidJson: localize.Integrations.spannerServiceAccountInvalidJson,
+            integrationsSpannerDataBoostLabel: localize.Integrations.spannerDataBoostLabel,
+            integrationsSpannerDataBoostHelp: localize.Integrations.spannerDataBoostHelp,
+            integrationsAlloyDBNameLabel: localize.Integrations.alloyDBNameLabel,
+            integrationsAlloyDBNamePlaceholder: localize.Integrations.alloyDBNamePlaceholder,
+            integrationsAlloyDBHostLabel: localize.Integrations.alloyDBHostLabel,
+            integrationsAlloyDBHostPlaceholder: localize.Integrations.alloyDBHostPlaceholder,
+            integrationsAlloyDBPortLabel: localize.Integrations.alloyDBPortLabel,
+            integrationsAlloyDBDatabaseLabel: localize.Integrations.alloyDBDatabaseLabel,
+            integrationsAlloyDBDatabasePlaceholder: localize.Integrations.alloyDBDatabasePlaceholder,
+            integrationsAlloyDBUsernameLabel: localize.Integrations.alloyDBUsernameLabel,
+            integrationsAlloyDBUsernamePlaceholder: localize.Integrations.alloyDBUsernamePlaceholder,
+            integrationsAlloyDBPasswordLabel: localize.Integrations.alloyDBPasswordLabel,
+            integrationsAlloyDBPasswordPlaceholder: localize.Integrations.alloyDBPasswordPlaceholder,
+            integrationsClickHouseNameLabel: localize.Integrations.clickHouseNameLabel,
+            integrationsClickHouseNamePlaceholder: localize.Integrations.clickHouseNamePlaceholder,
+            integrationsClickHouseHostLabel: localize.Integrations.clickHouseHostLabel,
+            integrationsClickHouseHostPlaceholder: localize.Integrations.clickHouseHostPlaceholder,
+            integrationsClickHousePortLabel: localize.Integrations.clickHousePortLabel,
+            integrationsClickHouseDatabaseLabel: localize.Integrations.clickHouseDatabaseLabel,
+            integrationsClickHouseDatabasePlaceholder: localize.Integrations.clickHouseDatabasePlaceholder,
+            integrationsClickHouseUsernameLabel: localize.Integrations.clickHouseUsernameLabel,
+            integrationsClickHouseUsernamePlaceholder: localize.Integrations.clickHouseUsernamePlaceholder,
+            integrationsClickHousePasswordLabel: localize.Integrations.clickHousePasswordLabel,
+            integrationsClickHousePasswordPlaceholder: localize.Integrations.clickHousePasswordPlaceholder,
+            integrationsMaterializeNameLabel: localize.Integrations.materializeNameLabel,
+            integrationsMaterializeNamePlaceholder: localize.Integrations.materializeNamePlaceholder,
+            integrationsMaterializeHostLabel: localize.Integrations.materializeHostLabel,
+            integrationsMaterializeHostPlaceholder: localize.Integrations.materializeHostPlaceholder,
+            integrationsMaterializePortLabel: localize.Integrations.materializePortLabel,
+            integrationsMaterializeDatabaseLabel: localize.Integrations.materializeDatabaseLabel,
+            integrationsMaterializeDatabasePlaceholder: localize.Integrations.materializeDatabasePlaceholder,
+            integrationsMaterializeClusterLabel: localize.Integrations.materializeClusterLabel,
+            integrationsMaterializeClusterPlaceholder: localize.Integrations.materializeClusterPlaceholder,
+            integrationsMaterializeUsernameLabel: localize.Integrations.materializeUsernameLabel,
+            integrationsMaterializeUsernamePlaceholder: localize.Integrations.materializeUsernamePlaceholder,
+            integrationsMaterializePasswordLabel: localize.Integrations.materializePasswordLabel,
+            integrationsMaterializePasswordPlaceholder: localize.Integrations.materializePasswordPlaceholder,
+            integrationsMindsDBNameLabel: localize.Integrations.mindsDBNameLabel,
+            integrationsMindsDBNamePlaceholder: localize.Integrations.mindsDBNamePlaceholder,
+            integrationsMindsDBHostLabel: localize.Integrations.mindsDBHostLabel,
+            integrationsMindsDBHostPlaceholder: localize.Integrations.mindsDBHostPlaceholder,
+            integrationsMindsDBPortLabel: localize.Integrations.mindsDBPortLabel,
+            integrationsMindsDBDatabaseLabel: localize.Integrations.mindsDBDatabaseLabel,
+            integrationsMindsDBDatabasePlaceholder: localize.Integrations.mindsDBDatabasePlaceholder,
+            integrationsMindsDBUsernameLabel: localize.Integrations.mindsDBUsernameLabel,
+            integrationsMindsDBUsernamePlaceholder: localize.Integrations.mindsDBUsernamePlaceholder,
+            integrationsMindsDBPasswordLabel: localize.Integrations.mindsDBPasswordLabel,
+            integrationsMindsDBPasswordPlaceholder: localize.Integrations.mindsDBPasswordPlaceholder,
+            integrationsSQLServerNameLabel: localize.Integrations.sqlServerNameLabel,
+            integrationsSQLServerNamePlaceholder: localize.Integrations.sqlServerNamePlaceholder,
+            integrationsSQLServerHostLabel: localize.Integrations.sqlServerHostLabel,
+            integrationsSQLServerHostPlaceholder: localize.Integrations.sqlServerHostPlaceholder,
+            integrationsSQLServerPortLabel: localize.Integrations.sqlServerPortLabel,
+            integrationsSQLServerDatabaseLabel: localize.Integrations.sqlServerDatabaseLabel,
+            integrationsSQLServerDatabasePlaceholder: localize.Integrations.sqlServerDatabasePlaceholder,
+            integrationsSQLServerUsernameLabel: localize.Integrations.sqlServerUsernameLabel,
+            integrationsSQLServerUsernamePlaceholder: localize.Integrations.sqlServerUsernamePlaceholder,
+            integrationsSQLServerPasswordLabel: localize.Integrations.sqlServerPasswordLabel,
+            integrationsSQLServerPasswordPlaceholder: localize.Integrations.sqlServerPasswordPlaceholder,
+            integrationsTrinoNameLabel: localize.Integrations.trinoNameLabel,
+            integrationsTrinoNamePlaceholder: localize.Integrations.trinoNamePlaceholder,
+            integrationsTrinoHostLabel: localize.Integrations.trinoHostLabel,
+            integrationsTrinoHostPlaceholder: localize.Integrations.trinoHostPlaceholder,
+            integrationsTrinoPortLabel: localize.Integrations.trinoPortLabel,
+            integrationsTrinoDatabaseLabel: localize.Integrations.trinoDatabaseLabel,
+            integrationsTrinoDatabasePlaceholder: localize.Integrations.trinoDatabasePlaceholder,
+            integrationsTrinoUsernameLabel: localize.Integrations.trinoUsernameLabel,
+            integrationsTrinoUsernamePlaceholder: localize.Integrations.trinoUsernamePlaceholder,
+            integrationsTrinoPasswordLabel: localize.Integrations.trinoPasswordLabel,
+            integrationsTrinoPasswordPlaceholder: localize.Integrations.trinoPasswordPlaceholder,
+            integrationsSshEnabled: localize.Integrations.sshEnabled,
+            integrationsSshHost: localize.Integrations.sshHost,
+            integrationsSshHostPlaceholder: localize.Integrations.sshHostPlaceholder,
+            integrationsSshPort: localize.Integrations.sshPort,
+            integrationsSshUser: localize.Integrations.sshUser,
+            integrationsSshUserPlaceholder: localize.Integrations.sshUserPlaceholder,
+            integrationsSslEnabled: localize.Integrations.sslEnabled,
+            integrationsCaCertificateName: localize.Integrations.caCertificateName,
+            integrationsCaCertificateNamePlaceholder: localize.Integrations.caCertificateNamePlaceholder,
+            integrationsCaCertificateText: localize.Integrations.caCertificateText,
+            integrationsCaCertificateTextPlaceholder: localize.Integrations.caCertificateTextPlaceholder,
             integrationsUnnamedIntegration: localize.Integrations.unnamedIntegration('{0}'),
             integrationsUnsupportedIntegrationType: localize.Integrations.unsupportedIntegrationType('{0}')
         };
@@ -217,7 +412,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     private async handleMessage(message: {
         type: string;
         integrationId?: string;
-        config?: DatabaseIntegrationConfig;
+        config?: ConfigurableDatabaseIntegrationConfig;
     }): Promise<void> {
         switch (message.type) {
             case 'configure':
@@ -259,7 +454,10 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     /**
      * Save the configuration for an integration
      */
-    private async saveConfiguration(integrationId: string, config: DatabaseIntegrationConfig): Promise<void> {
+    private async saveConfiguration(
+        integrationId: string,
+        config: ConfigurableDatabaseIntegrationConfig
+    ): Promise<void> {
         try {
             await this.integrationStorage.save(config);
 
@@ -342,12 +540,6 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 const type = integration.config?.type || integration.integrationType;
                 if (!type) {
                     logger.warn(`IntegrationWebviewProvider: No type found for integration ${id}, skipping`);
-                    return null;
-                }
-
-                // Skip DuckDB integration (internal, not a real Deepnote integration)
-                if (type === 'pandas-dataframe') {
-                    logger.trace(`IntegrationWebviewProvider: Skipping internal DuckDB integration ${id}`);
                     return null;
                 }
 

@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { getLocString } from '../react-common/locReactSide';
-import { IntegrationWithStatus } from './types';
-import { DatabaseIntegrationType } from '@deepnote/database-integrations';
+import { ConfigurableDatabaseIntegrationType, IntegrationWithStatus } from './types';
 
 export interface IIntegrationItemProps {
     integration: IntegrationWithStatus;
@@ -9,14 +8,42 @@ export interface IIntegrationItemProps {
     onDelete: (integrationId: string) => void;
 }
 
-const getIntegrationTypeLabel = (type: DatabaseIntegrationType): string => {
+const getIntegrationTypeLabel = (type: ConfigurableDatabaseIntegrationType): string => {
     switch (type) {
-        case 'pgsql':
-            return getLocString('integrationsPostgresTypeLabel', 'PostgreSQL');
+        case 'alloydb':
+            return getLocString('integrationsAlloyDBTypeLabel', 'AlloyDB');
+        case 'athena':
+            return getLocString('integrationsAthenaTypeLabel', 'Amazon Athena');
         case 'big-query':
             return getLocString('integrationsBigQueryTypeLabel', 'BigQuery');
+        case 'clickhouse':
+            return getLocString('integrationsClickHouseTypeLabel', 'ClickHouse');
+        case 'databricks':
+            return getLocString('integrationsDatabricksTypeLabel', 'Databricks');
+        case 'dremio':
+            return getLocString('integrationsDremioTypeLabel', 'Dremio');
+        case 'mariadb':
+            return getLocString('integrationsMariaDBTypeLabel', 'MariaDB');
+        case 'materialize':
+            return getLocString('integrationsMaterializeTypeLabel', 'Materialize');
+        case 'mindsdb':
+            return getLocString('integrationsMindsDBTypeLabel', 'MindsDB');
+        case 'mongodb':
+            return getLocString('integrationsMongoDBTypeLabel', 'MongoDB');
+        case 'mysql':
+            return getLocString('integrationsMySQLTypeLabel', 'MySQL');
+        case 'pgsql':
+            return getLocString('integrationsPostgresTypeLabel', 'PostgreSQL');
+        case 'redshift':
+            return getLocString('integrationsRedshiftTypeLabel', 'Amazon Redshift');
         case 'snowflake':
             return getLocString('integrationsSnowflakeTypeLabel', 'Snowflake');
+        case 'spanner':
+            return getLocString('integrationsSpannerTypeLabel', 'Google Cloud Spanner');
+        case 'sql-server':
+            return getLocString('integrationsSQLServerTypeLabel', 'SQL Server');
+        case 'trino':
+            return getLocString('integrationsTrinoTypeLabel', 'Trino');
         default:
             return type;
     }

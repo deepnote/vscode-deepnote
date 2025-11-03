@@ -11,7 +11,7 @@ import {
     IPlatformDeepnoteNotebookManager
 } from './types';
 import { DATAFRAME_SQL_INTEGRATION_ID } from './integrationTypes';
-import { getEnvironmentVariablesForIntegrations } from '@deepnote/database-integrations';
+import { DatabaseIntegrationConfig, getEnvironmentVariablesForIntegrations } from '@deepnote/database-integrations';
 
 /**
  * Provides environment variables for SQL integrations.
@@ -88,7 +88,7 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
             `SqlIntegrationEnvironmentVariablesProvider: Found ${projectIntegrations.length} integrations in project`
         );
 
-        const projectIntegrationConfigs = (
+        const projectIntegrationConfigs: Array<DatabaseIntegrationConfig> = (
             await Promise.all(
                 projectIntegrations.map((integration) => {
                     return this.integrationStorage.getIntegrationConfig(integration.id);

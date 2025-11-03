@@ -6,17 +6,13 @@ import { IAsyncDisposableRegistry } from '../../common/types';
 import { logger } from '../../logging';
 import { IIntegrationStorage } from './types';
 import { upgradeLegacyIntegrationConfig } from './legacyIntegrationConfigUtils';
-import {
-    DatabaseIntegrationConfig,
-    databaseIntegrationTypes,
-    databaseMetadataSchemasByType
-} from '@deepnote/database-integrations';
-import { DATAFRAME_SQL_INTEGRATION_ID } from './integrationTypes';
+import { databaseIntegrationTypes, databaseMetadataSchemasByType } from '@deepnote/database-integrations';
+import { ConfigurableDatabaseIntegrationConfig, DATAFRAME_SQL_INTEGRATION_ID } from './integrationTypes';
 
 const INTEGRATION_SERVICE_NAME = 'deepnote-integrations';
 
 // NOTE: We need a way to upgrade existing configurations to the new format of deepnote/database-integrations.
-type VersionedDatabaseIntegrationConfig = DatabaseIntegrationConfig & { version: 1 };
+type VersionedDatabaseIntegrationConfig = ConfigurableDatabaseIntegrationConfig & { version: 1 };
 
 function storeEncryptedIntegrationConfig(
     encryptedStorage: IEncryptedStorage,
@@ -33,7 +29,7 @@ function storeEncryptedIntegrationConfig(
  */
 @injectable()
 export class IntegrationStorage implements IIntegrationStorage {
-    private readonly cache: Map<string, DatabaseIntegrationConfig> = new Map();
+    private readonly cache: Map<string, ConfigurableDatabaseIntegrationConfig> = new Map();
 
     private cacheLoaded = false;
 
@@ -52,7 +48,7 @@ export class IntegrationStorage implements IIntegrationStorage {
     /**
      * Get all stored integration configurations.
      */
-    async getAll(): Promise<DatabaseIntegrationConfig[]> {
+    async getAll(): Promise<ConfigurableDatabaseIntegrationConfig[]> {
         await this.ensureCacheLoaded();
         return Array.from(this.cache.values());
     }
@@ -60,7 +56,7 @@ export class IntegrationStorage implements IIntegrationStorage {
     /**
      * Get a specific integration configuration by ID
      */
-    async getIntegrationConfig(integrationId: string): Promise<DatabaseIntegrationConfig | undefined> {
+    async getIntegrationConfig(integrationId: string): Promise<ConfigurableDatabaseIntegrationConfig | undefined> {
         await this.ensureCacheLoaded();
         return this.cache.get(integrationId);
     }
@@ -73,15 +69,15 @@ export class IntegrationStorage implements IIntegrationStorage {
     async getProjectIntegrationConfig(
         _projectId: string,
         integrationId: string
-    ): Promise<DatabaseIntegrationConfig | undefined> {
+    ): Promise<ConfigurableDatabaseIntegrationConfig | undefined> {
         return this.getIntegrationConfig(integrationId);
     }
 
     /**
      * Save or update an integration configuration
      */
-    async save(config: DatabaseIntegrationConfig): Promise<void> {
-        if (config.type === 'pandas-dataframe' || config.id === DATAFRAME_SQL_INTEGRATION_ID) {
+    async save(config: ConfigurableDatabaseIntegrationConfig): Promise<void> {
+        if ((config.type as string) === 'pandas-dataframe' || config.id === DATAFRAME_SQL_INTEGRATION_ID) {
             logger.warn(`IntegrationStorage: Skipping save for internal DuckDB integration ${config.id}`);
             return;
         }
@@ -210,7 +206,7 @@ export class IntegrationStorage implements IIntegrationStorage {
                             const config =
                                 databaseIntegrationTypes.includes(rawConfig.type) &&
                                 rawConfig.type !== 'pandas-dataframe'
-                                    ? (rawConfig as DatabaseIntegrationConfig)
+                                    ? (rawConfig as ConfigurableDatabaseIntegrationConfig)
                                     : null;
                             const validMetadata = config
                                 ? databaseMetadataSchemasByType[config.type].safeParse(config.metadata).data
@@ -219,7 +215,7 @@ export class IntegrationStorage implements IIntegrationStorage {
                                 this.cache.set(
                                     id,
                                     // NOTE: We must cast here because there is no union-wide schema parser at the moment.
-                                    { ...config, metadata: validMetadata } as DatabaseIntegrationConfig
+                                    { ...config, metadata: validMetadata } as ConfigurableDatabaseIntegrationConfig
                                 );
                             } else {
                                 logger.warn(`Invalid integration config for ${id}, marking for deletion`);

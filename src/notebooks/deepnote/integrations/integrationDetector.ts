@@ -2,9 +2,13 @@ import { inject, injectable } from 'inversify';
 
 import { logger } from '../../../platform/logging';
 import { IDeepnoteNotebookManager } from '../../types';
-import { IntegrationStatus, IntegrationWithStatus } from '../../../platform/notebooks/deepnote/integrationTypes';
+import {
+    ConfigurableDatabaseIntegrationType,
+    IntegrationStatus,
+    IntegrationWithStatus
+} from '../../../platform/notebooks/deepnote/integrationTypes';
 import { IIntegrationDetector, IIntegrationStorage } from './types';
-import { DatabaseIntegrationType, databaseIntegrationTypes } from '@deepnote/database-integrations';
+import { databaseIntegrationTypes } from '@deepnote/database-integrations';
 
 /**
  * Service for detecting integrations used in Deepnote notebooks
@@ -41,7 +45,10 @@ export class IntegrationDetector implements IIntegrationDetector {
         for (const projectIntegration of projectIntegrations) {
             const integrationId = projectIntegration.id;
             const integrationType = projectIntegration.type;
-            if (!(databaseIntegrationTypes as readonly string[]).includes(integrationType)) {
+            if (
+                !(databaseIntegrationTypes as readonly string[]).includes(integrationType) ||
+                integrationType === 'pandas-dataframe'
+            ) {
                 logger.debug(`IntegrationDetector: Skipping unsupported integration type: ${integrationType}`);
                 continue;
             }
@@ -53,7 +60,7 @@ export class IntegrationDetector implements IIntegrationDetector {
                 status: config ? IntegrationStatus.Connected : IntegrationStatus.Disconnected,
                 // Include integration metadata from project for prefilling when config is null
                 integrationName: projectIntegration.name,
-                integrationType: integrationType as DatabaseIntegrationType
+                integrationType: integrationType as ConfigurableDatabaseIntegrationType
             };
 
             integrations.set(integrationId, status);

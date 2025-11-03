@@ -161,12 +161,16 @@ export class IntegrationManager implements IIntegrationManager {
                 integrationType = projectIntegration.type as DatabaseIntegrationType;
             }
 
-            integrations.set(selectedIntegrationId, {
-                config: config || null,
-                status: config ? IntegrationStatus.Connected : IntegrationStatus.Disconnected,
-                integrationName,
-                integrationType
-            });
+            if (integrationType === 'pandas-dataframe') {
+                logger.debug(`IntegrationManager: Skipping internal DuckDB integration ${selectedIntegrationId}`);
+            } else {
+                integrations.set(selectedIntegrationId, {
+                    config: config || null,
+                    status: config ? IntegrationStatus.Connected : IntegrationStatus.Disconnected,
+                    integrationName,
+                    integrationType
+                });
+            }
         }
 
         if (integrations.size === 0) {

@@ -18,6 +18,30 @@ import {
 import { DEEPNOTE_VSCODE_RAW_CONTENT_KEY } from './constants';
 import { formatInputBlockCellContent } from '../inputBlockContentFormatter';
 
+/** Converts date strings to YYYY-MM-DD format, preserving values already in that format. */
+function normalizeDateString(dateValue: unknown): string {
+    if (!dateValue || typeof dateValue !== 'string') {
+        return '';
+    }
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+        return dateValue;
+    }
+
+    try {
+        const date = new Date(dateValue);
+        if (isNaN(date.getTime())) {
+            return dateValue;
+        }
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    } catch {
+        return dateValue;
+    }
+}
+
 export abstract class BaseInputBlockConverter<T extends z.ZodObject> implements BlockConverter {
     abstract schema(): T;
     abstract getSupportedType(): string;
@@ -248,8 +272,20 @@ export class InputDateBlockConverter extends BaseInputBlockConverter<typeof Deep
         return cell;
     }
 
-    // Date blocks are readonly - edits are reverted by DeepnoteInputBlockEditProtection
-    // Uses base class applyChangesToBlock which preserves existing metadata
+    /**
+     * Normalizes ISO date strings to YYYY-MM-DD format expected by createPythonCode.
+     * Deepnote API may return dates like "2025-09-30T00:00:00.000Z".
+     */
+    override applyChangesToBlock(block: DeepnoteBlock, _cell: NotebookCellData): void {
+        const value = block.metadata?.deepnote_variable_value;
+
+        if (typeof value === 'string' && value) {
+            const normalizedValue = normalizeDateString(value);
+            this.updateBlockMetadata(block, { deepnote_variable_value: normalizedValue });
+        } else {
+            this.updateBlockMetadata(block, {});
+        }
+    }
 }
 
 export class InputDateRangeBlockConverter extends BaseInputBlockConverter<typeof DeepnoteDateRangeInputMetadataSchema> {
@@ -271,8 +307,21 @@ export class InputDateRangeBlockConverter extends BaseInputBlockConverter<typeof
         return cell;
     }
 
-    // Date range blocks are readonly - edits are reverted by DeepnoteInputBlockEditProtection
-    // Uses base class applyChangesToBlock which preserves existing metadata
+    /**
+     * Normalizes ISO date strings to YYYY-MM-DD format expected by createPythonCode.
+     * Deepnote API may return dates like ["2025-09-30T00:00:00.000Z", "2025-10-16T00:00:00.000Z"].
+     * Relative date strings like "past3months" are preserved as-is.
+     */
+    override applyChangesToBlock(block: DeepnoteBlock, _cell: NotebookCellData): void {
+        const value = block.metadata?.deepnote_variable_value;
+
+        if (Array.isArray(value) && value.length === 2) {
+            const normalizedValue: [string, string] = [normalizeDateString(value[0]), normalizeDateString(value[1])];
+            this.updateBlockMetadata(block, { deepnote_variable_value: normalizedValue });
+        } else {
+            this.updateBlockMetadata(block, {});
+        }
+    }
 }
 
 export class InputFileBlockConverter extends BaseInputBlockConverter<typeof DeepnoteFileInputMetadataSchema> {

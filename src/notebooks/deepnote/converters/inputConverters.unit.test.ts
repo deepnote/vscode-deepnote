@@ -700,7 +700,7 @@ suite('InputDateBlockConverter', () => {
     });
 
     suite('applyChangesToBlock', () => {
-        test('preserves existing metadata (date blocks are readonly)', () => {
+        test('normalizes ISO date string to YYYY-MM-DD', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
                 content: '',
@@ -713,16 +713,75 @@ suite('InputDateBlockConverter', () => {
                 sortingKey: 'a0',
                 type: 'input-date'
             };
-            // Cell content is ignored since date blocks are readonly
-            const cell = new NotebookCellData(NotebookCellKind.Code, '"2025-12-31T00:00:00.000Z"', 'python');
+            const cell = new NotebookCellData(NotebookCellKind.Code, '"2025-01-01"', 'python');
 
             converter.applyChangesToBlock(block, cell);
 
             assert.strictEqual(block.content, '');
-            // Value should be preserved from metadata, not parsed from cell
-            assert.strictEqual(block.metadata?.deepnote_variable_value, '2025-01-01T00:00:00.000Z');
+            // ISO date should be normalized to YYYY-MM-DD
+            assert.strictEqual(block.metadata?.deepnote_variable_value, '2025-01-01');
             assert.strictEqual(block.metadata?.deepnote_variable_name, 'date1');
             assert.strictEqual(block.metadata?.deepnote_input_date_version, 2);
+        });
+
+        test('preserves dates already in YYYY-MM-DD format', () => {
+            const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
+                content: '',
+                id: 'block-123',
+                metadata: {
+                    deepnote_variable_name: 'date1',
+                    deepnote_input_date_version: 2,
+                    deepnote_variable_value: '2025-06-15'
+                },
+                sortingKey: 'a0',
+                type: 'input-date'
+            };
+            const cell = new NotebookCellData(NotebookCellKind.Code, '"2025-06-15"', 'python');
+
+            converter.applyChangesToBlock(block, cell);
+
+            // YYYY-MM-DD format should remain unchanged
+            assert.strictEqual(block.metadata?.deepnote_variable_value, '2025-06-15');
+        });
+
+        test('handles timezone-aware ISO dates correctly', () => {
+            const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
+                content: '',
+                id: 'block-123',
+                metadata: {
+                    deepnote_variable_name: 'date1',
+                    deepnote_variable_value: '2025-09-30T00:00:00.000Z'
+                },
+                sortingKey: 'a0',
+                type: 'input-date'
+            };
+            const cell = new NotebookCellData(NotebookCellKind.Code, '"2025-09-30"', 'python');
+
+            converter.applyChangesToBlock(block, cell);
+
+            // Should extract the date portion from ISO string
+            assert.strictEqual(block.metadata?.deepnote_variable_value, '2025-09-30');
+        });
+
+        test('preserves empty or null values', () => {
+            const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
+                content: '',
+                id: 'block-123',
+                metadata: {
+                    deepnote_variable_name: 'date1',
+                    deepnote_variable_value: ''
+                },
+                sortingKey: 'a0',
+                type: 'input-date'
+            };
+            const cell = new NotebookCellData(NotebookCellKind.Code, '""', 'python');
+
+            converter.applyChangesToBlock(block, cell);
+
+            assert.strictEqual(block.metadata?.deepnote_variable_value, '');
         });
     });
 });
@@ -791,7 +850,29 @@ suite('InputDateRangeBlockConverter', () => {
     });
 
     suite('applyChangesToBlock', () => {
-        test('preserves existing metadata (date range blocks are readonly)', () => {
+        test('normalizes ISO date range to YYYY-MM-DD format', () => {
+            const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
+                content: '',
+                id: 'block-123',
+                metadata: {
+                    deepnote_variable_name: 'range1',
+                    deepnote_variable_value: ['2025-09-30T00:00:00.000Z', '2025-10-16T00:00:00.000Z']
+                },
+                sortingKey: 'a0',
+                type: 'input-date-range'
+            };
+            const cell = new NotebookCellData(NotebookCellKind.Code, '("2025-09-30", "2025-10-16")', 'python');
+
+            converter.applyChangesToBlock(block, cell);
+
+            assert.strictEqual(block.content, '');
+            // ISO dates should be normalized to YYYY-MM-DD
+            assert.deepStrictEqual(block.metadata?.deepnote_variable_value, ['2025-09-30', '2025-10-16']);
+            assert.strictEqual(block.metadata?.deepnote_variable_name, 'range1');
+        });
+
+        test('preserves date ranges already in YYYY-MM-DD format', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
                 content: '',
@@ -803,15 +884,73 @@ suite('InputDateRangeBlockConverter', () => {
                 sortingKey: 'a0',
                 type: 'input-date-range'
             };
-            // Cell content is ignored since date range blocks are readonly
-            const cell = new NotebookCellData(NotebookCellKind.Code, '("2025-01-01", "2025-12-31")', 'python');
+            const cell = new NotebookCellData(NotebookCellKind.Code, '("2025-06-01", "2025-06-30")', 'python');
 
             converter.applyChangesToBlock(block, cell);
 
             assert.strictEqual(block.content, '');
-            // Value should be preserved from metadata, not parsed from cell
+            // YYYY-MM-DD format should remain unchanged
             assert.deepStrictEqual(block.metadata?.deepnote_variable_value, ['2025-06-01', '2025-06-30']);
             assert.strictEqual(block.metadata?.deepnote_variable_name, 'range1');
+        });
+
+        test('normalizes mixed ISO and YYYY-MM-DD dates', () => {
+            const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
+                content: '',
+                id: 'block-123',
+                metadata: {
+                    deepnote_variable_name: 'range1',
+                    deepnote_variable_value: ['2025-01-01T00:00:00.000Z', '2025-12-31']
+                },
+                sortingKey: 'a0',
+                type: 'input-date-range'
+            };
+            const cell = new NotebookCellData(NotebookCellKind.Code, '("2025-01-01", "2025-12-31")', 'python');
+
+            converter.applyChangesToBlock(block, cell);
+
+            // Both should be normalized to YYYY-MM-DD
+            assert.deepStrictEqual(block.metadata?.deepnote_variable_value, ['2025-01-01', '2025-12-31']);
+        });
+
+        test('preserves relative date strings', () => {
+            const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
+                content: '',
+                id: 'block-123',
+                metadata: {
+                    deepnote_variable_name: 'range1',
+                    deepnote_variable_value: 'past3months'
+                },
+                sortingKey: 'a0',
+                type: 'input-date-range'
+            };
+            const cell = new NotebookCellData(NotebookCellKind.Code, '', 'python');
+
+            converter.applyChangesToBlock(block, cell);
+
+            // Relative date strings should be preserved
+            assert.strictEqual(block.metadata?.deepnote_variable_value, 'past3months');
+        });
+
+        test('handles empty date range values', () => {
+            const block: DeepnoteBlock = {
+                blockGroup: 'test-group',
+                content: '',
+                id: 'block-123',
+                metadata: {
+                    deepnote_variable_name: 'range1',
+                    deepnote_variable_value: ['', '']
+                },
+                sortingKey: 'a0',
+                type: 'input-date-range'
+            };
+            const cell = new NotebookCellData(NotebookCellKind.Code, '', 'python');
+
+            converter.applyChangesToBlock(block, cell);
+
+            assert.deepStrictEqual(block.metadata?.deepnote_variable_value, ['', '']);
         });
     });
 });

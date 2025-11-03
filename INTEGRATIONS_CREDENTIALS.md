@@ -40,7 +40,7 @@ The extension supports all 18 database integration types from the `@deepnote/dat
 - `'pgsql'` - PostgreSQL
 - `'mysql'` - MySQL
 - `'mariadb'` - MariaDB
-- `'alloydb'` - Google Cloud AlloyDB
+- `'alloydb'` - Google AlloyDB
 - `'clickhouse'` - ClickHouse
 - `'materialize'` - Materialize
 - `'mindsdb'` - MindsDB
@@ -51,7 +51,7 @@ The extension supports all 18 database integration types from the `@deepnote/dat
 
 - `'big-query'` - Google BigQuery (service account JSON)
 - `'snowflake'` - Snowflake (password or key-pair auth)
-- `'spanner'` - Google Cloud Spanner (service account JSON)
+- `'spanner'` - Google Spanner (service account JSON)
 
 **Cloud Databases (AWS credentials):**
 

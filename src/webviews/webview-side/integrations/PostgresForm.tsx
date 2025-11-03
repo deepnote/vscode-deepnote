@@ -1,18 +1,17 @@
 import * as React from 'react';
-import { format, getLocString } from '../react-common/locReactSide';
+import { getLocString } from '../react-common/locReactSide';
 import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
 import { SshOptionsFields } from './SshOptionsFields';
 import { CaCertificateFields } from './CaCertificateFields';
+import { getDefaultIntegrationName } from './integrationUtils';
 
 function createEmptyPostgresConfig(params: {
     id: string;
     name?: string;
 }): Extract<DatabaseIntegrationConfig, { type: 'pgsql' }> {
-    const unnamedIntegration = getLocString('integrationsUnnamedIntegration', 'Unnamed Integration ({0})');
-
     return {
         id: params.id,
-        name: (params.name || format(unnamedIntegration, params.id)).trim(),
+        name: (params.name || getDefaultIntegrationName('pgsql')).trim(),
         type: 'pgsql',
         metadata: {
             host: '',

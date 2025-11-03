@@ -36,6 +36,26 @@ interface LocalQuickPickItem extends QuickPickItem {
     id: string;
 }
 
+const integrationTypeLabels: Record<ConfigurableDatabaseIntegrationType, string> = {
+    alloydb: l10n.t('Google AlloyDB'),
+    athena: l10n.t('Amazon Athena'),
+    'big-query': l10n.t('Google BigQuery'),
+    clickhouse: l10n.t('ClickHouse'),
+    databricks: l10n.t('Databricks'),
+    dremio: l10n.t('Dremio'),
+    mariadb: l10n.t('MariaDB'),
+    materialize: l10n.t('Materialize'),
+    mindsdb: l10n.t('MindsDB'),
+    mongodb: l10n.t('MongoDB'),
+    mysql: l10n.t('MySQL'),
+    pgsql: l10n.t('PostgreSQL'),
+    redshift: l10n.t('Amazon Redshift'),
+    snowflake: l10n.t('Snowflake'),
+    spanner: l10n.t('Google Spanner'),
+    'sql-server': l10n.t('Microsoft SQL Server'),
+    trino: l10n.t('Trino')
+};
+
 /**
  * Provides status bar items for SQL cells showing the integration name and variable name
  */
@@ -354,7 +374,7 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
             const typeLabel =
                 integrationType && (databaseIntegrationTypes as readonly string[]).includes(integrationType)
-                    ? this.getIntegrationTypeLabel(integrationType)
+                    ? integrationTypeLabels[integrationType] ?? integrationType
                     : projectIntegration.type;
 
             const item: LocalQuickPickItem = {
@@ -436,46 +456,5 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
         // Trigger status bar update
         this._onDidChangeCellStatusBarItems.fire();
-    }
-
-    private getIntegrationTypeLabel(type: ConfigurableDatabaseIntegrationType): string {
-        switch (type) {
-            case 'alloydb':
-                return l10n.t('AlloyDB');
-            case 'athena':
-                return l10n.t('Amazon Athena');
-            case 'big-query':
-                return l10n.t('BigQuery');
-            case 'clickhouse':
-                return l10n.t('ClickHouse');
-            case 'databricks':
-                return l10n.t('Databricks');
-            case 'dremio':
-                return l10n.t('Dremio');
-            case 'mariadb':
-                return l10n.t('MariaDB');
-            case 'materialize':
-                return l10n.t('Materialize');
-            case 'mindsdb':
-                return l10n.t('MindsDB');
-            case 'mongodb':
-                return l10n.t('MongoDB');
-            case 'mysql':
-                return l10n.t('MySQL');
-            case 'pgsql':
-                return l10n.t('PostgreSQL');
-            case 'redshift':
-                return l10n.t('Amazon Redshift');
-            case 'snowflake':
-                return l10n.t('Snowflake');
-            case 'spanner':
-                return l10n.t('Google Cloud Spanner');
-            case 'sql-server':
-                return l10n.t('SQL Server');
-            case 'trino':
-                return l10n.t('Trino');
-            default:
-                return String(type);
-        }
     }
 }

@@ -1,12 +1,9 @@
 import { inject, injectable } from 'inversify';
-import { workspace, CancellationToken, window, Uri, l10n } from 'vscode';
+import { workspace, CancellationToken, Uri } from 'vscode';
 import * as fs from 'fs';
 
 import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 import { ILogger } from '../../platform/logging/types';
-import { IPersistentStateFactory } from '../../platform/common/types';
-
-const DONT_ASK_OVERWRITE_REQUIREMENTS_KEY = 'DEEPNOTE_DONT_ASK_OVERWRITE_REQUIREMENTS';
 
 export const IDeepnoteRequirementsHelper = Symbol('IDeepnoteRequirementsHelper');
 export interface IDeepnoteRequirementsHelper {
@@ -18,10 +15,7 @@ export interface IDeepnoteRequirementsHelper {
  */
 @injectable()
 export class DeepnoteRequirementsHelper implements IDeepnoteRequirementsHelper {
-    constructor(
-        @inject(ILogger) private readonly logger: ILogger,
-        @inject(IPersistentStateFactory) private readonly persistentStateFactory: IPersistentStateFactory
-    ) {}
+    constructor(@inject(ILogger) private readonly logger: ILogger) {}
 
     /**
      * Extracts requirements from project settings and creates a local requirements.txt file.
@@ -94,61 +88,12 @@ export class DeepnoteRequirementsHelper implements IDeepnoteRequirementsHelper {
                     return;
                 }
 
-                // File exists but content is different, check if we should prompt user
-                const dontAskState = this.persistentStateFactory.createGlobalPersistentState<boolean>(
-                    DONT_ASK_OVERWRITE_REQUIREMENTS_KEY,
-                    false // default: ask user
-                );
-
-                if (!dontAskState.value) {
-                    // User hasn't chosen "Don't Ask Again", so prompt them
-                    const yes = l10n.t('Yes');
-                    const no = l10n.t('No');
-                    const dontAskAgain = l10n.t("Don't Ask Again");
-
-                    const response = await window.showWarningMessage(
-                        l10n.t(
-                            'A requirements.txt file already exists in this workspace. Do you want to override it with requirements from your Deepnote project?'
-                        ),
-                        { modal: true },
-                        yes,
-                        no,
-                        dontAskAgain
-                    );
-
-                    // Check cancellation after showing the prompt
-                    if (token.isCancellationRequested) {
-                        return;
-                    }
-
-                    switch (response) {
-                        case yes:
-                            // User wants to override, continue with writing
-                            this.logger.info('User chose to override requirements.txt');
-                            break;
-                        case no:
-                            // User doesn't want to override
-                            this.logger.info('User chose not to override requirements.txt');
-                            return;
-                        case dontAskAgain:
-                            // User chose "Don't Ask Again", save preference and override this time
-                            await dontAskState.updateValue(true);
-                            this.logger.info('User chose "Don\'t Ask Again" for requirements.txt override');
-                            break;
-                        default:
-                            // User dismissed the prompt (clicked X)
-                            this.logger.info('User dismissed requirements.txt override prompt');
-                            return;
-                    }
-                } else {
-                    // User previously selected "Don't Ask Again", automatically override
-                    this.logger.info(
-                        'Automatically overriding requirements.txt (user previously selected "Don\'t Ask Again")'
-                    );
-                }
+                this.logger.info('requirements.txt exists with different content; overriding with Deepnote requirements');
+            } else {
+                this.logger.info('Creating requirements.txt from Deepnote project requirements');
             }
 
-            // Write the requirements.txt file
+            // Write the requirements.txt file (overwrites if it already exists)
             await fs.promises.writeFile(requirementsPath, requirementsText, 'utf8');
 
             // Check cancellation after I/O operation

@@ -5,6 +5,10 @@ import { injectable, inject } from 'inversify';
 import { Uri, Memento } from 'vscode';
 import { IExtensionContext } from '../../../platform/common/types';
 import { logger } from '../../../platform/logging';
+import {
+    getDeepnoteNotebookStorageKey,
+    getLegacyDeepnoteNotebookStorageKey
+} from '../../../platform/deepnote/deepnoteUriUtils';
 
 /**
  * Manages the mapping between notebooks and their selected environments
@@ -14,7 +18,7 @@ import { logger } from '../../../platform/logging';
 export class DeepnoteNotebookEnvironmentMapper {
     private static readonly STORAGE_KEY = 'deepnote.notebookEnvironmentMappings';
     private readonly workspaceState: Memento;
-    private mappings: Map<string, string>; // notebookUri.fsPath -> environmentId
+    private mappings: Map<string, string>; // normalized notebook key -> environmentId
 
     constructor(@inject(IExtensionContext) context: IExtensionContext) {
         this.workspaceState = context.workspaceState;
@@ -28,8 +32,22 @@ export class DeepnoteNotebookEnvironmentMapper {
      * @returns Environment ID, or undefined if not set
      */
     public getEnvironmentForNotebook(notebookUri: Uri): string | undefined {
-        const key = notebookUri.fsPath;
-        return this.mappings.get(key);
+        const key = getDeepnoteNotebookStorageKey(notebookUri);
+        const environmentId = this.mappings.get(key);
+        if (environmentId !== undefined) {
+            return environmentId;
+        }
+
+        // Backwards compatibility with legacy keys that only used fsPath.
+        const legacyKey = getLegacyDeepnoteNotebookStorageKey(notebookUri);
+        const legacyEnvironment = this.mappings.get(legacyKey);
+        if (legacyEnvironment !== undefined) {
+            // upgrade in memory so subsequent lookups use the normalized key
+            this.mappings.delete(legacyKey);
+            this.mappings.set(key, legacyEnvironment);
+        }
+
+        return legacyEnvironment;
     }
 
     /**
@@ -38,8 +56,13 @@ export class DeepnoteNotebookEnvironmentMapper {
      * @param environmentId The environment ID
      */
     public async setEnvironmentForNotebook(notebookUri: Uri, environmentId: string): Promise<void> {
-        const key = notebookUri.fsPath;
+        const key = getDeepnoteNotebookStorageKey(notebookUri);
         this.mappings.set(key, environmentId);
+
+        const legacyKey = getLegacyDeepnoteNotebookStorageKey(notebookUri);
+        if (legacyKey !== key) {
+            this.mappings.delete(legacyKey);
+        }
         await this.saveMappings();
         logger.info(`Mapped notebook ${notebookUri.fsPath} to environment ${environmentId}`);
     }
@@ -49,8 +72,13 @@ export class DeepnoteNotebookEnvironmentMapper {
      * @param notebookUri The notebook URI (without query/fragment)
      */
     public async removeEnvironmentForNotebook(notebookUri: Uri): Promise<void> {
-        const key = notebookUri.fsPath;
+        const key = getDeepnoteNotebookStorageKey(notebookUri);
         this.mappings.delete(key);
+
+        const legacyKey = getLegacyDeepnoteNotebookStorageKey(notebookUri);
+        if (legacyKey !== key) {
+            this.mappings.delete(legacyKey);
+        }
         await this.saveMappings();
         logger.info(`Removed environment mapping for notebook ${notebookUri.fsPath}`);
     }
@@ -62,9 +90,19 @@ export class DeepnoteNotebookEnvironmentMapper {
      */
     public getNotebooksUsingEnvironment(environmentId: string): Uri[] {
         const notebooks: Uri[] = [];
-        for (const [notebookPath, configId] of this.mappings.entries()) {
-            if (configId === environmentId) {
-                notebooks.push(Uri.file(notebookPath));
+        for (const [notebookKey, configId] of this.mappings.entries()) {
+            if (configId !== environmentId) {
+                continue;
+            }
+
+            try {
+                if (notebookKey.includes('://')) {
+                    notebooks.push(Uri.parse(notebookKey));
+                } else {
+                    notebooks.push(Uri.file(notebookKey));
+                }
+            } catch (error) {
+                logger.warn(`Failed to parse notebook key '${notebookKey}' while listing environment mappings`, error);
             }
         }
         return notebooks;

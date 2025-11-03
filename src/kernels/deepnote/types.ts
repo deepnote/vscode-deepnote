@@ -130,7 +130,8 @@ export interface IDeepnoteServerStarter {
      * Environment-based method.
      * @param interpreter The Python interpreter to use
      * @param venvPath The path to the venv
-     * @param environmentId The environment ID (for server management)
+     * @param environmentId The environment ID (for telemetry/metadata)
+     * @param projectKey Stable identifier for the Deepnote project (shared across notebooks)
      * @param deepnoteFileUri The URI of the .deepnote file
      * @param token Cancellation token to cancel the operation
      * @returns Connection information (URL, port, etc.)
@@ -140,6 +141,7 @@ export interface IDeepnoteServerStarter {
         venvPath: vscode.Uri,
         additionalPackages: string[],
         environmentId: string,
+        projectKey: string,
         deepnoteFileUri: vscode.Uri,
         token?: vscode.CancellationToken
     ): Promise<DeepnoteServerInfo>;

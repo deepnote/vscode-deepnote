@@ -30,6 +30,7 @@ import {
 import { getDisplayPath } from '../../../platform/common/platform/fs-paths';
 import { IKernelProvider } from '../../types';
 import { createDeepnoteServerConfigHandle } from '../../../platform/deepnote/deepnoteServerUtils.node';
+import { getDeepnoteProjectStorageKey } from '../../../platform/deepnote/deepnoteUriUtils';
 
 /**
  * View controller for the Deepnote kernel environments tree view.
@@ -341,7 +342,8 @@ export class DeepnoteEnvironmentsView implements Disposable {
             const connectionMetadata = kernel.kernelConnectionMetadata;
             if (connectionMetadata.kind === 'startUsingDeepnoteKernel') {
                 const deepnoteMetadata = connectionMetadata as DeepnoteKernelConnectionMetadata;
-                const expectedHandle = createDeepnoteServerConfigHandle(environmentId, notebook.uri);
+                const projectKey = getDeepnoteProjectStorageKey(notebook.uri, notebook.metadata?.deepnoteProjectId);
+                const expectedHandle = createDeepnoteServerConfigHandle(environmentId, projectKey);
 
                 if (deepnoteMetadata.serverProviderHandle.handle === expectedHandle) {
                     logger.info(
@@ -367,11 +369,8 @@ export class DeepnoteEnvironmentsView implements Disposable {
     public async selectEnvironmentForNotebook({ notebook }: { notebook: NotebookDocument }): Promise<void> {
         logger.info('Selecting environment for notebook:', notebook);
 
-        // Get base file URI (without query/fragment)
-        const baseFileUri = notebook.uri.with({ query: '', fragment: '' });
-
         // Get current environment selection
-        const currentEnvironmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri);
+        const currentEnvironmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(notebook.uri);
         const currentEnvironment = currentEnvironmentId
             ? this.environmentManager.getEnvironment(currentEnvironmentId)
             : undefined;
@@ -469,7 +468,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 },
                 async () => {
                     // Update the notebook-to-environment mapping
-                    await this.notebookEnvironmentMapper.setEnvironmentForNotebook(baseFileUri, selectedEnvironmentId);
+                    await this.notebookEnvironmentMapper.setEnvironmentForNotebook(notebook.uri, selectedEnvironmentId);
 
                     // Force rebuild the controller with the new environment
                     // This clears cached metadata and creates a fresh controller.

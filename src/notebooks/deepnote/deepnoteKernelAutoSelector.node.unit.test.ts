@@ -134,7 +134,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             when(mockKernelProvider.getKernelExecution(instance(mockKernel))).thenReturn(mockExecution as any);
 
             // Stub ensureKernelSelected to verify it's still called despite pending cells
-            const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelected').resolves();
+            const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelected').resolves(true);
             // Act
             await selector.rebuildController(mockNotebook, instance(mockCancellationToken));
 
@@ -159,7 +159,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             when(mockKernelProvider.get(mockNotebook)).thenReturn(undefined);
 
             // Stub ensureKernelSelected to verify it's called
-            const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelected').resolves();
+            const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelected').resolves(true);
 
             // Act
             await selector.rebuildController(mockNotebook, instance(mockCancellationToken));
@@ -187,7 +187,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             when(mockKernelProvider.get(mockNotebook)).thenReturn(undefined);
 
             // Stub ensureKernelSelected to verify delegation
-            const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelected').resolves();
+            const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelected').resolves(true);
 
             // Act
             await selector.rebuildController(mockNotebook, instance(mockCancellationToken));
@@ -211,8 +211,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             when(mockKernelProvider.get(mockNotebook)).thenReturn(undefined);
 
             // Get the notebook key that will be used internally
-            const baseFileUri = mockNotebook.uri.with({ query: '', fragment: '' });
-            const notebookKey = baseFileUri.fsPath;
+            const notebookKey = mockNotebook.uri.with({ fragment: '' }).toString();
 
             // Set up initial metadata and server handle to verify they get cleared
             const selectorWithPrivateAccess = selector as any;
@@ -234,7 +233,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             );
 
             // Stub ensureKernelSelected to avoid full execution
-            const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelected').resolves();
+            const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelected').resolves(true);
 
             // Act
             await selector.rebuildController(mockNotebook, instance(mockCancellationToken));
@@ -273,7 +272,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             when(mockKernelProvider.get(mockNotebook)).thenReturn(undefined);
 
             // Stub ensureKernelSelected to verify it receives the token
-            const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelected').resolves();
+            const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelected').resolves(true);
 
             // Act
             await selector.rebuildController(mockNotebook, instance(mockCancellationToken));
@@ -306,7 +305,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             when(mockKernelProvider.get(mockNotebook)).thenReturn(undefined);
 
             // Stub ensureKernelSelected to track calls without full execution
-            const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelected').resolves();
+            const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelected').resolves(true);
 
             // Act: Call rebuildController to switch environments
             await selector.rebuildController(mockNotebook, instance(mockCancellationToken));
@@ -727,7 +726,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             when(newController.controller).thenReturn({} as any);
 
             // Setup mocks
-            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri)).thenReturn('env-new');
+            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(mockNotebook.uri)).thenReturn('env-new');
             when(mockEnvironmentManager.getEnvironment('env-new')).thenReturn(newEnv);
             when(mockPythonExtensionChecker.isPythonExtensionInstalled).thenReturn(true);
 

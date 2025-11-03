@@ -19,6 +19,7 @@ import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnot
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import * as path from '../../platform/vscode-path/path';
 import { DEEPNOTE_DEFAULT_PORT, DeepnoteServerInfo, IDeepnoteServerStarter, IDeepnoteToolkitInstaller } from './types';
+import { getDeepnoteNotebookStorageKey } from '../../platform/deepnote/deepnoteUriUtils';
 
 /**
  * Lock file data structure for tracking server ownership
@@ -56,6 +57,8 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
     private readonly projectContexts: Map<string, ProjectContext> = new Map();
     // Track in-flight operations per file to prevent concurrent start/stop
     private readonly pendingOperations: Map<string, PendingOperation> = new Map();
+    // Map legacy notebook file keys to project server keys for backwards compatibility
+    private readonly legacyServerKeyMap = new Map<string, Set<string>>();
     // Global lock for port allocation to prevent race conditions when multiple environments start concurrently
     private portAllocationLock: Promise<void> = Promise.resolve();
     // Unique session ID for this VS Code window instance
@@ -104,11 +107,12 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         venvPath: Uri,
         additionalPackages: string[],
         environmentId: string,
+        projectKey: string,
         deepnoteFileUri: Uri,
         token?: CancellationToken
     ): Promise<DeepnoteServerInfo> {
-        const fileKey = deepnoteFileUri.fsPath;
-        const serverKey = `${fileKey}-${environmentId}`;
+        const serverKey = projectKey;
+        const legacyKey = getDeepnoteNotebookStorageKey(deepnoteFileUri.with({ query: '', fragment: '' }));
 
         // Wait for any pending operations on this environment to complete
         let pendingOp = this.pendingOperations.get(serverKey);
@@ -143,7 +147,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                 logger.info(
                     `Stopping existing server for ${serverKey} with environmentId ${existingEnvironmentId} to start new one with environmentId ${environmentId}...`
                 );
-                await this.stopServerForEnvironment(existingContext, deepnoteFileUri, token);
+                await this.stopServerForEnvironment(serverKey, existingContext, deepnoteFileUri, token);
                 // TODO - Clear controllers for the notebook ?
             }
         } else {
@@ -158,6 +162,8 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             existingContext = newContext;
         }
 
+        existingContext.environmentId = environmentId;
+
         // Start the operation and track it
         const operation = {
             type: 'start' as const,
@@ -167,6 +173,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                 venvPath,
                 additionalPackages,
                 environmentId,
+                serverKey,
                 deepnoteFileUri,
                 token
             )
@@ -178,6 +185,11 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
             // Update context with running server info
             existingContext.serverInfo = result;
+
+            // Track legacy mapping for backwards compatibility
+            const mappings = this.legacyServerKeyMap.get(legacyKey) ?? new Set<string>();
+            mappings.add(serverKey);
+            this.legacyServerKeyMap.set(legacyKey, mappings);
             return result;
         } finally {
             // Remove from pending operations when done
@@ -195,35 +207,36 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
     public async stopServer(deepnoteFileUri: Uri, token?: CancellationToken): Promise<void> {
         Cancellation.throwIfCanceled(token);
 
-        const fileKey = deepnoteFileUri.fsPath;
-        const projectContext = this.projectContexts.get(fileKey) ?? null;
+        const legacyKey = getDeepnoteNotebookStorageKey(deepnoteFileUri.with({ query: '', fragment: '' }));
+        const matchingServerKeys = Array.from(this.legacyServerKeyMap.get(legacyKey) ?? []);
 
-        // Wait for any pending operations on this environment to complete
-        const pendingOp = this.pendingOperations.get(fileKey);
-        if (pendingOp) {
-            logger.info(`Waiting for pending operation on ${fileKey} before stopping...`);
-            try {
-                await pendingOp.promise;
-            } catch {
-                // Ignore errors from previous operations
+        for (const serverKey of matchingServerKeys) {
+            const projectContext = this.projectContexts.get(serverKey) ?? null;
+
+            const pendingOp = this.pendingOperations.get(serverKey);
+            if (pendingOp) {
+                logger.info(`Waiting for pending operation on ${serverKey} before stopping...`);
+                try {
+                    await pendingOp.promise;
+                } catch {
+                    // Ignore errors from previous operations
+                }
             }
-        }
 
-        Cancellation.throwIfCanceled(token);
+            Cancellation.throwIfCanceled(token);
 
-        // Start the stop operation and track it
-        const operation = {
-            type: 'stop' as const,
-            promise: this.stopServerForEnvironment(projectContext, deepnoteFileUri, token)
-        };
-        this.pendingOperations.set(fileKey, operation);
+            const operation = {
+                type: 'stop' as const,
+                promise: this.stopServerForEnvironment(serverKey, projectContext, deepnoteFileUri, token)
+            };
+            this.pendingOperations.set(serverKey, operation);
 
-        try {
-            await operation.promise;
-        } finally {
-            // Remove from pending operations when done
-            if (this.pendingOperations.get(fileKey) === operation) {
-                this.pendingOperations.delete(fileKey);
+            try {
+                await operation.promise;
+            } finally {
+                if (this.pendingOperations.get(serverKey) === operation) {
+                    this.pendingOperations.delete(serverKey);
+                }
             }
         }
     }
@@ -237,11 +250,12 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         venvPath: Uri,
         additionalPackages: string[],
         environmentId: string,
+        serverKey: string,
         deepnoteFileUri: Uri,
         token?: CancellationToken
     ): Promise<DeepnoteServerInfo> {
-        const fileKey = deepnoteFileUri.fsPath;
-        const serverKey = `${fileKey}-${environmentId}`;
+        const filePath = deepnoteFileUri.with({ query: '', fragment: '' }).fsPath;
+        const legacyKey = getDeepnoteNotebookStorageKey(deepnoteFileUri.with({ query: '', fragment: '' }));
 
         Cancellation.throwIfCanceled(token);
 
@@ -299,7 +313,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         // Inject SQL integration environment variables
         if (this.sqlIntegrationEnvVars) {
             logger.debug(
-                `DeepnoteServerStarter: Injecting SQL integration env vars for ${fileKey} with environmentId ${environmentId}`
+                `DeepnoteServerStarter: Injecting SQL integration env vars for ${filePath} with environmentId ${environmentId}`
             );
             try {
                 const sqlEnvVars = await this.sqlIntegrationEnvVars.getEnvironmentVariables(deepnoteFileUri, token);
@@ -331,7 +345,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                 '--ls-port',
                 lspPort.toString()
             ],
-            { env, cwd: path.dirname(deepnoteFileUri.fsPath) }
+            { env, cwd: path.dirname(filePath) }
         );
 
         projectContext.serverProcess = serverProcess;
@@ -392,7 +406,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         } catch (error) {
             if (error instanceof DeepnoteServerTimeoutError || error instanceof DeepnoteServerStartupError) {
                 // await this.stopServerImpl(deepnoteFileUri);
-                await this.stopServerForEnvironment(projectContext, deepnoteFileUri);
+                await this.stopServerForEnvironment(serverKey, projectContext, deepnoteFileUri);
                 throw error;
             }
 
@@ -402,7 +416,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             const capturedStderr = output?.stderr || '';
 
             // Clean up leaked server before rethrowing
-            await this.stopServerForEnvironment(projectContext, deepnoteFileUri);
+            await this.stopServerForEnvironment(serverKey, projectContext, deepnoteFileUri);
 
             throw new DeepnoteServerStartupError(
                 interpreter.uri.fsPath,
@@ -425,27 +439,28 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
      */
     // private async stopServerForEnvironment(environmentId: string, token?: CancellationToken): Promise<void> {
     private async stopServerForEnvironment(
+        serverKey: string,
         projectContext: ProjectContext | null,
         deepnoteFileUri: Uri,
         token?: CancellationToken
     ): Promise<void> {
-        const fileKey = deepnoteFileUri.fsPath;
+        const filePath = deepnoteFileUri.with({ query: '', fragment: '' }).fsPath;
 
         Cancellation.throwIfCanceled(token);
 
-        // const serverProcess = this.serverProcesses.get(fileKey);
+        // const serverProcess = this.serverProcesses.get(serverKey);
         const serverProcess = projectContext?.serverProcess;
 
         if (serverProcess) {
             const serverPid = serverProcess.proc?.pid;
 
             try {
-                logger.info(`Stopping Deepnote server for ${fileKey}...`);
+                logger.info(`Stopping Deepnote server for ${serverKey} (${filePath})...`);
                 serverProcess.proc?.kill();
-                this.serverProcesses.delete(fileKey);
-                this.serverInfos.delete(fileKey);
-                this.serverOutputByFile.delete(fileKey);
-                this.outputChannel.appendLine(l10n.t('Deepnote server stopped for {0}', fileKey));
+                this.serverProcesses.delete(serverKey);
+                this.serverInfos.delete(serverKey);
+                this.serverOutputByFile.delete(serverKey);
+                this.outputChannel.appendLine(l10n.t('Deepnote server stopped for {0}', serverKey));
             } catch (ex) {
                 logger.error('Error stopping Deepnote server', ex);
             } finally {
@@ -458,10 +473,26 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
         Cancellation.throwIfCanceled(token);
 
-        const disposables = this.disposablesByFile.get(fileKey);
+        const disposables = this.disposablesByFile.get(serverKey);
         if (disposables) {
             disposables.forEach((d) => d.dispose());
-            this.disposablesByFile.delete(fileKey);
+            this.disposablesByFile.delete(serverKey);
+        }
+
+        if (projectContext) {
+            projectContext.serverProcess = null;
+            projectContext.serverInfo = null;
+            projectContext.environmentId = '';
+        }
+
+        const mappings = this.legacyServerKeyMap.get(legacyKey);
+        if (mappings) {
+            mappings.delete(serverKey);
+            if (mappings.size === 0) {
+                this.legacyServerKeyMap.delete(legacyKey);
+            } else {
+                this.legacyServerKeyMap.set(legacyKey, mappings);
+            }
         }
     }
 
@@ -618,9 +649,9 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         const killPromises: Promise<void>[] = [];
         const pidsToCleanup: number[] = [];
 
-        for (const [fileKey, serverProcess] of this.serverProcesses.entries()) {
+        for (const [serverKey, serverProcess] of this.serverProcesses.entries()) {
             try {
-                logger.info(`Stopping Deepnote server for ${fileKey}...`);
+                logger.info(`Stopping Deepnote server for ${serverKey}...`);
                 const proc = serverProcess.proc;
                 if (proc && !proc.killed) {
                     const serverPid = proc.pid;
@@ -631,7 +662,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                     // Create a promise that resolves when the process exits
                     const exitPromise = new Promise<void>((resolve) => {
                         const timeout = setTimeout(() => {
-                            logger.warn(`Process for ${fileKey} did not exit gracefully, force killing...`);
+                            logger.warn(`Process for ${serverKey} did not exit gracefully, force killing...`);
                             try {
                                 proc.kill('SIGKILL');
                             } catch {
@@ -651,7 +682,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                     killPromises.push(exitPromise);
                 }
             } catch (ex) {
-                logger.error(`Error stopping Deepnote server for ${fileKey}`, ex);
+                logger.error(`Error stopping Deepnote server for ${serverKey}`, ex);
             }
         }
 
@@ -667,11 +698,11 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         }
 
         // Dispose all tracked disposables
-        for (const [fileKey, disposables] of this.disposablesByFile.entries()) {
+        for (const [serverKey, disposables] of this.disposablesByFile.entries()) {
             try {
                 disposables.forEach((d) => d.dispose());
             } catch (ex) {
-                logger.error(`Error disposing resources for ${fileKey}`, ex);
+                logger.error(`Error disposing resources for ${serverKey}`, ex);
             }
         }
 
@@ -681,6 +712,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         this.disposablesByFile.clear();
         this.pendingOperations.clear();
         this.serverOutputByFile.clear();
+        this.legacyServerKeyMap.clear();
 
         logger.info('DeepnoteServerStarter disposed successfully');
     }

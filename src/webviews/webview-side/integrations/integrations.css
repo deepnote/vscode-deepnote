@@ -291,9 +291,27 @@ form {
 
 .integration-type-selector h2 {
     margin-top: 0;
-    margin-bottom: 16px;
+    margin-bottom: 24px;
     font-size: 1.2em;
     font-weight: 600;
+}
+
+.integration-type-section {
+    margin-bottom: 32px;
+}
+
+.integration-type-section:last-child {
+    margin-bottom: 0;
+}
+
+.integration-type-section-title {
+    margin-top: 0;
+    margin-bottom: 12px;
+    font-size: 0.95em;
+    font-weight: 600;
+    color: var(--vscode-descriptionForeground);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .integration-type-grid {

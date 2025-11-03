@@ -34,7 +34,57 @@ interface IntegrationTypeInfo {
     icon: string;
 }
 
-const INTEGRATION_TYPES: IntegrationTypeInfo[] = [
+// Data Warehouses & Lakes
+const WAREHOUSE_INTEGRATION_TYPES: IntegrationTypeInfo[] = [
+    {
+        type: 'clickhouse',
+        label: integrationTypeLabels['clickhouse'],
+        icon: clickhouseLogo
+    },
+    {
+        type: 'redshift',
+        label: integrationTypeLabels['redshift'],
+        icon: redshiftLogo
+    },
+    {
+        type: 'athena',
+        label: integrationTypeLabels['athena'],
+        icon: athenaLogo
+    },
+    {
+        type: 'big-query',
+        label: integrationTypeLabels['big-query'],
+        icon: bigqueryLogo
+    },
+    {
+        type: 'snowflake',
+        label: integrationTypeLabels['snowflake'],
+        icon: snowflakeLogo
+    },
+    {
+        type: 'databricks',
+        label: integrationTypeLabels['databricks'],
+        icon: databricksLogo
+    },
+    {
+        type: 'dremio',
+        label: integrationTypeLabels['dremio'],
+        icon: dremioLogo
+    },
+    {
+        type: 'trino',
+        label: integrationTypeLabels['trino'],
+        icon: trinoLogo
+    }
+];
+
+// Databases
+const DATABASE_INTEGRATION_TYPES: IntegrationTypeInfo[] = [
+    {
+        type: 'mongodb',
+        label: integrationTypeLabels['mongodb'],
+        icon: mongodbLogo
+    },
     {
         type: 'pgsql',
         label: integrationTypeLabels['pgsql'],
@@ -51,24 +101,9 @@ const INTEGRATION_TYPES: IntegrationTypeInfo[] = [
         icon: mariadbLogo
     },
     {
-        type: 'mongodb',
-        label: integrationTypeLabels['mongodb'],
-        icon: mongodbLogo
-    },
-    {
         type: 'sql-server',
         label: integrationTypeLabels['sql-server'],
         icon: sqlServerLogo
-    },
-    {
-        type: 'big-query',
-        label: integrationTypeLabels['big-query'],
-        icon: bigqueryLogo
-    },
-    {
-        type: 'snowflake',
-        label: integrationTypeLabels['snowflake'],
-        icon: snowflakeLogo
     },
     {
         type: 'alloydb',
@@ -86,39 +121,9 @@ const INTEGRATION_TYPES: IntegrationTypeInfo[] = [
         icon: materializeLogo
     },
     {
-        type: 'clickhouse',
-        label: integrationTypeLabels['clickhouse'],
-        icon: clickhouseLogo
-    },
-    {
-        type: 'athena',
-        label: integrationTypeLabels['athena'],
-        icon: athenaLogo
-    },
-    {
-        type: 'redshift',
-        label: integrationTypeLabels['redshift'],
-        icon: redshiftLogo
-    },
-    {
-        type: 'databricks',
-        label: integrationTypeLabels['databricks'],
-        icon: databricksLogo
-    },
-    {
-        type: 'dremio',
-        label: integrationTypeLabels['dremio'],
-        icon: dremioLogo
-    },
-    {
         type: 'mindsdb',
         label: integrationTypeLabels['mindsdb'],
         icon: mindsdbLogo
-    },
-    {
-        type: 'trino',
-        label: integrationTypeLabels['trino'],
-        icon: trinoLogo
     }
 ];
 
@@ -126,23 +131,45 @@ export const IntegrationTypeSelector: React.FC<IIntegrationTypeSelectorProps> = 
     return (
         <div className="integration-type-selector">
             <h2>{getLocString('integrationsAddNewIntegration', 'Add New Integration')}</h2>
-            <div className="integration-type-grid">
-                {INTEGRATION_TYPES.map((integrationInfo) => (
-                    <button
-                        key={integrationInfo.type}
-                        type="button"
-                        className="integration-type-card"
-                        onClick={() => onSelectType(integrationInfo.type)}
-                    >
-                        <div className="integration-type-icon">
-                            <img src={integrationInfo.icon} alt={integrationInfo.label} />
-                        </div>
-                        <div className="integration-type-label">{integrationInfo.label}</div>
-                        <div className="integration-type-category">
-                            {getLocString('integrationsDatabase', 'Database')}
-                        </div>
-                    </button>
-                ))}
+
+            <div className="integration-type-section">
+                <h3 className="integration-type-section-title">
+                    {getLocString('integrationsDataWarehousesLakes', 'Data Warehouses & Lakes')}
+                </h3>
+                <div className="integration-type-grid">
+                    {WAREHOUSE_INTEGRATION_TYPES.map((integrationInfo) => (
+                        <button
+                            key={integrationInfo.type}
+                            type="button"
+                            className="integration-type-card"
+                            onClick={() => onSelectType(integrationInfo.type)}
+                        >
+                            <div className="integration-type-icon">
+                                <img src={integrationInfo.icon} alt={integrationInfo.label} />
+                            </div>
+                            <div className="integration-type-label">{integrationInfo.label}</div>
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            <div className="integration-type-section">
+                <h3 className="integration-type-section-title">{getLocString('integrationsDatabases', 'Databases')}</h3>
+                <div className="integration-type-grid">
+                    {DATABASE_INTEGRATION_TYPES.map((integrationInfo) => (
+                        <button
+                            key={integrationInfo.type}
+                            type="button"
+                            className="integration-type-card"
+                            onClick={() => onSelectType(integrationInfo.type)}
+                        >
+                            <div className="integration-type-icon">
+                                <img src={integrationInfo.icon} alt={integrationInfo.label} />
+                            </div>
+                            <div className="integration-type-label">{integrationInfo.label}</div>
+                        </button>
+                    ))}
+                </div>
             </div>
         </div>
     );

@@ -185,6 +185,8 @@ export type LocalizedMessages = {
     integrationsSave: string;
     integrationsAddNewIntegration: string;
     integrationsDatabase: string;
+    integrationsDataWarehousesLakes: string;
+    integrationsDatabases: string;
     // Integration type labels
     integrationsPostgresTypeLabel: string;
     integrationsBigQueryTypeLabel: string;

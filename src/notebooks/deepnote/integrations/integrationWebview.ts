@@ -133,6 +133,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsConfigureTitle: localize.Integrations.configureTitle,
             integrationsAddNewIntegration: localize.Integrations.addNewIntegration,
             integrationsDatabase: localize.Integrations.database,
+            integrationsDataWarehousesLakes: localize.Integrations.dataWarehousesLakes,
+            integrationsDatabases: localize.Integrations.databases,
             integrationsPostgresTypeLabel: localize.Integrations.postgresTypeLabel,
             integrationsBigQueryTypeLabel: localize.Integrations.bigQueryTypeLabel,
             integrationsSnowflakeTypeLabel: localize.Integrations.snowflakeTypeLabel,

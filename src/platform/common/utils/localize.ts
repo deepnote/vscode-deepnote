@@ -836,6 +836,8 @@ export namespace Integrations {
     export const save = l10n.t('Save');
     export const addNewIntegration = l10n.t('Add New Integration');
     export const database = l10n.t('Database');
+    export const dataWarehousesLakes = l10n.t('Data Warehouses & Lakes');
+    export const databases = l10n.t('Databases');
     export const requiredField = l10n.t('*');
     export const optionalField = l10n.t('(optional)');
     export const unnamedIntegration = (id: string) => l10n.t('Unnamed Integration ({0})', id);

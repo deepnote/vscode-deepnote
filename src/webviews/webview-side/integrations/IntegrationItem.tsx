@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { getLocString } from '../react-common/locReactSide';
 import { ConfigurableDatabaseIntegrationType, IntegrationWithStatus } from './types';
+import { integrationTypeIcons } from './integrationUtils';
 
 export interface IIntegrationItemProps {
     integration: IntegrationWithStatus;
@@ -66,14 +67,24 @@ export const IntegrationItem: React.FC<IIntegrationItemProps> = ({ integration, 
     // Get the type: prefer config type, then integration type from project
     const type = integration.config?.type || integration.integrationType;
 
-    // Build display name with type
-    const displayName = type ? `${name} (${getIntegrationTypeLabel(type)})` : name;
+    // Get the type label and icon
+    const typeLabel = type ? getIntegrationTypeLabel(type) : undefined;
+    const typeIcon = type ? integrationTypeIcons[type] : undefined;
 
     return (
         <div className="integration-item">
+            {typeIcon && (
+                <div className="integration-item-icon">
+                    <img src={typeIcon} alt={typeLabel || ''} />
+                </div>
+            )}
             <div className="integration-info">
-                <div className="integration-name">{displayName}</div>
-                <div className={`integration-status ${statusClass}`}>{statusText}</div>
+                <div className="integration-name">{name}</div>
+                <div className="integration-meta">
+                    {typeLabel && <span className="integration-type">{typeLabel}</span>}
+                    {typeLabel && <span className="integration-meta-separator"> • </span>}
+                    <span className={`integration-status ${statusClass}`}>{statusText}</span>
+                </div>
             </div>
             <div className="integration-actions">
                 <button type="button" onClick={() => onConfigure(integration.id)}>

@@ -1,4 +1,6 @@
 import * as React from 'react';
+
+import { generateUuid } from '../../../platform/common/uuid';
 import { IVsCodeApi } from '../react-common/postOffice';
 import { getLocString, storeLocStrings } from '../react-common/locReactSide';
 import { IntegrationList } from './IntegrationList';
@@ -191,7 +193,7 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
 
     const handleSelectIntegrationType = (type: ConfigurableDatabaseIntegrationType) => {
         // Generate a new UUID for the integration
-        const newId = crypto.randomUUID();
+        const newId = generateUuid();
 
         // Set up the form for creating a new integration
         setSelectedIntegrationId(newId);

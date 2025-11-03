@@ -1,28 +1,7 @@
 import * as React from 'react';
 import { getLocString } from '../react-common/locReactSide';
 import { ConfigurableDatabaseIntegrationType } from './types';
-import { integrationTypeLabels } from './integrationUtils';
-
-// Import integration logos
-/* eslint-disable @typescript-eslint/no-require-imports */
-const postgresqlLogo: string = require('./icons/postgresql.svg');
-const mysqlLogo: string = require('./icons/mysql.svg');
-const mariadbLogo: string = require('./icons/mariadb.svg');
-const mongodbLogo: string = require('./icons/mongodb.svg');
-const sqlServerLogo: string = require('./icons/sql-server.svg');
-const bigqueryLogo: string = require('./icons/bigquery.svg');
-const snowflakeLogo: string = require('./icons/snowflake.svg');
-const alloydbLogo: string = require('./icons/alloydb.svg');
-const spannerLogo: string = require('./icons/spanner.svg');
-const materializeLogo: string = require('./icons/materialize.svg');
-const clickhouseLogo: string = require('./icons/clickhouse.svg');
-const athenaLogo: string = require('./icons/athena.svg');
-const redshiftLogo: string = require('./icons/redshift.svg');
-const databricksLogo: string = require('./icons/databricks.svg');
-const dremioLogo: string = require('./icons/dremio.svg');
-const mindsdbLogo: string = require('./icons/mindsdb.svg');
-const trinoLogo: string = require('./icons/trino.svg');
-/* eslint-enable @typescript-eslint/no-require-imports */
+import { integrationTypeLabels, integrationTypeIcons } from './integrationUtils';
 
 export interface IIntegrationTypeSelectorProps {
     onSelectType: (type: ConfigurableDatabaseIntegrationType) => void;
@@ -39,42 +18,42 @@ const WAREHOUSE_INTEGRATION_TYPES: IntegrationTypeInfo[] = [
     {
         type: 'clickhouse',
         label: integrationTypeLabels['clickhouse'],
-        icon: clickhouseLogo
+        icon: integrationTypeIcons['clickhouse']
     },
     {
         type: 'redshift',
         label: integrationTypeLabels['redshift'],
-        icon: redshiftLogo
+        icon: integrationTypeIcons['redshift']
     },
     {
         type: 'athena',
         label: integrationTypeLabels['athena'],
-        icon: athenaLogo
+        icon: integrationTypeIcons['athena']
     },
     {
         type: 'big-query',
         label: integrationTypeLabels['big-query'],
-        icon: bigqueryLogo
+        icon: integrationTypeIcons['big-query']
     },
     {
         type: 'snowflake',
         label: integrationTypeLabels['snowflake'],
-        icon: snowflakeLogo
+        icon: integrationTypeIcons['snowflake']
     },
     {
         type: 'databricks',
         label: integrationTypeLabels['databricks'],
-        icon: databricksLogo
+        icon: integrationTypeIcons['databricks']
     },
     {
         type: 'dremio',
         label: integrationTypeLabels['dremio'],
-        icon: dremioLogo
+        icon: integrationTypeIcons['dremio']
     },
     {
         type: 'trino',
         label: integrationTypeLabels['trino'],
-        icon: trinoLogo
+        icon: integrationTypeIcons['trino']
     }
 ];
 
@@ -83,47 +62,47 @@ const DATABASE_INTEGRATION_TYPES: IntegrationTypeInfo[] = [
     {
         type: 'mongodb',
         label: integrationTypeLabels['mongodb'],
-        icon: mongodbLogo
+        icon: integrationTypeIcons['mongodb']
     },
     {
         type: 'pgsql',
         label: integrationTypeLabels['pgsql'],
-        icon: postgresqlLogo
+        icon: integrationTypeIcons['pgsql']
     },
     {
         type: 'mysql',
         label: integrationTypeLabels['mysql'],
-        icon: mysqlLogo
+        icon: integrationTypeIcons['mysql']
     },
     {
         type: 'mariadb',
         label: integrationTypeLabels['mariadb'],
-        icon: mariadbLogo
+        icon: integrationTypeIcons['mariadb']
     },
     {
         type: 'sql-server',
         label: integrationTypeLabels['sql-server'],
-        icon: sqlServerLogo
+        icon: integrationTypeIcons['sql-server']
     },
     {
         type: 'alloydb',
         label: integrationTypeLabels['alloydb'],
-        icon: alloydbLogo
+        icon: integrationTypeIcons['alloydb']
     },
     {
         type: 'spanner',
         label: integrationTypeLabels['spanner'],
-        icon: spannerLogo
+        icon: integrationTypeIcons['spanner']
     },
     {
         type: 'materialize',
         label: integrationTypeLabels['materialize'],
-        icon: materializeLogo
+        icon: integrationTypeIcons['materialize']
     },
     {
         type: 'mindsdb',
         label: integrationTypeLabels['mindsdb'],
-        icon: mindsdbLogo
+        icon: integrationTypeIcons['mindsdb']
     }
 ];
 

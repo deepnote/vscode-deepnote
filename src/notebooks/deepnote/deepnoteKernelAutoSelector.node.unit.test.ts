@@ -17,7 +17,8 @@ import { IDeepnoteInitNotebookRunner } from './deepnoteInitNotebookRunner.node';
 import { IDeepnoteNotebookManager } from '../types';
 import { IKernelProvider, IKernel, IJupyterKernelSpec } from '../../kernels/types';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
-import { NotebookDocument, Uri, NotebookController, CancellationToken, commands } from 'vscode';
+import * as vscode from 'vscode';
+import { NotebookDocument, Uri, NotebookController, CancellationToken } from 'vscode';
 import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnoteEnvironment';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import * as asyncUtils from '../../platform/common/utils/async';
@@ -340,7 +341,12 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
     suite('ensureControllerSelectedForNotebook', () => {
         test('should select controller when not already selected', async () => {
-            const executeStub = sandbox.stub(commands, 'executeCommand').resolves(undefined);
+            Object.defineProperty(vscode, 'commands', {
+                value: { executeCommand: async () => undefined },
+                configurable: true,
+                writable: true
+            });
+            const executeStub = sandbox.stub(vscode.commands, 'executeCommand').resolves(undefined);
             const waitStub = sandbox.stub(asyncUtils, 'waitForCondition').callsFake(async (condition) => {
                 return condition();
             });
@@ -364,7 +370,12 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         });
 
         test('should retry selection when first attempt fails', async () => {
-            const executeStub = sandbox.stub(commands, 'executeCommand').resolves(undefined);
+            Object.defineProperty(vscode, 'commands', {
+                value: { executeCommand: async () => undefined },
+                configurable: true,
+                writable: true
+            });
+            const executeStub = sandbox.stub(vscode.commands, 'executeCommand').resolves(undefined);
             const waitStub = sandbox.stub(asyncUtils, 'waitForCondition');
             waitStub.onFirstCall().resolves(false);
             waitStub.onSecondCall().callsFake(async (condition) => condition());
@@ -387,7 +398,12 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         });
 
         test('should skip selection when controller already selected', async () => {
-            const executeStub = sandbox.stub(commands, 'executeCommand').resolves(undefined);
+            Object.defineProperty(vscode, 'commands', {
+                value: { executeCommand: async () => undefined },
+                configurable: true,
+                writable: true
+            });
+            const executeStub = sandbox.stub(vscode.commands, 'executeCommand').resolves(undefined);
             const waitStub = sandbox.stub(asyncUtils, 'waitForCondition');
 
             when(mockControllerRegistration.getSelected(mockNotebook)).thenReturn(instance(mockNewController));
@@ -805,7 +821,9 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             when(newController.controller).thenReturn({} as any);
 
             // Setup mocks
-            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(mockNotebook.uri)).thenReturn('env-new');
+            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(mockNotebook.uri, 'project-123')).thenReturn(
+                'env-new'
+            );
             when(mockEnvironmentManager.getEnvironment('env-new')).thenReturn(newEnv);
             when(mockPythonExtensionChecker.isPythonExtensionInstalled).thenReturn(true);
 

@@ -441,8 +441,9 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         token: CancellationToken
     ): Promise<boolean> {
         const notebookKey = getDeepnoteNotebookStorageKey(notebook.uri);
+        const projectId = notebook.metadata?.deepnoteProjectId ?? null;
 
-        const environmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(notebook.uri);
+        const environmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(notebook.uri, projectId);
 
         if (environmentId == null) {
             return false;
@@ -451,7 +452,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         const environment = environmentId ? this.environmentManager.getEnvironment(environmentId) : undefined;
         if (environment == null) {
             logger.info(`No environment found for notebook ${getDisplayPath(notebook.uri)}`);
-            await this.notebookEnvironmentMapper.removeEnvironmentForNotebook(notebook.uri);
+            await this.notebookEnvironmentMapper.removeEnvironmentForNotebook(notebook.uri, projectId);
             return false;
         }
 

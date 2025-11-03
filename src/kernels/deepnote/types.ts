@@ -280,31 +280,44 @@ export interface IDeepnoteEnvironmentManager {
 export const IDeepnoteNotebookEnvironmentMapper = Symbol('IDeepnoteNotebookEnvironmentMapper');
 export interface IDeepnoteNotebookEnvironmentMapper {
     /**
-     * Get the environment ID selected for a notebook
+     * Get the environment ID selected for a notebook or project
      * @param notebookUri The notebook URI (without query/fragment)
+     * @param projectId Optional Deepnote project identifier associated with the notebook
      * @returns Environment ID, or undefined if not set
      */
-    getEnvironmentForNotebook(notebookUri: vscode.Uri): string | undefined;
+    getEnvironmentForNotebook(notebookUri: vscode.Uri, projectId?: string | null): string | undefined;
 
     /**
-     * Set the environment for a notebook
+     * Set the environment for a notebook/project pair
      * @param notebookUri The notebook URI (without query/fragment)
+     * @param projectId Optional Deepnote project identifier associated with the notebook
      * @param environmentId The environment ID
      */
-    setEnvironmentForNotebook(notebookUri: vscode.Uri, environmentId: string): Promise<void>;
+    setEnvironmentForNotebook(
+        notebookUri: vscode.Uri,
+        projectId: string | null | undefined,
+        environmentId: string
+    ): Promise<void>;
 
     /**
-     * Remove the environment mapping for a notebook
+     * Remove the environment mapping for a notebook/project pair
      * @param notebookUri The notebook URI (without query/fragment)
+     * @param projectId Optional Deepnote project identifier associated with the notebook
      */
-    removeEnvironmentForNotebook(notebookUri: vscode.Uri): Promise<void>;
+    removeEnvironmentForNotebook(notebookUri: vscode.Uri, projectId?: string | null): Promise<void>;
 
     /**
-     * Get all notebooks using a specific environment
-     * @param environmentId The environment ID
-     * @returns Array of notebook URIs
+     * Remove the environment mapping for a given project key directly.
+     * @param projectKey The normalized project key produced by getDeepnoteProjectStorageKey
      */
-    getNotebooksUsingEnvironment(environmentId: string): vscode.Uri[];
+    removeEnvironmentForProject(projectKey: string): Promise<void>;
+
+    /**
+     * Get all project keys using a specific environment
+     * @param environmentId The environment ID
+     * @returns Array of project keys
+     */
+    getProjectKeysUsingEnvironment(environmentId: string): string[];
 }
 
 export const DEEPNOTE_TOOLKIT_VERSION = '1.0.0rc2';

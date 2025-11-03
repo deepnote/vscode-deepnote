@@ -46,25 +46,16 @@ suite('DeepnoteNotebookEnvironmentMapper', () => {
         sinon.restore();
     });
 
-    test('stores unique environments per notebook query', async () => {
+    test('stores environments scoped to the project, not individual notebook instances', async () => {
         const uriA = Uri.parse('file:///workspace/notebook.deepnote?notebook=a');
         const uriB = Uri.parse('file:///workspace/notebook.deepnote?notebook=b');
+        const otherUri = Uri.parse('file:///workspace/other.deepnote');
 
-        await mapper.setEnvironmentForNotebook(uriA, 'env-a');
-        await mapper.setEnvironmentForNotebook(uriB, 'env-b');
+        await mapper.setEnvironmentForNotebook(uriA, 'project-123', 'env-a');
+        await mapper.setEnvironmentForNotebook(otherUri, 'project-456', 'env-b');
 
-        assert.strictEqual(mapper.getEnvironmentForNotebook(uriA), 'env-a');
-        assert.strictEqual(mapper.getEnvironmentForNotebook(uriB), 'env-b');
-    });
-
-    test('migrates legacy fsPath keys on load', async () => {
-        const legacyUri = Uri.parse('file:///workspace/notebook.deepnote?notebook=legacy');
-        const legacyKey = legacyUri.with({ query: '', fragment: '' }).fsPath;
-
-        await workspaceState.update('deepnote.notebookEnvironmentMappings', { [legacyKey]: 'env-legacy' });
-
-        const freshMapper = new DeepnoteNotebookEnvironmentMapper(createExtensionContextStub(workspaceState));
-
-        assert.strictEqual(freshMapper.getEnvironmentForNotebook(legacyUri), 'env-legacy');
+        assert.strictEqual(mapper.getEnvironmentForNotebook(uriB, 'project-123'), 'env-a');
+        assert.strictEqual(mapper.getEnvironmentForNotebook(otherUri, 'project-456'), 'env-b');
+        assert.isUndefined(mapper.getEnvironmentForNotebook(uriB, 'project-missing'));
     });
 });

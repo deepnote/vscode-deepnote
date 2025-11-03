@@ -299,9 +299,9 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 },
                 async (_progress, token) => {
                     // Clean up notebook mappings referencing this env
-                    const notebooks = this.notebookEnvironmentMapper.getNotebooksUsingEnvironment(environmentId);
-                    for (const nb of notebooks) {
-                        await this.notebookEnvironmentMapper.removeEnvironmentForNotebook(nb);
+                    const projectKeys = this.notebookEnvironmentMapper.getProjectKeysUsingEnvironment(environmentId);
+                    for (const projectKey of projectKeys) {
+                        await this.notebookEnvironmentMapper.removeEnvironmentForProject(projectKey);
                     }
 
                     // Dispose kernels from any open notebooks using this environment
@@ -370,7 +370,8 @@ export class DeepnoteEnvironmentsView implements Disposable {
         logger.info('Selecting environment for notebook:', notebook);
 
         // Get current environment selection
-        const currentEnvironmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(notebook.uri);
+        const projectId = notebook.metadata?.deepnoteProjectId ?? null;
+        const currentEnvironmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(notebook.uri, projectId);
         const currentEnvironment = currentEnvironmentId
             ? this.environmentManager.getEnvironment(currentEnvironmentId)
             : undefined;
@@ -468,7 +469,11 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 },
                 async () => {
                     // Update the notebook-to-environment mapping
-                    await this.notebookEnvironmentMapper.setEnvironmentForNotebook(notebook.uri, selectedEnvironmentId);
+                    await this.notebookEnvironmentMapper.setEnvironmentForNotebook(
+                        notebook.uri,
+                        projectId,
+                        selectedEnvironmentId
+                    );
 
                     // Force rebuild the controller with the new environment
                     // This clears cached metadata and creates a fresh controller.

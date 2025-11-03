@@ -5,10 +5,7 @@ import { injectable, inject } from 'inversify';
 import { Uri, Memento } from 'vscode';
 import { IExtensionContext } from '../../../platform/common/types';
 import { logger } from '../../../platform/logging';
-import {
-    getDeepnoteNotebookStorageKey,
-    getLegacyDeepnoteNotebookStorageKey
-} from '../../../platform/deepnote/deepnoteUriUtils.node';
+import { getDeepnoteProjectStorageKey } from '../../../platform/deepnote/deepnoteUriUtils.node';
 
 /**
  * Manages the mapping between notebooks and their selected environments
@@ -31,23 +28,9 @@ export class DeepnoteNotebookEnvironmentMapper {
      * @param notebookUri The notebook URI (without query/fragment)
      * @returns Environment ID, or undefined if not set
      */
-    public getEnvironmentForNotebook(notebookUri: Uri): string | undefined {
-        const key = getDeepnoteNotebookStorageKey(notebookUri);
-        const environmentId = this.mappings.get(key);
-        if (environmentId !== undefined) {
-            return environmentId;
-        }
-
-        // Backwards compatibility with legacy keys that only used fsPath.
-        const legacyKey = getLegacyDeepnoteNotebookStorageKey(notebookUri);
-        const legacyEnvironment = this.mappings.get(legacyKey);
-        if (legacyEnvironment !== undefined) {
-            // upgrade in memory so subsequent lookups use the normalized key
-            this.mappings.delete(legacyKey);
-            this.mappings.set(key, legacyEnvironment);
-        }
-
-        return legacyEnvironment;
+    public getEnvironmentForNotebook(notebookUri: Uri, projectId?: string | null): string | undefined {
+        const projectKey = getDeepnoteProjectStorageKey(notebookUri, projectId ?? undefined);
+        return this.mappings.get(projectKey);
     }
 
     /**
@@ -55,57 +38,53 @@ export class DeepnoteNotebookEnvironmentMapper {
      * @param notebookUri The notebook URI (without query/fragment)
      * @param environmentId The environment ID
      */
-    public async setEnvironmentForNotebook(notebookUri: Uri, environmentId: string): Promise<void> {
-        const key = getDeepnoteNotebookStorageKey(notebookUri);
-        this.mappings.set(key, environmentId);
+    public async setEnvironmentForNotebook(
+        notebookUri: Uri,
+        projectId: string | null | undefined,
+        environmentId: string
+    ): Promise<void> {
+        const projectKey = getDeepnoteProjectStorageKey(notebookUri, projectId ?? undefined);
+        this.mappings.set(projectKey, environmentId);
 
-        const legacyKey = getLegacyDeepnoteNotebookStorageKey(notebookUri);
-        if (legacyKey !== key) {
-            this.mappings.delete(legacyKey);
-        }
         await this.saveMappings();
-        logger.info(`Mapped notebook ${notebookUri.fsPath} to environment ${environmentId}`);
+        logger.info(`Mapped project ${projectKey} to environment ${environmentId}`);
     }
 
     /**
      * Remove the environment mapping for a notebook
      * @param notebookUri The notebook URI (without query/fragment)
      */
-    public async removeEnvironmentForNotebook(notebookUri: Uri): Promise<void> {
-        const key = getDeepnoteNotebookStorageKey(notebookUri);
-        this.mappings.delete(key);
+    public async removeEnvironmentForNotebook(notebookUri: Uri, projectId?: string | null): Promise<void> {
+        const projectKey = getDeepnoteProjectStorageKey(notebookUri, projectId ?? undefined);
+        this.mappings.delete(projectKey);
 
-        const legacyKey = getLegacyDeepnoteNotebookStorageKey(notebookUri);
-        if (legacyKey !== key) {
-            this.mappings.delete(legacyKey);
-        }
         await this.saveMappings();
-        logger.info(`Removed environment mapping for notebook ${notebookUri.fsPath}`);
+        logger.info(`Removed environment mapping for project ${projectKey}`);
     }
 
     /**
-     * Get all notebooks using a specific environment
-     * @param environmentId The environment ID
-     * @returns Array of notebook URIs
+     * Remove the environment mapping for a normalized project key.
      */
-    public getNotebooksUsingEnvironment(environmentId: string): Uri[] {
-        const notebooks: Uri[] = [];
-        for (const [notebookKey, configId] of this.mappings.entries()) {
-            if (configId !== environmentId) {
-                continue;
-            }
+    public async removeEnvironmentForProject(projectKey: string): Promise<void> {
+        if (this.mappings.delete(projectKey)) {
+            await this.saveMappings();
+            logger.info(`Removed environment mapping for project key ${projectKey}`);
+        }
+    }
 
-            try {
-                if (notebookKey.includes('://')) {
-                    notebooks.push(Uri.parse(notebookKey));
-                } else {
-                    notebooks.push(Uri.file(notebookKey));
-                }
-            } catch (error) {
-                logger.warn(`Failed to parse notebook key '${notebookKey}' while listing environment mappings`, error);
+    /**
+     * Get all project keys using a specific environment
+     * @param environmentId The environment ID
+     * @returns Array of project keys
+     */
+    public getProjectKeysUsingEnvironment(environmentId: string): string[] {
+        const projectKeys: string[] = [];
+        for (const [key, mappedEnvironmentId] of this.mappings.entries()) {
+            if (mappedEnvironmentId === environmentId) {
+                projectKeys.push(key);
             }
         }
-        return notebooks;
+        return projectKeys;
     }
 
     /**

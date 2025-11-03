@@ -17,9 +17,10 @@ import { IDeepnoteInitNotebookRunner } from './deepnoteInitNotebookRunner.node';
 import { IDeepnoteNotebookManager } from '../types';
 import { IKernelProvider, IKernel, IJupyterKernelSpec } from '../../kernels/types';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
-import { NotebookDocument, Uri, NotebookController, CancellationToken, workspace } from 'vscode';
+import { NotebookDocument, Uri, NotebookController, CancellationToken } from 'vscode';
 import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnoteEnvironment';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
+import { computeRequirementsHash } from './deepnoteProjectUtils';
 
 suite('DeepnoteKernelAutoSelector - rebuildController', () => {
     let selector: DeepnoteKernelAutoSelector;
@@ -778,17 +779,17 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
     suite('Requirements Optimization', () => {
         suite('computeRequirementsHash', () => {
             test('should return empty string for null/undefined', () => {
-                const result1 = selector.computeRequirementsHash(null);
-                const result2 = selector.computeRequirementsHash(undefined);
+                const result1 = computeRequirementsHash(null);
+                const result2 = computeRequirementsHash(undefined);
 
                 assert.strictEqual(result1, '');
                 assert.strictEqual(result2, '');
             });
 
             test('should return empty string for non-array input', () => {
-                const result1 = selector.computeRequirementsHash('not-an-array' as any);
-                const result2 = selector.computeRequirementsHash(123 as any);
-                const result3 = selector.computeRequirementsHash({} as any);
+                const result1 = computeRequirementsHash('not-an-array' as any);
+                const result2 = computeRequirementsHash(123 as any);
+                const result3 = computeRequirementsHash({} as any);
 
                 assert.strictEqual(result1, '');
                 assert.strictEqual(result2, '');
@@ -796,14 +797,14 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             });
 
             test('should return empty string for empty array', () => {
-                const result = selector.computeRequirementsHash([]);
+                const result = computeRequirementsHash([]);
 
                 assert.strictEqual(result, '');
             });
 
             test('should filter out non-string entries', () => {
                 const requirements = ['pandas', 123, 'numpy', null, 'scipy', undefined];
-                const result = selector.computeRequirementsHash(requirements);
+                const result = computeRequirementsHash(requirements);
 
                 // Should only include string entries
                 assert.strictEqual(result, 'numpy|pandas|scipy');
@@ -811,28 +812,28 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
             test('should trim whitespace from requirements', () => {
                 const requirements = ['  pandas  ', 'numpy\t', '\nscipy'];
-                const result = selector.computeRequirementsHash(requirements);
+                const result = computeRequirementsHash(requirements);
 
                 assert.strictEqual(result, 'numpy|pandas|scipy');
             });
 
             test('should filter out empty strings', () => {
                 const requirements = ['pandas', '', '  ', 'numpy', '\t\n'];
-                const result = selector.computeRequirementsHash(requirements);
+                const result = computeRequirementsHash(requirements);
 
                 assert.strictEqual(result, 'numpy|pandas');
             });
 
             test('should sort requirements alphabetically', () => {
                 const requirements = ['scipy', 'pandas', 'numpy', 'matplotlib'];
-                const result = selector.computeRequirementsHash(requirements);
+                const result = computeRequirementsHash(requirements);
 
                 assert.strictEqual(result, 'matplotlib|numpy|pandas|scipy');
             });
 
             test('should deduplicate requirements', () => {
                 const requirements = ['pandas', 'numpy', 'pandas', 'scipy', 'numpy'];
-                const result = selector.computeRequirementsHash(requirements);
+                const result = computeRequirementsHash(requirements);
 
                 // Should have each requirement only once
                 assert.strictEqual(result, 'numpy|pandas|scipy');
@@ -840,7 +841,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
             test('should handle version specifiers', () => {
                 const requirements = ['pandas>=1.0.0', 'numpy==1.21.0', 'scipy<2.0'];
-                const result = selector.computeRequirementsHash(requirements);
+                const result = computeRequirementsHash(requirements);
 
                 assert.strictEqual(result, 'numpy==1.21.0|pandas>=1.0.0|scipy<2.0');
             });
@@ -849,8 +850,8 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 const requirements1 = ['pandas', 'numpy', 'scipy'];
                 const requirements2 = ['scipy', 'pandas', 'numpy'];
 
-                const hash1 = selector.computeRequirementsHash(requirements1);
-                const hash2 = selector.computeRequirementsHash(requirements2);
+                const hash1 = computeRequirementsHash(requirements1);
+                const hash2 = computeRequirementsHash(requirements2);
 
                 assert.strictEqual(hash1, hash2);
             });
@@ -859,8 +860,8 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 const requirements1 = ['pandas', 'numpy'];
                 const requirements2 = ['pandas', 'scipy'];
 
-                const hash1 = selector.computeRequirementsHash(requirements1);
-                const hash2 = selector.computeRequirementsHash(requirements2);
+                const hash1 = computeRequirementsHash(requirements1);
+                const hash2 = computeRequirementsHash(requirements2);
 
                 assert.notStrictEqual(hash1, hash2);
             });
@@ -877,7 +878,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                     .map((line) => line.trim())
                     .filter((line) => line.length > 0 && !line.startsWith('#'));
 
-                const hash = selector.computeRequirementsHash(requirements);
+                const hash = computeRequirementsHash(requirements);
 
                 // Should have filtered and sorted correctly
                 assert.strictEqual(hash, 'numpy|pandas|scipy');

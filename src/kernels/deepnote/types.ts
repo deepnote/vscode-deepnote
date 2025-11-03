@@ -24,6 +24,7 @@ export class DeepnoteKernelConnectionMetadata {
     public readonly id: string;
     public readonly kernelSpec: IJupyterKernelSpec;
     public readonly baseUrl: string;
+    public readonly projectFilePath?: string;
     public readonly interpreter?: PythonEnvironment;
     public readonly serverProviderHandle: JupyterServerProviderHandle;
     public readonly serverInfo?: DeepnoteServerInfo; // Store server info for connection
@@ -36,6 +37,7 @@ export class DeepnoteKernelConnectionMetadata {
         kernelSpec: IJupyterKernelSpec;
         baseUrl: string;
         id: string;
+        projectFilePath?: string;
         serverProviderHandle: JupyterServerProviderHandle;
         serverInfo?: DeepnoteServerInfo;
         environmentName?: string;
@@ -46,6 +48,7 @@ export class DeepnoteKernelConnectionMetadata {
         this.kernelSpec = options.kernelSpec;
         this.baseUrl = options.baseUrl;
         this.id = options.id;
+        this.projectFilePath = options.projectFilePath;
         this.serverProviderHandle = options.serverProviderHandle;
         this.serverInfo = options.serverInfo;
         this.environmentName = options.environmentName;
@@ -58,6 +61,7 @@ export class DeepnoteKernelConnectionMetadata {
         kernelSpec: IJupyterKernelSpec;
         baseUrl: string;
         id: string;
+        projectFilePath?: string;
         serverProviderHandle: JupyterServerProviderHandle;
         serverInfo?: DeepnoteServerInfo;
         environmentName?: string;

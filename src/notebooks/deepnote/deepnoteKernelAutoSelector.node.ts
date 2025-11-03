@@ -61,6 +61,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     private readonly projectServerHandles = new Map<string, string>();
     // Track registered controllers per NOTEBOOK (full URI with query) - one controller per notebook
     private readonly notebookControllers = new Map<string, IVSCodeNotebookController>();
+    // Track environment for each notebook
+    private readonly notebookEnvironmentsIds = new Map<string, string>();
     // Track connection metadata per NOTEBOOK for reuse
     private readonly notebookConnectionMetadata = new Map<string, DeepnoteKernelConnectionMetadata>();
     // Track projects where we need to run init notebook (set during controller setup)
@@ -489,8 +491,9 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         }
 
         const existingController = this.notebookControllers.get(notebookKey);
+        const existingEnvironmentId = this.notebookEnvironmentsIds.get(notebookKey);
 
-        if (existingController != null) {
+        if (existingEnvironmentId != null && existingController != null && existingEnvironmentId === configuration.id) {
             logger.info(`Existing controller found for notebook ${getDisplayPath(notebook.uri)}, selecting it`);
             await this.ensureControllerSelectedForNotebook(notebook, existingController, progressToken);
             return;
@@ -508,6 +511,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             baseFileUri,
             progressToken
         );
+
+        this.notebookEnvironmentsIds.set(notebookKey, configuration.id);
 
         logger.info(`Server running at ${serverInfo.url}`);
 
@@ -571,18 +576,18 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         // Extract project and notebook titles from metadata for display
         const projectTitle = notebook.metadata?.deepnoteProjectName || 'Untitled Project';
-        const notebookTitle = notebook.metadata?.deepnoteNotebookName || 'Untitled Notebook';
 
         const newConnectionMetadata = DeepnoteKernelConnectionMetadata.create({
             interpreter: { uri: venvInterpreter, id: venvInterpreter.fsPath },
             kernelSpec,
             baseUrl: serverInfo.url,
             id: controllerId,
+            projectFilePath: baseFileUri.toString(),
             serverProviderHandle,
             serverInfo,
             environmentName: configuration.name,
             projectName: projectTitle,
-            notebookName: notebookTitle
+            notebookName: notebookKey
         });
 
         // Store connection metadata for reuse

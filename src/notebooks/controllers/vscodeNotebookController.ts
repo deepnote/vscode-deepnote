@@ -87,6 +87,7 @@ import { NotebookCellLanguageService } from '../languages/cellLanguageService';
 import { KernelConnector } from './kernelConnector';
 import { RemoteKernelReconnectBusyIndicator } from './remoteKernelReconnectBusyIndicator';
 import { IConnectionDisplayData, IConnectionDisplayDataProvider, IVSCodeNotebookController } from './types';
+import { notebookPathToDeepnoteProjectFilePath } from '../../platform/deepnote/deepnoteProjectUtils';
 
 /**
  * Our implementation of the VSCode Notebook Controller. Called by VS code to execute cells in a notebook. Also displayed
@@ -299,6 +300,10 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
         const oldConnection = this.kernelConnection;
         const hasChanged = !areKernelConnectionsEqual(oldConnection, kernelConnection);
 
+        if (kernelConnection.kind === 'startUsingDeepnoteKernel') {
+            logger.info(`Updating connection for Deepnote notebook from ${oldConnection} to ${kernelConnection}`);
+        }
+
         // Update the stored connection metadata
         this.kernelConnection = kernelConnection;
 
@@ -318,8 +323,7 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
             const notebooksToUpdate = allNotebooks.filter(
                 (n) =>
                     kernelConnection.kind === 'startUsingDeepnoteKernel' &&
-                    // eslint-disable-next-line local-rules/dont-use-fspath
-                    n.uri.fsPath === kernelConnection.notebookName
+                    notebookPathToDeepnoteProjectFilePath(n.uri).toString() === kernelConnection.projectFilePath
             );
             notebooksToUpdate.forEach((notebook) => {
                 const existingKernel = this.kernelProvider.get(notebook);

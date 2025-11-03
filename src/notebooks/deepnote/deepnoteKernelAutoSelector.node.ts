@@ -39,6 +39,7 @@ import { createJupyterConnectionInfo } from '../../kernels/jupyter/jupyterUtils'
 import { IJupyterRequestCreator, IJupyterRequestAgentCreator } from '../../kernels/jupyter/types';
 import { IConfigurationService } from '../../platform/common/types';
 import { disposeAsync } from '../../platform/common/utils';
+import { waitForCondition } from '../../platform/common/utils/async';
 import { IDeepnoteInitNotebookRunner } from './deepnoteInitNotebookRunner.node';
 import { IDeepnoteNotebookManager } from '../types';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
@@ -494,12 +495,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         if (existingController != null) {
             logger.info(`Existing controller found for notebook ${getDisplayPath(notebook.uri)}, selecting it`);
-            await commands.executeCommand('notebook.selectKernel', {
-                editor: notebook,
-                // id: existingController.controller.id,
-                id: existingController.connection.id,
-                extension: JVSC_EXTENSION_ID
-            });
+            await this.ensureControllerSelectedForNotebook(notebook, existingController, progressToken);
             return;
         }
 
@@ -641,15 +637,76 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         });
 
         // Auto-select the controller
-        await commands.executeCommand('notebook.selectKernel', {
-            editor: notebook,
-            // id: controller.controller.id,
-            id: controller.connection.id,
-            extension: JVSC_EXTENSION_ID
-        });
+        await this.ensureControllerSelectedForNotebook(notebook, controller, progressToken);
 
         logger.info(`Successfully set up kernel with configuration: ${configuration.name}`);
         progress.report({ message: 'Kernel ready!' });
+    }
+
+    private async ensureControllerSelectedForNotebook(
+        notebook: NotebookDocument,
+        controller: IVSCodeNotebookController,
+        token: CancellationToken
+    ): Promise<void> {
+        if (token.isCancellationRequested) {
+            logger.info(`Kernel selection cancelled for ${getDisplayPath(notebook.uri)}`);
+            return;
+        }
+
+        const alreadySelected = this.controllerRegistration.getSelected(notebook);
+        if (alreadySelected?.id === controller.id) {
+            controller.controller.updateNotebookAffinity(notebook, NotebookControllerAffinity.Preferred);
+            return;
+        }
+
+        controller.controller.updateNotebookAffinity(notebook, NotebookControllerAffinity.Preferred);
+
+        const trySelect = async (attempt: number) => {
+            if (token.isCancellationRequested) {
+                return false;
+            }
+            logger.info(
+                `Attempt ${attempt} to select Deepnote controller ${controller.id} for ${getDisplayPath(notebook.uri)}`
+            );
+            await commands.executeCommand('notebook.selectKernel', {
+                id: controller.connection.id,
+                extension: JVSC_EXTENSION_ID
+            });
+            return true;
+        };
+
+        const waitForSelection = async () =>
+            waitForCondition(async () => {
+                if (token.isCancellationRequested) {
+                    return true;
+                }
+                const selected = this.controllerRegistration.getSelected(notebook);
+                return selected?.id === controller.id;
+            }, 2000, 100);
+
+        let success = (await trySelect(1)) ? await waitForSelection() : true;
+
+        if (!success && !token.isCancellationRequested) {
+            logger.warn(
+                `Kernel selection did not stick on first attempt for ${getDisplayPath(notebook.uri)}. Retrying...`
+            );
+            success = (await trySelect(2)) ? await waitForSelection() : true;
+        }
+
+        if (token.isCancellationRequested) {
+            logger.info(`Kernel selection aborted for ${getDisplayPath(notebook.uri)} due to cancellation`);
+            return;
+        }
+
+        if (success) {
+            logger.info(
+                `Confirmed Deepnote controller ${controller.id} selected for ${getDisplayPath(notebook.uri)}`
+            );
+        } else if (!token.isCancellationRequested) {
+            logger.error(
+                `Failed to confirm Deepnote controller selection for ${getDisplayPath(notebook.uri)} after retry`
+            );
+        }
     }
 
     /**

@@ -17,9 +17,10 @@ import { IDeepnoteInitNotebookRunner } from './deepnoteInitNotebookRunner.node';
 import { IDeepnoteNotebookManager } from '../types';
 import { IKernelProvider, IKernel, IJupyterKernelSpec } from '../../kernels/types';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
-import { NotebookDocument, Uri, NotebookController, CancellationToken } from 'vscode';
+import { NotebookDocument, Uri, NotebookController, CancellationToken, commands } from 'vscode';
 import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnoteEnvironment';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
+import * as asyncUtils from '../../platform/common/utils/async';
 
 suite('DeepnoteKernelAutoSelector - rebuildController', () => {
     let selector: DeepnoteKernelAutoSelector;
@@ -44,6 +45,10 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
     let mockController: IVSCodeNotebookController;
     let mockNewController: IVSCodeNotebookController;
     let sandbox: sinon.SinonSandbox;
+    let existingNotebookController: NotebookController;
+    let newNotebookController: NotebookController;
+    let existingNotebookAffinityStub: sinon.SinonStub;
+    let newNotebookAffinityStub: sinon.SinonStub;
 
     setup(() => {
         sandbox = sinon.createSandbox();
@@ -64,6 +69,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         mockOutputChannel = mock<IOutputChannel>();
 
         mockCancellationToken = mock<CancellationToken>();
+        when(mockCancellationToken.isCancellationRequested).thenReturn(false);
 
         // Create mock notebook
         mockNotebook = {
@@ -86,11 +92,19 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         // Create mock controllers
         mockController = mock<IVSCodeNotebookController>();
         when(mockController.id).thenReturn('deepnote-config-kernel-old-env-id');
-        when(mockController.controller).thenReturn({} as NotebookController);
+        existingNotebookAffinityStub = sinon.stub();
+        existingNotebookController = {
+            updateNotebookAffinity: existingNotebookAffinityStub
+        } as unknown as NotebookController;
+        when(mockController.controller).thenReturn(existingNotebookController);
 
         mockNewController = mock<IVSCodeNotebookController>();
         when(mockNewController.id).thenReturn('deepnote-config-kernel-new-env-id');
-        when(mockNewController.controller).thenReturn({} as NotebookController);
+        newNotebookAffinityStub = sinon.stub();
+        newNotebookController = {
+            updateNotebookAffinity: newNotebookAffinityStub
+        } as unknown as NotebookController;
+        when(mockNewController.controller).thenReturn(newNotebookController);
 
         // Mock disposable registry - push returns the index
         when(mockDisposableRegistry.push(anything())).thenReturn(0);
@@ -321,6 +335,72 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 mockNotebook,
                 'ensureKernelSelected should be called with the notebook'
             );
+        });
+    });
+
+    suite('ensureControllerSelectedForNotebook', () => {
+        test('should select controller when not already selected', async () => {
+            const executeStub = sandbox.stub(commands, 'executeCommand').resolves(undefined);
+            const waitStub = sandbox.stub(asyncUtils, 'waitForCondition').callsFake(async (condition) => {
+                return condition();
+            });
+
+            when(mockControllerRegistration.getSelected(mockNotebook)).thenReturn(
+                undefined,
+                instance(mockNewController)
+            );
+
+            await (selector as any).ensureControllerSelectedForNotebook(
+                mockNotebook,
+                instance(mockNewController),
+                instance(mockCancellationToken)
+            );
+
+            assert.strictEqual(executeStub.calledOnce, true, 'executeCommand should be called once');
+            assert.strictEqual(waitStub.calledOnce, true, 'waitForCondition should be called once');
+            assert.strictEqual(waitStub.firstCall.args[1], 2000, 'wait timeout should be 2000ms');
+            assert.strictEqual(waitStub.firstCall.args[2], 100, 'wait interval should be 100ms');
+            assert.isAbove(newNotebookAffinityStub.callCount, 0, 'controller affinity should be updated');
+        });
+
+        test('should retry selection when first attempt fails', async () => {
+            const executeStub = sandbox.stub(commands, 'executeCommand').resolves(undefined);
+            const waitStub = sandbox.stub(asyncUtils, 'waitForCondition');
+            waitStub.onFirstCall().resolves(false);
+            waitStub.onSecondCall().callsFake(async (condition) => condition());
+
+            when(mockControllerRegistration.getSelected(mockNotebook)).thenReturn(
+                undefined,
+                undefined,
+                instance(mockNewController)
+            );
+
+            await (selector as any).ensureControllerSelectedForNotebook(
+                mockNotebook,
+                instance(mockNewController),
+                instance(mockCancellationToken)
+            );
+
+            assert.strictEqual(executeStub.callCount, 2, 'executeCommand should be called twice');
+            assert.strictEqual(waitStub.callCount, 2, 'waitForCondition should be called twice');
+            assert.isAbove(newNotebookAffinityStub.callCount, 0, 'controller affinity should be updated');
+        });
+
+        test('should skip selection when controller already selected', async () => {
+            const executeStub = sandbox.stub(commands, 'executeCommand').resolves(undefined);
+            const waitStub = sandbox.stub(asyncUtils, 'waitForCondition');
+
+            when(mockControllerRegistration.getSelected(mockNotebook)).thenReturn(instance(mockNewController));
+
+            await (selector as any).ensureControllerSelectedForNotebook(
+                mockNotebook,
+                instance(mockNewController),
+                instance(mockCancellationToken)
+            );
+
+            assert.strictEqual(executeStub.called, false, 'executeCommand should not be called');
+            assert.strictEqual(waitStub.called, false, 'waitForCondition should not be called');
+            assert.isAbove(newNotebookAffinityStub.callCount, 0, 'controller affinity should still be updated');
         });
     });
 

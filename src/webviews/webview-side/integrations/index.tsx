@@ -6,6 +6,8 @@ import { detectBaseTheme } from '../react-common/themeDetector';
 import { IntegrationPanel } from './IntegrationPanel';
 
 import '../common/index.css';
+import '../react-common/codicon/codicon.css';
+import './integrations.css';
 
 // This special function talks to vscode from a web panel
 declare function acquireVsCodeApi(): IVsCodeApi;

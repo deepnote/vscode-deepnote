@@ -996,7 +996,7 @@ suite('SqlCellStatusBarProvider', () => {
             assert.strictEqual(duckDbItem.label, 'DataFrame SQL (DuckDB)');
         });
 
-        test('shows BigQuery type label for BigQuery integrations', async () => {
+        test('shows BigQuery type label for Google BigQuery integrations', async () => {
             const notebookMetadata = { deepnoteProjectId: 'project-1' };
             const cell = createMockCell('sql', {}, notebookMetadata);
             let quickPickItems: any[] = [];
@@ -1006,7 +1006,7 @@ suite('SqlCellStatusBarProvider', () => {
                     integrations: [
                         {
                             id: 'bigquery-integration',
-                            name: 'My BigQuery',
+                            name: 'My Google BigQuery',
                             type: 'big-query'
                         }
                     ]
@@ -1021,8 +1021,8 @@ suite('SqlCellStatusBarProvider', () => {
             await switchIntegrationHandler(cell);
 
             const bigQueryItem = quickPickItems.find((item) => item.id === 'bigquery-integration');
-            assert.isDefined(bigQueryItem, 'BigQuery integration should be in quick pick items');
-            assert.strictEqual(bigQueryItem.description, 'BigQuery');
+            assert.isDefined(bigQueryItem, 'Google BigQuery integration should be in quick pick items');
+            assert.strictEqual(bigQueryItem.description, 'Google BigQuery');
         });
 
         test('shows raw type for unknown integration types', async () => {

@@ -173,12 +173,20 @@ export type LocalizedMessages = {
     integrationsConfigure: string;
     integrationsReconfigure: string;
     integrationsReset: string;
+    integrationsDelete: string;
     integrationsConfirmResetTitle: string;
     integrationsConfirmResetMessage: string;
     integrationsConfirmResetDetails: string;
+    integrationsConfirmDeleteTitle: string;
+    integrationsConfirmDeleteMessage: string;
+    integrationsConfirmDeleteDetails: string;
     integrationsConfigureTitle: string;
     integrationsCancel: string;
     integrationsSave: string;
+    integrationsAddNewIntegration: string;
+    integrationsDatabase: string;
+    integrationsDataWarehousesLakes: string;
+    integrationsDatabases: string;
     // Integration type labels
     integrationsPostgresTypeLabel: string;
     integrationsBigQueryTypeLabel: string;
@@ -442,6 +450,7 @@ export type LocalizedMessages = {
     integrationsRequiredField: string;
     integrationsOptionalField: string;
     integrationsUnnamedIntegration: string;
+    integrationsDefaultName: string;
     integrationsUnsupportedIntegrationType: string;
     // Select input settings strings
     selectInputSettingsTitle: string;

@@ -17,6 +17,7 @@ import {
     QuickPickItem,
     commands
 } from 'vscode';
+import * as fs from 'fs';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { logger } from '../../platform/logging';
@@ -612,9 +613,18 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             : undefined;
 
         if (project) {
-            progress.report({ message: 'Creating requirements.txt...' });
-            await this.requirementsHelper.createRequirementsFile(project, progressToken);
-            logger.info(`Created requirements.txt for project ${projectId}`);
+            // Only create requirements.txt if requirements have changed from what's on disk
+            const requirements = project.project.settings?.requirements;
+            const expectedHash = this.computeRequirementsHash(requirements);
+            const existingFileHash = await this.getExistingRequirementsHash();
+
+            if (expectedHash !== existingFileHash) {
+                progress.report({ message: 'Creating requirements.txt...' });
+                await this.requirementsHelper.createRequirementsFile(project, progressToken);
+                logger.info(`Created/updated requirements.txt for project ${projectId}`);
+            } else {
+                logger.info(`Skipping requirements.txt creation for project ${projectId} (no changes detected)`);
+            }
 
             if (project.project.initNotebookId && !this.notebookManager.hasInitNotebookBeenRun(projectId!)) {
                 this.projectsPendingInitNotebook.set(projectId!, { notebook, project });
@@ -783,6 +793,64 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         if (selectedAction === showOutputAction) {
             this.outputChannel.show();
+        }
+    }
+
+    /**
+     * Compute a hash of the requirements to detect changes.
+     * Returns a sorted, normalized string representation of requirements.
+     */
+    private computeRequirementsHash(requirements: unknown): string {
+        if (!requirements || !Array.isArray(requirements)) {
+            return '';
+        }
+
+        // Normalize requirements: filter strings, trim, remove empty, dedupe, and sort for consistency
+        const normalizedRequirements = Array.from(
+            new Set(
+                requirements
+                    .filter((req): req is string => typeof req === 'string')
+                    .map((req) => req.trim())
+                    .filter((req) => req.length > 0)
+            )
+        ).sort();
+
+        return normalizedRequirements.join('|');
+    }
+
+    /**
+     * Read and hash the existing requirements.txt file if it exists.
+     * Returns the same hash format as computeRequirementsHash for comparison.
+     */
+    private async getExistingRequirementsHash(): Promise<string> {
+        try {
+            const workspaceFolders = workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                return '';
+            }
+
+            const requirementsPath = Uri.joinPath(workspaceFolders[0].uri, 'requirements.txt').fsPath;
+            const fileExists = await fs.promises
+                .access(requirementsPath)
+                .then(() => true)
+                .catch(() => false);
+
+            if (!fileExists) {
+                return '';
+            }
+
+            const content = await fs.promises.readFile(requirementsPath, 'utf8');
+
+            // Parse the file into lines (filter out comments) and reuse the hash computation logic
+            const requirementsArray = content
+                .split(/\r?\n/)
+                .map((line) => line.trim())
+                .filter((line) => line.length > 0 && !line.startsWith('#'));
+
+            return this.computeRequirementsHash(requirementsArray);
+        } catch (error) {
+            logger.warn(`Failed to read existing requirements.txt: ${error}`);
+            return '';
         }
     }
 }

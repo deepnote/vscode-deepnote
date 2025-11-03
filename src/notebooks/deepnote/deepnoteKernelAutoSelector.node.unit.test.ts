@@ -1,6 +1,6 @@
 import { assert } from 'chai';
 import * as sinon from 'sinon';
-import { anything, instance, mock, when } from 'ts-mockito';
+import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { DeepnoteKernelAutoSelector } from './deepnoteKernelAutoSelector.node';
 import {
     IDeepnoteEnvironmentManager,
@@ -21,6 +21,7 @@ import { NotebookDocument, Uri, NotebookController, CancellationToken } from 'vs
 import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnoteEnvironment';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { computeRequirementsHash } from './deepnoteProjectUtils';
+import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 
 suite('DeepnoteKernelAutoSelector - rebuildController', () => {
     let selector: DeepnoteKernelAutoSelector;
@@ -48,6 +49,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
     let sandbox: sinon.SinonSandbox;
 
     setup(() => {
+        resetVSCodeMocks();
         sandbox = sinon.createSandbox();
 
         // Create mocks for all dependencies
@@ -272,6 +274,169 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 instance(mockCancellationToken),
                 'ensureKernelSelected should be called with the cancellation token'
             );
+        });
+    });
+
+    suite('pickEnvironment', () => {
+        test('should return selected environment when user picks one', async () => {
+            // Arrange
+            const notebookUri = Uri.parse('file:///test/notebook.deepnote');
+            const mockEnv1 = createMockEnvironment('env-1', 'Environment 1');
+            const mockEnv2 = createMockEnvironment('env-2', 'Environment 2');
+            const environments = [mockEnv1, mockEnv2];
+
+            // Mock environment manager
+            when(mockEnvironmentManager.waitForInitialization()).thenResolve();
+            when(mockEnvironmentManager.listEnvironments()).thenReturn(environments);
+
+            // Mock window.showQuickPick to simulate user selecting the first environment
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenResolve({
+                label: mockEnv1.name,
+                description: mockEnv1.pythonInterpreter.uri.fsPath,
+                environment: mockEnv1
+            } as any);
+
+            // Act
+            const result = await selector.pickEnvironment(notebookUri);
+
+            // Assert
+            assert.strictEqual(result, mockEnv1, 'Should return the selected environment');
+        });
+    });
+
+    suite('onKernelStarted', () => {
+        test('should return early and not call initNotebookRunner for non-deepnote notebooks', async () => {
+            // Arrange
+            const mockKernel = mock<IKernel>();
+            const mockJupyterNotebook = mock<NotebookDocument>();
+
+            when(mockJupyterNotebook.notebookType).thenReturn('jupyter-notebook');
+            when(mockKernel.notebook).thenReturn(instance(mockJupyterNotebook));
+
+            // Mock initNotebookRunner to track if it gets called
+            when(mockInitNotebookRunner.runInitNotebookIfNeeded(anything(), anything(), anything())).thenResolve();
+
+            // Act
+            await selector.onKernelStarted(instance(mockKernel));
+
+            // Assert - verify initNotebookRunner was never called
+            verify(mockInitNotebookRunner.runInitNotebookIfNeeded(anything(), anything(), anything())).never();
+        });
+    });
+
+    suite('ensureKernelSelected', () => {
+        test('should return false when no environment ID is assigned to the notebook', async () => {
+            // Mock environment mapper to return null (no environment assigned)
+            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).thenReturn(undefined);
+
+            // Stub ensureKernelSelectedWithConfiguration to track if it gets called
+            const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelectedWithConfiguration').resolves();
+
+            // Mock commands.executeCommand
+            when(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything())).thenResolve();
+
+            // Act
+            const result = await selector.ensureKernelSelected(
+                mockNotebook,
+                mockProgress,
+                instance(mockCancellationToken)
+            );
+
+            // Assert
+            assert.strictEqual(result, false, 'Should return false when no environment is assigned');
+            assert.strictEqual(
+                ensureKernelSelectedStub.called,
+                false,
+                'ensureKernelSelectedWithConfiguration should not be called'
+            );
+            verify(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).once();
+        });
+
+        test('should return false and remove mapping when environment is not found', async () => {
+            // Arrange
+            const environmentId = 'missing-env-id';
+
+            // Mock environment mapper to return an ID
+            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).thenReturn(environmentId);
+
+            // Mock environment manager to return null (environment not found)
+            when(mockEnvironmentManager.getEnvironment(environmentId)).thenReturn(undefined);
+
+            // Mock remove environment mapping
+            when(mockNotebookEnvironmentMapper.removeEnvironmentForNotebook(anything())).thenResolve();
+
+            // Stub ensureKernelSelectedWithConfiguration to track if it gets called
+            const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelectedWithConfiguration').resolves();
+
+            // Mock commands.executeCommand
+            when(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything())).thenResolve();
+
+            // Act
+            const result = await selector.ensureKernelSelected(
+                mockNotebook,
+                mockProgress,
+                instance(mockCancellationToken)
+            );
+
+            // Assert
+            assert.strictEqual(result, false, 'Should return false when environment is not found');
+            assert.strictEqual(
+                ensureKernelSelectedStub.called,
+                false,
+                'ensureKernelSelectedWithConfiguration should not be called'
+            );
+            verify(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).once();
+            verify(mockEnvironmentManager.getEnvironment(environmentId)).once();
+            verify(mockNotebookEnvironmentMapper.removeEnvironmentForNotebook(anything())).once();
+        });
+
+        test('should return true and call ensureKernelSelectedWithConfiguration when environment is found', async () => {
+            // Arrange
+            const baseFileUri = mockNotebook.uri.with({ query: '', fragment: '' });
+            const notebookKey = mockNotebook.uri.toString();
+            const projectKey = baseFileUri.fsPath;
+            const environmentId = 'test-env-id';
+            const mockEnvironment = createMockEnvironment(environmentId, 'Test Environment');
+
+            // Mock environment mapper to return an ID
+            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).thenReturn(environmentId);
+
+            // Mock environment manager to return the environment
+            when(mockEnvironmentManager.getEnvironment(environmentId)).thenReturn(mockEnvironment);
+
+            // Stub ensureKernelSelectedWithConfiguration to track calls
+            const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelectedWithConfiguration').resolves();
+
+            // Mock commands.executeCommand
+            when(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything())).thenResolve();
+
+            // Act
+            const result = await selector.ensureKernelSelected(
+                mockNotebook,
+                mockProgress,
+                instance(mockCancellationToken)
+            );
+
+            // Assert
+            assert.strictEqual(result, true, 'Should return true when environment is found');
+            assert.strictEqual(
+                ensureKernelSelectedStub.calledOnce,
+                true,
+                'ensureKernelSelectedWithConfiguration should be called once'
+            );
+
+            // Verify it was called with correct arguments
+            const callArgs = ensureKernelSelectedStub.firstCall.args;
+            assert.strictEqual(callArgs[0], mockNotebook, 'First arg should be notebook');
+            assert.strictEqual(callArgs[1], mockEnvironment, 'Second arg should be environment');
+            assert.strictEqual(callArgs[2].toString(), baseFileUri.toString(), 'Third arg should be baseFileUri');
+            assert.strictEqual(callArgs[3], notebookKey, 'Fourth arg should be notebookKey');
+            assert.strictEqual(callArgs[4], projectKey, 'Fifth arg should be projectKey');
+            assert.strictEqual(callArgs[5], mockProgress, 'Sixth arg should be progress');
+            assert.strictEqual(callArgs[6], instance(mockCancellationToken), 'Seventh arg should be token');
+
+            verify(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).once();
+            verify(mockEnvironmentManager.getEnvironment(environmentId)).once();
         });
     });
 

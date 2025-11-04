@@ -219,7 +219,7 @@ async function activateLegacy(
     const isDevMode =
         !isTestExecution() &&
         (context.extensionMode === ExtensionMode.Development ||
-            workspace.getConfiguration('jupyter').get<boolean>('development', false));
+            workspace.getConfiguration('deepnote').get<boolean>('development', false));
     serviceManager.addSingletonInstance<boolean>(IsDevMode, isDevMode);
     if (isDevMode) {
         commands.executeCommand('setContext', 'deepnote.development', true).then(noop, noop);

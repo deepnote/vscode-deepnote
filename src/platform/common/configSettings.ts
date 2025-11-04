@@ -222,7 +222,7 @@ export class JupyterSettings implements IWatchableJupyterSettings {
 
     private initialize(): void {
         const onDidChange = () => {
-            const currentConfig = workspace.getConfiguration('jupyter', this._workspaceRoot);
+            const currentConfig = workspace.getConfiguration('deepnote', this._workspaceRoot);
             const pythonConfig = workspace.getConfiguration('python', this._workspaceRoot);
             this.update(currentConfig, pythonConfig);
 
@@ -242,7 +242,7 @@ export class JupyterSettings implements IWatchableJupyterSettings {
             })
         );
 
-        const initialConfig = workspace.getConfiguration('jupyter', this._workspaceRoot);
+        const initialConfig = workspace.getConfiguration('deepnote', this._workspaceRoot);
         const pythonConfig = workspace.getConfiguration('python', this._workspaceRoot);
         if (initialConfig) {
             this.update(initialConfig, pythonConfig);

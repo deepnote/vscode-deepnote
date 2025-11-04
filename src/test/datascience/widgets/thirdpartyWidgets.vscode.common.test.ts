@@ -55,7 +55,7 @@ import { IS_REMOTE_NATIVE_TEST } from '../../constants';
             logger.info('Suite Setup VS Code Notebook - Execution');
             this.timeout(120_000);
             api = await initialize();
-            const config = workspace.getConfiguration('jupyter', undefined);
+            const config = workspace.getConfiguration('deepnote', undefined);
             await config.update('widgetScriptSources', widgetScriptSourcesValue, ConfigurationTarget.Global);
             const configService = api.serviceContainer.get<IConfigurationService>(IConfigurationService);
             const settings = configService.getSettings(undefined) as ReadWrite<IJupyterSettings>;

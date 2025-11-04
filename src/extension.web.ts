@@ -174,7 +174,7 @@ async function activateLegacy(
     // register "services"
     const isDevMode =
         context.extensionMode === ExtensionMode.Development ||
-        workspace.getConfiguration('jupyter').get<boolean>('development', false);
+        workspace.getConfiguration('deepnote').get<boolean>('development', false);
 
     serviceManager.addSingletonInstance<boolean>(IsDevMode, isDevMode);
     if (isDevMode) {

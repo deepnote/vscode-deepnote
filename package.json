@@ -1363,13 +1363,13 @@
                     "command": "deepnote.exportfileasnotebook",
                     "title": "%deepnote.command.deepnote.exportfileasnotebook.title%",
                     "category": "Jupyter",
-                    "when": "deepnote.ispythonorinteractiveeactive && !notebookEditorFocused && isWorkspaceTrusted"
+                    "when": "deepnote.ispythonorinteractiveactive && !notebookEditorFocused && isWorkspaceTrusted"
                 },
                 {
                     "command": "deepnote.restartkernel",
                     "title": "%deepnote.command.deepnote.restartkernel.title%",
                     "category": "Jupyter",
-                    "when": "(deepnote.ispythonorinteractiveeactive || deepnote.isnativeactive) && isWorkspaceTrusted"
+                    "when": "(deepnote.ispythonorinteractiveactive || deepnote.isnativeactive) && isWorkspaceTrusted"
                 },
                 {
                     "command": "deepnote.notebookeditor.removeallcells",

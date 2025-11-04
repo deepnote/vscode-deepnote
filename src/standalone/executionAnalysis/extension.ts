@@ -7,7 +7,7 @@ import { findNotebookAndCell, noop } from './common';
 import { ExecutionFixCodeActionsProvider, SymbolsTracker } from './symbols';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-    const optInto = vscode.workspace.getConfiguration('jupyter').get<boolean>('executionAnalysis.enabled');
+    const optInto = vscode.workspace.getConfiguration('deepnote').get<boolean>('executionAnalysis.enabled');
     if (!optInto) {
         return;
     }

@@ -55,14 +55,14 @@ export class PythonEnvironmentFilter implements IDisposable {
         // As there's no way to provide controllers per folder.
         if (!workspace.workspaceFolders || workspace.workspaceFolders.length === 0) {
             return workspace
-                .getConfiguration('jupyter', undefined)
+                .getConfiguration('deepnote', undefined)
                 .get<string[]>('kernels.excludePythonEnvironments', []);
         }
         const filters: string[] = [];
         workspace.workspaceFolders.forEach((item) => {
             filters.push(
                 ...workspace
-                    .getConfiguration('jupyter', item.uri)
+                    .getConfiguration('deepnote', item.uri)
                     .get<string[]>('kernels.excludePythonEnvironments', [])
             );
         });

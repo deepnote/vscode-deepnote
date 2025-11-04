@@ -16,7 +16,7 @@ export class TrustedKernelPaths implements ITrustedKernelPaths {
         : undefined;
     constructor(@inject(IPlatformService) private readonly platform: IPlatformService) {}
     private get trustedKernelSpecs(): string[] {
-        return workspace.getConfiguration('jupyter', undefined).get<string[]>('kernels.trusted', []);
+        return workspace.getConfiguration('deepnote', undefined).get<string[]>('kernels.trusted', []);
     }
     public isTrusted(kernelPath: Uri): boolean {
         const trusted = this.isTrustedImpl(kernelPath);

@@ -61,7 +61,7 @@ export function initializeCommonWebApi() {
             password?: string;
         }): Promise<{ url: string } & IDisposable> {
             // DEBUG_JUPYTER_SERVER_URI is not a valid setting, but updated when we launch the tests via vscode debugger.
-            const url = workspace.getConfiguration('jupyter').get('DEBUG_JUPYTER_SERVER_URI', JUPYTER_SERVER_URI);
+            const url = workspace.getConfiguration('deepnote').get('DEBUG_JUPYTER_SERVER_URI', JUPYTER_SERVER_URI);
             console.log(`ServerURI for remote test: ${url}`);
             // Server URI should have been embedded in the constants file
             const uri = Uri.parse(url);

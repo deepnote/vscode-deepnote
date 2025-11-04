@@ -78,7 +78,7 @@ suite(`Interactive window execution @iw`, async function () {
         }
         await closeNotebooksAndCleanUpAfterTests(disposables);
         // restore the default value
-        const settings = vscode.workspace.getConfiguration('jupyter', null);
+        const settings = vscode.workspace.getConfiguration('deepnote', null);
         await settings.update('interactiveWindow.creationMode', 'multiple');
         logger.info(`Ended Test (completed) ${this.currentTest?.title}`);
     });
@@ -219,7 +219,7 @@ suite(`Interactive window execution @iw`, async function () {
     });
 
     test('Multiple interactive windows', async () => {
-        const settings = vscode.workspace.getConfiguration('jupyter', null);
+        const settings = vscode.workspace.getConfiguration('deepnote', null);
         await settings.update('interactiveWindow.creationMode', 'multiple');
         const window1 = await interactiveWindowProvider.getOrCreate(undefined);
         const window2 = await interactiveWindowProvider.getOrCreate(undefined);
@@ -397,7 +397,7 @@ ${actualCode}
         await waitForTextOutput(secondCell!, '1');
     });
     test('Error stack traces have correct line hrefs with mix of cell sources', async function () {
-        const settings = vscode.workspace.getConfiguration('jupyter', null);
+        const settings = vscode.workspace.getConfiguration('deepnote', null);
         await settings.update('interactiveWindow.creationMode', 'single');
 
         const interactiveWindow = await createStandaloneInteractiveWindow(interactiveWindowProvider);
@@ -576,7 +576,7 @@ ${actualCode}
 
         let runFilePromise = vscode.commands.executeCommand(Commands.RunAllCells);
 
-        const settings = vscode.workspace.getConfiguration('jupyter', null);
+        const settings = vscode.workspace.getConfiguration('deepnote', null);
         const mode = (await settings.get('interactiveWindow.creationMode')) as InteractiveWindowMode;
         const interactiveWindow = interactiveWindowProvider.getExisting(tempFile.file, mode) as InteractiveWindow;
         await runInteractiveWindowInput('x = 5', interactiveWindow, 5);

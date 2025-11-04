@@ -296,7 +296,7 @@ export namespace EditorContexts {
     export const IsNativeActive = 'deepnote.isnativeactive';
     export const IsInteractiveOrNativeActive = 'deepnote.isinteractiveornativeactive';
     export const IsPythonOrNativeActive = 'deepnote.ispythonornativeactive';
-    export const IsPythonOrInteractiveActive = 'deepnote.ispythonorinteractiveeactive';
+    export const IsPythonOrInteractiveActive = 'deepnote.ispythonorinteractiveactive';
     export const IsPythonOrInteractiveOrNativeActive = 'deepnote.ispythonorinteractiveornativeeactive';
     export const CanRestartNotebookKernel = 'deepnote.notebookeditor.canrestartNotebookkernel';
     export const CanInterruptNotebookKernel = 'deepnote.notebookeditor.canInterruptNotebookKernel';

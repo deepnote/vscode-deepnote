@@ -559,12 +559,12 @@ function getKernelLanguage(kernel: IKernel) {
 }
 
 function isKernelCompletionEnabled(resource: Resource) {
-    return workspace.getConfiguration('jupyter', resource).get<boolean>('enableKernelCompletions', false);
+    return workspace.getConfiguration('deepnote', resource).get<boolean>('enableKernelCompletions', false);
 }
 
 function getCompletionTriggerCharacter(kernel: IKernel) {
     const triggerCharacters = workspace
-        .getConfiguration('jupyter', kernel.notebook.uri)
+        .getConfiguration('deepnote', kernel.notebook.uri)
         .get<Record<string, string[]>>('completionTriggerCharacters');
 
     // Check if object, as this used to be a different setting a few years ago (when it was specific to Python).

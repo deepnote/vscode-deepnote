@@ -88,7 +88,7 @@ type LoggingLevelSettingType = keyof typeof LogLevel | Lowercase<keyof typeof Lo
 function getLoggingLevelFromConfig() {
     try {
         const { level } = workspace
-            .getConfiguration('jupyter')
+            .getConfiguration('deepnote')
             .get<{ level: LoggingLevelSettingType }>('logging', { level: 'Info' });
         switch (level) {
             case 'debug':

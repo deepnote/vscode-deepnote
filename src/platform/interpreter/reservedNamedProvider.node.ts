@@ -12,7 +12,7 @@ import minimatch from 'minimatch';
 import { IFileSystemNode } from '../common/platform/types.node';
 import * as path from '../../platform/vscode-path/resources';
 
-const PYTHON_PACKAGES_MEMENTO_KEY = 'jupyter.pythonPackages';
+const PYTHON_PACKAGES_MEMENTO_KEY = 'deepnote.pythonPackages';
 export const ignoreListSettingName = 'diagnostics.reservedPythonNames.exclude';
 /**
  * Determines if a file or directory in the workspace is overriding a reserved python name.
@@ -35,7 +35,7 @@ export class ReservedNamedProvider implements IReservedPythonNamedProvider {
         );
         workspace.onDidChangeConfiguration(
             (e) => {
-                if (e.affectsConfiguration(`jupyter.${ignoreListSettingName}`)) {
+                if (e.affectsConfiguration(`deepnote.${ignoreListSettingName}`)) {
                     this.initializeIgnoreList();
                 }
             },
@@ -104,7 +104,7 @@ export class ReservedNamedProvider implements IReservedPythonNamedProvider {
     }
     public async addToIgnoreList(uri: Uri) {
         await this.pendingUpdate;
-        const jupyterConfig = workspace.getConfiguration('jupyter');
+        const jupyterConfig = workspace.getConfiguration('deepnote');
         const filePath = this.platform.isWindows ? uri.fsPath.toLowerCase() : uri.fsPath;
         this.initializeIgnoreList();
         const originalSizeOfList = this.ignoredFiles.size;
@@ -118,7 +118,7 @@ export class ReservedNamedProvider implements IReservedPythonNamedProvider {
         return this.pendingUpdate;
     }
     private initializeIgnoreList() {
-        const jupyterConfig = workspace.getConfiguration('jupyter');
+        const jupyterConfig = workspace.getConfiguration('deepnote');
         let listInSettings = jupyterConfig.get(ignoreListSettingName, []) as string[];
         // Ignore file case on windows, hence lower case the files.
         if (this.platform.isWindows) {

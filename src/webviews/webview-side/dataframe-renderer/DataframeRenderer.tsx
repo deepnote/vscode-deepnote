@@ -159,7 +159,7 @@ export const DataframeRenderer = memo(function DataframeRenderer({
                                                     : 'bg-[var(--vscode-list-hoverBackground)]/50'
                                             }`}
                                         >
-                                            {value == null ? 'None' : String(value) || ''}
+{value == null ? 'None' : String(value)}
                                         </div>
                                     ))}
                                 </div>

@@ -173,10 +173,19 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
             displayDataProvider
         );
 
-        try {
-            controller.controller.variableProvider = jupyterVairablesProvider;
-        } catch (ex) {
-            logger.warn('Failed to attach variable provider', ex);
+        // Only attach variable provider if the API is available
+        // The notebookVariableProvider is a proposed API that:
+        // - Works in extension development mode (F5 debugging)
+        // - Does NOT work in published extensions from the Marketplace
+        // - Requires users to manually enable it with --enable-proposed-api flag
+        // See: https://code.visualstudio.com/api/advanced-topics/using-proposed-api
+        // This check allows the extension to gracefully degrade when the API is unavailable
+        if ('variableProvider' in controller.controller) {
+            try {
+                controller.controller.variableProvider = jupyterVairablesProvider;
+            } catch (ex) {
+                logger.warn('Failed to attach variable provider', ex);
+            }
         }
 
         return controller;

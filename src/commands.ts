@@ -45,7 +45,7 @@ export interface ICommandNameArgumentTypeMapping {
     ['editor.action.rename']: [];
     ['deepnote.selectJupyterInterpreter']: [];
     ['dataScience.ClearUserProviderJupyterServerCache']: [];
-    ['jupyterViewVariables.focus']: [];
+    ['deepnoteViewVariables.focus']: [];
     ['deepnote.selectLocalJupyterServer']: [] | [undefined | string];
     ['workbench.action.openSettings']: ['deepnote.kernels.excludePythonEnvironments'];
     ['deepnote.getUsedAzMLServerHandles']: [];

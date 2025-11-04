@@ -55,9 +55,9 @@
     ],
     "activationEvents": [
         "onLanguage:python",
-        "onLanguageModelTool:configure_notebook",
-        "onLanguageModelTool:notebook_install_packages",
-        "onLanguageModelTool:notebook_list_packages",
+        "onLanguageModelTool:configure_deepnote_notebook",
+        "onLanguageModelTool:deepnote_notebook_install_packages",
+        "onLanguageModelTool:deepnote_notebook_list_packages",
         "onNotebook:deepnote",
         "onNotebook:interactive"
     ],
@@ -821,7 +821,7 @@
         ],
         "submenus": [
             {
-                "id": "editor.interactiveWindow.context",
+                "id": "deepnote.editor.interactiveWindow.context",
                 "label": "%deepnote.command.editor.interactiveWindow.context.label%"
             },
             {
@@ -859,13 +859,13 @@
             ],
             "editor/context": [
                 {
-                    "submenu": "editor.interactiveWindow.context",
-                    "group": "Jupyter2"
+                    "submenu": "deepnote.editor.interactiveWindow.context",
+                    "group": "Deepnote2"
                 },
                 {
                     "when": "editorFocus && editorLangId == python && deepnote.hascodecells && !notebookEditorFocused && isWorkspaceTrusted",
                     "command": "deepnote.exportfileasnotebook",
-                    "group": "Jupyter3@2"
+                    "group": "Deepnote3@2"
                 },
                 {
                     "when": "resourceExtname == .deepnote",
@@ -873,40 +873,40 @@
                     "group": "navigation"
                 }
             ],
-            "editor.interactiveWindow.context": [
+            "deepnote.editor.interactiveWindow.context": [
                 {
                     "when": "editorFocus && editorLangId == python && deepnote.hascodecells && !notebookEditorFocused && isWorkspaceTrusted",
                     "command": "deepnote.runallcells",
-                    "group": "Jupyter2"
+                    "group": "Deepnote2"
                 },
                 {
                     "when": "editorFocus && editorLangId == python && deepnote.hascodecells && !notebookEditorFocused && isWorkspaceTrusted",
                     "command": "deepnote.runcurrentcell",
-                    "group": "Jupyter2"
+                    "group": "Deepnote2"
                 },
                 {
                     "when": "editorFocus && editorLangId == python && deepnote.hascodecells && !notebookEditorFocused && isWorkspaceTrusted",
                     "command": "deepnote.runcurrentcelladvance",
-                    "group": "Jupyter2"
+                    "group": "Deepnote2"
                 },
                 {
                     "command": "deepnote.runFileInteractive",
-                    "group": "Jupyter2",
+                    "group": "Deepnote2",
                     "when": "editorFocus && editorLangId == python && !notebookEditorFocused && isWorkspaceTrusted"
                 },
                 {
                     "command": "deepnote.runfromline",
-                    "group": "Jupyter2",
+                    "group": "Deepnote2",
                     "when": "editorFocus && editorLangId == python && !notebookEditorFocused && isWorkspaceTrusted"
                 },
                 {
                     "command": "deepnote.runtoline",
-                    "group": "Jupyter2",
+                    "group": "Deepnote2",
                     "when": "editorFocus && editorLangId == python && !notebookEditorFocused && isWorkspaceTrusted"
                 },
                 {
                     "command": "deepnote.execSelectionInteractive",
-                    "group": "Jupyter2",
+                    "group": "Deepnote2",
                     "when": "editorFocus && editorLangId == python && !notebookEditorFocused && isWorkspaceTrusted"
                 }
             ],
@@ -1042,7 +1042,7 @@
                 },
                 {
                     "command": "deepnote.notebookeditor.export",
-                    "group": "Jupyter",
+                    "group": "Deepnote",
                     "when": "notebookType == 'jupyter-notebook' && notebookType != 'deepnote' && isWorkspaceTrusted"
                 },
                 {
@@ -1158,12 +1158,12 @@
                 {
                     "when": "resourceLangId == python && !notebookEditorFocused && isWorkspaceTrusted",
                     "command": "deepnote.runFileInteractive",
-                    "group": "Jupyter2"
+                    "group": "Deepnote2"
                 },
                 {
                     "when": "resourceExtname == .ipynb && isWorkspaceTrusted",
                     "command": "deepnote.importnotebookfile",
-                    "group": "Jupyter"
+                    "group": "Deepnote"
                 }
             ],
             "commandPalette": [
@@ -2248,8 +2248,8 @@
                 },
                 {
                     "type": "webview",
-                    "id": "jupyterViewVariables",
-                    "name": "Jupyter Variables",
+                    "id": "deepnoteViewVariables",
+                    "name": "Deepnote Variables",
                     "when": "deepnote.hasNativeNotebookOrInteractiveWindowOpen"
                 }
             ]
@@ -2289,7 +2289,7 @@
         ],
         "languageModelTools": [
             {
-                "name": "configure_notebook",
+                "name": "configure_deepnote_notebook",
                 "displayName": "%deepnote.languageModelTools.configure_notebook.displayName%",
                 "modelDescription": "Tool used to configure a Notebook. ALWAYS use this tool before running/executing any Notebook Cells for the first time or before listing/installing packages in Notebooks for the first time. I.e. there is no need to use this tool more than once for the same notebook.",
                 "userDescription": "%deepnote.languageModelTools.configure_notebook.userDescription%",
@@ -2318,56 +2318,10 @@
                 "when": "workspacePlatform != webworker"
             },
             {
-                "name": "configure_python_notebook",
-                "displayName": "Start Notebook Kernel",
-                "modelDescription": "Selects a Python Kernel and starts it.",
-                "tags": [
-                    "extension_installed_by_tool",
-                    "install python package",
-                    "notebooks"
-                ],
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "filePath": {
-                            "description": "The absolute path of the notebook with the active kernel.",
-                            "type": "string"
-                        }
-                    },
-                    "required": [
-                        "filePath"
-                    ]
-                },
-                "when": "false"
-            },
-            {
-                "name": "configure_non_python_notebook",
-                "displayName": "Start Notebook Kernel",
-                "modelDescription": "Selects the Notebook Kernel and starts it.",
-                "tags": [
-                    "extension_installed_by_tool",
-                    "jupyter",
-                    "notebooks"
-                ],
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "filePath": {
-                            "description": "The absolute path of the notebook with the active kernel.",
-                            "type": "string"
-                        }
-                    },
-                    "required": [
-                        "filePath"
-                    ]
-                },
-                "when": "false"
-            },
-            {
-                "name": "notebook_list_packages",
-                "displayName": "List Notebook Kernel Packages",
+                "name": "deepnote_notebook_list_packages",
+                "displayName": "List Deepnote Notebook Kernel Packages",
                 "modelDescription": "List the installed packages that are currently available in the selected kernel for a notebook editor. This tool should be used when working with a jupyter notebook with python code cells. Do not use this tool if not already working with a notebook, or for a language other than python. If the tool configure_notebooks exists, then ensure to call configure_notebooks before using this tool.",
-                "userDescription": "%deepnote.languageModelTools.notebook_list_packages.userDescription%",
+                "userDescription": "%deepnote.languageModelTools.deepnote_notebook_list_packages.userDescription%",
                 "toolReferenceName": "listNotebookPackages",
                 "tags": [
                     "python environment",
@@ -2392,11 +2346,11 @@
                 }
             },
             {
-                "name": "notebook_install_packages",
+                "name": "deepnote_notebook_install_packages",
                 "displayName": "Install Packages for Notebook",
                 "modelDescription": "Install a list of packages on a notebook kernel to be used within that notebook. This tool should be used when working with a jupyter notebook with python code cells. Do not use this tool if not already working with a notebook, or for a language other than python. If the tool configure_notebooks exists, then ensure to call configure_notebooks before using this tool.",
-                "userDescription": "%deepnote.languageModelTools.notebook_install_packages.userDescription%",
-                "toolReferenceName": "installNotebookPackages",
+                "userDescription": "%deepnote.languageModelTools.deepnote_notebook_install_packages.userDescription%",
+                "toolReferenceName": "installDeepnoteNotebookPackages",
                 "tags": [
                     "python environment",
                     "jupyter environment",
@@ -2428,10 +2382,10 @@
                 }
             },
             {
-                "name": "restart_notebook_kernel",
-                "displayName": "Restart Notebook",
+                "name": "restart_deepnote_notebook_kernel",
+                "displayName": "Restart Deepnote Notebook",
                 "modelDescription": "Tool used to restart a Notebook kernel. Some packages require a restart of the kernel after being installed. Use this if after installing a package if you know the package requires a restart, or if still getting an error about a missing package after installing.",
-                "toolReferenceName": "restartNotebookKernel",
+                "toolReferenceName": "restartDeepnoteNotebookKernel",
                 "tags": [
                     "extension_installed_by_tool",
                     "jupyter",

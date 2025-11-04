@@ -66,7 +66,8 @@ suite('DeepnoteRequirementsHelper', () => {
 
         // Mock fs.promises to check file doesn't exist
         const fsAccessStub = sandbox.stub(fs.promises, 'access');
-        fsAccessStub.rejects(new Error('File not found'));
+        const notFoundError = Object.assign(new Error('File not found'), { code: 'ENOENT' });
+        fsAccessStub.rejects(notFoundError);
 
         // Mock fs.promises.writeFile to capture what's written
         let writtenContent = '';

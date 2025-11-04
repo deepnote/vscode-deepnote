@@ -1,4 +1,4 @@
-import type { NotebookCellData } from 'vscode';
+import { NotebookCellKind, type NotebookCellData } from 'vscode';
 
 import type { DeepnoteBlock } from './deepnoteTypes';
 import { generateBlockId, generateSortingKey } from '../../notebooks/deepnote/dataConversionUtils';
@@ -64,13 +64,18 @@ export function createBlockFromPocket(cell: NotebookCellData, index: number): De
         }
     }
 
+    // Determine the block type:
+    // 1. Use the type from the pocket if available
+    // 2. Otherwise, infer from the cell kind (Code -> 'code', Markup -> 'markdown')
+    const defaultType = cell.kind === NotebookCellKind.Code ? 'code' : 'markdown';
+
     const block: DeepnoteBlock = {
         blockGroup: pocket?.blockGroup || generateUuid(),
         content: cell.value,
         id: cellId || generateBlockId(),
         metadata,
         sortingKey: pocket?.sortingKey || generateSortingKey(index),
-        type: pocket?.type || 'code'
+        type: pocket?.type || defaultType
     };
 
     if (pocket?.executionCount !== undefined) {

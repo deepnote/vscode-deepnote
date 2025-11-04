@@ -320,7 +320,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         // }
     }
 
-    private async onKernelStarted(kernel: IKernel) {
+    public async onKernelStarted(kernel: IKernel) {
         // Only handle deepnote notebooks
         if (kernel.notebook?.notebookType !== DEEPNOTE_NOTEBOOK_TYPE) {
             return;

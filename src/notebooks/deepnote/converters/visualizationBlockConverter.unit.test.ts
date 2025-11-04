@@ -59,7 +59,7 @@ suite('VisualizationBlockConverter', () => {
             const cell = converter.convertToCell(block);
 
             assert.strictEqual(cell.kind, NotebookCellKind.Code);
-            assert.strictEqual(cell.languageId, 'JSON');
+            assert.strictEqual(cell.languageId, 'json');
             assert.include(cell.value, '\n');
             assert.match(cell.value, /{\n  "variable"/);
 

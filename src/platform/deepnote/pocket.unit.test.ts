@@ -190,6 +190,31 @@ suite('Pocket', () => {
             assert.strictEqual(block.type, 'code');
         });
 
+        test('uses markdown type for markup cells when no pocket exists', () => {
+            const cell = new NotebookCellData(NotebookCellKind.Markup, '# Heading', 'markdown');
+
+            const block = createBlockFromPocket(cell, 0);
+
+            assert.strictEqual(block.type, 'markdown');
+        });
+
+        test('uses markdown type for markup cells when pocket has no type', () => {
+            const cell = new NotebookCellData(NotebookCellKind.Markup, '# Heading', 'markdown');
+
+            cell.metadata = {
+                __deepnotePocket: {
+                    sortingKey: 'a5'
+                },
+                id: 'markdown-block-123'
+            };
+
+            const block = createBlockFromPocket(cell, 0);
+
+            assert.strictEqual(block.type, 'markdown');
+            assert.strictEqual(block.id, 'markdown-block-123');
+            assert.strictEqual(block.sortingKey, 'a5');
+        });
+
         test('handles partial pocket data', () => {
             const cell = new NotebookCellData(NotebookCellKind.Code, 'print("hello")', 'python');
 

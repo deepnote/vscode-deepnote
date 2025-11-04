@@ -176,6 +176,21 @@ suite('DeepnoteDataConverter', () => {
             assert.strictEqual(blocks[0].content, '## Heading');
         });
 
+        test('converts markdown cell without pocket to markdown block (not code)', () => {
+            const cells: NotebookCellData[] = [
+                {
+                    kind: NotebookCellKind.Markup,
+                    value: '# Title\n\nSome content',
+                    languageId: 'markdown'
+                }
+            ];
+
+            const blocks = converter.convertCellsToBlocks(cells);
+
+            assert.strictEqual(blocks[0].type, 'markdown');
+            assert.strictEqual(blocks[0].content, '# Title\n\nSome content');
+        });
+
         test('generates new IDs and sorting keys for cells without metadata', () => {
             const cells: NotebookCellData[] = [
                 {

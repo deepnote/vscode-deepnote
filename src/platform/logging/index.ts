@@ -69,7 +69,7 @@ export function initializeLoggers(options: {
 
     if (options.addConsoleLogger) {
         // In CI there's no need for the label.
-        registerLogger(new ConsoleLogger(isCI ? undefined : 'Jupyter Extension:'));
+        registerLogger(new ConsoleLogger(isCI ? undefined : 'Deepnote Extension:'));
     }
 
     return standardOutputChannel;

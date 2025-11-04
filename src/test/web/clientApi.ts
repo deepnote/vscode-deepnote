@@ -8,7 +8,7 @@ export class ClientAPI {
     static url: string;
     public static initialize() {
         console.log(
-            `DEBUG_JUPYTER_SERVER_URI={workspace.getConfiguration('deepnote').get('DEBUG_JUPYTER_SERVER_URI')}`
+            `DEBUG_JUPYTER_SERVER_URI=${workspace.getConfiguration('deepnote').get('DEBUG_JUPYTER_SERVER_URI')}`
         );
         const reportServerPor = workspace.getConfiguration('deepnote').get('REPORT_SERVER_PORT') as number;
 

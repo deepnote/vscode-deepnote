@@ -153,13 +153,13 @@ export const DataframeRenderer = memo(function DataframeRenderer({
                                     {rows.map((value, index) => (
                                         <div
                                             key={index.toString()}
-                                            className={`p-[4px] border-b border-r border-[var(--vscode-panel-border)] font-mono ${
+                                            className={`p-[4px] min-h-[16px] border-b border-r border-[var(--vscode-panel-border)] font-mono ${
                                                 index % 2 === 0
                                                     ? 'bg-[var(--vscode-editor-background)]'
                                                     : 'bg-[var(--vscode-list-hoverBackground)]/50'
                                             }`}
                                         >
-                                            {value === null || value === undefined ? 'None' : String(value)}
+                                            {value == null ? 'None' : String(value)}
                                         </div>
                                     ))}
                                 </div>

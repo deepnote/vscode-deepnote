@@ -173,11 +173,6 @@ export class IntegrationManager implements IIntegrationManager {
             }
         }
 
-        if (integrations.size === 0) {
-            void window.showInformationMessage(l10n.t('No integrations found in this project.'));
-            return;
-        }
-
         // Show the webview with optional selected integration
         await this.webviewProvider.show(projectId, integrations, selectedIntegrationId);
     }

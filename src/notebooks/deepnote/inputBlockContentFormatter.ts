@@ -31,7 +31,6 @@ export function getInputBlockLanguage(blockType: string): string | undefined {
  * @returns The formatted cell content string
  */
 export function formatInputBlockCellContent(blockType: string, metadata: Record<string, unknown>): string {
-    console.log('formatInputBlockCellContent', blockType, metadata);
     switch (blockType) {
         case 'input-text':
         case 'input-textarea': {

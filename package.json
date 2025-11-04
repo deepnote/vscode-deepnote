@@ -2290,9 +2290,9 @@
         "languageModelTools": [
             {
                 "name": "configure_deepnote_notebook",
-                "displayName": "%deepnote.languageModelTools.configure_notebook.displayName%",
+                "displayName": "%deepnote.languageModelTools.configure_deepnote_notebook.displayName%",
                 "modelDescription": "Tool used to configure a Notebook. ALWAYS use this tool before running/executing any Notebook Cells for the first time or before listing/installing packages in Notebooks for the first time. I.e. there is no need to use this tool more than once for the same notebook.",
-                "userDescription": "%deepnote.languageModelTools.configure_notebook.userDescription%",
+                "userDescription": "%deepnote.languageModelTools.configure_deepnote_notebook.userDescription%",
                 "toolReferenceName": "configureNotebook",
                 "tags": [
                     "python environment",

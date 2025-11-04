@@ -37,11 +37,12 @@ import { KernelConnector } from './kernelConnector';
 import { ITrustedKernelPaths } from '../../kernels/raw/finder/types';
 import { IInterpreterService } from '../../platform/interpreter/contracts';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
-import { IConnectionDisplayDataProvider } from './types';
+import { IConnectionDisplayData, IConnectionDisplayDataProvider } from './types';
 import { ConnectionDisplayDataProvider } from './connectionDisplayData.node';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { Environment, PythonExtension } from '@vscode/python-extension';
 import { crateMockedPythonApi, whenResolveEnvironment } from '../../kernels/helpers.unit.test';
+import { IJupyterVariablesProvider } from '../../kernels/variables/types';
 
 suite(`Notebook Controller`, function () {
     let controller: NotebookController;
@@ -542,6 +543,193 @@ suite(`Notebook Controller`, function () {
                 await warnWhenUsingOutdatedPython(kernel);
                 verify(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything())).once();
             });
+        });
+    });
+
+    suite('VSCodeNotebookController.create', function () {
+        let kernelConnection: KernelConnectionMetadata;
+        let kernelProvider: IKernelProvider;
+        let context: IExtensionContext;
+        let languageService: NotebookCellLanguageService;
+        let configService: IConfigurationService;
+        let extensionChecker: IPythonExtensionChecker;
+        let serviceContainer: IServiceContainer;
+        let displayDataProvider: IConnectionDisplayDataProvider;
+        let jupyterVariablesProvider: IJupyterVariablesProvider;
+        let disposables: IDisposable[] = [];
+        let controller: NotebookController;
+        let onDidChangeSelectedNotebooks: EventEmitter<{
+            readonly notebook: NotebookDocument;
+            readonly selected: boolean;
+        }>;
+
+        setup(function () {
+            resetVSCodeMocks();
+            disposables.push(new Disposable(() => resetVSCodeMocks()));
+            kernelConnection = mock<KernelConnectionMetadata>();
+            kernelProvider = mock<IKernelProvider>();
+            context = mock<IExtensionContext>();
+            languageService = mock<NotebookCellLanguageService>();
+            configService = mock<IConfigurationService>();
+            extensionChecker = mock<IPythonExtensionChecker>();
+            serviceContainer = mock<IServiceContainer>();
+            displayDataProvider = mock<IConnectionDisplayDataProvider>();
+            jupyterVariablesProvider = mock<IJupyterVariablesProvider>();
+            controller = mock<NotebookController>();
+            onDidChangeSelectedNotebooks = new EventEmitter<{
+                readonly notebook: NotebookDocument;
+                readonly selected: boolean;
+            }>();
+            disposables.push(onDidChangeSelectedNotebooks);
+
+            when(context.extensionUri).thenReturn(Uri.file('extension'));
+            when(controller.onDidChangeSelectedNotebooks).thenReturn(onDidChangeSelectedNotebooks.event);
+            when(displayDataProvider.getDisplayData(anything())).thenReturn({
+                label: 'Test Kernel',
+                description: 'Test Description',
+                detail: 'Test Detail',
+                category: 'Test Category',
+                serverDisplayName: 'Test Server',
+                onDidChange: new EventEmitter<IConnectionDisplayData>().event,
+                dispose: () => {
+                    /* noop */
+                }
+            });
+            when(
+                mockedVSCodeNamespaces.notebooks.createNotebookController(
+                    anything(),
+                    anything(),
+                    anything(),
+                    anything(),
+                    anything()
+                )
+            ).thenReturn(instance(controller));
+        });
+
+        teardown(() => (disposables = dispose(disposables)));
+
+        test('Should attach variable provider when API is available', function () {
+            // Arrange: Mock controller with variableProvider property
+            const controllerWithApi = mock<NotebookController>();
+            when(controllerWithApi.onDidChangeSelectedNotebooks).thenReturn(onDidChangeSelectedNotebooks.event);
+            (instance(controllerWithApi) as any).variableProvider = undefined;
+
+            when(
+                mockedVSCodeNamespaces.notebooks.createNotebookController(
+                    anything(),
+                    anything(),
+                    anything(),
+                    anything(),
+                    anything()
+                )
+            ).thenReturn(instance(controllerWithApi));
+
+            // Act
+            const result = VSCodeNotebookController.create(
+                instance(kernelConnection),
+                'test-id',
+                'jupyter-notebook',
+                instance(kernelProvider),
+                instance(context),
+                disposables,
+                instance(languageService),
+                instance(configService),
+                instance(extensionChecker),
+                instance(serviceContainer),
+                instance(displayDataProvider),
+                instance(jupyterVariablesProvider)
+            );
+
+            // Assert
+            assert.isDefined(result);
+            assert.strictEqual(
+                (result.controller as any).variableProvider,
+                instance(jupyterVariablesProvider),
+                'Variable provider should be attached when API is available'
+            );
+        });
+
+        test('Should not attach variable provider when API is not available', function () {
+            // Arrange: Mock controller without variableProvider property
+            const controllerWithoutApi = mock<NotebookController>();
+            when(controllerWithoutApi.onDidChangeSelectedNotebooks).thenReturn(onDidChangeSelectedNotebooks.event);
+            // Don't add variableProvider property to simulate API not being available
+
+            when(
+                mockedVSCodeNamespaces.notebooks.createNotebookController(
+                    anything(),
+                    anything(),
+                    anything(),
+                    anything(),
+                    anything()
+                )
+            ).thenReturn(instance(controllerWithoutApi));
+
+            // Act
+            const result = VSCodeNotebookController.create(
+                instance(kernelConnection),
+                'test-id',
+                'jupyter-notebook',
+                instance(kernelProvider),
+                instance(context),
+                disposables,
+                instance(languageService),
+                instance(configService),
+                instance(extensionChecker),
+                instance(serviceContainer),
+                instance(displayDataProvider),
+                instance(jupyterVariablesProvider)
+            );
+
+            // Assert
+            assert.isDefined(result);
+            assert.isUndefined(
+                (result.controller as any).variableProvider,
+                'Variable provider should not be attached when API is not available'
+            );
+        });
+
+        test('Should handle errors when attaching variable provider', function () {
+            // Arrange: Mock controller that throws when setting variableProvider
+            const controllerWithError = mock<NotebookController>();
+            when(controllerWithError.onDidChangeSelectedNotebooks).thenReturn(onDidChangeSelectedNotebooks.event);
+
+            const controllerInstance = instance(controllerWithError);
+            Object.defineProperty(controllerInstance, 'variableProvider', {
+                set: () => {
+                    throw new Error('API not supported');
+                },
+                configurable: true
+            });
+
+            when(
+                mockedVSCodeNamespaces.notebooks.createNotebookController(
+                    anything(),
+                    anything(),
+                    anything(),
+                    anything(),
+                    anything()
+                )
+            ).thenReturn(controllerInstance);
+
+            // Act - should not throw
+            const result = VSCodeNotebookController.create(
+                instance(kernelConnection),
+                'test-id',
+                'jupyter-notebook',
+                instance(kernelProvider),
+                instance(context),
+                disposables,
+                instance(languageService),
+                instance(configService),
+                instance(extensionChecker),
+                instance(serviceContainer),
+                instance(displayDataProvider),
+                instance(jupyterVariablesProvider)
+            );
+
+            // Assert
+            assert.isDefined(result);
         });
     });
 });

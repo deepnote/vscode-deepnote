@@ -58,7 +58,7 @@ export function initializeLoggers(options: {
     globalLoggingLevel = getLoggingLevelFromConfig();
     trackDisposable(
         workspace.onDidChangeConfiguration((e) => {
-            if (e.affectsConfiguration('jupyter.logging')) {
+            if (e.affectsConfiguration('deepnote.logging')) {
                 globalLoggingLevel = getLoggingLevelFromConfig();
             }
         })
@@ -69,7 +69,7 @@ export function initializeLoggers(options: {
 
     if (options.addConsoleLogger) {
         // In CI there's no need for the label.
-        registerLogger(new ConsoleLogger(isCI ? undefined : 'Jupyter Extension:'));
+        registerLogger(new ConsoleLogger(isCI ? undefined : 'Deepnote Extension:'));
     }
 
     return standardOutputChannel;
@@ -88,7 +88,7 @@ type LoggingLevelSettingType = keyof typeof LogLevel | Lowercase<keyof typeof Lo
 function getLoggingLevelFromConfig() {
     try {
         const { level } = workspace
-            .getConfiguration('jupyter')
+            .getConfiguration('deepnote')
             .get<{ level: LoggingLevelSettingType }>('logging', { level: 'Info' });
         switch (level) {
             case 'debug':

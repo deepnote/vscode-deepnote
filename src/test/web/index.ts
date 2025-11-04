@@ -44,7 +44,7 @@ export async function activate(context: IExtensionContext): Promise<IExtensionAp
     if (activatedResponse) {
         return activatedResponse;
     }
-    vscode.commands.registerCommand('jupyter.web.runTests', async () => {
+    vscode.commands.registerCommand('deepnote.web.runTests', async () => {
         // imports mocha for the browser, defining the `mocha` global.
         require('mocha/mocha');
 
@@ -105,6 +105,6 @@ export async function run(): Promise<void> {
     await api.ready;
     // Run the tests from within the context of the extension bundle.
     // We achieve this by getting the extension to run the tests (then its guaranteed to use the same context as the extension).
-    await vscode.commands.executeCommand('jupyter.web.runTests');
+    await vscode.commands.executeCommand('deepnote.web.runTests');
     console.log('Finished executing tests.');
 }

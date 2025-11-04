@@ -15,7 +15,7 @@ import { DataViewerDelegator } from '../dataviewer/dataViewerDelegator';
 // This class creates our UI for our variable view and links it to the vs code webview view
 @injectable()
 export class VariableViewProvider implements IVariableViewProvider {
-    public readonly viewType = 'jupyterViewVariables';
+    public readonly viewType = 'deepnoteViewVariables';
 
     // Either return the active variable view or wait until it's created and return it
     // @ts-ignore Property will be accessed in test code via casting to ITestVariableViewProviderInterface

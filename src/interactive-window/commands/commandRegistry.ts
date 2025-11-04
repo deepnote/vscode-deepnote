@@ -533,7 +533,7 @@ export class CommandRegistry implements IDisposable, IExtensionSyncActivationSer
     private async openVariableView(): Promise<void> {
         // For all contributed views vscode creates a command with the format [view ID].focus to focus that view
         // It's the given way to focus a single view so using that here, note that it needs to match the view ID
-        return commands.executeCommand('jupyterViewVariables.focus');
+        return commands.executeCommand('deepnoteViewVariables.focus');
     }
 
     // Open the VS Code outline view

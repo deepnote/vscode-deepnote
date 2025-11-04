@@ -601,7 +601,7 @@ function getCombinedErrorMessage(prefix: string = '', message: string = '') {
     if (
         !doesErrorHaveMarkdownLinks(errorMessage) &&
         errorMessage.length &&
-        errorMessage.indexOf('command:jupyter.viewOutput') === -1
+        errorMessage.indexOf('command:deepnote.viewOutput') === -1
     ) {
         return `${errorMessage.endsWith('.') ? errorMessage : errorMessage + '.'} \n${
             DataScience.viewJupyterLogForFurtherInfo

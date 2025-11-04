@@ -116,7 +116,7 @@ suite('Standard IPyWidget Tests @widgets', function () {
         this.timeout(120_000);
         await initialize();
         logger.info('Suite Setup Standard IPyWidget Tests, Step 2');
-        const config = workspace.getConfiguration('jupyter', undefined);
+        const config = workspace.getConfiguration('deepnote', undefined);
         await config.update('widgetScriptSources', widgetScriptSourcesValue, ConfigurationTarget.Global);
         logger.info('Suite Setup Standard IPyWidget Tests, Step 3');
         await startJupyterServer();

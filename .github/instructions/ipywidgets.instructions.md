@@ -47,16 +47,16 @@ src/
 
 **Key Responsibilities**:
 
--   Manages lifecycle of IPyWidgets per notebook document
--   Coordinates communication between VS Code UI and webview renderers
--   Handles controller selection and webview attachment
--   Creates and manages `CommonMessageCoordinator` instances per notebook
+- Manages lifecycle of IPyWidgets per notebook document
+- Coordinates communication between VS Code UI and webview renderers
+- Handles controller selection and webview attachment
+- Creates and manages `CommonMessageCoordinator` instances per notebook
 
 **Key Methods**:
 
--   `activate()`: Initializes event listeners for notebook lifecycle
--   `onDidSelectController()`: Handles kernel controller changes
--   `initializeNotebookCommunication()`: Sets up webview communication
+- `activate()`: Initializes event listeners for notebook lifecycle
+- `onDidSelectController()`: Handles kernel controller changes
+- `initializeNotebookCommunication()`: Sets up webview communication
 
 ### 2. CommonMessageCoordinator (`message/commonMessageCoordinator.ts`)
 
@@ -64,16 +64,16 @@ src/
 
 **Key Responsibilities**:
 
--   Manages message flow between extension and webview
--   Handles IPyWidgets version determination and script loading
--   Coordinates between message dispatcher and script source provider
--   Manages widget load success/failure telemetry
+- Manages message flow between extension and webview
+- Handles IPyWidgets version determination and script loading
+- Coordinates between message dispatcher and script source provider
+- Manages widget load success/failure telemetry
 
 **Key Methods**:
 
--   `attach()`: Attaches to a webview communication channel
--   `onMessage()`: Processes incoming messages from webview
--   `initialize()`: Sets up message dispatcher and script source provider
+- `attach()`: Attaches to a webview communication channel
+- `onMessage()`: Processes incoming messages from webview
+- `initialize()`: Sets up message dispatcher and script source provider
 
 ### 3. IPyWidgetMessageDispatcher (`message/ipyWidgetMessageDispatcher.ts`)
 
@@ -81,24 +81,24 @@ src/
 
 **Key Responsibilities**:
 
--   Proxies kernel messages between extension and webview
--   Manages comm target registration for widget communication
--   Handles message hooks for widget output processing
--   Synchronizes kernel state with webview widget manager
+- Proxies kernel messages between extension and webview
+- Manages comm target registration for widget communication
+- Handles message hooks for widget output processing
+- Synchronizes kernel state with webview widget manager
 
 **Key Methods**:
 
--   `receiveMessage()`: Processes messages from webview
--   `sendRawPayloadToKernelSocket()`: Sends messages to kernel
--   `registerCommTarget()`: Registers communication targets
--   `onKernelSocketMessage()`: Handles incoming kernel messages
+- `receiveMessage()`: Processes messages from webview
+- `sendRawPayloadToKernelSocket()`: Sends messages to kernel
+- `registerCommTarget()`: Registers communication targets
+- `onKernelSocketMessage()`: Handles incoming kernel messages
 
 **Integration with `@jupyterlab/services`**:
 
--   Uses `@jupyterlab/services` for kernel message serialization/deserialization
--   Leverages `KernelMessage` interfaces for type safety
--   Utilizes `Kernel.IKernelConnection` for comm target management
--   Handles `IIOPubMessage` and `IDisplayDataMsg` types
+- Uses `@jupyterlab/services` for kernel message serialization/deserialization
+- Leverages `KernelMessage` interfaces for type safety
+- Utilizes `Kernel.IKernelConnection` for comm target management
+- Handles `IIOPubMessage` and `IDisplayDataMsg` types
 
 ### 4. Script Source Management (`scriptSourceProvider/`)
 
@@ -108,21 +108,21 @@ src/
 
 #### IPyWidgetScriptSource (`ipyWidgetScriptSource.ts`)
 
--   Coordinates script source requests from webview
--   Manages communication with script source providers
--   Handles widget script caching and serving
+- Coordinates script source requests from webview
+- Manages communication with script source providers
+- Handles widget script caching and serving
 
 #### Script Source Providers
 
--   **CDNWidgetScriptSourceProvider**: Serves scripts from CDN sources
--   **LocalWidgetScriptSourceProvider**: Serves scripts from local Python environment
--   **RemoteWidgetScriptSourceProvider**: Serves scripts from remote Jupyter servers
+- **CDNWidgetScriptSourceProvider**: Serves scripts from CDN sources
+- **LocalWidgetScriptSourceProvider**: Serves scripts from local Python environment
+- **RemoteWidgetScriptSourceProvider**: Serves scripts from remote Jupyter servers
 
 #### IPyWidgetScriptManager (Platform-specific)
 
--   **LocalIPyWidgetScriptManager**: Manages local nbextensions directory
--   **RemoteIPyWidgetScriptManager**: Manages remote widget scripts
--   **BaseIPyWidgetScriptManager**: Common functionality across platforms
+- **LocalIPyWidgetScriptManager**: Manages local nbextensions directory
+- **RemoteIPyWidgetScriptManager**: Manages remote widget scripts
+- **BaseIPyWidgetScriptManager**: Common functionality across platforms
 
 ### 5. Webview-Side Widget System (`webviews/webview-side/ipywidgets/`)
 
@@ -132,21 +132,21 @@ src/
 
 #### Kernel Proxy (`kernel/index.ts`)
 
--   Creates a proxy kernel connection in the webview
--   Manages widget lifecycle and rendering
--   Handles message passing between extension and widget manager
+- Creates a proxy kernel connection in the webview
+- Manages widget lifecycle and rendering
+- Handles message passing between extension and widget manager
 
 #### Widget Manager (`kernel/manager.ts`)
 
--   Integrates with JupyterLab widget manager
--   Manages widget model state and synchronization
--   Handles widget rendering and disposal
+- Integrates with JupyterLab widget manager
+- Manages widget model state and synchronization
+- Handles widget rendering and disposal
 
 #### Script Manager (`kernel/scriptManager.ts`)
 
--   Dynamically loads widget JavaScript modules
--   Manages script dependencies and loading order
--   Handles script loading failures and retries
+- Dynamically loads widget JavaScript modules
+- Manages script dependencies and loading order
+- Handles script loading failures and retries
 
 ### 6. Renderer Communication (`webviews/extension-side/ipywidgets/rendererComms.ts`)
 
@@ -154,10 +154,10 @@ src/
 
 **Key Responsibilities**:
 
--   Tracks widget model IDs in notebook outputs
--   Handles renderer-specific widget queries
--   Manages widget state and version information
--   Coordinates with IPyWidgetMessageDispatcher for display messages
+- Tracks widget model IDs in notebook outputs
+- Handles renderer-specific widget queries
+- Manages widget state and version information
+- Coordinates with IPyWidgetMessageDispatcher for display messages
 
 ### 7. IPyWidgets Standalone Package (`@vscode/jupyter-ipywidgets8`)
 
@@ -167,11 +167,11 @@ src/
 
 **Key Features**:
 
--   Self-contained IPyWidgets 8.x implementation
--   JupyterLab compatibility layer
--   Dynamic module loading via RequireJS
--   Version-specific widget support
--   CSS and font bundling
+- Self-contained IPyWidgets 8.x implementation
+- JupyterLab compatibility layer
+- Dynamic module loading via RequireJS
+- Version-specific widget support
+- CSS and font bundling
 
 **Package Structure**:
 
@@ -187,31 +187,31 @@ src/
 
 **Critical Classes**:
 
--   **`WidgetManager`**: Extends `@jupyter-widgets/jupyterlab-manager`
+- **`WidgetManager`**: Extends `@jupyter-widgets/jupyterlab-manager`
 
-    -   Implements dynamic widget class loading
-    -   Handles script loading with fallbacks
-    -   Provides error/success callbacks
-    -   Registers mime renderers for nested outputs
+  - Implements dynamic widget class loading
+  - Handles script loading with fallbacks
+  - Provides error/success callbacks
+  - Registers mime renderers for nested outputs
 
--   **`DocumentContext`**: Mock implementation of JupyterLab's document context
+- **`DocumentContext`**: Mock implementation of JupyterLab's document context
 
-    -   Implements `ISessionContext` and `DocumentRegistry.IContext`
-    -   Bridges VS Code kernel with JupyterLab widget system
-    -   Provides minimal required functionality
+  - Implements `ISessionContext` and `DocumentRegistry.IContext`
+  - Bridges VS Code kernel with JupyterLab widget system
+  - Provides minimal required functionality
 
--   **`SessionConnection`**: Wrapper around kernel connection
-    -   Implements `ISessionConnection` interface
-    -   Delegates to underlying kernel connection
-    -   Provides session-like API for compatibility
+- **`SessionConnection`**: Wrapper around kernel connection
+  - Implements `ISessionConnection` interface
+  - Delegates to underlying kernel connection
+  - Provides session-like API for compatibility
 
 **Dynamic Loading Pattern**:
 
 ```typescript
 // Global exposure for extension consumption
 (window as any).vscIPyWidgets8 = {
-    load, // Loads IPyWidgets 8.x scripts and CSS
-    unload // Cleans up and unloads modules
+  load, // Loads IPyWidgets 8.x scripts and CSS
+  unload // Cleans up and unloads modules
 };
 
 // RequireJS module registration
@@ -222,9 +222,9 @@ define('@jupyter-widgets/output', () => outputWidgets);
 
 **Integration Points**:
 
--   Consumed by main extension via webpack bundle
--   Loaded conditionally based on detected IPyWidgets version
--   Provides `WidgetManager` class for webview-side widget rendering
+- Consumed by main extension via webpack bundle
+- Loaded conditionally based on detected IPyWidgets version
+- Provides `WidgetManager` class for webview-side widget rendering
 
 ## IPyWidgets Protocol and Communication Patterns
 
@@ -238,16 +238,16 @@ IPyWidgets uses the Jupyter Comm system for kernel-frontend communication:
 
 **Core Characteristics**:
 
--   **Symmetric**: Both kernel and frontend can initiate communication
--   **Asynchronous**: Fire-and-forget messaging with no guaranteed delivery
--   **GUID-based**: Each comm has unique identifier for message routing
--   **Target-based**: Comms registered with specific target names
+- **Symmetric**: Both kernel and frontend can initiate communication
+- **Asynchronous**: Fire-and-forget messaging with no guaranteed delivery
+- **GUID-based**: Each comm has unique identifier for message routing
+- **Target-based**: Comms registered with specific target names
 
 **Message Types**:
 
--   `comm_open`: Establish new communication channel
--   `comm_msg`: Send data over established channel
--   `comm_close`: Close communication channel
+- `comm_open`: Establish new communication channel
+- `comm_msg`: Send data over established channel
+- `comm_close`: Close communication channel
 
 #### State Synchronization Model
 
@@ -255,10 +255,10 @@ Widget state synchronization follows a distributed model:
 
 **Key Principles**:
 
--   No single source of truth - both kernel and frontend maintain state
--   Automatic bidirectional propagation for traits marked `sync=True`
--   Conflict resolution via "last write wins" semantics
--   Custom serialization support for complex data types
+- No single source of truth - both kernel and frontend maintain state
+- Automatic bidirectional propagation for traits marked `sync=True`
+- Conflict resolution via "last write wins" semantics
+- Custom serialization support for complex data types
 
 ### 2. Message Flow Patterns
 
@@ -276,7 +276,7 @@ display(widget)               # 2. Display in cell output
 **Corresponding Message Flow**:
 
 ```
-1. Widget constructor → comm_open with target 'jupyter.widget'
+1. Widget constructor → comm_open with target 'deepnote.widget'
 2. display() call → display_data message with widget repr
 3. Initial state sync → comm_msg with current trait values
 4. Frontend receives messages → creates WidgetModel + WidgetView
@@ -364,13 +364,13 @@ VS Code's webview isolation requires message bridging:
 
 ```typescript
 // Forward kernel comms to webview
-kernel.addCommTarget('jupyter.widget', (comm, msg) => {
-    webview.postMessage({
-        type: 'comm_open',
-        comm_id: comm.id,
-        target: comm.target_name,
-        data: msg.content.data
-    });
+kernel.addCommTarget('deepnote.widget', (comm, msg) => {
+  webview.postMessage({
+    type: 'comm_open',
+    comm_id: comm.id,
+    target: comm.target_name,
+    data: msg.content.data
+  });
 });
 ```
 
@@ -379,10 +379,10 @@ kernel.addCommTarget('jupyter.widget', (comm, msg) => {
 ```typescript
 // Recreate comms in proxy kernel
 onDidReceiveMessage((message) => {
-    if (message.type === 'comm_open') {
-        const comm = this.proxyKernel.createComm(message.target, message.data);
-        comm.comm_id = message.comm_id;
-    }
+  if (message.type === 'comm_open') {
+    const comm = this.proxyKernel.createComm(message.target, message.data);
+    comm.comm_id = message.comm_id;
+  }
 });
 ```
 
@@ -437,31 +437,31 @@ The IPyWidgets system relies on a sophisticated kernel hook system that intercep
 
 ```typescript
 export function KernelSocketWrapper<T extends ClassType<IWebSocketLike>>(SuperClass: T) {
-    return class BaseKernelSocket extends SuperClass implements IKernelSocket {
-        private receiveHooks: ((data: WebSocketData) => Promise<void>)[];
-        private sendHooks: ((data: any, cb?: (err?: Error) => void) => Promise<void>)[];
-        private msgChain: Promise<any>;
-        private sendChain: Promise<any>;
+  return class BaseKernelSocket extends SuperClass implements IKernelSocket {
+    private receiveHooks: ((data: WebSocketData) => Promise<void>)[];
+    private sendHooks: ((data: any, cb?: (err?: Error) => void) => Promise<void>)[];
+    private msgChain: Promise<any>;
+    private sendChain: Promise<any>;
 
-        // Override send to inject sendHooks
-        public override send(data: any, a2: any): void {
-            this.sendChain = this.sendChain
-                .then(() => Promise.all(this.sendHooks.map((s) => s(data, a2))))
-                .then(() => super.send(data, a2));
-        }
+    // Override send to inject sendHooks
+    public override send(data: any, a2: any): void {
+      this.sendChain = this.sendChain
+        .then(() => Promise.all(this.sendHooks.map((s) => s(data, a2))))
+        .then(() => super.send(data, a2));
+    }
 
-        // Override emit to inject receiveHooks
-        protected handleEvent(superHandler, event, ...args): boolean {
-            if (event === 'message' && this.receiveHooks.length) {
-                this.msgChain = this.msgChain
-                    .then(() => Promise.all(this.receiveHooks.map((p) => p(args[0]))))
-                    .then(() => superHandler(event, ...args))
-                    .catch((e) => logger.error(`Exception while handling messages: ${e}`));
-                return true;
-            }
-            return superHandler(event, ...args);
-        }
-    };
+    // Override emit to inject receiveHooks
+    protected handleEvent(superHandler, event, ...args): boolean {
+      if (event === 'message' && this.receiveHooks.length) {
+        this.msgChain = this.msgChain
+          .then(() => Promise.all(this.receiveHooks.map((p) => p(args[0]))))
+          .then(() => superHandler(event, ...args))
+          .catch((e) => logger.error(`Exception while handling messages: ${e}`));
+        return true;
+      }
+      return superHandler(event, ...args);
+    }
+  };
 }
 ```
 
@@ -527,12 +527,12 @@ if (this.messageNeedsFullHandle(message)) {
 
 ```typescript
 const mustDeserialize =
-    typeof data !== 'string' ||
-    data.includes(WIDGET_MIMETYPE) ||
-    data.includes(Identifiers.DefaultCommTarget) ||
-    data.includes('comm_open') ||
-    data.includes('comm_close') ||
-    data.includes('comm_msg');
+  typeof data !== 'string' ||
+  data.includes(WIDGET_MIMETYPE) ||
+  data.includes(Identifiers.DefaultCommTarget) ||
+  data.includes('comm_open') ||
+  data.includes('comm_close') ||
+  data.includes('comm_msg');
 ```
 
 **Performance Optimization**: Only deserialize messages that potentially contain widget data to minimize processing overhead.
@@ -598,29 +598,29 @@ The system uses a comprehensive set of message types for communication:
 
 #### Widget Lifecycle Messages
 
--   `IPyWidgets_Ready`: Webview ready for widget communication
--   `IPyWidgets_Request_Widget_Version`: Request IPyWidgets version
--   `IPyWidgets_Reply_Widget_Version`: Version response
--   `IPyWidgets_onRestartKernel`: Kernel restart notification
+- `IPyWidgets_Ready`: Webview ready for widget communication
+- `IPyWidgets_Request_Widget_Version`: Request IPyWidgets version
+- `IPyWidgets_Reply_Widget_Version`: Version response
+- `IPyWidgets_onRestartKernel`: Kernel restart notification
 
 #### Script Loading Messages
 
--   `IPyWidgets_WidgetScriptSourceRequest`: Request widget script source
--   `IPyWidgets_WidgetScriptSourceResponse`: Script source response
--   `IPyWidgets_BaseUrlResponse`: Base URL for script loading
+- `IPyWidgets_WidgetScriptSourceRequest`: Request widget script source
+- `IPyWidgets_WidgetScriptSourceResponse`: Script source response
+- `IPyWidgets_BaseUrlResponse`: Base URL for script loading
 
 #### Kernel Communication Messages
 
--   `IPyWidgets_msg`: Kernel message (text)
--   `IPyWidgets_binary_msg`: Kernel message (binary)
--   `IPyWidgets_msg_received`: Message received acknowledgment
--   `IPyWidgets_kernelOptions`: Kernel configuration
+- `IPyWidgets_msg`: Kernel message (text)
+- `IPyWidgets_binary_msg`: Kernel message (binary)
+- `IPyWidgets_msg_received`: Message received acknowledgment
+- `IPyWidgets_kernelOptions`: Kernel configuration
 
 #### Error and Status Messages
 
--   `IPyWidgetLoadSuccess`: Widget loaded successfully
--   `IPyWidgetLoadFailure`: Widget load failed
--   `IPyWidgetRenderFailure`: Widget render failed
+- `IPyWidgetLoadSuccess`: Widget loaded successfully
+- `IPyWidgetLoadFailure`: Widget load failed
+- `IPyWidgetRenderFailure`: Widget render failed
 
 ### Communication Flow
 
@@ -673,7 +673,7 @@ const msg = deserialize(data, protocol) as KernelMessage.IMessage;
 
 // Type-safe message handling
 if (jupyterLab.KernelMessage.isDisplayDataMsg(msg)) {
-    this._onDisplayMessage.fire(msg);
+  this._onDisplayMessage.fire(msg);
 }
 ```
 
@@ -696,7 +696,7 @@ import { IDisplayDataMsg, IIOPubMessage } from '@jupyterlab/services/lib/kernel/
 
 // Type-safe message processing
 if (KernelMessage.isDisplayDataMsg(msg)) {
-    this.trackModelId(notebook, msg);
+  this.trackModelId(notebook, msg);
 }
 ```
 
@@ -706,20 +706,20 @@ The system depends on several key modules from `@jupyterlab/services`:
 
 #### Kernel Management (`/kernel/`)
 
--   **`kernel.ts`**: Core kernel interface and connection management
--   **`messages.ts`**: Message type definitions and validation
--   **`serialize.ts`**: Message serialization/deserialization
--   **`manager.ts`**: Kernel manager functionality
+- **`kernel.ts`**: Core kernel interface and connection management
+- **`messages.ts`**: Message type definitions and validation
+- **`serialize.ts`**: Message serialization/deserialization
+- **`manager.ts`**: Kernel manager functionality
 
 #### Session Management (`/session/`)
 
--   **`session.ts`**: Session management and lifecycle
--   **`manager.ts`**: Session manager for connection handling
+- **`session.ts`**: Session management and lifecycle
+- **`manager.ts`**: Session manager for connection handling
 
 #### Server Connection (`serverConnection.ts`)
 
--   Handles HTTP/WebSocket connections to Jupyter servers
--   Manages authentication and connection state
+- Handles HTTP/WebSocket connections to Jupyter servers
+- Manages authentication and connection state
 
 ## Architecture Deep Dive
 
@@ -731,28 +731,28 @@ VS Code implements the complete IPyWidgets comm protocol as a transparent bridge
 
 **Protocol Requirements**:
 
--   Symmetric, asynchronous messaging between kernel and frontend
--   JSON-serializable message blobs with GUID-based routing
--   Target-based comm registration and lifecycle management
--   Bidirectional state synchronization without single source of truth
+- Symmetric, asynchronous messaging between kernel and frontend
+- JSON-serializable message blobs with GUID-based routing
+- Target-based comm registration and lifecycle management
+- Bidirectional state synchronization without single source of truth
 
 **VS Code Implementation**:
 
 ```typescript
 // Extension acts as comm broker
-kernel.registerCommTarget('jupyter.widget', (comm, msg) => {
-    // Forward comm lifecycle to webview
-    webview.postMessage({
-        type: 'comm_open',
-        comm_id: comm.id,
-        target: comm.target_name,
-        data: msg.content.data
-    });
+kernel.registerCommTarget('deepnote.widget', (comm, msg) => {
+  // Forward comm lifecycle to webview
+  webview.postMessage({
+    type: 'comm_open',
+    comm_id: comm.id,
+    target: comm.target_name,
+    data: msg.content.data
+  });
 });
 
 // Handle bidirectional comm messages
 comm.onMsg = (msg) => {
-    webview.postMessage({ type: 'comm_msg', comm_id: comm.id, msg });
+  webview.postMessage({ type: 'comm_msg', comm_id: comm.id, msg });
 };
 ```
 
@@ -762,9 +762,9 @@ Implements the standard IPyWidgets Model-View pattern with VS Code adaptations:
 
 **Standard Protocol**:
 
--   WidgetModel (1) ↔ WidgetView (N) relationship
--   State synchronization via trait system with `sync=True` metadata
--   Display association via execution message GUID tracking
+- WidgetModel (1) ↔ WidgetView (N) relationship
+- State synchronization via trait system with `sync=True` metadata
+- Display association via execution message GUID tracking
 
 **VS Code Specific Handling**:
 
@@ -798,14 +798,14 @@ class MyWidget(DOMWidget):
 
 ```javascript
 var MyWidgetView = widgets.DOMWidgetView.extend({
-    initialize: function () {
-        // Listen for model changes
-        this.listenTo(this.model, 'change:count', this._count_changed);
-    },
-    _count_changed: function () {
-        // Update view based on model change
-        this.el.textContent = this.model.get('count');
-    }
+  initialize: function () {
+    // Listen for model changes
+    this.listenTo(this.model, 'change:count', this._count_changed);
+  },
+  _count_changed: function () {
+    // Update view based on model change
+    this.el.textContent = this.model.get('count');
+  }
 });
 ```
 
@@ -875,9 +875,9 @@ Multiple providers ensure widget availability across deployment scenarios:
 
 **Provider Types**:
 
--   **LocalWidgetScriptSourceProvider**: Local nbextensions directory
--   **RemoteWidgetScriptSourceProvider**: Remote Jupyter server
--   **CDNWidgetScriptSourceProvider**: Public CDN fallback
+- **LocalWidgetScriptSourceProvider**: Local nbextensions directory
+- **RemoteWidgetScriptSourceProvider**: Remote Jupyter server
+- **CDNWidgetScriptSourceProvider**: Public CDN fallback
 
 ### 4. Execution Context and Display Protocol
 
@@ -1175,17 +1175,17 @@ const msg = deserialize(data, protocol) as KernelMessage.IMessage;
 
 // Webview side - creating proxy kernel with proper serialization
 const settings = ServerConnection.makeSettings({
-    WebSocket: ProxyWebSocket as any,
-    wsUrl: 'BOGUS_PVSC'
+  WebSocket: ProxyWebSocket as any,
+  wsUrl: 'BOGUS_PVSC'
 });
 ```
 
 **Critical Usage**:
 
--   Protocol-aware message deserialization
--   Binary data handling for widget state
--   Message validation and type checking
--   Cross-platform compatibility (Node.js vs Browser)
+- Protocol-aware message deserialization
+- Binary data handling for widget state
+- Message validation and type checking
+- Cross-platform compatibility (Node.js vs Browser)
 
 #### 2. Kernel Connection Management
 
@@ -1196,20 +1196,20 @@ const settings = ServerConnection.makeSettings({
 import { KernelConnection } from '@jupyterlab/services/lib/kernel/default';
 
 this.realKernel = new KernelConnection({
-    serverSettings: settings,
-    clientId: options.clientId,
-    handleComms: true,
-    username: options.userName,
-    model: options.model
+  serverSettings: settings,
+  clientId: options.clientId,
+  handleComms: true,
+  username: options.userName,
+  model: options.model
 });
 ```
 
 **Critical Features**:
 
--   Full `Kernel.IKernelConnection` interface implementation
--   Comm target registration and management
--   Message hook system integration
--   Future and promise-based message handling
+- Full `Kernel.IKernelConnection` interface implementation
+- Comm target registration and management
+- Message hook system integration
+- Future and promise-based message handling
 
 #### 3. Message Type Validation and Processing
 
@@ -1220,20 +1220,20 @@ this.realKernel = new KernelConnection({
 import { KernelMessage } from '@jupyterlab/services';
 
 if (KernelMessage.isDisplayDataMsg(msg)) {
-    this._onDisplayMessage.fire(msg as IDisplayDataMsg);
+  this._onDisplayMessage.fire(msg as IDisplayDataMsg);
 }
 
 if (KernelMessage.isCommOpenMsg(msg) || KernelMessage.isCommCloseMsg(msg) || KernelMessage.isCommMsgMsg(msg)) {
-    // Handle comm messages
+  // Handle comm messages
 }
 ```
 
 **Message Types Used**:
 
--   `IExecuteRequestMsg` / `IExecuteReplyMsg` - Code execution
--   `IDisplayDataMsg` / `IUpdateDisplayDataMsg` - Widget output
--   `ICommOpenMsg` / `ICommCloseMsg` / `ICommMsgMsg` - Widget communication
--   `IIOPubMessage` - Kernel output messages
+- `IExecuteRequestMsg` / `IExecuteReplyMsg` - Code execution
+- `IDisplayDataMsg` / `IUpdateDisplayDataMsg` - Widget output
+- `ICommOpenMsg` / `ICommCloseMsg` / `ICommMsgMsg` - Widget communication
+- `IIOPubMessage` - Kernel output messages
 
 #### 4. Server Connection and WebSocket Management
 
@@ -1244,19 +1244,19 @@ if (KernelMessage.isCommOpenMsg(msg) || KernelMessage.isCommCloseMsg(msg) || Ker
 import { ServerConnection } from '@jupyterlab/services';
 
 const settings = ServerConnection.makeSettings({
-    WebSocket: ProxyWebSocket as any,
-    wsUrl: 'BOGUS_PVSC',
-    token: '',
-    appUrl: ''
+  WebSocket: ProxyWebSocket as any,
+  wsUrl: 'BOGUS_PVSC',
+  token: '',
+  appUrl: ''
 });
 ```
 
 **Configuration**:
 
--   Custom WebSocket implementation for message bridging
--   Authentication and authorization handling
--   Base URL and endpoint configuration
--   Request/response interceptors
+- Custom WebSocket implementation for message bridging
+- Authentication and authorization handling
+- Base URL and endpoint configuration
+- Request/response interceptors
 
 #### 5. Comm System Integration
 
@@ -1280,10 +1280,10 @@ public async _create_comm(
 
 **Comm Features**:
 
--   Target-based communication channels
--   Bidirectional message passing
--   State synchronization between extension and webview
--   Message queuing and delivery guarantees
+- Target-based communication channels
+- Bidirectional message passing
+- State synchronization between extension and webview
+- Message queuing and delivery guarantees
 
 ### Critical Dependencies
 
@@ -1291,32 +1291,32 @@ The IPyWidgets system depends on these specific @jupyterlab/services modules:
 
 #### Core Kernel Module (`/kernel/**/*.ts`)
 
--   `kernel/default.ts` - `KernelConnection` class
--   `kernel/kernel.ts` - Core interfaces and types
--   `kernel/messages.ts` - Message type definitions
--   `kernel/serialize.ts` - Message serialization utilities
--   `kernel/comm.ts` - Communication channel management
+- `kernel/default.ts` - `KernelConnection` class
+- `kernel/kernel.ts` - Core interfaces and types
+- `kernel/messages.ts` - Message type definitions
+- `kernel/serialize.ts` - Message serialization utilities
+- `kernel/comm.ts` - Communication channel management
 
 #### Session Management (`/session/**/*.ts`)
 
--   `session/session.ts` - Session interface definitions
--   `session/manager.ts` - Session lifecycle management
+- `session/session.ts` - Session interface definitions
+- `session/manager.ts` - Session lifecycle management
 
 #### Server Connection (`/serverconnection.ts`)
 
--   WebSocket configuration and management
--   Authentication and request handling
--   Base URL and endpoint resolution
+- WebSocket configuration and management
+- Authentication and request handling
+- Base URL and endpoint resolution
 
 #### Manager Module (`/manager.ts`)
 
--   Service manager for coordinating kernel and session services
--   Resource lifecycle management
--   Configuration and settings management
+- Service manager for coordinating kernel and session services
+- Resource lifecycle management
+- Configuration and settings management
 
 ## Development Patterns and Best Practices
 
-###  Widget Development Guidelines
+### Widget Development Guidelines
 
 Refer to [anywidget](https://anywidget.dev/en/getting-started/) for widget development guides.
 
@@ -1373,6 +1373,5 @@ def debug_trait_change(change):
 
 widget.observe(debug_trait_change, names=['count', 'message'])
 ```
-
 
 This comprehensive documentation ensures robust IPyWidgets implementation that maintains compatibility across different environments while providing excellent user experience in VS Code.

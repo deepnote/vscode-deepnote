@@ -7,7 +7,7 @@ import { findNotebookAndCell, noop } from './common';
 import { ExecutionFixCodeActionsProvider, SymbolsTracker } from './symbols';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-    const optInto = vscode.workspace.getConfiguration('jupyter').get<boolean>('executionAnalysis.enabled');
+    const optInto = vscode.workspace.getConfiguration('deepnote').get<boolean>('executionAnalysis.enabled');
     if (!optInto) {
         return;
     }
@@ -22,7 +22,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     context.subscriptions.push(
         vscode.commands.registerCommand(
-            'jupyter.selectDependentCells',
+            'deepnote.selectDependentCells',
             async (cell: vscode.NotebookCell | undefined) => {
                 const matched = findNotebookAndCell(cell);
                 if (!matched) {
@@ -36,7 +36,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand('jupyter.runPrecedentCells', async (cell: vscode.NotebookCell | undefined) => {
+        vscode.commands.registerCommand('deepnote.runPrecedentCells', async (cell: vscode.NotebookCell | undefined) => {
             const matched = findNotebookAndCell(cell);
             if (!matched) {
                 return;
@@ -48,7 +48,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand('jupyter.runDependentCells', async (cell: vscode.NotebookCell | undefined) => {
+        vscode.commands.registerCommand('deepnote.runDependentCells', async (cell: vscode.NotebookCell | undefined) => {
             const matched = findNotebookAndCell(cell);
             if (!matched) {
                 return;
@@ -61,7 +61,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     context.subscriptions.push(
         vscode.commands.registerCommand(
-            'jupyter.selectPrecedentCells',
+            'deepnote.selectPrecedentCells',
             async (cell: vscode.NotebookCell | undefined) => {
                 const matched = findNotebookAndCell(cell);
                 if (!matched) {
@@ -75,7 +75,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand('jupyter.debugCellSymbols', async () => {
+        vscode.commands.registerCommand('deepnote.debugCellSymbols', async () => {
             const notebookEditor = vscode.window.activeNotebookEditor;
             if (notebookEditor) {
                 await symbolsManager.debugSymbols(notebookEditor.notebook);

@@ -13,10 +13,10 @@ export class PythonFilterUICommandDeprecation implements IExtensionSyncActivatio
     public activate() {
         this.disposables.push(
             commands.registerCommand(
-                'jupyter.filterKernels',
+                'deepnote.filterKernels',
                 () =>
                     commands
-                        .executeCommand('workbench.action.openSettings', 'jupyter.kernels.excludePythonEnvironments')
+                        .executeCommand('workbench.action.openSettings', 'deepnote.kernels.excludePythonEnvironments')
                         .then(noop, noop),
                 this
             )

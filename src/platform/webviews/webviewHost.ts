@@ -324,7 +324,7 @@ export abstract class WebviewHost<IMapping> implements IDisposable {
             event.affectsConfiguration('editor.scrollbar.horizontalScrollbarSize') ||
             event.affectsConfiguration('files.autoSave') ||
             event.affectsConfiguration('files.autoSaveDelay') ||
-            event.affectsConfiguration('jupyter.widgetScriptSources')
+            event.affectsConfiguration('deepnote.widgetScriptSources')
         ) {
             // See if the theme changed
             const newSettings = await this.generateDataScienceExtraSettings();

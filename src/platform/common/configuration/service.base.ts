@@ -24,7 +24,7 @@ export abstract class BaseConfigurationService implements IConfigurationService 
             target: configTarget || ConfigurationTarget.WorkspaceFolder
         };
         let settingsInfo = defaultSetting;
-        if (section === 'jupyter' && configTarget !== ConfigurationTarget.Global) {
+        if (section === 'deepnote' && configTarget !== ConfigurationTarget.Global) {
             settingsInfo = JupyterSettings.getSettingsUriAndTarget(resource);
         }
         const configSection = workspace.getConfiguration(section, settingsInfo.uri);
@@ -50,7 +50,7 @@ export abstract class BaseConfigurationService implements IConfigurationService 
         resource?: Uri,
         configTarget?: ConfigurationTarget
     ): Promise<void> {
-        return this.updateSectionSetting('jupyter', setting, value, resource, configTarget);
+        return this.updateSectionSetting('deepnote', setting, value, resource, configTarget);
     }
 
     private async verifySetting(

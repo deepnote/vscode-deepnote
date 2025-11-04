@@ -12,12 +12,12 @@ async function go() {
     if (!url) {
         const info = await startJupyter(true);
         url = info.url;
-        fs.writeFileSync(path.join(__dirname, '..', 'temp', 'jupyter.pid'), info.server.pid.toString());
+        fs.writeFileSync(path.join(__dirname, '..', 'temp', 'deepnote.pid'), info.server.pid.toString());
     } else {
         console.log('Jupyter server URL provided in env args, no need to start one');
     }
     const settingsJson = fs.readFileSync(settingsFile).toString();
-    const edits = jsonc.modify(settingsJson, ['jupyter.DEBUG_JUPYTER_SERVER_URI'], url, {});
+    const edits = jsonc.modify(settingsJson, ['deepnote.DEBUG_JUPYTER_SERVER_URI'], url, {});
     const updatedSettingsJson = jsonc.applyEdits(settingsJson, edits);
     fs.writeFileSync(settingsFile, updatedSettingsJson);
     process.exit(0);

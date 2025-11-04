@@ -43,12 +43,12 @@ export interface ICommandNameArgumentTypeMapping {
     ['workbench.extensions.search']: [string];
     ['editor.action.formatDocument']: [];
     ['editor.action.rename']: [];
-    ['jupyter.selectJupyterInterpreter']: [];
+    ['deepnote.selectJupyterInterpreter']: [];
     ['dataScience.ClearUserProviderJupyterServerCache']: [];
-    ['jupyterViewVariables.focus']: [];
-    ['jupyter.selectLocalJupyterServer']: [] | [undefined | string];
-    ['workbench.action.openSettings']: ['jupyter.kernels.excludePythonEnvironments'];
-    ['jupyter.getUsedAzMLServerHandles']: [];
+    ['deepnoteViewVariables.focus']: [];
+    ['deepnote.selectLocalJupyterServer']: [] | [undefined | string];
+    ['workbench.action.openSettings']: ['deepnote.kernels.excludePythonEnvironments'];
+    ['deepnote.getUsedAzMLServerHandles']: [];
     [DSCommands.RunCurrentCell]: [];
     [DSCommands.RunCurrentCellAdvance]: [];
     [DSCommands.CreateNewInteractive]: [];
@@ -76,7 +76,7 @@ export interface ICommandNameArgumentTypeMapping {
     ['notebook.cell.collapseCellOutput']: [];
     ['notebook.cell.expandCellOutput']: [];
     ['vscode.openWith']: [Uri, string];
-    ['jupyter.filterKernels']: [never];
+    ['deepnote.filterKernels']: [never];
     ['workbench.action.quickOpen']: [string];
     ['workbench.extensions.installExtension']: [
         Uri | 'ms-toolsai.jupyter' | 'ms-python.python',
@@ -85,9 +85,9 @@ export interface ICommandNameArgumentTypeMapping {
     ['workbench.action.files.openFolder']: [];
     ['workbench.action.openWorkspace']: [];
     ['extension.open']: [string];
-    ['setContext']: [string, ContextKeyValue] | ['jupyter.vscode.channel', Channel];
-    ['jupyter.reloadVSCode']: [string];
-    ['jupyter.runInDedicatedExtensionHost']: [string];
+    ['setContext']: [string, ContextKeyValue] | ['deepnote.vscode.channel', Channel];
+    ['deepnote.reloadVSCode']: [string];
+    ['deepnote.runInDedicatedExtensionHost']: [string];
     ['revealLine']: [{ lineNumber: number; at: 'top' | 'center' | 'bottom' }];
     ['python._loadLanguageServerExtension']: {}[];
     ['python.SelectAndInsertDebugConfiguration']: [TextDocument, Position, CancellationToken];

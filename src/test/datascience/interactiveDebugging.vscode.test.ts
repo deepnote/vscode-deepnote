@@ -19,31 +19,31 @@ suite('Interactive Window Debugging @debugger', function () {
     async function enableJupyterDebugger(debuggerType: DebuggerType) {
         const enable = debuggerType === 'JupyterProtocolDebugger';
         const settingFileContents = fs.readFileSync(settingsFile).toString();
-        if (enable && settingFileContents.includes(`"jupyter.forceIPyKernelDebugger": true`)) {
+        if (enable && settingFileContents.includes(`"deepnote.forceIPyKernelDebugger": true`)) {
             return;
-        } else if (enable && settingFileContents.includes(`"jupyter.forceIPyKernelDebugger": false`)) {
+        } else if (enable && settingFileContents.includes(`"deepnote.forceIPyKernelDebugger": false`)) {
             fs.writeFileSync(
                 settingsFile,
                 settingFileContents.replace(
-                    `"jupyter.forceIPyKernelDebugger": false`,
-                    `"jupyter.forceIPyKernelDebugger": true`
+                    `"deepnote.forceIPyKernelDebugger": false`,
+                    `"deepnote.forceIPyKernelDebugger": true`
                 )
             );
             return;
-        } else if (enable && !settingFileContents.includes(`"jupyter.forceIPyKernelDebugger": true`)) {
+        } else if (enable && !settingFileContents.includes(`"deepnote.forceIPyKernelDebugger": true`)) {
             throw new Error('Unable to update settings file');
-        } else if (!enable && settingFileContents.includes(`"jupyter.forceIPyKernelDebugger": true`)) {
+        } else if (!enable && settingFileContents.includes(`"deepnote.forceIPyKernelDebugger": true`)) {
             fs.writeFileSync(
                 settingsFile,
                 settingFileContents.replace(
-                    `"jupyter.forceIPyKernelDebugger": true`,
-                    `"jupyter.forceIPyKernelDebugger": false`
+                    `"deepnote.forceIPyKernelDebugger": true`,
+                    `"deepnote.forceIPyKernelDebugger": false`
                 )
             );
             return;
-        } else if (!enable && settingFileContents.includes(`"jupyter.forceIPyKernelDebugger": false`)) {
+        } else if (!enable && settingFileContents.includes(`"deepnote.forceIPyKernelDebugger": false`)) {
             return;
-        } else if (!enable && !settingFileContents.includes(`"jupyter.forceIPyKernelDebugger": true`)) {
+        } else if (!enable && !settingFileContents.includes(`"deepnote.forceIPyKernelDebugger": true`)) {
             throw new Error('Unable to update settings file');
         }
     }

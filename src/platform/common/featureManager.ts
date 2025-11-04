@@ -127,13 +127,13 @@ export class FeatureManager implements IFeaturesManager {
                     return;
                 }
                 notify = this.isDeprecatedSettingAndValueUsed(
-                    workspace.getConfiguration('jupyter', workspaceFolder.uri),
+                    workspace.getConfiguration('deepnote', workspaceFolder.uri),
                     deprecatedInfo.setting!
                 );
             });
         } else {
             notify = this.isDeprecatedSettingAndValueUsed(
-                workspace.getConfiguration('jupyter'),
+                workspace.getConfiguration('deepnote'),
                 deprecatedInfo.setting!
             );
         }

@@ -92,7 +92,7 @@ export class IPyWidgetMessageDispatcher implements IIPyWidgetMessageDispatcher {
         // Always register this comm target.
         // Possible auto start is disabled, and when cell is executed with widget stuff, this comm target will not have
         // been registered, in which case kaboom. As we know this is always required, pre-register this.
-        this.pendingTargetNames.add('jupyter.widget');
+        this.pendingTargetNames.add('deepnote.widget');
         kernelProvider.onDidStartKernel(
             (e) => {
                 if (e.notebook === document) {

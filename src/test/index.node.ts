@@ -59,7 +59,7 @@ process.on('unhandledRejection', (ex: Error, _a) => {
         (msg.includes('Canceled future for') && msg.includes('message before replies were done')) ||
         (msg.includes('The kernel died. Error') &&
             msg.includes('No module named ipykernel_launcher') &&
-            msg.includes('View Jupyter [log](command:jupyter.viewOutput)')) ||
+            msg.includes('View Jupyter [log](command:deepnote.viewOutput)')) ||
         msg.includes('Channel has been closed') ||
         msg.includes('Error: custom request failed') ||
         msg.includes('ms-python.python') || // We don't care about unhanded promise rejections from the Python extension.

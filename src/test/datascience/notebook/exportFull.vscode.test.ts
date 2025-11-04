@@ -109,7 +109,7 @@ suite('Export @export', function () {
             await captureScreenShot(this);
         }
         // Revert back our settings just in case
-        const settings = workspace.getConfiguration('jupyter', null);
+        const settings = workspace.getConfiguration('deepnote', null);
         await settings.update('pythonExportMethod', 'direct', ConfigurationTarget.Global);
 
         await closeNotebooksAndCleanUpAfterTests(disposables);
@@ -131,7 +131,7 @@ suite('Export @export', function () {
         });
 
         // Execute our export command
-        await commands.executeCommand('jupyter.exportAsPythonScript');
+        await commands.executeCommand('deepnote.exportAsPythonScript');
 
         // Wait until our active document changes
         await deferred.promise;
@@ -160,11 +160,11 @@ suite('Export @export', function () {
             }
         });
 
-        const settings = workspace.getConfiguration('jupyter', null);
+        const settings = workspace.getConfiguration('deepnote', null);
         await settings.update('pythonExportMethod', 'commentMagics', ConfigurationTarget.Global);
 
         // Execute our export command
-        await commands.executeCommand('jupyter.exportAsPythonScript');
+        await commands.executeCommand('deepnote.exportAsPythonScript');
 
         // Wait until our active document changes
         await deferred.promise;
@@ -193,11 +193,11 @@ suite('Export @export', function () {
             }
         });
 
-        const settings = workspace.getConfiguration('jupyter', null);
+        const settings = workspace.getConfiguration('deepnote', null);
         await settings.update('pythonExportMethod', 'nbconvert', ConfigurationTarget.Global);
 
         // Execute our export command
-        await commands.executeCommand('jupyter.exportAsPythonScript');
+        await commands.executeCommand('deepnote.exportAsPythonScript');
 
         // Wait until our active document changes
         await deferred.promise;
@@ -249,7 +249,7 @@ suite('Export @export', function () {
             'test.ipynb'
         );
         const importFile = Uri.file(testFilePath);
-        await commands.executeCommand('jupyter.importnotebookfile', importFile);
+        await commands.executeCommand('deepnote.importnotebookfile', importFile);
 
         // Wait until our active document changes
         await deferred.promise;
@@ -274,7 +274,7 @@ suite('Export @export', function () {
         });
 
         // Set to nbconvert
-        const settings = workspace.getConfiguration('jupyter', null);
+        const settings = workspace.getConfiguration('deepnote', null);
         await settings.update('pythonExportMethod', 'nbconvert', ConfigurationTarget.Global);
 
         // Execute our export command
@@ -287,7 +287,7 @@ suite('Export @export', function () {
             'test.ipynb'
         );
         const importFile = Uri.file(testFilePath);
-        await commands.executeCommand('jupyter.importnotebookfile', importFile);
+        await commands.executeCommand('deepnote.importnotebookfile', importFile);
 
         // Wait until our active document changes
         await deferred.promise;

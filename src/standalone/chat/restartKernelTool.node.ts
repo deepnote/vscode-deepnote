@@ -15,7 +15,7 @@ interface RestartKernelToolParams extends IBaseToolParams {
 }
 
 export class RestartKernelTool extends BaseTool<RestartKernelToolParams> {
-    public static toolName = 'restart_notebook_kernel';
+    public static toolName = 'restart_deepnote_notebook_kernel';
 
     constructor(
         private readonly kernelProvider: IKernelProvider,
@@ -44,7 +44,7 @@ export class RestartKernelTool extends BaseTool<RestartKernelToolParams> {
         const kernel = this.kernelProvider.get(notebook);
         if (!controller || !kernel || !hasKernelStartedOrIsStarting(kernel)) {
             throw new WrappedError(
-                `No active kernel for notebook ${options.input.filePath}, the configure_notebook tool can be used to help the user select a kernel.`,
+                `No active kernel for notebook ${options.input.filePath}, the configure_deepnote_notebook tool can be used to help the user select a kernel.`,
                 undefined,
                 'noActiveKernel'
             );

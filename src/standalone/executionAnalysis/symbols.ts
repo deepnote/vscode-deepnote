@@ -714,7 +714,7 @@ export class ExecutionFixCodeActionsProvider implements vscode.CodeActionProvide
         if (matchingRefs.some((r) => r)) {
             const action = new vscode.CodeAction('Run Precedent Cells', vscode.CodeActionKind.QuickFix);
             action.command = {
-                command: 'jupyter.runPrecedentCells',
+                command: 'deepnote.runPrecedentCells',
                 title: 'Run Precedent Cells',
                 arguments: [targetCell]
             };

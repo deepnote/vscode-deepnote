@@ -13,7 +13,7 @@ import { commands, window } from 'vscode';
 @injectable()
 export class ReloadVSCodeCommandHandler implements IExtensionSyncActivationService {
     public activate() {
-        commands.registerCommand('jupyter.reloadVSCode', this.onReloadVSCode, this);
+        commands.registerCommand('deepnote.reloadVSCode', this.onReloadVSCode, this);
     }
     private async onReloadVSCode(message: string) {
         const item = await window.showInformationMessage(message, Common.reload);

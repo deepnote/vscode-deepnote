@@ -680,7 +680,7 @@ function newRawKernel(kernelProcess: IKernelProcess, clientId: string, username:
         username,
         model
     });
-    if (workspace.getConfiguration('jupyter').get('enablePythonKernelLogging', false)) {
+    if (workspace.getConfiguration('deepnote').get('enablePythonKernelLogging', false)) {
         realKernel.anyMessage.connect((_, msg) => {
             logger.trace(`[AnyMessage Event] [${msg.direction}] [${kernelProcess.pid}] ${JSON.stringify(msg.msg)}`);
         });

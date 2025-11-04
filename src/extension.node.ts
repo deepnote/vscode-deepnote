@@ -219,12 +219,12 @@ async function activateLegacy(
     const isDevMode =
         !isTestExecution() &&
         (context.extensionMode === ExtensionMode.Development ||
-            workspace.getConfiguration('jupyter').get<boolean>('development', false));
+            workspace.getConfiguration('deepnote').get<boolean>('development', false));
     serviceManager.addSingletonInstance<boolean>(IsDevMode, isDevMode);
     if (isDevMode) {
-        commands.executeCommand('setContext', 'jupyter.development', true).then(noop, noop);
+        commands.executeCommand('setContext', 'deepnote.development', true).then(noop, noop);
     }
-    commands.executeCommand('setContext', 'jupyter.webExtension', false).then(noop, noop);
+    commands.executeCommand('setContext', 'deepnote.webExtension', false).then(noop, noop);
 
     // Set the logger home dir (we can compute this in a node app)
     setHomeDirectory(homedir());

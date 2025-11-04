@@ -238,7 +238,7 @@ export function initializeCommonNodeApi() {
                     return JupyterServer.instance.startJupyter(options);
                 }
                 if (!remoteUrisCleared) {
-                    await commands.executeCommand('jupyter.clearSavedJupyterUris');
+                    await commands.executeCommand('deepnote.clearSavedJupyterUris');
                     remoteUrisCleared = true;
                 }
                 const url = options.useCert
@@ -246,14 +246,14 @@ export function initializeCommonNodeApi() {
                     : await JupyterServer.instance.startJupyterWithToken();
                 console.info(`Jupyter started and listening at ${url}`);
                 try {
-                    await commands.executeCommand('jupyter.selectjupyteruri', Uri.parse(url));
+                    await commands.executeCommand('deepnote.selectjupyteruri', Uri.parse(url));
                 } catch (ex) {
                     console.error('Failed to select jupyter server, retry in 1s', ex);
                 }
                 // Todo: Fix in debt week, we need to retry, some changes have caused the first connection attempt to fail on CI.
                 // Possible we're trying to connect before the server is ready.
                 await sleep(5_000);
-                await commands.executeCommand('jupyter.selectjupyteruri', Uri.parse(url));
+                await commands.executeCommand('deepnote.selectjupyteruri', Uri.parse(url));
                 return { url, dispose: noop };
             } else {
                 return { url: '', dispose: noop };

@@ -29,7 +29,7 @@ import { BaseTool, IBaseToolParams, sendConfigureNotebookToolCallTelemetry } fro
 import { basename } from '../../platform/vscode-path/resources';
 
 export class ConfigureNotebookTool extends BaseTool<IBaseToolParams> {
-    public static toolName = 'configure_notebook';
+    public static toolName = 'configure_deepnote_notebook';
     constructor(
         private readonly controllerRegistration: IControllerRegistration,
         private readonly kernelDependencyService: IKernelDependencyService,

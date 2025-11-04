@@ -650,10 +650,34 @@ suite(`Notebook Controller`, function () {
         });
 
         test('Should not attach variable provider when API is not available', function () {
-            // Arrange: Mock controller without variableProvider property
-            const controllerWithoutApi = mock<NotebookController>();
-            when(controllerWithoutApi.onDidChangeSelectedNotebooks).thenReturn(onDidChangeSelectedNotebooks.event);
-            // Don't add variableProvider property to simulate API not being available
+            // Arrange: Create a plain object without variableProvider property
+            const controllerWithoutApi = {
+                onDidChangeSelectedNotebooks: onDidChangeSelectedNotebooks.event,
+                id: 'test-id',
+                notebookType: 'jupyter-notebook',
+                supportedLanguages: [],
+                supportsExecutionOrder: true,
+                description: '',
+                detail: '',
+                label: 'Test Kernel',
+                dispose: () => {
+                    /* noop */
+                },
+                createNotebookCellExecution: () => ({}) as any,
+                createNotebookExecution: () => ({}) as any,
+                executeHandler: () => {
+                    /* noop */
+                },
+                interruptHandler: undefined,
+                updateNotebookAffinity: () => {
+                    /* noop */
+                },
+                rendererScripts: [],
+                onDidReceiveMessage: new EventEmitter<any>().event,
+                postMessage: () => Promise.resolve(true),
+                asWebviewUri: (uri: Uri) => uri
+                // Note: no variableProvider property to simulate API not being available
+            } as NotebookController;
 
             when(
                 mockedVSCodeNamespaces.notebooks.createNotebookController(
@@ -663,7 +687,7 @@ suite(`Notebook Controller`, function () {
                     anything(),
                     anything()
                 )
-            ).thenReturn(instance(controllerWithoutApi));
+            ).thenReturn(controllerWithoutApi);
 
             // Act
             const result = VSCodeNotebookController.create(
@@ -683,9 +707,9 @@ suite(`Notebook Controller`, function () {
 
             // Assert
             assert.isDefined(result);
-            assert.isUndefined(
-                (result.controller as any).variableProvider,
-                'Variable provider should not be attached when API is not available'
+            assert.isFalse(
+                'variableProvider' in result.controller,
+                'Variable provider property should not exist when API is not available'
             );
         });
 

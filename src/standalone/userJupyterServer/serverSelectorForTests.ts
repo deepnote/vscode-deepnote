@@ -47,7 +47,7 @@ export class JupyterServerSelectorCommand
                 this
             )
         );
-        this._register(commands.registerCommand('jupyter.selectjupyteruri', this.selectJupyterUri, this));
+        this._register(commands.registerCommand('deepnote.selectjupyteruri', this.selectJupyterUri, this));
     }
     private async selectJupyterUri(source: Uri): Promise<void> {
         logger.info(`Setting Jupyter Server URI to remote: ${source}`);

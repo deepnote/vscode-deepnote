@@ -20,6 +20,5 @@ See [here](https://code.visualstudio.com/api/references/vscode-api#extensions) f
 import { extensions } from 'vscode';
 import type { JupyterAPI } from '@vscode/jupyter';
 
-const jupyterApi = extensions.getExtension<JupyterAPI>('ms-jupyter.jupyter')?.exports;
+const jupyterApi = extensions.getExtension<JupyterAPI>('Deepnote.vscode-deepnote')?.exports;
 ```
-

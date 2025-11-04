@@ -178,9 +178,9 @@ async function activateLegacy(
 
     serviceManager.addSingletonInstance<boolean>(IsDevMode, isDevMode);
     if (isDevMode) {
-        commands.executeCommand('setContext', 'jupyter.development', true).then(noop, noop);
+        commands.executeCommand('setContext', 'deepnote.development', true).then(noop, noop);
     }
-    commands.executeCommand('setContext', 'jupyter.webExtension', true).then(noop, noop);
+    commands.executeCommand('setContext', 'deepnote.webExtension', true).then(noop, noop);
 
     // Register the rest of the types (platform is first because it's needed by others)
     registerPlatformTypes(serviceManager);

@@ -58,7 +58,7 @@ export function initializeLoggers(options: {
     globalLoggingLevel = getLoggingLevelFromConfig();
     trackDisposable(
         workspace.onDidChangeConfiguration((e) => {
-            if (e.affectsConfiguration('jupyter.logging')) {
+            if (e.affectsConfiguration('deepnote.logging')) {
                 globalLoggingLevel = getLoggingLevelFromConfig();
             }
         })

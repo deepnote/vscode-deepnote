@@ -66,7 +66,7 @@ export function initializeCommonWebApi() {
             // Server URI should have been embedded in the constants file
             const uri = Uri.parse(url);
             // Use this URI to set our jupyter server URI
-            await commands.executeCommand('jupyter.selectjupyteruri', uri);
+            await commands.executeCommand('deepnote.selectjupyteruri', uri);
             return { url: url, dispose: noop };
         },
         async initialize() {

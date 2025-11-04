@@ -26,7 +26,7 @@ export class PythonEnvironmentFilter implements IDisposable {
         if (!isWebExtension()) {
             workspace.onDidChangeConfiguration(
                 (e) => {
-                    e.affectsConfiguration('jupyter.kernels.excludePythonEnvironments') && this._onDidChange.fire();
+                    e.affectsConfiguration('deepnote.kernels.excludePythonEnvironments') && this._onDidChange.fire();
                 },
                 this,
                 this.disposables

@@ -172,7 +172,7 @@ export async function postActivateLegacy(context: IExtensionContext, serviceCont
     sendTelemetryEvent(Telemetry.ExperimentLoad, { duration });
 
     // "initialize" "services"
-    commands.executeCommand('setContext', 'jupyter.vscode.channel', getVSCodeChannel()).then(noop, noop);
+    commands.executeCommand('setContext', 'deepnote.vscode.channel', getVSCodeChannel()).then(noop, noop);
 
     // "activate" everything else
     serviceContainer.get<IExtensionActivationManager>(IExtensionActivationManager).activate();

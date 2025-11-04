@@ -411,7 +411,7 @@ class KernelSpecificCompletionProvider extends DisposableBase implements Complet
         this.registerCompletionProvider();
         this._register(
             workspace.onDidChangeConfiguration((e) => {
-                if (e.affectsConfiguration('jupyter.enableKernelCompletions')) {
+                if (e.affectsConfiguration('deepnote.enableKernelCompletions')) {
                     if (!isKernelCompletionEnabled(this.kernel.notebook.uri)) {
                         this.completionProvider?.dispose();
                         this.completionProvider = undefined;
@@ -421,8 +421,8 @@ class KernelSpecificCompletionProvider extends DisposableBase implements Complet
                     }
                 }
                 if (
-                    !e.affectsConfiguration('jupyter.completionTriggerCharacters') &&
-                    !e.affectsConfiguration('jupyter.pythonCompletionTriggerCharacters')
+                    !e.affectsConfiguration('deepnote.completionTriggerCharacters') &&
+                    !e.affectsConfiguration('deepnote.pythonCompletionTriggerCharacters')
                 ) {
                     return;
                 }
@@ -595,7 +595,7 @@ function logHowToEnableKernelCompletion(kernel: IKernel) {
     if (kernelLanguage.toLowerCase() === monacoLanguage.toLowerCase()) {
         logger.warn(
             l10n.t(
-                `Kernel completions not enabled for '{0}'. \nTo enable Kernel completion for this language please add the following setting \njupyter.completionTriggerCharacters = {1}: [<List of characters that will trigger completions>]}. \nFor more information please see https://aka.ms/vscodeJupyterCompletion`,
+                `Kernel completions not enabled for '{0}'. \nTo enable Kernel completion for this language please add the following setting \ndeepnote.completionTriggerCharacters = {1}: [<List of characters that will trigger completions>]}. \nFor more information please see https://aka.ms/vscodeJupyterCompletion`,
                 getDisplayNameOrNameOfKernelConnection(kernel.kernelConnectionMetadata),
                 `{${kernelLanguage}`
             )
@@ -603,7 +603,7 @@ function logHowToEnableKernelCompletion(kernel: IKernel) {
     } else {
         logger.warn(
             l10n.t(
-                `Kernel completions not enabled for '{0}'. \nTo enable Kernel completion for this language please add the following setting \njupyter.completionTriggerCharacters = {1}: [<List of characters that will trigger completions>]}. \n or the following: \njupyter.completionTriggerCharacters = {2}: [<List of characters that will trigger completions>]}. \nFor more information please see https://aka.ms/vscodeJupyterCompletion`,
+                `Kernel completions not enabled for '{0}'. \nTo enable Kernel completion for this language please add the following setting \ndeepnote.completionTriggerCharacters = {1}: [<List of characters that will trigger completions>]}. \n or the following: \ndeepnote.completionTriggerCharacters = {2}: [<List of characters that will trigger completions>]}. \nFor more information please see https://aka.ms/vscodeJupyterCompletion`,
                 getDisplayNameOrNameOfKernelConnection(kernel.kernelConnectionMetadata),
                 `{${kernelLanguage}`,
                 `{${monacoLanguage}`

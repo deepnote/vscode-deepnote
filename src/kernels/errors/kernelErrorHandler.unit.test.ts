@@ -814,7 +814,7 @@ Failed to run jupyter as observable with args notebook --no-browser --notebook-d
                 [
                     'Failed to start the Kernel. ',
                     'hello word does not have attribute named abc. ',
-                    'View Jupyter [log](command:jupyter.viewOutput) for further details.'
+                    'View Jupyter [log](command:deepnote.viewOutput) for further details.'
                 ].join('\n')
             );
         });
@@ -837,7 +837,7 @@ Failed to run jupyter as observable with args notebook --no-browser --notebook-d
                 [
                     'Failed to restart the Kernel. ',
                     'hello word does not have attribute named abc. ',
-                    'View Jupyter [log](command:jupyter.viewOutput) for further details.'
+                    'View Jupyter [log](command:deepnote.viewOutput) for further details.'
                 ].join('\n')
             );
         });
@@ -1101,7 +1101,7 @@ Failed to run jupyter as observable with args notebook --no-browser --notebook-d
             verify(uriStorage.remove(deepEqual(serverProviderHandle))).never();
         });
         function verifyErrorMessage(message: string, linkInfo?: string) {
-            message = message.includes('command:jupyter.viewOutput')
+            message = message.includes('command:deepnote.viewOutput')
                 ? message
                 : `${message} \n${DataScience.viewJupyterLogForFurtherInfo}`;
             if (linkInfo) {

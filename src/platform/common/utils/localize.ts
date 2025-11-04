@@ -147,7 +147,7 @@ export namespace DataScience {
     ) => l10n.t("Running cells with '{0}' requires the {1} package.", pythonEnvName, pythonModuleName);
     export const createANewPythonEnvironment = () =>
         l10n.t(
-            '[Create a Python Environment](command:jupyter.createPythonEnvAndSelectController) with the required packages.'
+            '[Create a Python Environment](command:deepnote.createPythonEnvAndSelectController) with the required packages.'
         );
     export const installPackageInstructions = (pythonModuleName: string, commandId: string) =>
         l10n.t("Install '{0}' into the Python environment. \nCommand: '{1}'", pythonModuleName, commandId);
@@ -223,37 +223,37 @@ export namespace DataScience {
     export const sessionStartFailedWithKernel = (kernelName: string) =>
         l10n.t({
             message:
-                "Failed to start the Kernel '{0}'. \nView Jupyter [log](command:jupyter.viewOutput) for further details.",
+                "Failed to start the Kernel '{0}'. \nView Jupyter [log](command:deepnote.viewOutput) for further details.",
             args: [kernelName],
             comment: [
-                'Do not translate the text "command:jupyter.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
+                'Do not translate the text "command:deepnote.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
             ]
         });
     export const failedToStartJupyter = (pythonEnvName: string) =>
         l10n.t({
             message:
-                "Failed to start Jupyter in the environment '{0}'. \nView Jupyter [log](command:jupyter.viewOutput) for further details.",
+                "Failed to start Jupyter in the environment '{0}'. \nView Jupyter [log](command:deepnote.viewOutput) for further details.",
             args: [pythonEnvName],
             comment: [
-                'Do not translate the text "command:jupyter.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
+                'Do not translate the text "command:deepnote.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
             ]
         });
     export const failedToStartJupyterWithErrorInfo = (pythonEnvName: string, errorMessage: string) =>
         l10n.t({
             message:
-                "Failed to start Jupyter in the environment '{0}'. \n{1} \nView Jupyter [log](command:jupyter.viewOutput) for further details.",
+                "Failed to start Jupyter in the environment '{0}'. \n{1} \nView Jupyter [log](command:deepnote.viewOutput) for further details.",
             args: [pythonEnvName, errorMessage],
             comment: [
-                'Do not translate the text "command:jupyter.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
+                'Do not translate the text "command:deepnote.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
             ]
         });
     export const failedToStartJupyterDueToOutdatedTraitlets = (pythonEnvName: string, errorMessage: string) =>
         l10n.t({
             message:
-                "Failed to start Jupyter in the environment '{0}' possibly due to an outdated version of 'traitlets'. \n{1} \nConsider updating the 'traitlets' module to '5.1.1' or later. \nView Jupyter [log](command:jupyter.viewOutput) for further details.",
+                "Failed to start Jupyter in the environment '{0}' possibly due to an outdated version of 'traitlets'. \n{1} \nConsider updating the 'traitlets' module to '5.1.1' or later. \nView Jupyter [log](command:deepnote.viewOutput) for further details.",
             args: [pythonEnvName, errorMessage],
             comment: [
-                'Do not translate the text "command:jupyter.viewOutput", that is a command Id that will be used by VS Code to open the output panel',
+                'Do not translate the text "command:deepnote.viewOutput", that is a command Id that will be used by VS Code to open the output panel',
                 "Do not translate the text 'traitlets', that is a Python module name"
             ]
         });
@@ -263,43 +263,43 @@ export namespace DataScience {
     export const rawKernelStartFailedDueToTimeout = (kernelName: string) =>
         l10n.t({
             message:
-                "Unable to start Kernel '{0}' due to a connection timeout. \nView Jupyter [log](command:jupyter.viewOutput) for further details.",
+                "Unable to start Kernel '{0}' due to a connection timeout. \nView Jupyter [log](command:deepnote.viewOutput) for further details.",
             args: [kernelName],
             comment: [
-                'Do not translate the text "command:jupyter.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
+                'Do not translate the text "command:deepnote.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
             ]
         });
     export const rawKernelStartFailedDueToTimeoutWaitingForPort = (kernelName: string) =>
         l10n.t({
             message:
-                "Unable to start Kernel '{0}' due to a timeout waiting for the ports to get used. \nView Jupyter [log](command:jupyter.viewOutput) for further details.",
+                "Unable to start Kernel '{0}' due to a timeout waiting for the ports to get used. \nView Jupyter [log](command:deepnote.viewOutput) for further details.",
             args: [kernelName],
             comment: [
-                'Do not translate the text "command:jupyter.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
+                'Do not translate the text "command:deepnote.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
             ]
         });
     export const viewJupyterLogForFurtherInfo = l10n.t({
-        message: 'View Jupyter [log](command:jupyter.viewOutput) for further details.',
+        message: 'View Jupyter [log](command:deepnote.viewOutput) for further details.',
         comment: [
-            'Do not translate the text "command:jupyter.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
+            'Do not translate the text "command:deepnote.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
         ]
     });
     export const kernelDied = (message: string) =>
         l10n.t({
             message:
-                'The kernel died. Error: {0}... View Jupyter [log](command:jupyter.viewOutput) for further details.',
+                'The kernel died. Error: {0}... View Jupyter [log](command:deepnote.viewOutput) for further details.',
             args: [message],
             comment: [
-                'Do not translate the text "command:jupyter.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
+                'Do not translate the text "command:deepnote.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
             ]
         });
     export const kernelDiedWithoutError = (kernelName: string) =>
         l10n.t({
             message:
-                "The kernel '{0}' died. Click [here](https://aka.ms/vscodeJupyterKernelCrash) for more info. View Jupyter [log](command:jupyter.viewOutput) for further details.",
+                "The kernel '{0}' died. Click [here](https://aka.ms/vscodeJupyterKernelCrash) for more info. View Jupyter [log](command:deepnote.viewOutput) for further details.",
             args: [kernelName],
             comment: [
-                'Do not translate the text "command:jupyter.viewOutput", that is a command Id that will be used by VS Code to open the output panel',
+                'Do not translate the text "command:deepnote.viewOutput", that is a command Id that will be used by VS Code to open the output panel',
                 'Do not translate the link https://aka.ms/vscodeJupyterKernelCrash'
             ]
         });
@@ -317,24 +317,24 @@ export namespace DataScience {
     export const kernelDiedWithoutErrorAndAutoRestarting = (kernelName: string) =>
         l10n.t({
             message:
-                "The kernel '{0}' died and is being automatically restarted by Jupyter. Click [here](https://aka.ms/vscodeJupyterKernelCrash) for more info. View Jupyter [log](command:jupyter.viewOutput) for further details.",
+                "The kernel '{0}' died and is being automatically restarted by Jupyter. Click [here](https://aka.ms/vscodeJupyterKernelCrash) for more info. View Jupyter [log](command:deepnote.viewOutput) for further details.",
             args: [kernelName],
             comment: [
-                'Do not translate the text "command:jupyter.viewOutput", that is a command Id that will be used by VS Code to open the output panel',
+                'Do not translate the text "command:deepnote.viewOutput", that is a command Id that will be used by VS Code to open the output panel',
                 'Do not translate the link https://aka.ms/vscodeJupyterKernelCrash'
             ]
         });
     export const kernelCrashedDueToCodeInCurrentOrPreviousCell = l10n.t({
         message:
-            "The Kernel crashed while executing code in the current cell or a previous cell. \nPlease review the code in the cell(s) to identify a possible cause of the failure. \nClick <a href='https://aka.ms/vscodeJupyterKernelCrash'>here</a> for more info. \nView Jupyter [log](command:jupyter.viewOutput) for further details.",
+            "The Kernel crashed while executing code in the current cell or a previous cell. \nPlease review the code in the cell(s) to identify a possible cause of the failure. \nClick <a href='https://aka.ms/vscodeJupyterKernelCrash'>here</a> for more info. \nView Jupyter [log](command:deepnote.viewOutput) for further details.",
         comment: [
-            'Do not translate the text "command:jupyter.viewOutput", that is a command Id that will be used by VS Code to open the output panel',
+            'Do not translate the text "command:deepnote.viewOutput", that is a command Id that will be used by VS Code to open the output panel',
             'Do not translate the link https://aka.ms/vscodeJupyterKernelCrash'
         ]
     });
     export const kernelDisconnected = (kernelName: string) =>
         l10n.t(
-            "Unable to connect to the kernel '{0}', please verify the Jupyter Server connection. View Jupyter [log](command:jupyter.viewOutput) for further details.",
+            "Unable to connect to the kernel '{0}', please verify the Jupyter Server connection. View Jupyter [log](command:deepnote.viewOutput) for further details.",
             kernelName
         );
     export const cannotRunCellKernelIsDead = (kernelName: string) =>
@@ -533,9 +533,9 @@ export namespace DataScience {
     export const openExportFileYes = l10n.t('Yes');
     export const openExportFileNo = l10n.t('No');
     export const exportFailedGeneralMessage = l10n.t({
-        message: `Please check the 'Jupyter' [output](command:jupyter.viewOutput) panel for further details.`,
+        message: `Please check the 'Jupyter' [output](command:deepnote.viewOutput) panel for further details.`,
         comment: [
-            'Do not translate the text "command:jupyter.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
+            'Do not translate the text "command:deepnote.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
         ]
     });
     export const exportToPDFDependencyMessage = l10n.t(

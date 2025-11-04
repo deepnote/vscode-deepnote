@@ -53,8 +53,8 @@ suite('DataScienceCodeLensProvider Unit Tests', () => {
         createCodeLensFactory().getCellRanges(document.object);
 
         // verify context keys set
-        verify(mockedVSCodeNamespaces.commands.executeCommand('setContext', 'jupyter.ownsSelection', true)).atLeast(1);
-        verify(mockedVSCodeNamespaces.commands.executeCommand('setContext', 'jupyter.hascodecells', true)).atLeast(1);
+        verify(mockedVSCodeNamespaces.commands.executeCommand('setContext', 'deepnote.ownsSelection', true)).atLeast(1);
+        verify(mockedVSCodeNamespaces.commands.executeCommand('setContext', 'deepnote.hascodecells', true)).atLeast(1);
     });
 
     test('Having no code lenses will set context keys to false', async () => {
@@ -68,8 +68,8 @@ suite('DataScienceCodeLensProvider Unit Tests', () => {
         createCodeLensFactory().getCellRanges(document.object);
 
         // verify context keys set
-        verify(mockedVSCodeNamespaces.commands.executeCommand('setContext', 'jupyter.ownsSelection', true)).atLeast(1);
-        verify(mockedVSCodeNamespaces.commands.executeCommand('setContext', 'jupyter.hascodecells', true)).atLeast(1);
+        verify(mockedVSCodeNamespaces.commands.executeCommand('setContext', 'deepnote.ownsSelection', true)).atLeast(1);
+        verify(mockedVSCodeNamespaces.commands.executeCommand('setContext', 'deepnote.hascodecells', true)).atLeast(1);
     });
 
     test('Having no code lenses but ownership setting true will set context keys correctly', async () => {
@@ -83,7 +83,7 @@ suite('DataScienceCodeLensProvider Unit Tests', () => {
         createCodeLensFactory().getCellRanges(document.object);
 
         // verify context keys set
-        verify(mockedVSCodeNamespaces.commands.executeCommand('setContext', 'jupyter.ownsSelection', true)).atLeast(1);
-        verify(mockedVSCodeNamespaces.commands.executeCommand('setContext', 'jupyter.hascodecells', true)).atLeast(1);
+        verify(mockedVSCodeNamespaces.commands.executeCommand('setContext', 'deepnote.ownsSelection', true)).atLeast(1);
+        verify(mockedVSCodeNamespaces.commands.executeCommand('setContext', 'deepnote.hascodecells', true)).atLeast(1);
     });
 });

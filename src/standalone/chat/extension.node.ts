@@ -78,7 +78,7 @@ export async function activate(context: vscode.ExtensionContext, serviceContaine
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand('jupyter.listPipPackages', async (uri) => {
+        vscode.commands.registerCommand('deepnote.listPipPackages', async (uri) => {
             const documentUri = uri ?? vscode.window.activeNotebookEditor?.notebook.uri;
             if (documentUri) {
                 const kernelProvider = serviceContainer.get<IKernelProvider>(IKernelProvider);
@@ -102,7 +102,7 @@ export async function activate(context: vscode.ExtensionContext, serviceContaine
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand('jupyter.listVariables', async (uri) => {
+        vscode.commands.registerCommand('deepnote.listVariables', async (uri) => {
             const documentUri = uri ?? vscode.window.activeNotebookEditor?.notebook.uri;
 
             if (!documentUri) {

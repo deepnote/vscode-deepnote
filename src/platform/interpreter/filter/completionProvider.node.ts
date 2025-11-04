@@ -68,7 +68,7 @@ export class PythonEnvFilterCompletionProvider implements CompletionItemProvider
         const location = getLocation(document.getText(), document.offsetAt(position));
         // Cursor must be inside the configurations array and not in any nested items.
         // Hence path[0] = array, path[1] = array element index.
-        return location.path[0] === 'jupyter.kernels.excludePythonEnvironments' && location.path.length === 2;
+        return location.path[0] === 'deepnote.kernels.excludePythonEnvironments' && location.path.length === 2;
     }
     private getCurrentItemsInList(document: TextDocument, position: Position): string[] {
         try {

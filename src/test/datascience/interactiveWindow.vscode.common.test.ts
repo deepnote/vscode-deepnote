@@ -133,14 +133,14 @@ suite(`Interactive window execution @iw`, async function () {
         await verifyCells();
 
         // CLear all cells
-        await vscode.commands.executeCommand('jupyter.interactive.clearAllCells');
+        await vscode.commands.executeCommand('deepnote.interactive.clearAllCells');
         await waitForCondition(async () => notebookDocument.cellCount === 0, 5_000, 'Cells not cleared');
 
         // Restart kernel
         const kernelProvider = api.serviceContainer.get<IKernelProvider>(IKernelProvider);
         const kernel = kernelProvider.get(notebookDocument);
         const handler = createEventHandler(kernel!, 'onRestarted', disposables);
-        await vscode.commands.executeCommand('jupyter.restartkernel');
+        await vscode.commands.executeCommand('deepnote.restartkernel');
         // Wait for restart to finish
         await handler.assertFiredExactly(1, defaultNotebookTestTimeout);
         await activeInteractiveWindow.addCode(source, untitledPythonFile.uri, 0);

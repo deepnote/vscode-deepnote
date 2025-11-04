@@ -35,6 +35,7 @@ suite('DeepnoteRequirementsHelper', () => {
 
     teardown(() => {
         sandbox.restore();
+        resetVSCodeMocks();
     });
 
     test('should create requirements.txt file with valid requirements', async () => {

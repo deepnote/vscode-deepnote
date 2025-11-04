@@ -3,6 +3,8 @@
  * This is the single source of truth for how input block values are displayed in cells.
  */
 
+import z from 'zod';
+
 /**
  * Gets the expected language ID for an input block type.
  * This is the single source of truth for input block language modes.
@@ -57,7 +59,8 @@ export function formatInputBlockCellContent(blockType: string, metadata: Record<
 
         case 'input-slider': {
             const value = metadata.deepnote_variable_value;
-            return typeof value === 'number' ? String(value) : '';
+            const parsedValueResult = z.coerce.number().safeParse(value);
+            return parsedValueResult.success ? String(parsedValueResult.data) : '';
         }
 
         case 'input-checkbox': {

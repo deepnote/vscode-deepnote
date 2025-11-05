@@ -335,7 +335,7 @@ suite('DeepnoteEnvironmentManager', () => {
             verify(mockStorage.saveEnvironments(anything())).once();
         });
 
-        test('should not migrate environments with correct UUID paths in correct storage', async () => {
+        test('should not migrate environments with correct ID-based paths in correct storage', async () => {
             const testDate = new Date();
             const correctConfig = {
                 id: '12345678-1234-1234-1234-123456789abc',
@@ -367,6 +367,38 @@ suite('DeepnoteEnvironmentManager', () => {
             // ID and name should be preserved
             assert.strictEqual(configs[0].id, '12345678-1234-1234-1234-123456789abc');
             assert.strictEqual(configs[0].name, 'Correct Config');
+
+            // Should NOT have saved (no migration needed)
+            verify(mockStorage.saveEnvironments(anything())).never();
+        });
+
+        test('should not migrate environments with non-UUID IDs when path already matches', async () => {
+            const testDate = new Date();
+            const customIdConfig = {
+                id: 'my-custom-env-id',
+                name: 'Custom ID Environment',
+                pythonInterpreter: testInterpreter,
+                venvPath: Uri.file('/global/storage/deepnote-venvs/my-custom-env-id'),
+                createdAt: testDate,
+                lastUsedAt: testDate,
+                toolkitVersion: '1.0.0'
+            };
+
+            when(mockStorage.loadEnvironments()).thenResolve([customIdConfig]);
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
+            when(mockContext.globalStorageUri).thenReturn(Uri.file('/global/storage'));
+
+            manager.activate();
+            await manager.waitForInitialization();
+
+            const configs = manager.listEnvironments();
+            assert.strictEqual(configs.length, 1);
+
+            // Path should remain unchanged
+            assert.strictEqual(configs[0].venvPath.fsPath, '/global/storage/deepnote-venvs/my-custom-env-id');
+
+            // Toolkit version should NOT be cleared
+            assert.strictEqual(configs[0].toolkitVersion, '1.0.0');
 
             // Should NOT have saved (no migration needed)
             verify(mockStorage.saveEnvironments(anything())).never();

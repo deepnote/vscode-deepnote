@@ -63,14 +63,13 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
                 const actualVenvParent = path.dirname(config.venvPath.fsPath);
                 const isInCorrectStorage = actualVenvParent === expectedVenvParent;
 
-                const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-                const isHashBasedName = !uuidPattern.test(venvDirName);
-
-                const needsPathMigration = isHashBasedName || !isInCorrectStorage;
+                // Check if directory name matches the environment ID and is in correct storage
+                const isExpectedPath = venvDirName === config.id && isInCorrectStorage;
+                const needsPathMigration = !isExpectedPath;
 
                 if (needsPathMigration) {
                     logger.info(
-                        `Migrating environment "${config.name}" from old venv path ${config.venvPath.fsPath} to UUID-based path`
+                        `Migrating environment "${config.name}" from ${config.venvPath.fsPath} to ID-based path`
                     );
 
                     config.venvPath = Uri.joinPath(this.context.globalStorageUri, 'deepnote-venvs', config.id);

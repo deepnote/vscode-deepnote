@@ -508,9 +508,30 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         const existingEnvironmentId = this.notebookEnvironmentsIds.get(notebookKey);
 
         if (existingEnvironmentId != null && existingController != null && existingEnvironmentId === configuration.id) {
-            logger.info(`Existing controller found for notebook ${getDisplayPath(notebook.uri)}, selecting it`);
-            await this.ensureControllerSelectedForNotebook(notebook, existingController, progressToken);
-            return;
+            logger.info(`Existing controller found for notebook ${getDisplayPath(notebook.uri)}, verifying connection`);
+
+            // Verify the controller's interpreter path matches the expected venv path
+            // This handles cases where notebooks were used in VS Code and now opened in Cursor
+            const existingInterpreter = existingController.connection.interpreter;
+            if (existingInterpreter) {
+                const expectedInterpreter =
+                    process.platform === 'win32'
+                        ? Uri.joinPath(configuration.venvPath, 'Scripts', 'python.exe')
+                        : Uri.joinPath(configuration.venvPath, 'bin', 'python');
+
+                if (existingInterpreter.uri.fsPath !== expectedInterpreter.fsPath) {
+                    logger.warn(
+                        `Controller interpreter path mismatch! Expected: ${expectedInterpreter.fsPath}, Got: ${existingInterpreter.uri.fsPath}. Recreating controller.`
+                    );
+                    // Dispose old controller and recreate it
+                    existingController.dispose();
+                    this.notebookControllers.delete(notebookKey);
+                } else {
+                    logger.info(`Controller verified, selecting it`);
+                    await this.ensureControllerSelectedForNotebook(notebook, existingController, progressToken);
+                    return;
+                }
+            }
         }
 
         // Ensure server is running (startServer is idempotent - returns early if already running)
@@ -581,6 +602,9 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             process.platform === 'win32'
                 ? Uri.joinPath(configuration.venvPath, 'Scripts', 'python.exe')
                 : Uri.joinPath(configuration.venvPath, 'bin', 'python');
+
+        logger.info(`Using venv path: ${configuration.venvPath.fsPath}`);
+        logger.info(`Venv interpreter path: ${venvInterpreter.fsPath}`);
 
         // CRITICAL: Use unique notebook-based ID (includes query with notebook ID)
         // This ensures each notebook gets its own controller/kernel, even within the same project.

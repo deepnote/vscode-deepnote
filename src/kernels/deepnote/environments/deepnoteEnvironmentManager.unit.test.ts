@@ -266,4 +266,157 @@ suite('DeepnoteEnvironmentManager', () => {
             // Should not throw
         });
     });
+
+    suite('environment migration', () => {
+        test('should migrate hash-based venv paths to UUID-based paths', async () => {
+            const oldHashBasedConfig = {
+                id: 'abcd1234-5678-90ab-cdef-123456789012',
+                name: 'Old Hash Config',
+                pythonInterpreter: testInterpreter,
+                venvPath: Uri.file('/global/storage/deepnote-venvs/venv_7626587d-1.0.0'),
+                createdAt: new Date(),
+                lastUsedAt: new Date()
+            };
+
+            when(mockStorage.loadEnvironments()).thenResolve([oldHashBasedConfig]);
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
+            when(mockContext.globalStorageUri).thenReturn(Uri.file('/global/storage'));
+
+            manager.activate();
+            await manager.waitForInitialization();
+
+            const configs = manager.listEnvironments();
+            assert.strictEqual(configs.length, 1);
+
+            // Should have migrated to UUID-based path
+            assert.strictEqual(
+                configs[0].venvPath.fsPath,
+                '/global/storage/deepnote-venvs/abcd1234-5678-90ab-cdef-123456789012'
+            );
+
+            // Should clear toolkit version to force reinstallation
+            assert.isUndefined(configs[0].toolkitVersion);
+
+            // Should have saved the migration
+            verify(mockStorage.saveEnvironments(anything())).once();
+        });
+
+        test('should migrate VS Code storage paths to Cursor storage paths', async () => {
+            const vsCodeConfig = {
+                id: 'cursor-env-id',
+                name: 'VS Code Environment',
+                pythonInterpreter: testInterpreter,
+                venvPath: Uri.file(
+                    '/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/cursor-env-id'
+                ),
+                createdAt: new Date(),
+                lastUsedAt: new Date(),
+                toolkitVersion: '1.0.0'
+            };
+
+            when(mockStorage.loadEnvironments()).thenResolve([vsCodeConfig]);
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
+            when(mockContext.globalStorageUri).thenReturn(
+                Uri.file('/Library/Application Support/Cursor/User/globalStorage/deepnote.vscode-deepnote')
+            );
+
+            manager.activate();
+            await manager.waitForInitialization();
+
+            const configs = manager.listEnvironments();
+            assert.strictEqual(configs.length, 1);
+
+            // Should have migrated to Cursor storage
+            assert.match(configs[0].venvPath.fsPath, /Cursor.*deepnote-venvs\/cursor-env-id$/);
+
+            // Should clear toolkit version to force reinstallation
+            assert.isUndefined(configs[0].toolkitVersion);
+
+            verify(mockStorage.saveEnvironments(anything())).once();
+        });
+
+        test('should not migrate environments with correct UUID paths in correct storage', async () => {
+            const testDate = new Date();
+            const correctConfig = {
+                id: '12345678-1234-1234-1234-123456789abc',
+                name: 'Correct Config',
+                pythonInterpreter: testInterpreter,
+                venvPath: Uri.file('/global/storage/deepnote-venvs/12345678-1234-1234-1234-123456789abc'),
+                createdAt: testDate,
+                lastUsedAt: testDate,
+                toolkitVersion: '1.0.0',
+                packages: []
+            };
+
+            when(mockStorage.loadEnvironments()).thenResolve([correctConfig]);
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
+            when(mockContext.globalStorageUri).thenReturn(Uri.file('/global/storage'));
+
+            manager.activate();
+            await manager.waitForInitialization();
+
+            const configs = manager.listEnvironments();
+            assert.strictEqual(configs.length, 1);
+
+            // Path should remain unchanged
+            assert.strictEqual(
+                configs[0].venvPath.fsPath,
+                '/global/storage/deepnote-venvs/12345678-1234-1234-1234-123456789abc'
+            );
+
+            // ID and name should be preserved
+            assert.strictEqual(configs[0].id, '12345678-1234-1234-1234-123456789abc');
+            assert.strictEqual(configs[0].name, 'Correct Config');
+
+            // Should NOT have saved (no migration needed)
+            verify(mockStorage.saveEnvironments(anything())).never();
+        });
+
+        test('should migrate multiple environments at once', async () => {
+            const configs = [
+                {
+                    id: 'uuid1',
+                    name: 'Hash Config',
+                    pythonInterpreter: testInterpreter,
+                    venvPath: Uri.file('/global/storage/deepnote-venvs/venv_abc123-1.0.0'),
+                    createdAt: new Date(),
+                    lastUsedAt: new Date()
+                },
+                {
+                    id: 'uuid2',
+                    name: 'VS Code Config',
+                    pythonInterpreter: testInterpreter,
+                    venvPath: Uri.file('/Code/globalStorage/deepnote-venvs/uuid2'),
+                    createdAt: new Date(),
+                    lastUsedAt: new Date()
+                },
+                {
+                    id: 'uuid3',
+                    name: 'Correct Config',
+                    pythonInterpreter: testInterpreter,
+                    venvPath: Uri.file('/global/storage/deepnote-venvs/uuid3'),
+                    createdAt: new Date(),
+                    lastUsedAt: new Date()
+                }
+            ];
+
+            when(mockStorage.loadEnvironments()).thenResolve(configs);
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
+            when(mockContext.globalStorageUri).thenReturn(Uri.file('/global/storage'));
+
+            manager.activate();
+            await manager.waitForInitialization();
+
+            const loaded = manager.listEnvironments();
+            assert.strictEqual(loaded.length, 3);
+
+            // First two should be migrated
+            assert.strictEqual(loaded[0].venvPath.fsPath, '/global/storage/deepnote-venvs/uuid1');
+            assert.strictEqual(loaded[1].venvPath.fsPath, '/global/storage/deepnote-venvs/uuid2');
+            // Third should remain unchanged
+            assert.strictEqual(loaded[2].venvPath.fsPath, '/global/storage/deepnote-venvs/uuid3');
+
+            verify(mockStorage.saveEnvironments(anything())).once();
+        });
+    });
 });

@@ -351,6 +351,7 @@ suite('DeepnoteServerStarter - Port Allocation Integration Tests', () => {
 
             const results = await Promise.all(keys.map((key) => allocatePorts(key)));
 
+            // Verify each result has consecutive ports
             for (let i = 0; i < results.length; i++) {
                 const result = results[i];
                 assert.strictEqual(
@@ -360,6 +361,23 @@ suite('DeepnoteServerStarter - Port Allocation Integration Tests', () => {
                         `This prevents server startup hangs when toolkit expects consecutive ports.`
                 );
             }
+
+            // Verify uniqueness: no two concurrent calls received the same port pair
+            const portPairs = new Set(results.map((r) => `${r.jupyterPort}:${r.lspPort}`));
+            assert.strictEqual(
+                portPairs.size,
+                results.length,
+                'All concurrent allocations must receive unique port pairs'
+            );
+
+            // Verify uniqueness of individual ports
+            const allPorts = results.flatMap((r) => [r.jupyterPort, r.lspPort]);
+            const uniquePorts = new Set(allPorts);
+            assert.strictEqual(
+                uniquePorts.size,
+                allPorts.length,
+                'All allocated ports (both Jupyter and LSP) must be unique across concurrent calls'
+            );
         });
     });
 

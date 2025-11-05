@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 import * as fs from 'fs-extra';
-import getPort from 'get-port';
 import { inject, injectable, named, optional } from 'inversify';
 import * as os from 'os';
 import { CancellationToken, l10n, Uri } from 'vscode';
@@ -19,6 +18,7 @@ import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnot
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import * as path from '../../platform/vscode-path/path';
 import { DEEPNOTE_DEFAULT_PORT, DeepnoteServerInfo, IDeepnoteServerStarter, IDeepnoteToolkitInstaller } from './types';
+import tcpPortUsed from 'tcp-port-used';
 
 /**
  * Lock file data structure for tracking server ownership
@@ -520,13 +520,11 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                 }
             }
 
-            // Allocate Jupyter port first
-            const jupyterPort = await this.findAvailablePort(DEEPNOTE_DEFAULT_PORT, portsInUse);
-            portsInUse.add(jupyterPort); // Reserve it immediately
-
-            // Allocate LSP port (starting from jupyterPort + 1 to avoid conflicts)
-            const lspPort = await this.findAvailablePort(jupyterPort + 1, portsInUse);
-            portsInUse.add(lspPort); // Reserve it immediately
+            // Find a pair of consecutive available ports
+            const { jupyterPort, lspPort } = await this.findConsecutiveAvailablePorts(
+                DEEPNOTE_DEFAULT_PORT,
+                portsInUse
+            );
 
             // Reserve both ports by adding to serverInfos
             // This prevents other concurrent allocations from getting the same ports
@@ -538,7 +536,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             this.serverInfos.set(key, serverInfo);
 
             logger.info(
-                `Allocated ports for ${key}: jupyter=${jupyterPort}, lsp=${lspPort} (excluded: ${
+                `Allocated consecutive ports for ${key}: jupyter=${jupyterPort}, lsp=${lspPort} (excluded: ${
                     portsInUse.size > 2
                         ? Array.from(portsInUse)
                               .filter((p) => p !== jupyterPort && p !== lspPort)
@@ -555,8 +553,80 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
     }
 
     /**
+     * Find a pair of consecutive available ports (port and port+1).
+     * This is critical for the deepnote-toolkit server which expects consecutive ports.
+     *
+     * @param startPort The port number to start searching from
+     * @param portsInUse Set of ports already allocated to other servers
+     * @returns A pair of consecutive ports { jupyterPort, lspPort } where lspPort = jupyterPort + 1
+     * @throws DeepnoteServerStartupError if no consecutive ports can be found after maxAttempts
+     */
+    private async findConsecutiveAvailablePorts(
+        startPort: number,
+        portsInUse: Set<number>
+    ): Promise<{ jupyterPort: number; lspPort: number }> {
+        const maxAttempts = 100;
+
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            // Try to find an available Jupyter port
+            const candidatePort = await this.findAvailablePort(
+                attempt === 0 ? startPort : startPort + attempt,
+                portsInUse
+            );
+
+            const nextPort = candidatePort + 1;
+
+            // Check if the consecutive port (candidatePort + 1) is also available
+            const isNextPortInUse = portsInUse.has(nextPort);
+            const isNextPortAvailable = !isNextPortInUse && (await this.isPortAvailable(nextPort));
+
+            if (isNextPortAvailable) {
+                // Found a consecutive pair!
+                return { jupyterPort: candidatePort, lspPort: nextPort };
+            }
+
+            // Consecutive port not available - mark both as unavailable and try next
+            portsInUse.add(candidatePort);
+            portsInUse.add(nextPort);
+        }
+
+        // Failed to find consecutive ports after max attempts
+        throw new DeepnoteServerStartupError(
+            'python',
+            startPort,
+            'process_failed',
+            '',
+            l10n.t(
+                'Failed to find consecutive available ports after {0} attempts starting from port {1}. Please close some applications using network ports and try again.',
+                maxAttempts,
+                startPort
+            )
+        );
+    }
+
+    /**
+     * Check if a specific port is available on the system by actually trying to bind to it.
+     * This is more reliable than get-port which doesn't test the exact port.
+     */
+    private async isPortAvailable(port: number): Promise<boolean> {
+        try {
+            const inUse = await tcpPortUsed.check(port, '127.0.0.1');
+            if (inUse) {
+                return false;
+            }
+
+            // Also check IPv6 loopback to be safe
+            const inUseIpv6 = await tcpPortUsed.check(port, '::1');
+            return !inUseIpv6;
+        } catch (error) {
+            logger.warn(`Failed to check port availability for ${port}:`, error);
+            return false;
+        }
+    }
+
+    /**
      * Find an available port starting from the given port number.
-     * Checks both our internal portsInUse set and system availability.
+     * Checks both our internal portsInUse set and system availability by actually binding to test.
      */
     private async findAvailablePort(startPort: number, portsInUse: Set<number>): Promise<number> {
         let port = startPort;
@@ -566,23 +636,12 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         while (attempts < maxAttempts) {
             // Skip ports already in use by our servers
             if (!portsInUse.has(port)) {
-                // Check if this port is available on the system
-                const availablePort = await getPort({
-                    host: 'localhost',
-                    port
-                });
+                // Check if this port is actually available on the system by binding to it
+                const available = await this.isPortAvailable(port);
 
-                // If get-port returned the same port, it's available
-                if (availablePort === port) {
+                if (available) {
                     return port;
                 }
-
-                // get-port returned a different port - check if that one is in use
-                if (!portsInUse.has(availablePort)) {
-                    return availablePort;
-                }
-
-                // Both our requested port and get-port's suggestion are in use, try next
             }
 
             // Try next port

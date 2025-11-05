@@ -1,10 +1,13 @@
 import { assert } from 'chai';
+import * as sinon from 'sinon';
+import tcpPortUsed from 'tcp-port-used';
 import { anything, instance, mock, when } from 'ts-mockito';
 import { DeepnoteServerStarter } from './deepnoteServerStarter.node';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { IAsyncDisposableRegistry, IHttpClient, IOutputChannel } from '../../platform/common/types';
 import { IDeepnoteToolkitInstaller } from './types';
 import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
+import { logger } from '../../platform/logging';
 
 /**
  * Integration tests for DeepnoteServerStarter port allocation logic.
@@ -51,57 +54,60 @@ suite('DeepnoteServerStarter - Port Allocation Integration Tests', () => {
     });
 
     suite('isPortAvailable', () => {
-        test('should return true when port is available', async () => {
-            // Use a high unlikely-to-be-used port
+        let checkStub: sinon.SinonStub;
+
+        setup(() => {
+            checkStub = sinon.stub(tcpPortUsed, 'check');
+        });
+
+        teardown(() => {
+            checkStub.restore();
+        });
+
+        test('should return true when both IPv4 and IPv6 loopbacks are free', async () => {
             const port = 54321;
+            checkStub.onFirstCall().resolves(false); // IPv4
+            checkStub.onSecondCall().resolves(false); // IPv6
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const isPortAvailable = getPrivateMethod(serverStarter as any, 'isPortAvailable');
             const result = await isPortAvailable(port);
 
-            // Port should be available (or test might be flaky if something uses this port)
-            assert.isTrue(result, 'Port 54321 should be available');
+            assert.isTrue(result, 'Expected port to be reported as available');
+            assert.strictEqual(checkStub.callCount, 2, 'Should check both IPv4 and IPv6 loopbacks');
+            assert.deepEqual(checkStub.getCall(0).args, [port, '127.0.0.1']);
+            assert.deepEqual(checkStub.getCall(1).args, [port, '::1']);
         });
 
-        test('CRITICAL: should return false when port is actually in use', async () => {
-            // This is the test that would have caught the bug!
-            // We actually bind to a port and verify isPortAvailable detects it
-            const port = 54323;
-            const net = require('net');
-            const server = net.createServer();
+        test('should return false when IPv4 loopback is already in use', async () => {
+            const port = 54322;
+            checkStub.onFirstCall().resolves(true);
 
-            // Bind to the port
-            await new Promise<void>((resolve) => {
-                server.listen(port, 'localhost', () => {
-                    resolve();
-                });
-            });
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const isPortAvailable = getPrivateMethod(serverStarter as any, 'isPortAvailable');
+            const result = await isPortAvailable(port);
+
+            assert.isFalse(result, 'Expected port to be reported as in use');
+            assert.strictEqual(checkStub.callCount, 1, 'IPv6 check should be skipped when IPv4 is busy');
+        });
+
+        test('should return false and log when port checks throw', async () => {
+            const port = 54323;
+            const error = new Error('check failed');
+            checkStub.rejects(error);
+
+            const warnStub = sinon.stub(logger, 'warn');
 
             try {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const isPortAvailable = getPrivateMethod(serverStarter as any, 'isPortAvailable');
                 const result = await isPortAvailable(port);
 
-                // CRITICAL: Should return false because we're holding the port
-                assert.isFalse(result, 'Port should be detected as in use when actually bound');
+                assert.isFalse(result, 'Expected port check to fail closed when an error occurs');
+                assert.isTrue(warnStub.called, 'Expected warning to be logged when check fails');
             } finally {
-                // Clean up: close the server
-                await new Promise<void>((resolve) => {
-                    server.close(() => resolve());
-                });
+                warnStub.restore();
             }
-        });
-
-        test('should detect when checking port availability', async () => {
-            // This tests that isPortAvailable returns a boolean
-            const port = 54322;
-
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const isPortAvailable = getPrivateMethod(serverStarter as any, 'isPortAvailable');
-            const result = await isPortAvailable(port);
-
-            // Result should be a boolean
-            assert.isBoolean(result);
         });
     });
 

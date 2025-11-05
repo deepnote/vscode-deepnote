@@ -362,4 +362,112 @@ suite('DeepnoteServerStarter - Port Allocation Integration Tests', () => {
             }
         });
     });
+
+    suite('findConsecutiveAvailablePorts - Edge Cases', () => {
+        test('should mark both ports unavailable and continue when consecutive port is taken', async () => {
+            // This test covers the scenario where a candidate port is available
+            // but the next port (candidate + 1) is not available.
+            // The system should mark BOTH ports as unavailable in portsInUse and continue searching.
+
+            const net = require('net');
+            const server1 = net.createServer();
+            const server2 = net.createServer();
+            const blockedPort1 = 54801;
+            const blockedPort2 = 54803;
+
+            // Block ports 54801 and 54803 (leaving 54800 and 54802 available but not consecutive)
+            await new Promise<void>((resolve) => {
+                server1.listen(blockedPort1, 'localhost', () => {
+                    server2.listen(blockedPort2, 'localhost', () => {
+                        resolve();
+                    });
+                });
+            });
+
+            try {
+                const portsInUse = new Set<number>();
+                const startPort = 54800;
+
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const findConsecutiveAvailablePorts = getPrivateMethod(
+                    serverStarter as any,
+                    'findConsecutiveAvailablePorts'
+                );
+
+                // Should skip 54800 (since 54801 is blocked) and 54802 (since 54803 is blocked)
+                // and find the next consecutive pair like 54804+54805
+                const result = await findConsecutiveAvailablePorts(startPort, portsInUse);
+
+                // Verify ports are consecutive
+                assert.strictEqual(result.lspPort, result.jupyterPort + 1);
+
+                // Should have found ports after the blocked ones
+                assert.isTrue(
+                    result.jupyterPort > blockedPort2 || result.jupyterPort < blockedPort1 - 1,
+                    'Should skip blocked port ranges'
+                );
+            } finally {
+                // Clean up
+                await new Promise<void>((resolve) => {
+                    server1.close(() => {
+                        server2.close(() => resolve());
+                    });
+                });
+            }
+        });
+
+        test('should throw DeepnoteServerStartupError when max attempts exhausted', async () => {
+            // This test covers the scenario where we cannot find consecutive ports
+            // after maxAttempts (100 attempts). This should throw a DeepnoteServerStartupError.
+
+            const net = require('net');
+            const servers: any[] = [];
+
+            try {
+                // Block a large range of ports to make it impossible to find consecutive pairs
+                const startPort = 55000;
+                const portsToBlock = 210; // More than maxAttempts (100) * 2
+
+                // Create servers blocking many ports
+                for (let i = 0; i < portsToBlock; i++) {
+                    const server = net.createServer();
+                    servers.push(server);
+                    await new Promise<void>((resolve) => {
+                        server.listen(startPort + i, 'localhost', () => resolve());
+                    });
+                }
+
+                const portsInUse = new Set<number>();
+
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const findConsecutiveAvailablePorts = getPrivateMethod(
+                    serverStarter as any,
+                    'findConsecutiveAvailablePorts'
+                );
+
+                // Should throw DeepnoteServerStartupError after maxAttempts
+                let errorThrown = false;
+                try {
+                    await findConsecutiveAvailablePorts(startPort, portsInUse);
+                } catch (error: any) {
+                    errorThrown = true;
+                    assert.strictEqual(error.constructor.name, 'DeepnoteServerStartupError');
+                    assert.include(error.stderr, 'Failed to find consecutive available ports');
+                    assert.include(error.stderr, '100 attempts');
+                }
+
+                assert.isTrue(errorThrown, 'Expected DeepnoteServerStartupError to be thrown');
+            } finally {
+                // Clean up all servers
+                await Promise.all(
+                    servers.map(
+                        (server) =>
+                            new Promise<void>((resolve) => {
+                                server.close(() => resolve());
+                            })
+                    )
+                );
+            }
+        });
+    });
 });

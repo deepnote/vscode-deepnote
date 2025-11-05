@@ -579,6 +579,9 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             // Check if the consecutive port (candidatePort + 1) is also available
             const isNextPortInUse = portsInUse.has(nextPort);
             const isNextPortAvailable = !isNextPortInUse && (await this.isPortAvailable(nextPort));
+            logger.info(
+                `Consecutive port check for base ${candidatePort}: next=${nextPort}, inUseSet=${isNextPortInUse}, available=${isNextPortAvailable}`
+            );
 
             if (isNextPortAvailable) {
                 // Found a consecutive pair!
@@ -979,14 +982,8 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                                 pidsToSkip.push({ pid, reason: 'belongs to current session' });
                             }
                         } else {
-                            // No lock file - check if orphaned before killing
-                            const isOrphaned = await this.isProcessOrphaned(pid);
-                            if (isOrphaned) {
-                                logger.info(`PID ${pid} has no lock file and is orphaned - will kill`);
-                                pidsToKill.push(pid);
-                            } else {
-                                pidsToSkip.push({ pid, reason: 'no lock file but has active parent process' });
-                            }
+                            // No lock file - assume it's an external/non-managed process and skip it
+                            pidsToSkip.push({ pid, reason: 'no lock file (assuming external process)' });
                         }
                     }
 

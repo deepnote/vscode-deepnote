@@ -53,6 +53,13 @@ suite('DeepnoteServerStarter - Port Allocation Integration Tests', () => {
         );
     });
 
+    teardown(async () => {
+        // Dispose the serverStarter to clean up any allocated ports and state
+        if (serverStarter) {
+            await serverStarter.dispose();
+        }
+    });
+
     suite('isPortAvailable', () => {
         let checkStub: sinon.SinonStub;
 
@@ -344,7 +351,13 @@ suite('DeepnoteServerStarter - Port Allocation Integration Tests', () => {
             // if Jupyter port was available but LSP port (Jupyter+1) was not,
             // the system would allocate non-consecutive ports causing server hangs
 
-            const keys = ['regression-1', 'regression-2', 'regression-3'];
+            // Use unique keys with timestamp to avoid conflicts with other tests
+            const timestamp = Date.now();
+            const keys = [
+                `concurrent-test-${timestamp}-1`,
+                `concurrent-test-${timestamp}-2`,
+                `concurrent-test-${timestamp}-3`
+            ];
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const allocatePorts = getPrivateMethod(serverStarter as any, 'allocatePorts');
@@ -437,21 +450,25 @@ suite('DeepnoteServerStarter - Port Allocation Integration Tests', () => {
         test('should throw DeepnoteServerStartupError when max attempts exhausted', async () => {
             // This test covers the scenario where we cannot find consecutive ports
             // after maxAttempts (100 attempts). This should throw a DeepnoteServerStartupError.
+            // Strategy: Block every other port so individual ports are available,
+            // but no consecutive pairs exist (blocking the +1 port for each available port)
 
             const net = require('net');
             const servers: any[] = [];
 
             try {
-                // Block a large range of ports to make it impossible to find consecutive pairs
+                // Block every other port starting from 55001 (leaving 55000, 55002, 55004, etc. available)
+                // This ensures findAvailablePort succeeds, but the consecutive port is always blocked
                 const startPort = 55000;
-                const portsToBlock = 210; // More than maxAttempts (100) * 2
+                const portsToBlock = 200; // Block 200 odd-numbered ports
 
-                // Create servers blocking many ports
+                // Create servers blocking every other port (the +1 ports)
                 for (let i = 0; i < portsToBlock; i++) {
+                    const portToBlock = startPort + i * 2 + 1; // Block 55001, 55003, 55005, etc.
                     const server = net.createServer();
                     servers.push(server);
                     await new Promise<void>((resolve) => {
-                        server.listen(startPort + i, 'localhost', () => resolve());
+                        server.listen(portToBlock, 'localhost', () => resolve());
                     });
                 }
 

@@ -499,14 +499,16 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
      * @returns Object with jupyterPort and lspPort
      */
     private async allocatePorts(key: string): Promise<{ jupyterPort: number; lspPort: number }> {
-        // Wait for any ongoing port allocation to complete
-        await this.portAllocationLock;
-
-        // Create new allocation promise and update the lock
+        // Chain onto the existing lock promise to serialize allocations even when multiple calls start concurrently
+        const previousLock = this.portAllocationLock;
         let releaseLock: () => void;
-        this.portAllocationLock = new Promise((resolve) => {
+        const currentLock = new Promise<void>((resolve) => {
             releaseLock = resolve;
         });
+        this.portAllocationLock = previousLock.then(() => currentLock);
+
+        // Wait until all prior allocations have completed before proceeding
+        await previousLock;
 
         try {
             // Get all ports currently in use by our managed servers
@@ -547,7 +549,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
             return { jupyterPort, lspPort };
         } finally {
-            // Release the lock to allow next allocation
+            // Release the lock to allow next allocation in the chain to proceed
             releaseLock!();
         }
     }

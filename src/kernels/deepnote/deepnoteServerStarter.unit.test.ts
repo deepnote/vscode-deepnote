@@ -116,6 +116,66 @@ suite('DeepnoteServerStarter - Port Allocation Integration Tests', () => {
                 warnStub.restore();
             }
         });
+
+        test('should return true when IPv6 is disabled (EAFNOSUPPORT error)', async () => {
+            const port = 54324;
+            const ipv6Error = new Error('connect EAFNOSUPPORT ::1:54324');
+
+            // IPv4 check succeeds (port is available)
+            checkStub.onFirstCall().resolves(false);
+
+            // IPv6 check throws EAFNOSUPPORT (IPv6 not supported)
+            checkStub.onSecondCall().rejects(ipv6Error);
+
+            const debugStub = sinon.stub(logger, 'debug');
+
+            try {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const isPortAvailable = getPrivateMethod(serverStarter as any, 'isPortAvailable');
+                const result = await isPortAvailable(port);
+
+                assert.isTrue(result, 'Expected port to be available when IPv4 is free and IPv6 is not supported');
+                assert.strictEqual(checkStub.callCount, 2, 'Should check both IPv4 and IPv6');
+                assert.deepEqual(checkStub.getCall(0).args, [port, '127.0.0.1']);
+                assert.deepEqual(checkStub.getCall(1).args, [port, '::1']);
+                assert.isTrue(
+                    debugStub.calledWith('IPv6 is not supported on this system'),
+                    'Should log debug message about IPv6 not being supported'
+                );
+            } finally {
+                debugStub.restore();
+            }
+        });
+
+        test('should return false when IPv6 check throws non-EAFNOSUPPORT error', async () => {
+            const port = 54325;
+            const ipv6Error = new Error('Some other IPv6 error');
+
+            // IPv4 check succeeds (port is available)
+            checkStub.onFirstCall().resolves(false);
+
+            // IPv6 check throws a different error
+            checkStub.onSecondCall().rejects(ipv6Error);
+
+            const warnStub = sinon.stub(logger, 'warn');
+
+            try {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const isPortAvailable = getPrivateMethod(serverStarter as any, 'isPortAvailable');
+                const result = await isPortAvailable(port);
+
+                assert.isFalse(
+                    result,
+                    'Expected port check to fail closed when IPv6 check fails with non-EAFNOSUPPORT error'
+                );
+                assert.strictEqual(checkStub.callCount, 2, 'Should check both IPv4 and IPv6');
+                assert.isTrue(warnStub.called, 'Should log warning when IPv6 check fails');
+                const warnCall = warnStub.getCall(0);
+                assert.include(warnCall.args[0], 'Failed to check IPv6 port availability');
+            } finally {
+                warnStub.restore();
+            }
+        });
     });
 
     suite('findAvailablePort', () => {

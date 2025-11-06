@@ -621,8 +621,17 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             }
 
             // Also check IPv6 loopback to be safe
-            const inUseIpv6 = await tcpPortUsed.check(port, '::1');
-            return !inUseIpv6;
+            try {
+                const inUseIpv6 = await tcpPortUsed.check(port, '::1');
+                return !inUseIpv6;
+            } catch (error: unknown) {
+                if (error instanceof Error && 'code' in error && error.code === 'EAFNOSUPPORT') {
+                    logger.debug('IPv6 is not supported on this system');
+                    return true;
+                }
+                logger.warn(`Failed to check IPv6 port availability for ${port}:`, error);
+                return false;
+            }
         } catch (error) {
             logger.warn(`Failed to check port availability for ${port}:`, error);
             return false;

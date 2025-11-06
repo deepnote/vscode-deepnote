@@ -624,8 +624,8 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             try {
             const inUseIpv6 = await tcpPortUsed.check(port, '::1');
             return !inUseIpv6;
-            } catch (error) {
-                if (error instanceof Error && error.message.includes('EAFNOSUPPORT')) {
+            } catch (error: unknown) {
+                if (error instanceof Error && 'code' in error && error.code === 'EAFNOSUPPORT') {
                     logger.debug('IPv6 is not supported on this system');
                     return true;
                 }

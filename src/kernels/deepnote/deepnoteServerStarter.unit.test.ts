@@ -120,6 +120,7 @@ suite('DeepnoteServerStarter - Port Allocation Integration Tests', () => {
         test('should return true when IPv6 is disabled (EAFNOSUPPORT error)', async () => {
             const port = 54324;
             const ipv6Error = new Error('connect EAFNOSUPPORT ::1:54324');
+            (ipv6Error as any).code = 'EAFNOSUPPORT';
 
             // IPv4 check succeeds (port is available)
             checkStub.onFirstCall().resolves(false);

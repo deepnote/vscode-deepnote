@@ -345,7 +345,7 @@
             {
                 "command": "deepnote.viewOutput",
                 "title": "%deepnote.command.deepnote.viewOutput.title%",
-                "category": "Jupyter"
+                "category": "Deepnote"
             },
             {
                 "command": "deepnote.notebookeditor.export",

@@ -41,8 +41,7 @@ function isTelemetrySupported(): boolean {
  * @returns {boolean}
  */
 export function isTelemetryDisabled(): boolean {
-    const settings = workspace.getConfiguration('telemetry').inspect<boolean>('enableTelemetry')!;
-    return settings.globalValue === false ? true : false;
+    return true;
 }
 
 export function onDidChangeTelemetryEnablement(handler: (enabled: boolean) => void): Disposable {

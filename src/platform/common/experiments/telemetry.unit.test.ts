@@ -9,20 +9,14 @@ import * as Telemetry from '../../../platform/telemetry/index';
 suite('Experimentation telemetry', () => {
     const event = 'SomeEventName';
 
-    let telemetryEvents: { eventName: string; properties: object }[] = [];
-    let sendTelemetryEventStub: sinon.SinonStub;
     let setSharedPropertyStub: sinon.SinonStub;
     let experimentTelemetry: ExperimentationTelemetry;
     let eventProperties: Map<string, string>;
 
     setup(() => {
-        sendTelemetryEventStub = sinon
-            .stub(Telemetry, 'sendTelemetryEvent')
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            .callsFake((eventName: string, _, properties: any) => {
-                const telemetry = { eventName, properties };
-                telemetryEvents.push(telemetry);
-            });
+        sinon.stub(Telemetry, 'sendTelemetryEvent').callsFake(() => {
+            // Stub for telemetry (now disabled)
+        });
         setSharedPropertyStub = sinon.stub(Telemetry, 'setSharedProperty');
 
         eventProperties = new Map<string, string>();
@@ -33,21 +27,13 @@ suite('Experimentation telemetry', () => {
     });
 
     teardown(() => {
-        telemetryEvents = [];
         sinon.restore();
     });
 
-    test('Calling postEvent should send a telemetry event', () => {
-        experimentTelemetry.postEvent(event, eventProperties);
-
-        sinon.assert.calledOnce(sendTelemetryEventStub);
-        assert.equal(telemetryEvents.length, 1);
-        assert.deepEqual(telemetryEvents[0], {
-            eventName: event,
-            properties: {
-                foo: 'one',
-                bar: 'two'
-            }
+    test('Calling postEvent should not throw (telemetry disabled)', () => {
+        // Telemetry is now disabled, so we just verify the method doesn't throw
+        assert.doesNotThrow(() => {
+            experimentTelemetry.postEvent(event, eventProperties);
         });
     });
 

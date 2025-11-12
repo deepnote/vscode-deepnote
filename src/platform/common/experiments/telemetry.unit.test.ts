@@ -9,20 +9,14 @@ import * as Telemetry from '../../../platform/telemetry/index';
 suite('Experimentation telemetry', () => {
     const event = 'SomeEventName';
 
-    let telemetryEvents: { eventName: string; properties: object }[] = [];
-    let sendTelemetryEventStub: sinon.SinonStub;
     let setSharedPropertyStub: sinon.SinonStub;
     let experimentTelemetry: ExperimentationTelemetry;
     let eventProperties: Map<string, string>;
 
     setup(() => {
-        sendTelemetryEventStub = sinon
-            .stub(Telemetry, 'sendTelemetryEvent')
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            .callsFake((eventName: string, _, properties: any) => {
-                const telemetry = { eventName, properties };
-                telemetryEvents.push(telemetry);
-            });
+        sinon.stub(Telemetry, 'sendTelemetryEvent').callsFake(() => {
+            // Stub for telemetry (now disabled)
+        });
         setSharedPropertyStub = sinon.stub(Telemetry, 'setSharedProperty');
 
         eventProperties = new Map<string, string>();
@@ -33,7 +27,6 @@ suite('Experimentation telemetry', () => {
     });
 
     teardown(() => {
-        telemetryEvents = [];
         sinon.restore();
     });
 

@@ -6,17 +6,11 @@ import * as sinon from 'sinon';
 import { expect } from 'chai';
 import { Disposable } from 'vscode';
 import { EXTENSION_ROOT_DIR } from '../constants.node';
-import {
-    _resetSharedProperties,
-    getTelemetryReporter,
-    isTelemetryDisabled,
-    sendTelemetryEvent,
-    setSharedProperty
-} from '../../telemetry';
+import { _resetSharedProperties, getTelemetryReporter, sendTelemetryEvent, setSharedProperty } from '../../telemetry';
 import { isUnitTestExecution, isTestExecution, setTestExecution, setUnitTestExecution } from '../common/constants';
 import { sleep } from '../../test/core';
 import { waitForCondition } from '../../test/common';
-import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
+import { resetVSCodeMocks } from '../../test/vscode-mock';
 import { IDisposable } from '../common/types';
 import { dispose } from '../common/utils/lifecycle';
 

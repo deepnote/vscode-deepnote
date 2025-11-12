@@ -10,8 +10,7 @@ import {
     isTestExecution,
     isUnitTestExecution,
     setTestExecution,
-    setUnitTestExecution,
-    Telemetry
+    setUnitTestExecution
 } from '../platform/common/constants';
 import {
     IConfigurationService,

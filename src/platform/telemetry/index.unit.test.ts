@@ -4,8 +4,7 @@
 /* eslint-disable , , @typescript-eslint/no-explicit-any */
 import * as sinon from 'sinon';
 import { expect } from 'chai';
-import { instance, mock, reset, verify, when } from 'ts-mockito';
-import { Disposable, WorkspaceConfiguration } from 'vscode';
+import { Disposable } from 'vscode';
 import { EXTENSION_ROOT_DIR } from '../constants.node';
 import {
     _resetSharedProperties,
@@ -80,35 +79,7 @@ suite('Telemetry', () => {
         _resetSharedProperties();
     });
 
-    const testsForisTelemetryDisabled = [
-        {
-            testName: 'Returns true when globalValue is set to false',
-            settings: { globalValue: false },
-            expectedResult: true
-        },
-        {
-            testName: 'Returns false otherwise',
-            settings: {},
-            expectedResult: false
-        }
-    ];
-
-    suite('Function isTelemetryDisabled()', () => {
-        testsForisTelemetryDisabled.forEach((testParams) => {
-            test(testParams.testName, async () => {
-                const workspaceConfig = mock<WorkspaceConfiguration>();
-                reset(mockedVSCodeNamespaces.workspace);
-                when(mockedVSCodeNamespaces.workspace.getConfiguration('telemetry')).thenReturn(
-                    instance(workspaceConfig)
-                );
-                when(workspaceConfig.inspect<string>('enableTelemetry')).thenReturn(testParams.settings as any);
-
-                expect(isTelemetryDisabled()).to.equal(testParams.expectedResult);
-
-                verify(mockedVSCodeNamespaces.workspace.getConfiguration('telemetry')).once();
-            });
-        });
-    });
+    // Note: isTelemetryDisabled() tests removed as telemetry is now permanently disabled
 
     test('Send Telemetry', async () => {
         const eventName = 'Testing';

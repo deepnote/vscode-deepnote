@@ -37,17 +37,10 @@ suite('Experimentation telemetry', () => {
         sinon.restore();
     });
 
-    test('Calling postEvent should send a telemetry event', () => {
-        experimentTelemetry.postEvent(event, eventProperties);
-
-        sinon.assert.calledOnce(sendTelemetryEventStub);
-        assert.equal(telemetryEvents.length, 1);
-        assert.deepEqual(telemetryEvents[0], {
-            eventName: event,
-            properties: {
-                foo: 'one',
-                bar: 'two'
-            }
+    test('Calling postEvent should not throw (telemetry disabled)', () => {
+        // Telemetry is now disabled, so we just verify the method doesn't throw
+        assert.doesNotThrow(() => {
+            experimentTelemetry.postEvent(event, eventProperties);
         });
     });
 

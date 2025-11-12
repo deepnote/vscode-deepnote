@@ -4,7 +4,6 @@
 /* eslint-disable , , @typescript-eslint/no-explicit-any, no-multi-str, no-trailing-spaces */
 import * as sinon from 'sinon';
 import * as fakeTimers from '@sinonjs/fake-timers';
-import { assert, expect } from 'chai';
 import { when } from 'ts-mockito';
 import { Disposable, EventEmitter, NotebookCellKind, NotebookDocument } from 'vscode';
 
@@ -18,11 +17,9 @@ import {
 } from '../../platform/common/constants';
 import { dispose } from '../../platform/common/utils/lifecycle';
 import { IDisposable } from '../../platform/common/types';
-import { EventName } from '../../platform/telemetry/constants';
 import { getTelemetrySafeHashedString } from '../../platform/telemetry/helpers';
 import { ImportTracker } from './importTracker';
 import { ResourceTypeTelemetryProperty, getTelemetryReporter } from '../../telemetry';
-import { waitForCondition } from '../../test/common';
 import { createMockedNotebookDocument } from '../../test/datascience/editor-integration/helpers';
 import { mockedVSCodeNamespaces } from '../../test/vscode-mock';
 import { EmptyEvent } from '../../platform/common/utils/events';
@@ -52,6 +49,7 @@ suite(`Import Tracker`, async () => {
         public static properties: Record<string, string>[] = [];
         public static measures: {}[] = [];
 
+        // Telemetry is now disabled, so this method just ensures the tracker doesn't crash
         public static async expectHashes(
             when: 'onExecution' | 'onOpenCloseOrSave' = 'onOpenCloseOrSave',
             resourceType: ResourceTypeTelemetryProperty['resourceType'] = undefined,
@@ -59,39 +57,7 @@ suite(`Import Tracker`, async () => {
         ) {
             clock.tick(1);
             void clock.runAllAsync();
-            if (hashes.length > 0) {
-                await waitForCondition(
-                    async () => {
-                        expect(Reporter.eventNames).to.contain(EventName.HASHED_PACKAGE_NAME);
-                        return true;
-                    },
-                    1_000,
-                    'Hashed package name event not sent'
-                );
-                expect(Reporter.eventNames).to.contain(EventName.HASHED_PACKAGE_NAME);
-                await waitForCondition(
-                    async () => {
-                        Reporter.properties.filter((item) => Object.keys(item).length).length === hashes.length;
-                        return true;
-                    },
-                    1_000,
-                    () =>
-                        `Incorrect number of hashed package name events sent. Expected ${hashes.length}, got ${
-                            Reporter.properties.filter((item) => Object.keys(item).length).length
-                        }, with values ${JSON.stringify(
-                            Reporter.properties.filter((item) => Object.keys(item).length)
-                        )}`
-                );
-            }
-            const properties = Reporter.properties.filter((item) => Object.keys(item).length);
-            const expected = resourceType
-                ? hashes.map((hash) => ({ hashedNamev2: hash, when, resourceType }))
-                : hashes.map((hash) => ({ hashedNamev2: hash, when }));
-            assert.deepEqual(
-                properties.sort((a, b) => a.hashedNamev2.localeCompare(b.hashedNamev2)),
-                expected.sort((a, b) => a.hashedNamev2.localeCompare(b.hashedNamev2)),
-                `Hashes not sent correctly, expected ${JSON.stringify(expected)} but got ${JSON.stringify(properties)}`
-            );
+            // Telemetry verification removed as telemetry is now disabled
         }
 
         public sendTelemetryEvent(eventName: string, properties?: {}, measures?: {}) {

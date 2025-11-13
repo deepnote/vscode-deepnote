@@ -2543,7 +2543,7 @@
         "uuid": "^13.0.0",
         "vega": "^5.33.0",
         "vega-embed": "^6.25.0",
-        "vega-lite": "^5.21.0",
+        "vega-lite": "^6.4.1",
         "vscode-debugprotocol": "^1.41.0",
         "vscode-languageclient": "8.0.2-next.5",
         "vscode-tas-client": "^0.1.84",

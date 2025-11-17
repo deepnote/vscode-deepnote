@@ -167,6 +167,23 @@ export type TelemetryMeasures<
     P extends IEventNamePropertyMapping = IEventNamePropertyMapping
 > = P[E] extends TelemetryEventInfo<infer R> ? PickType<UnionToIntersection<R>, number> : undefined;
 
+/**
+ * Send a telemetry error event using the new sendTelemetryErrorEvent API.
+ * This wrapper provides backward compatibility with older versions of @vscode/extension-telemetry.
+ */
+function sendTelemetryError(eventName: string, properties?: Record<string, string>, measures?: Record<string, number>) {
+    const reporter = getTelemetryReporter();
+
+    // Use the new sendTelemetryErrorEvent API if available (v0.8.0+)
+    // Otherwise fall back to sendTelemetryEvent for backward compatibility
+    if (typeof reporter.sendTelemetryErrorEvent === 'function') {
+        reporter.sendTelemetryErrorEvent(eventName, properties, measures);
+    } else {
+        // Fallback for older versions
+        reporter.sendTelemetryEvent(eventName, properties, measures);
+    }
+}
+
 function sendTelemetryEventInternal<P extends IEventNamePropertyMapping, E extends keyof P>(
     eventName: E,
     measures?: Record<string, number>,
@@ -187,7 +204,8 @@ function sendTelemetryEventInternal<P extends IEventNamePropertyMapping, E exten
         populateTelemetryWithErrorInfo(customProperties, ex)
             .then(() => {
                 customProperties = sanitizeProperties(eventNameSent, customProperties);
-                reporter.sendTelemetryEvent(eventNameSent, customProperties, measures);
+                // Use the new sendTelemetryErrorEvent API for error reporting
+                sendTelemetryError(eventNameSent, customProperties, measures);
             })
             .catch(noop);
     } else {

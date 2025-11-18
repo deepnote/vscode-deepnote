@@ -16,7 +16,7 @@ import { logger } from '../../platform/logging';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { Commands } from '../../platform/common/constants';
-import { chainWithPendingUpdates } from '../../kernels/execution/notebookUpdater';
+import { notebookUpdaterUtils } from '../../kernels/execution/notebookUpdater';
 import { WrappedError } from '../../platform/errors/types';
 import { formatInputBlockCellContent, getInputBlockLanguage } from './inputBlockContentFormatter';
 import {
@@ -202,7 +202,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         // Determine the index where to insert the new cell (below current selection or at the end)
         const insertIndex = selection ? selection.end : document.cellCount;
 
-        const result = await chainWithPendingUpdates(document, (edit) => {
+        const result = await notebookUpdaterUtils.chainWithPendingUpdates(document, (edit) => {
             // Create a SQL cell with SQL language for syntax highlighting
             // This matches the SqlBlockConverter representation
             const newCell = new NotebookCellData(NotebookCellKind.Code, '', 'sql');
@@ -247,7 +247,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             }
         };
 
-        const result = await chainWithPendingUpdates(document, (edit) => {
+        const result = await notebookUpdaterUtils.chainWithPendingUpdates(document, (edit) => {
             const newCell = new NotebookCellData(
                 NotebookCellKind.Code,
                 JSON.stringify(bigNumberMetadata, null, 2),
@@ -301,7 +301,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             }
         };
 
-        const result = await chainWithPendingUpdates(document, (edit) => {
+        const result = await notebookUpdaterUtils.chainWithPendingUpdates(document, (edit) => {
             const newCell = new NotebookCellData(NotebookCellKind.Code, JSON.stringify(cellContent, null, 2), 'json');
 
             newCell.metadata = metadata;
@@ -347,7 +347,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             ...defaultMetadata
         };
 
-        const result = await chainWithPendingUpdates(document, (edit) => {
+        const result = await notebookUpdaterUtils.chainWithPendingUpdates(document, (edit) => {
             // Use the formatter to get the correct cell content based on block type and metadata
             const cellContent = formatInputBlockCellContent(blockType, defaultMetadata);
             // Get the correct language mode for this input block type

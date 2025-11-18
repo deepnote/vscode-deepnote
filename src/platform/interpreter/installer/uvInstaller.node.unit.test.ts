@@ -4,48 +4,59 @@
 import { assert } from 'chai';
 import { anything, instance, mock, when } from 'ts-mockito';
 import * as sinon from 'sinon';
-import { UvInstaller } from './uvInstaller.node';
+import esmock from 'esmock';
 import { IServiceContainer } from '../../ioc/types';
 import { IProcessServiceFactory, IProcessService } from '../../common/process/types.node';
 import { ModuleInstallerType, ModuleInstallFlags } from './types';
 import { ExecutionInstallArgs } from './moduleInstaller.node';
 import { PythonEnvironment } from '../../pythonEnvironments/info';
 import { Environment } from '@vscode/python-extension';
-import * as helpers from '../helpers';
 import { Uri } from 'vscode';
-
-// Test class to access protected methods
-class TestableUvInstaller extends UvInstaller {
-    public async testGetExecutionArgs(
-        moduleName: string,
-        interpreter: PythonEnvironment | Environment,
-        flags?: ModuleInstallFlags
-    ): Promise<ExecutionInstallArgs> {
-        return this.getExecutionArgs(moduleName, interpreter, flags);
-    }
-}
+import type { UvInstaller } from './uvInstaller.node';
 
 suite('UvInstaller', () => {
+    let UvInstallerClass: typeof UvInstaller;
+    let TestableUvInstallerClass: any;
     let installer: UvInstaller;
-    let testableInstaller: TestableUvInstaller;
+    let testableInstaller: any;
     let serviceContainer: IServiceContainer;
     let processServiceFactory: IProcessServiceFactory;
     let processService: IProcessService;
     let getInterpreterInfoStub: sinon.SinonStub;
 
-    setup(() => {
+    setup(async () => {
         serviceContainer = mock<IServiceContainer>();
         processServiceFactory = mock<IProcessServiceFactory>();
         processService = mock<IProcessService>();
 
         // Create stub for getInterpreterInfo helper
-        getInterpreterInfoStub = sinon.stub(helpers, 'getInterpreterInfo');
+        getInterpreterInfoStub = sinon.stub();
+
+        // Import UvInstaller with mocked helpers
+        const module = await esmock('./uvInstaller.node', {
+            '../helpers': {
+                getInterpreterInfo: getInterpreterInfoStub
+            }
+        });
+
+        UvInstallerClass = module.UvInstaller;
+
+        // Test class to access protected methods
+        TestableUvInstallerClass = class extends UvInstallerClass {
+            public async testGetExecutionArgs(
+                moduleName: string,
+                interpreter: PythonEnvironment | Environment,
+                flags?: ModuleInstallFlags
+            ): Promise<ExecutionInstallArgs> {
+                return this.getExecutionArgs(moduleName, interpreter, flags);
+            }
+        };
 
         when(processServiceFactory.create(anything())).thenResolve(instance(processService));
 
-        installer = new UvInstaller(instance(serviceContainer), instance(processServiceFactory));
+        installer = new UvInstallerClass(instance(serviceContainer), instance(processServiceFactory));
 
-        testableInstaller = new TestableUvInstaller(instance(serviceContainer), instance(processServiceFactory));
+        testableInstaller = new TestableUvInstallerClass(instance(serviceContainer), instance(processServiceFactory));
 
         // Ensure 'then' is undefined to prevent hanging tests
         (instance(processService) as any).then = undefined;

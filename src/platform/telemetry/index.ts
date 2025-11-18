@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import type TelemetryReporter from '@vscode/extension-telemetry';
+import TelemetryReporter from '@vscode/extension-telemetry';
 import { AppinsightsKey, Telemetry, isTestExecution, isUnitTestExecution } from '../common/constants';
 import { logger } from '../logging';
 import { StopWatch } from '../common/utils/stopWatch';
@@ -25,11 +25,7 @@ export { JupyterCommands, Telemetry } from '../common/constants';
  */
 function isTelemetrySupported(): boolean {
     try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const vsc = require('vscode');
-        if (vsc === undefined) {
-            return false;
-        }
+        // In ESM, vscode is already imported at the top, so we just need to check if telemetry reporter is available
         return getTelemetryReporter() !== undefined;
     } catch {
         return false;
@@ -86,8 +82,7 @@ export function getTelemetryReporter(): TelemetryReporter {
     if (telemetryReporter) {
         return telemetryReporter;
     }
-    const TelemetryReporrerClass = require('@vscode/extension-telemetry').default as typeof TelemetryReporter;
-    return (telemetryReporter = new TelemetryReporrerClass(AppinsightsKey));
+    return (telemetryReporter = new TelemetryReporter(AppinsightsKey));
 }
 
 function sanitizeProperties(eventName: string, data: Record<string, any>) {

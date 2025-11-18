@@ -3,7 +3,7 @@
 
 import { ChildProcess } from 'child_process';
 import { kill } from 'process';
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import * as crypto from 'crypto';
 import * as os from 'os';
 import * as path from '../../../platform/vscode-path/path';

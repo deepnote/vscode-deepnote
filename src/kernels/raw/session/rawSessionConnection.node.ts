@@ -3,6 +3,8 @@
 
 import type { Kernel, KernelMessage, ServerConnection, Session } from '@jupyterlab/services';
 import { Signal } from '@lumino/signaling';
+import { createRequire } from 'module';
+
 import { logger } from '../../../platform/logging';
 import { Resource } from '../../../platform/common/types';
 import { Telemetry } from '../../../telemetry';
@@ -15,6 +17,8 @@ import { CancellationToken, Uri } from 'vscode';
 import { trackKernelResourceInformation } from '../../telemetry/helper';
 import { RawKernelConnection } from './rawKernelConnection.node';
 import { generateUuid } from '../../../platform/common/uuid';
+
+const require = createRequire(import.meta.url);
 
 /*
 RawSession class implements a jupyterlab ISession object

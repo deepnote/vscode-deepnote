@@ -1,8 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-'use strict';
 
-const util = require('./util');
-exports.ExtensionRootDir = util.ExtensionRootDir;
-exports.isWindows = /^win/.test(process.platform);
-exports.isCI = process.env.TF_BUILD !== undefined || process.env.GITHUB_ACTIONS === 'true';
+import { ExtensionRootDir as _ExtensionRootDir } from './util.js';
+
+export const ExtensionRootDir = _ExtensionRootDir;
+export const isWindows = /^win/.test(process.platform);
+export const isCI = process.env.TF_BUILD !== undefined || process.env.GITHUB_ACTIONS === 'true';

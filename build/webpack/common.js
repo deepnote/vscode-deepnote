@@ -1,11 +1,11 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-'use strict';
 
-const glob = require('glob');
-const path = require('path');
-const constants = require('../constants');
-exports.nodeModulesToExternalize = [
+import glob from 'glob';
+import path from 'path';
+import { ExtensionRootDir } from '../constants.js';
+
+export const nodeModulesToExternalize = [
     'pdfkit/js/pdfkit.standalone',
     'crypto-js',
     'fontkit',
@@ -13,19 +13,20 @@ exports.nodeModulesToExternalize = [
     'zeromq',
     'zeromqold'
 ];
-exports.nodeModulesToReplacePaths = [...exports.nodeModulesToExternalize];
-function getDefaultPlugins(name) {
+
+export const nodeModulesToReplacePaths = [...nodeModulesToExternalize];
+
+export function getDefaultPlugins(name) {
     return [];
 }
-exports.getDefaultPlugins = getDefaultPlugins;
-function getListOfExistingModulesInOutDir() {
-    const outDir = path.join(constants.ExtensionRootDir, 'out');
+
+export function getListOfExistingModulesInOutDir() {
+    const outDir = path.join(ExtensionRootDir, 'out');
     const files = glob.sync('**/*.js', { sync: true, cwd: outDir });
     return files.map((filePath) => `./${filePath.slice(0, -3)}`);
 }
-exports.getListOfExistingModulesInOutDir = getListOfExistingModulesInOutDir;
 
-const bundleConfiguration = {
+export const bundleConfiguration = {
     // We are bundling for both Web and Desktop.
     webAndDesktop: 'webAndDesktop',
     // We are bundling for both Web only.
@@ -33,11 +34,12 @@ const bundleConfiguration = {
     // We are bundling for both Desktop only.
     desktop: 'desktop'
 };
+
 /**
  * Gets the bundle configuration based on the environment variable.
  * @return {'webAndDesktop' | 'web' | 'desktop'}
  */
-function getBundleConfiguration() {
+export function getBundleConfiguration() {
     if (process.env.VSC_VSCE_TARGET === 'web') {
         console.log('Building Web Bundle');
         return bundleConfiguration.web;
@@ -51,7 +53,7 @@ function getBundleConfiguration() {
     }
 }
 
-function getZeroMQPreBuildsFoldersToKeep() {
+export function getZeroMQPreBuildsFoldersToKeep() {
     // Possible values of 'VSC_VSCE_TARGET' include platforms supported by `vsce package --target`
     // See here https://code.visualstudio.com/api/working-with-extensions/publishing-extension#platformspecific-extensions
     const vsceTarget = process.env.VSC_VSCE_TARGET;
@@ -100,7 +102,3 @@ function getZeroMQPreBuildsFoldersToKeep() {
         throw new Error(`Unknown platform '${vsceTarget}'}`);
     }
 }
-
-exports.bundleConfiguration = bundleConfiguration;
-exports.getZeroMQPreBuildsFoldersToKeep = getZeroMQPreBuildsFoldersToKeep;
-exports.getBundleConfiguration = getBundleConfiguration;

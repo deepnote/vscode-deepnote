@@ -1,12 +1,13 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { FetchError } from 'node-fetch';
 import * as stackTrace from 'stack-trace';
 import { getTelemetrySafeHashedString } from '../telemetry/helpers';
 import { getErrorTags } from './errors';
 import { getLastFrameFromPythonTraceback } from './errorUtils';
 import { getErrorCategory, TelemetryErrorProperties, BaseError, WrappedError } from './types';
+
+class FetchError extends Error {}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function populateTelemetryWithErrorInfo(props: Partial<TelemetryErrorProperties>, error: Error) {

@@ -10,10 +10,18 @@ export * from './platform';
 // Home path depends upon OS
 const homePath = os.homedir();
 
-export function getEnvironmentVariable(key: string): string | undefined {
+function getEnvironmentVariableImpl(key: string): string | undefined {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (process.env as any as EnvironmentVariables)[key];
 }
+
+// Export through a mutable object to allow stubbing in ESM tests
+export const platformUtils = {
+    getEnvironmentVariable: getEnvironmentVariableImpl
+};
+
+// Keep original export for backwards compatibility
+export const getEnvironmentVariable = platformUtils.getEnvironmentVariable;
 
 export function getPathEnvironmentVariable(): string | undefined {
     return getEnvironmentVariable('Path') || getEnvironmentVariable('PATH');

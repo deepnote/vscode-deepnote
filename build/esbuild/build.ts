@@ -3,17 +3,26 @@
 
 import * as path from 'path';
 import * as esbuild from 'esbuild';
-import { green } from 'colors';
+import colors from 'colors';
 import type { BuildOptions, Charset, Loader, Plugin, SameShape } from 'esbuild';
 import { lessLoader } from 'esbuild-plugin-less';
 import fs from 'fs-extra';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import { createRequire } from 'module';
 import { getZeroMQPreBuildsFoldersToKeep, getBundleConfiguration, bundleConfiguration } from '../webpack/common';
-import ImportGlobPlugin from 'esbuild-plugin-import-glob';
+import ImportGlobPluginModule from 'esbuild-plugin-import-glob';
 import postcss from 'postcss';
+
+const ImportGlobPlugin = ImportGlobPluginModule.default || ImportGlobPluginModule;
 import tailwindcss from '@tailwindcss/postcss';
 import autoprefixer from 'autoprefixer';
-const plugin = require('node-stdlib-browser/helpers/esbuild/plugin');
-const stdLibBrowser = require('node-stdlib-browser');
+import plugin from 'node-stdlib-browser/helpers/esbuild/plugin';
+import stdLibBrowser from 'node-stdlib-browser';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const require = createRequire(import.meta.url);
 
 // These will not be in the main desktop bundle, but will be in the web bundle.
 // In desktop, we will bundle/copye each of these separately into the node_modules folder.
@@ -24,10 +33,7 @@ const deskTopNodeModulesToExternalize = [
     'png-js',
     'zeromq', // Copy, do not bundle
     'zeromqold', // Copy, do not bundle
-    // Its lazy loaded by Jupyter lab code, & since this isn't used directly in our code
-    // there's no need to include into the main bundle.
-    'node-fetch',
-    // Its loaded by node-fetch, & since that is lazy loaded
+    // Its loaded by node-fetch (which is now bundled), & since that is lazy loaded
     // there's no need to include into the main bundle.
     'iconv-lite',
     // Its loaded by ivonv-lite, & since that is lazy loaded
@@ -36,17 +42,16 @@ const deskTopNodeModulesToExternalize = [
     'svg-to-pdfkit',
     // Lazy loaded modules.
     'vscode-languageclient/node',
-    '@vscode/extension-telemetry',
-    '@jupyterlab/services',
     '@jupyterlab/nbformat',
-    '@jupyterlab/services/lib/kernel/serialize',
-    '@jupyterlab/services/lib/kernel/default',
     'vscode-jsonrpc' // Used by a few modules, might as well pull this out, instead of duplicating it in separate bundles.
 ];
 const commonExternals = [
     'log4js',
     'vscode',
     'commonjs',
+    'module', // Node.js builtin module for createRequire (ESM support)
+    'node:os', // Node.js builtin (use node: prefix for ESM)
+    'ansi-regex', // Used by regexp utils
     'node:crypto',
     'node:fs/promises',
     'node:path',
@@ -58,7 +63,7 @@ const commonExternals = [
     '@opentelemetry/instrumentation',
     '@azure/functions-core'
 ];
-const webExternals = commonExternals.concat('os').concat(commonExternals);
+const webExternals = commonExternals;
 const desktopExternals = commonExternals.concat(deskTopNodeModulesToExternalize);
 const bundleConfig = getBundleConfiguration();
 const isDevbuild = !process.argv.includes('--production');
@@ -232,13 +237,13 @@ function createConfig(
     if (target === 'desktop') {
         alias['jsonc-parser'] = path.join(extensionFolder, 'node_modules', 'jsonc-parser', 'lib', 'esm', 'main.js');
     }
-    return {
+    const config: SameShape<BuildOptions, BuildOptions> = {
         entryPoints: [source],
         outfile,
         bundle: true,
         external,
         alias,
-        format: target === 'desktop' || source.endsWith('extension.web.ts') || isWebTestSource ? 'cjs' : 'esm',
+        format: 'esm',
         metafile: isDevbuild && !watch,
         define,
         target: target === 'desktop' ? 'node18' : 'es2018',
@@ -250,6 +255,20 @@ function createConfig(
         plugins,
         loader: target === 'desktop' ? {} : loader
     };
+
+    // Add createRequire banner for desktop ESM builds to support external CommonJS modules
+    if (target === 'desktop') {
+        config.banner = {
+            js: `import { createRequire as __createRequire } from 'module';
+import { fileURLToPath as __fileURLToPath } from 'url';
+import { dirname as __getDirname } from 'path';
+const require = __createRequire(import.meta.url);
+const __filename = __fileURLToPath(import.meta.url);
+const __dirname = __getDirname(__filename);`
+        };
+    }
+
+    return config;
 }
 async function build(source: string, outfile: string, options: { watch: boolean; target: 'desktop' | 'web' }) {
     if (options.watch) {
@@ -259,11 +278,11 @@ async function build(source: string, outfile: string, options: { watch: boolean;
         const result = await esbuild.build(createConfig(source, outfile, options.target, options.watch));
         const size = fs.statSync(outfile).size;
         const relativePath = `./${path.relative(extensionFolder, outfile)}`;
-        console.log(`asset ${green(relativePath)} size: ${(size / 1024).toFixed()} KiB`);
+        console.log(`asset ${colors.green(relativePath)} size: ${(size / 1024).toFixed()} KiB`);
         if (isDevbuild && result.metafile) {
             const metafile = `${outfile}.esbuild.meta.json`;
             await fs.writeFile(metafile, JSON.stringify(result.metafile));
-            console.log(`metafile ${green(`./${path.relative(extensionFolder, metafile)}`)}`);
+            console.log(`metafile ${colors.green(`./${path.relative(extensionFolder, metafile)}`)}`);
         }
     }
 }

@@ -1,21 +1,18 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { instance, mock, when } from 'ts-mockito';
+import { anything, instance, mock, when } from 'ts-mockito';
 /* eslint-disable no-invalid-this, @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires, @typescript-eslint/no-explicit-any */
 
 import * as vscode from 'vscode';
 import { format } from '../platform/common/helpers';
 import { noop } from '../platform/common/utils/misc';
 import * as vscodeMocks from './mocks/vsc';
-import { vscMockTelemetryReporter } from './mocks/vsc/telemetryReporter';
-const Module = require('module');
 
 type VSCode = typeof vscode;
 
-const mockedVSCode: Partial<VSCode> = {};
+export const mockedVSCode: Partial<VSCode> = {};
 export const mockedVSCodeNamespaces: { [P in keyof VSCode]: VSCode[P] } = {} as any;
-const originalLoad = Module._load;
 
 function generateMock<K extends keyof VSCode>(name: K): void {
     const mockedObj = mock<VSCode[K]>();
@@ -69,9 +66,138 @@ export function resetVSCodeMocks() {
     generateMock('commands');
     generateMock('extensions');
 
+    // Workspace event emitters
+    const onDidChangeConfiguration = new vscodeMocks.vscMock.EventEmitter<vscode.ConfigurationChangeEvent>();
+    const onDidCloseNotebookDocument = new vscodeMocks.vscMock.EventEmitter<vscode.NotebookDocument>();
+    const onDidOpenNotebookDocument = new vscodeMocks.vscMock.EventEmitter<vscode.NotebookDocument>();
+    const onDidGrantWorkspaceTrust = new vscodeMocks.vscMock.EventEmitter<void>();
+
     when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([]);
+    when(mockedVSCodeNamespaces.workspace.onDidChangeConfiguration).thenReturn(onDidChangeConfiguration.event);
+    when(mockedVSCodeNamespaces.workspace.onDidCloseNotebookDocument).thenReturn(onDidCloseNotebookDocument.event);
+    when(mockedVSCodeNamespaces.workspace.onDidOpenNotebookDocument).thenReturn(onDidOpenNotebookDocument.event);
+    when(mockedVSCodeNamespaces.workspace.onDidGrantWorkspaceTrust).thenReturn(onDidGrantWorkspaceTrust.event);
+    when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn(undefined);
+    when(mockedVSCodeNamespaces.workspace.isTrusted).thenReturn(true);
+
     when(mockedVSCodeNamespaces.window.visibleNotebookEditors).thenReturn([]);
     when(mockedVSCodeNamespaces.window.activeTextEditor).thenReturn(undefined);
+    when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
+
+    // Window dialog methods with overloads (1-5 parameters)
+    // showInformationMessage
+    when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenResolve(undefined as any);
+    when(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything())).thenResolve(undefined as any);
+    when(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything(), anything())).thenResolve(
+        undefined as any
+    );
+    when(
+        mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything(), anything(), anything())
+    ).thenResolve(undefined as any);
+    when(
+        mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything(), anything(), anything(), anything())
+    ).thenResolve(undefined as any);
+
+    // showErrorMessage
+    when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenResolve(undefined as any);
+    when(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything())).thenResolve(undefined as any);
+    when(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything(), anything())).thenResolve(
+        undefined as any
+    );
+    when(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything(), anything(), anything())).thenResolve(
+        undefined as any
+    );
+    when(
+        mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything(), anything(), anything(), anything())
+    ).thenResolve(undefined as any);
+
+    // showWarningMessage
+    when(mockedVSCodeNamespaces.window.showWarningMessage(anything())).thenResolve(undefined as any);
+    when(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything())).thenResolve(undefined as any);
+    when(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).thenResolve(
+        undefined as any
+    );
+    when(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything(), anything())).thenResolve(
+        undefined as any
+    );
+    when(
+        mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything(), anything(), anything())
+    ).thenResolve(undefined as any);
+
+    // showQuickPick
+    when(mockedVSCodeNamespaces.window.showQuickPick(anything())).thenResolve(undefined as any);
+    when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenResolve(undefined as any);
+    when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything(), anything())).thenResolve(undefined as any);
+
+    // showInputBox
+    when(mockedVSCodeNamespaces.window.showInputBox()).thenResolve(undefined as any);
+    when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenResolve(undefined as any);
+    when(mockedVSCodeNamespaces.window.showInputBox(anything(), anything())).thenResolve(undefined as any);
+
+    // showTextDocument
+    when(mockedVSCodeNamespaces.window.showTextDocument(anything())).thenResolve(undefined as any);
+    when(mockedVSCodeNamespaces.window.showTextDocument(anything(), anything())).thenResolve(undefined as any);
+    when(mockedVSCodeNamespaces.window.showTextDocument(anything(), anything(), anything())).thenResolve(
+        undefined as any
+    );
+
+    // showNotebookDocument
+    when(mockedVSCodeNamespaces.window.showNotebookDocument(anything())).thenResolve(undefined as any);
+    when(mockedVSCodeNamespaces.window.showNotebookDocument(anything(), anything())).thenResolve(undefined as any);
+
+    // showOpenDialog
+    when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenResolve(undefined as any);
+
+    // withProgress - execute the callback and return its result
+    when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall((_options, callback) => {
+        return Promise.resolve(
+            callback(
+                { report: () => {} },
+                { isCancellationRequested: false, onCancellationRequested: () => ({ dispose: () => {} }) as any }
+            )
+        );
+    });
+
+    // createOutputChannel - return a mock output channel
+    const mockOutputChannel = {
+        name: 'Mock Output Channel',
+        append: () => {},
+        appendLine: () => {},
+        replace: () => {},
+        clear: () => {},
+        show: () => {},
+        hide: () => {},
+        dispose: () => {}
+    };
+    when(mockedVSCodeNamespaces.window.createOutputChannel(anything())).thenReturn(mockOutputChannel as any);
+    when(mockedVSCodeNamespaces.window.createOutputChannel(anything(), anything())).thenReturn(
+        mockOutputChannel as any
+    );
+
+    // Workspace methods
+    // getConfiguration - return a mock configuration object
+    const mockConfiguration = {
+        get: () => undefined,
+        has: () => false,
+        inspect: () => undefined,
+        update: () => Promise.resolve()
+    };
+    when(mockedVSCodeNamespaces.workspace.getConfiguration()).thenReturn(mockConfiguration as any);
+    when(mockedVSCodeNamespaces.workspace.getConfiguration(anything())).thenReturn(mockConfiguration as any);
+    when(mockedVSCodeNamespaces.workspace.getConfiguration(anything(), anything())).thenReturn(
+        mockConfiguration as any
+    );
+
+    // applyEdit
+    when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenResolve(true as any);
+
+    // openTextDocument
+    when(mockedVSCodeNamespaces.workspace.openTextDocument(anything())).thenResolve(undefined as any);
+
+    // openNotebookDocument
+    when(mockedVSCodeNamespaces.workspace.openNotebookDocument(anything())).thenResolve(undefined as any);
+    when(mockedVSCodeNamespaces.workspace.openNotebookDocument(anything(), anything())).thenResolve(undefined as any);
+
     // Use mock clipboard fo testing purposes.
     const clipboard = new MockClipboard();
     when(mockedVSCodeNamespaces.env.clipboard).thenReturn(clipboard);
@@ -81,29 +207,13 @@ export function resetVSCodeMocks() {
 export function initialize() {
     resetVSCodeMocks();
 
-    // When upgrading to npm 9-10, this might have to change, as we could have explicit imports (named imports).
-    Module._load = function (request: any, _parent: any) {
-        if (request === 'vscode') {
-            return mockedVSCode;
-        }
-        if (request === '@vscode/extension-telemetry') {
-            return { default: vscMockTelemetryReporter as any };
-        }
-        if (request === '@deepnote/convert') {
-            return {
-                convertIpynbFilesToDeepnoteFile: async () => {
-                    // Mock implementation - does nothing in tests
-                }
-            };
-        }
-        // less files need to be in import statements to be converted to css
-        // But we don't want to try to load them in the mock vscode
-        if (/\.less$/.test(request)) {
-            return;
-        }
-        return originalLoad.apply(this, arguments);
-    };
+    // In ESM, module mocking is handled by the mocha-esm-loader.js
+    // No need to override Module._load anymore
 }
+
+// Initialize mocks at module load time to ensure they're available when the mocha-esm-loader
+// creates the vscode module exports
+resetVSCodeMocks();
 mockedVSCode.l10n = {
     bundle: undefined,
     t: (arg1: string | { message: string; args?: string[] | Record<string, string> }, ...restOfArguments: string[]) => {
@@ -196,3 +306,7 @@ mockedVSCode.NotebookCellOutput = vscodeMocks.vscMockExtHostedTypes.NotebookCell
 (mockedVSCode as any).NotebookCellOutputItem = vscodeMocks.vscMockExtHostedTypes.NotebookCellOutputItem;
 (mockedVSCode as any).NotebookCellExecutionState = vscodeMocks.vscMockExtHostedTypes.NotebookCellExecutionState;
 (mockedVSCode as any).NotebookEditorRevealType = vscodeMocks.vscMockExtHostedTypes.NotebookEditorRevealType;
+// Mock ColorThemeKind enum
+(mockedVSCode as any).ColorThemeKind = { Light: 1, Dark: 2, HighContrast: 3, HighContrastLight: 4 };
+mockedVSCode.FileSystemError = vscodeMocks.vscMockExtHostedTypes.FileSystemError;
+mockedVSCode.EndOfLine = vscodeMocks.vscMockExtHostedTypes.EndOfLine;

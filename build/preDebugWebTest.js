@@ -1,12 +1,18 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-const fs = require('fs-extra');
-const path = require('path');
-const { startJupyter } = require('./preLaunchWebTest');
-const jsonc = require('jsonc-parser');
+import fs from 'fs-extra';
+import path from 'path';
+import { startJupyter } from './preLaunchWebTest.js';
+import jsonc from 'jsonc-parser';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const settingsFile = path.join(__dirname, '..', 'src', 'test', 'datascience', '.vscode', 'settings.json');
+
 async function go() {
     let url = process.env.EXISTING_JUPYTER_URI;
     if (!url) {
@@ -22,4 +28,5 @@ async function go() {
     fs.writeFileSync(settingsFile, updatedSettingsJson);
     process.exit(0);
 }
+
 void go();

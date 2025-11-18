@@ -1,6 +1,3 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-
 import * as sinon from 'sinon';
 import * as path from '../../../platform/vscode-path/path';
 import assert from 'assert';
@@ -13,9 +10,7 @@ import { IConfigurationService, IDisposable } from '../../../platform/common/typ
 import { ServiceContainer } from '../../../platform/ioc/container';
 import { EnvironmentType, PythonEnvironment } from '../../../platform/pythonEnvironments/info';
 import { TEST_LAYOUT_ROOT } from '../../../test/pythonEnvironments/constants';
-import * as fileUtils from '../../../platform/common/platform/fileUtils.node';
 import { JupyterSettings } from '../../../platform/common/configSettings';
-import { PoetryInstaller } from '../../../platform/interpreter/installer/poetryInstaller.node';
 import { ExecutionInstallArgs } from '../../../platform/interpreter/installer/moduleInstaller.node';
 import { ModuleInstallFlags } from '../../../platform/interpreter/installer/types';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
@@ -24,26 +19,23 @@ import { dispose } from '../../common/utils/lifecycle';
 import { PythonExtension } from '@vscode/python-extension';
 import { resolvableInstance } from '../../../test/datascience/helpers';
 import { setPythonApi } from '../helpers';
+import esmock from 'esmock';
 
 suite('Module Installer - Poetry', () => {
-    class TestInstaller extends PoetryInstaller {
-        public override async getExecutionArgs(
-            moduleName: string,
-            interpreter: PythonEnvironment,
-            _flags?: ModuleInstallFlags
-        ): Promise<ExecutionInstallArgs> {
-            return super.getExecutionArgs(moduleName, interpreter);
-        }
-    }
     const testPoetryDir = path.join(TEST_LAYOUT_ROOT, 'poetry');
     const project1 = path.join(testPoetryDir, 'project1');
-    let poetryInstaller: TestInstaller;
+    let poetryInstaller: any;
     let configurationService: IConfigurationService;
     let serviceContainer: ServiceContainer;
     let shellExecute: sinon.SinonStub;
+    let arePathsSame: sinon.SinonStub;
+    let pathExistsSync: sinon.SinonStub;
+    let readFileSync: sinon.SinonStub;
+    let getPythonSetting: sinon.SinonStub;
     let disposables: IDisposable[] = [];
     let environments: PythonExtension['environments'];
-    setup(() => {
+
+    setup(async () => {
         resetVSCodeMocks();
         disposables.push(new Disposable(() => resetVSCodeMocks()));
         serviceContainer = mock(ServiceContainer);
@@ -51,14 +43,25 @@ suite('Module Installer - Poetry', () => {
         reset(mockedVSCodeNamespaces.workspace);
         when(configurationService.getSettings(anything())).thenReturn({} as any);
 
-        shellExecute = sinon.stub(fileUtils, 'shellExecute');
+        shellExecute = sinon.stub();
+        arePathsSame = sinon.stub();
+        pathExistsSync = sinon.stub();
+        readFileSync = sinon.stub();
+        getPythonSetting = sinon.stub();
+
+        // Mock arePathsSame to work as expected in the test logic
+        arePathsSame.callsFake((p1: string, p2: string) => p1 === p2);
+        pathExistsSync.returns(true);
+        readFileSync.returns('[tool.poetry]');
+        getPythonSetting.returns('poetry');
+
         shellExecute.callsFake((command: string, options: ShellOptions) => {
             // eslint-disable-next-line default-case
             switch (command) {
                 case 'poetry env list --full-path':
                     return Promise.resolve<ExecutionResult<string>>({ stdout: '' });
                 case 'poetry env info -p':
-                    if (options.cwd && fileUtils.arePathsSame(options.cwd.toString(), project1)) {
+                    if (options.cwd && arePathsSame(options.cwd.toString(), project1)) {
                         return Promise.resolve<ExecutionResult<string>>({
                             stdout: `${path.join(project1, '.venv')} \n`
                         });
@@ -66,6 +69,44 @@ suite('Module Installer - Poetry', () => {
             }
             return Promise.reject(new Error('Command failed'));
         });
+
+        const fileUtilsMock = {
+            shellExecute,
+            arePathsSame,
+            pathExistsSync,
+            readFileSync,
+            getPythonSetting
+        };
+
+        const poetryNode = await esmock('../../../platform/interpreter/installer/poetry.node', {
+            '../../../platform/common/platform/fileUtils.node': fileUtilsMock,
+            '../../../platform/common/utils/platform': {
+                getUserHomeDir: () => undefined, // Mock getUserHomeDir to avoid using real home dir
+                OSType: { Windows: 'Windows', OSX: 'OSX', Linux: 'Linux' },
+                getOSType: () => 'OSX'
+            }
+        });
+
+        const module = await esmock('../../../platform/interpreter/installer/poetryInstaller.node', {
+            '../../../platform/interpreter/installer/poetry.node': poetryNode,
+            '../../../platform/common/platform/fileUtils.node': fileUtilsMock
+        });
+
+        const PoetryInstaller = module.PoetryInstaller;
+
+        class TestInstaller extends PoetryInstaller {
+            // eslint-disable-next-line @typescript-eslint/no-useless-constructor
+            constructor(serviceContainer: ServiceContainer, configurationService: IConfigurationService) {
+                super(serviceContainer, configurationService);
+            }
+            public async getExecutionArgs(
+                moduleName: string,
+                interpreter: PythonEnvironment,
+                _flags?: ModuleInstallFlags
+            ): Promise<ExecutionInstallArgs> {
+                return super.getExecutionArgs(moduleName, interpreter);
+            }
+        }
 
         poetryInstaller = new TestInstaller(instance(serviceContainer), instance(configurationService));
 
@@ -81,7 +122,11 @@ suite('Module Installer - Poetry', () => {
 
     teardown(() => {
         disposables = dispose(disposables);
-        shellExecute?.restore();
+        sinon.restore();
+        // esmock.purge(poetryInstaller); // poetryInstaller is an instance, not the module.
+        // We should purge the module if we kept a reference, but esmock might handle it if we don't reuse it?
+        // Better to purge. But I don't have the module reference here easily unless I store it.
+        // Actually esmock.purge is for the module.
     });
 
     test('Installer name is poetry', () => {

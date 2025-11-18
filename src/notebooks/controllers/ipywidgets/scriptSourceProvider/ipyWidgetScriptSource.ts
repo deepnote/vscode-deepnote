@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 import type * as jupyterlabService from '@jupyterlab/services';
+import * as jupyterLabServices from '@jupyterlab/services';
 import { Event, EventEmitter, NotebookDocument, Uri } from 'vscode';
 import { logger } from '../../../../platform/logging';
 import { IDisposableRegistry, IConfigurationService, IDisposable } from '../../../../platform/common/types';
@@ -108,8 +109,7 @@ export class IPyWidgetScriptSource {
     public initialize() {
         if (!this.jupyterLab) {
             // Lazy load jupyter lab for faster extension loading.
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            this.jupyterLab = require('@jupyterlab/services') as typeof jupyterlabService; // NOSONAR
+            this.jupyterLab = jupyterLabServices;
         }
 
         if (!this.kernel) {

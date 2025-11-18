@@ -12,8 +12,8 @@ import { compile as convertVegaLiteSpecToVega } from 'vega-lite';
 import { produce } from 'immer';
 import { SqlBlockConverter } from './converters/sqlBlockConverter';
 import { TextBlockConverter } from './converters/textBlockConverter';
-import type { Field } from 'vega-lite/build/src/channeldef';
-import type { LayerSpec, TopLevel } from 'vega-lite/build/src/spec';
+import type { Field } from 'vega-lite/types_unstable/channeldef.js';
+import type { LayerSpec, TopLevel } from 'vega-lite/types_unstable/spec/index.js';
 import { ChartBigNumberBlockConverter } from './converters/chartBigNumberBlockConverter';
 import {
     InputTextBlockConverter,
@@ -27,7 +27,7 @@ import {
     ButtonBlockConverter
 } from './converters/inputConverters';
 import { CHART_BIG_NUMBER_MIME_TYPE } from '../../platform/deepnote/deepnoteConstants';
-import { generateUuid } from '../../platform/common/uuid';
+import { uuidUtils } from '../../platform/common/uuid';
 
 /**
  * Utility class for converting between Deepnote block structures and VS Code notebook cells.
@@ -169,7 +169,7 @@ export class DeepnoteDataConverter {
 
     private createFallbackBlock(cell: NotebookCellData, index: number): DeepnoteBlock {
         return {
-            blockGroup: generateUuid(),
+            blockGroup: uuidUtils.generateUuid(),
             id: generateBlockId(),
             sortingKey: generateSortingKey(index),
             type: cell.kind === NotebookCellKind.Code ? 'code' : 'markdown',

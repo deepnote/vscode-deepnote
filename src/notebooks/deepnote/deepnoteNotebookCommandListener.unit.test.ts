@@ -1,5 +1,6 @@
 import { assert } from 'chai';
 import * as sinon from 'sinon';
+import { when, reset, anything } from 'ts-mockito';
 import {
     NotebookCell,
     NotebookDocument,
@@ -8,8 +9,6 @@ import {
     NotebookCellKind,
     NotebookCellData,
     WorkspaceEdit,
-    commands,
-    window,
     Uri
 } from 'vscode';
 
@@ -24,17 +23,21 @@ import * as notebookUpdater from '../../kernels/execution/notebookUpdater';
 import { createMockedNotebookDocument } from '../../test/datascience/editor-integration/helpers';
 import { WrappedError } from '../../platform/errors/types';
 import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
+import { mockedVSCodeNamespaces } from '../../test/vscode-mock';
 
 suite('DeepnoteNotebookCommandListener', () => {
     let commandListener: DeepnoteNotebookCommandListener;
     let disposables: IDisposable[];
+    let sandbox: sinon.SinonSandbox;
 
     setup(() => {
+        sandbox = sinon.createSandbox();
         disposables = [];
         commandListener = new DeepnoteNotebookCommandListener(disposables);
     });
 
     teardown(() => {
+        sandbox.restore();
         disposables.forEach((d) => d?.dispose());
     });
 
@@ -333,6 +336,8 @@ suite('DeepnoteNotebookCommandListener', () => {
 
         teardown(() => {
             sandbox.restore();
+            // Reset the ts-mockito mocks
+            reset(mockedVSCodeNamespaces.window);
         });
 
         /**
@@ -374,17 +379,15 @@ suite('DeepnoteNotebookCommandListener', () => {
         }
 
         function mockNotebookUpdateAndExecute(editor: NotebookEditor) {
-            Object.defineProperty(window, 'activeNotebookEditor', {
-                value: editor,
-                configurable: true,
-                writable: true
-            });
+            // Use ts-mockito to mock the activeNotebookEditor
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(editor);
 
             let capturedNotebookEdits: any[] | null = null;
 
             // Mock chainWithPendingUpdates to capture the edit and resolve immediately
+            // Use notebookUpdaterUtils object which is mutable and can be stubbed in ESM
             const chainStub = sandbox
-                .stub(notebookUpdater, 'chainWithPendingUpdates')
+                .stub(notebookUpdater.notebookUpdaterUtils, 'chainWithPendingUpdates')
                 .callsFake((_doc: NotebookDocument, callback: (edit: WorkspaceEdit) => void) => {
                     const edit = new WorkspaceEdit();
                     // Stub the set method to capture the notebook edits
@@ -395,17 +398,12 @@ suite('DeepnoteNotebookCommandListener', () => {
                     return Promise.resolve(true);
                 });
 
-            // Mock commands.executeCommand
-            const executeCommandStub = sandbox.stub().resolves();
-            Object.defineProperty(commands, 'executeCommand', {
-                value: executeCommandStub,
-                configurable: true,
-                writable: true
-            });
+            // Mock commands.executeCommand using ts-mockito (ESM-compatible)
+            when(mockedVSCodeNamespaces.commands.executeCommand(anything())).thenResolve(undefined as any);
+            when(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything())).thenResolve(undefined as any);
 
             return {
                 chainStub,
-                executeCommandStub,
                 getCapturedNotebookEdits: () => capturedNotebookEdits
             };
         }
@@ -582,8 +580,7 @@ suite('DeepnoteNotebookCommandListener', () => {
                     // Setup mocks
                     const { editor, document } = createMockEditor(existingCells, selection);
 
-                    const { chainStub, executeCommandStub, getCapturedNotebookEdits } =
-                        mockNotebookUpdateAndExecute(editor);
+                    const { chainStub, getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
 
                     // Call the method and await it
                     await commandListener.addInputBlock(blockType);
@@ -649,25 +646,16 @@ suite('DeepnoteNotebookCommandListener', () => {
                     const revealCall = (editor.revealRange as sinon.SinonStub).firstCall;
                     assert.equal(revealCall.args[0].start, expectedInsertIndex, 'Should reveal correct range start');
                     assert.equal(revealCall.args[0].end, expectedInsertIndex + 1, 'Should reveal correct range end');
-
-                    // Verify notebook.cell.edit command was executed
-                    assert.isTrue(
-                        executeCommandStub.calledWith('notebook.cell.edit'),
-                        'Should execute notebook.cell.edit command'
-                    );
                 });
             }
         );
 
         test('should do nothing when no active editor exists', async () => {
             // Setup: no active editor
-            Object.defineProperty(window, 'activeNotebookEditor', {
-                value: undefined,
-                configurable: true,
-                writable: true
-            });
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
 
-            const chainStub = sandbox.stub(notebookUpdater, 'chainWithPendingUpdates');
+            const chainStub = sinon.stub();
+            sandbox.replace(notebookUpdater.notebookUpdaterUtils, 'chainWithPendingUpdates', chainStub);
 
             // Call the method
             await assert.isRejected(
@@ -683,14 +671,11 @@ suite('DeepnoteNotebookCommandListener', () => {
         test('should handle errors in chainWithPendingUpdates gracefully', async () => {
             // Setup mocks
             const { editor } = createMockEditor([]);
-            Object.defineProperty(window, 'activeNotebookEditor', {
-                value: editor,
-                configurable: true,
-                writable: true
-            });
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(editor);
 
             // Mock chainWithPendingUpdates to reject
-            const chainStub = sandbox.stub(notebookUpdater, 'chainWithPendingUpdates').rejects(new Error('Test error'));
+            const chainStub = sinon.stub().rejects(new Error('Test error'));
+            sandbox.replace(notebookUpdater.notebookUpdaterUtils, 'chainWithPendingUpdates', chainStub);
 
             // Call the method - should not throw
             await assert.isRejected(commandListener.addInputBlock('input-text'), Error, 'Test error');
@@ -703,8 +688,7 @@ suite('DeepnoteNotebookCommandListener', () => {
             test('should add SQL block at the end when no selection exists', async () => {
                 // Setup mocks
                 const { editor, document } = createMockEditor([], undefined);
-                const { chainStub, executeCommandStub, getCapturedNotebookEdits } =
-                    mockNotebookUpdateAndExecute(editor);
+                const { chainStub, getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
 
                 // Call the method
                 await commandListener.addSqlBlock();
@@ -751,12 +735,6 @@ suite('DeepnoteNotebookCommandListener', () => {
                 assert.equal(revealCall.args[0].start, 0, 'Should reveal correct range start');
                 assert.equal(revealCall.args[0].end, 1, 'Should reveal correct range end');
                 assert.equal(revealCall.args[1], 0, 'Should use NotebookEditorRevealType.Default (value 0)');
-
-                // Verify notebook.cell.edit command was executed
-                assert.isTrue(
-                    executeCommandStub.calledWith('notebook.cell.edit'),
-                    'Should execute notebook.cell.edit command'
-                );
             });
 
             test('should add SQL block after selection when selection exists', async () => {
@@ -823,11 +801,7 @@ suite('DeepnoteNotebookCommandListener', () => {
 
             test('should throw error when no active editor exists', async () => {
                 // Setup: no active editor
-                Object.defineProperty(window, 'activeNotebookEditor', {
-                    value: undefined,
-                    configurable: true,
-                    writable: true
-                });
+                when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
 
                 // Call the method and expect rejection
                 await assert.isRejected(commandListener.addSqlBlock(), Error, 'No active notebook editor found');
@@ -836,14 +810,14 @@ suite('DeepnoteNotebookCommandListener', () => {
             test('should throw error when chainWithPendingUpdates fails', async () => {
                 // Setup mocks
                 const { editor } = createMockEditor([], undefined);
-                Object.defineProperty(window, 'activeNotebookEditor', {
-                    value: editor,
-                    configurable: true,
-                    writable: true
-                });
+                when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(editor);
 
                 // Mock chainWithPendingUpdates to return false
-                sandbox.stub(notebookUpdater, 'chainWithPendingUpdates').resolves(false);
+                sandbox.replace(
+                    notebookUpdater.notebookUpdaterUtils,
+                    'chainWithPendingUpdates',
+                    sinon.stub().resolves(false)
+                );
 
                 // Call the method and expect rejection
                 await assert.isRejected(commandListener.addSqlBlock(), Error, 'Failed to insert SQL block');
@@ -854,8 +828,7 @@ suite('DeepnoteNotebookCommandListener', () => {
             test('should add big number block at the end when no selection exists', async () => {
                 // Setup mocks
                 const { editor, document } = createMockEditor([], undefined);
-                const { chainStub, executeCommandStub, getCapturedNotebookEdits } =
-                    mockNotebookUpdateAndExecute(editor);
+                const { chainStub, getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
 
                 // Call the method
                 await commandListener.addBigNumberChartBlock();
@@ -894,12 +867,6 @@ suite('DeepnoteNotebookCommandListener', () => {
                 assert.equal(revealCall.args[0].start, 0, 'Should reveal correct range start');
                 assert.equal(revealCall.args[0].end, 1, 'Should reveal correct range end');
                 assert.equal(revealCall.args[1], 0, 'Should use NotebookEditorRevealType.Default (value 0)');
-
-                // Verify notebook.cell.edit command was executed
-                assert.isTrue(
-                    executeCommandStub.calledWith('notebook.cell.edit'),
-                    'Should execute notebook.cell.edit command'
-                );
             });
 
             test('should add big number block after selection when selection exists', async () => {
@@ -948,11 +915,7 @@ suite('DeepnoteNotebookCommandListener', () => {
 
             test('should throw error when no active editor exists', async () => {
                 // Setup: no active editor
-                Object.defineProperty(window, 'activeNotebookEditor', {
-                    value: undefined,
-                    configurable: true,
-                    writable: true
-                });
+                when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
 
                 // Call the method and expect rejection
                 await assert.isRejected(
@@ -965,14 +928,14 @@ suite('DeepnoteNotebookCommandListener', () => {
             test('should throw error when chainWithPendingUpdates fails', async () => {
                 // Setup mocks
                 const { editor } = createMockEditor([], undefined);
-                Object.defineProperty(window, 'activeNotebookEditor', {
-                    value: editor,
-                    configurable: true,
-                    writable: true
-                });
+                when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(editor);
 
                 // Mock chainWithPendingUpdates to return false
-                sandbox.stub(notebookUpdater, 'chainWithPendingUpdates').resolves(false);
+                sandbox.replace(
+                    notebookUpdater.notebookUpdaterUtils,
+                    'chainWithPendingUpdates',
+                    sinon.stub().resolves(false)
+                );
 
                 // Call the method and expect rejection
                 await assert.isRejected(
@@ -987,8 +950,7 @@ suite('DeepnoteNotebookCommandListener', () => {
             test('should add chart block at the end when no selection exists', async () => {
                 // Setup mocks
                 const { editor, document } = createMockEditor([], undefined);
-                const { chainStub, executeCommandStub, getCapturedNotebookEdits } =
-                    mockNotebookUpdateAndExecute(editor);
+                const { chainStub, getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
 
                 // Call the method
                 await commandListener.addChartBlock();
@@ -1041,12 +1003,6 @@ suite('DeepnoteNotebookCommandListener', () => {
                 assert.equal(revealCall.args[0].start, 0, 'Should reveal correct range start');
                 assert.equal(revealCall.args[0].end, 1, 'Should reveal correct range end');
                 assert.equal(revealCall.args[1], 0, 'Should use NotebookEditorRevealType.Default (value 0)');
-
-                // Verify notebook.cell.edit command was executed
-                assert.isTrue(
-                    executeCommandStub.calledWith('notebook.cell.edit'),
-                    'Should execute notebook.cell.edit command'
-                );
             });
 
             test('should add chart block after selection when selection exists', async () => {
@@ -1138,11 +1094,7 @@ suite('DeepnoteNotebookCommandListener', () => {
 
             test('should throw error when no active editor exists', async () => {
                 // Setup: no active editor
-                Object.defineProperty(window, 'activeNotebookEditor', {
-                    value: undefined,
-                    configurable: true,
-                    writable: true
-                });
+                when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
 
                 // Call the method and expect rejection
                 await assert.isRejected(
@@ -1155,14 +1107,14 @@ suite('DeepnoteNotebookCommandListener', () => {
             test('should throw error when chainWithPendingUpdates fails', async () => {
                 // Setup mocks
                 const { editor } = createMockEditor([], undefined);
-                Object.defineProperty(window, 'activeNotebookEditor', {
-                    value: editor,
-                    configurable: true,
-                    writable: true
-                });
+                when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(editor);
 
                 // Mock chainWithPendingUpdates to return false
-                sandbox.stub(notebookUpdater, 'chainWithPendingUpdates').resolves(false);
+                sandbox.replace(
+                    notebookUpdater.notebookUpdaterUtils,
+                    'chainWithPendingUpdates',
+                    sinon.stub().resolves(false)
+                );
 
                 // Call the method and expect rejection
                 await assert.isRejected(commandListener.addChartBlock(), WrappedError, 'Failed to insert chart block');

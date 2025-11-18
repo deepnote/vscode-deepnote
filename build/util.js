@@ -1,11 +1,17 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-'use strict';
 
-const fs = require('fs');
-const path = require('path');
-exports.ExtensionRootDir = path.dirname(__dirname);
-function getListOfFiles(filename) {
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+export const ExtensionRootDir = path.dirname(__dirname);
+
+export function getListOfFiles(filename) {
     filename = path.normalize(filename);
     if (!path.isAbsolute(filename)) {
         filename = path.join(__dirname, filename);
@@ -13,7 +19,6 @@ function getListOfFiles(filename) {
     const data = fs.readFileSync(filename).toString();
     const files = JSON.parse(data);
     return files.map((file) => {
-        return path.join(exports.ExtensionRootDir, file.replace(/\//g, path.sep));
+        return path.join(ExtensionRootDir, file.replace(/\//g, path.sep));
     });
 }
-exports.getListOfFiles = getListOfFiles;

@@ -21,7 +21,7 @@ import { noop } from '../../platform/common/utils/misc';
  */
 const pendingCellUpdates = new WeakMap<NotebookDocument, Promise<unknown>>();
 
-export async function chainWithPendingUpdates(
+async function chainWithPendingUpdatesImpl(
     document: NotebookDocument,
     update: (edit: WorkspaceEdit) => void | Promise<void>
 ): Promise<boolean> {
@@ -51,9 +51,19 @@ export async function chainWithPendingUpdates(
     return deferred.promise;
 }
 
-export function clearPendingChainedUpdatesForTests() {
+function clearPendingChainedUpdatesForTestsImpl() {
     const editor: NotebookEditor | undefined = window.activeNotebookEditor;
     if (editor?.notebook) {
         pendingCellUpdates.delete(editor.notebook);
     }
 }
+
+// Export through a mutable object to allow stubbing in ESM tests
+export const notebookUpdaterUtils = {
+    chainWithPendingUpdates: chainWithPendingUpdatesImpl,
+    clearPendingChainedUpdatesForTests: clearPendingChainedUpdatesForTestsImpl
+};
+
+// Keep original exports for backwards compatibility
+export const chainWithPendingUpdates = notebookUpdaterUtils.chainWithPendingUpdates;
+export const clearPendingChainedUpdatesForTests = notebookUpdaterUtils.clearPendingChainedUpdatesForTests;

@@ -5,6 +5,7 @@
 import * as sinon from 'sinon';
 import { expect } from 'chai';
 import * as typemoq from 'typemoq';
+import { anything, verify } from 'ts-mockito';
 import { InteractiveShiftEnterBanner, InteractiveShiftEnterStateKeys } from './shiftEnterBanner';
 import {
     isTestExecution,
@@ -19,7 +20,7 @@ import {
     IWatchableJupyterSettings
 } from '../platform/common/types';
 import { getTelemetryReporter } from '../telemetry';
-import { anything, when } from 'ts-mockito';
+import { when } from 'ts-mockito';
 import { mockedVSCodeNamespaces } from '../test/vscode-mock';
 
 suite('Interactive Shift Enter Banner', () => {
@@ -56,7 +57,15 @@ suite('Interactive Shift Enter Banner', () => {
 
     test('Shift Enter Banner with Jupyter available', async () => {
         const shiftBanner = loadBanner(config, true, true, 'Yes');
-        await shiftBanner.showBanner();
+        const enableSpy = sinon.spy(shiftBanner, 'enableInteractiveShiftEnter');
+        const promise = shiftBanner.showBanner();
+        await promise;
+
+        // Verify showInformationMessage was called
+        verify(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything(), anything())).once();
+
+        // Check if enableInteractiveShiftEnter was called
+        expect(enableSpy.called).to.equal(true, 'enableInteractiveShiftEnter should have been called');
 
         config.verifyAll();
 
@@ -82,6 +91,7 @@ suite('Interactive Shift Enter Banner', () => {
     test('Shift Enter Banner say no', async () => {
         const shiftBanner = loadBanner(config, true, true, 'No');
         await shiftBanner.showBanner();
+        await new Promise((resolve) => setTimeout(resolve, 0));
 
         config.verifyAll();
 
@@ -100,6 +110,7 @@ function loadBanner(
     const persistService: typemoq.IMock<IPersistentStateFactory> = typemoq.Mock.ofType<IPersistentStateFactory>();
     const enabledState: typemoq.IMock<IPersistentState<boolean>> = typemoq.Mock.ofType<IPersistentState<boolean>>();
     enabledState.setup((a) => a.value).returns(() => stateEnabled);
+    enabledState.setup((a) => a.updateValue(typemoq.It.isAny())).returns(() => Promise.resolve());
     persistService
         .setup((a) =>
             a.createGlobalPersistentState(
@@ -126,11 +137,11 @@ function loadBanner(
     dataScienceSettings.setup((d) => d.sendSelectionToInteractiveWindow).returns(() => false);
     config.setup((c) => c.getSettings(typemoq.It.isAny())).returns(() => dataScienceSettings.object);
 
-    const yes = 'Yes';
-    const no = 'No';
+    // const yes = 'Yes';
+    // const no = 'No';
 
     // Config AppShell
-    when(mockedVSCodeNamespaces.window.showInformationMessage(anything(), yes, no)).thenReturn(
+    when(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything(), anything())).thenReturn(
         Promise.resolve(questionResponse) as any
     );
 

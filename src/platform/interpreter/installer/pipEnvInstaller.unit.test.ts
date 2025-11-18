@@ -1,6 +1,3 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { expect } from 'chai';
@@ -10,8 +7,6 @@ import { Uri } from 'vscode';
 import { IInterpreterService } from '../../../platform/interpreter/contracts';
 import { IServiceContainer } from '../../../platform/ioc/types';
 import { EnvironmentType } from '../../../platform/pythonEnvironments/info';
-import { PipEnvInstaller } from '../../../platform/interpreter/installer/pipEnvInstaller.node';
-import * as pipEnvHelper from '../../../platform/interpreter/installer/pipenv.node';
 import { instance, mock, when } from 'ts-mockito';
 import { mockedVSCodeNamespaces } from '../../../test/vscode-mock';
 import { resolvableInstance, uriEquals } from '../../../test/datascience/helpers';
@@ -19,28 +14,37 @@ import type { IDisposable } from '../../common/types';
 import { PythonExtension } from '@vscode/python-extension';
 import { dispose } from '../../common/utils/lifecycle';
 import { setPythonApi } from '../helpers';
+import esmock from 'esmock';
 
 suite('PipEnv installer', async () => {
     let disposables: IDisposable[] = [];
     let serviceContainer: TypeMoq.IMock<IServiceContainer>;
     let isPipenvEnvironmentRelatedToFolder: sinon.SinonStub;
     let interpreterService: TypeMoq.IMock<IInterpreterService>;
-    let pipEnvInstaller: PipEnvInstaller;
+    let pipEnvInstaller: any;
     const interpreterPath = Uri.file('path/to/interpreter');
     const workspaceFolder = Uri.file('path/to/folder');
     let environments: PythonExtension['environments'];
-    setup(() => {
+
+    setup(async () => {
         serviceContainer = TypeMoq.Mock.ofType<IServiceContainer>();
         interpreterService = TypeMoq.Mock.ofType<IInterpreterService>();
         serviceContainer
             .setup((c) => c.get(TypeMoq.It.isValue(IInterpreterService)))
             .returns(() => interpreterService.object);
 
-        isPipenvEnvironmentRelatedToFolder = sinon
-            .stub(pipEnvHelper, 'isPipenvEnvironmentRelatedToFolder')
-            .callsFake((interpreter: Uri, folder: Uri) => {
-                return Promise.resolve(interpreterPath === interpreter && folder === workspaceFolder);
-            });
+        isPipenvEnvironmentRelatedToFolder = sinon.stub();
+        isPipenvEnvironmentRelatedToFolder.callsFake((interpreter: Uri, folder: Uri) => {
+            return Promise.resolve(interpreterPath === interpreter && folder === workspaceFolder);
+        });
+
+        const module = await esmock('../../../platform/interpreter/installer/pipEnvInstaller.node', {
+            '../../../platform/interpreter/installer/pipenv.node': {
+                isPipenvEnvironmentRelatedToFolder
+            }
+        });
+
+        const PipEnvInstaller = module.PipEnvInstaller;
         pipEnvInstaller = new PipEnvInstaller(serviceContainer.object);
 
         const mockedApi = mock<PythonExtension>();
@@ -55,7 +59,7 @@ suite('PipEnv installer', async () => {
 
     teardown(() => {
         disposables = dispose(disposables);
-        isPipenvEnvironmentRelatedToFolder.restore();
+        sinon.restore();
     });
 
     test('Installer name is pipenv', () => {

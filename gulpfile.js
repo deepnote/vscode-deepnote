@@ -6,26 +6,29 @@
 /* jshint node: true */
 /* jshint esversion: 6 */
 
-'use strict';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import gulp from 'gulp';
+import glob from 'glob';
+import spawn from 'cross-spawn';
+import path from 'path';
+import del from 'del';
+import fs from 'fs-extra';
+import nativeDependencyChecker from 'node-has-native-dependencies';
+import flat from 'flat';
+import { spawnSync } from 'child_process';
+import { dumpTestSummary } from './build/webTestReporter.js';
+import { Validator } from 'jsonschema';
+import * as common from './build/webpack/common.js';
+import * as jsonc from 'jsonc-parser';
 
-const gulp = require('gulp');
-const glob = require('glob');
-const spawn = require('cross-spawn');
-const path = require('path');
-const del = require('del');
-const fs = require('fs-extra');
-const nativeDependencyChecker = require('node-has-native-dependencies');
-const flat = require('flat');
-const { spawnSync } = require('child_process');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 const isCI = process.env.TF_BUILD !== undefined || process.env.GITHUB_ACTIONS === 'true';
-const { dumpTestSummary } = require('./build/webTestReporter');
-const { Validator } = require('jsonschema');
-const common = require('./build/webpack/common');
-const jsonc = require('jsonc-parser');
 
 gulp.task('createNycFolder', async (done) => {
     try {
-        const fs = require('fs');
         fs.mkdirSync(path.join(__dirname, '.nyc_output'));
     } catch (e) {
         //
@@ -104,7 +107,7 @@ gulp.task('checkNpmDependencies', (done) => {
      * Sometimes we have to update the package-lock.json file to upload dependencies.
      * Thisscript will ensure that even if the package-lock.json is re-generated the (minimum) version numbers are still as expected.
      */
-    const packageLock = require('./package-lock.json');
+    const packageLock = JSON.parse(fs.readFileSync(path.join(__dirname, 'package-lock.json'), 'utf-8'));
     const errors = [];
 
     const expectedVersions = [
@@ -249,7 +252,7 @@ function hasNativeDependencies() {
 }
 
 async function generateTelemetry() {
-    const generator = require('./out/telemetryGenerator.node');
+    const generator = await import('./out/telemetryGenerator.node.js');
     await generator.default();
 }
 gulp.task('generateTelemetry', async () => {

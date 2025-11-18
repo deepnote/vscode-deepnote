@@ -1,10 +1,6 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-
 import { assert } from 'chai';
 import { Signal } from '@lumino/signaling';
 import * as sinon from 'sinon';
-import type * as nbformat from '@jupyterlab/nbformat';
 import * as fakeTimers from '@sinonjs/fake-timers';
 import { Kernel, type KernelMessage } from '@jupyterlab/services';
 import { generateUuid } from '../../platform/common/uuid';
@@ -26,24 +22,18 @@ import {
     Range,
     TextDocument,
     Uri,
-    type NotebookCellOutput,
-    EventEmitter,
     type MarkdownString
 } from 'vscode';
-import { maxPendingKernelRequests, resolveCompletionItem } from './resolveCompletionItem';
 import { IDisposable, IDisposableRegistry } from '../../platform/common/types';
 import { DisposableStore, dispose } from '../../platform/common/utils/lifecycle';
-import { Deferred, createDeferred } from '../../platform/common/utils/async';
+import { type Deferred, createDeferred } from '../../platform/common/utils/async';
 import { IInspectReplyMsg } from '@jupyterlab/services/lib/kernel/messages';
 import { sleep } from '../../test/core';
 import { ServiceContainer } from '../../platform/ioc/container';
-import { NotebookKernelExecution } from '../../kernels/kernelExecution';
 import { PythonExtension } from '@vscode/python-extension';
 import { setPythonApi } from '../../platform/interpreter/helpers';
-import type { Output } from '../../api';
-import { executionCounters } from '../api/kernels/backgroundExecution';
-import { cellOutputToVSCCellOutput } from '../../kernels/execution/helpers';
 import { IControllerRegistration } from '../../notebooks/controllers/types';
+import esmock from 'esmock';
 
 suite('Jupyter Kernel Completion (requestInspect)', () => {
     let kernel: IKernel;
@@ -56,6 +46,10 @@ suite('Jupyter Kernel Completion (requestInspect)', () => {
     let disposables: IDisposable[] = [];
     let toDispose: DisposableStore;
     let clock: fakeTimers.InstalledClock;
+    let resolveCompletionItem: any;
+    let maxPendingKernelRequests: number;
+    let execCodeInBackgroundThreadStub: sinon.SinonStub;
+
     const pythonKernel = PythonKernelConnectionMetadata.create({
         id: 'pythonId',
         interpreter: {
@@ -79,7 +73,16 @@ suite('Jupyter Kernel Completion (requestInspect)', () => {
         }
     });
     let kernelStatusChangedSignal: Signal<Kernel.IKernelConnection, Kernel.Status>;
-    setup(() => {
+
+    // Mock ServiceContainer instance
+    let serviceContainerInstance: any;
+    const ServiceContainerMock = class {
+        static get instance() {
+            return serviceContainerInstance;
+        }
+    };
+
+    setup(async () => {
         kernelConnection = mock<Kernel.IKernelConnection>();
         kernel = mock<IKernel>();
         kernelId = generateUuid();
@@ -103,11 +106,68 @@ suite('Jupyter Kernel Completion (requestInspect)', () => {
         disposables.push(new Disposable(() => Signal.disconnectAll(instance(kernelConnection))));
         disposables.push(tokenSource);
         disposables.push(toDispose);
+
+        execCodeInBackgroundThreadStub = sinon.stub();
+        // Load module with esmock
+        const module = await esmock('./resolveCompletionItem', {
+            '../../platform/ioc/container': {
+                ServiceContainer: ServiceContainerMock
+            },
+            '@vscode/python-extension': {
+                PythonExtension: {
+                    api: () => Promise.resolve(undefined) // Default mock
+                }
+            },
+            '../../platform/common/utils/async': {
+                createDeferred,
+                sleep,
+                raceTimeoutError: (timeout: number, error: Error, ...promises: Promise<any>[]) => {
+                    let promiseReject: ((value: unknown) => void) | undefined = undefined;
+                    const timer = setTimeout(() => promiseReject?.(error), timeout);
+
+                    return Promise.race([
+                        Promise.race(promises).finally(() => clearTimeout(timer)),
+                        new Promise<any>((_, reject) => (promiseReject = reject))
+                    ]);
+                }
+            },
+            '../../platform/common/cancellation': {
+                raceCancellation: (_token: CancellationToken, promise: Promise<any>) => promise,
+                wrapCancellationTokens: (token: CancellationToken) => ({
+                    token,
+                    cancel: () => {},
+                    dispose: () => {}
+                })
+            },
+            '../api/kernels/backgroundExecution': {
+                execCodeInBackgroundThread: (...args: any[]) => execCodeInBackgroundThreadStub(...args)
+            },
+            '../api/kernels/backgroundExecution.js': {
+                execCodeInBackgroundThread: (...args: any[]) => execCodeInBackgroundThreadStub(...args)
+            },
+            './completionDocumentationFormatter': {
+                convertDocumentationToMarkdown: (documentation: string, language: string) => {
+                    if (language === 'python') {
+                        return { value: documentation };
+                    }
+                    return documentation;
+                }
+            },
+            '../../platform/common/utils/regexp': {
+                stripAnsi: (str: string) => str
+            },
+            '../../platform/common/helpers': {
+                splitLines: (str: string) => str.split('\n')
+            }
+        });
+        resolveCompletionItem = module.resolveCompletionItem;
+        maxPendingKernelRequests = module.maxPendingKernelRequests;
     });
 
     teardown(() => {
         sinon.reset();
         disposables = dispose(disposables);
+        serviceContainerInstance = undefined;
     });
     suite('Non-Python', () => {
         setup(() => {
@@ -468,39 +528,26 @@ suite('Jupyter Kernel Completion (requestInspect)', () => {
         });
     });
     suite('Python', () => {
-        let onDidReceiveDisplayUpdate: EventEmitter<NotebookCellOutput>;
-        let resolveOutputs: Deferred<NotebookCellOutput[]>;
-        let kernelExecution: NotebookKernelExecution;
-        setup(() => {
+        let resolveOutputs: Deferred<KernelMessage.IInspectReplyMsg['content']>;
+        setup(async () => {
             when(kernel.kernelConnectionMetadata).thenReturn(pythonKernel);
             when(kernel.disposed).thenReturn(false);
 
-            async function* mockOutput(): AsyncGenerator<Output, void, unknown> {
-                const outputs = await resolveOutputs.promise;
-                for (const output of outputs) {
-                    yield output;
-                }
-            }
+            resolveOutputs = createDeferred<KernelMessage.IInspectReplyMsg['content']>();
+            execCodeInBackgroundThreadStub.callsFake(() => resolveOutputs.promise);
 
-            resolveOutputs = createDeferred<NotebookCellOutput[]>();
-            onDidReceiveDisplayUpdate = new EventEmitter<NotebookCellOutput>();
-            disposables.push(onDidReceiveDisplayUpdate);
             const container = mock<ServiceContainer>();
             const kernelProvider = mock<IKernelProvider>();
-            kernelExecution = mock<NotebookKernelExecution>();
             const controllerRegistration = mock<IControllerRegistration>();
             when(controllerRegistration.getSelected(anything())).thenReturn(undefined);
-            when(kernelExecution.onDidReceiveDisplayUpdate).thenReturn(onDidReceiveDisplayUpdate.event);
-            when(kernelExecution.executeCode(anything(), anything(), anything(), anything())).thenCall(() =>
-                mockOutput()
-            );
-            when(kernelProvider.getKernelExecution(instance(kernel))).thenReturn(instance(kernelExecution));
             when(container.get<IKernelProvider>(IKernelProvider)).thenReturn(instance(kernelProvider));
             when(container.get<IDisposableRegistry>(IDisposableRegistry)).thenReturn([]);
             when(container.get<IControllerRegistration>(IControllerRegistration)).thenReturn(
                 instance(controllerRegistration)
             );
-            sinon.stub(ServiceContainer, 'instance').get(() => instance(container));
+
+            // Set the mocked instance
+            serviceContainerInstance = instance(container);
 
             const pythonApi = mock<PythonExtension>();
             setPythonApi(instance(pythonApi));
@@ -508,46 +555,6 @@ suite('Jupyter Kernel Completion (requestInspect)', () => {
 
             when(pythonApi.environments).thenReturn({ known: [] } as any);
         });
-        function createCompletionOutputs(kernel: IKernel, completion: string) {
-            const counter = executionCounters.get(kernel) || 0;
-            const mime = `application/vnd.vscode.bg.execution.${counter}`;
-            const mimeFinalResult = `application/vnd.vscode.bg.execution.${counter}.result`;
-            const result: KernelMessage.IInspectReplyMsg['content'] = {
-                status: 'ok',
-                data: {
-                    'text/plain': completion
-                },
-                found: true,
-                metadata: {}
-            };
-            const output1: nbformat.IOutput = {
-                data: {
-                    [mime]: ''
-                },
-                execution_count: 1,
-                output_type: 'display_data',
-                transient: {
-                    display_id: '123'
-                },
-                metadata: {
-                    foo: 'bar'
-                }
-            };
-            const finalOutput: nbformat.IOutput = {
-                data: {
-                    [mimeFinalResult]: result as any
-                },
-                execution_count: 1,
-                output_type: 'update_display_data',
-                transient: {
-                    display_id: '123'
-                },
-                metadata: {
-                    foo: 'bar'
-                }
-            };
-            return [output1, finalOutput].map((output) => cellOutputToVSCCellOutput(output));
-        }
         test('Resolve the documentation', async () => {
             completionItem = new CompletionItem('One');
             completionItem.range = new Range(0, 4, 0, 4);
@@ -564,9 +571,14 @@ suite('Jupyter Kernel Completion (requestInspect)', () => {
                 new Position(0, 4)
             );
 
-            // Create the output mime type
-            const outputs = createCompletionOutputs(instance(kernel), 'Some documentation');
-            resolveOutputs.resolve(outputs);
+            resolveOutputs.resolve({
+                status: 'ok',
+                data: {
+                    'text/plain': 'Some documentation'
+                },
+                found: true,
+                metadata: {}
+            });
 
             const [result] = await Promise.all([resultPromise, clock.tickAsync(5_000)]);
             assert.strictEqual((result.documentation as MarkdownString).value, 'Some documentation');
@@ -587,55 +599,17 @@ suite('Jupyter Kernel Completion (requestInspect)', () => {
                 new Position(0, 4)
             );
 
-            // Create the output mimem type
-            const outputs = createCompletionOutputs(instance(kernel), 'Some documentation');
-            resolveOutputs.resolve(outputs);
+            resolveOutputs.resolve({
+                status: 'ok',
+                data: {
+                    'text/plain': 'Some documentation'
+                },
+                found: true,
+                metadata: {}
+            });
 
             const [result] = await Promise.all([resultPromise, clock.tickAsync(5_000)]);
             assert.strictEqual((result.documentation as MarkdownString).value, 'Some documentation');
         });
-        // test.only('Never queue more than 5 requests', async () => {
-        //     completionItem = new CompletionItem('One');
-        //     completionItem.range = new Range(0, 4, 0, 4);
-        //     when(kernel.status).thenReturn('idle');
-
-        //     const sendRequest = () =>
-        //         resolveCompletionItem(
-        //             completionItem,
-        //             undefined,
-        //             token,
-        //             instance(kernel),
-        //             kernelId,
-        //             'python',
-        //             document,
-        //             new Position(0, 4)
-        //         );
-
-        //     void sendRequest();
-        //     await clock.tickAsync(10);
-
-        //     for (let index = 0; index < maxPendingPythonKernelRequests; index++) {
-        //         // Asking for resolving another completion will not send a new request, as there are too many
-        //         void sendRequest();
-        //     }
-
-        //     verify(kernelExecution.executeCode(anything(), anything(), anything(), anything())).times(5);
-
-        // // Complete one of the requests, this should allow another request to be sent
-        // requests.pop()?.resolve({ content: { status: 'ok', data: {}, found: false, metadata: {} } } as any);
-        // kernelStatusChangedSignal.emit('idle');
-        // await clock.tickAsync(100); // Wait for backoff strategy to work.
-        // verify(kernelConnection.requestInspect(anything())).times(maxPendingNonPythonkernelRequests + 1);
-
-        // void sendRequest();
-        // void sendRequest();
-        // void sendRequest();
-        // void sendRequest();
-
-        // // After calling everything, nothing should be sent (as all have been cancelled).
-        // tokenSource.cancel();
-        // await clock.tickAsync(500); // Wait for backoff strategy to work.
-        // verify(kernelConnection.requestInspect(anything())).times(maxPendingNonPythonkernelRequests + 1);
-        // });
     });
 });

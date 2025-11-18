@@ -51,7 +51,7 @@ import { registerTypes as registerWebviewTypes } from './webviews/extension-side
 import { Exiting, isTestExecution, setIsCodeSpace, setIsWebExtension } from './platform/common/constants';
 import { initializeGlobals as initializeTelemetryGlobals } from './platform/telemetry/telemetry';
 import { IInterpreterPackages } from './platform/interpreter/types';
-import { homedir, platform, arch, userInfo } from 'os';
+import { homedir, platform, arch, userInfo } from 'node:os';
 import { getUserHomeDir } from './platform/common/utils/platform.node';
 import { homePath } from './platform/common/platform/fs-paths.node';
 import {

@@ -5,7 +5,7 @@ import { assert } from 'chai';
 import { EOL } from 'os';
 // eslint-disable-next-line local-rules/node-imports
 import * as path from 'path';
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import { convertDocumentationToMarkdown } from './completionDocumentationFormatter';
 import { EXTENSION_ROOT_DIR_FOR_TESTS } from '../../test/constants.node';
 

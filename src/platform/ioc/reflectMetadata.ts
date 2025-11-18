@@ -5,11 +5,10 @@
  * This module imports the reflect-metadata library which is needed by inversify. It was designed to
  * be imported near the start of all entrypoints that will utilize inversify.
  *
- * Note that this uses require, not import, because reflect-metadata may have been already
+ * Note that we check if metadata is already defined because reflect-metadata may have been already
  * initialized by another extension running on the same extension host. If that happens, the old
  * metadata state would be clobbered.
  */
+// Import reflect-metadata at the top level
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-if ((Reflect as any).metadata === undefined) {
-    require('reflect-metadata');
-}
+import 'reflect-metadata';

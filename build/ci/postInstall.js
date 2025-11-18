@@ -1,18 +1,22 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-'use strict';
 
-const { EOL } = require('os');
-const colors = require('colors/safe');
-const fs = require('fs-extra');
-const path = require('path');
-const constants = require('../constants');
-const common = require('../webpack/common');
-const { downloadZMQ } = require('@vscode/zeromq');
+import { EOL } from 'os';
+import colors from 'colors/safe';
+import fs from 'fs-extra';
+import path from 'path';
+import { ExtensionRootDir } from '../constants.js';
+import { getBundleConfiguration, bundleConfiguration } from '../webpack/common.js';
+import { downloadZMQ } from '@vscode/zeromq';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 function fixVariableNameInKernelDefaultJs() {
     var relativePath = path.join('node_modules', '@jupyterlab', 'services', 'lib', 'kernel', 'default.js');
-    var filePath = path.join(constants.ExtensionRootDir, relativePath);
+    var filePath = path.join(ExtensionRootDir, relativePath);
     if (!fs.existsSync(filePath)) {
         throw new Error(
             "Jupyter lab default kernel not found '" + filePath + "' (Jupyter Extension post install script)"
@@ -32,7 +36,7 @@ function fixVariableNameInKernelDefaultJs() {
 }
 function removeUnnecessaryLoggingFromKernelDefault() {
     var relativePath = path.join('node_modules', '@jupyterlab', 'services', 'lib', 'kernel', 'default.js');
-    var filePath = path.join(constants.ExtensionRootDir, relativePath);
+    var filePath = path.join(ExtensionRootDir, relativePath);
     if (!fs.existsSync(filePath)) {
         throw new Error(
             "Jupyter lab default kernel not found '" + filePath + "' (Jupyter Extension post install script)"
@@ -61,7 +65,7 @@ function makeVariableExplorerAlwaysSorted() {
         'case g.NONE:e=r?g.DESC:g.ASC;break;case g.ASC:e=r?g.NONE:g.DESC;break;case g.DESC:e=r?g.ASC:g.NONE';
     for (const fileName of fileNames) {
         var relativePath = path.join('node_modules', 'react-data-grid', 'dist', fileName);
-        var filePath = path.join(constants.ExtensionRootDir, relativePath);
+        var filePath = path.join(ExtensionRootDir, relativePath);
         if (!fs.existsSync(filePath)) {
             throw new Error("react-data-grid dist file not found '" + filePath + "' (pvsc post install script)");
         }
@@ -167,7 +171,7 @@ function verifyMomentIsOnlyUsedByJupyterLabCoreUtils() {
     }
 }
 async function downloadZmqBinaries() {
-    if (common.getBundleConfiguration() === common.bundleConfiguration.web) {
+    if (getBundleConfiguration() === bundleConfiguration.web) {
         // No need to download zmq binaries for web.
         return;
     }

@@ -138,7 +138,8 @@ exports.javascript = {
  * See comments here build/webpack/moment.js
  */
 function verifyMomentIsOnlyUsedByJupyterLabCoreUtils() {
-    const packageLock = require(path.join(__dirname, '..', '..', 'package-lock.json'));
+    const packageLockPath = path.join(__dirname, '..', '..', 'package-lock.json');
+    const packageLock = JSON.parse(fs.readFileSync(packageLockPath, 'utf8'));
     const packagesAllowedToUseMoment = ['node_modules/@jupyterlab/coreutils', '@jupyterlab/coreutils'];
     const otherPackagesUsingMoment = [];
     ['packages', 'dependencies'].forEach((key) => {

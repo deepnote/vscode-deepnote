@@ -2621,7 +2621,6 @@
         "chai-arrays": "^2.2.0",
         "chai-as-promised": "^7.1.1",
         "chai-exclude": "^2.1.0",
-        "codecov": "^3.7.1",
         "colors": "^1.4.0",
         "concurrently": "^8.2.2",
         "cross-env": "^7.0.3",

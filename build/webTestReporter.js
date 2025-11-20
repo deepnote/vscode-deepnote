@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import fs from 'fs-extra';
-import path from 'path';
+import path from 'node:path';
 import { createServer } from 'http';
 import jsonc from 'jsonc-parser';
 import mocha from 'mocha';
@@ -13,8 +13,8 @@ import core from '@actions/core';
 import glob from 'glob';
 import { ExtensionRootDir } from './constants.js';
 import { webcrypto } from 'node:crypto';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

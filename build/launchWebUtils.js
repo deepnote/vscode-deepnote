@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import path from 'path';
+import path from 'node:path';
 import fs from 'fs-extra';
 import test_web from '@vscode/test-web';
 import { startJupyter } from './preLaunchWebTest.js';
@@ -9,8 +9,8 @@ import jsonc from 'jsonc-parser';
 import { startReportServer } from './webTestReporter.js';
 import { noop } from '../out/test/core';
 import { isCI } from './constants.js';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

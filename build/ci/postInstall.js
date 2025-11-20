@@ -1,15 +1,15 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { EOL } from 'os';
-import colors from 'colors/safe';
+import { EOL } from 'node:os';
+import colors from 'colors/safe.js';
 import fs from 'fs-extra';
-import path from 'path';
+import path from 'node:path';
 import { ExtensionRootDir } from '../constants.js';
 import { getBundleConfiguration, bundleConfiguration } from '../webpack/common.js';
 import { downloadZMQ } from '@vscode/zeromq';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

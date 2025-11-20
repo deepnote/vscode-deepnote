@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import glob from 'glob';
-import path from 'path';
+import path from 'node:path';
 import { ExtensionRootDir } from '../constants.js';
 
 export const nodeModulesToExternalize = [

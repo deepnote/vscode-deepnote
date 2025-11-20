@@ -90,18 +90,27 @@ export class DeepnoteTreeItem extends TreeItem {
      * Call this after updating the data property to ensure the tree view reflects changes.
      */
     public updateVisualFields(): void {
-        // Inline the same logic as in constructor
+        if (this.type === DeepnoteTreeItemType.Loading) {
+            return;
+        }
+
         if (this.type === DeepnoteTreeItemType.ProjectFile) {
             const project = this.data as DeepnoteProject;
+
             this.label = project.project.name || 'Untitled Project';
             this.tooltip = `Deepnote Project: ${project.project.name}\nFile: ${this.context.filePath}`;
+
             const notebookCount = project.project.notebooks?.length || 0;
+
             this.description = `${notebookCount} notebook${notebookCount !== 1 ? 's' : ''}`;
         } else {
             const notebook = this.data as DeepnoteNotebook;
+
             this.label = notebook.name || 'Untitled Notebook';
             this.tooltip = `Notebook: ${notebook.name}\nExecution Mode: ${notebook.executionMode}`;
+
             const blockCount = notebook.blocks?.length || 0;
+
             this.description = `${blockCount} cell${blockCount !== 1 ? 's' : ''}`;
         }
     }

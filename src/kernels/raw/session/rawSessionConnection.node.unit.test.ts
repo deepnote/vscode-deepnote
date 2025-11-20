@@ -28,12 +28,12 @@ import { dispose } from '../../../platform/common/utils/lifecycle';
 import { resolvableInstance, uriEquals } from '../../../test/datascience/helpers';
 import { waitForCondition } from '../../../test/common';
 import { KernelConnectionTimeoutError } from '../../errors/kernelConnectionTimeoutError';
-import { RawSessionConnection } from './rawSessionConnection.node';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 import type { IFileSystem } from '../../../platform/common/platform/types';
 import { computeLocalWorkingDirectory } from './kernelWorkingDirectory.node';
 import { createRequire } from 'module';
 import { getDirname } from '../../../platform/common/esmUtils.node';
+import esmock from 'esmock';
 
 const __dirname = getDirname(import.meta.url);
 const require = createRequire(import.meta.url);
@@ -41,16 +41,25 @@ const jupyterLabKernel =
     require('@jupyterlab/services/lib/kernel/default') as typeof import('@jupyterlab/services/lib/kernel/default');
 
 // Mock the ZeroMQ module to avoid creating real connections
+// Fixed async iterators to terminate after yielding initial empty messages
 const mockZmq = {
     Subscriber: class {
         connect = noop;
         close = noop;
         subscribe = noop;
         [Symbol.asyncIterator]() {
+            let iterationCount = 0;
             return {
-                next: () => Promise.resolve({ done: false, value: [] }),
-                return: () => Promise.resolve({ done: true, value: undefined }),
-                throw: () => Promise.resolve({ done: true, value: undefined })
+                next: async () => {
+                    // Yield one empty message then terminate to avoid infinite loops
+                    if (iterationCount === 0) {
+                        iterationCount++;
+                        return { done: false, value: [] };
+                    }
+                    return { done: true, value: undefined };
+                },
+                return: async () => ({ done: true, value: undefined }),
+                throw: async () => ({ done: true, value: undefined })
             };
         }
     },
@@ -59,30 +68,30 @@ const mockZmq = {
         close = noop;
         send = noop;
         [Symbol.asyncIterator]() {
+            let iterationCount = 0;
             return {
-                next: () => Promise.resolve({ done: false, value: [] }),
-                return: () => Promise.resolve({ done: true, value: undefined }),
-                throw: () => Promise.resolve({ done: true, value: undefined })
+                next: async () => {
+                    // Yield one empty message then terminate to avoid infinite loops
+                    if (iterationCount === 0) {
+                        iterationCount++;
+                        return { done: false, value: [] };
+                    }
+                    return { done: true, value: undefined };
+                },
+                return: async () => ({ done: true, value: undefined }),
+                throw: async () => ({ done: true, value: undefined })
             };
         }
     },
     context: { blocky: false }
 };
 
-// Use require.cache to inject our mock
-const zeromqPath = require.resolve('zeromq');
-require.cache[zeromqPath] = {
-    id: zeromqPath,
-    filename: zeromqPath,
-    loaded: true,
-    exports: mockZmq,
-    children: [],
-    paths: [],
-    require: require as any
-} as any;
+// Load the module under test with esmock to stub zeromq
+let RawSessionConnection: typeof import('./rawSessionConnection.node').RawSessionConnection;
+type RawSessionConnectionType = InstanceType<typeof RawSessionConnection>;
 
 suite('Raw Session & Raw Kernel Connection', () => {
-    let session: RawSessionConnection;
+    let session: RawSessionConnectionType;
     let kernelLauncher: IKernelLauncher;
     let token: CancellationTokenSource;
     let kernelProcess: IKernelProcess;
@@ -97,6 +106,15 @@ suite('Raw Session & Raw Kernel Connection', () => {
     let disposables: IDisposable[] = [];
     let kernelConnectionMetadata: LocalKernelSpecConnectionMetadata;
     const OldKernelConnectionClass = jupyterLabKernel.KernelConnection;
+
+    // Load the module with esmock to stub zeromq before tests run
+    suiteSetup(async () => {
+        const module = await esmock('./rawSessionConnection.node.js', {
+            zeromq: mockZmq
+        });
+        RawSessionConnection = module.RawSessionConnection;
+    });
+
     const kernelInfo: KernelMessage.IInfoReply = {
         banner: '',
         help_links: [],
@@ -263,7 +281,7 @@ suite('Raw Session & Raw Kernel Connection', () => {
         when(mockedVSCodeNamespaces.workspace.getConfiguration(anything())).thenReturn(instance(workspaceConfig));
         token = new CancellationTokenSource();
         disposables.push(token);
-        session = mock<RawSessionConnection>();
+        session = mock<RawSessionConnectionType>();
         kernelProcess = createKernelProcess();
         kernelLauncher = mock<IKernelLauncher>();
         kernel = createKernel();

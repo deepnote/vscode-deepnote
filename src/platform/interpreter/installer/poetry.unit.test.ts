@@ -15,7 +15,7 @@ const project4 = path.join(testPoetryDir, 'project4');
 const project3 = path.join(testPoetryDir, 'project3');
 
 suite('isPoetryEnvironment Tests', () => {
-    let isPoetryEnvironment: any;
+    let isPoetryEnvironment: (interpreterPath: string) => Promise<boolean>;
     let shellExecute: sinon.SinonStub;
     let getPythonSetting: sinon.SinonStub;
     let getOSType: sinon.SinonStub;

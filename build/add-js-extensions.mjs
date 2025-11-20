@@ -14,15 +14,16 @@ const rootDir = path.join(__dirname, '..');
 const srcDir = path.join(rootDir, 'src');
 
 // Regex patterns to match import statements with relative paths
+// Updated to handle multi-line imports/exports by using [\s\S] to match newlines
 const importPatterns = [
-    // import ... from './path' or '../path'
-    /^(\s*import\s+.+\s+from\s+['"])(\.\/.+?|\.\.?\/.+?)(['"])/gm,
-    // export ... from './path' or '../path'
-    /^(\s*export\s+.+\s+from\s+['"])(\.\/.+?|\.\.?\/.+?)(['"])/gm,
-    // import('./path') or import('../path')
-    /(\bimport\s*\(\s*['"])(\.\/.+?|\.\.?\/.+?)(['"])/gm,
-    // await import('./path')
-    /(\bawait\s+import\s*\(\s*['"])(\.\/.+?|\.\.?\/.+?)(['"])/gm,
+    // import ... from './path' or '../path' (supports multi-line named imports)
+    /^(\s*import\s+[\s\S]+?from\s+['"])(\.\/.+?|\.\.?\/.+?)(['"])/gm,
+    // export ... from './path' or '../path' (supports multi-line named exports)
+    /^(\s*export\s+[\s\S]+?from\s+['"])(\.\/.+?|\.\.?\/.+?)(['"])/gm,
+    // import('./path') or import('../path') (supports newlines before parentheses and quotes)
+    /(\bimport[\s\S]*?\([\s\S]*?['"])(\.\/.+?|\.\.?\/.+?)(['"])/gm,
+    // await import('./path') (supports newlines in await import statements)
+    /(\bawait\s+import[\s\S]*?\([\s\S]*?['"])(\.\/.+?|\.\.?\/.+?)(['"])/gm,
 ];
 
 async function getAllTsFiles(dir) {
@@ -37,7 +38,8 @@ async function getAllTsFiles(dir) {
             if (!['node_modules', 'out', 'dist', '.git', '.vscode', 'resources'].includes(entry.name)) {
                 files.push(...(await getAllTsFiles(fullPath)));
             }
-        } else if (entry.name.endsWith('.ts') || entry.name.endsWith('.tsx')) {
+        } else if ((entry.name.endsWith('.ts') || entry.name.endsWith('.tsx')) && !entry.name.endsWith('.d.ts')) {
+            // Include .ts and .tsx files, but exclude .d.ts declaration files
             files.push(fullPath);
         }
     }

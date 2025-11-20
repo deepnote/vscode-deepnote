@@ -59,7 +59,6 @@ suite('PipEnv installer', async () => {
 
     teardown(() => {
         disposables = dispose(disposables);
-        sinon.restore();
     });
 
     test('Installer name is pipenv', () => {

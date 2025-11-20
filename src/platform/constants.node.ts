@@ -19,7 +19,8 @@ export * from './constants';
 // Override isPreReleaseVersion with Node.js-specific implementation
 export function isPreReleaseVersion(): boolean {
     try {
-        return require('vscode-jupyter-release-version').isPreRelesVersionOfJupyterExtension === true;
+        const { isPreRelease } = require('vscode-jupyter-release-version') as { isPreRelease?: boolean };
+        return isPreRelease === true;
     } catch {
         // Dev version is treated as pre-release.
         return true;

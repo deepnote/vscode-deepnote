@@ -220,6 +220,7 @@ project:
         test('should fall back to active notebook document when no stored selection', () => {
             // Create a mock notebook document
             const mockNotebookDoc = {
+                then: undefined, // Prevent mock from being treated as a Promise-like thenable
                 notebookType: 'deepnote',
                 metadata: {
                     deepnoteProjectId: 'project-123',

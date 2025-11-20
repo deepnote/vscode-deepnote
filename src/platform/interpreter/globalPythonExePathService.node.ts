@@ -9,7 +9,7 @@ import { IFileSystem, IPlatformService } from '../common/platform/types';
 import { swallowExceptions } from '../common/utils/decorators';
 import { IProcessServiceFactory } from '../common/process/types.node';
 import { logger } from '../logging';
-import { getDisplayPath } from '../common/platform/fs-paths';
+import { getDisplayPath } from '../common/platform/fs-paths.node';
 import { Environment } from '@vscode/python-extension';
 import { getEnvironmentType } from './helpers';
 import { ResourceMap } from '../common/utils/map';

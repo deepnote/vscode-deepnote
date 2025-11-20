@@ -16,12 +16,14 @@ function getHomeDir() {
 
     if (isWeb()) {
         cachedHomeDir = undefined;
+
         return undefined;
     }
 
     // In web contexts, return undefined
     // Node.js-specific logic is in fs-paths.node.ts
     cachedHomeDir = undefined;
+
     return undefined;
 }
 export function getFilePath(file: Uri | undefined) {

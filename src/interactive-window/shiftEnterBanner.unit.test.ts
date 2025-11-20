@@ -5,7 +5,7 @@
 import * as sinon from 'sinon';
 import { expect } from 'chai';
 import * as typemoq from 'typemoq';
-import { anything, verify } from 'ts-mockito';
+import { verify, when } from 'ts-mockito';
 import { InteractiveShiftEnterBanner, InteractiveShiftEnterStateKeys } from './shiftEnterBanner';
 import {
     isTestExecution,
@@ -20,7 +20,6 @@ import {
     IWatchableJupyterSettings
 } from '../platform/common/types';
 import { getTelemetryReporter } from '../telemetry';
-import { when } from 'ts-mockito';
 import { mockedVSCodeNamespaces } from '../test/vscode-mock';
 
 suite('Interactive Shift Enter Banner', () => {
@@ -61,8 +60,14 @@ suite('Interactive Shift Enter Banner', () => {
         const promise = shiftBanner.showBanner();
         await promise;
 
-        // Verify showInformationMessage was called
-        verify(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything(), anything())).once();
+        // Verify showInformationMessage was called with the expected message and button labels
+        verify(
+            mockedVSCodeNamespaces.window.showInformationMessage(
+                'Would you like shift-enter to send code to the new Interactive Window experience?',
+                'Yes',
+                'No'
+            )
+        ).once();
 
         // Check if enableInteractiveShiftEnter was called
         expect(enableSpy.called).to.equal(true, 'enableInteractiveShiftEnter should have been called');
@@ -137,13 +142,14 @@ function loadBanner(
     dataScienceSettings.setup((d) => d.sendSelectionToInteractiveWindow).returns(() => false);
     config.setup((c) => c.getSettings(typemoq.It.isAny())).returns(() => dataScienceSettings.object);
 
-    // const yes = 'Yes';
-    // const no = 'No';
-
-    // Config AppShell
-    when(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything(), anything())).thenReturn(
-        Promise.resolve(questionResponse) as any
-    );
+    // Config AppShell - mock showInformationMessage with exact expected arguments
+    when(
+        mockedVSCodeNamespaces.window.showInformationMessage(
+            'Would you like shift-enter to send code to the new Interactive Window experience?',
+            'Yes',
+            'No'
+        )
+    ).thenReturn(Promise.resolve(questionResponse) as any);
 
     // Config settings
     config

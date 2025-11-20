@@ -63,8 +63,9 @@ const commonExternals = [
     '@opentelemetry/instrumentation',
     '@azure/functions-core'
 ];
-const webExternals = commonExternals;
-const desktopExternals = commonExternals.concat(deskTopNodeModulesToExternalize);
+// Create separate copies to avoid shared-state mutations
+const webExternals = [...commonExternals];
+const desktopExternals = [...commonExternals, ...deskTopNodeModulesToExternalize];
 const bundleConfig = getBundleConfiguration();
 const isDevbuild = !process.argv.includes('--production');
 const watchAll = process.argv.includes('--watch-all');
@@ -224,7 +225,8 @@ function createConfig(
     if (source.endsWith(path.join('data-explorer', 'index.tsx'))) {
         inject.push(path.join(__dirname, 'jquery.js'));
     }
-    const external = target === 'web' ? webExternals : commonExternals;
+    // Create a copy to avoid mutating the original arrays
+    const external = [...(target === 'web' ? webExternals : commonExternals)];
     if (source.toLowerCase().endsWith('extension.node.ts')) {
         external.push(...desktopExternals);
     }

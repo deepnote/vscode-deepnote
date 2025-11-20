@@ -67,6 +67,18 @@ suite('OpenInDeepnoteHandler', () => {
         getDeepnoteDomainStub.returns('app.deepnote.com');
     });
 
+    /**
+     * Helper function to stub fs.promises.stat and fs.promises.readFile
+     * Reduces duplication across tests that need to mock file operations
+     */
+    function stubFsForDeepnote(testFileBuffer: Buffer, size = 1000) {
+        const statStub = sinon.stub().resolves({ size } as fs.Stats);
+        const readFileStub = sinon.stub().resolves(testFileBuffer);
+        sandbox.replace(fs.promises, 'stat', statStub as any);
+        sandbox.replace(fs.promises, 'readFile', readFileStub as any);
+        return { statStub, readFileStub };
+    }
+
     suite('activate', () => {
         test('should register command when activated', () => {
             let registeredCommandId: string | undefined;
@@ -148,10 +160,7 @@ suite('OpenInDeepnoteHandler', () => {
             when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(mockNotebookEditor);
             when(mockedVSCodeNamespaces.commands.executeCommand(anything())).thenReturn(Promise.resolve(undefined));
 
-            const statStub = sinon.stub().resolves({ size: 1000 } as fs.Stats);
-            const readFileStub = sinon.stub().resolves(testFileBuffer);
-            sandbox.replace(fs.promises, 'stat', statStub as any);
-            sandbox.replace(fs.promises, 'readFile', readFileStub as any);
+            const { statStub, readFileStub } = stubFsForDeepnote(testFileBuffer);
             when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall((_options, callback) => {
                 withProgressCalled = true;
                 return callback(
@@ -182,10 +191,7 @@ suite('OpenInDeepnoteHandler', () => {
             when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(mockNotebookEditor);
             when(mockedVSCodeNamespaces.window.activeTextEditor).thenReturn(mockTextEditor);
 
-            const statStub = sinon.stub().resolves({ size: 1000 } as fs.Stats);
-            const readFileStub = sinon.stub().resolves(testFileBuffer);
-            sandbox.replace(fs.promises, 'stat', statStub as any);
-            sandbox.replace(fs.promises, 'readFile', readFileStub as any);
+            const { statStub, readFileStub } = stubFsForDeepnote(testFileBuffer);
             when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall((_options, callback) => {
                 return callback(
                     {
@@ -210,10 +216,7 @@ suite('OpenInDeepnoteHandler', () => {
             when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
             when(mockedVSCodeNamespaces.window.activeTextEditor).thenReturn(mockTextEditor);
 
-            const statStub = sinon.stub().resolves({ size: 1000 } as fs.Stats);
-            const readFileStub = sinon.stub().resolves(testFileBuffer);
-            sandbox.replace(fs.promises, 'stat', statStub as any);
-            sandbox.replace(fs.promises, 'readFile', readFileStub as any);
+            const { statStub, readFileStub } = stubFsForDeepnote(testFileBuffer);
             when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall((_options, callback) => {
                 return callback(
                     {
@@ -261,10 +264,7 @@ suite('OpenInDeepnoteHandler', () => {
             when(mockedVSCodeNamespaces.window.activeTextEditor).thenReturn(mockTextEditor);
 
             const saveStub = sandbox.stub(mockDocument, 'save').resolves(true);
-            const statStub2 = sinon.stub().resolves({ size: 1000 } as fs.Stats);
-            const readFileStub2 = sinon.stub().resolves(testFileBuffer);
-            sandbox.replace(fs.promises, 'stat', statStub2 as any);
-            sandbox.replace(fs.promises, 'readFile', readFileStub2 as any);
+            stubFsForDeepnote(testFileBuffer);
             when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall((_options, callback) => {
                 return callback(
                     {
@@ -311,8 +311,7 @@ suite('OpenInDeepnoteHandler', () => {
             when(mockedVSCodeNamespaces.window.activeTextEditor).thenReturn(mockTextEditor);
 
             const largeSize = MAX_FILE_SIZE + 1;
-            const statStub = sinon.stub().resolves({ size: largeSize } as fs.Stats);
-            sandbox.replace(fs.promises, 'stat', statStub as any);
+            const { statStub } = stubFsForDeepnote(testFileBuffer, largeSize);
             when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenCall((message) => {
                 errorMessage = message;
                 return Promise.resolve(undefined);
@@ -335,10 +334,7 @@ suite('OpenInDeepnoteHandler', () => {
             when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
             when(mockedVSCodeNamespaces.window.activeTextEditor).thenReturn(mockTextEditor);
 
-            const statStubX = sinon.stub().resolves({ size: 1000 } as fs.Stats);
-            const readFileStubX = sinon.stub().resolves(testFileBuffer);
-            sandbox.replace(fs.promises, 'stat', statStubX as any);
-            sandbox.replace(fs.promises, 'readFile', readFileStubX as any);
+            stubFsForDeepnote(testFileBuffer);
             when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall((_options, callback) => {
                 return callback(
                     {
@@ -370,10 +366,7 @@ suite('OpenInDeepnoteHandler', () => {
             when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
             when(mockedVSCodeNamespaces.window.activeTextEditor).thenReturn(mockTextEditor);
 
-            const statStubX = sinon.stub().resolves({ size: 1000 } as fs.Stats);
-            const readFileStubX = sinon.stub().resolves(testFileBuffer);
-            sandbox.replace(fs.promises, 'stat', statStubX as any);
-            sandbox.replace(fs.promises, 'readFile', readFileStubX as any);
+            stubFsForDeepnote(testFileBuffer);
             when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall((_options, callback) => {
                 return callback(
                     {
@@ -402,10 +395,7 @@ suite('OpenInDeepnoteHandler', () => {
             when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(mockNotebookEditor);
             when(mockedVSCodeNamespaces.commands.executeCommand(anything())).thenReturn(Promise.resolve(undefined));
 
-            const statStub = sinon.stub().resolves({ size: 1000 } as fs.Stats);
-            const readFileStubY = sinon.stub().resolves(testFileBuffer);
-            sandbox.replace(fs.promises, 'stat', statStub as any);
-            sandbox.replace(fs.promises, 'readFile', readFileStubY as any);
+            const { statStub } = stubFsForDeepnote(testFileBuffer);
             when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall((_options, callback) => {
                 return callback(
                     {

@@ -49,8 +49,8 @@ suite('Custom Environment Variables Provider', () => {
 
         // Stub FileSystem.readFile to ensure it works correctly with physical files
         readFileStub = sinon.stub(FileSystem.prototype, 'readFile').callsFake(async (uri: Uri) => {
-            const result = await fs.readFile(uri.fsPath);
-            const data = Buffer.from(result);
+            const data = await fs.readFile(uri.fsPath);
+
             return data.toString('utf8');
         });
 

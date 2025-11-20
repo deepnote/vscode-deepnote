@@ -15,6 +15,42 @@ const telemetryMockPath = pathToFileURL(path.join(projectRoot, 'out/test/mocks/v
 
 import { stat } from 'node:fs/promises';
 
+/**
+ * Attempts to resolve a module specifier with multiple fallback strategies.
+ * First tries the original specifier, then adds .js extension if needed,
+ * then tries /index.js for extensionless paths.
+ * @param {string} specifier - The module specifier to resolve
+ * @param {object} context - The resolution context
+ * @param {function} nextResolve - The next resolver in the chain
+ * @returns {Promise<object>} The resolved module
+ * @throws {Error} Re-throws the original error if all attempts fail
+ */
+async function resolveWithFallback(specifier, context, nextResolve) {
+    try {
+        return await nextResolve(specifier, context);
+    } catch (originalErr) {
+        // Check if specifier already has a .js extension
+        if (!specifier.endsWith('.js')) {
+            // Try adding .js (handles both extensionless and compound extensions like .node)
+            try {
+                return await nextResolve(specifier + '.js', context);
+            } catch (jsErr) {
+                // If .js doesn't work and it doesn't have any extension, try /index.js
+                if (!path.extname(specifier)) {
+                    try {
+                        return await nextResolve(specifier + '/index.js', context);
+                    } catch (indexErr) {
+                        // Re-throw original error
+                        throw originalErr;
+                    }
+                }
+            }
+        }
+        // Re-throw original error if specifier already had .js or had a partial extension
+        throw originalErr;
+    }
+}
+
 export async function resolve(specifier, context, nextResolve) {
     // Intercept vscode module and point to our mock
     if (specifier === 'vscode') {
@@ -42,37 +78,7 @@ export async function resolve(specifier, context, nextResolve) {
     }
 
     // Handle extensionless imports (both relative and node_modules)
-    // Try the original specifier first
-    try {
-        const result = await nextResolve(specifier, context);
-        return result;
-    } catch (err) {
-        // Check if specifier already has a .js extension
-        const hasJsExtension = specifier.endsWith('.js');
-
-        if (!hasJsExtension) {
-            // Try adding .js (handles both extensionless and compound extensions like .node)
-            try {
-                const withJs = specifier + '.js';
-                const result = await nextResolve(withJs, context);
-                return result;
-            } catch (jsErr) {
-                // If .js doesn't work and it doesn't have any extension, try /index.js
-                if (!path.extname(specifier)) {
-                    try {
-                        const withIndex = specifier + '/index.js';
-                        return await nextResolve(withIndex, context);
-                    } catch (indexErr) {
-                        // Re-throw original error
-                        throw err;
-                    }
-                }
-                // Re-throw original error if it had a partial extension
-                throw err;
-            }
-        }
-        throw err;
-    }
+    return resolveWithFallback(specifier, context, nextResolve);
 }
 
 export async function load(url, context, nextLoad) {
@@ -107,13 +113,6 @@ export async function load(url, context, nextLoad) {
 
                 // Create proxy for dynamic exports
                 const vsProxy = new Proxy(mockedVSCode, handler);
-
-                // Export all known properties from mockedVSCode
-                // Using Object.keys to get all current properties
-                ${(() => {
-                    // This will be evaluated when the module is loaded
-                    return '';
-                })()}
 
                 // Export all vscode API exports used in the codebase
                 // Use Proxy to create pass-through objects that dynamically resolve to vsProxy properties

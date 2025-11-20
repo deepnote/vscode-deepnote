@@ -17,7 +17,13 @@ async function go() {
     let url = process.env.EXISTING_JUPYTER_URI;
     if (!url) {
         const info = await startJupyter(true);
+
         url = info.url;
+
+        const tempDir = path.join(__dirname, '..', 'temp');
+
+        await fs.ensureDir(tempDir);
+
         fs.writeFileSync(path.join(__dirname, '..', 'temp', 'deepnote.pid'), info.server.pid.toString());
     } else {
         console.log('Jupyter server URL provided in env args, no need to start one');

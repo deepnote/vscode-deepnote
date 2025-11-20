@@ -11,6 +11,8 @@ import { DeepnoteEnvironment } from './deepnoteEnvironment';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 import { DeepnoteEnvironmentTreeDataProvider } from './deepnoteEnvironmentTreeDataProvider.node';
+import { crateMockedPythonApi, whenKnownEnvironments } from '../../helpers.unit.test';
+import type { PythonExtension } from '@vscode/python-extension';
 import { createDeepnoteServerConfigHandle } from '../../../platform/deepnote/deepnoteServerUtils.node';
 
 suite('DeepnoteEnvironmentsView', () => {
@@ -23,10 +25,14 @@ suite('DeepnoteEnvironmentsView', () => {
     let mockNotebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper;
     let mockKernelProvider: IKernelProvider;
     let disposables: Disposable[] = [];
+    let pythonEnvironments: PythonExtension['environments'];
 
     setup(() => {
         resetVSCodeMocks();
         disposables.push(new Disposable(() => resetVSCodeMocks()));
+
+        // Initialize Python API for helper functions
+        pythonEnvironments = crateMockedPythonApi(disposables).environments;
 
         mockConfigManager = mock<IDeepnoteEnvironmentManager>();
         mockTreeDataProvider = mock<DeepnoteEnvironmentTreeDataProvider>();
@@ -253,14 +259,8 @@ suite('DeepnoteEnvironmentsView', () => {
             resetCalls(mockedVSCodeNamespaces.window);
         });
 
-        test.skip('should successfully create environment with all inputs', async () => {
-            // NOTE: This test was simplified to avoid stubbing ES module exports.
-            // Instead of testing implementation details, we focus on the public behavior.
-            // FIXME: This test is currently skipped because getCachedEnvironment throws an error
-            // when pythonApi is not initialized. The test needs to properly initialize the Python API
-            // or mock the helper functions.
-
-            // Mock Python API to return available interpreters
+        test('should successfully create environment with all inputs', async () => {
+            // Set up Python environments for helper functions to use
             const mockResolvedEnvironment = {
                 id: testInterpreter.id,
                 path: testInterpreter.uri.fsPath,
@@ -272,8 +272,17 @@ suite('DeepnoteEnvironmentsView', () => {
                 environment: {
                     name: 'test-env',
                     folderUri: testInterpreter.uri
+                },
+                tools: [],
+                executable: {
+                    uri: testInterpreter.uri
                 }
             };
+
+            // Configure the Python API that was initialized in setup()
+            whenKnownEnvironments(pythonEnvironments).thenReturn([mockResolvedEnvironment]);
+
+            // Mock the Python API provider to return the same environments
             const mockPythonApi = {
                 environments: {
                     known: [mockResolvedEnvironment]

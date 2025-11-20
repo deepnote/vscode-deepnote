@@ -22,9 +22,9 @@ async function go() {
 
         const tempDir = path.join(__dirname, '..', 'temp');
 
-        await fs.ensureDir(tempDir);
+        fs.ensureDirSync(tempDir);
 
-        fs.writeFileSync(path.join(__dirname, '..', 'temp', 'deepnote.pid'), info.server.pid.toString());
+        fs.writeFileSync(path.join(tempDir, 'deepnote.pid'), info.server.pid.toString());
     } else {
         console.log('Jupyter server URL provided in env args, no need to start one');
     }

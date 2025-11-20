@@ -183,7 +183,7 @@ function tryGetUsername() {
         const username = escapeRegExp(userInfo().username);
         return new RegExp(username, 'ig');
     } catch (e) {
-        console.info(
+        logger.info(
             `jupyter extension failed to get username info with ${e}\n username will not be obfuscated in local logs`
         );
     }
@@ -194,7 +194,7 @@ function tryGetHomePath() {
         const homeDir = escapeRegExp(getUserHomeDir().fsPath);
         return new RegExp(homeDir, 'ig');
     } catch (e) {
-        console.info(
+        logger.info(
             `jupyter extension failed to get home directory path with ${e}\n home Path will not be obfuscated in local logs`
         );
     }

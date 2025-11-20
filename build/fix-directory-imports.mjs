@@ -44,19 +44,15 @@ function fixDirectoryImports(content) {
     let changeCount = 0;
 
     for (const dirImport of directoryImports) {
-        // Match imports like '../platform/logging.js' or './platform/logging.js'
-        const patterns = [
-            new RegExp(`(['"])(\\.\\.?\\/.*?\\/)${dirImport}\\.js(['"])`, 'g'),
-            new RegExp(`(['"])(\\.\\.?\\/)${dirImport}\\.js(['"])`, 'g'),
-        ];
+        // Match imports with any relative path prefix (./, ../, ../../foo/, etc.)
+        // Captures: quote, prefix (e.g., './', '../../'), directoryImport, '.js', quote
+        const pattern = new RegExp(`(['"])((?:\\.\\.\\/|\\.\\/)(?:.*\\/)?)${dirImport}\\.js(['"])`, 'g');
 
-        for (const pattern of patterns) {
-            const newModified = modified.replace(pattern, (match, quote1, pathPrefix, quote2) => {
-                changeCount++;
-                return `${quote1}${pathPrefix}${dirImport}/index.js${quote2}`;
-            });
-            modified = newModified;
-        }
+        const newModified = modified.replace(pattern, (match, quote1, prefix, quote2) => {
+            changeCount++;
+            return `${quote1}${prefix}${dirImport}/index.js${quote2}`;
+        });
+        modified = newModified;
     }
 
     return { content: modified, changed: changeCount > 0, changeCount };

@@ -38,14 +38,14 @@ function fixTelemetryImports(content) {
     // Fix: './telemetry/index' -> './telemetry' (top-level telemetry.ts file)
     // Fix: '../telemetry/index' -> '../telemetry'
     // Fix: '../../telemetry/index' -> '../../telemetry' etc.
-    const pattern = /(from\s+['"])(\.\.\/?)+telemetry\/index(['"'])/g;
+    const pattern = /(from\s+['"])((?:\.\.\/?)+)telemetry\/index(['"'])/g;
     modified = modified.replace(pattern, (match, before, dots, after) => {
         changeCount++;
         return `${before}${dots}telemetry${after}`;
     });
 
     // Fix the double path: './platform/telemetry/telemetry/index' -> './platform/telemetry'
-    const doublePath = /(from\s+['"])(\.\.\/?)+platform\/telemetry\/telemetry\/index(['"'])/g;
+    const doublePath = /(from\s+['"])((?:\.\.\/?)+)platform\/telemetry\/telemetry\/index(['"'])/g;
     modified = modified.replace(doublePath, (match, before, dots, after) => {
         changeCount++;
         return `${before}${dots}platform/telemetry${after}`;

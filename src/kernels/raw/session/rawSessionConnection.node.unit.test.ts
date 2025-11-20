@@ -205,6 +205,7 @@ suite('Raw Session & Raw Kernel Connection', () => {
             id: '1234',
             clientId: '5678',
             username: 'test',
+            then: undefined,
             get status() {
                 return 'idle';
             },

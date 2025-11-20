@@ -12,8 +12,7 @@ import { compile as convertVegaLiteSpecToVega } from 'vega-lite';
 import { produce } from 'immer';
 import { SqlBlockConverter } from './converters/sqlBlockConverter';
 import { TextBlockConverter } from './converters/textBlockConverter';
-import type { Field } from 'vega-lite/types_unstable/channeldef.js';
-import type { LayerSpec, TopLevel } from 'vega-lite/types_unstable/spec/index.js';
+import type { Field, LayerSpec, TopLevel } from 'vega-lite/types_unstable';
 import { ChartBigNumberBlockConverter } from './converters/chartBigNumberBlockConverter';
 import {
     InputTextBlockConverter,

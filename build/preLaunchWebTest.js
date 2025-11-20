@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import path from 'node:path';
-import jupyterServer from '../out/test/datascience/jupyterServer.node';
+import jupyterServer from '../out/test/datascience/jupyterServer.node.js';
 import fs from 'fs-extra';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';

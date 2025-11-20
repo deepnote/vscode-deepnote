@@ -70,7 +70,7 @@ gulp.task('validateTranslationFiles', (done) => {
     glob.sync('package.nls.*.json', { sync: true }).forEach((file) => {
         // Verify we can open and parse as JSON.
         try {
-            const js = JSON.parse(fs.readFileSync(file));
+            const js = JSON.parse(fs.readFileSync(file, 'utf-8'));
             const result = validator.validate(js, schema);
             if (Array.isArray(result.errors) && result.errors.length) {
                 console.error(result.errors);
@@ -271,9 +271,9 @@ gulp.task('validateTelemetry', async () => {
 
 gulp.task('validatePackageLockJson', async () => {
     const fileName = path.join(__dirname, 'package-lock.json');
-    const oldContents = fs.readFileSync(fileName).toString();
+    const oldContents = fs.readFileSync(fileName, 'utf-8');
     spawnSync('npm', ['install', '--prefer-offline']);
-    const newContents = fs.readFileSync(fileName).toString();
+    const newContents = fs.readFileSync(fileName, 'utf-8');
     if (oldContents.trim() !== newContents.trim()) {
         throw new Error('package-lock.json has changed after running `npm install`');
     }
@@ -281,7 +281,7 @@ gulp.task('validatePackageLockJson', async () => {
 
 gulp.task('verifyUnhandledErrors', async () => {
     const fileName = path.join(__dirname, 'unhandledErrors.txt');
-    const contents = fs.pathExistsSync(fileName) ? fs.readFileSync(fileName, 'utf8') : '';
+    const contents = fs.pathExistsSync(fileName) ? fs.readFileSync(fileName, 'utf-8') : '';
     if (contents.trim().length) {
         console.error(contents);
         throw new Error('Unhandled errors detected. Please fix them before merging this PR.', contents);

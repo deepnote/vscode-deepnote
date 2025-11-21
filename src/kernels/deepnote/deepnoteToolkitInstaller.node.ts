@@ -278,9 +278,11 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
 
             Cancellation.throwIfCanceled(token);
 
-            // Install deepnote-toolkit and ipykernel in venv
-            logger.info(`Installing deepnote-toolkit (${DEEPNOTE_TOOLKIT_VERSION}) and ipykernel in venv from PyPI`);
-            this.outputChannel.appendLine(l10n.t('Installing deepnote-toolkit and ipykernel...'));
+            // Install deepnote-toolkit, ipykernel, and python-lsp-server in venv
+            logger.info(
+                `Installing deepnote-toolkit (${DEEPNOTE_TOOLKIT_VERSION}), ipykernel, and python-lsp-server in venv from PyPI`
+            );
+            this.outputChannel.appendLine(l10n.t('Installing deepnote-toolkit, ipykernel, and python-lsp-server...'));
 
             const installResult = await venvProcessService.exec(
                 venvInterpreter.uri.fsPath,
@@ -290,7 +292,8 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                     'install',
                     '--upgrade',
                     `deepnote-toolkit[server]==${DEEPNOTE_TOOLKIT_VERSION}`,
-                    'ipykernel'
+                    'ipykernel',
+                    'python-lsp-server[all]'
                 ],
                 { throwOnStdErr: false }
             );

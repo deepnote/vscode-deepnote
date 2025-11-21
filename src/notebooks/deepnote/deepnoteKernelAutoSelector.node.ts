@@ -26,6 +26,7 @@ import {
     DeepnoteKernelConnectionMetadata,
     IDeepnoteEnvironmentManager,
     IDeepnoteKernelAutoSelector,
+    IDeepnoteLspClientManager,
     IDeepnoteNotebookEnvironmentMapper,
     IDeepnoteServerProvider,
     IDeepnoteServerStarter
@@ -40,6 +41,7 @@ import {
 import { IJupyterKernelSpec, IKernel, IKernelProvider } from '../../kernels/types';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IPythonExtensionChecker } from '../../platform/api/types';
+import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { Cancellation } from '../../platform/common/cancellation';
 import { JVSC_EXTENSION_ID, STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
 import { getDisplayPath } from '../../platform/common/platform/fs-paths';
@@ -81,6 +83,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         @inject(IControllerRegistration) private readonly controllerRegistration: IControllerRegistration,
         @inject(IPythonExtensionChecker) private readonly pythonExtensionChecker: IPythonExtensionChecker,
         @inject(IDeepnoteServerProvider) private readonly serverProvider: IDeepnoteServerProvider,
+        @inject(IDeepnoteLspClientManager) private readonly lspClientManager: IDeepnoteLspClientManager,
         @inject(IJupyterRequestCreator) private readonly requestCreator: IJupyterRequestCreator,
         @inject(IJupyterRequestAgentCreator)
         @optional()
@@ -564,6 +567,26 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         // Register the server with the provider (one server per PROJECT)
         this.serverProvider.registerServer(serverProviderHandle.handle, serverInfo);
         this.projectServerHandles.set(projectKey, serverProviderHandle.handle);
+
+        // Get the venv interpreter for LSP
+        const lspInterpreterUri =
+            process.platform === 'win32'
+                ? Uri.joinPath(configuration.venvPath, 'Scripts', 'python.exe')
+                : Uri.joinPath(configuration.venvPath, 'bin', 'python');
+
+        const lspInterpreter: PythonEnvironment = {
+            uri: lspInterpreterUri,
+            id: lspInterpreterUri.fsPath
+        } as PythonEnvironment;
+
+        // Start LSP clients for code intelligence
+        try {
+            await this.lspClientManager.startLspClients(serverInfo, notebook.uri, lspInterpreter);
+            logger.info(`✓ LSP clients started for ${notebookKey}`);
+        } catch (error) {
+            logger.error(`Failed to start LSP clients for ${notebookKey}:`, error);
+            // Don't fail the kernel selection if LSP fails - it's supplementary
+        }
 
         // Connect to the server and get available kernel specs
         progress.report({ message: 'Connecting to kernel...' });

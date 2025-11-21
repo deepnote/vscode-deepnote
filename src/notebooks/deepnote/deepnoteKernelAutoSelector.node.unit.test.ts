@@ -4,8 +4,9 @@ import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { DeepnoteKernelAutoSelector } from './deepnoteKernelAutoSelector.node';
 import {
     IDeepnoteEnvironmentManager,
-    IDeepnoteServerProvider,
+    IDeepnoteLspClientManager,
     IDeepnoteNotebookEnvironmentMapper,
+    IDeepnoteServerProvider,
     IDeepnoteServerStarter
 } from '../../kernels/deepnote/types';
 import { IControllerRegistration, IVSCodeNotebookController } from '../controllers/types';
@@ -29,6 +30,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
     let mockControllerRegistration: IControllerRegistration;
     let mockPythonExtensionChecker: IPythonExtensionChecker;
     let mockServerProvider: IDeepnoteServerProvider;
+    let mockLspClientManager: IDeepnoteLspClientManager;
     let mockRequestCreator: IJupyterRequestCreator;
     let mockConfigService: IConfigurationService;
     let mockInitNotebookRunner: IDeepnoteInitNotebookRunner;
@@ -57,6 +59,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         mockControllerRegistration = mock<IControllerRegistration>();
         mockPythonExtensionChecker = mock<IPythonExtensionChecker>();
         mockServerProvider = mock<IDeepnoteServerProvider>();
+        mockLspClientManager = mock<IDeepnoteLspClientManager>();
         mockRequestCreator = mock<IJupyterRequestCreator>();
         mockConfigService = mock<IConfigurationService>();
         mockInitNotebookRunner = mock<IDeepnoteInitNotebookRunner>();
@@ -111,6 +114,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             instance(mockControllerRegistration),
             instance(mockPythonExtensionChecker),
             instance(mockServerProvider),
+            instance(mockLspClientManager),
             instance(mockRequestCreator),
             undefined, // requestAgentCreator is optional
             instance(mockConfigService),

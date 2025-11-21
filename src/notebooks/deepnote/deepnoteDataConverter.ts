@@ -250,6 +250,8 @@ export class DeepnoteDataConverter {
                     data['application/vnd.deepnote.dataframe.v3+json'] = JSON.parse(
                         new TextDecoder().decode(item.data)
                     );
+                } else if (item.mime === 'application/vnd.vega.v6+json') {
+                    data['application/vnd.vega.v6+json'] = JSON.parse(new TextDecoder().decode(item.data));
                 } else if (item.mime === 'application/vnd.vega.v5+json') {
                     data['application/vnd.vega.v5+json'] = JSON.parse(new TextDecoder().decode(item.data));
                 } else if (item.mime === 'application/vnd.plotly.v1+json') {
@@ -335,7 +337,14 @@ export class DeepnoteDataConverter {
                             );
                         }
 
-                        if (data['application/vnd.vega.v5+json']) {
+                        if (data['application/vnd.vega.v6+json']) {
+                            items.push(
+                                NotebookCellOutputItem.json(
+                                    data['application/vnd.vega.v6+json'],
+                                    'application/vnd.vega.v6+json'
+                                )
+                            );
+                        } else if (data['application/vnd.vega.v5+json']) {
                             items.push(
                                 NotebookCellOutputItem.json(
                                     data['application/vnd.vega.v5+json'],
@@ -387,7 +396,7 @@ export class DeepnoteDataConverter {
                             });
 
                             const vegaSpec = convertVegaLiteSpecToVega(patchedVegaLiteSpec as VegaLiteSpec).spec;
-                            items.push(NotebookCellOutputItem.json(vegaSpec, 'application/vnd.vega.v5+json'));
+                            items.push(NotebookCellOutputItem.json(vegaSpec, 'application/vnd.vega.v6+json'));
                         }
 
                         if (data['application/json']) {

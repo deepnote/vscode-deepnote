@@ -2209,7 +2209,8 @@
                 "displayName": "Deepnote Vega Chart Renderer",
                 "entrypoint": "./dist/webviews/webview-side/vegaRenderer/vegaRenderer.js",
                 "mimeTypes": [
-                    "application/vnd.vega.v6+json"
+                    "application/vnd.vega.v6+json",
+                    "application/vnd.vega.v5+json"
                 ],
                 "requiresMessaging": "optional"
             },

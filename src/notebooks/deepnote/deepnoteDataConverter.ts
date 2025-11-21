@@ -12,6 +12,7 @@ import { compile as convertVegaLiteSpecToVega } from 'vega-lite';
 import { produce } from 'immer';
 import { SqlBlockConverter } from './converters/sqlBlockConverter';
 import { TextBlockConverter } from './converters/textBlockConverter';
+// @ts-ignore - types_unstable path doesn't resolve correctly in some TypeScript configurations
 import type { Field, LayerSpec, TopLevel } from 'vega-lite/types_unstable';
 import { ChartBigNumberBlockConverter } from './converters/chartBigNumberBlockConverter';
 import {
@@ -362,22 +363,30 @@ export class DeepnoteDataConverter {
                         }
 
                         if (data['application/vnd.vegalite.v5+json']) {
-                            const patchedVegaLiteSpec = produce(
-                                data['application/vnd.vegalite.v5+json'] as TopLevel<LayerSpec<Field>>,
-                                (draft) => {
-                                    draft.height = 'container';
-                                    draft.width = 'container';
+                            type VegaLiteSpec = TopLevel<LayerSpec<Field>>;
+                            type VegaLiteConfig = { customFormatTypes?: boolean };
+                            type VegaLiteSpecWithExtensions = VegaLiteSpec & {
+                                height?: string | number;
+                                width?: string | number;
+                                autosize?: { type: string };
+                                config?: VegaLiteConfig;
+                            };
 
-                                    draft.autosize = {
-                                        type: 'fit'
-                                    };
-                                    if (!draft.config) {
-                                        draft.config = {};
-                                    }
-                                    draft.config.customFormatTypes = true;
+                            const originalSpec = data['application/vnd.vegalite.v5+json'] as VegaLiteSpecWithExtensions;
+
+                            const patchedVegaLiteSpec = produce(originalSpec, (draft: VegaLiteSpecWithExtensions) => {
+                                draft.height = 'container';
+                                draft.width = 'container';
+                                draft.autosize = {
+                                    type: 'fit'
+                                };
+                                if (!draft.config) {
+                                    draft.config = {};
                                 }
-                            );
-                            const vegaSpec = convertVegaLiteSpecToVega(patchedVegaLiteSpec).spec;
+                                draft.config.customFormatTypes = true;
+                            });
+
+                            const vegaSpec = convertVegaLiteSpecToVega(patchedVegaLiteSpec as VegaLiteSpec).spec;
                             items.push(NotebookCellOutputItem.json(vegaSpec, 'application/vnd.vega.v5+json'));
                         }
 

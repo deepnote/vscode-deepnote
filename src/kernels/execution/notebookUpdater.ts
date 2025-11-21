@@ -58,12 +58,15 @@ function clearPendingChainedUpdatesForTestsImpl() {
     }
 }
 
-// Export through a mutable object to allow stubbing in ESM tests
+// Export through a mutable object to allow stubbing in ESM tests.
+// This object is intentionally mutable - tests can replace these functions
+// by reassigning properties on notebookUpdaterUtils, which is necessary
+// because ESM modules are read-only and direct exports cannot be stubbed.
 export const notebookUpdaterUtils = {
     chainWithPendingUpdates: chainWithPendingUpdatesImpl,
     clearPendingChainedUpdatesForTests: clearPendingChainedUpdatesForTestsImpl
 };
 
-// Keep original exports for backwards compatibility
+// Standalone exports for backwards compatibility
 export const chainWithPendingUpdates = notebookUpdaterUtils.chainWithPendingUpdates;
 export const clearPendingChainedUpdatesForTests = notebookUpdaterUtils.clearPendingChainedUpdatesForTests;

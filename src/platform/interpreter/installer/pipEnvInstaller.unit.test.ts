@@ -15,13 +15,14 @@ import { PythonExtension } from '@vscode/python-extension';
 import { dispose } from '../../common/utils/lifecycle';
 import { setPythonApi } from '../helpers';
 import esmock from 'esmock';
+import type { PipEnvInstaller } from './pipEnvInstaller.node';
 
 suite('PipEnv installer', async () => {
     let disposables: IDisposable[] = [];
     let serviceContainer: TypeMoq.IMock<IServiceContainer>;
     let isPipenvEnvironmentRelatedToFolder: sinon.SinonStub;
     let interpreterService: TypeMoq.IMock<IInterpreterService>;
-    let pipEnvInstaller: any;
+    let pipEnvInstaller: PipEnvInstaller;
     const interpreterPath = Uri.file('path/to/interpreter');
     const workspaceFolder = Uri.file('path/to/folder');
     let environments: PythonExtension['environments'];
@@ -44,8 +45,8 @@ suite('PipEnv installer', async () => {
             }
         });
 
-        const PipEnvInstaller = module.PipEnvInstaller;
-        pipEnvInstaller = new PipEnvInstaller(serviceContainer.object);
+        const PipEnvInstallerClass = module.PipEnvInstaller as typeof PipEnvInstaller;
+        pipEnvInstaller = new PipEnvInstallerClass(serviceContainer.object);
 
         const mockedApi = mock<PythonExtension>();
         sinon.stub(PythonExtension, 'api').resolves(resolvableInstance(mockedApi));

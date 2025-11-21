@@ -31,6 +31,7 @@ export const platformUtils = {
     untildify: untildifyImpl
 };
 
-// Keep original exports for backwards compatibility
-export const getOSType = platformUtils.getOSType;
-export const untildify = platformUtils.untildify;
+// Delegation wrappers that call through platformUtils at runtime
+// This allows test stubs to take effect
+export const getOSType = (platform: string = process.platform): OSType => platformUtils.getOSType(platform);
+export const untildify = (path: string, home: string): string => platformUtils.untildify(path, home);

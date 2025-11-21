@@ -65,5 +65,6 @@ export const uuidUtils = {
     generateUuid: generateUuidImpl
 };
 
-// Keep original export for backwards compatibility
-export const generateUuid = uuidUtils.generateUuid;
+// Delegation wrapper that calls through uuidUtils at runtime
+// This allows test stubs to take effect
+export const generateUuid = (): string => uuidUtils.generateUuid();

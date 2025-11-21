@@ -5,10 +5,9 @@ import path from 'node:path';
 import jupyterServer from '../out/test/datascience/jupyterServer.node.js';
 import fs from 'fs-extra';
 import { fileURLToPath } from 'node:url';
-import { dirname } from 'node:path';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = path.dirname(__filename);
 
 export async function startJupyter(detached) {
     const server = jupyterServer.JupyterServer.instance;

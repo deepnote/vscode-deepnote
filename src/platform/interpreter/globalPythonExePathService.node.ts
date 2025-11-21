@@ -88,9 +88,12 @@ export class GlobalPythonExecutablePathService {
             } else {
                 sitePath = Uri.joinPath(outputPath, 'bin');
             }
-            if (!sitePath || !this.fs.exists(sitePath)) {
+            const sitePathExists = sitePath ? await this.fs.exists(sitePath) : false;
+            if (!sitePath || !sitePathExists) {
                 throw new Error(
-                    `USER_SITE ${sitePath.fsPath} dir does not exist for the interpreter ${getDisplayPath(executable)}`
+                    `USER_SITE ${
+                        sitePath?.fsPath || 'undefined'
+                    } dir does not exist for the interpreter ${getDisplayPath(executable)}`
                 );
             }
             logger.trace(`USER_SITE for ${getDisplayPath(executable)} is ${sitePath.fsPath}`);

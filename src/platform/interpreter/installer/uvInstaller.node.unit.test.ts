@@ -15,7 +15,7 @@ import { Uri } from 'vscode';
 import type { UvInstaller } from './uvInstaller.node';
 
 suite('UvInstaller', () => {
-    let UvInstallerClass: typeof UvInstaller;
+    let UvInstallerClass: typeof import('./uvInstaller.node').UvInstaller;
     let TestableUvInstallerClass: any;
     let installer: UvInstaller;
     let testableInstaller: any;

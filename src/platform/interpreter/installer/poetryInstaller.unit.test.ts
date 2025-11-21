@@ -86,11 +86,23 @@ suite('Module Installer - Poetry', () => {
                 getOSType: () => 'OSX'
             }
         });
+        // Safely remove 'then' property to prevent promise-like behavior
+        try {
+            poetryNode.then = undefined;
+        } catch {
+            // Object may be non-extensible in newer Node.js/esmock versions
+        }
 
         const module = await esmock('../../../platform/interpreter/installer/poetryInstaller.node', {
             '../../../platform/interpreter/installer/poetry.node': poetryNode,
             '../../../platform/common/platform/fileUtils.node': fileUtilsMock
         });
+        // Safely remove 'then' property to prevent promise-like behavior
+        try {
+            module.then = undefined;
+        } catch {
+            // Object may be non-extensible in newer Node.js/esmock versions
+        }
 
         const PoetryInstaller = module.PoetryInstaller;
 

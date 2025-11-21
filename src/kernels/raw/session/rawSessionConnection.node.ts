@@ -45,10 +45,7 @@ export class RawSessionConnection implements Session.ISessionConnection {
         return this._kernel?.connectionStatus || 'disconnected';
     }
     get serverSettings(): ServerConnection.ISettings {
-        // We do not expect anyone to use this. Hence return a setting thats now expected to work, but at least compiles.
-        return ServerConnection.makeSettings({
-            wsUrl: 'RAW'
-        });
+        throw new Error('serverSettings is not implemented for raw kernel connections');
     }
     get model(): Session.IModel {
         return {
@@ -166,16 +163,16 @@ export class RawSessionConnection implements Session.ISessionConnection {
     }
 
     public setPath(_path: string): Promise<void> {
-        throw new Error('Not yet implemented');
+        throw new Error('setPath is not implemented for raw kernel connections');
     }
     public setName(_name: string): Promise<void> {
-        throw new Error('Not yet implemented');
+        throw new Error('setName is not implemented for raw kernel connections');
     }
     public setType(_type: string): Promise<void> {
-        throw new Error('Not yet implemented');
+        throw new Error('setType is not implemented for raw kernel connections');
     }
     public changeKernel(_options: Partial<Kernel.IModel>): Promise<Kernel.IKernelConnection> {
-        throw new Error('Not yet implemented');
+        throw new Error('changeKernel is not implemented for raw kernel connections');
     }
 
     private onIOPubMessage(_sender: Kernel.IKernelConnection, msg: KernelMessage.IIOPubMessage) {

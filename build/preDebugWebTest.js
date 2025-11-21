@@ -6,10 +6,9 @@ import path from 'node:path';
 import { startJupyter } from './preLaunchWebTest.js';
 import jsonc from 'jsonc-parser';
 import { fileURLToPath } from 'node:url';
-import { dirname } from 'node:path';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = path.dirname(__filename);
 
 const settingsFile = path.join(__dirname, '..', 'src', 'test', 'datascience', '.vscode', 'settings.json');
 

@@ -282,7 +282,6 @@ suite('Raw Session & Raw Kernel Connection', () => {
         when(mockedVSCodeNamespaces.workspace.getConfiguration(anything())).thenReturn(instance(workspaceConfig));
         token = new CancellationTokenSource();
         disposables.push(token);
-        session = mock<RawSessionConnectionType>();
         kernelProcess = createKernelProcess();
         kernelLauncher = mock<IKernelLauncher>();
         kernel = createKernel();
@@ -315,11 +314,9 @@ suite('Raw Session & Raw Kernel Connection', () => {
             startupToken = new CancellationTokenSource();
             disposables.push(startupToken);
         });
-        // TODO: These tests require a complete mock of the ZeroMQ kernel connection.
-        // The current mock setup doesn't properly intercept the kernel creation because
-        // the jupyterLabKernel module-level variable in rawKernelConnection.node.ts
-        // is separate from the test's imported reference. This needs to be fixed by
-        // either using dynamic imports or by mocking at the ZeroMQ module level.
+        // TODO: Re-enable these tests once ZeroMQ mocking is implemented at the module boundary.
+        // The current esmock setup doesn't properly inject into rawKernelConnection.node.ts because
+        // it uses a module-level import. Track progress in build/feedback.md item 2.
         test.skip('Verify kernel Status', async () => {
             await session.startKernel({ token: startupToken.token });
 
@@ -361,9 +358,10 @@ suite('Raw Session & Raw Kernel Connection', () => {
             await assert.isRejected(promise, new CancellationError().message);
         });
     });
+    // TODO: Re-enable once ZeroMQ mocking is complete (see 'Start' suite TODO above).
+    // Blocking reason: incomplete ZeroMQ mocking causing kernel startup failure.
+    // Track progress in build/feedback.md item 2.
     suite.skip('After Start', async () => {
-        // TODO: Skipped because the setup requires kernel startup which is currently broken
-        // due to incomplete ZeroMQ mocking. See the TODO comment in the 'Start' suite above.
         setup(async () => {
             const startupToken = new CancellationTokenSource();
             disposables.push(startupToken);

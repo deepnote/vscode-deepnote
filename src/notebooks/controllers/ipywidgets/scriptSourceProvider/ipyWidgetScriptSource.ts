@@ -108,7 +108,7 @@ export class IPyWidgetScriptSource {
     }
     public initialize() {
         if (!this.jupyterLab) {
-            // Lazy load jupyter lab for faster extension loading.
+            // jupyterLab is assigned from the statically imported jupyterLabServices
             this.jupyterLab = jupyterLabServices;
         }
 

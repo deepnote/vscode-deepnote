@@ -38,14 +38,14 @@ function fixTelemetryImports(content) {
     // Fix: './telemetry/index' -> './telemetry' (top-level telemetry.ts file)
     // Fix: '../telemetry/index' -> '../telemetry'
     // Fix: '../../telemetry/index' -> '../../telemetry' etc.
-    const pattern = /(from\s+['"])((?:\.\.\/?)+)telemetry\/index(['"'])/g;
+    const pattern = /(from\s+['"])((?:\.\.?\/)+)telemetry\/index(['"'])/g;
     modified = modified.replace(pattern, (match, before, dots, after) => {
         changeCount++;
         return `${before}${dots}telemetry${after}`;
     });
 
     // Fix the double path: './platform/telemetry/telemetry/index' -> './platform/telemetry'
-    const doublePath = /(from\s+['"])((?:\.\.\/?)+)platform\/telemetry\/telemetry\/index(['"'])/g;
+    const doublePath = /(from\s+['"])((?:\.\.?\/)+)platform\/telemetry\/telemetry\/index(['"'])/g;
     modified = modified.replace(doublePath, (match, before, dots, after) => {
         changeCount++;
         return `${before}${dots}platform/telemetry${after}`;
@@ -80,7 +80,7 @@ async function main() {
     console.log(`🔗 Fixed ${totalImportsFixed} telemetry import${totalImportsFixed !== 1 ? 's' : ''}`);
 }
 
-main().catch(error => {
+main().catch((error) => {
     console.error('❌ Error:', error);
     process.exit(1);
 });

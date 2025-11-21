@@ -12,7 +12,7 @@ import { compile as convertVegaLiteSpecToVega } from 'vega-lite';
 import { produce } from 'immer';
 import { SqlBlockConverter } from './converters/sqlBlockConverter';
 import { TextBlockConverter } from './converters/textBlockConverter';
-// @ts-ignore - types_unstable path doesn't resolve correctly in some TypeScript configurations
+// @ts-ignore - types_unstable subpath requires moduleResolution: "node16" which mandates module: "node16" and .js extensions on all imports
 import type { Field, LayerSpec, TopLevel } from 'vega-lite/types_unstable';
 import { ChartBigNumberBlockConverter } from './converters/chartBigNumberBlockConverter';
 import {

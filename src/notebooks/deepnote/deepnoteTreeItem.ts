@@ -34,7 +34,12 @@ export class DeepnoteTreeItem extends TreeItem {
         this.contextValue = this.type;
 
         // Inline method calls to avoid ES module TreeItem extension issues
-        if (this.type !== DeepnoteTreeItemType.Loading) {
+        if (this.type === DeepnoteTreeItemType.Loading) {
+            this.label = 'Loading…';
+            this.tooltip = 'Loading…';
+            this.description = '';
+            this.iconPath = new ThemeIcon('loading~spin');
+        } else {
             // getTooltip() inline
             if (this.type === DeepnoteTreeItemType.ProjectFile) {
                 const project = this.data as DeepnoteProject;
@@ -91,6 +96,10 @@ export class DeepnoteTreeItem extends TreeItem {
      */
     public updateVisualFields(): void {
         if (this.type === DeepnoteTreeItemType.Loading) {
+            this.label = 'Loading…';
+            this.tooltip = 'Loading…';
+            this.description = '';
+            this.iconPath = new ThemeIcon('loading~spin');
             return;
         }
 

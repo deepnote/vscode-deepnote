@@ -20,8 +20,9 @@ export const platformUtils = {
     getEnvironmentVariable: getEnvironmentVariableImpl
 };
 
-// Keep original export for backwards compatibility
-export const getEnvironmentVariable = platformUtils.getEnvironmentVariable;
+// Delegation wrapper that calls through platformUtils at runtime
+// This allows test stubs to take effect
+export const getEnvironmentVariable = (key: string): string | undefined => platformUtils.getEnvironmentVariable(key);
 
 export function getPathEnvironmentVariable(): string | undefined {
     return getEnvironmentVariable('Path') || getEnvironmentVariable('PATH');

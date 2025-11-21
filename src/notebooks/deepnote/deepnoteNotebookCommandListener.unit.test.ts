@@ -338,6 +338,7 @@ suite('DeepnoteNotebookCommandListener', () => {
             sandbox.restore();
             // Reset the ts-mockito mocks
             reset(mockedVSCodeNamespaces.window);
+            reset(mockedVSCodeNamespaces.commands);
         });
 
         /**
@@ -407,6 +408,10 @@ suite('DeepnoteNotebookCommandListener', () => {
                 getCapturedNotebookEdits: () => capturedNotebookEdits
             };
         }
+
+        teardown(() => {
+            reset(mockedVSCodeNamespaces.commands);
+        });
 
         const TEST_INPUTS: Array<{
             description: string;

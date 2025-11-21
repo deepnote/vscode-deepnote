@@ -23,7 +23,7 @@ async function getAllTsFiles(dir) {
             if (!['node_modules', 'out', 'dist', '.git', '.vscode', 'resources'].includes(entry.name)) {
                 files.push(...(await getAllTsFiles(fullPath)));
             }
-        } else if (entry.name.endsWith('.ts') || entry.name.endsWith('.tsx')) {
+        } else if ((entry.name.endsWith('.ts') || entry.name.endsWith('.tsx')) && !entry.name.endsWith('.d.ts')) {
             files.push(fullPath);
         }
     }
@@ -42,7 +42,7 @@ function removeJsExtensions(content) {
         // import ... from './path.js' or '../path.js'
         /(\bfrom\s+['"])(\.\/?[^'"]+)\.js(['"])/g,
         // import('./path.js') or import('../path.js')
-        /(\bimport\s*\(\s*['"])(\.\/?[^'"]+)\.js(['"])/g,
+        /(\bimport\s*\(\s*['"])(\.\/?[^'"]+)\.js(['"])/g
     ];
 
     for (const pattern of patterns) {
@@ -81,7 +81,7 @@ async function main() {
     console.log(`🔗 Removed ${totalExtensionsRemoved} .js extension${totalExtensionsRemoved !== 1 ? 's' : ''}`);
 }
 
-main().catch(error => {
+main().catch((error) => {
     console.error('❌ Error:', error);
     process.exit(1);
 });

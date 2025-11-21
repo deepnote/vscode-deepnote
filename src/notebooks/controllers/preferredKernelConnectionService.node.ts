@@ -69,9 +69,10 @@ export function findPythonEnvBelongingToFolder(folder: Uri, pythonEnvs: readonly
     // Find an environment that is a .venv or .conda environment.
     // Give preference to .venv over .conda.
     // & give preference to .venv or .conda over any other environment.
-    return localEnvs.find(
-        (e) => getEnvironmentType(e) === EnvironmentType.Venv && e.environment?.name?.toLowerCase() === '.venv'
-    ) ||
+    return (
+        localEnvs.find(
+            (e) => getEnvironmentType(e) === EnvironmentType.Venv && e.environment?.name?.toLowerCase() === '.venv'
+        ) ||
         localEnvs.find(
             (e) => getEnvironmentType(e) === EnvironmentType.Conda && e.environment?.name?.toLowerCase() === '.conda'
         ) ||
@@ -83,9 +84,8 @@ export function findPythonEnvBelongingToFolder(folder: Uri, pythonEnvs: readonly
         localEnvs.find(
             (e) => e.environment?.name?.toLowerCase() === '.venv' || e.environment?.name?.toLowerCase() === '.conda'
         ) ||
-        localEnvs.length
-        ? localEnvs[0]
-        : undefined;
+        (localEnvs.length ? localEnvs[0] : undefined)
+    );
 }
 
 export async function getRecommendedPythonEnvironment(uri: Uri): Promise<ResolvedEnvironment | undefined> {

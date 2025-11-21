@@ -46,9 +46,9 @@ suite('Jupyter Kernel Completion (requestInspect)', () => {
     let disposables: IDisposable[] = [];
     let toDispose: DisposableStore;
     let clock: fakeTimers.InstalledClock;
-    let resolveCompletionItem: any;
+    let resolveCompletionItem: typeof import('./resolveCompletionItem')['resolveCompletionItem'];
     let maxPendingKernelRequests: number;
-    let execCodeInBackgroundThreadStub: sinon.SinonStub;
+    let execCodeInBackgroundThreadStub: sinon.SinonStub<[...args: any[]], Promise<unknown>>;
 
     const pythonKernel = PythonKernelConnectionMetadata.create({
         id: 'pythonId',
@@ -75,9 +75,9 @@ suite('Jupyter Kernel Completion (requestInspect)', () => {
     let kernelStatusChangedSignal: Signal<Kernel.IKernelConnection, Kernel.Status>;
 
     // Mock ServiceContainer instance
-    let serviceContainerInstance: any;
+    let serviceContainerInstance: ServiceContainer | undefined;
     const ServiceContainerMock = class {
-        static get instance() {
+        static get instance(): ServiceContainer | undefined {
             return serviceContainerInstance;
         }
     };

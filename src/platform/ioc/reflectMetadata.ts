@@ -10,5 +10,4 @@
  * the global Reflect.metadata API has already been polyfilled and won't overwrite existing metadata.
  */
 // Import reflect-metadata at the top level
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 import 'reflect-metadata';

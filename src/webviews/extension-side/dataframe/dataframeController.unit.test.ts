@@ -1,5 +1,5 @@
 import { assert } from 'chai';
-import { anything, instance, mock, when } from 'ts-mockito';
+import { anything, instance, mock, verify, when } from 'ts-mockito';
 import {
     Disposable,
     NotebookCell,
@@ -451,7 +451,7 @@ suite('DataframeController', () => {
                 await (controller as any).handleCopyTable(editor, message);
                 assert.fail('Should have thrown an error');
             } catch (error) {
-                assert.include((error as Error).message, 'empty');
+                assert.include((error as Error).message, 'dataframe is empty');
             }
         });
     });
@@ -628,7 +628,8 @@ suite('DataframeController', () => {
             // The method should not throw, just show an error message to the user
             await (controller as any).handleExportTable(editor, message);
 
-            // If we get here without throwing, the error handling worked correctly
+            // Verify that an error message was shown to the user
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
         });
 
         test('Should show error when dataframe is empty', async () => {

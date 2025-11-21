@@ -21,11 +21,10 @@ import { dumpTestSummary } from './build/webTestReporter.js';
 import { Validator } from 'jsonschema';
 import * as common from './build/webpack/common.js';
 import * as jsonc from 'jsonc-parser';
+import { isCI } from './build/constants.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-
-const isCI = process.env.TF_BUILD !== undefined || process.env.GITHUB_ACTIONS === 'true';
 
 gulp.task('createNycFolder', async (done) => {
     try {

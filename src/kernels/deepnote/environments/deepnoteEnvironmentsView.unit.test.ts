@@ -360,6 +360,8 @@ suite('DeepnoteEnvironmentsView', () => {
             assert.strictEqual(capturedOptions.description, 'Environment for data science work');
             // Don't assert on pythonInterpreter.id as the helper functions transform it
             assert.ok(capturedOptions.pythonInterpreter, 'Python interpreter should be provided');
+            assert.ok(capturedOptions.pythonInterpreter.uri, 'Python interpreter uri should be present');
+            assert.ok(capturedOptions.pythonInterpreter.id, 'Python interpreter id should be present');
             assert.ok(capturedToken, 'Cancellation token should be provided');
 
             // Verify success message was shown

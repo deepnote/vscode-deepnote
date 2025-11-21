@@ -114,9 +114,9 @@ export class KernelDependencyService implements IKernelDependencyService {
         let promise = this.installPromises.get(key);
         let cancelTokenSource: CancellationTokenSource | undefined;
         if (!promise) {
-            const cancelTokenSource = new CancellationTokenSource();
+            cancelTokenSource = new CancellationTokenSource();
             const disposable = token.onCancellationRequested(() => {
-                cancelTokenSource.cancel();
+                cancelTokenSource!.cancel();
                 disposable.dispose();
             });
             const install = async () => {
@@ -133,7 +133,7 @@ export class KernelDependencyService implements IKernelDependencyService {
                     resource,
                     kernelConnection.interpreter!,
                     ui,
-                    cancelTokenSource,
+                    cancelTokenSource!,
                     cannotChangeKernels,
                     installWithoutPrompting
                 );
@@ -148,7 +148,7 @@ export class KernelDependencyService implements IKernelDependencyService {
             promise
                 .finally(() => {
                     disposable.dispose();
-                    cancelTokenSource.dispose();
+                    cancelTokenSource!.dispose();
                 })
                 .catch(noop);
             this.installPromises.set(key, promise);

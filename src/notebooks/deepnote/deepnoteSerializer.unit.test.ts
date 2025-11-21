@@ -1,5 +1,4 @@
 import { assert } from 'chai';
-import * as sinon from 'sinon';
 import { when } from 'ts-mockito';
 import * as yaml from 'js-yaml';
 import type { NotebookDocument } from 'vscode';
@@ -13,7 +12,6 @@ import { mockedVSCodeNamespaces } from '../../test/vscode-mock';
 suite('DeepnoteNotebookSerializer', () => {
     let serializer: DeepnoteNotebookSerializer;
     let manager: DeepnoteNotebookManager;
-    let sandbox: sinon.SinonSandbox;
 
     const mockProject: DeepnoteProject = {
         metadata: {
@@ -61,13 +59,8 @@ suite('DeepnoteNotebookSerializer', () => {
     };
 
     setup(() => {
-        sandbox = sinon.createSandbox();
         manager = new DeepnoteNotebookManager();
         serializer = new DeepnoteNotebookSerializer(manager);
-    });
-
-    teardown(() => {
-        sandbox.restore();
     });
 
     /**

@@ -16,6 +16,7 @@ const project3 = path.join(testPoetryDir, 'project3');
 
 suite('isPoetryEnvironment Tests', () => {
     let isPoetryEnvironment: (interpreterPath: string) => Promise<boolean>;
+    let mockedModule: any;
     let shellExecute: sinon.SinonStub;
     let getPythonSetting: sinon.SinonStub;
     let getOSType: sinon.SinonStub;
@@ -31,7 +32,7 @@ suite('isPoetryEnvironment Tests', () => {
         readFileSync = sinon.stub();
         isVirtualenvEnvironment = sinon.stub();
 
-        const module = await esmock('../../../platform/interpreter/installer/poetry.node', {
+        mockedModule = await esmock('../../../platform/interpreter/installer/poetry.node', {
             '../../../platform/common/platform/fileUtils.node': {
                 shellExecute,
                 getPythonSetting,
@@ -47,13 +48,13 @@ suite('isPoetryEnvironment Tests', () => {
                 OSType: platformApis.OSType
             }
         });
-        isPoetryEnvironment = module.isPoetryEnvironment;
+        isPoetryEnvironment = mockedModule.isPoetryEnvironment;
         isVirtualenvEnvironment.resolves(true); // Default to true
     });
 
     teardown(() => {
         sinon.restore();
-        esmock.purge(isPoetryEnvironment);
+        esmock.purge(mockedModule);
     });
 
     suite('Global poetry environment', async () => {

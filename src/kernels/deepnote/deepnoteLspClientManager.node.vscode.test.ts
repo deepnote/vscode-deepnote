@@ -44,10 +44,11 @@ suite('DeepnoteLspClientManager Integration Tests', () => {
     test('Should handle starting LSP clients with mock interpreter', async function () {
         this.timeout(10000);
 
-        // Create a mock interpreter (pointing to system Python for test)
+        // Use invalid path to deliberately trigger failure and test error handling
+        // This ensures consistent test behavior across platforms (simulates missing pylsp)
         const mockInterpreter: PythonEnvironment = {
-            id: '/usr/bin/python3',
-            uri: Uri.file('/usr/bin/python3')
+            id: '/nonexistent/path/to/python',
+            uri: Uri.file('/nonexistent/path/to/python')
         } as PythonEnvironment;
 
         const mockServerInfo = {
@@ -94,9 +95,11 @@ suite('DeepnoteLspClientManager Integration Tests', () => {
     test('Should not start duplicate clients for same notebook', async function () {
         this.timeout(10000);
 
+        // Use invalid path to deliberately trigger failure and test error handling
+        // This ensures consistent test behavior across platforms (simulates missing pylsp)
         const mockInterpreter: PythonEnvironment = {
-            id: '/usr/bin/python3',
-            uri: Uri.file('/usr/bin/python3')
+            id: '/nonexistent/path/to/python',
+            uri: Uri.file('/nonexistent/path/to/python')
         } as PythonEnvironment;
 
         const mockServerInfo = {

@@ -568,28 +568,23 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         this.serverProvider.registerServer(serverProviderHandle.handle, serverInfo);
         this.projectServerHandles.set(projectKey, serverProviderHandle.handle);
 
-        // Get the venv interpreter for LSP
-        const lspInterpreterUri =
-            process.platform === 'win32'
-                ? Uri.joinPath(configuration.venvPath, 'Scripts', 'python.exe')
-                : Uri.joinPath(configuration.venvPath, 'bin', 'python');
+        const lspInterpreterUri = this.getVenvInterpreterUri(configuration.venvPath);
 
         const lspInterpreter: PythonEnvironment = {
             uri: lspInterpreterUri,
             id: lspInterpreterUri.fsPath
         } as PythonEnvironment;
 
-        // Start LSP clients for code intelligence
         try {
             await this.lspClientManager.startLspClients(serverInfo, notebook.uri, lspInterpreter);
+
             logger.info(`✓ LSP clients started for ${notebookKey}`);
         } catch (error) {
             logger.error(`Failed to start LSP clients for ${notebookKey}:`, error);
-            // Don't fail the kernel selection if LSP fails - it's supplementary
         }
 
-        // Connect to the server and get available kernel specs
         progress.report({ message: 'Connecting to kernel...' });
+
         const connectionInfo = createJupyterConnectionInfo(
             serverProviderHandle,
             {
@@ -620,11 +615,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         progress.report({ message: 'Finalizing kernel setup...' });
 
-        // Get the venv Python interpreter (not the base interpreter)
-        const venvInterpreter =
-            process.platform === 'win32'
-                ? Uri.joinPath(configuration.venvPath, 'Scripts', 'python.exe')
-                : Uri.joinPath(configuration.venvPath, 'bin', 'python');
+        const venvInterpreter = this.getVenvInterpreterUri(configuration.venvPath);
 
         logger.info(`Using venv path: ${configuration.venvPath.fsPath}`);
         logger.info(`Venv interpreter path: ${venvInterpreter.fsPath}`);
@@ -801,6 +792,12 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 `Cleared controller for notebook ${getDisplayPath(notebook.uri)} (environment ${environmentId})`
             );
         }
+    }
+
+    private getVenvInterpreterUri(venvPath: Uri): Uri {
+        return process.platform === 'win32'
+            ? Uri.joinPath(venvPath, 'Scripts', 'python.exe')
+            : Uri.joinPath(venvPath, 'bin', 'python');
     }
 
     /**

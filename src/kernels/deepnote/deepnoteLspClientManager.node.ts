@@ -1,9 +1,7 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-
 import * as vscode from 'vscode';
 import { inject, injectable } from 'inversify';
 import { LanguageClient, LanguageClientOptions, Executable } from 'vscode-languageclient/node';
+
 import { IDisposable, IDisposableRegistry } from '../../platform/common/types';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { DeepnoteServerInfo, IDeepnoteLspClientManager } from './types';
@@ -24,8 +22,9 @@ interface LspClientInfo {
 export class DeepnoteLspClientManager
     implements IDeepnoteLspClientManager, IExtensionSyncActivationService, IDisposable
 {
-    // Map notebook URIs to their LSP clients
     private readonly clients = new Map<string, LspClientInfo>();
+    private readonly pendingStarts = new Map<string, boolean>();
+
     private disposed = false;
 
     constructor(@inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry) {
@@ -33,34 +32,57 @@ export class DeepnoteLspClientManager
     }
 
     public activate(): void {
-        // This service is activated synchronously and doesn't need async initialization
         logger.info('DeepnoteLspClientManager activated');
     }
 
     public async startLspClients(
         _serverInfo: DeepnoteServerInfo,
         notebookUri: vscode.Uri,
-        interpreter: PythonEnvironment
+        interpreter: PythonEnvironment,
+        token?: vscode.CancellationToken
     ): Promise<void> {
         if (this.disposed) {
             return;
         }
 
-        const notebookKey = notebookUri.toString();
-
-        // Check if clients already exist for this notebook
-        if (this.clients.has(notebookKey)) {
-            logger.trace(`LSP clients already started for ${notebookKey}`);
+        // Check for cancellation before starting
+        if (token?.isCancellationRequested) {
             return;
         }
 
-        logger.info(`Starting LSP clients for ${notebookKey} using interpreter ${interpreter.uri.fsPath}`);
+        const notebookKey = notebookUri.toString();
+
+        const pendingStart = this.pendingStarts.get(notebookKey);
+
+        if (pendingStart) {
+            logger.trace(`LSP client is already starting up for ${notebookKey}.`);
+
+            return;
+        }
+
+        if (this.clients.has(notebookKey)) {
+            logger.trace(`LSP clients already started for ${notebookKey}.`);
+
+            return;
+        }
+
+        logger.info(`Starting LSP clients for ${notebookKey} using interpreter ${interpreter.uri.fsPath}.`);
+
+        this.pendingStarts.set(notebookKey, true);
 
         try {
-            // Start Python LSP client
-            const pythonClient = await this.createPythonLspClient(notebookUri, interpreter);
+            // Check cancellation before expensive operation
+            if (token?.isCancellationRequested) {
+                return;
+            }
 
-            // Store the client info
+            const pythonClient = await this.createPythonLspClient(notebookUri, interpreter, token);
+
+            // Check cancellation after client creation
+            if (token?.isCancellationRequested) {
+                return;
+            }
+
             const clientInfo: LspClientInfo = {
                 pythonClient
                 // TODO: Add SQL client when endpoint is determined
@@ -71,11 +93,14 @@ export class DeepnoteLspClientManager
             logger.info(`LSP clients started successfully for ${notebookKey}`);
         } catch (error) {
             logger.error(`Failed to start LSP clients for ${notebookKey}:`, error);
+
             throw error;
+        } finally {
+            this.pendingStarts.delete(notebookKey);
         }
     }
 
-    public async stopLspClients(notebookUri: vscode.Uri): Promise<void> {
+    public async stopLspClients(notebookUri: vscode.Uri, token?: vscode.CancellationToken): Promise<void> {
         const notebookKey = notebookUri.toString();
         const clientInfo = this.clients.get(notebookKey);
 
@@ -83,36 +108,61 @@ export class DeepnoteLspClientManager
             return;
         }
 
+        // Check cancellation before stopping
+        if (token?.isCancellationRequested) {
+            return;
+        }
+
         logger.info(`Stopping LSP clients for ${notebookKey}`);
 
         try {
-            // Stop Python client
             if (clientInfo.pythonClient) {
+                if (token?.isCancellationRequested) {
+                    return;
+                }
                 await clientInfo.pythonClient.stop();
+                await clientInfo.pythonClient.dispose();
             }
 
-            // Stop SQL client
             if (clientInfo.sqlClient) {
+                if (token?.isCancellationRequested) {
+                    return;
+                }
                 await clientInfo.sqlClient.stop();
+                await clientInfo.sqlClient.dispose();
             }
 
             this.clients.delete(notebookKey);
+
             logger.info(`LSP clients stopped for ${notebookKey}`);
         } catch (error) {
             logger.error(`Error stopping LSP clients for ${notebookKey}:`, error);
         }
     }
 
-    public async stopAllClients(): Promise<void> {
+    public async stopAllClients(token?: vscode.CancellationToken): Promise<void> {
+        // Check cancellation before stopping
+        if (token?.isCancellationRequested) {
+            return;
+        }
+
         logger.info('Stopping all LSP clients');
 
         const stopPromises: Promise<void>[] = [];
         for (const [, clientInfo] of this.clients.entries()) {
+            // Check cancellation during iteration
+            if (token?.isCancellationRequested) {
+                break;
+            }
+
             if (clientInfo.pythonClient) {
                 stopPromises.push(clientInfo.pythonClient.stop().catch(noop));
+                stopPromises.push(clientInfo.pythonClient.dispose().catch(noop));
             }
+
             if (clientInfo.sqlClient) {
                 stopPromises.push(clientInfo.sqlClient.stop().catch(noop));
+                stopPromises.push(clientInfo.sqlClient.dispose().catch(noop));
             }
         }
 
@@ -122,20 +172,24 @@ export class DeepnoteLspClientManager
 
     public dispose(): void {
         this.disposed = true;
-        // Stop all clients asynchronously but don't wait
+
         void this.stopAllClients();
     }
 
     private async createPythonLspClient(
         notebookUri: vscode.Uri,
-        interpreter: PythonEnvironment
+        interpreter: PythonEnvironment,
+        token?: vscode.CancellationToken
     ): Promise<LanguageClient> {
-        // Start python-lsp-server as a child process using stdio
+        // Check cancellation before creating client
+        if (token?.isCancellationRequested) {
+            throw new Error('Operation cancelled');
+        }
+
         const pythonPath = interpreter.uri.fsPath;
 
         logger.trace(`Creating Python LSP client using interpreter: ${pythonPath}`);
 
-        // Define the server executable
         const serverOptions: Executable = {
             command: pythonPath,
             args: ['-m', 'pylsp'], // Start python-lsp-server
@@ -145,7 +199,6 @@ export class DeepnoteLspClientManager
         };
 
         const clientOptions: LanguageClientOptions = {
-            // Document selector for Python cells in Deepnote notebooks
             documentSelector: [
                 {
                     scheme: 'vscode-notebook-cell',
@@ -158,16 +211,12 @@ export class DeepnoteLspClientManager
                     pattern: '**/*.deepnote'
                 }
             ],
-            // Synchronization settings
             synchronize: {
-                // Notify the server about file changes to '.py' files in the workspace
-                fileEvents: vscode.workspace.createFileSystemWatcher('**/*.py')
+                fileEvents: vscode.workspace.createFileSystemWatcher('**/*.{py,deepnote}')
             },
-            // Output channel for diagnostics
             outputChannelName: 'Deepnote Python LSP'
         };
 
-        // Create the language client with stdio connection
         const client = new LanguageClient(
             'deepnote-python-lsp',
             'Deepnote Python Language Server',
@@ -175,8 +224,13 @@ export class DeepnoteLspClientManager
             clientOptions
         );
 
-        // Start the client
+        // Check cancellation before starting client
+        if (token?.isCancellationRequested) {
+            throw new Error('Operation cancelled');
+        }
+
         await client.start();
+
         logger.info(`Python LSP client started for ${notebookUri.toString()}`);
 
         return client;

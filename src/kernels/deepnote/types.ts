@@ -324,23 +324,27 @@ export interface IDeepnoteLspClientManager {
      * @param serverInfo Server information
      * @param notebookUri The notebook URI for which to start LSP clients
      * @param interpreter The Python interpreter from the venv
+     * @param token Optional cancellation token to cancel the operation
      */
     startLspClients(
         serverInfo: DeepnoteServerInfo,
         notebookUri: vscode.Uri,
-        interpreter: PythonEnvironment
+        interpreter: PythonEnvironment,
+        token?: vscode.CancellationToken
     ): Promise<void>;
 
     /**
      * Stop LSP clients for a notebook
      * @param notebookUri The notebook URI
+     * @param token Optional cancellation token to cancel the operation
      */
-    stopLspClients(notebookUri: vscode.Uri): Promise<void>;
+    stopLspClients(notebookUri: vscode.Uri, token?: vscode.CancellationToken): Promise<void>;
 
     /**
      * Stop all LSP clients
+     * @param token Optional cancellation token to cancel the operation
      */
-    stopAllClients(): Promise<void>;
+    stopAllClients(token?: vscode.CancellationToken): Promise<void>;
 }
 
 export const DEEPNOTE_TOOLKIT_VERSION = '1.1.0';

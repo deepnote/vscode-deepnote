@@ -1,9 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import type { Kernel, KernelMessage, ServerConnection, Session } from '@jupyterlab/services';
+import { type Kernel, type KernelMessage, ServerConnection, type Session } from '@jupyterlab/services';
 import { Signal } from '@lumino/signaling';
-import { createRequire } from 'module';
 
 import { logger } from '../../../platform/logging';
 import { Resource } from '../../../platform/common/types';
@@ -17,8 +16,6 @@ import { CancellationToken, Uri } from 'vscode';
 import { trackKernelResourceInformation } from '../../telemetry/helper';
 import { RawKernelConnection } from './rawKernelConnection.node';
 import { generateUuid } from '../../../platform/common/uuid';
-
-const require = createRequire(import.meta.url);
 
 /*
 RawSession class implements a jupyterlab ISession object
@@ -49,8 +46,7 @@ export class RawSessionConnection implements Session.ISessionConnection {
     }
     get serverSettings(): ServerConnection.ISettings {
         // We do not expect anyone to use this. Hence return a setting thats now expected to work, but at least compiles.
-        const jupyterLab = require('@jupyterlab/services') as typeof import('@jupyterlab/services'); // NOSONAR
-        return jupyterLab.ServerConnection.makeSettings({
+        return ServerConnection.makeSettings({
             wsUrl: 'RAW'
         });
     }

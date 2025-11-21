@@ -31,8 +31,12 @@ function pathExistsImpl(absPath: string): Promise<boolean> {
     return fsapi.pathExists(absPath);
 }
 
-export function pathExistsSync(absPath: string): boolean {
+function pathExistsSyncImpl(absPath: string): boolean {
     return fsapi.pathExistsSync(absPath);
+}
+
+export function pathExistsSync(absPath: string): boolean {
+    return pathExistsSyncImpl(absPath);
 }
 
 function readFileImpl(filePath: string): Promise<string> {
@@ -49,9 +53,15 @@ export const fileUtilsNodeUtils = {
     readFile: readFileImpl
 };
 
-// Keep original exports for backwards compatibility
-export const pathExists = fileUtilsNodeUtils.pathExists;
-export const readFile = fileUtilsNodeUtils.readFile;
+// Delegation wrappers that call through fileUtilsNodeUtils at runtime
+// This allows test stubs to take effect
+export function pathExists(absPath: string): Promise<boolean> {
+    return fileUtilsNodeUtils.pathExists(absPath);
+}
+
+export function readFile(filePath: string): Promise<string> {
+    return fileUtilsNodeUtils.readFile(filePath);
+}
 
 export const untildify: (value: string) => string = (value) => untilidfyCommon(value, homedir());
 

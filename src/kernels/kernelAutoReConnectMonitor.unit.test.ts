@@ -349,6 +349,7 @@ suite('Kernel ReConnect Failed Monitor', () => {
 
         // Send the kernel into connecting state & then disconnected.
         kernel.kernelConnectionStatusSignal.emit('connecting');
+        await clock.nextAsync();
         kernel.kernelConnectionStatusSignal.emit('disconnected');
         await clock.nextAsync();
 

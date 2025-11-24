@@ -7,7 +7,7 @@ export function isUUID(value: string): boolean {
     return _UUIDPattern.test(value);
 }
 
-export const generateUuid = (function (): () => string {
+const generateUuidImpl = (function (): () => string {
     // use `randomUUID` if possible
     if (typeof crypto.randomUUID === 'function') {
         // see https://developer.mozilla.org/en-US/docs/Web/API/Window/crypto
@@ -59,3 +59,12 @@ export const generateUuid = (function (): () => string {
         return result;
     };
 })();
+
+// Export through a mutable object to allow stubbing in ESM tests
+export const uuidUtils = {
+    generateUuid: generateUuidImpl
+};
+
+// Delegation wrapper that calls through uuidUtils at runtime
+// This allows test stubs to take effect
+export const generateUuid = (): string => uuidUtils.generateUuid();

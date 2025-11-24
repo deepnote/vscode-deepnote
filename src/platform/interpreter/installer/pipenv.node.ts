@@ -3,15 +3,15 @@
 
 import * as path from '../../vscode-path/path';
 import { logger } from '../../logging';
-import { getEnvironmentVariable } from '../../common/utils/platform.node';
-import { pathExists, readFile } from '../../common/platform/fileUtils.node';
+import { platformUtils } from '../../common/utils/platform.node';
+import { fileUtilsNodeUtils } from '../../common/platform/fileUtils.node';
 import { Uri } from 'vscode';
-import { normCasePath, arePathsSame } from '../../common/platform/fileUtils';
+import { normCasePath, fileUtilsCommonUtils } from '../../common/platform/fileUtils';
 
 function getSearchHeight() {
     // PIPENV_MAX_DEPTH tells pipenv the maximum number of directories to recursively search for
     // a Pipfile, defaults to 3: https://pipenv.pypa.io/en/latest/advanced/#pipenv.environments.PIPENV_MAX_DEPTH
-    const maxDepthStr = getEnvironmentVariable('PIPENV_MAX_DEPTH');
+    const maxDepthStr = platformUtils.getEnvironmentVariable('PIPENV_MAX_DEPTH');
     if (maxDepthStr === undefined) {
         return 3;
     }
@@ -33,11 +33,11 @@ export async function _getAssociatedPipfile(
     searchDir: string,
     options: { lookIntoParentDirectories: boolean }
 ): Promise<string | undefined> {
-    const pipFileName = getEnvironmentVariable('PIPENV_PIPFILE') || 'Pipfile';
+    const pipFileName = platformUtils.getEnvironmentVariable('PIPENV_PIPFILE') || 'Pipfile';
     let heightToSearch = options.lookIntoParentDirectories ? getSearchHeight() : 1;
-    while (heightToSearch > 0 && !arePathsSame(searchDir, path.dirname(searchDir))) {
+    while (heightToSearch > 0 && !fileUtilsCommonUtils.arePathsSame(searchDir, path.dirname(searchDir))) {
         const pipFile = path.join(searchDir, pipFileName);
-        if (await pathExists(pipFile)) {
+        if (await fileUtilsNodeUtils.pathExists(pipFile)) {
             return pipFile;
         }
         searchDir = path.dirname(searchDir);
@@ -60,11 +60,11 @@ async function getProjectDir(envFolder: string): Promise<string | undefined> {
     //     |__ python  <--- interpreterPath
     // We get the project by reading the .project file
     const dotProjectFile = path.join(envFolder, '.project');
-    if (!(await pathExists(dotProjectFile))) {
+    if (!(await fileUtilsNodeUtils.pathExists(dotProjectFile))) {
         return undefined;
     }
-    const projectDir = await readFile(dotProjectFile);
-    if (!(await pathExists(projectDir))) {
+    const projectDir = await fileUtilsNodeUtils.readFile(dotProjectFile);
+    if (!(await fileUtilsNodeUtils.pathExists(projectDir))) {
         logger.error(
             `The .project file inside environment folder: ${envFolder} doesn't contain a valid path to the project`
         );
@@ -109,10 +109,10 @@ export async function isPipenvEnvironmentRelatedToFolder(interpreterPath: Uri, f
 
     // PIPENV_NO_INHERIT is used to tell pipenv not to look for Pipfile in parent directories
     // https://pipenv.pypa.io/en/latest/advanced/#pipenv.environments.PIPENV_NO_INHERIT
-    const lookIntoParentDirectories = getEnvironmentVariable('PIPENV_NO_INHERIT') === undefined;
+    const lookIntoParentDirectories = platformUtils.getEnvironmentVariable('PIPENV_NO_INHERIT') === undefined;
     const pipFileAssociatedWithFolder = await _getAssociatedPipfile(folder.fsPath, { lookIntoParentDirectories });
     if (!pipFileAssociatedWithFolder) {
         return false;
     }
-    return arePathsSame(pipFileAssociatedWithEnvironment, pipFileAssociatedWithFolder);
+    return fileUtilsCommonUtils.arePathsSame(pipFileAssociatedWithEnvironment, pipFileAssociatedWithFolder);
 }

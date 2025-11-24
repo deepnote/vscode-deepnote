@@ -172,7 +172,7 @@ suite('Kernel Execution @kernelCore', function () {
         await fs.writeFileSync(
             envFile.fsPath,
             dedent`
-        ENV_VAR_TESTING_CI=HelloWorldEnvVariable
+        VSCODE_JUPYTER_ENV_TEST_VAR1=HelloWorldEnvVariable
         PYTHONPATH=./dummyFolderForPythonPath
         `
         );
@@ -182,7 +182,7 @@ suite('Kernel Execution @kernelCore', function () {
                     import sys
                     import os
                     print(sys.path)
-                    print(os.getenv("ENV_VAR_TESTING_CI"))`
+                    print(os.getenv("VSCODE_JUPYTER_ENV_TEST_VAR1"))`
         );
 
         await Promise.all([

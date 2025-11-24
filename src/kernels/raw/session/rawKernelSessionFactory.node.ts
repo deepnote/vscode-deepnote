@@ -3,7 +3,7 @@
 
 import { injectable, inject } from 'inversify';
 import { logger } from '../../../platform/logging';
-import { getDisplayPath } from '../../../platform/common/platform/fs-paths';
+import { getDisplayPath } from '../../../platform/common/platform/fs-paths.node';
 import { IConfigurationService } from '../../../platform/common/types';
 import { trackKernelResourceInformation } from '../../telemetry/helper';
 import {

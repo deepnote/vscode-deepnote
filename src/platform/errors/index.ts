@@ -1,12 +1,11 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { FetchError } from 'node-fetch';
 import * as stackTrace from 'stack-trace';
 import { getTelemetrySafeHashedString } from '../telemetry/helpers';
 import { getErrorTags } from './errors';
 import { getLastFrameFromPythonTraceback } from './errorUtils';
-import { getErrorCategory, TelemetryErrorProperties, BaseError, WrappedError } from './types';
+import { getErrorCategory, TelemetryErrorProperties, BaseError } from './types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function populateTelemetryWithErrorInfo(props: Partial<TelemetryErrorProperties>, error: Error) {
@@ -14,13 +13,15 @@ export async function populateTelemetryWithErrorInfo(props: Partial<TelemetryErr
     // Don't blow away what we already have.
     props.failureCategory = props.failureCategory || getErrorCategory(error);
 
-    // In browsers, FetchError is undefined and the error we receive is a `TypeError` with message `Failed to fetch`.
-    const isBrowserFetchError = !FetchError && error?.name === 'TypeError' && error?.message === 'Failed to fetch';
-    const errorType = isBrowserFetchError ? TypeError : FetchError;
-
-    // In the web we might receive other errors besides `TypeError: Failed to fetch`.
-    // In such cases, we should not try to compare the error type with `FetchError`, since it's not defined.
-    const isFetchError = (isBrowserFetchError || FetchError !== undefined) && isErrorType(error, errorType);
+    // Detect fetch errors by shape instead of using instanceof
+    // - Native FetchError (node-fetch or some runtimes): error.name === 'FetchError'
+    // - Browser fetch failures: error.name === 'TypeError' && message matches 'failed to fetch'
+    // - Global FetchError support: check if globalThis has FetchError
+    const globalFetchError = (globalThis as typeof globalThis & { FetchError?: ErrorConstructor }).FetchError;
+    const isFetchError =
+        error?.name === 'FetchError' ||
+        (error?.name === 'TypeError' && /failed to fetch/i.test(String(error.message))) ||
+        (typeof globalFetchError !== 'undefined' && error instanceof globalFetchError);
 
     if (props.failureCategory === 'unknown' && isFetchError) {
         props.failureCategory = 'fetcherror';
@@ -91,23 +92,4 @@ function getCallSite(frame: stackTrace.StackFrame) {
         }
     }
     return parts.join('.');
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Constructor<T> = { new (...args: any[]): T };
-
-function isErrorType<T>(error: Error, expectedType: Constructor<T>) {
-    // If the expectedType is undefined, which may happen in the web,
-    // we should log the error and return false.
-    if (!expectedType) {
-        console.error('Error type is not defined', error);
-        return false;
-    }
-    if (error instanceof expectedType) {
-        return true;
-    }
-    if (error instanceof WrappedError && error.originalException instanceof expectedType) {
-        return true;
-    }
-    return false;
 }

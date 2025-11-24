@@ -1,4 +1,5 @@
 import { inject, injectable, named } from 'inversify';
+import * as path from '../../../platform/vscode-path/path';
 import { CancellationToken, EventEmitter, l10n, Uri } from 'vscode';
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
 import { Cancellation } from '../../../platform/common/cancellation';
@@ -52,8 +53,38 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
             const configs = await this.storage.loadEnvironments();
             this.environments.clear();
 
+            let needsMigration = false;
+
             for (const config of configs) {
+                const venvDirName = path.basename(config.venvPath.fsPath);
+
+                // Check if venv path is under current globalStorage
+                const expectedVenvParent = Uri.joinPath(this.context.globalStorageUri, 'deepnote-venvs').fsPath;
+                const actualVenvParent = path.dirname(config.venvPath.fsPath);
+                const isInCorrectStorage = actualVenvParent === expectedVenvParent;
+
+                // Check if directory name matches the environment ID and is in correct storage
+                const isExpectedPath = venvDirName === config.id && isInCorrectStorage;
+                const needsPathMigration = !isExpectedPath;
+
+                if (needsPathMigration) {
+                    logger.info(
+                        `Migrating environment "${config.name}" from ${config.venvPath.fsPath} to ID-based path`
+                    );
+
+                    config.venvPath = Uri.joinPath(this.context.globalStorageUri, 'deepnote-venvs', config.id);
+                    config.toolkitVersion = undefined;
+
+                    logger.info(`New venv path: ${config.venvPath.fsPath} (will be recreated on next use)`);
+                    needsMigration = true;
+                }
+
                 this.environments.set(config.id, config);
+            }
+
+            if (needsMigration) {
+                logger.info('Saving migrated environments to storage');
+                await this.persistEnvironments();
             }
 
             logger.info(`Initialized environment manager with ${this.environments.size} environments`);

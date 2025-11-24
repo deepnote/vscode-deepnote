@@ -1,8 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-'use strict';
-
 /*
 This file is only used when using webpack for bundling.
 We have a dummy file so that webpack doesn't fall over when trying to bundle pdfkit.
@@ -12,4 +10,4 @@ with the actual source of pdfkit that needs to be used by nodejs (our extension 
 */
 
 class PDFDocument {}
-module.exports = PDFDocument;
+export default PDFDocument;

@@ -27,7 +27,7 @@ import {
     resolvedPythonEnvToJupyterEnv,
     getPythonEnvironmentName
 } from '../../../platform/interpreter/helpers';
-import { getDisplayPath } from '../../../platform/common/platform/fs-paths';
+import { getDisplayPath } from '../../../platform/common/platform/fs-paths.node';
 import { IKernelProvider } from '../../types';
 import { createDeepnoteServerConfigHandle } from '../../../platform/deepnote/deepnoteServerUtils.node';
 

@@ -25,7 +25,7 @@ import { noop } from '../../../platform/common/utils/misc';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
 import { TraceOptions } from '../../../platform/logging/types';
 import { IPythonExecutionFactory } from '../../../platform/interpreter/types.node';
-import { getDisplayPath } from '../../../platform/common/platform/fs-paths';
+import { getDisplayPath } from '../../../platform/common/platform/fs-paths.node';
 import { StopWatch } from '../../../platform/common/utils/stopWatch';
 import { ResourceMap, ResourceSet } from '../../../platform/common/utils/map';
 import { getPythonEnvDisplayName, getSysPrefix } from '../../../platform/interpreter/helpers';

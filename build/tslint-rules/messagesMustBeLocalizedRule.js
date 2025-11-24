@@ -1,12 +1,12 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-'use strict';
 
-const path = require('path');
-const Lint = require('tslint');
-const ts = require('typescript');
-const util = require('../util');
-const baseRuleWalker = require('./baseRuleWalker');
+import path from 'path';
+import Lint from 'tslint';
+import ts from 'typescript';
+import { getListOfFiles } from '../util.js';
+import { BaseRuleWalker } from './baseRuleWalker.js';
+
 const methodNames = [
     // From IApplicationShell (vscode.window):
     'showErrorMessage',
@@ -17,13 +17,15 @@ const methodNames = [
     'appendLine',
     'appendLine'
 ];
+
 // tslint:ignore-next-line:no-suspicious-comments
 // TODO: Ideally we would not ignore any files.
-const ignoredFiles = util.getListOfFiles('unlocalizedFiles.json');
+const ignoredFiles = getListOfFiles('unlocalizedFiles.json');
 const ignoredPrefix = path.normalize('src/test');
 const failureMessage =
     'Messages must be localized in the Jupyter Extension (use src/platform/common/utils/localize.ts)';
-class NoStringLiteralsInMessages extends baseRuleWalker.BaseRuleWalker {
+
+class NoStringLiteralsInMessages extends BaseRuleWalker {
     visitCallExpression(node) {
         if (!this.shouldIgnoreNode(node)) {
             node.arguments
@@ -63,10 +65,13 @@ class NoStringLiteralsInMessages extends baseRuleWalker.BaseRuleWalker {
         return false;
     }
 }
+
 class Rule extends Lint.Rules.AbstractRule {
     apply(sourceFile) {
         return this.applyWithWalker(new NoStringLiteralsInMessages(sourceFile, this.getOptions()));
     }
 }
+
 Rule.FAILURE_STRING = failureMessage;
-exports.Rule = Rule;
+
+export { Rule };

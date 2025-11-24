@@ -10,8 +10,6 @@ import { format } from 'util';
 import { registerLogger } from '../../platform/logging/index';
 import { Arguments, ILogger } from '../../platform/logging/types';
 import { ClientAPI } from './clientApi';
-const { inherits } = require('mocha/lib/utils');
-const defaultReporter = require('mocha/lib/reporters/spec');
 
 const constants = {
     EVENT_RUN_BEGIN: 'start',
@@ -92,7 +90,7 @@ type Message =
 let currentPromise = Promise.resolve();
 const messages: Message[] = [];
 
-function writeReportProgress(message: Message) {
+async function writeReportProgress(message: Message) {
     if (env.uiKind === UIKind.Desktop) {
         messages.push(message);
         if (message.event === constants.EVENT_RUN_END) {
@@ -101,7 +99,7 @@ function writeReportProgress(message: Message) {
                 ? Uri.joinPath(jupyterExtUri, 'logs')
                 : Uri.joinPath(extensions.getExtension(PerformanceExtensionId)!.extensionUri, '..', '..', '..', 'logs');
             const logFile = Uri.joinPath(logDir, 'testresults.json');
-            const fs: typeof import('fs-extra') = require('fs-extra');
+            const fs = await import('fs-extra');
             // eslint-disable-next-line local-rules/dont-use-fspath
             fs.ensureDirSync(logDir.fsPath);
             // eslint-disable-next-line local-rules/dont-use-fspath
@@ -206,21 +204,35 @@ class ConsoleHijacker implements ILogger {
 const consoleHijacker = new ConsoleHijacker();
 
 registerLogger(consoleHijacker);
+
+// Load mocha internals dynamically
+let defaultReporter: any;
+let mochaInternalsLoaded = false;
+
 function CustomReporter(this: any, runner: mochaTypes.Runner, options: mochaTypes.MochaOptions) {
+    if (!mochaInternalsLoaded) {
+        // Use synchronous require for mocha internals
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const mochaUtils = require('mocha/lib/utils');
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        defaultReporter = require('mocha/lib/reporters/spec');
+        mochaUtils.inherits(CustomReporter, defaultReporter);
+        mochaInternalsLoaded = true;
+    }
     defaultReporter.call(this, runner, options);
     // eslint-disable-next-line @typescript-eslint/no-use-before-define
     runner
         .once(constants.EVENT_RUN_BEGIN, () => {
             consoleHijacker.release();
-            writeReportProgress({ event: constants.EVENT_RUN_BEGIN });
+            void writeReportProgress({ event: constants.EVENT_RUN_BEGIN });
         })
         .once(constants.EVENT_RUN_END, () => {
             consoleHijacker.release();
-            writeReportProgress({ event: constants.EVENT_RUN_END, stats: runner.stats });
+            void writeReportProgress({ event: constants.EVENT_RUN_END, stats: runner.stats });
         })
         .on(constants.EVENT_SUITE_BEGIN, (suite: mochaTypes.Suite) => {
             consoleHijacker.release();
-            writeReportProgress({
+            void writeReportProgress({
                 event: constants.EVENT_SUITE_BEGIN,
                 title: suite.title,
                 titlePath: suite.titlePath(),
@@ -230,7 +242,7 @@ function CustomReporter(this: any, runner: mochaTypes.Runner, options: mochaType
         })
         .on(constants.EVENT_SUITE_END, (suite: mochaTypes.Suite) => {
             consoleHijacker.release();
-            writeReportProgress({
+            void writeReportProgress({
                 event: constants.EVENT_SUITE_END,
                 title: suite.title,
                 titlePath: suite.titlePath(),
@@ -241,7 +253,7 @@ function CustomReporter(this: any, runner: mochaTypes.Runner, options: mochaType
         })
         .on(constants.EVENT_TEST_FAIL, (test: mochaTypes.Test, err: any) => {
             const consoleOutput = consoleHijacker.release();
-            writeReportProgress({
+            void writeReportProgress({
                 event: constants.EVENT_TEST_FAIL,
                 title: test.title,
                 err: formatException(err),
@@ -257,7 +269,7 @@ function CustomReporter(this: any, runner: mochaTypes.Runner, options: mochaType
         })
         .on(constants.EVENT_TEST_BEGIN, (test: mochaTypes.Test) => {
             consoleHijacker.hijack();
-            writeReportProgress({
+            void writeReportProgress({
                 event: constants.EVENT_TEST_BEGIN,
                 title: test.title,
                 titlePath: test.titlePath(),
@@ -271,7 +283,7 @@ function CustomReporter(this: any, runner: mochaTypes.Runner, options: mochaType
         })
         .on(constants.EVENT_TEST_PENDING, (test: mochaTypes.Test) => {
             consoleHijacker.release();
-            writeReportProgress({
+            void writeReportProgress({
                 event: constants.EVENT_TEST_PENDING,
                 title: test.title,
                 titlePath: test.titlePath(),
@@ -285,7 +297,7 @@ function CustomReporter(this: any, runner: mochaTypes.Runner, options: mochaType
         })
         .on(constants.EVENT_TEST_PASS, (test: mochaTypes.Test) => {
             const consoleOutput = consoleHijacker.release();
-            writeReportProgress({
+            void writeReportProgress({
                 event: constants.EVENT_TEST_PASS,
                 title: test.title,
                 titlePath: test.titlePath(),
@@ -300,5 +312,4 @@ function CustomReporter(this: any, runner: mochaTypes.Runner, options: mochaType
         });
 }
 
-inherits(CustomReporter, defaultReporter);
-module.exports = CustomReporter;
+export default CustomReporter;

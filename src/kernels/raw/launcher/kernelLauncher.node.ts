@@ -11,7 +11,7 @@ import { IPythonExtensionChecker } from '../../../platform/api/types';
 import { Cancellation, raceCancellationError } from '../../../platform/common/cancellation';
 import { getTelemetrySafeErrorMessageFromPythonTraceback } from '../../../platform/errors/errorUtils';
 import { logger } from '../../../platform/logging';
-import { getDisplayPath } from '../../../platform/common/platform/fs-paths';
+import { getDisplayPath } from '../../../platform/common/platform/fs-paths.node';
 import { IFileSystemNode } from '../../../platform/common/platform/types.node';
 import { IProcessServiceFactory } from '../../../platform/common/process/types.node';
 import { IDisposableRegistry, IConfigurationService, Resource } from '../../../platform/common/types';

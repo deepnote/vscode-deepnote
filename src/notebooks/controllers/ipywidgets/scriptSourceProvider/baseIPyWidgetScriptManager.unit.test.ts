@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import { assert } from 'chai';
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import { Uri } from 'vscode';
 import { extractRequireConfigFromWidgetEntry } from './baseIPyWidgetScriptManager';
 import * as path from '../../../../platform/vscode-path/path';

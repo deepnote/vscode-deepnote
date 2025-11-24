@@ -1,15 +1,15 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-'use strict';
 
-const path = require('path');
-const Lint = require('tslint');
-const util = require('../util');
-class BaseRuleWalker extends Lint.RuleWalker {
+import path from 'path';
+import Lint from 'tslint';
+import { ExtensionRootDir } from '../util.js';
+
+export class BaseRuleWalker extends Lint.RuleWalker {
     shouldIgnoreCurrentFile(node, filesToIgnore) {
         const sourceFile = node.getSourceFile();
         if (sourceFile && sourceFile.fileName) {
-            const filename = path.resolve(util.ExtensionRootDir, sourceFile.fileName);
+            const filename = path.resolve(ExtensionRootDir, sourceFile.fileName);
             if (filesToIgnore.indexOf(filename.replace(/\//g, path.sep)) >= 0) {
                 return true;
             }
@@ -17,4 +17,3 @@ class BaseRuleWalker extends Lint.RuleWalker {
         return false;
     }
 }
-exports.BaseRuleWalker = BaseRuleWalker;

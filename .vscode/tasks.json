@@ -6,12 +6,36 @@
         "focus": false,
         "panel": "shared"
     },
+    "problemMatchers": [
+        {
+            "name": "esbuild-watch",
+            "label": "esbuild watch",
+            "owner": "esbuild",
+            "source": "esbuild",
+            "fileLocation": "relative",
+            "pattern": [
+                {
+                    "regexp": "^\\s*(.*):(\\d+):(\\d+):\\s+(error|warning):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
+                }
+            ],
+            "background": {
+                "activeOnStart": true,
+                "beginsPattern": "^\\[watch\\] build started",
+                "endsPattern": "^\\[watch\\] build (finished|failed)"
+            }
+        }
+    ],
     "tasks": [
         {
             "label": "Build",
             "dependsOn": [
-                "Core - Build",
-                "Unittest - Build"
+                "Core - Build Once",
+                "Unittest - Build Once"
             ],
             "presentation": {
                 "reveal": "never",
@@ -24,11 +48,31 @@
         },
         {
             "type": "npm",
+            "script": "esbuild-all",
+            "group": "build",
+            "problemMatcher": [],
+            "label": "Core - Build Once",
+            "presentation": {
+                "reveal": "never"
+            }
+        },
+        {
+            "type": "npm",
+            "script": "compile-tsc",
+            "group": "build",
+            "problemMatcher": "$tsc",
+            "label": "Unittest - Build Once",
+            "presentation": {
+                "reveal": "never"
+            }
+        },
+        {
+            "type": "npm",
             "script": "compile-esbuild-watch",
             "group": "build",
             "problemMatcher": "$esbuild-watch",
             "isBackground": true,
-            "label": "Core - Build",
+            "label": "Core - Watch",
             "presentation": {
                 "group": "buildWatchers",
                 "reveal": "never"
@@ -40,7 +84,7 @@
             "group": "build",
             "problemMatcher": "$tsc-watch",
             "isBackground": true,
-            "label": "Unittest - Build",
+            "label": "Unittest - Watch",
             "presentation": {
                 "group": "buildWatchers",
                 "reveal": "never"

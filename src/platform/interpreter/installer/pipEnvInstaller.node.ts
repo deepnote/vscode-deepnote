@@ -10,7 +10,7 @@ import { ExecutionInstallArgs, ModuleInstaller } from './moduleInstaller.node';
 import { ModuleInstallerType, ModuleInstallFlags } from './types';
 import { isPipenvEnvironmentRelatedToFolder } from './pipenv.node';
 import { IServiceContainer } from '../../ioc/types';
-import { getFilePath } from '../../common/platform/fs-paths';
+import { getFilePath } from '../../common/platform/fs-paths.node';
 import { getInterpreterWorkspaceFolder } from './helpers';
 import { Environment } from '@vscode/python-extension';
 import { getEnvironmentType } from '../helpers';

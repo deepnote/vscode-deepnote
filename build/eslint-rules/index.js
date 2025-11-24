@@ -4,6 +4,7 @@
 const importType = require('eslint-plugin-import/lib/core/importType');
 const moduleVisitor = require('eslint-module-utils/moduleVisitor');
 const path = require('path');
+
 const testFolder = path.join('src', 'test');
 
 function reportIfMissing(context, node, allowed, name) {
@@ -24,30 +25,30 @@ function reportIfMissing(context, node, allowed, name) {
 }
 
 module.exports = {
-    meta: {
-        type: 'problem',
-        docs: {
-            description: 'Check for node.js builtins in non-node files',
-            category: 'import'
-        },
-        schema: [
-            {
-                type: 'object',
-                properties: {
-                    allow: {
-                        type: 'array',
-                        uniqueItems: true,
-                        items: {
-                            type: 'string'
-                        }
-                    }
-                },
-                additionalProperties: false
-            }
-        ]
-    },
     rules: {
         'node-imports': {
+            meta: {
+                type: 'problem',
+                docs: {
+                    description: 'Check for node.js builtins in non-node files',
+                    category: 'import'
+                },
+                schema: [
+                    {
+                        type: 'object',
+                        properties: {
+                            allow: {
+                                type: 'array',
+                                uniqueItems: true,
+                                items: {
+                                    type: 'string'
+                                }
+                            }
+                        },
+                        additionalProperties: false
+                    }
+                ]
+            },
             create: function (context) {
                 const options = context.options[0] || {};
                 const allowed = options.allow || [];
@@ -61,6 +62,13 @@ module.exports = {
             }
         },
         'dont-use-process': {
+            meta: {
+                type: 'problem',
+                docs: {
+                    description: 'Prevent use of process.env in non-node files',
+                    category: 'best-practices'
+                }
+            },
             create: function (context) {
                 return {
                     MemberExpression(node) {
@@ -82,6 +90,13 @@ module.exports = {
             }
         },
         'dont-use-fspath': {
+            meta: {
+                type: 'problem',
+                docs: {
+                    description: 'Prevent use of fsPath in non-node files',
+                    category: 'best-practices'
+                }
+            },
             create: function (context) {
                 return {
                     MemberExpression(node) {
@@ -103,6 +118,13 @@ module.exports = {
             }
         },
         'dont-use-filename': {
+            meta: {
+                type: 'problem',
+                docs: {
+                    description: 'Prevent use of __dirname and __filename in non-node files',
+                    category: 'best-practices'
+                }
+            },
             create: function (context) {
                 return {
                     Identifier(node) {

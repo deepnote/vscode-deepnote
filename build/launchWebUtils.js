@@ -1,14 +1,20 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-const path = require('path');
-const fs = require('fs-extra');
-const test_web = require('@vscode/test-web');
-const { startJupyter } = require('./preLaunchWebTest');
-const jsonc = require('jsonc-parser');
-const { startReportServer } = require('./webTestReporter');
-const { noop } = require('../out/test/core');
-const { isCI } = require('./constants');
+import path from 'node:path';
+import fs from 'fs-extra';
+import test_web from '@vscode/test-web';
+import { startJupyter } from './preLaunchWebTest.js';
+import jsonc from 'jsonc-parser';
+import { startReportServer } from './webTestReporter.js';
+import { noop } from '../out/test/core';
+import { isCI } from './constants.js';
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 const extensionDevelopmentPath = path.resolve(__dirname, '../');
 const packageJsonFile = path.join(extensionDevelopmentPath, 'package.json');
 
@@ -25,7 +31,7 @@ const port =
 const attachArgName = '--waitForDebugger=';
 const waitForDebuggerArg = process.argv.find((arg) => arg.startsWith(attachArgName));
 
-exports.launch = async function launch(launchTests) {
+export async function launch(launchTests) {
     let exitCode = 0;
     let server;
     let testServer;
@@ -90,4 +96,4 @@ exports.launch = async function launch(launchTests) {
 
     // Not all promises complete. Force exit
     process.exit(exitCode);
-};
+}

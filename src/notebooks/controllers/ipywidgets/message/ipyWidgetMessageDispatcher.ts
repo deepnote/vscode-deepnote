@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 
 import type { Kernel, KernelMessage } from '@jupyterlab/services';
+import * as jupyterLabSerialize from '@jupyterlab/services/lib/kernel/serialize';
+import * as jupyterLabServices from '@jupyterlab/services';
 import { Event, EventEmitter, NotebookDocument } from 'vscode';
 import type { Data as WebSocketData } from 'ws';
 import { logger } from '../../../../platform/logging';
@@ -104,9 +106,6 @@ export class IPyWidgetMessageDispatcher implements IIPyWidgetMessageDispatcher {
         );
         this.mirrorSend = this.mirrorSend.bind(this);
         this.onKernelSocketMessage = this.onKernelSocketMessage.bind(this);
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const jupyterLabSerialize =
-            require('@jupyterlab/services/lib/kernel/serialize') as typeof import('@jupyterlab/services/lib/kernel/serialize'); // NOSONAR
         this.deserialize = jupyterLabSerialize.deserialize;
     }
     public dispose() {
@@ -179,8 +178,7 @@ export class IPyWidgetMessageDispatcher implements IIPyWidgetMessageDispatcher {
     public initialize() {
         if (!this.jupyterLab) {
             // Lazy load jupyter lab for faster extension loading.
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            this.jupyterLab = require('@jupyterlab/services') as typeof import('@jupyterlab/services'); // NOSONAR
+            this.jupyterLab = jupyterLabServices;
         }
 
         // If we have any pending targets, register them now
@@ -376,8 +374,7 @@ export class IPyWidgetMessageDispatcher implements IIPyWidgetMessageDispatcher {
                 this.raisePostMessage(IPyWidgetMessages.IPyWidgets_msg, { id: msgUuid, data });
                 if (data.includes('display_data')) {
                     deserializedMessage = this.deserialize(data as any, protocol);
-                    const jupyterLab = require('@jupyterlab/services') as typeof import('@jupyterlab/services');
-                    if (jupyterLab.KernelMessage.isDisplayDataMsg(deserializedMessage)) {
+                    if (jupyterLabServices.KernelMessage.isDisplayDataMsg(deserializedMessage)) {
                         this._onDisplayMessage.fire(deserializedMessage);
                     }
                 }

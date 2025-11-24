@@ -6,7 +6,7 @@ import { getExecutablePath } from '../pythonEnvironments/info/executable.node';
 import * as internalPython from './internal/python.node';
 import { ExecutionResult, IProcessService, ShellOptions, SpawnOptions } from '../common/process/types.node';
 import { SemVer } from 'semver';
-import { getFilePath } from '../common/platform/fs-paths';
+import { getFilePath } from '../common/platform/fs-paths.node';
 import { Uri } from 'vscode';
 import { IFileSystem } from '../common/platform/types';
 import { logger } from '../logging';

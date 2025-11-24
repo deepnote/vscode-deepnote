@@ -5,6 +5,7 @@ import * as path from '../platform/vscode-path/path';
 import * as uriPath from '../platform/vscode-path/resources';
 import type * as nbformat from '@jupyterlab/nbformat';
 import type { Kernel, KernelSpec } from '@jupyterlab/services';
+import * as jupyterLab from '@jupyterlab/services';
 import url from 'url-parse';
 import {
     KernelConnectionMetadata,
@@ -660,8 +661,6 @@ export async function executeSilently(
     logger.trace(
         `Executing silently Code (${kernelConnection.status}) = ${splitLines(code.substring(0, 100)).join('\\n')}`
     );
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const jupyterLab = require('@jupyterlab/services') as typeof import('@jupyterlab/services');
 
     const request = kernelConnection.requestExecute(
         {
@@ -755,8 +754,6 @@ export function executeSilentlyAndEmitOutput(
     onOutput: (output: NotebookCellOutput) => void
 ) {
     code = code.replace(/\r\n/g, '\n');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const jupyterLab = require('@jupyterlab/services') as typeof import('@jupyterlab/services');
 
     const request = kernelConnection.requestExecute(
         {

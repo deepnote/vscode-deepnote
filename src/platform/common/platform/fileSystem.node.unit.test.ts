@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import { assert } from 'chai';
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import * as path from '../../../platform/vscode-path/path';
 import * as os from 'os';
 import { FileSystem } from './fileSystem.node';

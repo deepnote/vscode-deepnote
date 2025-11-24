@@ -4,8 +4,7 @@
 import { OutputChannel } from 'vscode';
 import { Arguments, ILogger } from './types';
 import { getTimeForLogging } from './util';
-
-const format = require('format-util') as typeof import('format-util');
+import format from 'format-util';
 
 export class OutputChannelLogger implements ILogger {
     private readonly homeReplaceRegEx?: RegExp;

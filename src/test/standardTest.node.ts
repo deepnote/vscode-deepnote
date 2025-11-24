@@ -16,6 +16,9 @@ import {
 } from '../platform/common/constants';
 import { DownloadPlatform } from '@vscode/test-electron/out/download';
 import { arch } from 'os';
+import { getDirname } from '../platform/common/esmUtils.node';
+
+const __dirname = getDirname(import.meta.url);
 
 // Support for passing grep (specially for models or Copilot Coding Agent)
 // Local Copilot or Copilot Coding Agent can use `--grep=XYZ` or `--grep XYZ`

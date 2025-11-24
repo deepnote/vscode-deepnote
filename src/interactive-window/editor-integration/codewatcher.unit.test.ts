@@ -400,13 +400,13 @@ fourth line
     });
 
     test('Test the RunCell command', async () => {
-        const fileName = Uri.file('test.py').fsPath;
-        const version = 1;
         const testString = '#%%\ntesting';
-        const document = createDocument(testString, fileName, version, TypeMoq.Times.atLeastOnce(), true);
         const testRange = new Range(0, 0, 1, 7);
 
-        codeWatcher.setDocument(document.object);
+        // Initialize mock text editor to set up window.activeTextEditor properly
+        initializeMockTextEditor(codeWatcher, testString);
+
+        const fileName = Uri.file('test.py').fsPath;
 
         // Set up our expected call to add code
         activeInteractiveWindow
@@ -425,7 +425,6 @@ fourth line
 
         // Verify function calls
         activeInteractiveWindow.verifyAll();
-        document.verifyAll();
     });
 
     test('Test the RunFileInteractive command', async () => {
@@ -581,22 +580,21 @@ testing3`;
     });
 
     test('Test the RunCurrentCell command', async () => {
-        const fileName = Uri.file('test.py');
-        const version = 1;
         const inputText = `#%%
 testing1
 #%%
 testing2`;
-        const document = createDocument(inputText, fileName.fsPath, version, TypeMoq.Times.atLeastOnce(), true);
+        const fileName = Uri.file('test.py').fsPath;
 
-        codeWatcher.setDocument(document.object);
+        // Initialize mock text editor to set up window.activeTextEditor properly
+        const mockTextEditor = initializeMockTextEditor(codeWatcher, inputText);
 
         // Set up our expected calls to add code
         activeInteractiveWindow
             .setup((h) =>
                 h.addCode(
                     TypeMoq.It.isValue('#%%\ntesting2'),
-                    TypeMoq.It.is((u) => u.fsPath == fileName.fsPath),
+                    TypeMoq.It.is((u) => u.fsPath == fileName),
                     TypeMoq.It.isValue(2)
                 )
             )
@@ -604,13 +602,12 @@ testing2`;
             .verifiable(TypeMoq.Times.once());
 
         // For this test we need to set up a document selection point
-        textEditor.setup((te) => te.selection).returns(() => new Selection(2, 0, 2, 0));
+        mockTextEditor.selection = new Selection(2, 0, 2, 0);
 
         await codeWatcher.runCurrentCell();
 
         // Verify function calls
         activeInteractiveWindow.verifyAll();
-        document.verifyAll();
     });
 
     test('Test the RunCellAndAllBelow command', async () => {
@@ -906,22 +903,21 @@ testing2`;
     });
 
     test('Test runCurrentCellAndAdvance command with next cell', async () => {
-        const fileName = Uri.file('test.py');
-        const version = 1;
         const inputText = `#%%
 testing1
 #%%
 testing2`;
-        const document = createDocument(inputText, fileName.fsPath, version, TypeMoq.Times.atLeastOnce(), true);
+        const fileName = Uri.file('test.py').fsPath;
 
-        codeWatcher.setDocument(document.object);
+        // Initialize mock text editor to set up window.activeTextEditor properly
+        const mockTextEditor = initializeMockTextEditor(codeWatcher, inputText);
 
         // Set up our expected calls to add code
         activeInteractiveWindow
             .setup((h) =>
                 h.addCode(
                     TypeMoq.It.isValue('#%%\ntesting1'),
-                    TypeMoq.It.is((u) => u.fsPath == fileName.fsPath),
+                    TypeMoq.It.is((u) => u.fsPath == fileName),
                     TypeMoq.It.isValue(0)
                 )
             )
@@ -929,18 +925,9 @@ testing2`;
             .verifiable(TypeMoq.Times.once());
 
         // For this test we need to set up a document selection point
-        const selection = new Selection(0, 0, 0, 0);
-        textEditor.setup((te) => te.selection).returns(() => selection);
+        mockTextEditor.selection = new Selection(0, 0, 0, 0);
 
-        //textEditor.setup(te => te.selection = TypeMoq.It.isAny()).verifiable(TypeMoq.Times.once());
-        //textEditor.setup(te => te.selection = TypeMoq.It.isAnyObject<Selection>(Selection));
-        // Would be good to check that selection was set, but TypeMoq doesn't seem to like
-        // both getting and setting an object property. isAnyObject is not valid for this class
-        // and is or isAny overwrite the previous property getter if used. Will verify selection set
-        // in functional test
-        // https://github.com/florinn/typemoq/issues/107
-
-        // To get around this, override the advanceToRange function called from within runCurrentCellAndAdvance
+        // To get around TypeMoq limitations, override the advanceToRange function called from within runCurrentCellAndAdvance
         // this will tell us if we are calling the correct range
         (codeWatcher as any).advanceToRange = (targetRange: Range) => {
             expect(targetRange.start.line).is.equal(2, 'Incorrect range in run cell and advance');
@@ -952,27 +939,24 @@ testing2`;
         await codeWatcher.runCurrentCellAndAdvance();
 
         // Verify function calls
-        textEditor.verifyAll();
         activeInteractiveWindow.verifyAll();
-        document.verifyAll();
     });
 
     test('Test runCurrentCellAndAdvance command does not advance when newCellOnRunLast is false', async () => {
-        const fileName = Uri.file('test.py');
-        const version = 1;
         const inputText = `#%%
 testing1
 `;
-        const document = createDocument(inputText, fileName.fsPath, version, TypeMoq.Times.atLeastOnce(), true);
+        const fileName = Uri.file('test.py').fsPath;
 
-        codeWatcher.setDocument(document.object);
+        // Initialize mock text editor to set up window.activeTextEditor properly
+        const mockTextEditor = initializeMockTextEditor(codeWatcher, inputText);
 
         // Set up our expected calls to add code
         activeInteractiveWindow
             .setup((h) =>
                 h.addCode(
                     TypeMoq.It.isValue('#%%\ntesting1\n'),
-                    TypeMoq.It.is((u) => u.fsPath == fileName.fsPath),
+                    TypeMoq.It.is((u) => u.fsPath == fileName),
                     TypeMoq.It.isValue(0)
                 )
             )
@@ -980,8 +964,7 @@ testing1
             .verifiable(TypeMoq.Times.once());
 
         // For this test we need to set up a document selection point
-        const selection = new Selection(0, 0, 0, 0);
-        textEditor.setup((te) => te.selection).returns(() => selection);
+        mockTextEditor.selection = new Selection(0, 0, 0, 0);
 
         // Apply setting we want to test
         jupyterSettings.newCellOnRunLast = false;
@@ -1004,9 +987,7 @@ testing1
         expect(advanceToRangeCalled).to.be.equal(false, 'advanceToRange should not have been set');
 
         // Verify function calls
-        textEditor.verifyAll();
         activeInteractiveWindow.verifyAll();
-        document.verifyAll();
     });
 
     test('CodeLens returned after settings changed is different', () => {

@@ -10,7 +10,7 @@ import { EnvironmentType } from '../pythonEnvironments/info';
 import { sendTelemetryEvent } from '../../telemetry';
 import { IPythonApiProvider, IPythonExtensionChecker } from '../api/types';
 import { StopWatch } from '../common/utils/stopWatch';
-import { getDisplayPath } from '../common/platform/fs-paths';
+import { getDisplayPath } from '../common/platform/fs-paths.node';
 import { IEnvironmentActivationService } from './activation/types';
 import { IInterpreterService } from './contracts';
 import { DataScience } from '../common/utils/localize';

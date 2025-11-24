@@ -10,6 +10,9 @@ import { FileSystem } from '../../../platform/common/platform/fileSystem.node';
 import { EnvironmentVariablesService } from '../../../platform/common/variables/environment.node';
 import { IEnvironmentVariablesService } from '../../../platform/common/variables/types';
 import { initialize } from '../../initialize';
+import { getDirname } from '../../../platform/common/esmUtils.node';
+
+const __dirname = getDirname(import.meta.url);
 
 use(chaiAsPromised);
 

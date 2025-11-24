@@ -7,7 +7,7 @@ import { EXTENSION_ROOT_DIR_FOR_TESTS } from './constants.node';
 /**
  * Rebuilds all other files with coverage instrumentations
  */
-export function setupCoverage() {
+export async function setupCoverage() {
     // In case of running integration tests like DS test with VS Code UI, we have no other way to add coverage.
     // In such a case we need to instrument the code for coverage.
     if (!process.env.VSC_JUPYTER_INSTRUMENT_CODE_FOR_COVERAGE) {
@@ -15,7 +15,9 @@ export function setupCoverage() {
     }
     const htmlReport = process.env.VSC_JUPYTER_INSTRUMENT_CODE_FOR_COVERAGE_HTML ? ['html'] : [];
     const reports = htmlReport.concat(['text', 'text-summary', 'lcov']);
-    const NYC = require('nyc');
+    // Use dynamic import for nyc as it doesn't have type definitions
+    // @ts-expect-error - nyc doesn't have type definitions
+    const { default: NYC } = await import('nyc');
     const nyc = new NYC({
         cwd: path.join(EXTENSION_ROOT_DIR_FOR_TESTS),
         extension: ['.ts'],

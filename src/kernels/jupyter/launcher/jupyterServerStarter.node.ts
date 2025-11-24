@@ -23,7 +23,7 @@ import { ReportableAction } from '../../../platform/progress/types';
 import { IJupyterConnection } from '../../types';
 import { IJupyterSubCommandExecutionService } from '../types.node';
 import { INotebookStarter as IJupyterServerStarter } from '../types';
-import { getFilePath } from '../../../platform/common/platform/fs-paths';
+import { getFilePath } from '../../../platform/common/platform/fs-paths.node';
 import { JupyterNotebookNotInstalled } from '../../../platform/errors/jupyterNotebookNotInstalled';
 import { JupyterCannotBeLaunchedWithRootError } from '../../../platform/errors/jupyterCannotBeLaunchedWithRootError';
 import { noop } from '../../../platform/common/utils/misc';

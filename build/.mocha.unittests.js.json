@@ -1,9 +1,10 @@
 {
     "spec": "./out/**/*.unit.test.js",
-    "require": ["source-map-support/register", "out/test/unittests.js"],
-    "reporter": "mocha-multi-reporters",
-    "reporter-option": "configFile=build/.mocha-multi-reporters.config",
+    "loader": ["./build/mocha-esm-loader.js"],
+    "require": ["./out/test/unittests.js"],
+    "reporter": "spec",
     "ui": "tdd",
     "recursive": true,
-    "colors": true
+    "colors": true,
+    "node-option": ["no-warnings=ExperimentalWarning", "loader=./build/mocha-esm-loader.js"]
 }

@@ -576,7 +576,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         } as PythonEnvironment;
 
         try {
-            await this.lspClientManager.startLspClients(serverInfo, notebook.uri, lspInterpreter);
+            await this.lspClientManager.startLspClients(serverInfo, notebook.uri, lspInterpreter, progressToken);
 
             logger.info(`✓ LSP clients started for ${notebookKey}`);
         } catch (error) {

@@ -12,6 +12,9 @@ import {
     IIPyWidgetScriptManager
 } from '../types';
 import { LocalWidgetScriptSourceProvider } from './localWidgetScriptSourceProvider.node';
+import { getDirname } from '../../../../platform/common/esmUtils.node';
+
+const __dirname = getDirname(import.meta.url);
 
 /* eslint-disable , @typescript-eslint/no-explicit-any */
 suite('ipywidget - Local Widget Script Source', () => {

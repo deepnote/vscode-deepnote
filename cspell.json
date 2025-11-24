@@ -36,6 +36,7 @@
         "Dremio",
         "duckdb",
         "ename",
+        "esmock",
         "evalue",
         "findstr",
         "getsitepackages",

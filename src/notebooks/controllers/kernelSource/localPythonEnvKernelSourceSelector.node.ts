@@ -24,7 +24,7 @@ import { ILocalPythonNotebookKernelSourceSelector } from '../types';
 import { ServiceContainer } from '../../../platform/ioc/container';
 import { IInterpreterService } from '../../../platform/interpreter/contracts';
 import { logger } from '../../../platform/logging';
-import { getDisplayPath } from '../../../platform/common/platform/fs-paths';
+import { getDisplayPath } from '../../../platform/common/platform/fs-paths.node';
 
 export type MultiStepResult<T extends KernelConnectionMetadata = KernelConnectionMetadata> = {
     notebook: NotebookDocument;

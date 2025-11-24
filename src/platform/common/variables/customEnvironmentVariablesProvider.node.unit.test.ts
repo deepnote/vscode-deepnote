@@ -8,7 +8,7 @@ import { dispose } from '../utils/lifecycle';
 import { IDisposable } from '../types';
 import { CustomEnvironmentVariablesProvider } from './customEnvironmentVariablesProvider.node';
 import { IEnvironmentVariablesService } from './types';
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import dedent from 'dedent';
 import { IPythonApiProvider, IPythonExtensionChecker } from '../../api/types';
 import { logger } from '../../logging';
@@ -42,9 +42,18 @@ suite('Custom Environment Variables Provider', () => {
     let fsWatcher: FileSystemWatcher;
     const workspaceUri = Uri.joinPath(Uri.file(EXTENSION_ROOT_DIR_FOR_TESTS), 'src', 'test', 'datascience');
     const workspaceFolder = { index: 0, name: 'workspace', uri: workspaceUri };
+    let readFileStub: sinon.SinonStub;
     setup(async function () {
         logger.info(`Start Test ${this.currentTest?.title}`);
         clearCache();
+
+        // Stub FileSystem.readFile to ensure it works correctly with physical files
+        readFileStub = sinon.stub(FileSystem.prototype, 'readFile').callsFake(async (uri: Uri) => {
+            const data = await fs.readFile(uri.fsPath);
+
+            return data.toString('utf8');
+        });
+
         envVarsService = new EnvironmentVariablesService(new FileSystem());
         pythonExtChecker = mock<IPythonExtensionChecker>();
         when(pythonExtChecker.isPythonExtensionInstalled).thenReturn(true);
@@ -93,7 +102,6 @@ suite('Custom Environment Variables Provider', () => {
         );
     }
     test('Loads .env file', async () => {
-        const fsSpy = sinon.spy(FileSystem.prototype, 'readFile');
         const envVars = dedent`
                     VSCODE_JUPYTER_ENV_TEST_VAR1=FOO
                     VSCODE_JUPYTER_ENV_TEST_VAR2=BAR
@@ -109,10 +117,10 @@ suite('Custom Environment Variables Provider', () => {
         });
 
         // Reading again doesn't require a new read of the file.
-        const originalCalLCount = fsSpy.callCount;
+        const originalCallCount = readFileStub.callCount;
         const vars2 = await customEnvVarsProvider.getCustomEnvironmentVariables(undefined, 'RunNonPythonCode');
 
-        assert.strictEqual(fsSpy.callCount, originalCalLCount);
+        assert.strictEqual(readFileStub.callCount, originalCallCount);
         assert.deepEqual(vars2, {
             VSCODE_JUPYTER_ENV_TEST_VAR1: 'FOO',
             VSCODE_JUPYTER_ENV_TEST_VAR2: 'BAR'

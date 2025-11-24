@@ -8,7 +8,7 @@ import { IExtensionSyncActivationService } from '../../activation/types';
 import { IDisposableRegistry } from '../../common/types';
 import * as path from '../../../platform/vscode-path/path';
 import { IPythonExtensionChecker } from '../../api/types';
-import { getDisplayPath } from '../../common/platform/fs-paths';
+import { getDisplayPath } from '../../common/platform/fs-paths.node';
 import { getCachedEnvironments, getPythonEnvDisplayName } from '../helpers';
 import { isPythonEnvInListOfHiddenEnvs } from './filterService';
 import { logger } from '../../logging';

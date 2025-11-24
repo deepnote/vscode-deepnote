@@ -31,13 +31,16 @@ import { CancellationTokenSource, Uri } from 'vscode';
 import { dispose } from '../../../platform/common/utils/lifecycle';
 import { noop } from '../../../test/core';
 import { ChildProcess } from 'child_process';
-import { EventEmitter } from 'stream';
+import { EventEmitter } from 'events';
 import { PythonKernelInterruptDaemon } from '../finder/pythonKernelInterruptDaemon.node';
 import { JupyterPaths } from '../finder/jupyterPaths.node';
 import { waitForCondition } from '../../../test/common.node';
 import { IS_REMOTE_NATIVE_TEST } from '../../../test/constants';
 import { logger } from '../../../platform/logging';
 import { IPlatformService } from '../../../platform/common/platform/types';
+import { getDirname } from '../../../platform/common/esmUtils.node';
+
+const __dirname = getDirname(import.meta.url);
 import { IPythonExecutionFactory, IPythonExecutionService } from '../../../platform/interpreter/types.node';
 import { createObservable } from '../../../platform/common/process/proc.node';
 import { ServiceContainer } from '../../../platform/ioc/container';

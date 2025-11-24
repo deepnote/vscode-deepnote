@@ -51,7 +51,7 @@ import { registerTypes as registerWebviewTypes } from './webviews/extension-side
 import { Exiting, isTestExecution, setIsCodeSpace, setIsWebExtension } from './platform/common/constants';
 import { initializeGlobals as initializeTelemetryGlobals } from './platform/telemetry/telemetry';
 import { IInterpreterPackages } from './platform/interpreter/types';
-import { homedir, platform, arch, userInfo } from 'os';
+import { homedir, platform, arch, userInfo } from 'node:os';
 import { getUserHomeDir } from './platform/common/utils/platform.node';
 import { homePath } from './platform/common/platform/fs-paths.node';
 import {
@@ -183,7 +183,7 @@ function tryGetUsername() {
         const username = escapeRegExp(userInfo().username);
         return new RegExp(username, 'ig');
     } catch (e) {
-        console.info(
+        logger.info(
             `jupyter extension failed to get username info with ${e}\n username will not be obfuscated in local logs`
         );
     }
@@ -194,7 +194,7 @@ function tryGetHomePath() {
         const homeDir = escapeRegExp(getUserHomeDir().fsPath);
         return new RegExp(homeDir, 'ig');
     } catch (e) {
-        console.info(
+        logger.info(
             `jupyter extension failed to get home directory path with ${e}\n home Path will not be obfuscated in local logs`
         );
     }

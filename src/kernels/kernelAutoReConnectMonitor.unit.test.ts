@@ -104,11 +104,15 @@ suite('Kernel ReConnect Progress Message', () => {
         const kernel = createKernel();
 
         onDidStartKernel.fire(instance(kernel.kernel));
+        // Advance clock to allow event handlers to be registered
+        await clock.nextAsync();
 
         // Send the kernel into connecting state & then disconnected.
         kernel.kernelConnectionStatusSignal.emit('connecting');
+        // Allow microtask queue to flush
+        await clock.nextAsync();
         kernel.kernelConnectionStatusSignal.emit('disconnected');
-        await clock.runAllAsync();
+        await clock.nextAsync();
 
         verify(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).once();
     });
@@ -225,11 +229,14 @@ suite('Kernel ReConnect Failed Monitor', () => {
         const kernel = createKernel();
 
         onDidStartKernel.fire(instance(kernel.kernel));
+        // Advance clock to allow event handlers to be registered
+        await clock.nextAsync();
 
         // Send the kernel into connecting state & then disconnected.
         kernel.kernelConnectionStatusSignal.emit('connecting');
+        await clock.nextAsync();
         kernel.kernelConnectionStatusSignal.emit('disconnected');
-        await clock.runAllAsync();
+        await clock.nextAsync();
 
         verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
         verify(cellExecution.appendOutput(anything())).never();
@@ -270,12 +277,15 @@ suite('Kernel ReConnect Failed Monitor', () => {
         const cell = createCell(instance(nb));
         when(kernelProvider.get(instance(nb))).thenReturn(instance(kernel.kernel));
         onDidStartKernel.fire(instance(kernel.kernel));
+        // Advance clock to allow event handlers to be registered
+        await clock.nextAsync();
         notebookCellExecutions.changeCellState(instance(cell), NotebookCellExecutionState.Executing);
 
         // Send the kernel into connecting state & then disconnected.
         kernel.kernelConnectionStatusSignal.emit('connecting');
+        await clock.nextAsync();
         kernel.kernelConnectionStatusSignal.emit('disconnected');
-        await clock.runAllAsync();
+        await clock.nextAsync();
 
         verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
         verify(cellExecution.appendOutput(anything())).once();
@@ -288,15 +298,18 @@ suite('Kernel ReConnect Failed Monitor', () => {
         const cell = createCell(instance(nb));
         when(kernelProvider.get(instance(nb))).thenReturn(instance(kernel.kernel));
         onDidStartKernel.fire(instance(kernel.kernel));
+        // Advance clock to allow event handlers to be registered
+        await clock.nextAsync();
         notebookCellExecutions.changeCellState(instance(cell), NotebookCellExecutionState.Executing);
 
         // Send the kernel into connecting state & then disconnected.
         kernel.kernelConnectionStatusSignal.emit('connecting');
+        await clock.nextAsync();
 
         // Mark the cell as completed.
         notebookCellExecutions.changeCellState(instance(cell), NotebookCellExecutionState.Idle);
         kernel.kernelConnectionStatusSignal.emit('disconnected');
-        await clock.runAllAsync();
+        await clock.nextAsync();
 
         verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
         verify(cellExecution.appendOutput(anything())).never();
@@ -331,11 +344,14 @@ suite('Kernel ReConnect Failed Monitor', () => {
         when(jupyterUriProviderRegistration.jupyterCollections).thenReturn([instance(collection)]);
 
         onDidStartKernel.fire(instance(kernel.kernel));
+        // Advance clock to allow event handlers to be registered
+        await clock.nextAsync();
 
         // Send the kernel into connecting state & then disconnected.
         kernel.kernelConnectionStatusSignal.emit('connecting');
+        await clock.nextAsync();
         kernel.kernelConnectionStatusSignal.emit('disconnected');
-        await clock.runAllAsync();
+        await clock.nextAsync();
 
         // the server is gone, the kernel is disposed so we don't show the error message
         verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).never();

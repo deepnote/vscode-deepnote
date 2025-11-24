@@ -284,8 +284,7 @@ suite('DeepnoteEnvironmentManager', () => {
             // Delete the environment
             await manager.deleteEnvironment(config.id);
 
-            // Verify directory no longer exists (with a small delay to allow async operation)
-            await new Promise((resolve) => setTimeout(resolve, 100));
+            // Verify directory no longer exists
             assert.isFalse(fs.existsSync(venvDirPath), 'Directory should not exist after deletion');
         });
     });

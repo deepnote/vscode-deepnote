@@ -208,6 +208,10 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
         } catch (error) {
             // Log but don't fail - the directory might not exist or might already be deleted
             logger.warn(`Failed to delete virtual environment directory: ${config.venvPath.fsPath}`, error);
+            const msg = error instanceof Error ? error.message : String(error);
+            this.outputChannel.appendLine(
+                l10n.t('Failed to delete Deepnote virtual environment directory for "{0}": {1}', config.name, msg)
+            );
         }
 
         Cancellation.throwIfCanceled(token);

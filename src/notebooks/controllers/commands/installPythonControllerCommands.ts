@@ -60,7 +60,7 @@ export class InstallPythonControllerCommands implements IExtensionSyncActivation
             await commands.executeCommand('python.installPython');
         } else if (selection === Common.reload) {
             sendTelemetryEvent(Telemetry.PythonNotInstalled, undefined, { action: 'reload' });
-            await commands.executeCommand('jupyter.reloadVSCode', DataScience.reloadRequired);
+            await commands.executeCommand('deepnote.reloadVSCode', DataScience.reloadRequired);
         } else {
             sendTelemetryEvent(Telemetry.PythonNotInstalled, undefined, { action: 'dismissed' });
         }

@@ -12,8 +12,8 @@ import { compile as convertVegaLiteSpecToVega } from 'vega-lite';
 import { produce } from 'immer';
 import { SqlBlockConverter } from './converters/sqlBlockConverter';
 import { TextBlockConverter } from './converters/textBlockConverter';
-import type { Field } from 'vega-lite/build/src/channeldef';
-import type { LayerSpec, TopLevel } from 'vega-lite/build/src/spec';
+// @ts-ignore - types_unstable subpath requires moduleResolution: "node16" which mandates module: "node16" and .js extensions on all imports
+import type { Field, LayerSpec, TopLevel } from 'vega-lite/types_unstable';
 import { ChartBigNumberBlockConverter } from './converters/chartBigNumberBlockConverter';
 import {
     InputTextBlockConverter,
@@ -27,7 +27,7 @@ import {
     ButtonBlockConverter
 } from './converters/inputConverters';
 import { CHART_BIG_NUMBER_MIME_TYPE } from '../../platform/deepnote/deepnoteConstants';
-import { generateUuid } from '../../platform/common/uuid';
+import { uuidUtils } from '../../platform/common/uuid';
 
 /**
  * Utility class for converting between Deepnote block structures and VS Code notebook cells.
@@ -169,7 +169,7 @@ export class DeepnoteDataConverter {
 
     private createFallbackBlock(cell: NotebookCellData, index: number): DeepnoteBlock {
         return {
-            blockGroup: generateUuid(),
+            blockGroup: uuidUtils.generateUuid(),
             id: generateBlockId(),
             sortingKey: generateSortingKey(index),
             type: cell.kind === NotebookCellKind.Code ? 'code' : 'markdown',
@@ -250,8 +250,12 @@ export class DeepnoteDataConverter {
                     data['application/vnd.deepnote.dataframe.v3+json'] = JSON.parse(
                         new TextDecoder().decode(item.data)
                     );
+                } else if (item.mime === 'application/vnd.vega.v6+json') {
+                    data['application/vnd.vega.v6+json'] = JSON.parse(new TextDecoder().decode(item.data));
                 } else if (item.mime === 'application/vnd.vega.v5+json') {
                     data['application/vnd.vega.v5+json'] = JSON.parse(new TextDecoder().decode(item.data));
+                } else if (item.mime === 'application/vnd.plotly.v1+json') {
+                    data['application/vnd.plotly.v1+json'] = JSON.parse(new TextDecoder().decode(item.data));
                 } else if (item.mime === 'application/vnd.deepnote.sql-output-metadata+json') {
                     data['application/vnd.deepnote.sql-output-metadata+json'] = JSON.parse(
                         new TextDecoder().decode(item.data)
@@ -333,11 +337,27 @@ export class DeepnoteDataConverter {
                             );
                         }
 
-                        if (data['application/vnd.vega.v5+json']) {
+                        if (data['application/vnd.vega.v6+json']) {
+                            items.push(
+                                NotebookCellOutputItem.json(
+                                    data['application/vnd.vega.v6+json'],
+                                    'application/vnd.vega.v6+json'
+                                )
+                            );
+                        } else if (data['application/vnd.vega.v5+json']) {
                             items.push(
                                 NotebookCellOutputItem.json(
                                     data['application/vnd.vega.v5+json'],
                                     'application/vnd.vega.v5+json'
+                                )
+                            );
+                        }
+
+                        if (data['application/vnd.plotly.v1+json']) {
+                            items.push(
+                                NotebookCellOutputItem.json(
+                                    data['application/vnd.plotly.v1+json'],
+                                    'application/vnd.plotly.v1+json'
                                 )
                             );
                         }
@@ -352,23 +372,31 @@ export class DeepnoteDataConverter {
                         }
 
                         if (data['application/vnd.vegalite.v5+json']) {
-                            const patchedVegaLiteSpec = produce(
-                                data['application/vnd.vegalite.v5+json'] as TopLevel<LayerSpec<Field>>,
-                                (draft) => {
-                                    draft.height = 'container';
-                                    draft.width = 'container';
+                            type VegaLiteSpec = TopLevel<LayerSpec<Field>>;
+                            type VegaLiteConfig = { customFormatTypes?: boolean };
+                            type VegaLiteSpecWithExtensions = VegaLiteSpec & {
+                                height?: string | number;
+                                width?: string | number;
+                                autosize?: { type: string };
+                                config?: VegaLiteConfig;
+                            };
 
-                                    draft.autosize = {
-                                        type: 'fit'
-                                    };
-                                    if (!draft.config) {
-                                        draft.config = {};
-                                    }
-                                    draft.config.customFormatTypes = true;
+                            const originalSpec = data['application/vnd.vegalite.v5+json'] as VegaLiteSpecWithExtensions;
+
+                            const patchedVegaLiteSpec = produce(originalSpec, (draft: VegaLiteSpecWithExtensions) => {
+                                draft.height = 'container';
+                                draft.width = 'container';
+                                draft.autosize = {
+                                    type: 'fit'
+                                };
+                                if (!draft.config) {
+                                    draft.config = {};
                                 }
-                            );
-                            const vegaSpec = convertVegaLiteSpecToVega(patchedVegaLiteSpec).spec;
-                            items.push(NotebookCellOutputItem.json(vegaSpec, 'application/vnd.vega.v5+json'));
+                                draft.config.customFormatTypes = true;
+                            });
+
+                            const vegaSpec = convertVegaLiteSpecToVega(patchedVegaLiteSpec as VegaLiteSpec).spec;
+                            items.push(NotebookCellOutputItem.json(vegaSpec, 'application/vnd.vega.v6+json'));
                         }
 
                         if (data['application/json']) {

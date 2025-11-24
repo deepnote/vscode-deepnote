@@ -147,7 +147,7 @@ export namespace DataScience {
     ) => l10n.t("Running cells with '{0}' requires the {1} package.", pythonEnvName, pythonModuleName);
     export const createANewPythonEnvironment = () =>
         l10n.t(
-            '[Create a Python Environment](command:jupyter.createPythonEnvAndSelectController) with the required packages.'
+            '[Create a Python Environment](command:deepnote.createPythonEnvAndSelectController) with the required packages.'
         );
     export const installPackageInstructions = (pythonModuleName: string, commandId: string) =>
         l10n.t("Install '{0}' into the Python environment. \nCommand: '{1}'", pythonModuleName, commandId);
@@ -223,37 +223,37 @@ export namespace DataScience {
     export const sessionStartFailedWithKernel = (kernelName: string) =>
         l10n.t({
             message:
-                "Failed to start the Kernel '{0}'. \nView Jupyter [log](command:jupyter.viewOutput) for further details.",
+                "Failed to start the Kernel '{0}'. \nView Jupyter [log](command:deepnote.viewOutput) for further details.",
             args: [kernelName],
             comment: [
-                'Do not translate the text "command:jupyter.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
+                'Do not translate the text "command:deepnote.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
             ]
         });
     export const failedToStartJupyter = (pythonEnvName: string) =>
         l10n.t({
             message:
-                "Failed to start Jupyter in the environment '{0}'. \nView Jupyter [log](command:jupyter.viewOutput) for further details.",
+                "Failed to start Jupyter in the environment '{0}'. \nView Jupyter [log](command:deepnote.viewOutput) for further details.",
             args: [pythonEnvName],
             comment: [
-                'Do not translate the text "command:jupyter.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
+                'Do not translate the text "command:deepnote.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
             ]
         });
     export const failedToStartJupyterWithErrorInfo = (pythonEnvName: string, errorMessage: string) =>
         l10n.t({
             message:
-                "Failed to start Jupyter in the environment '{0}'. \n{1} \nView Jupyter [log](command:jupyter.viewOutput) for further details.",
+                "Failed to start Jupyter in the environment '{0}'. \n{1} \nView Jupyter [log](command:deepnote.viewOutput) for further details.",
             args: [pythonEnvName, errorMessage],
             comment: [
-                'Do not translate the text "command:jupyter.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
+                'Do not translate the text "command:deepnote.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
             ]
         });
     export const failedToStartJupyterDueToOutdatedTraitlets = (pythonEnvName: string, errorMessage: string) =>
         l10n.t({
             message:
-                "Failed to start Jupyter in the environment '{0}' possibly due to an outdated version of 'traitlets'. \n{1} \nConsider updating the 'traitlets' module to '5.1.1' or later. \nView Jupyter [log](command:jupyter.viewOutput) for further details.",
+                "Failed to start Jupyter in the environment '{0}' possibly due to an outdated version of 'traitlets'. \n{1} \nConsider updating the 'traitlets' module to '5.1.1' or later. \nView Jupyter [log](command:deepnote.viewOutput) for further details.",
             args: [pythonEnvName, errorMessage],
             comment: [
-                'Do not translate the text "command:jupyter.viewOutput", that is a command Id that will be used by VS Code to open the output panel',
+                'Do not translate the text "command:deepnote.viewOutput", that is a command Id that will be used by VS Code to open the output panel',
                 "Do not translate the text 'traitlets', that is a Python module name"
             ]
         });
@@ -263,43 +263,43 @@ export namespace DataScience {
     export const rawKernelStartFailedDueToTimeout = (kernelName: string) =>
         l10n.t({
             message:
-                "Unable to start Kernel '{0}' due to a connection timeout. \nView Jupyter [log](command:jupyter.viewOutput) for further details.",
+                "Unable to start Kernel '{0}' due to a connection timeout. \nView Jupyter [log](command:deepnote.viewOutput) for further details.",
             args: [kernelName],
             comment: [
-                'Do not translate the text "command:jupyter.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
+                'Do not translate the text "command:deepnote.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
             ]
         });
     export const rawKernelStartFailedDueToTimeoutWaitingForPort = (kernelName: string) =>
         l10n.t({
             message:
-                "Unable to start Kernel '{0}' due to a timeout waiting for the ports to get used. \nView Jupyter [log](command:jupyter.viewOutput) for further details.",
+                "Unable to start Kernel '{0}' due to a timeout waiting for the ports to get used. \nView Jupyter [log](command:deepnote.viewOutput) for further details.",
             args: [kernelName],
             comment: [
-                'Do not translate the text "command:jupyter.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
+                'Do not translate the text "command:deepnote.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
             ]
         });
     export const viewJupyterLogForFurtherInfo = l10n.t({
-        message: 'View Jupyter [log](command:jupyter.viewOutput) for further details.',
+        message: 'View Jupyter [log](command:deepnote.viewOutput) for further details.',
         comment: [
-            'Do not translate the text "command:jupyter.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
+            'Do not translate the text "command:deepnote.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
         ]
     });
     export const kernelDied = (message: string) =>
         l10n.t({
             message:
-                'The kernel died. Error: {0}... View Jupyter [log](command:jupyter.viewOutput) for further details.',
+                'The kernel died. Error: {0}... View Jupyter [log](command:deepnote.viewOutput) for further details.',
             args: [message],
             comment: [
-                'Do not translate the text "command:jupyter.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
+                'Do not translate the text "command:deepnote.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
             ]
         });
     export const kernelDiedWithoutError = (kernelName: string) =>
         l10n.t({
             message:
-                "The kernel '{0}' died. Click [here](https://aka.ms/vscodeJupyterKernelCrash) for more info. View Jupyter [log](command:jupyter.viewOutput) for further details.",
+                "The kernel '{0}' died. Click [here](https://aka.ms/vscodeJupyterKernelCrash) for more info. View Jupyter [log](command:deepnote.viewOutput) for further details.",
             args: [kernelName],
             comment: [
-                'Do not translate the text "command:jupyter.viewOutput", that is a command Id that will be used by VS Code to open the output panel',
+                'Do not translate the text "command:deepnote.viewOutput", that is a command Id that will be used by VS Code to open the output panel',
                 'Do not translate the link https://aka.ms/vscodeJupyterKernelCrash'
             ]
         });
@@ -317,24 +317,24 @@ export namespace DataScience {
     export const kernelDiedWithoutErrorAndAutoRestarting = (kernelName: string) =>
         l10n.t({
             message:
-                "The kernel '{0}' died and is being automatically restarted by Jupyter. Click [here](https://aka.ms/vscodeJupyterKernelCrash) for more info. View Jupyter [log](command:jupyter.viewOutput) for further details.",
+                "The kernel '{0}' died and is being automatically restarted by Jupyter. Click [here](https://aka.ms/vscodeJupyterKernelCrash) for more info. View Jupyter [log](command:deepnote.viewOutput) for further details.",
             args: [kernelName],
             comment: [
-                'Do not translate the text "command:jupyter.viewOutput", that is a command Id that will be used by VS Code to open the output panel',
+                'Do not translate the text "command:deepnote.viewOutput", that is a command Id that will be used by VS Code to open the output panel',
                 'Do not translate the link https://aka.ms/vscodeJupyterKernelCrash'
             ]
         });
     export const kernelCrashedDueToCodeInCurrentOrPreviousCell = l10n.t({
         message:
-            "The Kernel crashed while executing code in the current cell or a previous cell. \nPlease review the code in the cell(s) to identify a possible cause of the failure. \nClick <a href='https://aka.ms/vscodeJupyterKernelCrash'>here</a> for more info. \nView Jupyter [log](command:jupyter.viewOutput) for further details.",
+            "The Kernel crashed while executing code in the current cell or a previous cell. \nPlease review the code in the cell(s) to identify a possible cause of the failure. \nClick <a href='https://aka.ms/vscodeJupyterKernelCrash'>here</a> for more info. \nView Jupyter [log](command:deepnote.viewOutput) for further details.",
         comment: [
-            'Do not translate the text "command:jupyter.viewOutput", that is a command Id that will be used by VS Code to open the output panel',
+            'Do not translate the text "command:deepnote.viewOutput", that is a command Id that will be used by VS Code to open the output panel',
             'Do not translate the link https://aka.ms/vscodeJupyterKernelCrash'
         ]
     });
     export const kernelDisconnected = (kernelName: string) =>
         l10n.t(
-            "Unable to connect to the kernel '{0}', please verify the Jupyter Server connection. View Jupyter [log](command:jupyter.viewOutput) for further details.",
+            "Unable to connect to the kernel '{0}', please verify the Jupyter Server connection. View Jupyter [log](command:deepnote.viewOutput) for further details.",
             kernelName
         );
     export const cannotRunCellKernelIsDead = (kernelName: string) =>
@@ -533,9 +533,9 @@ export namespace DataScience {
     export const openExportFileYes = l10n.t('Yes');
     export const openExportFileNo = l10n.t('No');
     export const exportFailedGeneralMessage = l10n.t({
-        message: `Please check the 'Jupyter' [output](command:jupyter.viewOutput) panel for further details.`,
+        message: `Please check the 'Jupyter' [output](command:deepnote.viewOutput) panel for further details.`,
         comment: [
-            'Do not translate the text "command:jupyter.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
+            'Do not translate the text "command:deepnote.viewOutput", that is a command Id that will be used by VS Code to open the output panel'
         ]
     });
     export const exportToPDFDependencyMessage = l10n.t(
@@ -822,20 +822,47 @@ export namespace Integrations {
     export const configure = l10n.t('Configure');
     export const reconfigure = l10n.t('Reconfigure');
     export const reset = l10n.t('Reset');
+    export const deleteIntegration = l10n.t('Delete');
     export const confirmResetTitle = l10n.t('Confirm Reset');
     export const confirmResetMessage = l10n.t('Are you sure you want to reset this integration configuration?');
     export const confirmResetDetails = l10n.t('This will remove the stored credentials. You can reconfigure it later.');
+    export const confirmDeleteTitle = l10n.t('Confirm Delete');
+    export const confirmDeleteMessage = l10n.t('Are you sure you want to permanently delete this integration?');
+    export const confirmDeleteDetails = l10n.t(
+        'This will permanently remove the integration from your project. This action cannot be undone.'
+    );
     export const configureTitle = l10n.t('Configure Integration: {0}');
     export const cancel = l10n.t('Cancel');
     export const save = l10n.t('Save');
+    export const addNewIntegration = l10n.t('Add New Integration');
+    export const database = l10n.t('Database');
+    export const dataWarehousesLakes = l10n.t('Data Warehouses & Lakes');
+    export const databases = l10n.t('Databases');
     export const requiredField = l10n.t('*');
     export const optionalField = l10n.t('(optional)');
     export const unnamedIntegration = (id: string) => l10n.t('Unnamed Integration ({0})', id);
+    export const defaultName = (type: string) => l10n.t('My {0} integration', type);
+    export const unsupportedIntegrationType = (type: string) => l10n.t('Unsupported integration type: {0}', type);
 
     // Integration type labels
     export const postgresTypeLabel = l10n.t('PostgreSQL');
-    export const bigQueryTypeLabel = l10n.t('BigQuery');
+    export const bigQueryTypeLabel = l10n.t('Google BigQuery');
     export const snowflakeTypeLabel = l10n.t('Snowflake');
+    export const alloyDBTypeLabel = l10n.t('Google AlloyDB');
+    export const athenaTypeLabel = l10n.t('Amazon Athena');
+    export const clickHouseTypeLabel = l10n.t('ClickHouse');
+    export const databricksTypeLabel = l10n.t('Databricks');
+    export const dremioTypeLabel = l10n.t('Dremio');
+    export const mariaDBTypeLabel = l10n.t('MariaDB');
+    export const materializeTypeLabel = l10n.t('Materialize');
+    export const mindsDBTypeLabel = l10n.t('MindsDB');
+    export const mongoDBTypeLabel = l10n.t('MongoDB');
+    export const mySQLTypeLabel = l10n.t('MySQL');
+    export const duckDBTypeLabel = l10n.t('DuckDB');
+    export const redshiftTypeLabel = l10n.t('Amazon Redshift');
+    export const spannerTypeLabel = l10n.t('Google Spanner');
+    export const sqlServerTypeLabel = l10n.t('Microsoft SQL Server');
+    export const trinoTypeLabel = l10n.t('Trino');
 
     // PostgreSQL form strings
     export const postgresNameLabel = l10n.t('Name (optional)');
@@ -898,6 +925,226 @@ export namespace Integrations {
     export const snowflakeRolePlaceholder = l10n.t('');
     export const snowflakeWarehouseLabel = l10n.t('Warehouse (optional)');
     export const snowflakeWarehousePlaceholder = l10n.t('');
+
+    // MySQL form strings
+    export const mySQLNameLabel = l10n.t('Name (optional)');
+    export const mySQLNamePlaceholder = l10n.t('My MySQL Database');
+    export const mySQLHostLabel = l10n.t('Host');
+    export const mySQLHostPlaceholder = l10n.t('localhost');
+    export const mySQLPortLabel = l10n.t('Port');
+    export const mySQLDatabaseLabel = l10n.t('Database');
+    export const mySQLDatabasePlaceholder = l10n.t('my_database');
+    export const mySQLUsernameLabel = l10n.t('Username');
+    export const mySQLUsernamePlaceholder = l10n.t('username');
+    export const mySQLPasswordLabel = l10n.t('Password');
+    export const mySQLPasswordPlaceholder = l10n.t('••••••••');
+
+    // MariaDB form strings
+    export const mariaDBNameLabel = l10n.t('Name (optional)');
+    export const mariaDBNamePlaceholder = l10n.t('My MariaDB Database');
+    export const mariaDBHostLabel = l10n.t('Host');
+    export const mariaDBHostPlaceholder = l10n.t('localhost');
+    export const mariaDBPortLabel = l10n.t('Port');
+    export const mariaDBDatabaseLabel = l10n.t('Database');
+    export const mariaDBDatabasePlaceholder = l10n.t('my_database');
+    export const mariaDBUsernameLabel = l10n.t('Username');
+    export const mariaDBUsernamePlaceholder = l10n.t('username');
+    export const mariaDBPasswordLabel = l10n.t('Password');
+    export const mariaDBPasswordPlaceholder = l10n.t('••••••••');
+
+    // Athena form strings
+    export const athenaNameLabel = l10n.t('Name (optional)');
+    export const athenaNamePlaceholder = l10n.t('My Athena Database');
+    export const athenaAccessKeyIdLabel = l10n.t('AWS Access Key ID');
+    export const athenaAccessKeyIdPlaceholder = l10n.t('AKIAIOSFODNN7EXAMPLE');
+    export const athenaSecretAccessKeyLabel = l10n.t('AWS Secret Access Key');
+    export const athenaSecretAccessKeyPlaceholder = l10n.t('••••••••');
+    export const athenaRegionLabel = l10n.t('AWS Region');
+    export const athenaRegionPlaceholder = l10n.t('us-east-1');
+    export const athenaS3OutputPathLabel = l10n.t('S3 Output Path');
+    export const athenaS3OutputPathPlaceholder = l10n.t('s3://my-bucket/path/');
+    export const athenaWorkgroupLabel = l10n.t('Workgroup (optional)');
+    export const athenaWorkgroupPlaceholder = l10n.t('primary');
+
+    // Databricks form strings
+    export const databricksNameLabel = l10n.t('Name (optional)');
+    export const databricksNamePlaceholder = l10n.t('My Databricks Workspace');
+    export const databricksHostLabel = l10n.t('Server Hostname');
+    export const databricksHostPlaceholder = l10n.t('dbc-1234abcd-5678.cloud.databricks.com');
+    export const databricksHttpPathLabel = l10n.t('HTTP Path');
+    export const databricksHttpPathPlaceholder = l10n.t('/sql/1.0/warehouses/abc123');
+    export const databricksTokenLabel = l10n.t('Access Token');
+    export const databricksTokenPlaceholder = l10n.t('••••••••');
+    export const databricksPortLabel = l10n.t('Port');
+    export const databricksCatalogLabel = l10n.t('Catalog (optional)');
+    export const databricksCatalogPlaceholder = l10n.t('main');
+    export const databricksSchemaLabel = l10n.t('Schema (optional)');
+    export const databricksSchemaPlaceholder = l10n.t('default');
+
+    // Dremio form strings
+    export const dremioNameLabel = l10n.t('Name (optional)');
+    export const dremioNamePlaceholder = l10n.t('My Dremio Instance');
+    export const dremioHostLabel = l10n.t('Host');
+    export const dremioHostPlaceholder = l10n.t('dremio.example.com');
+    export const dremioPortLabel = l10n.t('Port');
+    export const dremioSchemaLabel = l10n.t('Schema');
+    export const dremioSchemaPlaceholder = l10n.t('my_schema');
+    export const dremioTokenLabel = l10n.t('Personal Access Token');
+    export const dremioTokenPlaceholder = l10n.t('••••••••');
+
+    // MongoDB form strings
+    export const mongoDBNameLabel = l10n.t('Name (optional)');
+    export const mongoDBNamePlaceholder = l10n.t('My MongoDB Database');
+    export const mongoDBConnectionStringLabel = l10n.t('Connection String');
+    export const mongoDBConnectionStringPlaceholder = l10n.t('mongodb://username:password@host:port/database');
+    export const mongoDBConnectionStringHelp = l10n.t(
+        'Enter your MongoDB connection string. Example: mongodb://user:pass@host:27017/mydb or mongodb+srv://user:pass@cluster.mongodb.net/mydb'
+    );
+    export const mongoDBOptionalFieldsNote = l10n.t(
+        'The following fields are optional and redundant with the connection string. They create environment variables for use in your code.'
+    );
+    export const mongoDBRawConnectionStringLabel = l10n.t('Raw Connection String (optional)');
+    export const mongoDBPrefixLabel = l10n.t('Prefix (optional)');
+    export const mongoDBHostLabel = l10n.t('Host (optional)');
+    export const mongoDBPortLabel = l10n.t('Port (optional)');
+    export const mongoDBUserLabel = l10n.t('User (optional)');
+    export const mongoDBPasswordLabel = l10n.t('Password (optional)');
+    export const mongoDBDatabaseLabel = l10n.t('Database (optional)');
+    export const mongoDBOptionsLabel = l10n.t('Options (optional)');
+
+    // Redshift form strings
+    export const redshiftNameLabel = l10n.t('Name (optional)');
+    export const redshiftNamePlaceholder = l10n.t('My Redshift Cluster');
+    export const redshiftAuthMethodLabel = l10n.t('Authentication Method');
+    export const redshiftAuthMethodUsernamePassword = l10n.t('Username and Password');
+    export const redshiftAuthMethodIndividualCredentials = l10n.t('Individual Credentials (IAM)');
+    export const redshiftAuthMethodHelp = l10n.t(
+        'Individual Credentials uses your AWS credentials configured in the environment.'
+    );
+    export const redshiftHostLabel = l10n.t('Cluster Endpoint');
+    export const redshiftHostPlaceholder = l10n.t('my-cluster.abc123.us-east-1.redshift.amazonaws.com');
+    export const redshiftPortLabel = l10n.t('Port');
+    export const redshiftDatabaseLabel = l10n.t('Database');
+    export const redshiftDatabasePlaceholder = l10n.t('dev');
+    export const redshiftUsernameLabel = l10n.t('Username');
+    export const redshiftUsernamePlaceholder = l10n.t('admin');
+    export const redshiftPasswordLabel = l10n.t('Password');
+    export const redshiftPasswordPlaceholder = l10n.t('••••••••');
+
+    // Spanner form strings
+    export const spannerNameLabel = l10n.t('Name (optional)');
+    export const spannerNamePlaceholder = l10n.t('My Spanner Database');
+    export const spannerInstanceLabel = l10n.t('Instance ID');
+    export const spannerInstancePlaceholder = l10n.t('my-instance');
+    export const spannerDatabaseLabel = l10n.t('Database');
+    export const spannerDatabasePlaceholder = l10n.t('my-database');
+    export const spannerServiceAccountLabel = l10n.t('Service Account JSON');
+    export const spannerServiceAccountPlaceholder = l10n.t(
+        '{\n  "type": "service_account",\n  "project_id": "...",\n  ...\n}'
+    );
+    export const spannerServiceAccountHelp = l10n.t(
+        'Paste the contents of your Google Cloud service account JSON key file.'
+    );
+    export const spannerServiceAccountInvalidJson = l10n.t('Invalid JSON format');
+    export const spannerDataBoostLabel = l10n.t('Enable Data Boost');
+    export const spannerDataBoostHelp = l10n.t(
+        'Data Boost provides independent compute resources for analytics queries.'
+    );
+
+    // AlloyDB form strings
+    export const alloyDBNameLabel = l10n.t('Name (optional)');
+    export const alloyDBNamePlaceholder = l10n.t('My AlloyDB Database');
+    export const alloyDBHostLabel = l10n.t('Host');
+    export const alloyDBHostPlaceholder = l10n.t('localhost');
+    export const alloyDBPortLabel = l10n.t('Port');
+    export const alloyDBDatabaseLabel = l10n.t('Database');
+    export const alloyDBDatabasePlaceholder = l10n.t('my_database');
+    export const alloyDBUsernameLabel = l10n.t('Username');
+    export const alloyDBUsernamePlaceholder = l10n.t('username');
+    export const alloyDBPasswordLabel = l10n.t('Password');
+    export const alloyDBPasswordPlaceholder = l10n.t('••••••••');
+
+    // ClickHouse form strings
+    export const clickHouseNameLabel = l10n.t('Name (optional)');
+    export const clickHouseNamePlaceholder = l10n.t('My ClickHouse Database');
+    export const clickHouseHostLabel = l10n.t('Host');
+    export const clickHouseHostPlaceholder = l10n.t('localhost');
+    export const clickHousePortLabel = l10n.t('Port');
+    export const clickHouseDatabaseLabel = l10n.t('Database');
+    export const clickHouseDatabasePlaceholder = l10n.t('my_database');
+    export const clickHouseUsernameLabel = l10n.t('Username');
+    export const clickHouseUsernamePlaceholder = l10n.t('username');
+    export const clickHousePasswordLabel = l10n.t('Password');
+    export const clickHousePasswordPlaceholder = l10n.t('••••••••');
+
+    // Materialize form strings
+    export const materializeNameLabel = l10n.t('Name (optional)');
+    export const materializeNamePlaceholder = l10n.t('My Materialize Database');
+    export const materializeHostLabel = l10n.t('Host');
+    export const materializeHostPlaceholder = l10n.t('localhost');
+    export const materializePortLabel = l10n.t('Port');
+    export const materializeDatabaseLabel = l10n.t('Database');
+    export const materializeDatabasePlaceholder = l10n.t('my_database');
+    export const materializeClusterLabel = l10n.t('Cluster');
+    export const materializeClusterPlaceholder = l10n.t('quickstart');
+    export const materializeUsernameLabel = l10n.t('Username');
+    export const materializeUsernamePlaceholder = l10n.t('username');
+    export const materializePasswordLabel = l10n.t('Password');
+    export const materializePasswordPlaceholder = l10n.t('••••••••');
+
+    // MindsDB form strings
+    export const mindsDBNameLabel = l10n.t('Name (optional)');
+    export const mindsDBNamePlaceholder = l10n.t('My MindsDB Database');
+    export const mindsDBHostLabel = l10n.t('Host');
+    export const mindsDBHostPlaceholder = l10n.t('localhost');
+    export const mindsDBPortLabel = l10n.t('Port');
+    export const mindsDBDatabaseLabel = l10n.t('Database');
+    export const mindsDBDatabasePlaceholder = l10n.t('my_database');
+    export const mindsDBUsernameLabel = l10n.t('Username');
+    export const mindsDBUsernamePlaceholder = l10n.t('username');
+    export const mindsDBPasswordLabel = l10n.t('Password');
+    export const mindsDBPasswordPlaceholder = l10n.t('••••••••');
+
+    // SQL Server form strings
+    export const sqlServerNameLabel = l10n.t('Name (optional)');
+    export const sqlServerNamePlaceholder = l10n.t('My SQL Server Database');
+    export const sqlServerHostLabel = l10n.t('Host');
+    export const sqlServerHostPlaceholder = l10n.t('localhost');
+    export const sqlServerPortLabel = l10n.t('Port');
+    export const sqlServerDatabaseLabel = l10n.t('Database');
+    export const sqlServerDatabasePlaceholder = l10n.t('my_database');
+    export const sqlServerUsernameLabel = l10n.t('Username');
+    export const sqlServerUsernamePlaceholder = l10n.t('username');
+    export const sqlServerPasswordLabel = l10n.t('Password');
+    export const sqlServerPasswordPlaceholder = l10n.t('••••••••');
+
+    // Trino form strings
+    export const trinoNameLabel = l10n.t('Name (optional)');
+    export const trinoNamePlaceholder = l10n.t('My Trino Database');
+    export const trinoHostLabel = l10n.t('Host');
+    export const trinoHostPlaceholder = l10n.t('localhost');
+    export const trinoPortLabel = l10n.t('Port');
+    export const trinoDatabaseLabel = l10n.t('Database');
+    export const trinoDatabasePlaceholder = l10n.t('my_database');
+    export const trinoUsernameLabel = l10n.t('Username');
+    export const trinoUsernamePlaceholder = l10n.t('username');
+    export const trinoPasswordLabel = l10n.t('Password');
+    export const trinoPasswordPlaceholder = l10n.t('••••••••');
+
+    // SSH options strings
+    export const sshEnabled = l10n.t('Enable SSH Tunnel');
+    export const sshHost = l10n.t('SSH Host');
+    export const sshHostPlaceholder = l10n.t('ssh.example.com');
+    export const sshPort = l10n.t('SSH Port');
+    export const sshUser = l10n.t('SSH User');
+    export const sshUserPlaceholder = l10n.t('ubuntu');
+
+    // SSL/CA certificate strings
+    export const sslEnabled = l10n.t('Enable SSL');
+    export const caCertificateName = l10n.t('CA Certificate Name');
+    export const caCertificateNamePlaceholder = l10n.t('my-ca-certificate');
+    export const caCertificateText = l10n.t('CA Certificate (PEM)');
+    export const caCertificateTextPlaceholder = l10n.t('-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----');
 }
 
 export namespace SelectInputSettings {
@@ -918,6 +1165,25 @@ export namespace SelectInputSettings {
     export const saveButton = l10n.t('Save');
     export const cancelButton = l10n.t('Cancel');
     export const failedToSave = l10n.t('Failed to save select input settings');
+}
+
+export namespace BigNumberComparison {
+    export const title = l10n.t('Big Number Comparison Settings');
+    export const enableComparison = l10n.t('Enable comparison');
+    export const comparisonTypeLabel = l10n.t('Comparison type');
+    export const percentageChange = l10n.t('Percentage change');
+    export const absoluteValue = l10n.t('Absolute value');
+    export const comparisonValueLabel = l10n.t('Comparison value variable');
+    export const comparisonValuePlaceholder = l10n.t('e.g., last_month_revenue');
+    export const comparisonTitleLabel = l10n.t('Comparison title (optional)');
+    export const comparisonTitlePlaceholder = l10n.t('e.g., vs last month');
+    export const comparisonTitleHelp = l10n.t('You can use {{var}} syntax to reference variables');
+    export const comparisonValueHelp = l10n.t('Enter a variable name (not a literal value)');
+    export const comparisonFormatLabel = l10n.t('Comparison format (optional)');
+    export const comparisonFormatHelp = l10n.t('Leave empty to use the same format as the main value');
+    export const saveButton = l10n.t('Save');
+    export const cancelButton = l10n.t('Cancel');
+    export const failedToSave = l10n.t('Failed to save big number comparison settings');
 }
 
 export namespace Deprecated {

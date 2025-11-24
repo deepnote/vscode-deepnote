@@ -228,7 +228,7 @@ suite('Connect to Remote Jupyter Servers @mandatory', function () {
         userUri: string;
         failWithInvalidPassword?: boolean;
     }) {
-        const config = workspace.getConfiguration('jupyter');
+        const config = workspace.getConfiguration('deepnote');
         const displayName = 'Test Remove Server Name';
         void env.clipboard.writeText(userUri);
         sinon.stub(UserJupyterServerUriInput.prototype, 'getUrlFromUser').resolves({

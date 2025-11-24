@@ -1,27 +1,57 @@
 import * as React from 'react';
 import { getLocString } from '../react-common/locReactSide';
-import { IntegrationWithStatus, IntegrationType } from './types';
+import { ConfigurableDatabaseIntegrationType, IntegrationWithStatus } from './types';
+import { integrationTypeIcons } from './integrationUtils';
 
 export interface IIntegrationItemProps {
     integration: IntegrationWithStatus;
     onConfigure: (integrationId: string) => void;
+    onReset: (integrationId: string) => void;
     onDelete: (integrationId: string) => void;
 }
 
-const getIntegrationTypeLabel = (type: IntegrationType): string => {
+const getIntegrationTypeLabel = (type: ConfigurableDatabaseIntegrationType): string => {
     switch (type) {
-        case 'postgres':
+        case 'alloydb':
+            return getLocString('integrationsAlloyDBTypeLabel', 'Google AlloyDB');
+        case 'athena':
+            return getLocString('integrationsAthenaTypeLabel', 'Amazon Athena');
+        case 'big-query':
+            return getLocString('integrationsBigQueryTypeLabel', 'Google BigQuery');
+        case 'clickhouse':
+            return getLocString('integrationsClickHouseTypeLabel', 'ClickHouse');
+        case 'databricks':
+            return getLocString('integrationsDatabricksTypeLabel', 'Databricks');
+        case 'dremio':
+            return getLocString('integrationsDremioTypeLabel', 'Dremio');
+        case 'mariadb':
+            return getLocString('integrationsMariaDBTypeLabel', 'MariaDB');
+        case 'materialize':
+            return getLocString('integrationsMaterializeTypeLabel', 'Materialize');
+        case 'mindsdb':
+            return getLocString('integrationsMindsDBTypeLabel', 'MindsDB');
+        case 'mongodb':
+            return getLocString('integrationsMongoDBTypeLabel', 'MongoDB');
+        case 'mysql':
+            return getLocString('integrationsMySQLTypeLabel', 'MySQL');
+        case 'pgsql':
             return getLocString('integrationsPostgresTypeLabel', 'PostgreSQL');
-        case 'bigquery':
-            return getLocString('integrationsBigQueryTypeLabel', 'BigQuery');
+        case 'redshift':
+            return getLocString('integrationsRedshiftTypeLabel', 'Amazon Redshift');
         case 'snowflake':
             return getLocString('integrationsSnowflakeTypeLabel', 'Snowflake');
+        case 'spanner':
+            return getLocString('integrationsSpannerTypeLabel', 'Google Spanner');
+        case 'sql-server':
+            return getLocString('integrationsSQLServerTypeLabel', 'Microsoft SQL Server');
+        case 'trino':
+            return getLocString('integrationsTrinoTypeLabel', 'Trino');
         default:
             return type;
     }
 };
 
-export const IntegrationItem: React.FC<IIntegrationItemProps> = ({ integration, onConfigure, onDelete }) => {
+export const IntegrationItem: React.FC<IIntegrationItemProps> = ({ integration, onConfigure, onReset, onDelete }) => {
     const statusClass = integration.status === 'connected' ? 'status-connected' : 'status-disconnected';
     const statusText =
         integration.status === 'connected'
@@ -37,22 +67,43 @@ export const IntegrationItem: React.FC<IIntegrationItemProps> = ({ integration, 
     // Get the type: prefer config type, then integration type from project
     const type = integration.config?.type || integration.integrationType;
 
-    // Build display name with type
-    const displayName = type ? `${name} (${getIntegrationTypeLabel(type)})` : name;
+    // Get the type label and icon
+    const typeLabel = type ? getIntegrationTypeLabel(type) : undefined;
+    const typeIcon = type ? integrationTypeIcons[type] : undefined;
 
     return (
         <div className="integration-item">
+            {typeIcon && (
+                <div className="integration-item-icon">
+                    <img src={typeIcon} alt={typeLabel || ''} />
+                </div>
+            )}
             <div className="integration-info">
-                <div className="integration-name">{displayName}</div>
-                <div className={`integration-status ${statusClass}`}>{statusText}</div>
+                <div className="integration-name">{name}</div>
+                <div className="integration-meta">
+                    {typeLabel && <span className="integration-type">{typeLabel}</span>}
+                    {typeLabel && <span className="integration-meta-separator"> • </span>}
+                    <span className={`integration-status ${statusClass}`}>{statusText}</span>
+                </div>
             </div>
             <div className="integration-actions">
                 <button type="button" onClick={() => onConfigure(integration.id)}>
                     {configureText}
                 </button>
                 {integration.config && (
-                    <button type="button" className="secondary" onClick={() => onDelete(integration.id)}>
+                    <button type="button" className="secondary" onClick={() => onReset(integration.id)}>
                         {getLocString('integrationsReset', 'Reset')}
+                    </button>
+                )}
+                {integration.config && (
+                    <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => onDelete(integration.id)}
+                        title={getLocString('integrationsDelete', 'Delete')}
+                        aria-label={getLocString('integrationsDelete', 'Delete')}
+                    >
+                        {getLocString('integrationsDelete', 'Delete')}
                     </button>
                 )}
             </div>

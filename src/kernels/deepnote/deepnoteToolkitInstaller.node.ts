@@ -82,6 +82,18 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         const venvKey = venvPath.fsPath;
 
         logger.info(`Ensuring virtual environment at ${venvKey}`);
+        logger.info(`Base interpreter: ${baseInterpreter.uri.fsPath}`);
+
+        // Validate that venv path is in current globalStorage (not from a different editor like VS Code)
+        const expectedStoragePrefix = this.context.globalStorageUri.fsPath;
+        if (!venvKey.startsWith(expectedStoragePrefix)) {
+            const error = new Error(
+                `Venv path mismatch! Expected venv under ${expectedStoragePrefix} but got ${venvKey}. ` +
+                    `This might happen if the notebook was previously used in a different editor (VS Code vs Cursor).`
+            );
+            logger.error(error.message);
+            throw error;
+        }
 
         // Wait for any pending installation for this venv to complete
         const pendingInstall = this.pendingInstallations.get(venvKey);

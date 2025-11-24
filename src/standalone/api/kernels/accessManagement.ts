@@ -17,7 +17,7 @@ export class KernelApi implements IExtensionSyncActivationService {
         const disposableStore = new DisposableStore();
         disposables.push(disposableStore);
         disposables.push(
-            commands.registerCommand('jupyter.manageAccessToKernels', () => manageKernelAccess(disposableStore))
+            commands.registerCommand('deepnote.manageAccessToKernels', () => manageKernelAccess(disposableStore))
         );
     }
 }

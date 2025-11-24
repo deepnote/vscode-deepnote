@@ -2,7 +2,7 @@ import { assert } from 'chai';
 import { ThemeIcon, TreeItemCollapsibleState, Uri } from 'vscode';
 
 import { DeepnoteEnvironmentTreeItem, EnvironmentTreeItemType } from './deepnoteEnvironmentTreeItem.node';
-import { DeepnoteEnvironment, EnvironmentStatus } from './deepnoteEnvironment';
+import { DeepnoteEnvironment } from './deepnoteEnvironment';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
 
 suite('DeepnoteEnvironmentTreeItem', () => {
@@ -21,97 +21,26 @@ suite('DeepnoteEnvironmentTreeItem', () => {
     };
 
     suite('Environment Item', () => {
-        test('should create running environment item', () => {
-            const item = new DeepnoteEnvironmentTreeItem(
-                EnvironmentTreeItemType.Environment,
-                testEnvironment,
-                EnvironmentStatus.Running
-            );
+        test('should create environment item', () => {
+            const item = new DeepnoteEnvironmentTreeItem(EnvironmentTreeItemType.Environment, testEnvironment);
 
             assert.strictEqual(item.type, EnvironmentTreeItemType.Environment);
             assert.strictEqual(item.environment, testEnvironment);
-            assert.strictEqual(item.status, EnvironmentStatus.Running);
-            assert.include(item.label as string, 'Test Environment');
-            assert.include(item.label as string, '[Running]');
+            assert.strictEqual(item.label, 'Test Environment');
             assert.strictEqual(item.collapsibleState, TreeItemCollapsibleState.Collapsed);
-            assert.strictEqual(item.contextValue, 'deepnoteEnvironment.running');
-        });
-
-        test('should create stopped environment item', () => {
-            const item = new DeepnoteEnvironmentTreeItem(
-                EnvironmentTreeItemType.Environment,
-                testEnvironment,
-                EnvironmentStatus.Stopped
-            );
-
-            assert.include(item.label as string, '[Stopped]');
-            assert.strictEqual(item.contextValue, 'deepnoteEnvironment.stopped');
-        });
-
-        test('should create starting environment item', () => {
-            const item = new DeepnoteEnvironmentTreeItem(
-                EnvironmentTreeItemType.Environment,
-                testEnvironment,
-                EnvironmentStatus.Starting
-            );
-
-            assert.include(item.label as string, '[Starting...]');
-            assert.strictEqual(item.contextValue, 'deepnoteEnvironment.starting');
-        });
-
-        test('should have correct icon for running state', () => {
-            const item = new DeepnoteEnvironmentTreeItem(
-                EnvironmentTreeItemType.Environment,
-                testEnvironment,
-                EnvironmentStatus.Running
-            );
-
-            assert.instanceOf(item.iconPath, ThemeIcon);
-            assert.strictEqual((item.iconPath as ThemeIcon).id, 'vm-running');
-        });
-
-        test('should have correct icon for stopped state', () => {
-            const item = new DeepnoteEnvironmentTreeItem(
-                EnvironmentTreeItemType.Environment,
-                testEnvironment,
-                EnvironmentStatus.Stopped
-            );
-
-            assert.instanceOf(item.iconPath, ThemeIcon);
-            assert.strictEqual((item.iconPath as ThemeIcon).id, 'vm-outline');
-        });
-
-        test('should have correct icon for starting state', () => {
-            const item = new DeepnoteEnvironmentTreeItem(
-                EnvironmentTreeItemType.Environment,
-                testEnvironment,
-                EnvironmentStatus.Starting
-            );
-
-            assert.instanceOf(item.iconPath, ThemeIcon);
-            assert.strictEqual((item.iconPath as ThemeIcon).id, 'loading~spin');
         });
 
         test('should include last used time in description', () => {
-            const item = new DeepnoteEnvironmentTreeItem(
-                EnvironmentTreeItemType.Environment,
-                testEnvironment,
-                EnvironmentStatus.Stopped
-            );
+            const item = new DeepnoteEnvironmentTreeItem(EnvironmentTreeItemType.Environment, testEnvironment);
 
             assert.include(item.description as string, 'Last used:');
         });
 
         test('should have tooltip with environment details', () => {
-            const item = new DeepnoteEnvironmentTreeItem(
-                EnvironmentTreeItemType.Environment,
-                testEnvironment,
-                EnvironmentStatus.Running
-            );
+            const item = new DeepnoteEnvironmentTreeItem(EnvironmentTreeItemType.Environment, testEnvironment);
 
             const tooltip = `${item.tooltip}`;
             assert.include(tooltip, 'Test Environment');
-            assert.include(tooltip, 'Running');
             assert.include(tooltip, testInterpreter.uri.toString(true));
         });
 
@@ -121,11 +50,7 @@ suite('DeepnoteEnvironmentTreeItem', () => {
                 packages: ['numpy', 'pandas']
             };
 
-            const item = new DeepnoteEnvironmentTreeItem(
-                EnvironmentTreeItemType.Environment,
-                configWithPackages,
-                EnvironmentStatus.Stopped
-            );
+            const item = new DeepnoteEnvironmentTreeItem(EnvironmentTreeItemType.Environment, configWithPackages);
 
             const tooltip = item.tooltip as string;
             assert.include(tooltip, 'numpy');
@@ -135,12 +60,7 @@ suite('DeepnoteEnvironmentTreeItem', () => {
 
     suite('Info Item', () => {
         test('should create info item', () => {
-            const item = new DeepnoteEnvironmentTreeItem(
-                EnvironmentTreeItemType.InfoItem,
-                undefined,
-                undefined,
-                'Info Label'
-            );
+            const item = new DeepnoteEnvironmentTreeItem(EnvironmentTreeItemType.InfoItem, undefined, 'Info Label');
 
             assert.strictEqual(item.type, EnvironmentTreeItemType.InfoItem);
             assert.strictEqual(item.label, 'Info Label');
@@ -150,19 +70,19 @@ suite('DeepnoteEnvironmentTreeItem', () => {
 
         test('should create info item with icon', () => {
             const item = DeepnoteEnvironmentTreeItem.createInfoItem(
-                'ports',
+                'python',
                 'test-config-id',
-                'Port: 8888',
+                'Python: /usr/bin/python3',
                 'circle-filled'
             );
 
-            assert.strictEqual(item.label, 'Port: 8888');
+            assert.strictEqual(item.label, 'Python: /usr/bin/python3');
             assert.instanceOf(item.iconPath, ThemeIcon);
             assert.strictEqual((item.iconPath as ThemeIcon).id, 'circle-filled');
         });
 
         test('should create info item without icon', () => {
-            const item = DeepnoteEnvironmentTreeItem.createInfoItem('ports', 'test-config-id', 'No icon');
+            const item = DeepnoteEnvironmentTreeItem.createInfoItem('venv', 'test-config-id', 'No icon');
 
             assert.strictEqual(item.label, 'No icon');
             assert.isUndefined(item.iconPath);
@@ -197,11 +117,7 @@ suite('DeepnoteEnvironmentTreeItem', () => {
                 lastUsedAt: new Date()
             };
 
-            const item = new DeepnoteEnvironmentTreeItem(
-                EnvironmentTreeItemType.Environment,
-                recentConfig,
-                EnvironmentStatus.Stopped
-            );
+            const item = new DeepnoteEnvironmentTreeItem(EnvironmentTreeItemType.Environment, recentConfig);
 
             assert.include(item.description as string, 'just now');
         });
@@ -213,11 +129,7 @@ suite('DeepnoteEnvironmentTreeItem', () => {
                 lastUsedAt: fewSecondsAgo
             };
 
-            const item = new DeepnoteEnvironmentTreeItem(
-                EnvironmentTreeItemType.Environment,
-                config,
-                EnvironmentStatus.Stopped
-            );
+            const item = new DeepnoteEnvironmentTreeItem(EnvironmentTreeItemType.Environment, config);
 
             assert.include(item.description as string, 'just now');
         });
@@ -229,11 +141,7 @@ suite('DeepnoteEnvironmentTreeItem', () => {
                 lastUsedAt: fiveMinutesAgo
             };
 
-            const item = new DeepnoteEnvironmentTreeItem(
-                EnvironmentTreeItemType.Environment,
-                config,
-                EnvironmentStatus.Stopped
-            );
+            const item = new DeepnoteEnvironmentTreeItem(EnvironmentTreeItemType.Environment, config);
 
             assert.include(item.description as string, 'minute');
             assert.include(item.description as string, 'ago');
@@ -246,11 +154,7 @@ suite('DeepnoteEnvironmentTreeItem', () => {
                 lastUsedAt: twoHoursAgo
             };
 
-            const item = new DeepnoteEnvironmentTreeItem(
-                EnvironmentTreeItemType.Environment,
-                config,
-                EnvironmentStatus.Stopped
-            );
+            const item = new DeepnoteEnvironmentTreeItem(EnvironmentTreeItemType.Environment, config);
 
             assert.include(item.description as string, 'hour');
             assert.include(item.description as string, 'ago');
@@ -263,11 +167,7 @@ suite('DeepnoteEnvironmentTreeItem', () => {
                 lastUsedAt: threeDaysAgo
             };
 
-            const item = new DeepnoteEnvironmentTreeItem(
-                EnvironmentTreeItemType.Environment,
-                config,
-                EnvironmentStatus.Stopped
-            );
+            const item = new DeepnoteEnvironmentTreeItem(EnvironmentTreeItemType.Environment, config);
 
             assert.include(item.description as string, 'day');
             assert.include(item.description as string, 'ago');

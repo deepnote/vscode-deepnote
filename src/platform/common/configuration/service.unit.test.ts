@@ -23,7 +23,7 @@ suite('Configuration Service', () => {
 
     function setupConfigProvider(): WorkspaceConfiguration {
         const workspaceConfig = mock<WorkspaceConfiguration>();
-        when(mockedVSCodeNamespaces.workspace.getConfiguration('jupyter', uriEquals(resource))).thenReturn(
+        when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote', uriEquals(resource))).thenReturn(
             instance(workspaceConfig)
         );
         return workspaceConfig;

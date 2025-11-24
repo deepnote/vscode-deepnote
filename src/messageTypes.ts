@@ -173,16 +173,39 @@ export type LocalizedMessages = {
     integrationsConfigure: string;
     integrationsReconfigure: string;
     integrationsReset: string;
+    integrationsDelete: string;
     integrationsConfirmResetTitle: string;
     integrationsConfirmResetMessage: string;
     integrationsConfirmResetDetails: string;
+    integrationsConfirmDeleteTitle: string;
+    integrationsConfirmDeleteMessage: string;
+    integrationsConfirmDeleteDetails: string;
     integrationsConfigureTitle: string;
     integrationsCancel: string;
     integrationsSave: string;
+    integrationsAddNewIntegration: string;
+    integrationsDatabase: string;
+    integrationsDataWarehousesLakes: string;
+    integrationsDatabases: string;
     // Integration type labels
     integrationsPostgresTypeLabel: string;
     integrationsBigQueryTypeLabel: string;
     integrationsSnowflakeTypeLabel: string;
+    integrationsAlloyDBTypeLabel: string;
+    integrationsAthenaTypeLabel: string;
+    integrationsClickHouseTypeLabel: string;
+    integrationsDatabricksTypeLabel: string;
+    integrationsDremioTypeLabel: string;
+    integrationsMariaDBTypeLabel: string;
+    integrationsMaterializeTypeLabel: string;
+    integrationsMindsDBTypeLabel: string;
+    integrationsMongoDBTypeLabel: string;
+    integrationsMySQLTypeLabel: string;
+    integrationsDuckDBTypeLabel: string;
+    integrationsRedshiftTypeLabel: string;
+    integrationsSpannerTypeLabel: string;
+    integrationsSQLServerTypeLabel: string;
+    integrationsTrinoTypeLabel: string;
     // PostgreSQL form strings
     integrationsPostgresNameLabel: string;
     integrationsPostgresNamePlaceholder: string;
@@ -231,10 +254,204 @@ export type LocalizedMessages = {
     integrationsSnowflakeRolePlaceholder: string;
     integrationsSnowflakeWarehouseLabel: string;
     integrationsSnowflakeWarehousePlaceholder: string;
+    // MySQL form strings
+    integrationsMySQLNameLabel: string;
+    integrationsMySQLNamePlaceholder: string;
+    integrationsMySQLHostLabel: string;
+    integrationsMySQLHostPlaceholder: string;
+    integrationsMySQLPortLabel: string;
+    integrationsMySQLDatabaseLabel: string;
+    integrationsMySQLDatabasePlaceholder: string;
+    integrationsMySQLUsernameLabel: string;
+    integrationsMySQLUsernamePlaceholder: string;
+    integrationsMySQLPasswordLabel: string;
+    integrationsMySQLPasswordPlaceholder: string;
+    // MariaDB form strings
+    integrationsMariaDBNameLabel: string;
+    integrationsMariaDBNamePlaceholder: string;
+    integrationsMariaDBHostLabel: string;
+    integrationsMariaDBHostPlaceholder: string;
+    integrationsMariaDBPortLabel: string;
+    integrationsMariaDBDatabaseLabel: string;
+    integrationsMariaDBDatabasePlaceholder: string;
+    integrationsMariaDBUsernameLabel: string;
+    integrationsMariaDBUsernamePlaceholder: string;
+    integrationsMariaDBPasswordLabel: string;
+    integrationsMariaDBPasswordPlaceholder: string;
+    // Athena form strings
+    integrationsAthenaNameLabel: string;
+    integrationsAthenaNamePlaceholder: string;
+    integrationsAthenaAccessKeyIdLabel: string;
+    integrationsAthenaAccessKeyIdPlaceholder: string;
+    integrationsAthenaSecretAccessKeyLabel: string;
+    integrationsAthenaSecretAccessKeyPlaceholder: string;
+    integrationsAthenaRegionLabel: string;
+    integrationsAthenaRegionPlaceholder: string;
+    integrationsAthenaS3OutputPathLabel: string;
+    integrationsAthenaS3OutputPathPlaceholder: string;
+    integrationsAthenaWorkgroupLabel: string;
+    integrationsAthenaWorkgroupPlaceholder: string;
+    // Databricks form strings
+    integrationsDatabricksNameLabel: string;
+    integrationsDatabricksNamePlaceholder: string;
+    integrationsDatabricksHostLabel: string;
+    integrationsDatabricksHostPlaceholder: string;
+    integrationsDatabricksHttpPathLabel: string;
+    integrationsDatabricksHttpPathPlaceholder: string;
+    integrationsDatabricksTokenLabel: string;
+    integrationsDatabricksTokenPlaceholder: string;
+    integrationsDatabricksPortLabel: string;
+    integrationsDatabricksCatalogLabel: string;
+    integrationsDatabricksCatalogPlaceholder: string;
+    integrationsDatabricksSchemaLabel: string;
+    integrationsDatabricksSchemaPlaceholder: string;
+    // Dremio form strings
+    integrationsDremioNameLabel: string;
+    integrationsDremioNamePlaceholder: string;
+    integrationsDremioHostLabel: string;
+    integrationsDremioHostPlaceholder: string;
+    integrationsDremioPortLabel: string;
+    integrationsDremioSchemaLabel: string;
+    integrationsDremioSchemaPlaceholder: string;
+    integrationsDremioTokenLabel: string;
+    integrationsDremioTokenPlaceholder: string;
+    // MongoDB form strings
+    integrationsMongoDBNameLabel: string;
+    integrationsMongoDBNamePlaceholder: string;
+    integrationsMongoDBConnectionStringLabel: string;
+    integrationsMongoDBConnectionStringPlaceholder: string;
+    integrationsMongoDBConnectionStringHelp: string;
+    integrationsMongoDBOptionalFieldsNote: string;
+    integrationsMongoDBRawConnectionStringLabel: string;
+    integrationsMongoDBPrefixLabel: string;
+    integrationsMongoDBHostLabel: string;
+    integrationsMongoDBPortLabel: string;
+    integrationsMongoDBUserLabel: string;
+    integrationsMongoDBPasswordLabel: string;
+    integrationsMongoDBDatabaseLabel: string;
+    integrationsMongoDBOptionsLabel: string;
+    // Redshift form strings
+    integrationsRedshiftNameLabel: string;
+    integrationsRedshiftNamePlaceholder: string;
+    integrationsRedshiftAuthMethodLabel: string;
+    integrationsRedshiftAuthMethodUsernamePassword: string;
+    integrationsRedshiftAuthMethodIndividualCredentials: string;
+    integrationsRedshiftAuthMethodHelp: string;
+    integrationsRedshiftHostLabel: string;
+    integrationsRedshiftHostPlaceholder: string;
+    integrationsRedshiftPortLabel: string;
+    integrationsRedshiftDatabaseLabel: string;
+    integrationsRedshiftDatabasePlaceholder: string;
+    integrationsRedshiftUsernameLabel: string;
+    integrationsRedshiftUsernamePlaceholder: string;
+    integrationsRedshiftPasswordLabel: string;
+    integrationsRedshiftPasswordPlaceholder: string;
+    // Spanner form strings
+    integrationsSpannerNameLabel: string;
+    integrationsSpannerNamePlaceholder: string;
+    integrationsSpannerInstanceLabel: string;
+    integrationsSpannerInstancePlaceholder: string;
+    integrationsSpannerDatabaseLabel: string;
+    integrationsSpannerDatabasePlaceholder: string;
+    integrationsSpannerServiceAccountLabel: string;
+    integrationsSpannerServiceAccountPlaceholder: string;
+    integrationsSpannerServiceAccountHelp: string;
+    integrationsSpannerServiceAccountInvalidJson: string;
+    integrationsSpannerDataBoostLabel: string;
+    integrationsSpannerDataBoostHelp: string;
+    // AlloyDB form strings
+    integrationsAlloyDBNameLabel: string;
+    integrationsAlloyDBNamePlaceholder: string;
+    integrationsAlloyDBHostLabel: string;
+    integrationsAlloyDBHostPlaceholder: string;
+    integrationsAlloyDBPortLabel: string;
+    integrationsAlloyDBDatabaseLabel: string;
+    integrationsAlloyDBDatabasePlaceholder: string;
+    integrationsAlloyDBUsernameLabel: string;
+    integrationsAlloyDBUsernamePlaceholder: string;
+    integrationsAlloyDBPasswordLabel: string;
+    integrationsAlloyDBPasswordPlaceholder: string;
+    // ClickHouse form strings
+    integrationsClickHouseNameLabel: string;
+    integrationsClickHouseNamePlaceholder: string;
+    integrationsClickHouseHostLabel: string;
+    integrationsClickHouseHostPlaceholder: string;
+    integrationsClickHousePortLabel: string;
+    integrationsClickHouseDatabaseLabel: string;
+    integrationsClickHouseDatabasePlaceholder: string;
+    integrationsClickHouseUsernameLabel: string;
+    integrationsClickHouseUsernamePlaceholder: string;
+    integrationsClickHousePasswordLabel: string;
+    integrationsClickHousePasswordPlaceholder: string;
+    // Materialize form strings
+    integrationsMaterializeNameLabel: string;
+    integrationsMaterializeNamePlaceholder: string;
+    integrationsMaterializeHostLabel: string;
+    integrationsMaterializeHostPlaceholder: string;
+    integrationsMaterializePortLabel: string;
+    integrationsMaterializeDatabaseLabel: string;
+    integrationsMaterializeDatabasePlaceholder: string;
+    integrationsMaterializeClusterLabel: string;
+    integrationsMaterializeClusterPlaceholder: string;
+    integrationsMaterializeUsernameLabel: string;
+    integrationsMaterializeUsernamePlaceholder: string;
+    integrationsMaterializePasswordLabel: string;
+    integrationsMaterializePasswordPlaceholder: string;
+    // MindsDB form strings
+    integrationsMindsDBNameLabel: string;
+    integrationsMindsDBNamePlaceholder: string;
+    integrationsMindsDBHostLabel: string;
+    integrationsMindsDBHostPlaceholder: string;
+    integrationsMindsDBPortLabel: string;
+    integrationsMindsDBDatabaseLabel: string;
+    integrationsMindsDBDatabasePlaceholder: string;
+    integrationsMindsDBUsernameLabel: string;
+    integrationsMindsDBUsernamePlaceholder: string;
+    integrationsMindsDBPasswordLabel: string;
+    integrationsMindsDBPasswordPlaceholder: string;
+    // SQL Server form strings
+    integrationsSQLServerNameLabel: string;
+    integrationsSQLServerNamePlaceholder: string;
+    integrationsSQLServerHostLabel: string;
+    integrationsSQLServerHostPlaceholder: string;
+    integrationsSQLServerPortLabel: string;
+    integrationsSQLServerDatabaseLabel: string;
+    integrationsSQLServerDatabasePlaceholder: string;
+    integrationsSQLServerUsernameLabel: string;
+    integrationsSQLServerUsernamePlaceholder: string;
+    integrationsSQLServerPasswordLabel: string;
+    integrationsSQLServerPasswordPlaceholder: string;
+    // Trino form strings
+    integrationsTrinoNameLabel: string;
+    integrationsTrinoNamePlaceholder: string;
+    integrationsTrinoHostLabel: string;
+    integrationsTrinoHostPlaceholder: string;
+    integrationsTrinoPortLabel: string;
+    integrationsTrinoDatabaseLabel: string;
+    integrationsTrinoDatabasePlaceholder: string;
+    integrationsTrinoUsernameLabel: string;
+    integrationsTrinoUsernamePlaceholder: string;
+    integrationsTrinoPasswordLabel: string;
+    integrationsTrinoPasswordPlaceholder: string;
+    // SSH options strings
+    integrationsSshEnabled: string;
+    integrationsSshHost: string;
+    integrationsSshHostPlaceholder: string;
+    integrationsSshPort: string;
+    integrationsSshUser: string;
+    integrationsSshUserPlaceholder: string;
+    // SSL/CA certificate strings
+    integrationsSslEnabled: string;
+    integrationsCaCertificateName: string;
+    integrationsCaCertificateNamePlaceholder: string;
+    integrationsCaCertificateText: string;
+    integrationsCaCertificateTextPlaceholder: string;
     // Common form strings
     integrationsRequiredField: string;
     integrationsOptionalField: string;
     integrationsUnnamedIntegration: string;
+    integrationsDefaultName: string;
+    integrationsUnsupportedIntegrationType: string;
     // Select input settings strings
     selectInputSettingsTitle: string;
     allowMultipleValues: string;
@@ -253,6 +470,20 @@ export type LocalizedMessages = {
     saveButton: string;
     cancelButton: string;
     failedToSave: string;
+    // Big number comparison settings strings
+    bigNumberComparisonTitle: string;
+    enableComparison: string;
+    comparisonTypeLabel: string;
+    percentageChange: string;
+    absoluteValue: string;
+    comparisonValueLabel: string;
+    comparisonValuePlaceholder: string;
+    comparisonTitleLabel: string;
+    comparisonTitlePlaceholder: string;
+    comparisonTitleHelp: string;
+    comparisonValueHelp: string;
+    comparisonFormatLabel: string;
+    comparisonFormatHelp: string;
 };
 // Map all messages to specific payloads
 export class IInteractiveWindowMapping {

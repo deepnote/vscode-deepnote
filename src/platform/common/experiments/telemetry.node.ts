@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import { IExperimentationTelemetry } from 'vscode-tas-client';
-import { sendTelemetryEvent, setSharedProperty } from '../../../telemetry';
+import { telemetryWrapper } from '../../telemetry/wrapper';
 
 /**
  * Used by the experimentation service to send extra properties
@@ -12,7 +12,7 @@ export class ExperimentationTelemetry implements IExperimentationTelemetry {
         // Add the shared property to all telemetry being sent, not just events being sent by the experimentation package.
         // We are not in control of these props, just cast to `any`, i.e. we cannot strongly type these external props.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        setSharedProperty(name as any, value as any);
+        telemetryWrapper.setSharedProperty(name as any, value as any);
     }
 
     public postEvent(eventName: string, properties: Map<string, string>): void {
@@ -22,6 +22,6 @@ export class ExperimentationTelemetry implements IExperimentationTelemetry {
         });
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        sendTelemetryEvent(eventName as any, undefined, formattedProperties);
+        telemetryWrapper.sendTelemetryEvent(eventName as any, undefined, formattedProperties);
     }
 }

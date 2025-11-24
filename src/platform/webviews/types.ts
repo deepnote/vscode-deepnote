@@ -35,7 +35,7 @@ export type WebViewViewChangeEventArgs = { current: WebViewViewState; previous: 
 
 // Wraps the VS Code WebviewViewProvider. VSC Prefix as we also have our own IWebviewViewProvider
 export interface IVSCWebviewViewProvider extends WebviewViewProvider {
-    readonly viewType: 'jupyterViewVariables';
+    readonly viewType: 'deepnoteViewVariables';
 }
 
 /**

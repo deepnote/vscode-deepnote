@@ -3,7 +3,7 @@
 
 import { ChildProcess } from 'child_process';
 import { kill } from 'process';
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import * as crypto from 'crypto';
 import * as os from 'os';
 import * as path from '../../../platform/vscode-path/path';
@@ -53,7 +53,7 @@ import pidtree from 'pidtree';
 import { isKernelLaunchedViaLocalPythonIPyKernel } from '../../helpers.node';
 import { splitLines } from '../../../platform/common/helpers';
 import { IPythonExecutionFactory } from '../../../platform/interpreter/types.node';
-import { getDisplayPath } from '../../../platform/common/platform/fs-paths';
+import { getDisplayPath } from '../../../platform/common/platform/fs-paths.node';
 import { StopWatch } from '../../../platform/common/utils/stopWatch';
 import { ServiceContainer } from '../../../platform/ioc/container';
 import { ObservableDisposable } from '../../../platform/common/utils/lifecycle';

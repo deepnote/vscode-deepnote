@@ -23,12 +23,11 @@ import { IDisposableRegistry } from '../../platform/common/types';
 import { IIntegrationStorage } from './integrations/types';
 import { Commands } from '../../platform/common/constants';
 import {
-    DATAFRAME_SQL_INTEGRATION_ID,
-    DEEPNOTE_TO_INTEGRATION_TYPE,
-    IntegrationType,
-    RawIntegrationType
+    ConfigurableDatabaseIntegrationType,
+    DATAFRAME_SQL_INTEGRATION_ID
 } from '../../platform/notebooks/deepnote/integrationTypes';
 import { IDeepnoteNotebookManager } from '../types';
+import { DatabaseIntegrationType, databaseIntegrationTypes } from '@deepnote/database-integrations';
 
 /**
  * QuickPick item with an integration ID
@@ -36,6 +35,26 @@ import { IDeepnoteNotebookManager } from '../types';
 interface LocalQuickPickItem extends QuickPickItem {
     id: string;
 }
+
+const integrationTypeLabels: Record<ConfigurableDatabaseIntegrationType, string> = {
+    alloydb: l10n.t('Google AlloyDB'),
+    athena: l10n.t('Amazon Athena'),
+    'big-query': l10n.t('Google BigQuery'),
+    clickhouse: l10n.t('ClickHouse'),
+    databricks: l10n.t('Databricks'),
+    dremio: l10n.t('Dremio'),
+    mariadb: l10n.t('MariaDB'),
+    materialize: l10n.t('Materialize'),
+    mindsdb: l10n.t('MindsDB'),
+    mongodb: l10n.t('MongoDB'),
+    mysql: l10n.t('MySQL'),
+    pgsql: l10n.t('PostgreSQL'),
+    redshift: l10n.t('Amazon Redshift'),
+    snowflake: l10n.t('Snowflake'),
+    spanner: l10n.t('Google Spanner'),
+    'sql-server': l10n.t('Microsoft SQL Server'),
+    trino: l10n.t('Trino')
+};
 
 /**
  * Provides status bar items for SQL cells showing the integration name and variable name
@@ -342,13 +361,21 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
         // Add all project integrations
         for (const projectIntegration of projectIntegrations) {
+            const integrationType =
+                projectIntegration.type &&
+                (databaseIntegrationTypes as readonly string[]).includes(projectIntegration.type)
+                    ? (projectIntegration.type as DatabaseIntegrationType)
+                    : null;
+
             // Skip the internal DuckDB integration
-            if (projectIntegration.id === DATAFRAME_SQL_INTEGRATION_ID) {
+            if (projectIntegration.id === DATAFRAME_SQL_INTEGRATION_ID || integrationType === 'pandas-dataframe') {
                 continue;
             }
 
-            const integrationType = DEEPNOTE_TO_INTEGRATION_TYPE[projectIntegration.type as RawIntegrationType];
-            const typeLabel = integrationType ? this.getIntegrationTypeLabel(integrationType) : projectIntegration.type;
+            const typeLabel =
+                integrationType && (databaseIntegrationTypes as readonly string[]).includes(integrationType)
+                    ? integrationTypeLabels[integrationType] ?? integrationType
+                    : projectIntegration.type;
 
             const item: LocalQuickPickItem = {
                 label: projectIntegration.name || projectIntegration.id,
@@ -429,18 +456,5 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
         // Trigger status bar update
         this._onDidChangeCellStatusBarItems.fire();
-    }
-
-    private getIntegrationTypeLabel(type: IntegrationType): string {
-        switch (type) {
-            case IntegrationType.Postgres:
-                return l10n.t('PostgreSQL');
-            case IntegrationType.BigQuery:
-                return l10n.t('BigQuery');
-            case IntegrationType.Snowflake:
-                return l10n.t('Snowflake');
-            default:
-                return String(type);
-        }
     }
 }

@@ -3,7 +3,8 @@
 
 import { IExtensionSyncActivationService } from '../platform/activation/types';
 import { IPythonExtensionChecker } from '../platform/api/types';
-import { Identifiers, isPreReleaseVersion } from '../platform/common/constants';
+import { Identifiers } from '../platform/common/constants';
+import { isPreReleaseVersion } from '../platform/constants.node';
 import { IServiceManager } from '../platform/ioc/types';
 import { setSharedProperty } from '../telemetry';
 import { Activation } from './jupyter/interpreter/activation.node';

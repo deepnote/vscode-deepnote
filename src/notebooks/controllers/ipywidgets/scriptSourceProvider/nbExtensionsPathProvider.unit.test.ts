@@ -23,6 +23,9 @@ import { NbExtensionsPathProvider as WebNbExtensionsPathProvider } from './nbExt
 import { PythonExtension } from '@vscode/python-extension';
 import { resolvableInstance } from '../../../../test/datascience/helpers';
 import { dispose } from '../../../../platform/common/utils/lifecycle';
+import { getDirname } from '../../../../platform/common/esmUtils.node';
+
+const __dirname = getDirname(import.meta.url);
 
 [false, true].forEach((isWeb) => {
     const localNonPythonKernelSpec = LocalKernelSpecConnectionMetadata.create({

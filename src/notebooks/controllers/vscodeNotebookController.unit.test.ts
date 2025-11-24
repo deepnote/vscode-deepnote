@@ -37,11 +37,12 @@ import { KernelConnector } from './kernelConnector';
 import { ITrustedKernelPaths } from '../../kernels/raw/finder/types';
 import { IInterpreterService } from '../../platform/interpreter/contracts';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
-import { IConnectionDisplayDataProvider } from './types';
+import { IConnectionDisplayData, IConnectionDisplayDataProvider } from './types';
 import { ConnectionDisplayDataProvider } from './connectionDisplayData.node';
-import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
+import { mockedVSCode, mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { Environment, PythonExtension } from '@vscode/python-extension';
 import { crateMockedPythonApi, whenResolveEnvironment } from '../../kernels/helpers.unit.test';
+import { IJupyterVariablesProvider } from '../../kernels/variables/types';
 
 suite(`Notebook Controller`, function () {
     let controller: NotebookController;
@@ -98,20 +99,46 @@ suite(`Notebook Controller`, function () {
         disposables.push(new Disposable(() => clock.uninstall()));
         when(context.extensionUri).thenReturn(Uri.file('extension'));
         when(controller.onDidChangeSelectedNotebooks).thenReturn(onDidChangeSelectedNotebooks.event);
+        when(controller.id).thenReturn('test-controller-id');
+        when(controller.label).thenReturn('Test Controller');
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([]);
         when(mockedVSCodeNamespaces.workspace.onDidCloseNotebookDocument).thenReturn(onDidCloseNotebookDocument.event);
-        when(
-            mockedVSCodeNamespaces.notebooks.createNotebookController(
-                anything(),
-                anything(),
-                anything(),
-                anything(),
-                anything()
-            )
-        ).thenCall((_id, _view, _label, _handler) => {
-            // executionHandler = handler;
-            return instance(controller);
-        });
+        // Override just the createNotebookController method on the existing notebooks object
+        (mockedVSCode as any).notebooks.createNotebookController = (
+            _id: string,
+            _view: string,
+            _label: string,
+            _handler: any,
+            _rendererScripts: any
+        ) => {
+            console.log('MOCK createNotebookController CALLED with id:', _id);
+            const mockControllerObject: any = {
+                id: _id,
+                label: _label,
+                description: '',
+                detail: '',
+                supportedLanguages: [],
+                supportsExecutionOrder: false,
+                interruptHandler: undefined,
+                executeHandler: _handler,
+                onDidChangeSelectedNotebooks: onDidChangeSelectedNotebooks.event,
+                onDidReceiveMessage: new EventEmitter<any>().event,
+                dispose: () => {},
+                asWebviewUri: (uri: Uri) => uri,
+                postMessage: () => Promise.resolve(true),
+                updateNotebookAffinity: () => {},
+                createNotebookCellExecution: () => ({}) as any,
+                createNotebookExecution: () => ({}) as any,
+                notebookType: _view,
+                rendererScripts: _rendererScripts || []
+            };
+            console.log('MOCK createNotebookController RETURNING controller with id:', mockControllerObject.id);
+            return mockControllerObject;
+        };
+        console.log(
+            'mockedVSCode.notebooks.createNotebookController:',
+            typeof (mockedVSCode as any).notebooks.createNotebookController
+        );
         when(languageService.getSupportedLanguages(anything())).thenReturn([PYTHON_LANGUAGE]);
         when(mockedVSCodeNamespaces.workspace.isTrusted).thenReturn(true);
         when(mockedVSCodeNamespaces.workspace.onDidCloseNotebookDocument).thenReturn(onDidCloseNotebookDocument.event);
@@ -542,6 +569,261 @@ suite(`Notebook Controller`, function () {
                 await warnWhenUsingOutdatedPython(kernel);
                 verify(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything())).once();
             });
+        });
+    });
+
+    suite('VSCodeNotebookController.create', function () {
+        let kernelConnection: KernelConnectionMetadata;
+        let kernelProvider: IKernelProvider;
+        let context: IExtensionContext;
+        let languageService: NotebookCellLanguageService;
+        let configService: IConfigurationService;
+        let extensionChecker: IPythonExtensionChecker;
+        let serviceContainer: IServiceContainer;
+        let displayDataProvider: IConnectionDisplayDataProvider;
+        let jupyterVariablesProvider: IJupyterVariablesProvider;
+        let disposables: IDisposable[] = [];
+        let controller: NotebookController;
+        let onDidChangeSelectedNotebooks: EventEmitter<{
+            readonly notebook: NotebookDocument;
+            readonly selected: boolean;
+        }>;
+
+        setup(function () {
+            resetVSCodeMocks();
+            disposables.push(new Disposable(() => resetVSCodeMocks()));
+            kernelConnection = mock<KernelConnectionMetadata>();
+            kernelProvider = mock<IKernelProvider>();
+            context = mock<IExtensionContext>();
+            languageService = mock<NotebookCellLanguageService>();
+            configService = mock<IConfigurationService>();
+            extensionChecker = mock<IPythonExtensionChecker>();
+            serviceContainer = mock<IServiceContainer>();
+            displayDataProvider = mock<IConnectionDisplayDataProvider>();
+            jupyterVariablesProvider = mock<IJupyterVariablesProvider>();
+            controller = mock<NotebookController>();
+            onDidChangeSelectedNotebooks = new EventEmitter<{
+                readonly notebook: NotebookDocument;
+                readonly selected: boolean;
+            }>();
+            disposables.push(onDidChangeSelectedNotebooks);
+
+            when(context.extensionUri).thenReturn(Uri.file('extension'));
+            when(controller.onDidChangeSelectedNotebooks).thenReturn(onDidChangeSelectedNotebooks.event);
+            when(controller.id).thenReturn('test-controller-id');
+            when(controller.label).thenReturn('Test Controller');
+            when(displayDataProvider.getDisplayData(anything())).thenReturn({
+                label: 'Test Kernel',
+                description: 'Test Description',
+                detail: 'Test Detail',
+                category: 'Test Category',
+                serverDisplayName: 'Test Server',
+                onDidChange: new EventEmitter<IConnectionDisplayData>().event,
+                dispose: () => {
+                    /* noop */
+                }
+            });
+            when(
+                mockedVSCodeNamespaces.notebooks.createNotebookController(
+                    anything(),
+                    anything(),
+                    anything(),
+                    anything(),
+                    anything()
+                )
+            ).thenCall((_id, _view, _label, _handler, _rendererScripts) => {
+                // Create a plain object with all required controller properties
+                const mockController = {
+                    id: _id,
+                    label: _label,
+                    description: '',
+                    detail: '',
+                    supportedLanguages: [],
+                    supportsExecutionOrder: false,
+                    interruptHandler: undefined,
+                    executeHandler: _handler,
+                    onDidChangeSelectedNotebooks: onDidChangeSelectedNotebooks.event,
+                    onDidReceiveMessage: new EventEmitter<any>().event,
+                    dispose: () => {},
+                    asWebviewUri: (uri: Uri) => uri,
+                    postMessage: () => Promise.resolve(true),
+                    updateNotebookAffinity: () => {},
+                    createNotebookCellExecution: () => ({}) as any,
+                    createNotebookExecution: () => ({}) as any,
+                    notebookType: _view,
+                    rendererScripts: _rendererScripts || []
+                };
+                return mockController as NotebookController;
+            });
+        });
+
+        teardown(() => (disposables = dispose(disposables)));
+
+        test('Should attach variable provider when API is available', function () {
+            // Arrange: Mock controller with variableProvider property
+            when(
+                mockedVSCodeNamespaces.notebooks.createNotebookController(
+                    anything(),
+                    anything(),
+                    anything(),
+                    anything(),
+                    anything()
+                )
+            ).thenCall((_id, _view, _label, _handler, _rendererScripts) => {
+                const mockController: any = {
+                    id: _id,
+                    label: _label,
+                    description: '',
+                    detail: '',
+                    supportedLanguages: [],
+                    supportsExecutionOrder: false,
+                    interruptHandler: undefined,
+                    executeHandler: _handler,
+                    onDidChangeSelectedNotebooks: onDidChangeSelectedNotebooks.event,
+                    onDidReceiveMessage: new EventEmitter<any>().event,
+                    dispose: () => {},
+                    asWebviewUri: (uri: Uri) => uri,
+                    postMessage: () => Promise.resolve(true),
+                    updateNotebookAffinity: () => {},
+                    createNotebookCellExecution: () => ({}) as any,
+                    createNotebookExecution: () => ({}) as any,
+                    notebookType: _view,
+                    rendererScripts: _rendererScripts || [],
+                    variableProvider: undefined
+                };
+                return mockController as NotebookController;
+            });
+
+            // Act
+            const result = VSCodeNotebookController.create(
+                instance(kernelConnection),
+                'test-id',
+                'jupyter-notebook',
+                instance(kernelProvider),
+                instance(context),
+                disposables,
+                instance(languageService),
+                instance(configService),
+                instance(extensionChecker),
+                instance(serviceContainer),
+                instance(displayDataProvider),
+                instance(jupyterVariablesProvider)
+            );
+
+            // Assert
+            assert.isDefined(result);
+            assert.strictEqual(
+                (result.controller as any).variableProvider,
+                instance(jupyterVariablesProvider),
+                'Variable provider should be attached when API is available'
+            );
+        });
+
+        test('Should not attach variable provider when API is not available', function () {
+            // Arrange: Create a plain object without variableProvider property
+            const controllerWithoutApi = {
+                onDidChangeSelectedNotebooks: onDidChangeSelectedNotebooks.event,
+                id: 'test-id',
+                notebookType: 'jupyter-notebook',
+                supportedLanguages: [],
+                supportsExecutionOrder: true,
+                description: '',
+                detail: '',
+                label: 'Test Kernel',
+                dispose: () => {
+                    /* noop */
+                },
+                createNotebookCellExecution: () => ({}) as any,
+                createNotebookExecution: () => ({}) as any,
+                executeHandler: () => {
+                    /* noop */
+                },
+                interruptHandler: undefined,
+                updateNotebookAffinity: () => {
+                    /* noop */
+                },
+                rendererScripts: [],
+                onDidReceiveMessage: new EventEmitter<any>().event,
+                postMessage: () => Promise.resolve(true),
+                asWebviewUri: (uri: Uri) => uri
+                // Note: no variableProvider property to simulate API not being available
+            } as NotebookController;
+
+            when(
+                mockedVSCodeNamespaces.notebooks.createNotebookController(
+                    anything(),
+                    anything(),
+                    anything(),
+                    anything(),
+                    anything()
+                )
+            ).thenReturn(controllerWithoutApi);
+
+            // Act
+            const result = VSCodeNotebookController.create(
+                instance(kernelConnection),
+                'test-id',
+                'jupyter-notebook',
+                instance(kernelProvider),
+                instance(context),
+                disposables,
+                instance(languageService),
+                instance(configService),
+                instance(extensionChecker),
+                instance(serviceContainer),
+                instance(displayDataProvider),
+                instance(jupyterVariablesProvider)
+            );
+
+            // Assert
+            assert.isDefined(result);
+            assert.isFalse(
+                'variableProvider' in result.controller,
+                'Variable provider property should not exist when API is not available'
+            );
+        });
+
+        test('Should handle errors when attaching variable provider', function () {
+            // Arrange: Mock controller that throws when setting variableProvider
+            const controllerWithError = mock<NotebookController>();
+            when(controllerWithError.onDidChangeSelectedNotebooks).thenReturn(onDidChangeSelectedNotebooks.event);
+
+            const controllerInstance = instance(controllerWithError);
+            Object.defineProperty(controllerInstance, 'variableProvider', {
+                set: () => {
+                    throw new Error('API not supported');
+                },
+                configurable: true
+            });
+
+            when(
+                mockedVSCodeNamespaces.notebooks.createNotebookController(
+                    anything(),
+                    anything(),
+                    anything(),
+                    anything(),
+                    anything()
+                )
+            ).thenReturn(controllerInstance);
+
+            // Act - should not throw
+            const result = VSCodeNotebookController.create(
+                instance(kernelConnection),
+                'test-id',
+                'jupyter-notebook',
+                instance(kernelProvider),
+                instance(context),
+                disposables,
+                instance(languageService),
+                instance(configService),
+                instance(extensionChecker),
+                instance(serviceContainer),
+                instance(displayDataProvider),
+                instance(jupyterVariablesProvider)
+            );
+
+            // Assert
+            assert.isDefined(result);
         });
     });
 });

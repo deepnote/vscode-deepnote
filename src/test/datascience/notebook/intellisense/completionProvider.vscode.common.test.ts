@@ -43,7 +43,7 @@ import { IKernelProvider } from '../../../../kernels/types';
                 }
                 logger.info(`Start Suite Code Completion via Jupyter`);
                 this.timeout(120_000);
-                jupyterConfig = workspace.getConfiguration('jupyter', undefined);
+                jupyterConfig = workspace.getConfiguration('deepnote', undefined);
                 previousJediSetting = jupyterConfig.get<boolean>('enableExtendedPythonKernelCompletions');
                 await jupyterConfig.update(
                     'enableExtendedPythonKernelCompletions',

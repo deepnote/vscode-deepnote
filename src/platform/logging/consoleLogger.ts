@@ -3,7 +3,7 @@
 
 import { Arguments, ILogger } from './types';
 import { getTimeForLogging } from './util';
-const format = require('format-util') as typeof import('format-util');
+import format from 'format-util';
 
 function formatMessage(level: string | undefined, message: string, ...data: Arguments): string {
     const isDataEmpty = [...data].length === 0;

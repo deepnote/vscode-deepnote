@@ -14,7 +14,7 @@ import { workspace } from 'vscode';
 @injectable()
 export class RunInDedicatedExtensionHostCommandHandler implements IExtensionSyncActivationService {
     public activate() {
-        commands.registerCommand('jupyter.runInDedicatedExtensionHost', this.updateAffinity, this);
+        commands.registerCommand('deepnote.runInDedicatedExtensionHost', this.updateAffinity, this);
     }
     private async updateAffinity() {
         const affinity = workspace.getConfiguration('extensions').get('experimental.affinity') as

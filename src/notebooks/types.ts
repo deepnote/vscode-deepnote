@@ -5,6 +5,7 @@ import { NotebookDocument, NotebookEditor, Uri, type Event } from 'vscode';
 import { Resource } from '../platform/common/types';
 import type { EnvironmentPath } from '@vscode/python-extension';
 import { DeepnoteProject } from '../platform/deepnote/deepnoteTypes';
+import { ConfigurableDatabaseIntegrationType } from '../platform/notebooks/deepnote/integrationTypes';
 
 export interface IEmbedNotebookEditorProvider {
     findNotebookEditor(resource: Resource): NotebookEditor | undefined;
@@ -31,7 +32,7 @@ export interface INotebookPythonEnvironmentService {
 export interface ProjectIntegration {
     id: string;
     name: string;
-    type: string;
+    type: ConfigurableDatabaseIntegrationType;
 }
 
 export const IDeepnoteNotebookManager = Symbol('IDeepnoteNotebookManager');

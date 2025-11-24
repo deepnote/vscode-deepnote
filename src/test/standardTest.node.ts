@@ -16,6 +16,9 @@ import {
 } from '../platform/common/constants';
 import { DownloadPlatform } from '@vscode/test-electron/out/download';
 import { arch } from 'os';
+import { getDirname } from '../platform/common/esmUtils.node';
+
+const __dirname = getDirname(import.meta.url);
 
 // Support for passing grep (specially for models or Copilot Coding Agent)
 // Local Copilot or Copilot Coding Agent can use `--grep=XYZ` or `--grep XYZ`
@@ -144,7 +147,7 @@ async function createSettings(): Promise<string> {
     const settingsFile = path.join(userDataDirectory, 'User', 'settings.json');
     const defaultSettings: Record<string, string | boolean | string[]> = {
         'python.insidersChannel': 'off',
-        'jupyter.logging.level': 'debug',
+        'deepnote.logging.level': 'debug',
         'python.logging.level': 'debug',
         'files.autoSave': 'off',
         'python.experiments.enabled': true,
@@ -154,9 +157,9 @@ async function createSettings(): Promise<string> {
         // For instance if the start page UI opens up, then active editor, active notebook and the like are empty.
         'python.showStartPage': false,
         // Disable the restart ask so that restart just happens
-        'jupyter.askForKernelRestart': false,
+        'deepnote.askForKernelRestart': false,
         // To get widgets working.
-        'jupyter.widgetScriptSources': ['jsdelivr.com', 'unpkg.com'],
+        'deepnote.widgetScriptSources': ['jsdelivr.com', 'unpkg.com'],
         'notebook.stickyScroll.enabled': true, // Required for perf tests
         'notebook.outline.showCodeCells': true // Required for perf tests
     };

@@ -14,7 +14,7 @@ import { IJupyterConnection } from '../../types';
 import { IJupyterRequestAgentCreator, IJupyterRequestCreator, JupyterServerInfo } from '../types';
 import { getJupyterConnectionDisplayName } from '../helpers';
 import { arePathsSame } from '../../../platform/common/platform/fileUtils';
-import { getFilePath } from '../../../platform/common/platform/fs-paths';
+import { getFilePath } from '../../../platform/common/platform/fs-paths.node';
 import { JupyterNotebookNotInstalled } from '../../../platform/errors/jupyterNotebookNotInstalled';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
 import { JupyterCannotBeLaunchedWithRootError } from '../../../platform/errors/jupyterCannotBeLaunchedWithRootError';

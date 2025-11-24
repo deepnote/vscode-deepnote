@@ -10,7 +10,6 @@ on:
 permissions:
   actions: read
   contents: read
-  packages: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -23,20 +22,16 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
 
       - name: Setup Node.js
         uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@deepnote'
 
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run ESLint
         run: npm run lint
@@ -50,20 +45,16 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
 
       - name: Setup Node.js
         uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@deepnote'
 
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run TypeScript type checking
         run: npm run typecheck
@@ -75,7 +66,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
         with:
           fetch-depth: 0
 
@@ -95,23 +86,18 @@ jobs:
     permissions:
       id-token: write
       contents: read
-      packages: read
     steps:
       - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
 
       - name: Setup Node.js
         uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@deepnote'
 
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Compile TypeScript
         run: npm run compile
@@ -148,20 +134,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
 
       - name: Setup Node.js
         uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@deepnote'
 
       - name: Install dependencies
         run: npm ci
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check Licenses
         run: npm run check-licenses
@@ -172,20 +154,16 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
 
       - name: Setup Node.js
         uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@deepnote'
 
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run spell check
         run: npm run spell-check
@@ -196,20 +174,16 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
 
       - name: Setup Node.js
         uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@deepnote'
 
       - name: Install dependencies
         run: npm install
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check package lock drift
         run: |
@@ -221,20 +195,16 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
 
       - name: Setup Node.js
         uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@deepnote'
 
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run audit for production dependencies
         run: npm audit --production
@@ -245,20 +215,16 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
 
       - name: Setup Node.js
         uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@deepnote'
 
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run audit for all dependencies
         run: npm audit

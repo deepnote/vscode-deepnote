@@ -14,7 +14,7 @@ import {
 import { IDisposableRegistry } from '../../platform/common/types';
 import { IIntegrationStorage } from './integrations/types';
 import { SqlCellStatusBarProvider } from './sqlCellStatusBarProvider';
-import { DATAFRAME_SQL_INTEGRATION_ID, IntegrationType } from '../../platform/notebooks/deepnote/integrationTypes';
+import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { createEventHandler } from '../../test/common';
 import { Commands } from '../../platform/common/constants';
@@ -134,12 +134,15 @@ suite('SqlCellStatusBarProvider', () => {
         when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve({
             id: integrationId,
             name: 'My Postgres DB',
-            type: IntegrationType.Postgres,
-            host: 'localhost',
-            port: 5432,
-            database: 'test',
-            username: 'user',
-            password: 'pass'
+            type: 'pgsql',
+            metadata: {
+                host: 'localhost',
+                port: '5432',
+                database: 'test',
+                user: 'user',
+                password: 'pass',
+                sslEnabled: false
+            }
         });
 
         const result = await provider.provideCellStatusBarItems(cell, cancellationToken);
@@ -282,12 +285,15 @@ suite('SqlCellStatusBarProvider', () => {
         when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve({
             id: integrationId,
             name: 'My Postgres DB',
-            type: IntegrationType.Postgres,
-            host: 'localhost',
-            port: 5432,
-            database: 'test',
-            username: 'user',
-            password: 'pass'
+            type: 'pgsql',
+            metadata: {
+                host: 'localhost',
+                port: '5432',
+                database: 'test',
+                user: 'user',
+                password: 'pass',
+                sslEnabled: false
+            }
         });
 
         const result = await provider.provideCellStatusBarItems(cell, cancellationToken);
@@ -990,7 +996,7 @@ suite('SqlCellStatusBarProvider', () => {
             assert.strictEqual(duckDbItem.label, 'DataFrame SQL (DuckDB)');
         });
 
-        test('shows BigQuery type label for BigQuery integrations', async () => {
+        test('shows BigQuery type label for Google BigQuery integrations', async () => {
             const notebookMetadata = { deepnoteProjectId: 'project-1' };
             const cell = createMockCell('sql', {}, notebookMetadata);
             let quickPickItems: any[] = [];
@@ -1000,7 +1006,7 @@ suite('SqlCellStatusBarProvider', () => {
                     integrations: [
                         {
                             id: 'bigquery-integration',
-                            name: 'My BigQuery',
+                            name: 'My Google BigQuery',
                             type: 'big-query'
                         }
                     ]
@@ -1015,8 +1021,8 @@ suite('SqlCellStatusBarProvider', () => {
             await switchIntegrationHandler(cell);
 
             const bigQueryItem = quickPickItems.find((item) => item.id === 'bigquery-integration');
-            assert.isDefined(bigQueryItem, 'BigQuery integration should be in quick pick items');
-            assert.strictEqual(bigQueryItem.description, 'BigQuery');
+            assert.isDefined(bigQueryItem, 'Google BigQuery integration should be in quick pick items');
+            assert.strictEqual(bigQueryItem.description, 'Google BigQuery');
         });
 
         test('shows raw type for unknown integration types', async () => {

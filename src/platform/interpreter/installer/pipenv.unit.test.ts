@@ -16,23 +16,22 @@ import { Uri } from 'vscode';
 
 suite('Pipenv helper', () => {
     suite('isPipenvEnvironmentRelatedToFolder()', async () => {
+        let sandbox: sinon.SinonSandbox;
         let readFile: sinon.SinonStub;
         let getEnvVar: sinon.SinonStub;
         let pathExists: sinon.SinonStub;
         let arePathsSame: sinon.SinonStub;
 
         setup(() => {
-            getEnvVar = sinon.stub(platformApis, 'getEnvironmentVariable');
-            readFile = sinon.stub(fileUtils, 'readFile');
-            pathExists = sinon.stub(fileUtils, 'pathExists');
-            arePathsSame = sinon.stub(fileUtilsCommon, 'arePathsSame');
+            sandbox = sinon.createSandbox();
+            getEnvVar = sandbox.stub(platformApis.platformUtils, 'getEnvironmentVariable');
+            readFile = sandbox.stub(fileUtils.fileUtilsNodeUtils, 'readFile');
+            pathExists = sandbox.stub(fileUtils.fileUtilsNodeUtils, 'pathExists');
+            arePathsSame = sandbox.stub(fileUtilsCommon.fileUtilsCommonUtils, 'arePathsSame');
         });
 
         teardown(() => {
-            readFile.restore();
-            getEnvVar.restore();
-            pathExists.restore();
-            arePathsSame.restore();
+            sandbox.restore();
         });
 
         test('Global pipenv environment is associated with a project whose Pipfile lies at 3 levels above the project', async () => {
@@ -147,16 +146,17 @@ suite('Pipenv helper', () => {
     });
 
     suite('_getAssociatedPipfile()', async () => {
+        let sandbox: sinon.SinonSandbox;
         let getEnvVar: sinon.SinonStub;
         let pathExists: sinon.SinonStub;
         setup(() => {
-            getEnvVar = sinon.stub(platformApis, 'getEnvironmentVariable');
-            pathExists = sinon.stub(fileUtils, 'pathExists');
+            sandbox = sinon.createSandbox();
+            getEnvVar = sandbox.stub(platformApis.platformUtils, 'getEnvironmentVariable');
+            pathExists = sandbox.stub(fileUtils.fileUtilsNodeUtils, 'pathExists');
         });
 
         teardown(() => {
-            getEnvVar.restore();
-            pathExists.restore();
+            sandbox.restore();
         });
 
         test('Correct Pipfile is returned for folder whose Pipfile lies in the folder directory', async () => {

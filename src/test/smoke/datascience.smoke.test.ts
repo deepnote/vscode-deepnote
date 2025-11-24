@@ -64,7 +64,7 @@ suite('Smoke Tests', function () {
     //     console.log('Step0');
     //     await sleep(1_000);
     //     console.log('Step1');
-    //     await vscode.commands.executeCommand<void>('jupyter.runallcells', textDocument.uri);
+    //     await vscode.commands.executeCommand<void>('deepnote.runallcells', textDocument.uri);
     //     console.log('Step2');
     //     const checkIfFileHasBeenCreated = () => fs.pathExists(outputFile);
     //     console.log('Step3');
@@ -121,7 +121,7 @@ suite('Smoke Tests', function () {
         return this.skip(); // See https://github.com/microsoft/vscode-jupyter/issues/5478
 
         // Make an interactive window
-        await vscode.commands.executeCommand<void>('jupyter.createnewinteractive');
+        await vscode.commands.executeCommand<void>('deepnote.createnewinteractive');
         assert.ok(vscode.workspace.notebookDocuments.length === 1, 'Unexpected number of notebook documents created');
         // const currentWindow = provider.windows[0];
         // const interpreterForCurrentWindow = currentWindow.notebook?.getMatchingInterpreter();
@@ -139,7 +139,7 @@ suite('Smoke Tests', function () {
         // await vscode.commands.executeCommand<void>('python.setInterpreter', differentInterpreter); // Requires change to Python extension
 
         // // Now make another interactive window and confirm it's using the newly selected interpreter
-        // await vscode.commands.executeCommand<void>('jupyter.createnewinteractive');
+        // await vscode.commands.executeCommand<void>('deepnote.createnewinteractive');
         // assert.ok(provider.windows.length === 2, 'Unexpected number of interactive windows created');
         // const newWindow = provider.windows.find((window) => window !== currentWindow);
         // const interpreterForNewWindow = newWindow?.notebook?.getMatchingInterpreter();

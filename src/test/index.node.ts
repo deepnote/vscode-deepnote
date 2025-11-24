@@ -6,8 +6,8 @@ import '../platform/ioc/reflectMetadata';
 
 // Always place at top, must be done before we import any of the files from src/client folder.
 // We need to ensure nyc gets a change to setup necessary hooks before files are loaded.
-const { setupCoverage } = require('./coverage.node');
-const nyc = setupCoverage();
+import { setupCoverage } from './coverage.node';
+const nycPromise = setupCoverage();
 
 import * as fs from 'fs-extra';
 import glob from 'glob';
@@ -28,6 +28,9 @@ import { stopJupyterServer } from './datascience/notebook/helper.node';
 import { initialize } from './initialize.node';
 import { rootHooks } from './testHooks.node';
 import { isCI } from '../platform/common/constants';
+import { getDirname } from '../platform/common/esmUtils.node';
+
+const __dirname = getDirname(import.meta.url);
 
 type SetupOptions = Mocha.MochaOptions & {
     testFilesSuffix: string;
@@ -59,7 +62,7 @@ process.on('unhandledRejection', (ex: Error, _a) => {
         (msg.includes('Canceled future for') && msg.includes('message before replies were done')) ||
         (msg.includes('The kernel died. Error') &&
             msg.includes('No module named ipykernel_launcher') &&
-            msg.includes('View Jupyter [log](command:jupyter.viewOutput)')) ||
+            msg.includes('View Jupyter [log](command:deepnote.viewOutput)')) ||
         msg.includes('Channel has been closed') ||
         msg.includes('Error: custom request failed') ||
         msg.includes('ms-python.python') || // We don't care about unhanded promise rejections from the Python extension.
@@ -78,7 +81,7 @@ process.on('unhandledRejection', (ex: Error, _a) => {
 /**
  * Configure the test environment and return the options required to run mocha tests.
  */
-function configure(): SetupOptions {
+async function configure(): Promise<SetupOptions> {
     process.env.VSC_JUPYTER_CI_TEST = '1';
     process.env.IS_MULTI_ROOT_TEST = IS_MULTI_ROOT_TEST().toString();
 
@@ -125,9 +128,10 @@ function configure(): SetupOptions {
 
     // Linux: prevent a weird NPE when mocha on Linux requires the window size from the TTY.
     // Since we are not running in a tty environment, we just implement the method statically.
-    const tty = require('tty');
-    if (!tty.getWindowSize) {
-        tty.getWindowSize = () => [80, 75];
+    // Use dynamic import for tty to avoid TypeScript type issues
+    const tty = await import('tty');
+    if (!(tty as any).getWindowSize) {
+        (tty as any).getWindowSize = () => [80, 75];
     }
 
     return options;
@@ -165,11 +169,14 @@ function activateExtensionScript() {
 export async function run(): Promise<void> {
     // Enable gc during tests
     v8.setFlagsFromString('--expose_gc');
-    const options = configure();
+    const options = await configure();
     const mocha = new Mocha(options);
     const testsRoot = path.join(__dirname, '..');
     // Enable source map support.
-    require('source-map-support').install();
+    // Use dynamic import for source-map-support as it doesn't have type definitions
+    // @ts-expect-error - source-map-support doesn't have type definitions
+    const sourceMapSupport = await import('source-map-support');
+    sourceMapSupport.default.install();
 
     const ignoreGlob: string[] = [];
     switch (options.testFilesSuffix.toLowerCase()) {
@@ -216,6 +223,7 @@ export async function run(): Promise<void> {
         });
     } finally {
         stopJupyterServer().catch(noop);
+        const nyc = await nycPromise;
         if (nyc) {
             nyc.writeCoverageFile();
             await nyc.report(); // This is async.

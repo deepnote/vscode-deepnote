@@ -50,7 +50,9 @@ import {
     IIntegrationWebviewProvider
 } from './deepnote/integrations/types';
 import { DeepnoteInputBlockCellStatusBarItemProvider } from './deepnote/deepnoteInputBlockCellStatusBarProvider';
+import { DeepnoteBigNumberCellStatusBarProvider } from './deepnote/deepnoteBigNumberCellStatusBarProvider';
 import { SqlCellStatusBarProvider } from './deepnote/sqlCellStatusBarProvider';
+import { IntegrationKernelRestartHandler } from './deepnote/integrations/integrationKernelRestartHandler';
 
 export function registerTypes(serviceManager: IServiceManager, isDevMode: boolean) {
     registerControllerTypes(serviceManager, isDevMode);
@@ -119,7 +121,15 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     );
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
+        DeepnoteBigNumberCellStatusBarProvider
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
         SqlCellStatusBarProvider
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        IntegrationKernelRestartHandler
     );
 
     serviceManager.addSingleton<IExportBase>(IExportBase, ExportBase);

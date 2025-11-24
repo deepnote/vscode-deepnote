@@ -19,7 +19,7 @@ body:
     attributes:
       label: Applies To
       options:
-        - label: Notebooks (.ipynb files)
+        - label: Notebooks (.deepnote files)
         - label: Interactive Window and\/or Cell Scripts (.py files with \#%% markers)
   - type: textarea
     id: what-happened
@@ -36,17 +36,17 @@ body:
     validations:
       required: true
   - type: input
-    id: jupyter-version
+    id: deepnote-version
     attributes:
-      label: Jupyter Extension Version
+      label: Deepnote Extension Version
       description: The version can be found at the top of the extension's description in the extensions sidebar.
     validations:
       required: true
   - type: textarea
     id: logs
     attributes:
-      label: Jupyter logs
-      description: Copy and paste all of the text in the Jupyter Output panel available via the ```Jupyter Show Output``` command. This is often critical to help us understand and fix what may have gone wrong!
+      label: Deepnote logs
+      description: Copy and paste all of the text in the Deepnote Output panel available via the ```Deepnote Show Output``` command. This is often critical to help us understand and fix what may have gone wrong!
       render: shell
   - type: markdown
     attributes:
@@ -57,22 +57,3 @@ body:
     attributes:
       label: Coding Language and Runtime Version
       placeholder: Python v3.8.2, vJulia 1.6, R, etc.
-  - type: input
-    id: lang-extension-version
-    attributes:
-      label: Language Extension Version (if applicable)
-      description: Ex. Python Extension. The extension version can be found at the top of the extension's description in the extensions sidebar.
-  - type: input
-    id: anaconda-version
-    attributes:
-      label: Anaconda Version (if applicable)
-      description: If applicable, what version of the Anaconda are you using?
-  - type: dropdown
-    id: local-remote
-    attributes:
-      label: Running Jupyter locally or remotely?
-      multiple:
-      options:
-        - Local
-        - Remote
-        - N/A or Not sure

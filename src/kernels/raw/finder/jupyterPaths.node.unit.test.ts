@@ -18,6 +18,7 @@ import { ICustomEnvironmentVariablesProvider } from '../../../platform/common/va
 import { IPythonExecutionService, IPythonExecutionFactory } from '../../../platform/interpreter/types.node';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
 import * as path from '../../../platform/vscode-path/path';
+import { getFilename } from '../../../platform/common/esmUtils.node';
 import { EXTENSION_ROOT_DIR_FOR_TESTS } from '../../../test/constants.node';
 import { resolvableInstance, uriEquals } from '../../../test/datascience/helpers';
 import { IInterpreterService } from '../../../platform/interpreter/contracts';
@@ -337,7 +338,7 @@ suite('Jupyter Paths', () => {
         when(platformService.osType).thenReturn(OSType.Windows);
         when(platformService.homeDir).thenReturn(windowsHomeDir);
         when(memento.get(CACHE_KEY_FOR_JUPYTER_KERNEL_PATHS, anything())).thenReturn([]);
-        const jupyter_Paths = [__filename];
+        const jupyter_Paths = [getFilename(import.meta.url)];
         process.env['JUPYTER_PATH'] = jupyter_Paths.join(path.delimiter);
 
         const paths = await jupyterPaths.getKernelSpecRootPaths(cancelToken.token);
@@ -347,7 +348,10 @@ suite('Jupyter Paths', () => {
         assert.strictEqual(paths.length, 3, `Expected 3 paths, got ${paths.length}, ${JSON.stringify(paths)}`);
 
         // First path should be from JUPYTER_PATH
-        assert.strictEqual(paths[0].toString(), Uri.joinPath(Uri.file(__filename), 'kernels').toString());
+        assert.strictEqual(
+            paths[0].toString(),
+            Uri.joinPath(Uri.file(getFilename(import.meta.url)), 'kernels').toString()
+        );
 
         // Second path should be from data directory (.jupyter/data/kernels)
         assert.strictEqual(paths[1].toString(), Uri.joinPath(windowsHomeDir, '.jupyter', 'data', 'kernels').toString());
@@ -359,7 +363,7 @@ suite('Jupyter Paths', () => {
         when(platformService.osType).thenReturn(OSType.Windows);
         when(platformService.homeDir).thenReturn(windowsHomeDir);
         when(memento.get(CACHE_KEY_FOR_JUPYTER_KERNEL_PATHS, anything())).thenReturn([]);
-        const jupyter_Paths = [__filename];
+        const jupyter_Paths = [getFilename(import.meta.url)];
         process.env['JUPYTER_PATH'] = jupyter_Paths.join(path.delimiter);
         const allUserProfilePath = (process.env['PROGRAMDATA'] = path.join(EXTENSION_ROOT_DIR_FOR_TESTS, 'temp'));
 
@@ -370,7 +374,10 @@ suite('Jupyter Paths', () => {
         assert.strictEqual(paths.length, 4, `Expected 4 paths, got ${paths.length}, ${JSON.stringify(paths)}`);
 
         // First path should be from JUPYTER_PATH
-        assert.strictEqual(paths[0].toString(), Uri.joinPath(Uri.file(__filename), 'kernels').toString());
+        assert.strictEqual(
+            paths[0].toString(),
+            Uri.joinPath(Uri.file(getFilename(import.meta.url)), 'kernels').toString()
+        );
 
         // Second path should be from data directory (.jupyter/data/kernels)
         assert.strictEqual(paths[1].toString(), Uri.joinPath(windowsHomeDir, '.jupyter', 'data', 'kernels').toString());

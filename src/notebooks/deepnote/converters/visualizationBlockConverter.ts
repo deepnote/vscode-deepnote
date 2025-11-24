@@ -84,7 +84,7 @@ export class VisualizationBlockConverter implements BlockConverter {
         };
 
         const jsonContent = JSON.stringify(config, null, 2);
-        const cell = new NotebookCellData(NotebookCellKind.Code, jsonContent, 'JSON');
+        const cell = new NotebookCellData(NotebookCellKind.Code, jsonContent, 'json');
 
         return cell;
     }

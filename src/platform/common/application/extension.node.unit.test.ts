@@ -11,10 +11,10 @@ import { EOL } from 'os';
 
 const stack1 = [
     'Error: ',
-    '    at Extensions.determineExtensionFromCallStack (/Users/username/Development/vsc/vscode-jupyter/src/platform/common/application/extensions.node.ts:18:26)',
-    '    at JupyterKernelServiceFactory.getService (/Users/username/Development/vsc/vscode-jupyter/src/standalone/api/unstable/kernelApi.ts:43:38)',
-    '    at getKernelService (/Users/username/Development/vsc/vscode-jupyter/src/standalone/api/unstable/index.ts:92:33)',
-    '    at Object.getKernelService (/Users/username/Development/vsc/vscode-jupyter/src/standalone/api/index.ts:43:33)',
+    '    at Extensions.determineExtensionFromCallStack (/Users/username/Development/vsc/vscode-deepnote/src/platform/common/application/extensions.node.ts:18:26)',
+    '    at JupyterKernelServiceFactory.getService (/Users/username/Development/vsc/vscode-deepnote/src/standalone/api/unstable/kernelApi.ts:43:38)',
+    '    at getKernelService (/Users/username/Development/vsc/vscode-deepnote/src/standalone/api/unstable/index.ts:92:33)',
+    '    at Object.getKernelService (/Users/username/Development/vsc/vscode-deepnote/src/standalone/api/index.ts:43:33)',
     '    at activateFeature (/Users/username/.vscode-insiders/extensions/ms-toolsai.vscode-jupyter-powertoys-0.1.0/out/main.js:13466:56)',
     '    at activate (/Users/username/.vscode-insiders/extensions/ms-toolsai.vscode-jupyter-powertoys-0.1.0/out/main.js:13479:9)',
     '    at activate (/Users/username/.vscode-insiders/extensions/ms-toolsai.vscode-jupyter-powertoys-0.1.0/out/main.js:14160:5)',
@@ -24,9 +24,9 @@ const stack1 = [
 ];
 const stack2 = [
     'Error:',
-    '    at kg.determineExtensionFromCallStack (/storage/username/.vscode-insiders/extensions/ms-toolsai.jupyter-2024.3.0/dist/extension.node.js:203:3695)',
-    '    at F9 (/storage/username/.vscode-insiders/extensions/ms-toolsai.jupyter-2024.3.0/dist/extension.node.js:198:24742)',
-    '    at Object.getKernelService (/storage/username/.vscode-insiders/extensions/ms-toolsai.jupyter-2024.3.0/dist/extension.node.js:198:26312)',
+    '    at kg.determineExtensionFromCallStack (/storage/username/.vscode-insiders/extensions/Deepnote.vscode-deepnote-2024.3.0/dist/extension.node.js:203:3695)',
+    '    at F9 (/storage/username/.vscode-insiders/extensions/Deepnote.vscode-deepnote-2024.3.0/dist/extension.node.js:198:24742)',
+    '    at Object.getKernelService (/storage/username/.vscode-insiders/extensions/Deepnote.vscode-deepnote-2024.3.0/dist/extension.node.js:198:26312)',
     '    at activateFeature (/storage/username/.vscode-insiders/extensions/ms-toolsai.vscode-jupyter-powertoys-0.1.0/out/main.js:335:56)',
     '    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)',
     '    at async activate (/storage/username/.vscode-insiders/extensions/ms-toolsai.vscode-jupyter-powertoys-0.1.0/out/main.js:343:9)',
@@ -57,9 +57,9 @@ const extensions1 = [
         extensionUri: Uri.file('/Users/username/.vscode-insiders/extensions/ms-toolsai.vscode-jupyter-powertoys-0.1.0')
     },
     {
-        id: 'ms-toolsai.jupyter',
-        packageJSON: { displayName: 'ms-toolsai.jupyter' },
-        extensionUri: Uri.file('/Users/username/Development/vsc/vscode-jupyter')
+        id: 'Deepnote.vscode-deepnote',
+        packageJSON: { displayName: 'Deepnote.vscode-deepnote' },
+        extensionUri: Uri.file('/Users/username/Development/vsc/vscode-deepnote')
     }
 ];
 const extensions2 = [
@@ -71,24 +71,24 @@ const extensions2 = [
     {
         id: 'donjayamanne.kusto',
         packageJSON: { displayName: 'donjayamanne.kusto', version: '0.4.4' },
-        extensionUri: Uri.file('/Users/username/.vscode-insiders/extensions/donjayamanne.kusto-0.4.4')
+        extensionUri: Uri.file('/storage/username/.vscode-insiders/extensions/donjayamanne.kusto-0.4.4')
     },
     {
         id: 'ms-python.python',
         packageJSON: { displayName: 'ms-python.python', version: '2024.3.10640539' },
-        extensionUri: Uri.file('/storage/username/.vscode-server-insiders/extensions/ms-python.python-2024.3.10640539')
+        extensionUri: Uri.file('/storage/username/.vscode-insiders/extensions/ms-python.python-2024.3.10640539')
     },
     {
         id: 'ms-toolsai.vscode-jupyter-powertoys',
         packageJSON: { displayName: 'ms-toolsai.vscode-jupyter-powertoys', version: '0.1.0' },
         extensionUri: Uri.file(
-            '/storage/username/.vscode-server-insiders/extensions/ms-toolsai.vscode-jupyter-powertoys-0.1.0'
+            '/storage/username/.vscode-insiders/extensions/ms-toolsai.vscode-jupyter-powertoys-0.1.0'
         )
     },
     {
-        id: 'ms-toolsai.jupyter',
-        packageJSON: { displayName: 'ms-toolsai.jupyter', version: '2024.3.0' },
-        extensionUri: Uri.file('/storage/username/.vscode-server-insiders/extensions/ms-toolsai.jupyter-2024.3.0')
+        id: 'Deepnote.vscode-deepnote',
+        packageJSON: { displayName: 'Deepnote.vscode-deepnote', version: '2024.3.0' },
+        extensionUri: Uri.file('/storage/username/.vscode-insiders/extensions/Deepnote.vscode-deepnote-2024.3.0')
     }
 ];
 
@@ -108,7 +108,7 @@ suite(`Interpreter Service`, () => {
         assert.strictEqual(extensionId, 'ms-toolsai.vscode-jupyter-powertoys');
         assert.strictEqual(displayName, 'ms-toolsai.vscode-jupyter-powertoys');
     });
-    test('Identify from callstack on remote server', () => {
+    test('Identify from callstack with minified code', () => {
         when(mockedVSCodeNamespaces.extensions.all).thenReturn(extensions2 as any);
         when(mockedVSCodeNamespaces.extensions.getExtension(anything())).thenCall(function (id: string) {
             return extensions2.find((e) => e.id === id);

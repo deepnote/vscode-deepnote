@@ -53,6 +53,10 @@ import {
     IIntegrationStorage,
     IIntegrationWebviewProvider
 } from './deepnote/integrations/types';
+import {
+    IPlatformNotebookEditorProvider,
+    IPlatformDeepnoteNotebookManager
+} from '../platform/notebooks/deepnote/types';
 import { SqlCellStatusBarProvider } from './deepnote/sqlCellStatusBarProvider';
 import {
     IDeepnoteToolkitInstaller,
@@ -60,7 +64,6 @@ import {
     IDeepnoteKernelAutoSelector,
     IDeepnoteServerProvider,
     IDeepnoteEnvironmentManager,
-    IDeepnoteEnvironmentPicker,
     IDeepnoteNotebookEnvironmentMapper
 } from '../kernels/deepnote/types';
 import { DeepnoteToolkitInstaller } from '../kernels/deepnote/deepnoteToolkitInstaller.node';
@@ -73,14 +76,15 @@ import { DeepnoteEnvironmentManager } from '../kernels/deepnote/environments/dee
 import { DeepnoteEnvironmentStorage } from '../kernels/deepnote/environments/deepnoteEnvironmentStorage.node';
 import { DeepnoteEnvironmentsView } from '../kernels/deepnote/environments/deepnoteEnvironmentsView.node';
 import { DeepnoteEnvironmentsActivationService } from '../kernels/deepnote/environments/deepnoteEnvironmentsActivationService';
-import { DeepnoteEnvironmentPicker } from '../kernels/deepnote/environments/deepnoteEnvironmentPicker';
 import { DeepnoteNotebookEnvironmentMapper } from '../kernels/deepnote/environments/deepnoteNotebookEnvironmentMapper.node';
 import { DeepnoteNotebookCommandListener } from './deepnote/deepnoteNotebookCommandListener';
 import { DeepnoteInputBlockCellStatusBarItemProvider } from './deepnote/deepnoteInputBlockCellStatusBarProvider';
+import { DeepnoteBigNumberCellStatusBarProvider } from './deepnote/deepnoteBigNumberCellStatusBarProvider';
 import { SqlIntegrationStartupCodeProvider } from './deepnote/integrations/sqlIntegrationStartupCodeProvider';
 import { DeepnoteCellCopyHandler } from './deepnote/deepnoteCellCopyHandler';
 import { DeepnoteEnvironmentTreeDataProvider } from '../kernels/deepnote/environments/deepnoteEnvironmentTreeDataProvider.node';
 import { OpenInDeepnoteHandler } from './deepnote/openInDeepnoteHandler.node';
+import { IntegrationKernelRestartHandler } from './deepnote/integrations/integrationKernelRestartHandler';
 
 export function registerTypes(serviceManager: IServiceManager, isDevMode: boolean) {
     registerControllerTypes(serviceManager, isDevMode);
@@ -88,6 +92,8 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<INotebookCommandHandler>(INotebookCommandHandler, NotebookCommandListener);
     serviceManager.addBinding(INotebookCommandHandler, IExtensionSyncActivationService);
     serviceManager.addSingleton<INotebookEditorProvider>(INotebookEditorProvider, NotebookEditorProvider);
+    // Bind the platform-layer interface to the same implementation
+    serviceManager.addBinding(INotebookEditorProvider, IPlatformNotebookEditorProvider);
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
         RemoteKernelControllerWatcher
@@ -158,6 +164,8 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
         DeepnoteNotebookCommandListener
     );
     serviceManager.addSingleton<IDeepnoteNotebookManager>(IDeepnoteNotebookManager, DeepnoteNotebookManager);
+    // Bind the platform-layer interface to the same implementation
+    serviceManager.addBinding(IDeepnoteNotebookManager, IPlatformDeepnoteNotebookManager);
     serviceManager.addSingleton<IIntegrationStorage>(IIntegrationStorage, IntegrationStorage);
     serviceManager.addSingleton<IIntegrationDetector>(IIntegrationDetector, IntegrationDetector);
     serviceManager.addSingleton<IIntegrationWebviewProvider>(IIntegrationWebviewProvider, IntegrationWebviewProvider);
@@ -178,6 +186,10 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
         IExtensionSyncActivationService,
         OpenInDeepnoteHandler
     );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        IntegrationKernelRestartHandler
+    );
 
     // Deepnote kernel services
     serviceManager.addSingleton<IDeepnoteToolkitInstaller>(IDeepnoteToolkitInstaller, DeepnoteToolkitInstaller);
@@ -192,6 +204,10 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
         DeepnoteInputBlockCellStatusBarItemProvider
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        DeepnoteBigNumberCellStatusBarProvider
     );
 
     // Deepnote configuration services
@@ -210,7 +226,6 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     );
 
     // Deepnote configuration selection
-    serviceManager.addSingleton<IDeepnoteEnvironmentPicker>(IDeepnoteEnvironmentPicker, DeepnoteEnvironmentPicker);
     serviceManager.addSingleton<IDeepnoteNotebookEnvironmentMapper>(
         IDeepnoteNotebookEnvironmentMapper,
         DeepnoteNotebookEnvironmentMapper

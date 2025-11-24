@@ -7,12 +7,24 @@ import * as uriPath from '../../vscode-path/resources';
 import { getOSType, OSType } from '../utils/platform';
 import { isWeb } from '../utils/misc';
 
+let cachedHomeDir: Uri | undefined | null = null;
+
 function getHomeDir() {
+    if (cachedHomeDir !== null) {
+        return cachedHomeDir;
+    }
+
     if (isWeb()) {
+        cachedHomeDir = undefined;
+
         return undefined;
     }
-    // eslint-disable-next-line local-rules/node-imports
-    return Uri.file(require('os').homedir()); // This is the only thing requiring a node version
+
+    // In web contexts, return undefined
+    // Node.js-specific logic is in fs-paths.node.ts
+    cachedHomeDir = undefined;
+
+    return undefined;
 }
 export function getFilePath(file: Uri | undefined) {
     const isWindows = getOSType() === OSType.Windows;

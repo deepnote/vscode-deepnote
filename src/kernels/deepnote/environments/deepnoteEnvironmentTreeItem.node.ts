@@ -1,7 +1,6 @@
-import { l10n, ThemeColor, ThemeIcon, TreeItem, TreeItemCollapsibleState } from 'vscode';
+import { l10n, ThemeIcon, TreeItem, TreeItemCollapsibleState } from 'vscode';
 
-import { DeepnoteEnvironment, EnvironmentStatus } from './deepnoteEnvironment';
-import { getDeepnoteEnvironmentStatusVisual } from './deepnoteEnvironmentUi';
+import { DeepnoteEnvironment } from './deepnoteEnvironment';
 
 /**
  * Type of tree item in the environments view
@@ -12,15 +11,7 @@ export enum EnvironmentTreeItemType {
     CreateAction = 'create'
 }
 
-export type DeepnoteEnvironmentTreeInfoItemId =
-    | 'ports'
-    | 'url'
-    | 'python'
-    | 'venv'
-    | 'packages'
-    | 'toolkit'
-    | 'created'
-    | 'lastUsed';
+export type DeepnoteEnvironmentTreeInfoItemId = 'python' | 'venv' | 'packages' | 'toolkit' | 'created' | 'lastUsed';
 
 /**
  * Tree item for displaying environments and related info
@@ -29,18 +20,76 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
     constructor(
         public readonly type: EnvironmentTreeItemType,
         public readonly environment?: DeepnoteEnvironment,
-        public readonly status?: EnvironmentStatus,
         label?: string,
         collapsibleState?: TreeItemCollapsibleState
     ) {
         super(label || '', collapsibleState);
 
+        // Setup inline to avoid method binding issues with ES modules and TreeItem proxy
         if (type === EnvironmentTreeItemType.Environment && environment) {
-            this.setupEnvironmentItem();
+            // setupEnvironmentItem inline
+            this.id = environment.id;
+            this.label = environment.name;
+            this.collapsibleState = TreeItemCollapsibleState.Collapsed;
+
+            // getRelativeTime inline
+            const now = new Date();
+            const diff = now.getTime() - environment.lastUsedAt.getTime();
+            const seconds = Math.floor(diff / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const hours = Math.floor(minutes / 60);
+            const days = Math.floor(hours / 24);
+
+            let lastUsed: string;
+            if (seconds < 60) {
+                lastUsed = l10n.t('just now');
+            } else if (minutes < 60) {
+                lastUsed = minutes === 1 ? l10n.t('1 minute ago') : l10n.t('{0} minutes ago', minutes);
+            } else if (hours < 24) {
+                lastUsed = hours === 1 ? l10n.t('1 hour ago') : l10n.t('{0} hours ago', hours);
+            } else if (days < 7) {
+                lastUsed = days === 1 ? l10n.t('1 day ago') : l10n.t('{0} days ago', days);
+            } else {
+                lastUsed = environment.lastUsedAt.toLocaleDateString();
+            }
+
+            this.description = l10n.t('Last used: {0}', lastUsed);
+
+            // buildTooltip inline
+            const lines: string[] = [];
+            lines.push(`**${environment.name}**`);
+            lines.push('');
+            lines.push(l10n.t('Python: {0}', environment.pythonInterpreter.uri.toString(true)));
+            lines.push(l10n.t('Venv: {0}', environment.venvPath.toString(true)));
+
+            if (environment.packages && environment.packages.length > 0) {
+                lines.push(l10n.t('Packages: {0}', environment.packages.join(', ')));
+            }
+
+            if (environment.toolkitVersion) {
+                lines.push(l10n.t('Toolkit: {0}', environment.toolkitVersion));
+            }
+
+            lines.push('');
+            lines.push(l10n.t('Created: {0}', environment.createdAt.toLocaleString()));
+            lines.push(l10n.t('Last used: {0}', environment.lastUsedAt.toLocaleString()));
+
+            this.tooltip = lines.join('\n');
         } else if (type === EnvironmentTreeItemType.InfoItem) {
-            this.setupInfoItem();
+            // setupInfoItem inline
+            this.contextValue = 'deepnoteEnvironment.info';
+            this.collapsibleState = TreeItemCollapsibleState.None;
         } else if (type === EnvironmentTreeItemType.CreateAction) {
-            this.setupCreateAction();
+            // setupCreateAction inline
+            this.id = 'create';
+            this.label = l10n.t('Create New Environment');
+            this.iconPath = new ThemeIcon('add');
+            this.contextValue = 'deepnoteEnvironment.create';
+            this.collapsibleState = TreeItemCollapsibleState.None;
+            this.command = {
+                command: 'deepnote.environments.create',
+                title: l10n.t('Create Environment')
+            };
         }
     }
 
@@ -53,7 +102,7 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
         label: string,
         icon?: string
     ): DeepnoteEnvironmentTreeItem {
-        const item = new DeepnoteEnvironmentTreeItem(EnvironmentTreeItemType.InfoItem, undefined, undefined, label);
+        const item = new DeepnoteEnvironmentTreeItem(EnvironmentTreeItemType.InfoItem, undefined, label);
         item.id = `info-${environmentId}-${id}`;
 
         if (icon) {
@@ -61,96 +110,5 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
         }
 
         return item;
-    }
-
-    private setupEnvironmentItem(): void {
-        if (!this.environment) {
-            return;
-        }
-
-        const statusVisual = getDeepnoteEnvironmentStatusVisual(this.status ?? EnvironmentStatus.Stopped);
-
-        this.id = this.environment.id;
-        this.label = `${this.environment.name} [${statusVisual.text}]`;
-        this.iconPath = new ThemeIcon(statusVisual.icon, new ThemeColor(statusVisual.themeColorId));
-        this.contextValue = statusVisual.contextValue;
-
-        // Make it collapsible to show info items
-        this.collapsibleState = TreeItemCollapsibleState.Collapsed;
-
-        // Set description with last used time
-        const lastUsed = this.getRelativeTime(this.environment.lastUsedAt);
-        this.description = l10n.t('Last used: {0}', lastUsed);
-
-        // Set tooltip with detailed info
-        this.tooltip = this.buildTooltip();
-    }
-
-    private setupInfoItem(): void {
-        // Info items are not clickable and don't have context menus
-        this.contextValue = 'deepnoteEnvironment.info';
-        this.collapsibleState = TreeItemCollapsibleState.None;
-    }
-
-    private setupCreateAction(): void {
-        this.id = 'create';
-        this.label = l10n.t('Create New Environment');
-        this.iconPath = new ThemeIcon('add');
-        this.contextValue = 'deepnoteEnvironment.create';
-        this.collapsibleState = TreeItemCollapsibleState.None;
-        this.command = {
-            command: 'deepnote.environments.create',
-            title: l10n.t('Create Environment')
-        };
-    }
-
-    private buildTooltip(): string {
-        if (!this.environment) {
-            return '';
-        }
-
-        const { text } = getDeepnoteEnvironmentStatusVisual(this.status ?? EnvironmentStatus.Stopped);
-
-        const lines: string[] = [];
-        lines.push(`**${this.environment.name}**`);
-        lines.push('');
-        lines.push(l10n.t('Status: {0}', text));
-        lines.push(l10n.t('Python: {0}', this.environment.pythonInterpreter.uri.toString(true)));
-        lines.push(l10n.t('Venv: {0}', this.environment.venvPath.toString(true)));
-
-        if (this.environment.packages && this.environment.packages.length > 0) {
-            lines.push(l10n.t('Packages: {0}', this.environment.packages.join(', ')));
-        }
-
-        if (this.environment.toolkitVersion) {
-            lines.push(l10n.t('Toolkit: {0}', this.environment.toolkitVersion));
-        }
-
-        lines.push('');
-        lines.push(l10n.t('Created: {0}', this.environment.createdAt.toLocaleString()));
-        lines.push(l10n.t('Last used: {0}', this.environment.lastUsedAt.toLocaleString()));
-
-        return lines.join('\n');
-    }
-
-    private getRelativeTime(date: Date): string {
-        const now = new Date();
-        const diff = now.getTime() - date.getTime();
-        const seconds = Math.floor(diff / 1000);
-        const minutes = Math.floor(seconds / 60);
-        const hours = Math.floor(minutes / 60);
-        const days = Math.floor(hours / 24);
-
-        if (seconds < 60) {
-            return l10n.t('just now');
-        } else if (minutes < 60) {
-            return minutes === 1 ? l10n.t('1 minute ago') : l10n.t('{0} minutes ago', minutes);
-        } else if (hours < 24) {
-            return hours === 1 ? l10n.t('1 hour ago') : l10n.t('{0} hours ago', hours);
-        } else if (days < 7) {
-            return days === 1 ? l10n.t('1 day ago') : l10n.t('{0} days ago', days);
-        } else {
-            return date.toLocaleDateString();
-        }
     }
 }

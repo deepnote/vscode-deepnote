@@ -563,7 +563,7 @@ export function analyzeKernelErrors(
             .find((line) => line.toLowerCase().includes('error: '));
         // https://github.com/microsoft/vscode-jupyter/issues/8295
         const errorMessageDueToOutdatedTraitlets = "AttributeError: 'Namespace' object has no attribute '_flags'";
-        const telemetrySafeTags = ['jupyter.startup.failure'];
+        const telemetrySafeTags = ['deepnote.startup.failure'];
         let link: string | undefined;
         let reason = KernelFailureReason.jupyterStartFailure;
         // Some times the error message is either in the message or the stderr.

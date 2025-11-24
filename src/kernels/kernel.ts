@@ -485,6 +485,7 @@ abstract class BaseKernel implements IBaseKernel {
         }
     }
     protected async startJupyterSession(options: IDisplayOptions = new DisplayOptions(false)): Promise<IKernelSession> {
+        logger.info(`Starting Jupyter Session for ${getDisplayPath(this.uri)}, ${this.uri}`);
         this._startedAtLeastOnce = true;
         if (!options.disableUI) {
             this.startupUI.disableUI = false;

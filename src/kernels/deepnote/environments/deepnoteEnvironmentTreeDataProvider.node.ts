@@ -1,7 +1,6 @@
 import { Disposable, Event, EventEmitter, TreeDataProvider, TreeItem } from 'vscode';
 import { IDeepnoteEnvironmentManager } from '../types';
 import { EnvironmentTreeItemType, DeepnoteEnvironmentTreeItem } from './deepnoteEnvironmentTreeItem.node';
-import { EnvironmentStatus } from './deepnoteEnvironment';
 import { inject, injectable } from 'inversify';
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
 
@@ -60,15 +59,7 @@ export class DeepnoteEnvironmentTreeDataProvider
 
         // Add environment items
         for (const config of environments) {
-            const statusInfo = this.environmentManager.getEnvironmentWithStatus(config.id);
-            const status = statusInfo?.status || EnvironmentStatus.Stopped;
-
-            const item = new DeepnoteEnvironmentTreeItem(
-                EnvironmentTreeItemType.Environment,
-                // deepnoteEnvironmentToView(config),
-                config,
-                status
-            );
+            const item = new DeepnoteEnvironmentTreeItem(EnvironmentTreeItemType.Environment, config);
 
             items.push(item);
         }
@@ -86,22 +77,6 @@ export class DeepnoteEnvironmentTreeDataProvider
         }
 
         const items: DeepnoteEnvironmentTreeItem[] = [];
-        const statusInfo = this.environmentManager.getEnvironmentWithStatus(config.id);
-
-        // Server status and ports
-        if (statusInfo?.status === EnvironmentStatus.Running && config.serverInfo) {
-            items.push(
-                DeepnoteEnvironmentTreeItem.createInfoItem(
-                    'ports',
-                    config.id,
-                    `Ports: jupyter=${config.serverInfo.jupyterPort}, lsp=${config.serverInfo.lspPort}`,
-                    'port'
-                )
-            );
-            items.push(
-                DeepnoteEnvironmentTreeItem.createInfoItem('url', config.id, `URL: ${config.serverInfo.url}`, 'globe')
-            );
-        }
 
         // Python interpreter
         items.push(

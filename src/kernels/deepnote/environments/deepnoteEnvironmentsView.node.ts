@@ -1,5 +1,15 @@
 import { inject, injectable } from 'inversify';
-import { commands, Disposable, l10n, ProgressLocation, QuickPickItem, TreeView, window, workspace } from 'vscode';
+import {
+    commands,
+    Disposable,
+    l10n,
+    NotebookDocument,
+    ProgressLocation,
+    QuickPickItem,
+    TreeView,
+    window,
+    workspace
+} from 'vscode';
 import { IDisposableRegistry } from '../../../platform/common/types';
 import { logger } from '../../../platform/logging';
 import { IPythonApiProvider } from '../../../platform/api/types';
@@ -11,15 +21,15 @@ import {
 } from '../types';
 import { DeepnoteEnvironmentTreeDataProvider } from './deepnoteEnvironmentTreeDataProvider.node';
 import { DeepnoteEnvironmentTreeItem } from './deepnoteEnvironmentTreeItem.node';
-import { CreateDeepnoteEnvironmentOptions, DeepnoteEnvironment, EnvironmentStatus } from './deepnoteEnvironment';
+import { CreateDeepnoteEnvironmentOptions, DeepnoteEnvironment } from './deepnoteEnvironment';
 import {
     getCachedEnvironment,
     resolvedPythonEnvToJupyterEnv,
     getPythonEnvironmentName
 } from '../../../platform/interpreter/helpers';
-import { getDisplayPath } from '../../../platform/common/platform/fs-paths';
+import { getDisplayPath } from '../../../platform/common/platform/fs-paths.node';
 import { IKernelProvider } from '../../types';
-import { getDeepnoteEnvironmentStatusVisual } from './deepnoteEnvironmentUi';
+import { createDeepnoteServerConfigHandle } from '../../../platform/deepnote/deepnoteServerUtils.node';
 
 /**
  * View controller for the Deepnote kernel environments tree view.
@@ -211,33 +221,6 @@ export class DeepnoteEnvironmentsView implements Disposable {
             })
         );
 
-        // Start server command
-        this.disposables.push(
-            commands.registerCommand('deepnote.environments.start', async (item: DeepnoteEnvironmentTreeItem) => {
-                if (item?.environment) {
-                    await this.startServer(item.environment.id);
-                }
-            })
-        );
-
-        // Stop server command
-        this.disposables.push(
-            commands.registerCommand('deepnote.environments.stop', async (item: DeepnoteEnvironmentTreeItem) => {
-                if (item?.environment) {
-                    await this.stopServer(item.environment.id);
-                }
-            })
-        );
-
-        // Restart server command
-        this.disposables.push(
-            commands.registerCommand('deepnote.environments.restart', async (item: DeepnoteEnvironmentTreeItem) => {
-                if (item?.environment) {
-                    await this.restartServer(item.environment.id);
-                }
-            })
-        );
-
         // Delete environment command
         this.disposables.push(
             commands.registerCommand('deepnote.environments.delete', async (item: DeepnoteEnvironmentTreeItem) => {
@@ -270,9 +253,19 @@ export class DeepnoteEnvironmentsView implements Disposable {
 
         // Switch environment for notebook command
         this.disposables.push(
-            commands.registerCommand('deepnote.environments.selectForNotebook', async () => {
-                await this.selectEnvironmentForNotebook();
-            })
+            commands.registerCommand(
+                'deepnote.environments.selectForNotebook',
+                async (options?: { notebook?: NotebookDocument }) => {
+                    // Get the active notebook
+                    const activeNotebook = options?.notebook ?? window.activeNotebookEditor?.notebook;
+                    if (!activeNotebook || activeNotebook.notebookType !== 'deepnote') {
+                        void window.showWarningMessage(l10n.t('No active Deepnote notebook found'));
+                        return;
+                    }
+
+                    await this.selectEnvironmentForNotebook({ notebook: activeNotebook });
+                }
+            )
         );
     }
 
@@ -348,7 +341,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
             const connectionMetadata = kernel.kernelConnectionMetadata;
             if (connectionMetadata.kind === 'startUsingDeepnoteKernel') {
                 const deepnoteMetadata = connectionMetadata as DeepnoteKernelConnectionMetadata;
-                const expectedHandle = `deepnote-config-server-${environmentId}`;
+                const expectedHandle = createDeepnoteServerConfigHandle(environmentId, notebook.uri);
 
                 if (deepnoteMetadata.serverProviderHandle.handle === expectedHandle) {
                     logger.info(
@@ -371,16 +364,11 @@ export class DeepnoteEnvironmentsView implements Disposable {
         }
     }
 
-    public async selectEnvironmentForNotebook(): Promise<void> {
-        // Get the active notebook
-        const activeNotebook = window.activeNotebookEditor?.notebook;
-        if (!activeNotebook || activeNotebook.notebookType !== 'deepnote') {
-            void window.showWarningMessage(l10n.t('No active Deepnote notebook found'));
-            return;
-        }
+    public async selectEnvironmentForNotebook({ notebook }: { notebook: NotebookDocument }): Promise<void> {
+        logger.info('Selecting environment for notebook:', notebook);
 
         // Get base file URI (without query/fragment)
-        const baseFileUri = activeNotebook.uri.with({ query: '', fragment: '' });
+        const baseFileUri = notebook.uri.with({ query: '', fragment: '' });
 
         // Get current environment selection
         const currentEnvironmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri);
@@ -393,16 +381,10 @@ export class DeepnoteEnvironmentsView implements Disposable {
 
         // Build quick pick items
         const items: (QuickPickItem & { environmentId?: string })[] = environments.map((env) => {
-            const envWithStatus = this.environmentManager.getEnvironmentWithStatus(env.id);
-
-            const { icon, text } = getDeepnoteEnvironmentStatusVisual(
-                envWithStatus?.status ?? EnvironmentStatus.Stopped
-            );
-
             const isCurrent = currentEnvironment?.id === env.id;
 
             return {
-                label: `$(${icon}) ${env.name} [${text}]${isCurrent ? ' $(check)' : ''}`,
+                label: `${env.name} ${isCurrent ? ' $(check)' : ''}`,
                 description: getDisplayPath(env.pythonInterpreter.uri),
                 detail: env.packages?.length
                     ? l10n.t('Packages: {0}', env.packages.join(', '))
@@ -454,7 +436,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
 
         // Check if any cells are currently executing using the kernel execution state
         // This is more reliable than checking executionSummary
-        const kernel = this.kernelProvider.get(activeNotebook);
+        const kernel = this.kernelProvider.get(notebook);
         const hasExecutingCells = kernel
             ? this.kernelProvider.getKernelExecution(kernel).pendingCells.length > 0
             : false;
@@ -476,22 +458,23 @@ export class DeepnoteEnvironmentsView implements Disposable {
         }
 
         // User selected a different environment - switch to it
-        logger.info(`Switching notebook ${getDisplayPath(activeNotebook.uri)} to environment ${selectedEnvironmentId}`);
+        logger.info(`Switching notebook ${getDisplayPath(notebook.uri)} to environment ${selectedEnvironmentId}`);
 
         try {
             await window.withProgress(
                 {
                     location: ProgressLocation.Notification,
                     title: l10n.t('Switching to environment...'),
-                    cancellable: false
+                    cancellable: true
                 },
-                async () => {
+                async (progress, token) => {
                     // Update the notebook-to-environment mapping
                     await this.notebookEnvironmentMapper.setEnvironmentForNotebook(baseFileUri, selectedEnvironmentId);
 
                     // Force rebuild the controller with the new environment
                     // This clears cached metadata and creates a fresh controller.
-                    await this.kernelAutoSelector.rebuildController(activeNotebook);
+                    // await this.kernelAutoSelector.ensureKernelSelected(activeNotebook);
+                    await this.kernelAutoSelector.rebuildController(notebook, progress, token);
 
                     logger.info(`Successfully switched to environment ${selectedEnvironmentId}`);
                 }
@@ -501,84 +484,6 @@ export class DeepnoteEnvironmentsView implements Disposable {
         } catch (error) {
             logger.error('Failed to switch environment', error);
             void window.showErrorMessage(l10n.t('Failed to switch environment. See output for details.'));
-        }
-    }
-
-    private async startServer(environmentId: string): Promise<void> {
-        const config = this.environmentManager.getEnvironment(environmentId);
-        if (!config) {
-            return;
-        }
-
-        try {
-            await window.withProgress(
-                {
-                    location: ProgressLocation.Notification,
-                    title: l10n.t('Starting server for "{0}"...', config.name),
-                    cancellable: true
-                },
-                async (_progress, token) => {
-                    await this.environmentManager.startServer(environmentId, token);
-                    logger.info(`Started server for environment: ${environmentId}`);
-                }
-            );
-
-            void window.showInformationMessage(l10n.t('Server started for "{0}"', config.name));
-        } catch (error) {
-            logger.error('Failed to start server', error);
-            void window.showErrorMessage(l10n.t('Failed to start server. See output for details.'));
-        }
-    }
-
-    private async stopServer(environmentId: string): Promise<void> {
-        const config = this.environmentManager.getEnvironment(environmentId);
-        if (!config) {
-            return;
-        }
-
-        try {
-            await window.withProgress(
-                {
-                    location: ProgressLocation.Notification,
-                    title: l10n.t('Stopping server for "{0}"...', config.name),
-                    cancellable: true
-                },
-                async (_progress, token) => {
-                    await this.environmentManager.stopServer(environmentId, token);
-                    logger.info(`Stopped server for environment: ${environmentId}`);
-                }
-            );
-
-            void window.showInformationMessage(l10n.t('Server stopped for "{0}"', config.name));
-        } catch (error) {
-            logger.error('Failed to stop server', error);
-            void window.showErrorMessage(l10n.t('Failed to stop server. See output for details.'));
-        }
-    }
-
-    private async restartServer(environmentId: string): Promise<void> {
-        const config = this.environmentManager.getEnvironment(environmentId);
-        if (!config) {
-            return;
-        }
-
-        try {
-            await window.withProgress(
-                {
-                    location: ProgressLocation.Notification,
-                    title: l10n.t('Restarting server for "{0}"...', config.name),
-                    cancellable: true
-                },
-                async (_progress, token) => {
-                    await this.environmentManager.restartServer(environmentId, token);
-                    logger.info(`Restarted server for environment: ${environmentId}`);
-                }
-            );
-
-            void window.showInformationMessage(l10n.t('Server restarted for "{0}"', config.name));
-        } catch (error) {
-            logger.error('Failed to restart server', error);
-            void window.showErrorMessage(l10n.t('Failed to restart server. See output for details.'));
         }
     }
 

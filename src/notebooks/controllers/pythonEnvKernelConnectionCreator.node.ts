@@ -12,7 +12,7 @@ import {
 } from '../../kernels/types';
 import { wrapCancellationTokens } from '../../platform/common/cancellation';
 import { dispose } from '../../platform/common/utils/lifecycle';
-import { getDisplayPath } from '../../platform/common/platform/fs-paths';
+import { getDisplayPath } from '../../platform/common/platform/fs-paths.node';
 import { IDisposable } from '../../platform/common/types';
 import { IInterpreterService } from '../../platform/interpreter/contracts';
 import { ServiceContainer } from '../../platform/ioc/container';

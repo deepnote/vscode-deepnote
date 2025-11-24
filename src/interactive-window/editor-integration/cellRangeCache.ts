@@ -61,7 +61,7 @@ export class CellRangeCache implements ICellRangeCache {
         ) {
             // set the context to false so our command doesn't run for other files
             const hasCellsContext = new ContextKey(EditorContexts.HasCodeCells);
-            hasCellsContext.set(false).catch((ex) => logger.warn('Failed to set jupyter.HasCodeCells context', ex));
+            hasCellsContext.set(false).catch((ex) => logger.warn('Failed to set deepnote.HasCodeCells context', ex));
             this.updateContextKeys(false);
         } else {
             this.updateContextKeys(activeEditor.document);
@@ -71,7 +71,7 @@ export class CellRangeCache implements ICellRangeCache {
     private onSettingChanged(e: ConfigurationChangeEvent) {
         this.cache.clear();
 
-        if (e.affectsConfiguration('jupyter.interactiveWindow.textEditor.executeSelection')) {
+        if (e.affectsConfiguration('deepnote.interactiveWindow.textEditor.executeSelection')) {
             const settings = this.configService.getSettings(undefined);
             this.cachedOwnsSetting = settings.sendSelectionToInteractiveWindow;
             this.updateContextKeys();

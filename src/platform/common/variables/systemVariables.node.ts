@@ -7,6 +7,7 @@ import * as path from '../../vscode-path/path';
 import { Uri, Range, workspace, window } from 'vscode';
 import { AbstractSystemVariables } from './systemVariables';
 import { getUserHomeDir } from '../utils/platform.node';
+import { getDirname } from '../esmUtils.node';
 
 /**
  * System variables for node.js. Node specific is necessary because of using the current process environment.
@@ -23,7 +24,9 @@ export class SystemVariables extends AbstractSystemVariables {
     constructor(file: Uri | undefined, rootFolder: Uri | undefined) {
         super();
         const workspaceFolder = file ? workspace.getWorkspaceFolder(file) : undefined;
-        this._workspaceFolder = workspaceFolder ? workspaceFolder.uri.fsPath : rootFolder?.fsPath || __dirname;
+        this._workspaceFolder = workspaceFolder
+            ? workspaceFolder.uri.fsPath
+            : rootFolder?.fsPath || getDirname(import.meta.url);
         this._workspaceFolderName = path.basename(this._workspaceFolder);
         this._fileWorkspaceFolder = this._workspaceFolder;
         this._filePath = file ? file.fsPath : undefined;

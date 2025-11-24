@@ -1,22 +1,15 @@
 import { assert, use } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
-import { anything, instance, mock, when, verify, deepEqual } from 'ts-mockito';
+import { anything, instance, mock, when, verify } from 'ts-mockito';
 import { Uri } from 'vscode';
 import * as fs from 'fs';
 import * as os from 'os';
 import { DeepnoteEnvironmentManager } from './deepnoteEnvironmentManager.node';
 import { DeepnoteEnvironmentStorage } from './deepnoteEnvironmentStorage.node';
 import { IExtensionContext, IOutputChannel } from '../../../platform/common/types';
-import { IFileSystem } from '../../../platform/common/platform/types';
-import {
-    IDeepnoteServerStarter,
-    IDeepnoteToolkitInstaller,
-    DeepnoteServerInfo,
-    VenvAndToolkitInstallation,
-    DEEPNOTE_TOOLKIT_VERSION
-} from '../types';
+import { IDeepnoteServerStarter } from '../types';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
-import { EnvironmentStatus } from './deepnoteEnvironment';
+import { IFileSystem } from '../../../platform/common/platform/types';
 
 use(chaiAsPromised);
 
@@ -24,7 +17,6 @@ suite('DeepnoteEnvironmentManager', () => {
     let manager: DeepnoteEnvironmentManager;
     let mockContext: IExtensionContext;
     let mockStorage: DeepnoteEnvironmentStorage;
-    let mockToolkitInstaller: IDeepnoteToolkitInstaller;
     let mockServerStarter: IDeepnoteServerStarter;
     let mockOutputChannel: IOutputChannel;
     let mockFileSystem: IFileSystem;
@@ -36,22 +28,9 @@ suite('DeepnoteEnvironmentManager', () => {
         version: { major: 3, minor: 11, patch: 0, raw: '3.11.0' }
     } as PythonEnvironment;
 
-    const testServerInfo: DeepnoteServerInfo = {
-        url: 'http://localhost:8888',
-        jupyterPort: 8888,
-        lspPort: 8889,
-        token: 'test-token'
-    };
-
-    const testVenvAndToolkit: VenvAndToolkitInstallation = {
-        pythonInterpreter: testInterpreter,
-        toolkitVersion: DEEPNOTE_TOOLKIT_VERSION
-    };
-
     setup(() => {
         mockContext = mock<IExtensionContext>();
         mockStorage = mock<DeepnoteEnvironmentStorage>();
-        mockToolkitInstaller = mock<IDeepnoteToolkitInstaller>();
         mockServerStarter = mock<IDeepnoteServerStarter>();
         mockOutputChannel = mock<IOutputChannel>();
         mockFileSystem = mock<IFileSystem>();
@@ -74,7 +53,6 @@ suite('DeepnoteEnvironmentManager', () => {
         manager = new DeepnoteEnvironmentManager(
             instance(mockContext),
             instance(mockStorage),
-            instance(mockToolkitInstaller),
             instance(mockServerStarter),
             instance(mockOutputChannel),
             instance(mockFileSystem)
@@ -206,40 +184,6 @@ suite('DeepnoteEnvironmentManager', () => {
         });
     });
 
-    suite('getEnvironmentWithStatus', () => {
-        test('should return environment with stopped status when server is not running', async () => {
-            when(mockStorage.saveEnvironments(anything())).thenResolve();
-
-            const created = await manager.createEnvironment({
-                name: 'Test',
-                pythonInterpreter: testInterpreter
-            });
-
-            const withStatus = manager.getEnvironmentWithStatus(created.id);
-            assert.strictEqual(withStatus?.status, EnvironmentStatus.Stopped);
-        });
-
-        test('should return environment with running status when server is running', async () => {
-            when(mockStorage.saveEnvironments(anything())).thenResolve();
-            when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testVenvAndToolkit
-            );
-            when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
-                testServerInfo
-            );
-
-            const created = await manager.createEnvironment({
-                name: 'Test',
-                pythonInterpreter: testInterpreter
-            });
-
-            await manager.startServer(created.id);
-
-            const withStatus = manager.getEnvironmentWithStatus(created.id);
-            assert.strictEqual(withStatus?.status, EnvironmentStatus.Running);
-        });
-    });
-
     suite('updateEnvironment', () => {
         test('should update environment name', async () => {
             when(mockStorage.saveEnvironments(anything())).thenResolve();
@@ -314,27 +258,6 @@ suite('DeepnoteEnvironmentManager', () => {
             verify(mockStorage.saveEnvironments(anything())).atLeast(1);
         });
 
-        test('should stop server before deleting if running', async () => {
-            when(mockStorage.saveEnvironments(anything())).thenResolve();
-            when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testVenvAndToolkit
-            );
-            when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
-                testServerInfo
-            );
-            when(mockServerStarter.stopServer(anything(), anything())).thenResolve();
-
-            const config = await manager.createEnvironment({
-                name: 'Test',
-                pythonInterpreter: testInterpreter
-            });
-
-            await manager.startServer(config.id);
-            await manager.deleteEnvironment(config.id);
-
-            verify(mockServerStarter.stopServer(config.id, anything())).once();
-        });
-
         test('should throw error for non-existent environment', async () => {
             await assert.isRejected(manager.deleteEnvironment('non-existent'), 'Environment not found: non-existent');
         });
@@ -367,217 +290,6 @@ suite('DeepnoteEnvironmentManager', () => {
         });
     });
 
-    suite('startServer', () => {
-        test('should start server for environment', async () => {
-            when(mockStorage.saveEnvironments(anything())).thenResolve();
-            when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testVenvAndToolkit
-            );
-            when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
-                testServerInfo
-            );
-
-            const config = await manager.createEnvironment({
-                name: 'Test',
-                pythonInterpreter: testInterpreter
-            });
-
-            await manager.startServer(config.id);
-
-            const updated = manager.getEnvironment(config.id);
-            assert.deepStrictEqual(updated?.serverInfo, testServerInfo);
-
-            verify(mockToolkitInstaller.ensureVenvAndToolkit(testInterpreter, anything(), anything())).once();
-            verify(mockServerStarter.startServer(testInterpreter, anything(), config.id, anything())).once();
-        });
-
-        test('should install additional packages when specified', async () => {
-            when(mockStorage.saveEnvironments(anything())).thenResolve();
-            when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testVenvAndToolkit
-            );
-            when(mockToolkitInstaller.installAdditionalPackages(anything(), anything(), anything())).thenResolve();
-            when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
-                testServerInfo
-            );
-
-            const config = await manager.createEnvironment({
-                name: 'Test',
-                pythonInterpreter: testInterpreter,
-                packages: ['numpy', 'pandas']
-            });
-
-            await manager.startServer(config.id);
-
-            verify(
-                mockToolkitInstaller.installAdditionalPackages(anything(), deepEqual(['numpy', 'pandas']), anything())
-            ).once();
-        });
-
-        test('should always call serverStarter.startServer to ensure fresh serverInfo (UT-6)', async () => {
-            when(mockStorage.saveEnvironments(anything())).thenResolve();
-            when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testVenvAndToolkit
-            );
-            when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
-                testServerInfo
-            );
-
-            const config = await manager.createEnvironment({
-                name: 'Test',
-                pythonInterpreter: testInterpreter
-            });
-
-            await manager.startServer(config.id);
-            await manager.startServer(config.id);
-
-            // IMPORTANT: Should call TWICE - this ensures we always get fresh serverInfo
-            // The serverStarter itself is idempotent and returns existing server if running
-            // But the environment manager always calls it to ensure config.serverInfo is updated
-            verify(mockServerStarter.startServer(anything(), anything(), anything(), anything())).twice();
-        });
-
-        test('should update environment.serverInfo even if server was already running (INV-10)', async () => {
-            // This test explicitly verifies INV-10: serverInfo must always reflect current server state
-            // This is critical for environment switching - prevents using stale serverInfo
-
-            when(mockStorage.saveEnvironments(anything())).thenResolve();
-            when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testVenvAndToolkit
-            );
-
-            // First call returns initial serverInfo
-            const initialServerInfo: DeepnoteServerInfo = {
-                url: 'http://localhost:8888',
-                jupyterPort: 8888,
-                lspPort: 8889,
-                token: 'initial-token'
-            };
-
-            // Second call returns updated serverInfo (simulating server restart or port change)
-            const updatedServerInfo: DeepnoteServerInfo = {
-                url: 'http://localhost:9999',
-                jupyterPort: 9999,
-                lspPort: 10000,
-                token: 'updated-token'
-            };
-
-            when(mockServerStarter.startServer(anything(), anything(), anything(), anything()))
-                .thenResolve(initialServerInfo)
-                .thenResolve(updatedServerInfo);
-
-            const config = await manager.createEnvironment({
-                name: 'Test',
-                pythonInterpreter: testInterpreter
-            });
-
-            // First startServer call
-            await manager.startServer(config.id);
-            let retrieved = manager.getEnvironment(config.id);
-            assert.deepStrictEqual(retrieved?.serverInfo, initialServerInfo, 'Should have initial serverInfo');
-
-            // Second startServer call - should update to new serverInfo
-            await manager.startServer(config.id);
-            retrieved = manager.getEnvironment(config.id);
-            assert.deepStrictEqual(retrieved?.serverInfo, updatedServerInfo, 'Should have updated serverInfo');
-
-            // This proves that getEnvironment() after startServer() always returns fresh data
-            // which is exactly what the kernel selector relies on (see deepnoteKernelAutoSelector.node.ts:454-467)
-        });
-
-        test('should update lastUsedAt timestamp', async () => {
-            when(mockStorage.saveEnvironments(anything())).thenResolve();
-            when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testVenvAndToolkit
-            );
-            when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
-                testServerInfo
-            );
-
-            const config = await manager.createEnvironment({
-                name: 'Test',
-                pythonInterpreter: testInterpreter
-            });
-
-            const originalLastUsed = config.lastUsedAt.getTime();
-            await manager.startServer(config.id);
-            const updated = manager.getEnvironment(config.id)!;
-            assert.isAtLeast(updated.lastUsedAt.getTime(), originalLastUsed);
-        });
-
-        test('should throw error for non-existent environment', async () => {
-            await assert.isRejected(manager.startServer('non-existent'), 'Environment not found: non-existent');
-        });
-    });
-
-    suite('stopServer', () => {
-        test('should stop running server', async () => {
-            when(mockStorage.saveEnvironments(anything())).thenResolve();
-            when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testVenvAndToolkit
-            );
-            when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
-                testServerInfo
-            );
-            when(mockServerStarter.stopServer(anything(), anything())).thenResolve();
-
-            const config = await manager.createEnvironment({
-                name: 'Test',
-                pythonInterpreter: testInterpreter
-            });
-
-            await manager.startServer(config.id);
-            await manager.stopServer(config.id);
-
-            const updated = manager.getEnvironment(config.id);
-            assert.isUndefined(updated?.serverInfo);
-
-            verify(mockServerStarter.stopServer(config.id, anything())).once();
-        });
-
-        test('should do nothing if server is not running', async () => {
-            when(mockStorage.saveEnvironments(anything())).thenResolve();
-
-            const config = await manager.createEnvironment({
-                name: 'Test',
-                pythonInterpreter: testInterpreter
-            });
-
-            await manager.stopServer(config.id);
-
-            verify(mockServerStarter.stopServer(anything(), anything())).never();
-        });
-
-        test('should throw error for non-existent environment', async () => {
-            await assert.isRejected(manager.stopServer('non-existent'), 'Environment not found: non-existent');
-        });
-    });
-
-    suite('restartServer', () => {
-        test('should stop and start server', async () => {
-            when(mockStorage.saveEnvironments(anything())).thenResolve();
-            when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything())).thenResolve(
-                testVenvAndToolkit
-            );
-            when(mockServerStarter.startServer(anything(), anything(), anything(), anything())).thenResolve(
-                testServerInfo
-            );
-            when(mockServerStarter.stopServer(anything(), anything())).thenResolve();
-
-            const config = await manager.createEnvironment({
-                name: 'Test',
-                pythonInterpreter: testInterpreter
-            });
-
-            await manager.startServer(config.id);
-            await manager.restartServer(config.id);
-
-            verify(mockServerStarter.stopServer(config.id, anything())).once();
-            // Called twice: once for initial start, once for restart
-            verify(mockServerStarter.startServer(anything(), anything(), anything(), anything())).twice();
-        });
-    });
-
     suite('updateLastUsed', () => {
         test('should update lastUsedAt timestamp', async () => {
             when(mockStorage.saveEnvironments(anything())).thenResolve();
@@ -605,6 +317,191 @@ suite('DeepnoteEnvironmentManager', () => {
         test('should dispose event emitter', () => {
             manager.dispose();
             // Should not throw
+        });
+    });
+
+    suite('environment migration', () => {
+        test('should migrate hash-based venv paths to UUID-based paths', async () => {
+            const oldHashBasedConfig = {
+                id: 'abcd1234-5678-90ab-cdef-123456789012',
+                name: 'Old Hash Config',
+                pythonInterpreter: testInterpreter,
+                venvPath: Uri.file('/global/storage/deepnote-venvs/venv_7626587d-1.0.0'),
+                createdAt: new Date(),
+                lastUsedAt: new Date()
+            };
+
+            when(mockStorage.loadEnvironments()).thenResolve([oldHashBasedConfig]);
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
+            when(mockContext.globalStorageUri).thenReturn(Uri.file('/global/storage'));
+
+            manager.activate();
+            await manager.waitForInitialization();
+
+            const configs = manager.listEnvironments();
+            assert.strictEqual(configs.length, 1);
+
+            // Should have migrated to UUID-based path
+            assert.strictEqual(
+                configs[0].venvPath.fsPath,
+                '/global/storage/deepnote-venvs/abcd1234-5678-90ab-cdef-123456789012'
+            );
+
+            // Should clear toolkit version to force reinstallation
+            assert.isUndefined(configs[0].toolkitVersion);
+
+            // Should have saved the migration
+            verify(mockStorage.saveEnvironments(anything())).once();
+        });
+
+        test('should migrate VS Code storage paths to Cursor storage paths', async () => {
+            const vsCodeConfig = {
+                id: 'cursor-env-id',
+                name: 'VS Code Environment',
+                pythonInterpreter: testInterpreter,
+                venvPath: Uri.file(
+                    '/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/cursor-env-id'
+                ),
+                createdAt: new Date(),
+                lastUsedAt: new Date(),
+                toolkitVersion: '1.0.0'
+            };
+
+            when(mockStorage.loadEnvironments()).thenResolve([vsCodeConfig]);
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
+            when(mockContext.globalStorageUri).thenReturn(
+                Uri.file('/Library/Application Support/Cursor/User/globalStorage/deepnote.vscode-deepnote')
+            );
+
+            manager.activate();
+            await manager.waitForInitialization();
+
+            const configs = manager.listEnvironments();
+            assert.strictEqual(configs.length, 1);
+
+            // Should have migrated to Cursor storage
+            assert.match(configs[0].venvPath.fsPath, /Cursor.*deepnote-venvs\/cursor-env-id$/);
+
+            // Should clear toolkit version to force reinstallation
+            assert.isUndefined(configs[0].toolkitVersion);
+
+            verify(mockStorage.saveEnvironments(anything())).once();
+        });
+
+        test('should not migrate environments with correct ID-based paths in correct storage', async () => {
+            const testDate = new Date();
+            const correctConfig = {
+                id: '12345678-1234-1234-1234-123456789abc',
+                name: 'Correct Config',
+                pythonInterpreter: testInterpreter,
+                venvPath: Uri.file('/global/storage/deepnote-venvs/12345678-1234-1234-1234-123456789abc'),
+                createdAt: testDate,
+                lastUsedAt: testDate,
+                toolkitVersion: '1.0.0',
+                packages: []
+            };
+
+            when(mockStorage.loadEnvironments()).thenResolve([correctConfig]);
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
+            when(mockContext.globalStorageUri).thenReturn(Uri.file('/global/storage'));
+
+            manager.activate();
+            await manager.waitForInitialization();
+
+            const configs = manager.listEnvironments();
+            assert.strictEqual(configs.length, 1);
+
+            // Path should remain unchanged
+            assert.strictEqual(
+                configs[0].venvPath.fsPath,
+                '/global/storage/deepnote-venvs/12345678-1234-1234-1234-123456789abc'
+            );
+
+            // ID and name should be preserved
+            assert.strictEqual(configs[0].id, '12345678-1234-1234-1234-123456789abc');
+            assert.strictEqual(configs[0].name, 'Correct Config');
+
+            // Should NOT have saved (no migration needed)
+            verify(mockStorage.saveEnvironments(anything())).never();
+        });
+
+        test('should not migrate environments with non-UUID IDs when path already matches', async () => {
+            const testDate = new Date();
+            const customIdConfig = {
+                id: 'my-custom-env-id',
+                name: 'Custom ID Environment',
+                pythonInterpreter: testInterpreter,
+                venvPath: Uri.file('/global/storage/deepnote-venvs/my-custom-env-id'),
+                createdAt: testDate,
+                lastUsedAt: testDate,
+                toolkitVersion: '1.0.0'
+            };
+
+            when(mockStorage.loadEnvironments()).thenResolve([customIdConfig]);
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
+            when(mockContext.globalStorageUri).thenReturn(Uri.file('/global/storage'));
+
+            manager.activate();
+            await manager.waitForInitialization();
+
+            const configs = manager.listEnvironments();
+            assert.strictEqual(configs.length, 1);
+
+            // Path should remain unchanged
+            assert.strictEqual(configs[0].venvPath.fsPath, '/global/storage/deepnote-venvs/my-custom-env-id');
+
+            // Toolkit version should NOT be cleared
+            assert.strictEqual(configs[0].toolkitVersion, '1.0.0');
+
+            // Should NOT have saved (no migration needed)
+            verify(mockStorage.saveEnvironments(anything())).never();
+        });
+
+        test('should migrate multiple environments at once', async () => {
+            const configs = [
+                {
+                    id: 'uuid1',
+                    name: 'Hash Config',
+                    pythonInterpreter: testInterpreter,
+                    venvPath: Uri.file('/global/storage/deepnote-venvs/venv_abc123-1.0.0'),
+                    createdAt: new Date(),
+                    lastUsedAt: new Date()
+                },
+                {
+                    id: 'uuid2',
+                    name: 'VS Code Config',
+                    pythonInterpreter: testInterpreter,
+                    venvPath: Uri.file('/Code/globalStorage/deepnote-venvs/uuid2'),
+                    createdAt: new Date(),
+                    lastUsedAt: new Date()
+                },
+                {
+                    id: 'uuid3',
+                    name: 'Correct Config',
+                    pythonInterpreter: testInterpreter,
+                    venvPath: Uri.file('/global/storage/deepnote-venvs/uuid3'),
+                    createdAt: new Date(),
+                    lastUsedAt: new Date()
+                }
+            ];
+
+            when(mockStorage.loadEnvironments()).thenResolve(configs);
+            when(mockStorage.saveEnvironments(anything())).thenResolve();
+            when(mockContext.globalStorageUri).thenReturn(Uri.file('/global/storage'));
+
+            manager.activate();
+            await manager.waitForInitialization();
+
+            const loaded = manager.listEnvironments();
+            assert.strictEqual(loaded.length, 3);
+
+            // First two should be migrated
+            assert.strictEqual(loaded[0].venvPath.fsPath, '/global/storage/deepnote-venvs/uuid1');
+            assert.strictEqual(loaded[1].venvPath.fsPath, '/global/storage/deepnote-venvs/uuid2');
+            // Third should remain unchanged
+            assert.strictEqual(loaded[2].venvPath.fsPath, '/global/storage/deepnote-venvs/uuid3');
+
+            verify(mockStorage.saveEnvironments(anything())).once();
         });
     });
 });

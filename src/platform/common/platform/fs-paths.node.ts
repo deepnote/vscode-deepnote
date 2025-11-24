@@ -1,11 +1,15 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { getDisplayPath as getDisplayPathCommon } from './fs-paths';
+import { getDisplayPath as getDisplayPathCommon, getFilePath as getFilePathCommon } from './fs-paths';
 import { Uri, WorkspaceFolder } from 'vscode';
-import { homedir } from 'os';
+import { homedir } from 'node:os';
 
 export const homePath = Uri.file(homedir()); // This is the only thing requiring a node version
+
+export function getFilePath(file: Uri | undefined) {
+    return getFilePathCommon(file);
+}
 
 export function getDisplayPathFromLocalFile(file: string | undefined, cwd?: string | undefined) {
     const folders: WorkspaceFolder[] = cwd

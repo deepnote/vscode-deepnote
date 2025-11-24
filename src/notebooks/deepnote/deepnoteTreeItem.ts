@@ -26,23 +26,62 @@ export class DeepnoteTreeItem extends TreeItem {
     constructor(
         public readonly type: DeepnoteTreeItemType,
         public readonly context: DeepnoteTreeItemContext,
-        public readonly data: DeepnoteProject | DeepnoteNotebook | null,
+        public data: DeepnoteProject | DeepnoteNotebook | null,
         collapsibleState: TreeItemCollapsibleState
     ) {
         super('', collapsibleState);
 
         this.contextValue = this.type;
 
-        // Skip initialization for loading items as they don't have real data
-        if (this.type !== DeepnoteTreeItemType.Loading) {
-            this.tooltip = this.getTooltip();
-            this.iconPath = this.getIcon();
-            this.label = this.getLabel();
-            this.description = this.getDescription();
+        // Inline method calls to avoid ES module TreeItem extension issues
+        if (this.type === DeepnoteTreeItemType.Loading) {
+            this.label = 'Loading…';
+            this.tooltip = 'Loading…';
+            this.description = '';
+            this.iconPath = new ThemeIcon('loading~spin');
+        } else {
+            // getTooltip() inline
+            if (this.type === DeepnoteTreeItemType.ProjectFile) {
+                const project = this.data as DeepnoteProject;
+                this.tooltip = `Deepnote Project: ${project.project.name}\nFile: ${this.context.filePath}`;
+            } else {
+                const notebook = this.data as DeepnoteNotebook;
+                this.tooltip = `Notebook: ${notebook.name}\nExecution Mode: ${notebook.executionMode}`;
+            }
+
+            // getIcon() inline
+            if (this.type === DeepnoteTreeItemType.ProjectFile) {
+                this.iconPath = new ThemeIcon('notebook');
+            } else {
+                this.iconPath = new ThemeIcon('file-code');
+            }
+
+            // getLabel() inline
+            if (this.type === DeepnoteTreeItemType.ProjectFile) {
+                const project = this.data as DeepnoteProject;
+                this.label = project.project.name || 'Untitled Project';
+            } else {
+                const notebook = this.data as DeepnoteNotebook;
+                this.label = notebook.name || 'Untitled Notebook';
+            }
+
+            // getDescription() inline
+            if (this.type === DeepnoteTreeItemType.ProjectFile) {
+                const project = this.data as DeepnoteProject;
+                const notebookCount = project.project.notebooks?.length || 0;
+                this.description = `${notebookCount} notebook${notebookCount !== 1 ? 's' : ''}`;
+            } else {
+                const notebook = this.data as DeepnoteNotebook;
+                const blockCount = notebook.blocks?.length || 0;
+                this.description = `${blockCount} cell${blockCount !== 1 ? 's' : ''}`;
+            }
         }
 
         if (this.type === DeepnoteTreeItemType.Notebook) {
-            this.resourceUri = this.getNotebookUri();
+            // getNotebookUri() inline
+            if (this.context.notebookId) {
+                this.resourceUri = Uri.parse(`deepnote-notebook://${this.context.filePath}#${this.context.notebookId}`);
+            }
             this.command = {
                 command: 'deepnote.openNotebook',
                 title: 'Open Notebook',
@@ -51,57 +90,37 @@ export class DeepnoteTreeItem extends TreeItem {
         }
     }
 
-    private getLabel(): string {
-        if (this.type === DeepnoteTreeItemType.ProjectFile) {
-            const project = this.data as DeepnoteProject;
-
-            return project.project.name || 'Untitled Project';
+    /**
+     * Updates the tree item's visual fields (label, description, tooltip) based on current data.
+     * Call this after updating the data property to ensure the tree view reflects changes.
+     */
+    public updateVisualFields(): void {
+        if (this.type === DeepnoteTreeItemType.Loading) {
+            this.label = 'Loading…';
+            this.tooltip = 'Loading…';
+            this.description = '';
+            this.iconPath = new ThemeIcon('loading~spin');
+            return;
         }
 
-        const notebook = this.data as DeepnoteNotebook;
-
-        return notebook.name || 'Untitled Notebook';
-    }
-
-    private getDescription(): string | undefined {
         if (this.type === DeepnoteTreeItemType.ProjectFile) {
             const project = this.data as DeepnoteProject;
+
+            this.label = project.project.name || 'Untitled Project';
+            this.tooltip = `Deepnote Project: ${project.project.name}\nFile: ${this.context.filePath}`;
+
             const notebookCount = project.project.notebooks?.length || 0;
 
-            return `${notebookCount} notebook${notebookCount !== 1 ? 's' : ''}`;
+            this.description = `${notebookCount} notebook${notebookCount !== 1 ? 's' : ''}`;
+        } else {
+            const notebook = this.data as DeepnoteNotebook;
+
+            this.label = notebook.name || 'Untitled Notebook';
+            this.tooltip = `Notebook: ${notebook.name}\nExecution Mode: ${notebook.executionMode}`;
+
+            const blockCount = notebook.blocks?.length || 0;
+
+            this.description = `${blockCount} cell${blockCount !== 1 ? 's' : ''}`;
         }
-
-        const notebook = this.data as DeepnoteNotebook;
-        const blockCount = notebook.blocks?.length || 0;
-
-        return `${blockCount} cell${blockCount !== 1 ? 's' : ''}`;
-    }
-
-    private getTooltip(): string {
-        if (this.type === DeepnoteTreeItemType.ProjectFile) {
-            const project = this.data as DeepnoteProject;
-
-            return `Deepnote Project: ${project.project.name}\nFile: ${this.context.filePath}`;
-        }
-
-        const notebook = this.data as DeepnoteNotebook;
-
-        return `Notebook: ${notebook.name}\nExecution Mode: ${notebook.executionMode}`;
-    }
-
-    private getIcon(): ThemeIcon {
-        if (this.type === DeepnoteTreeItemType.ProjectFile) {
-            return new ThemeIcon('notebook');
-        }
-
-        return new ThemeIcon('file-code');
-    }
-
-    private getNotebookUri(): Uri | undefined {
-        if (this.type === DeepnoteTreeItemType.Notebook && this.context.notebookId) {
-            return Uri.parse(`deepnote-notebook://${this.context.filePath}#${this.context.notebookId}`);
-        }
-
-        return undefined;
     }
 }

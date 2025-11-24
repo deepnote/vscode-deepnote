@@ -11,10 +11,11 @@ import { IDisposable, IDisposableRegistry } from '../../platform/common/types';
 import { isNotebookCell, noop } from '../../platform/common/utils/misc';
 import { InteractiveWindowView, JupyterNotebookView } from '../../platform/common/constants';
 import { IInteractiveWindowProvider, IInteractiveWindow } from '../../interactive-window/types';
-import { getNotebookMetadata, isJupyterNotebook } from '../../platform/common/utils';
+import { getNotebookMetadata, isDeepnoteNotebook, isJupyterNotebook } from '../../platform/common/utils';
 import { isPythonNotebook } from '../../kernels/helpers';
 import { IControllerRegistration } from '../../notebooks/controllers/types';
 import { IJupyterServerProviderRegistry } from '../../kernels/jupyter/types';
+import { logger } from '../../platform/logging';
 
 /**
  * Tracks a lot of the context keys needed in the extension.
@@ -118,7 +119,10 @@ export class ActiveEditorContextService implements IExtensionSyncActivationServi
         this.updateContextOfActiveInteractiveWindowKernel();
     }
     private onDidChangeActiveNotebookEditor(e?: NotebookEditor) {
-        const isJupyterNotebookDoc = e ? e.notebook.notebookType === JupyterNotebookView : false;
+        logger.info(`onDidChangeActiveNotebookEditor: ${e?.notebook.uri.toString()}`);
+        const isJupyterNotebookDoc = e
+            ? e.notebook.notebookType === JupyterNotebookView || e.notebook.notebookType === 'deepnote'
+            : false;
         this.nativeContext.set(isJupyterNotebookDoc).catch(noop);
 
         this.isPythonNotebook
@@ -183,7 +187,11 @@ export class ActiveEditorContextService implements IExtensionSyncActivationServi
         const document =
             window.activeNotebookEditor?.notebook ||
             this.interactiveProvider?.getActiveOrAssociatedInteractiveWindow()?.notebookDocument;
-        if (document && isJupyterNotebook(document) && this.controllers.getSelected(document)) {
+        if (
+            document &&
+            (isJupyterNotebook(document) || isDeepnoteNotebook(document)) &&
+            this.controllers.getSelected(document)
+        ) {
             this.isJupyterKernelSelected.set(true).catch(noop);
             this.updateNativeNotebookInteractiveWindowOpenContext(document, true);
         } else {

@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-const { launch } = require('./launchWebUtils');
+import { launch } from './launchWebUtils.js';
 
 void launch(true);

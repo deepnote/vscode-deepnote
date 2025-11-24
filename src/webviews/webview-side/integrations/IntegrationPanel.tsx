@@ -1,9 +1,17 @@
 import * as React from 'react';
+
+import { generateUuid } from '../../../platform/common/uuid';
 import { IVsCodeApi } from '../react-common/postOffice';
 import { getLocString, storeLocStrings } from '../react-common/locReactSide';
 import { IntegrationList } from './IntegrationList';
+import { IntegrationTypeSelector } from './IntegrationTypeSelector';
 import { ConfigurationForm } from './ConfigurationForm';
-import { IntegrationWithStatus, WebviewMessage, IntegrationConfig, IntegrationType } from './types';
+import {
+    ConfigurableDatabaseIntegrationConfig,
+    ConfigurableDatabaseIntegrationType,
+    IntegrationWithStatus,
+    WebviewMessage
+} from './types';
 
 export interface IIntegrationPanelProps {
     baseTheme: string;
@@ -12,16 +20,21 @@ export interface IIntegrationPanelProps {
 
 export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, vscodeApi }) => {
     const [integrations, setIntegrations] = React.useState<IntegrationWithStatus[]>([]);
+    const [projectName, setProjectName] = React.useState<string | undefined>(undefined);
     const [selectedIntegrationId, setSelectedIntegrationId] = React.useState<string | null>(null);
-    const [selectedConfig, setSelectedConfig] = React.useState<IntegrationConfig | null>(null);
-    const [selectedIntegrationName, setSelectedIntegrationName] = React.useState<string | undefined>(undefined);
-    const [selectedIntegrationType, setSelectedIntegrationType] = React.useState<IntegrationType | undefined>(
+    const [selectedConfig, setSelectedConfig] = React.useState<ConfigurableDatabaseIntegrationConfig | null>(null);
+    const [selectedIntegrationDefaultName, setSelectedIntegrationDefaultName] = React.useState<string | undefined>(
         undefined
     );
+    const [selectedIntegrationType, setSelectedIntegrationType] = React.useState<
+        ConfigurableDatabaseIntegrationType | undefined
+    >(undefined);
     const [message, setMessage] = React.useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [confirmReset, setConfirmReset] = React.useState<string | null>(null);
     const [confirmDelete, setConfirmDelete] = React.useState<string | null>(null);
 
     const messageTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+    const confirmResetTimerRef = React.useRef<NodeJS.Timeout | null>(null);
     const confirmDeleteTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
     // Cleanup timers on unmount
@@ -30,6 +43,10 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
             if (messageTimerRef.current) {
                 clearTimeout(messageTimerRef.current);
                 messageTimerRef.current = null;
+            }
+            if (confirmResetTimerRef.current) {
+                clearTimeout(confirmResetTimerRef.current);
+                confirmResetTimerRef.current = null;
             }
             if (confirmDeleteTimerRef.current) {
                 clearTimeout(confirmDeleteTimerRef.current);
@@ -50,12 +67,13 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
 
                 case 'update':
                     setIntegrations(msg.integrations);
+                    setProjectName(msg.projectName);
                     break;
 
                 case 'showForm':
                     setSelectedIntegrationId(msg.integrationId);
                     setSelectedConfig(msg.config);
-                    setSelectedIntegrationName(msg.integrationName);
+                    setSelectedIntegrationDefaultName(msg.integrationName);
                     setSelectedIntegrationType(msg.integrationType);
                     break;
 
@@ -86,6 +104,41 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
             type: 'configure',
             integrationId
         });
+    };
+
+    const handleReset = (integrationId: string) => {
+        // Clear any existing confirmReset timer before creating a new one
+        if (confirmResetTimerRef.current) {
+            clearTimeout(confirmResetTimerRef.current);
+        }
+
+        setConfirmReset(integrationId);
+    };
+
+    const handleConfirmReset = () => {
+        if (confirmReset) {
+            // Clear the timer when user confirms
+            if (confirmResetTimerRef.current) {
+                clearTimeout(confirmResetTimerRef.current);
+                confirmResetTimerRef.current = null;
+            }
+
+            vscodeApi.postMessage({
+                type: 'reset',
+                integrationId: confirmReset
+            });
+            setConfirmReset(null);
+        }
+    };
+
+    const handleCancelReset = () => {
+        // Clear the timer when user cancels
+        if (confirmResetTimerRef.current) {
+            clearTimeout(confirmResetTimerRef.current);
+            confirmResetTimerRef.current = null;
+        }
+
+        setConfirmReset(null);
     };
 
     const handleDelete = (integrationId: string) => {
@@ -123,7 +176,7 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
         setConfirmDelete(null);
     };
 
-    const handleSave = (config: IntegrationConfig) => {
+    const handleSave = (config: ConfigurableDatabaseIntegrationConfig) => {
         vscodeApi.postMessage({
             type: 'save',
             integrationId: config.id,
@@ -136,28 +189,49 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
     const handleCancel = () => {
         setSelectedIntegrationId(null);
         setSelectedConfig(null);
+        setSelectedIntegrationDefaultName(undefined);
+        setSelectedIntegrationType(undefined);
+    };
+
+    const handleSelectIntegrationType = (type: ConfigurableDatabaseIntegrationType) => {
+        // Generate a new UUID for the integration
+        const newId = generateUuid();
+
+        // Set up the form for creating a new integration
+        setSelectedIntegrationId(newId);
+        setSelectedConfig(null);
+        setSelectedIntegrationDefaultName(undefined);
+        setSelectedIntegrationType(type);
     };
 
     return (
         <div className={`integration-panel theme-${baseTheme}`}>
             <h1>{getLocString('integrationsTitle', 'Deepnote Integrations')}</h1>
+            {projectName && <p className="project-name">{projectName}</p>}
 
             {message && <div className={`message message-${message.type}`}>{message.text}</div>}
 
-            <IntegrationList integrations={integrations} onConfigure={handleConfigure} onDelete={handleDelete} />
+            <IntegrationList
+                integrations={integrations}
+                onConfigure={handleConfigure}
+                onReset={handleReset}
+                onDelete={handleDelete}
+            />
 
-            {selectedIntegrationId && (
+            <IntegrationTypeSelector onSelectType={handleSelectIntegrationType} />
+
+            {selectedIntegrationId && selectedIntegrationType && (
                 <ConfigurationForm
                     integrationId={selectedIntegrationId}
                     existingConfig={selectedConfig}
-                    integrationName={selectedIntegrationName}
+                    defaultName={selectedIntegrationDefaultName}
                     integrationType={selectedIntegrationType}
                     onSave={handleSave}
                     onCancel={handleCancel}
                 />
             )}
 
-            {confirmDelete && (
+            {confirmReset && (
                 <div className="configuration-form-overlay">
                     <div className="configuration-form-container" style={{ maxWidth: '400px' }}>
                         <div className="configuration-form-header">
@@ -178,8 +252,40 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
                             </p>
                         </div>
                         <div className="form-actions">
-                            <button type="button" className="primary" onClick={handleConfirmDelete}>
+                            <button type="button" className="primary" onClick={handleConfirmReset}>
                                 {getLocString('integrationsReset', 'Reset')}
+                            </button>
+                            <button type="button" className="secondary" onClick={handleCancelReset}>
+                                {getLocString('integrationsCancel', 'Cancel')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {confirmDelete && (
+                <div className="configuration-form-overlay">
+                    <div className="configuration-form-container" style={{ maxWidth: '400px' }}>
+                        <div className="configuration-form-header">
+                            <h2>{getLocString('integrationsConfirmDeleteTitle', 'Confirm Delete')}</h2>
+                        </div>
+                        <div className="configuration-form-body">
+                            <p>
+                                {getLocString(
+                                    'integrationsConfirmDeleteMessage',
+                                    'Are you sure you want to permanently delete this integration?'
+                                )}
+                            </p>
+                            <p style={{ marginTop: '10px', fontSize: '0.9em', opacity: 0.8 }}>
+                                {getLocString(
+                                    'integrationsConfirmDeleteDetails',
+                                    'This will permanently remove the integration from your project. This action cannot be undone.'
+                                )}
+                            </p>
+                        </div>
+                        <div className="form-actions">
+                            <button type="button" className="primary" onClick={handleConfirmDelete}>
+                                {getLocString('integrationsDelete', 'Delete')}
                             </button>
                             <button type="button" className="secondary" onClick={handleCancelDelete}>
                                 {getLocString('integrationsCancel', 'Cancel')}

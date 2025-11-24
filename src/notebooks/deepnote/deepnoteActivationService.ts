@@ -38,7 +38,7 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
      */
     public activate() {
         this.serializer = new DeepnoteNotebookSerializer(this.notebookManager);
-        this.explorerView = new DeepnoteExplorerView(this.extensionContext, this.notebookManager);
+        this.explorerView = new DeepnoteExplorerView(this.extensionContext, this.notebookManager, this.logger);
         this.editProtection = new DeepnoteInputBlockEditProtection(this.logger);
 
         this.extensionContext.subscriptions.push(workspace.registerNotebookSerializer('deepnote', this.serializer));

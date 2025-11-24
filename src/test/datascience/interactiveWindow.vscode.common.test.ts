@@ -48,6 +48,7 @@ import { sleep } from '../core';
 import { IPYTHON_VERSION_CODE } from '../constants';
 import { translateCellErrorOutput, getTextOutputValue } from '../../kernels/execution/helpers';
 import dedent from 'dedent';
+import AnsiToHtml from 'ansi-to-html';
 import { generateCellRangesFromDocument } from '../../interactive-window/editor-integration/cellFactory';
 import { Commands } from '../../platform/common/constants';
 import { IControllerRegistration } from '../../notebooks/controllers/types';
@@ -78,7 +79,7 @@ suite(`Interactive window execution @iw`, async function () {
         }
         await closeNotebooksAndCleanUpAfterTests(disposables);
         // restore the default value
-        const settings = vscode.workspace.getConfiguration('jupyter', null);
+        const settings = vscode.workspace.getConfiguration('deepnote', null);
         await settings.update('interactiveWindow.creationMode', 'multiple');
         logger.info(`Ended Test (completed) ${this.currentTest?.title}`);
     });
@@ -133,14 +134,14 @@ suite(`Interactive window execution @iw`, async function () {
         await verifyCells();
 
         // CLear all cells
-        await vscode.commands.executeCommand('jupyter.interactive.clearAllCells');
+        await vscode.commands.executeCommand('deepnote.interactive.clearAllCells');
         await waitForCondition(async () => notebookDocument.cellCount === 0, 5_000, 'Cells not cleared');
 
         // Restart kernel
         const kernelProvider = api.serviceContainer.get<IKernelProvider>(IKernelProvider);
         const kernel = kernelProvider.get(notebookDocument);
         const handler = createEventHandler(kernel!, 'onRestarted', disposables);
-        await vscode.commands.executeCommand('jupyter.restartkernel');
+        await vscode.commands.executeCommand('deepnote.restartkernel');
         // Wait for restart to finish
         await handler.assertFiredExactly(1, defaultNotebookTestTimeout);
         await activeInteractiveWindow.addCode(source, untitledPythonFile.uri, 0);
@@ -219,7 +220,7 @@ suite(`Interactive window execution @iw`, async function () {
     });
 
     test('Multiple interactive windows', async () => {
-        const settings = vscode.workspace.getConfiguration('jupyter', null);
+        const settings = vscode.workspace.getConfiguration('deepnote', null);
         await settings.update('interactiveWindow.creationMode', 'multiple');
         const window1 = await interactiveWindowProvider.getOrCreate(undefined);
         const window2 = await interactiveWindowProvider.getOrCreate(undefined);
@@ -397,7 +398,7 @@ ${actualCode}
         await waitForTextOutput(secondCell!, '1');
     });
     test('Error stack traces have correct line hrefs with mix of cell sources', async function () {
-        const settings = vscode.workspace.getConfiguration('jupyter', null);
+        const settings = vscode.workspace.getConfiguration('deepnote', null);
         await settings.update('interactiveWindow.creationMode', 'single');
 
         const interactiveWindow = await createStandaloneInteractiveWindow(interactiveWindowProvider);
@@ -419,8 +420,7 @@ ${actualCode}
         assert.equal(errorOutput.traceback.length, 4, 'Traceback wrong size');
 
         // Convert to html for easier parsing
-        const ansiToHtml = require('ansi-to-html') as typeof import('ansi-to-html');
-        const converter = new ansiToHtml();
+        const converter = new AnsiToHtml();
         const html = converter.toHtml(errorOutput.traceback.join('\n')) as string;
 
         assert.ok(html.includes('Traceback (most recent call last)'), 'traceback not found in output');
@@ -469,8 +469,7 @@ ${actualCode}
         assert.equal(errorOutput.traceback.length, 5, 'Traceback wrong size');
 
         // Convert to html for easier parsing
-        const ansiToHtml = require('ansi-to-html') as typeof import('ansi-to-html');
-        const converter = new ansiToHtml();
+        const converter = new AnsiToHtml();
         const html = converter.toHtml(errorOutput.traceback.join('\n')) as string;
 
         const text = html.replace(/<[^>]+>/g, '');
@@ -498,8 +497,7 @@ ${actualCode}
         assert.ok(errorOutput, 'No error output found');
 
         // Convert to html for easier parsing
-        const ansiToHtml = require('ansi-to-html') as typeof import('ansi-to-html');
-        const converter = new ansiToHtml();
+        const converter = new AnsiToHtml();
         const html = converter.toHtml(errorOutput.traceback.join('\n'));
 
         const text = html.replace(/<[^>]+>/g, '');
@@ -576,7 +574,7 @@ ${actualCode}
 
         let runFilePromise = vscode.commands.executeCommand(Commands.RunAllCells);
 
-        const settings = vscode.workspace.getConfiguration('jupyter', null);
+        const settings = vscode.workspace.getConfiguration('deepnote', null);
         const mode = (await settings.get('interactiveWindow.creationMode')) as InteractiveWindowMode;
         const interactiveWindow = interactiveWindowProvider.getExisting(tempFile.file, mode) as InteractiveWindow;
         await runInteractiveWindowInput('x = 5', interactiveWindow, 5);

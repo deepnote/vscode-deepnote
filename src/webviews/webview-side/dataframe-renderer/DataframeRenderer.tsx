@@ -38,7 +38,7 @@ interface DataframeRendererProps {
             name: string;
             stats: ColumnStats;
         }[];
-        preview_row_count: number;
+        preview_row_count?: number;
         row_count: number;
         rows: {
             _deepnote_index_column: number;
@@ -75,7 +75,7 @@ export const DataframeRenderer = memo(function DataframeRenderer({
     const selectId = useMemo(() => generateUuid(), []);
 
     const filteredColumns = data.columns.filter((column) => !column.name.startsWith('_deepnote_'));
-    const numberOfRows = Math.min(data.row_count, data.preview_row_count);
+    const numberOfRows = Number.isFinite(data.preview_row_count) ? data.preview_row_count : data.row_count;
     const numberOfColumns = filteredColumns.length;
 
     const totalPages = Math.ceil(data.row_count / pageSize);
@@ -153,13 +153,13 @@ export const DataframeRenderer = memo(function DataframeRenderer({
                                     {rows.map((value, index) => (
                                         <div
                                             key={index.toString()}
-                                            className={`p-[4px] border-b border-r border-[var(--vscode-panel-border)] font-mono ${
+                                            className={`p-[4px] min-h-[16px] border-b border-r border-[var(--vscode-panel-border)] font-mono ${
                                                 index % 2 === 0
                                                     ? 'bg-[var(--vscode-editor-background)]'
                                                     : 'bg-[var(--vscode-list-hoverBackground)]/50'
                                             }`}
                                         >
-                                            {value === null || value === undefined ? 'None' : String(value)}
+                                            {value == null ? 'None' : String(value)}
                                         </div>
                                     ))}
                                 </div>

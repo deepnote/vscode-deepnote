@@ -36,7 +36,7 @@ suite('Reserved Names Provider', () => {
         fs = mock<IFileSystemNode>();
         workspaceConfig = mock<WorkspaceConfiguration>();
         when(memento.update(anything(), anything())).thenResolve();
-        when(mockedVSCodeNamespaces.workspace.getConfiguration('jupyter')).thenReturn(instance(workspaceConfig));
+        when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote')).thenReturn(instance(workspaceConfig));
         when(workspaceConfig.get(ignoreListSettingName, anything())).thenReturn(defaultIgnoreList);
         when(memento.get(anything(), anything())).thenCall((_, defaultValue) => defaultValue as any);
         settingsChanged = new EventEmitter<ConfigurationChangeEvent>();
@@ -197,7 +197,7 @@ suite('Reserved Names Provider', () => {
         // Now, lets change the setting to un-ignore the above file.
         ignoreListInSettings = [...defaultIgnoreList];
         settingsChanged.fire({
-            affectsConfiguration: (section) => section === `jupyter.${ignoreListSettingName}`
+            affectsConfiguration: (section) => section === `deepnote.${ignoreListSettingName}`
         });
 
         uris = await reservedNamedProvider.getUriOverridingReservedPythonNames(cwd);

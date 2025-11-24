@@ -1,11 +1,15 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-const path = require('path');
-const jupyterServer = require('../out/test/datascience/jupyterServer.node');
-const fs = require('fs-extra');
+import path from 'node:path';
+import jupyterServer from '../out/test/datascience/jupyterServer.node.js';
+import fs from 'fs-extra';
+import { fileURLToPath } from 'node:url';
 
-exports.startJupyter = async function startJupyter(detached) {
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export async function startJupyter(detached) {
     const server = jupyterServer.JupyterServer.instance;
     // Need to start jupyter here before starting the test as it requires node to start it.
     const uri = await server.startJupyterWithToken({ detached });
@@ -26,4 +30,4 @@ exports.startJupyter = async function startJupyter(detached) {
         await fs.writeFile(bundleFile, newContents);
     }
     return { server, url: uri.toString() };
-};
+}

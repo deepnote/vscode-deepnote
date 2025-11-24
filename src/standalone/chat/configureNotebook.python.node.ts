@@ -22,7 +22,7 @@ import { getRecommendedPythonEnvironment } from '../../notebooks/controllers/pre
 import { getPythonEnvDisplayName } from '../../platform/interpreter/helpers';
 import { raceCancellationError } from '../../platform/common/cancellation';
 import { logger } from '../../platform/logging';
-import { getDisplayPath } from '../../platform/common/platform/fs-paths';
+import { getDisplayPath } from '../../platform/common/platform/fs-paths.node';
 import { IKernelProvider } from '../../kernels/types';
 import { BaseTool, IBaseToolParams } from './helper';
 import { basename } from '../../platform/vscode-path/resources';

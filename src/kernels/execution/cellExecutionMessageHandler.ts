@@ -25,6 +25,7 @@ import {
     extensions
 } from 'vscode';
 import { coerce, SemVer } from 'semver';
+import * as jupyterLab from '@jupyterlab/services';
 
 import type { Kernel } from '@jupyterlab/services';
 import { CellExecutionCreator } from './cellExecutionCreator';
@@ -305,8 +306,6 @@ export class CellExecutionMessageHandler implements IDisposable {
         if (this.cell.document.isClosed) {
             return this.endCellExecution();
         }
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const jupyterLab = require('@jupyterlab/services') as typeof import('@jupyterlab/services');
 
         if (!this.request && direction === 'recv') {
             const parentMsgId = getParentHeaderMsgId(msg);
@@ -506,8 +505,6 @@ export class CellExecutionMessageHandler implements IDisposable {
             logger.debug(`Kernel acknowledged execution of cell ${this.cell.index} @ ${this.startTime}`);
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const jupyterLab = require('@jupyterlab/services') as typeof import('@jupyterlab/services');
         if (jupyterLab.KernelMessage.isCommOpenMsg(msg)) {
             this.handleCommOpen(msg);
         } else if (jupyterLab.KernelMessage.isExecuteResultMsg(msg)) {
@@ -1143,9 +1140,6 @@ export class CellExecutionMessageHandler implements IDisposable {
 
     @swallowExceptions()
     private handleReply(msg: KernelMessage.IShellControlMessage) {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const jupyterLab = require('@jupyterlab/services') as typeof import('@jupyterlab/services');
-
         if (jupyterLab.KernelMessage.isExecuteReplyMsg(msg)) {
             this.handleExecuteReply(msg);
 

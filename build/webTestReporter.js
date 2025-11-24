@@ -1,18 +1,23 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-const fs = require('fs-extra');
-const path = require('path');
-const { createServer } = require('http');
-const jsonc = require('jsonc-parser');
-const mocha = require('mocha');
-const dedent = require('dedent');
-const { EventEmitter } = require('events');
-const colors = require('colors');
-const core = require('@actions/core');
-const glob = require('glob');
-const { ExtensionRootDir } = require('./constants');
-const { webcrypto } = require('node:crypto');
+import fs from 'fs-extra';
+import path from 'node:path';
+import { createServer } from 'http';
+import jsonc from 'jsonc-parser';
+import mocha from 'mocha';
+import dedent from 'dedent';
+import { EventEmitter } from 'events';
+import colors from 'colors';
+import core from '@actions/core';
+import glob from 'glob';
+import { ExtensionRootDir } from './constants.js';
+import { webcrypto } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const settingsFile = path.join(__dirname, '..', 'src', 'test', 'datascience', '.vscode', 'settings.json');
 const webTestSummaryJsonFile = path.join(__dirname, '..', 'logs', 'testresults.json');
@@ -20,9 +25,10 @@ const webTestSummaryNb = path.join(__dirname, '..', 'logs', 'testresults.ipynb')
 const failedWebTestSummaryNb = path.join(__dirname, '..', 'logs', 'failedtestresults.ipynb');
 const progress = [];
 const logsDir = path.join(ExtensionRootDir, 'logs');
+let server;
 
 async function captureScreenShot(name, res) {
-    const screenshot = require('screenshot-desktop');
+    const screenshot = (await import('screenshot-desktop')).default;
     fs.ensureDirSync(logsDir);
     const filename = path.join(logsDir, name);
     try {
@@ -34,7 +40,8 @@ async function captureScreenShot(name, res) {
     res.writeHead(200);
     res.end();
 }
-exports.startReportServer = async function () {
+
+export async function startReportServer() {
     return new Promise((resolve) => {
         console.log(`Creating test server`);
         server = createServer((req, res) => {
@@ -94,7 +101,7 @@ exports.startReportServer = async function () {
             });
         });
     });
-};
+}
 
 async function addCell(cells, output, failed, executionCount) {
     const stackFrames = failed ? (output.err.stack || '').split(/\r?\n/) : [];
@@ -181,7 +188,8 @@ async function addCell(cells, output, failed, executionCount) {
         outputs: [...assertionError, consoleOutput, ...screenshots]
     });
 }
-exports.dumpTestSummary = async () => {
+
+export async function dumpTestSummary() {
     try {
         const summary = JSON.parse(fs.readFileSync(webTestSummaryJsonFile).toString());
         const runner = new EventEmitter();
@@ -285,4 +293,4 @@ exports.dumpTestSummary = async () => {
         core.error('Failed to print test summary');
         core.setFailed(ex);
     }
-};
+}

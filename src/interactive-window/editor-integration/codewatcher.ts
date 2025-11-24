@@ -319,7 +319,9 @@ export class CodeWatcher implements ICodeWatcher {
 
     @debugDecorator('CodeWatcher::runCell', TraceOptions.BeforeCall)
     public async runCell(range: Range): Promise<void> {
+        console.log('[DEBUG] runCell, window.activeTextEditor:', window.activeTextEditor);
         if (!window.activeTextEditor || !window.activeTextEditor.document) {
+            console.log('[DEBUG] Early return');
             return;
         }
 
@@ -327,6 +329,7 @@ export class CodeWatcher implements ICodeWatcher {
         const advance =
             range.contains(window.activeTextEditor.selection.start) &&
             this.configService.getSettings(window.activeTextEditor.document.uri).enableAutoMoveToNextCell;
+        console.log('[DEBUG] Calling runMatchingCell, advance:', advance);
         return this.runMatchingCell(range, advance);
     }
 

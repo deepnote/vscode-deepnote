@@ -5,7 +5,7 @@ import { inject, injectable, named } from 'inversify';
 import { CancellationToken, CancellationTokenSource, Memento, Uri, env, window } from 'vscode';
 import { raceCancellation } from '../platform/common/cancellation';
 import { logger, debugDecorator, logValue } from '../platform/logging';
-import { getDisplayPath } from '../platform/common/platform/fs-paths';
+import { getDisplayPath } from '../platform/common/platform/fs-paths.node';
 import { IMemento, GLOBAL_MEMENTO, Resource, IDisplayOptions } from '../platform/common/types';
 import { DataScience, Common } from '../platform/common/utils/localize';
 import { IServiceContainer } from '../platform/ioc/types';
@@ -114,9 +114,9 @@ export class KernelDependencyService implements IKernelDependencyService {
         let promise = this.installPromises.get(key);
         let cancelTokenSource: CancellationTokenSource | undefined;
         if (!promise) {
-            const cancelTokenSource = new CancellationTokenSource();
+            cancelTokenSource = new CancellationTokenSource();
             const disposable = token.onCancellationRequested(() => {
-                cancelTokenSource.cancel();
+                cancelTokenSource!.cancel();
                 disposable.dispose();
             });
             const install = async () => {
@@ -133,7 +133,7 @@ export class KernelDependencyService implements IKernelDependencyService {
                     resource,
                     kernelConnection.interpreter!,
                     ui,
-                    cancelTokenSource,
+                    cancelTokenSource!,
                     cannotChangeKernels,
                     installWithoutPrompting
                 );
@@ -148,7 +148,7 @@ export class KernelDependencyService implements IKernelDependencyService {
             promise
                 .finally(() => {
                     disposable.dispose();
-                    cancelTokenSource.dispose();
+                    cancelTokenSource!.dispose();
                 })
                 .catch(noop);
             this.installPromises.set(key, promise);

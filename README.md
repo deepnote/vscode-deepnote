@@ -12,7 +12,7 @@
 
 # Deepnote in VS Code, Cursor, Windsurf, and Antigravity
 
-A powerful [Visual Studio Code](https://marketplace.visualstudio.com/items?itemName=Deepnote.vscode-deepnote), [Cursor](https://open-vsx.org/extension/Deepnote/vscode-deepnote), [Windsurf](https://open-vsx.org/extension/Deepnote/vscode-deepnote) and [Antigravity](https://open-vsx.org/extension/Deepnote/vscode-deepnote) extension that brings [Deepnote](https://deepnote.com/) notebook capabilities directly into your favorite editor. Work with sleek AI notebooks featuring SQL blocks, database integrations, and reactive blocks - all within your IDE.
+A powerful [Visual Studio Code](https://marketplace.visualstudio.com/items?itemName=Deepnote.vscode-deepnote), [Cursor](https://open-vsx.org/extension/Deepnote/vscode-deepnote), [Windsurf](https://open-vsx.org/extension/Deepnote/vscode-deepnote), and [Antigravity](https://open-vsx.org/extension/Deepnote/vscode-deepnote) extension that brings [Deepnote](https://deepnote.com/) notebook capabilities directly into your favorite editor. Work with sleek AI notebooks featuring SQL blocks, database integrations, and reactive blocks - all within your IDE.
 
 ![Deepnote Projects](./assets/deepnote-projects.png)
 

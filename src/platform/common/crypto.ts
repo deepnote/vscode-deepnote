@@ -16,21 +16,29 @@ let stopStoringHashes = false;
 
 let cryptoProvider: Crypto;
 declare var WorkerGlobalScope: Function | undefined;
-// Web
-if (typeof window === 'object') {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    cryptoProvider = (window as any).crypto;
+
+// Async initialization for Node.js crypto
+async function initCryptoProvider(): Promise<Crypto> {
+    // Web
+    if (typeof window === 'object') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return (window as any).crypto;
+    }
+    // Web worker
+    else if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return self.crypto;
+    }
+    // Node
+    else {
+        // eslint-disable-next-line local-rules/node-imports
+        const nodeCrypto = await import('node:crypto');
+        return nodeCrypto.webcrypto as Crypto;
+    }
 }
-// Web worker
-else if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    cryptoProvider = self.crypto;
-}
-// Node
-else {
-    // eslint-disable-next-line local-rules/node-imports
-    cryptoProvider = require('node:crypto').webcrypto;
-}
+
+// Initialize crypto provider (will be set on first use)
+let cryptoProviderPromise: Promise<Crypto> | undefined;
 
 /**
  * Computes a hash for a give string and returns hash as a hex value.
@@ -62,6 +70,14 @@ export async function computeHash(data: string, algorithm: 'SHA-512' | 'SHA-256'
 }
 
 async function computeHashInternal(data: string, algorithm: 'SHA-512' | 'SHA-256' | 'SHA-1'): Promise<string> {
+    // Ensure crypto provider is initialized
+    if (!cryptoProvider) {
+        if (!cryptoProviderPromise) {
+            cryptoProviderPromise = initCryptoProvider();
+        }
+        cryptoProvider = await cryptoProviderPromise;
+    }
+
     const inputBuffer = new TextEncoder().encode(data);
     const hashBuffer = await cryptoProvider.subtle.digest({ name: algorithm }, inputBuffer);
 

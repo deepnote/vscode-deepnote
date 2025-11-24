@@ -9,9 +9,9 @@ import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
 import { DeepnoteTreeItem, DeepnoteTreeItemType, type DeepnoteTreeItemContext } from './deepnoteTreeItem';
 import type { IExtensionContext } from '../../platform/common/types';
 import type { DeepnoteFile, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
-import * as uuidModule from '../../platform/common/uuid';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { ILogger } from '../../platform/logging/types';
+import * as uuidModule from '../../platform/common/uuid';
 
 function createMockLogger(): ILogger {
     return {
@@ -22,6 +22,20 @@ function createMockLogger(): ILogger {
         trace: () => undefined,
         ci: () => undefined
     } as ILogger;
+}
+
+// Helper to mock UUID generation by mocking the uuidUtils wrapper
+function createUuidMock(uuids: string[]): sinon.SinonStub {
+    let callCount = 0;
+    const stub = sinon.stub(uuidModule.uuidUtils, 'generateUuid');
+    stub.callsFake(() => {
+        if (callCount < uuids.length) {
+            return uuids[callCount++];
+        }
+        // Fallback to a default UUID if we run out of mocked values
+        return `fallback-uuid-${callCount++}`;
+    });
+    return stub;
 }
 
 suite('DeepnoteExplorerView', () => {
@@ -206,10 +220,12 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
     let mockContext: IExtensionContext;
     let mockManager: DeepnoteNotebookManager;
     let sandbox: sinon.SinonSandbox;
+    let uuidStubs: sinon.SinonStub[] = [];
 
     setup(() => {
         sandbox = sinon.createSandbox();
         resetVSCodeMocks();
+        uuidStubs = [];
 
         mockContext = {
             subscriptions: []
@@ -222,6 +238,8 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
     teardown(() => {
         sandbox.restore();
+        uuidStubs.forEach((stub) => stub.restore());
+        uuidStubs = [];
         resetVSCodeMocks();
     });
 
@@ -241,12 +259,9 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             // Mock user input
             when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(projectName));
 
-            // Mock UUID generation
-            const generateUuidStub = sandbox.stub(uuidModule, 'generateUuid');
-            generateUuidStub.onCall(0).returns(projectId);
-            generateUuidStub.onCall(1).returns(notebookId);
-            generateUuidStub.onCall(2).returns(blockGroupId);
-            generateUuidStub.onCall(3).returns(blockId);
+            // Mock UUID generation by mocking crypto.randomUUID
+            const uuidStub = createUuidMock([projectId, notebookId, blockGroupId, blockId]);
+            uuidStubs.push(uuidStub);
 
             // Mock file system
             const mockFS = mock<typeof workspace.fs>();
@@ -301,7 +316,9 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder as any]);
             when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(projectName));
-            sandbox.stub(uuidModule, 'generateUuid').returns('test-id');
+
+            const uuidStub = createUuidMock(['test-id', 'test-id', 'test-id', 'test-id']);
+            uuidStubs.push(uuidStub);
 
             const mockFS = mock<typeof workspace.fs>();
             when(mockFS.stat(anything())).thenReject(new Error('File not found'));
@@ -394,7 +411,9 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder as any]);
             when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(projectName));
-            sandbox.stub(uuidModule, 'generateUuid').returns('test-id');
+
+            const uuidStub = createUuidMock(['test-id', 'test-id', 'test-id', 'test-id']);
+            uuidStubs.push(uuidStub);
 
             const mockFS = mock<typeof workspace.fs>();
             when(mockFS.stat(anything())).thenReject(new Error('File not found'));
@@ -801,11 +820,9 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             // Mock user input
             when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(notebookName));
 
-            // Mock UUID generation
-            const generateUuidStub = sandbox.stub(uuidModule, 'generateUuid');
-            generateUuidStub.onCall(0).returns(newNotebookId);
-            generateUuidStub.onCall(1).returns(blockGroupId);
-            generateUuidStub.onCall(2).returns(blockId);
+            // Mock UUID generation by mocking crypto.randomUUID
+            const uuidStub = createUuidMock([newNotebookId, blockGroupId, blockId]);
+            uuidStubs.push(uuidStub);
 
             // Mock notebook opening
             const mockNotebook = { notebookType: 'deepnote' };
@@ -902,7 +919,8 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 return Promise.resolve('Test Notebook');
             });
 
-            sandbox.stub(uuidModule, 'generateUuid').returns('test-id');
+            const uuidStub = createUuidMock(['test-id', 'test-id', 'test-id']);
+            uuidStubs.push(uuidStub);
 
             when(mockedVSCodeNamespaces.workspace.openNotebookDocument(anything())).thenReturn(
                 Promise.resolve({} as any)
@@ -1320,11 +1338,9 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             });
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
 
-            // Mock UUID generation
-            const generateUuidStub = sandbox.stub(uuidModule, 'generateUuid');
-            generateUuidStub.onCall(0).returns(duplicatedNotebookId);
-            generateUuidStub.onCall(1).returns(blockId);
-            generateUuidStub.onCall(2).returns(blockGroupId);
+            // Mock UUID generation by mocking crypto.randomUUID
+            const uuidStub = createUuidMock([duplicatedNotebookId, blockId, blockGroupId]);
+            uuidStubs.push(uuidStub);
 
             // Mock notebook opening
             const mockNotebook = { notebookType: 'deepnote' };
@@ -1529,11 +1545,9 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
 
-            // Stub generateUuid to return predictable IDs
-            const generateUuidStub = sinon.stub(uuidModule, 'generateUuid');
-            generateUuidStub.onCall(0).returns('duplicate-notebook-id');
-            generateUuidStub.onCall(1).returns('duplicate-block-id');
-            generateUuidStub.onCall(2).returns('duplicate-blockgroup-id');
+            // Mock UUID generation by mocking crypto.randomUUID
+            const uuidStub = createUuidMock(['duplicate-notebook-id', 'duplicate-block-id', 'duplicate-blockgroup-id']);
+            uuidStubs.push(uuidStub);
 
             // Execute duplication
             await explorerView.duplicateNotebook(mockTreeItem as DeepnoteTreeItem);
@@ -1597,8 +1611,6 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 'Original outputs should not be affected by changes to duplicate'
             );
             assert.strictEqual(duplicateBlock.outputs!.length, 2, 'Duplicate outputs should have the new item');
-
-            generateUuidStub.restore();
         });
     });
 

@@ -7,7 +7,7 @@ import { IConfigurationService, Resource } from '../../../platform/common/types'
 import { IKernelWorkingDirectory, isLocalConnection, KernelConnectionMetadata } from '../../types';
 import { untildify } from '../../../platform/common/platform/fileUtils.node';
 import { IFileSystem } from '../../../platform/common/platform/types';
-import { getFilePath } from '../../../platform/common/platform/fs-paths';
+import { getFilePath } from '../../../platform/common/platform/fs-paths.node';
 import { expandWorkingDir } from '../../jupyter/jupyterUtils';
 import { inject, injectable } from 'inversify';
 import { raceCancellationError } from '../../../platform/common/cancellation';

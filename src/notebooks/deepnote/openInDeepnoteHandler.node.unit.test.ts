@@ -3,31 +3,81 @@ import * as sinon from 'sinon';
 import { instance, mock, when, anything } from 'ts-mockito';
 import { Uri, TextDocument, TextEditor, NotebookDocument, NotebookEditor } from 'vscode';
 import * as fs from 'fs';
+import esmock from 'esmock';
 
-import { OpenInDeepnoteHandler } from './openInDeepnoteHandler.node';
+import type { OpenInDeepnoteHandler } from './openInDeepnoteHandler.node';
 import { IExtensionContext } from '../../platform/common/types';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
-import * as importClient from './importClient.node';
+import { MAX_FILE_SIZE } from './importClient.node';
 
 suite('OpenInDeepnoteHandler', () => {
     let handler: OpenInDeepnoteHandler;
     let mockExtensionContext: IExtensionContext;
     let sandbox: sinon.SinonSandbox;
+    let initImportStub: sinon.SinonStub;
+    let uploadFileStub: sinon.SinonStub;
+    let getDeepnoteDomainStub: sinon.SinonStub;
+    let OpenInDeepnoteHandlerClass: typeof OpenInDeepnoteHandler;
 
-    setup(() => {
+    setup(async () => {
         resetVSCodeMocks();
         sandbox = sinon.createSandbox();
+
+        // Create stubs for importClient functions
+        initImportStub = sinon.stub().resolves({
+            importId: 'test-import-id',
+            uploadUrl: 'https://test.com/upload',
+            expiresAt: '2025-12-31T23:59:59Z'
+        });
+        uploadFileStub = sinon.stub().resolves();
+        getDeepnoteDomainStub = sinon.stub().returns('app.deepnote.com');
+
+        // Load the module with mocked dependencies using esmock
+        const module = await esmock('./openInDeepnoteHandler.node', {
+            './importClient.node': {
+                initImport: initImportStub,
+                uploadFile: uploadFileStub,
+                getDeepnoteDomain: getDeepnoteDomainStub,
+                getErrorMessage: (error: unknown) => String(error),
+                MAX_FILE_SIZE: MAX_FILE_SIZE
+            }
+        });
+
+        OpenInDeepnoteHandlerClass = module.OpenInDeepnoteHandler;
 
         mockExtensionContext = {
             subscriptions: []
         } as any;
 
-        handler = new OpenInDeepnoteHandler(mockExtensionContext);
+        handler = new OpenInDeepnoteHandlerClass(mockExtensionContext);
     });
 
     teardown(() => {
         sandbox.restore();
+        // Reset stubs between tests
+        initImportStub.reset();
+        initImportStub.resolves({
+            importId: 'test-import-id',
+            uploadUrl: 'https://test.com/upload',
+            expiresAt: '2025-12-31T23:59:59Z'
+        });
+        uploadFileStub.reset();
+        uploadFileStub.resolves();
+        getDeepnoteDomainStub.reset();
+        getDeepnoteDomainStub.returns('app.deepnote.com');
     });
+
+    /**
+     * Helper function to stub fs.promises.stat and fs.promises.readFile
+     * Reduces duplication across tests that need to mock file operations
+     */
+    function stubFsForDeepnote(testFileBuffer: Buffer, size = 1000) {
+        const statStub = sinon.stub().resolves({ size } as fs.Stats);
+        const readFileStub = sinon.stub().resolves(testFileBuffer);
+        sandbox.replace(fs.promises, 'stat', statStub as any);
+        sandbox.replace(fs.promises, 'readFile', readFileStub as any);
+        return { statStub, readFileStub };
+    }
 
     suite('activate', () => {
         test('should register command when activated', () => {
@@ -110,8 +160,7 @@ suite('OpenInDeepnoteHandler', () => {
             when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(mockNotebookEditor);
             when(mockedVSCodeNamespaces.commands.executeCommand(anything())).thenReturn(Promise.resolve(undefined));
 
-            const statStub = sandbox.stub(fs.promises, 'stat').resolves({ size: 1000 } as fs.Stats);
-            const readFileStub = sandbox.stub(fs.promises, 'readFile').resolves(testFileBuffer);
+            const { statStub, readFileStub } = stubFsForDeepnote(testFileBuffer);
             when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall((_options, callback) => {
                 withProgressCalled = true;
                 return callback(
@@ -123,13 +172,6 @@ suite('OpenInDeepnoteHandler', () => {
                     {} as any
                 );
             });
-            const initImportStub = sandbox.stub(importClient, 'initImport').resolves({
-                importId: 'test-import-id',
-                uploadUrl: 'https://test.com/upload',
-                expiresAt: '2025-12-31T23:59:59Z'
-            });
-            const uploadFileStub = sandbox.stub(importClient, 'uploadFile').resolves();
-            sandbox.stub(importClient, 'getDeepnoteDomain').returns('app.deepnote.com');
             when(mockedVSCodeNamespaces.env.openExternal(anything())).thenReturn(Promise.resolve(true));
 
             await (handler as any).handleOpenInDeepnote();
@@ -149,8 +191,7 @@ suite('OpenInDeepnoteHandler', () => {
             when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(mockNotebookEditor);
             when(mockedVSCodeNamespaces.window.activeTextEditor).thenReturn(mockTextEditor);
 
-            const statStub = sandbox.stub(fs.promises, 'stat').resolves({ size: 1000 } as fs.Stats);
-            const readFileStub = sandbox.stub(fs.promises, 'readFile').resolves(testFileBuffer);
+            const { statStub, readFileStub } = stubFsForDeepnote(testFileBuffer);
             when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall((_options, callback) => {
                 return callback(
                     {
@@ -161,13 +202,6 @@ suite('OpenInDeepnoteHandler', () => {
                     {} as any
                 );
             });
-            sandbox.stub(importClient, 'initImport').resolves({
-                importId: 'test-import-id',
-                uploadUrl: 'https://test.com/upload',
-                expiresAt: '2025-12-31T23:59:59Z'
-            });
-            sandbox.stub(importClient, 'uploadFile').resolves();
-            sandbox.stub(importClient, 'getDeepnoteDomain').returns('app.deepnote.com');
             when(mockedVSCodeNamespaces.env.openExternal(anything())).thenReturn(Promise.resolve(true));
 
             await (handler as any).handleOpenInDeepnote();
@@ -182,8 +216,7 @@ suite('OpenInDeepnoteHandler', () => {
             when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
             when(mockedVSCodeNamespaces.window.activeTextEditor).thenReturn(mockTextEditor);
 
-            const statStub = sandbox.stub(fs.promises, 'stat').resolves({ size: 1000 } as fs.Stats);
-            const readFileStub = sandbox.stub(fs.promises, 'readFile').resolves(testFileBuffer);
+            const { statStub, readFileStub } = stubFsForDeepnote(testFileBuffer);
             when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall((_options, callback) => {
                 return callback(
                     {
@@ -194,13 +227,6 @@ suite('OpenInDeepnoteHandler', () => {
                     {} as any
                 );
             });
-            sandbox.stub(importClient, 'initImport').resolves({
-                importId: 'test-import-id',
-                uploadUrl: 'https://test.com/upload',
-                expiresAt: '2025-12-31T23:59:59Z'
-            });
-            sandbox.stub(importClient, 'uploadFile').resolves();
-            sandbox.stub(importClient, 'getDeepnoteDomain').returns('app.deepnote.com');
             when(mockedVSCodeNamespaces.env.openExternal(anything())).thenReturn(Promise.resolve(true));
 
             await (handler as any).handleOpenInDeepnote();
@@ -238,8 +264,7 @@ suite('OpenInDeepnoteHandler', () => {
             when(mockedVSCodeNamespaces.window.activeTextEditor).thenReturn(mockTextEditor);
 
             const saveStub = sandbox.stub(mockDocument, 'save').resolves(true);
-            sandbox.stub(fs.promises, 'stat').resolves({ size: 1000 } as fs.Stats);
-            sandbox.stub(fs.promises, 'readFile').resolves(testFileBuffer);
+            stubFsForDeepnote(testFileBuffer);
             when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall((_options, callback) => {
                 return callback(
                     {
@@ -250,13 +275,6 @@ suite('OpenInDeepnoteHandler', () => {
                     {} as any
                 );
             });
-            sandbox.stub(importClient, 'initImport').resolves({
-                importId: 'test-import-id',
-                uploadUrl: 'https://test.com/upload',
-                expiresAt: '2025-12-31T23:59:59Z'
-            });
-            sandbox.stub(importClient, 'uploadFile').resolves();
-            sandbox.stub(importClient, 'getDeepnoteDomain').returns('app.deepnote.com');
             when(mockedVSCodeNamespaces.env.openExternal(anything())).thenReturn(Promise.resolve(true));
 
             await (handler as any).handleOpenInDeepnote();
@@ -292,8 +310,8 @@ suite('OpenInDeepnoteHandler', () => {
             when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
             when(mockedVSCodeNamespaces.window.activeTextEditor).thenReturn(mockTextEditor);
 
-            const largeSize = importClient.MAX_FILE_SIZE + 1;
-            const statStub = sandbox.stub(fs.promises, 'stat').resolves({ size: largeSize } as fs.Stats);
+            const largeSize = MAX_FILE_SIZE + 1;
+            const { statStub } = stubFsForDeepnote(testFileBuffer, largeSize);
             when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenCall((message) => {
                 errorMessage = message;
                 return Promise.resolve(undefined);
@@ -310,11 +328,13 @@ suite('OpenInDeepnoteHandler', () => {
             const mockTextEditor = createMockTextEditor(testFileUri);
             let errorMessage: string | undefined;
 
+            // Override the default stub to reject
+            initImportStub.rejects(new Error('Network error'));
+
             when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
             when(mockedVSCodeNamespaces.window.activeTextEditor).thenReturn(mockTextEditor);
 
-            sandbox.stub(fs.promises, 'stat').resolves({ size: 1000 } as fs.Stats);
-            sandbox.stub(fs.promises, 'readFile').resolves(testFileBuffer);
+            stubFsForDeepnote(testFileBuffer);
             when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall((_options, callback) => {
                 return callback(
                     {
@@ -325,7 +345,6 @@ suite('OpenInDeepnoteHandler', () => {
                     {} as any
                 );
             });
-            const initImportStub = sandbox.stub(importClient, 'initImport').rejects(new Error('Network error'));
             when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenCall((message) => {
                 errorMessage = message;
                 return Promise.resolve(undefined);
@@ -341,11 +360,13 @@ suite('OpenInDeepnoteHandler', () => {
             const mockTextEditor = createMockTextEditor(testFileUri);
             let errorMessage: string | undefined;
 
+            // Override the default stub to reject
+            uploadFileStub.rejects(new Error('Upload failed'));
+
             when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
             when(mockedVSCodeNamespaces.window.activeTextEditor).thenReturn(mockTextEditor);
 
-            sandbox.stub(fs.promises, 'stat').resolves({ size: 1000 } as fs.Stats);
-            sandbox.stub(fs.promises, 'readFile').resolves(testFileBuffer);
+            stubFsForDeepnote(testFileBuffer);
             when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall((_options, callback) => {
                 return callback(
                     {
@@ -356,12 +377,6 @@ suite('OpenInDeepnoteHandler', () => {
                     {} as any
                 );
             });
-            sandbox.stub(importClient, 'initImport').resolves({
-                importId: 'test-import-id',
-                uploadUrl: 'https://test.com/upload',
-                expiresAt: '2025-12-31T23:59:59Z'
-            });
-            const uploadFileStub = sandbox.stub(importClient, 'uploadFile').rejects(new Error('Upload failed'));
             when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenCall((message) => {
                 errorMessage = message;
                 return Promise.resolve(undefined);
@@ -380,8 +395,7 @@ suite('OpenInDeepnoteHandler', () => {
             when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(mockNotebookEditor);
             when(mockedVSCodeNamespaces.commands.executeCommand(anything())).thenReturn(Promise.resolve(undefined));
 
-            const statStub = sandbox.stub(fs.promises, 'stat').resolves({ size: 1000 } as fs.Stats);
-            sandbox.stub(fs.promises, 'readFile').resolves(testFileBuffer);
+            const { statStub } = stubFsForDeepnote(testFileBuffer);
             when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall((_options, callback) => {
                 return callback(
                     {
@@ -392,13 +406,6 @@ suite('OpenInDeepnoteHandler', () => {
                     {} as any
                 );
             });
-            sandbox.stub(importClient, 'initImport').resolves({
-                importId: 'test-import-id',
-                uploadUrl: 'https://test.com/upload',
-                expiresAt: '2025-12-31T23:59:59Z'
-            });
-            sandbox.stub(importClient, 'uploadFile').resolves();
-            sandbox.stub(importClient, 'getDeepnoteDomain').returns('app.deepnote.com');
             when(mockedVSCodeNamespaces.env.openExternal(anything())).thenReturn(Promise.resolve(true));
 
             await (handler as any).handleOpenInDeepnote();

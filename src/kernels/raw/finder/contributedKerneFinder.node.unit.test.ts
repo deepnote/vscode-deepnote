@@ -26,6 +26,7 @@ import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
 import { IPythonExtensionChecker } from '../../../platform/api/types';
 import { PYTHON_LANGUAGE } from '../../../platform/common/constants';
 import * as platform from '../../../platform/common/utils/platform';
+import { platformUtils } from '../../../platform/common/utils/platform';
 import { CancellationTokenSource, Disposable, EventEmitter, Memento, Uri } from 'vscode';
 import { IDisposable, IExtensionContext } from '../../../platform/common/types';
 import { dispose } from '../../../platform/common/utils/lifecycle';
@@ -94,7 +95,7 @@ import { setPythonApi } from '../../../platform/interpreter/helpers';
         async function initialize(testData: TestData, activeInterpreter?: PythonEnvironment & { sysPrefix: string }) {
             disposables.push(cancelToken);
             cancelToken = new CancellationTokenSource();
-            const getOSTypeStub = sinon.stub(platform, 'getOSType');
+            const getOSTypeStub = sinon.stub(platformUtils, 'getOSType');
             getOSTypeStub.returns(isWindows ? platform.OSType.Windows : platform.OSType.Linux);
             const interpreterService = mock(InterpreterService);
             onDidChangeInterpreter = new EventEmitter<PythonEnvironment | undefined>();

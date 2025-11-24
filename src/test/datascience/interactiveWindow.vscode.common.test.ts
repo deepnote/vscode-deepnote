@@ -48,6 +48,7 @@ import { sleep } from '../core';
 import { IPYTHON_VERSION_CODE } from '../constants';
 import { translateCellErrorOutput, getTextOutputValue } from '../../kernels/execution/helpers';
 import dedent from 'dedent';
+import AnsiToHtml from 'ansi-to-html';
 import { generateCellRangesFromDocument } from '../../interactive-window/editor-integration/cellFactory';
 import { Commands } from '../../platform/common/constants';
 import { IControllerRegistration } from '../../notebooks/controllers/types';
@@ -419,8 +420,7 @@ ${actualCode}
         assert.equal(errorOutput.traceback.length, 4, 'Traceback wrong size');
 
         // Convert to html for easier parsing
-        const ansiToHtml = require('ansi-to-html') as typeof import('ansi-to-html');
-        const converter = new ansiToHtml();
+        const converter = new AnsiToHtml();
         const html = converter.toHtml(errorOutput.traceback.join('\n')) as string;
 
         assert.ok(html.includes('Traceback (most recent call last)'), 'traceback not found in output');
@@ -469,8 +469,7 @@ ${actualCode}
         assert.equal(errorOutput.traceback.length, 5, 'Traceback wrong size');
 
         // Convert to html for easier parsing
-        const ansiToHtml = require('ansi-to-html') as typeof import('ansi-to-html');
-        const converter = new ansiToHtml();
+        const converter = new AnsiToHtml();
         const html = converter.toHtml(errorOutput.traceback.join('\n')) as string;
 
         const text = html.replace(/<[^>]+>/g, '');
@@ -498,8 +497,7 @@ ${actualCode}
         assert.ok(errorOutput, 'No error output found');
 
         // Convert to html for easier parsing
-        const ansiToHtml = require('ansi-to-html') as typeof import('ansi-to-html');
-        const converter = new ansiToHtml();
+        const converter = new AnsiToHtml();
         const html = converter.toHtml(errorOutput.traceback.join('\n'));
 
         const text = html.replace(/<[^>]+>/g, '');

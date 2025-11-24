@@ -3,7 +3,7 @@
 
 import { inject, injectable, named } from 'inversify';
 import { Memento, workspace } from 'vscode';
-import { getExperimentationService, IExperimentationService, TargetPopulation } from 'vscode-tas-client';
+import { IExperimentationService, TargetPopulation } from 'vscode-tas-client';
 import { IApplicationEnvironment } from '../application/types';
 import { JVSC_EXTENSION_ID, isPreReleaseVersion } from '../constants';
 import { logger } from '../../logging';
@@ -12,6 +12,7 @@ import { Experiments } from '../utils/localize';
 import { Experiments as ExperimentGroups } from '../types';
 import { ExperimentationTelemetry } from './telemetry.node';
 import { getVSCodeChannel } from '../application/applicationEnvironment';
+import { tasClientWrapper } from './tasClientWrapper';
 
 // This is a hacky way to determine what experiments have been loaded by the Experiments service.
 // There's no public API yet, hence we access the global storage that is updated by the experiments package.
@@ -67,7 +68,7 @@ export class ExperimentService implements IExperimentService {
 
         const telemetryReporter = new ExperimentationTelemetry();
 
-        this.experimentationService = getExperimentationService(
+        this.experimentationService = tasClientWrapper.getExperimentationService(
             JVSC_EXTENSION_ID,
             this.appEnvironment.extensionVersion!,
             targetPopulation,

@@ -9,7 +9,7 @@ import { JupyterInstallError } from '../../../platform/errors/jupyterInstallErro
 import { GetServerOptions, IJupyterConnection } from '../../types';
 import { IJupyterServerHelper, IJupyterServerProvider } from '../types';
 import { NotSupportedInWebError } from '../../../platform/errors/notSupportedInWebError';
-import { getFilePath } from '../../../platform/common/platform/fs-paths';
+import { getFilePath } from '../../../platform/common/platform/fs-paths.node';
 import { Cancellation, isCancellationError } from '../../../platform/common/cancellation';
 import { getPythonEnvDisplayName } from '../../../platform/interpreter/helpers';
 

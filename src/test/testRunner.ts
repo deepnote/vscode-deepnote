@@ -12,9 +12,14 @@ import { MAX_EXTENSION_ACTIVATION_TIME } from './constants.node';
 import { noop } from './core';
 import { stopJupyterServer } from './datascience/notebook/helper.node';
 import { initialize } from './initialize.node';
+import { createRequire } from 'module';
+import { getDirname } from '../platform/common/esmUtils.node';
+
+const __dirname = getDirname(import.meta.url);
 
 // Linux: prevent a weird NPE when mocha on Linux requires the window size from the TTY.
 // Since we are not running in a tty environment, we just implement the method statically.
+const require = createRequire(import.meta.url);
 const tty = require('tty');
 if (!tty.getWindowSize) {
     tty.getWindowSize = function (): number[] {
@@ -49,7 +54,9 @@ export function configure(setupOptions: SetupOptions): void {
 export async function run(): Promise<void> {
     const testsRoot = path.join(__dirname, '..');
     // Enable source map support.
-    require('source-map-support').install();
+    // @ts-expect-error - source-map-support doesn't have type definitions
+    const sourceMapSupport = await import('source-map-support');
+    sourceMapSupport.default.install();
 
     /**
      * Waits until the Python Extension completes loading or a timeout.

@@ -73,3 +73,4 @@ tmp
 vscode.d.ts
 vscode.proposed.*.d.ts
 xunit-test-results.xml
+tsconfig.tsbuildinfo

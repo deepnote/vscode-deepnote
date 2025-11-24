@@ -1,10 +1,13 @@
 import { assert } from 'chai';
+import { when } from 'ts-mockito';
 import * as yaml from 'js-yaml';
+import type { NotebookDocument } from 'vscode';
 
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
 import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
 import type { DeepnoteFile, DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
+import { mockedVSCodeNamespaces } from '../../test/vscode-mock';
 
 suite('DeepnoteNotebookSerializer', () => {
     let serializer: DeepnoteNotebookSerializer;
@@ -205,6 +208,34 @@ project:
             const result = serializer.findCurrentNotebookId('project-123');
 
             assert.strictEqual(result, 'notebook-456');
+        });
+
+        test('should fall back to active notebook document when no stored selection', () => {
+            // Create a mock notebook document
+            const mockNotebookDoc = {
+                then: undefined, // Prevent mock from being treated as a Promise-like thenable
+                notebookType: 'deepnote',
+                metadata: {
+                    deepnoteProjectId: 'project-123',
+                    deepnoteNotebookId: 'notebook-from-workspace'
+                },
+                uri: {} as any,
+                version: 1,
+                isDirty: false,
+                isUntitled: false,
+                isClosed: false,
+                cellCount: 0,
+                cellAt: () => ({}) as any,
+                getCells: () => [],
+                save: async () => true
+            } as NotebookDocument;
+
+            // Configure the mocked workspace.notebookDocuments (same pattern as other tests)
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([mockNotebookDoc]);
+
+            const result = serializer.findCurrentNotebookId('project-123');
+
+            assert.strictEqual(result, 'notebook-from-workspace');
         });
 
         test('should return undefined for unknown project', () => {

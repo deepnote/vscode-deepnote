@@ -28,7 +28,7 @@ This separation means language experts can focus on building great language serv
 
 The LSP architecture has three main components:
 
-```
+```text
 ┌─────────────────┐         JSON-RPC          ┌─────────────────┐
 │                 │ ◄──────────────────────► │                 │
 │  Editor/IDE     │    (WebSocket/stdio)     │ Language Server │
@@ -82,7 +82,7 @@ The LSP servers run as background processes—you don't need to start them manua
 
 The LSP server is a **separate process** that runs alongside your notebook environment:
 
-```
+```text
 ┌──────────────────────────────────────────────┐
 │  Deepnote Toolkit Environment                │
 │                                              │
@@ -118,19 +118,19 @@ This separation is crucial because:
 
 The LSP server provides IDE-quality features that traditional notebooks lack:
 
-**Real-Time Analysis**
+#### Real-Time Analysis
 
 - Parses your code without executing it
 - Tracks imports, variable definitions, and function signatures
 - Provides instant feedback on syntax errors and potential issues
 
-**Context-Aware Intelligence**
+#### Context-Aware Intelligence
 
 - Understands your project structure
 - Knows about imported libraries and their APIs
 - Tracks variable types and usage patterns
 
-**Multi-Language Support**
+#### Multi-Language Support
 
 - Python blocks get Python-specific intelligence
 - SQL blocks get SQL-specific intelligence
@@ -140,7 +140,7 @@ The LSP server provides IDE-quality features that traditional notebooks lack:
 
 Notebooks present unique challenges for LSP because they're not traditional files. Here's how Deepnote solves this:
 
-**Virtual Document Model**
+#### Virtual Document Model
 
 ```python
 # Cell 1
@@ -166,7 +166,7 @@ This allows the language server to understand:
 - Variables defined in previous cells
 - The overall execution context of your notebook
 
-**Cell Independence**
+#### Cell Independence
 
 Unlike execution (which can happen in any order), LSP analysis respects cell order in the notebook. This means you get accurate intelligence even if you haven't executed cells yet.
 
@@ -180,7 +180,7 @@ Deepnote maintains forks of well-established LSP servers:
 - Built on top of Jedi for static analysis
 - Supports plugins for additional features (linting, formatting)
 
-**sql-language-server**
+#### sql-language-server
 
 - Provides SQL-specific intelligence
 - Understands database schemas
@@ -299,7 +299,7 @@ The Deepnote VS Code extension provides seamless LSP integration for `.deepnote`
 
 The extension integrates with LSP through a dedicated client manager:
 
-```
+```text
 ┌─────────────────────────────────────────────────────┐
 │  VS Code Extension                                  │
 │                                                     │
@@ -340,7 +340,7 @@ When you open a `.deepnote` file in VS Code:
 
 The `DeepnoteLspClientManager` (in `src/kernels/deepnote/deepnoteLspClientManager.node.ts`) handles:
 
-**Client Lifecycle**
+#### Client Lifecycle
 ```typescript
 // When kernel starts
 await lspClientManager.startLspClients(
@@ -353,12 +353,12 @@ await lspClientManager.startLspClients(
 await lspClientManager.stopLspClients(notebookUri);
 ```
 
-**Per-Notebook Isolation**
+#### Per-Notebook Isolation
 - Each notebook gets its own LSP client instance
 - Clients are isolated to prevent conflicts
 - Automatic cleanup when notebooks close
 
-**Duplicate Prevention**
+#### Duplicate Prevention
 - Prevents multiple clients for the same notebook
 - Reuses existing clients when possible
 - Graceful handling of client errors
@@ -407,25 +407,25 @@ This ensures code intelligence works in:
 
 ### Features Provided
 
-**Real-Time Code Intelligence**
+#### Real-Time Code Intelligence
 - Autocomplete as you type in notebook cells
 - Hover documentation for functions and variables
 - Signature help for function parameters
 - Error detection before execution
 
-**Context Awareness**
+#### Context Awareness
 - Understands imports and dependencies from the venv
 - Knows about variables defined in earlier cells
 - Provides relevant suggestions based on cell context
 
-**Integration with Kernel**
+#### Integration with Kernel
 - LSP runs alongside the Deepnote kernel
 - Both share the same Python environment
 - Consistent experience between static analysis and execution
 
 ### Implementation Details
 
-**Service Registration**
+#### Service Registration
 
 The LSP client manager is registered as a singleton service:
 
@@ -437,7 +437,7 @@ serviceManager.addSingleton<IDeepnoteLspClientManager>(
 );
 ```
 
-**Kernel Lifecycle Integration**
+#### Kernel Lifecycle Integration
 
 The manager integrates with kernel auto-selection:
 
@@ -452,7 +452,7 @@ await this.lspClientManager.startLspClients(
 );
 ```
 
-**Error Handling**
+#### Error Handling
 
 The implementation gracefully handles:
 - Missing `python-lsp-server` installation
@@ -462,17 +462,17 @@ The implementation gracefully handles:
 
 ### User Experience
 
-**Transparent Operation**
+#### Transparent Operation
 - No manual configuration required
 - Automatically starts with notebooks
 - Seamlessly integrates with VS Code features
 
-**Performance**
+#### Performance
 - Lightweight per-notebook clients
 - Fast response times for code intelligence
 - Minimal impact on notebook execution
 
-**Reliability**
+#### Reliability
 - Robust error handling
 - Automatic reconnection on failures
 - Clean shutdown on notebook close

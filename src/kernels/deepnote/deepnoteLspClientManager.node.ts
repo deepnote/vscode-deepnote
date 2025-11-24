@@ -45,7 +45,6 @@ export class DeepnoteLspClientManager
             return;
         }
 
-        // Check for cancellation before starting
         if (token?.isCancellationRequested) {
             return;
         }
@@ -71,15 +70,16 @@ export class DeepnoteLspClientManager
         this.pendingStarts.set(notebookKey, true);
 
         try {
-            // Check cancellation before expensive operation
             if (token?.isCancellationRequested) {
                 return;
             }
 
             const pythonClient = await this.createPythonLspClient(notebookUri, interpreter, token);
 
-            // Check cancellation after client creation
             if (token?.isCancellationRequested) {
+                // Clean up the client if cancellation occurred after creation
+                await pythonClient.stop();
+                await pythonClient.dispose();
                 return;
             }
 
@@ -115,29 +115,28 @@ export class DeepnoteLspClientManager
 
         logger.info(`Stopping LSP clients for ${notebookKey}`);
 
-        try {
-            if (clientInfo.pythonClient) {
-                if (token?.isCancellationRequested) {
-                    return;
-                }
+        // Stop all clients without intermediate cancellation checks to ensure complete cleanup
+        if (clientInfo.pythonClient) {
+            try {
                 await clientInfo.pythonClient.stop();
                 await clientInfo.pythonClient.dispose();
+            } catch (error) {
+                logger.error(`Error stopping Python client for ${notebookKey}:`, error);
             }
+        }
 
-            if (clientInfo.sqlClient) {
-                if (token?.isCancellationRequested) {
-                    return;
-                }
+        if (clientInfo.sqlClient) {
+            try {
                 await clientInfo.sqlClient.stop();
                 await clientInfo.sqlClient.dispose();
+            } catch (error) {
+                logger.error(`Error stopping SQL client for ${notebookKey}:`, error);
             }
-
-            this.clients.delete(notebookKey);
-
-            logger.info(`LSP clients stopped for ${notebookKey}`);
-        } catch (error) {
-            logger.error(`Error stopping LSP clients for ${notebookKey}:`, error);
         }
+
+        this.clients.delete(notebookKey);
+
+        logger.info(`LSP clients stopped for ${notebookKey}`);
     }
 
     public async stopAllClients(token?: vscode.CancellationToken): Promise<void> {
@@ -156,13 +155,23 @@ export class DeepnoteLspClientManager
             }
 
             if (clientInfo.pythonClient) {
-                stopPromises.push(clientInfo.pythonClient.stop().catch(noop));
-                stopPromises.push(clientInfo.pythonClient.dispose().catch(noop));
+                // Chain stop() and dispose() sequentially for each client
+                stopPromises.push(
+                    clientInfo.pythonClient
+                        .stop()
+                        .catch(noop)
+                        .then(() => clientInfo.pythonClient!.dispose().catch(noop))
+                );
             }
 
             if (clientInfo.sqlClient) {
-                stopPromises.push(clientInfo.sqlClient.stop().catch(noop));
-                stopPromises.push(clientInfo.sqlClient.dispose().catch(noop));
+                // Chain stop() and dispose() sequentially for each client
+                stopPromises.push(
+                    clientInfo.sqlClient
+                        .stop()
+                        .catch(noop)
+                        .then(() => clientInfo.sqlClient!.dispose().catch(noop))
+                );
             }
         }
 

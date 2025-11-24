@@ -1,6 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+import * as vscode from 'vscode';
+
 export const JVSC_EXTENSION_ID_FOR_TESTS = 'Deepnote.vscode-deepnote';
 export const PerformanceExtensionId = 'ms-toolsai.vscode-notebook-perf';
 
@@ -56,8 +58,6 @@ function isMultirootTest() {
         return false;
     }
     try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const vscode = require('vscode');
         const workspace = vscode.workspace;
         return Array.isArray(workspace.workspaceFolders) && workspace.workspaceFolders.length > 1;
     } catch {

@@ -8,9 +8,17 @@ export function normCasePath(filePath: string): string {
     return getOSType() === OSType.Windows ? path.normalize(filePath).toUpperCase() : path.normalize(filePath);
 }
 
-export function arePathsSame(path1: string, path2: string): boolean {
+function arePathsSameImpl(path1: string, path2: string): boolean {
     return normCasePath(path1) === normCasePath(path2);
 }
+
+// Export through a mutable object to allow stubbing in ESM tests
+export const fileUtilsCommonUtils = {
+    arePathsSame: arePathsSameImpl
+};
+
+// Keep original export for backwards compatibility
+export const arePathsSame = fileUtilsCommonUtils.arePathsSame;
 
 /**
  * Returns true if given file path exists within the given parent directory, false otherwise.

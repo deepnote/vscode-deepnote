@@ -10,7 +10,7 @@ import { TemporaryFile } from './types';
 import { IFileSystemNode } from './types.node';
 import { ENCODING, FileSystem as FileSystemBase } from './fileSystem';
 import { FileType, Uri } from 'vscode';
-import { getFilePath } from './fs-paths';
+import { getFilePath } from './fs-paths.node';
 
 /**
  * File system abstraction which wraps the VS Code API.

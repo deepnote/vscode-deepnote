@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import * as fsapi from 'fs-extra';
+import fsapi from 'fs-extra';
 import * as path from '../../../platform/vscode-path/path';
 import { ShellOptions, ExecutionResult, IProcessServiceFactory } from '../process/types.node';
 import { IConfigurationService } from '../types';
@@ -27,20 +27,40 @@ export async function shellExecute(command: string, options: ShellOptions = {}):
 
 // filesystem
 
-export function pathExists(absPath: string): Promise<boolean> {
+function pathExistsImpl(absPath: string): Promise<boolean> {
     return fsapi.pathExists(absPath);
 }
 
-export function pathExistsSync(absPath: string): boolean {
+function pathExistsSyncImpl(absPath: string): boolean {
     return fsapi.pathExistsSync(absPath);
 }
 
-export function readFile(filePath: string): Promise<string> {
+export function pathExistsSync(absPath: string): boolean {
+    return pathExistsSyncImpl(absPath);
+}
+
+function readFileImpl(filePath: string): Promise<string> {
     return fsapi.readFile(filePath, 'utf-8');
 }
 
 export function readFileSync(filePath: string): string {
     return fsapi.readFileSync(filePath, 'utf-8');
+}
+
+// Export through a mutable object to allow stubbing in ESM tests
+export const fileUtilsNodeUtils = {
+    pathExists: pathExistsImpl,
+    readFile: readFileImpl
+};
+
+// Delegation wrappers that call through fileUtilsNodeUtils at runtime
+// This allows test stubs to take effect
+export function pathExists(absPath: string): Promise<boolean> {
+    return fileUtilsNodeUtils.pathExists(absPath);
+}
+
+export function readFile(filePath: string): Promise<string> {
+    return fileUtilsNodeUtils.readFile(filePath);
 }
 
 export const untildify: (value: string) => string = (value) => untilidfyCommon(value, homedir());

@@ -5,7 +5,7 @@
 
 import { assert } from 'chai';
 import * as path from '../../platform/vscode-path/path';
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import * as os from 'os';
 import { getCondaFile } from './condaService.node';
 import { glob } from 'glob';

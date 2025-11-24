@@ -4,20 +4,26 @@
 import { assert } from 'chai';
 import * as sinon from 'sinon';
 import { ExperimentationTelemetry } from '../../../platform/common/experiments/telemetry.node';
-import * as Telemetry from '../../../platform/telemetry/index';
+import { telemetryWrapper } from '../../../platform/telemetry/wrapper';
 
 suite('Experimentation telemetry', () => {
     const event = 'SomeEventName';
 
+    let sandbox: sinon.SinonSandbox;
     let setSharedPropertyStub: sinon.SinonStub;
     let experimentTelemetry: ExperimentationTelemetry;
     let eventProperties: Map<string, string>;
 
     setup(() => {
-        sinon.stub(Telemetry, 'sendTelemetryEvent').callsFake(() => {
-            // Stub for telemetry (now disabled)
-        });
-        setSharedPropertyStub = sinon.stub(Telemetry, 'setSharedProperty');
+        sandbox = sinon.createSandbox();
+        sandbox.replace(
+            telemetryWrapper,
+            'sendTelemetryEvent',
+            sinon.stub().callsFake(() => {
+                // Stub for telemetry (now disabled)
+            })
+        );
+        setSharedPropertyStub = sandbox.replace(telemetryWrapper, 'setSharedProperty', sinon.stub()) as sinon.SinonStub;
 
         eventProperties = new Map<string, string>();
         eventProperties.set('foo', 'one');
@@ -27,7 +33,7 @@ suite('Experimentation telemetry', () => {
     });
 
     teardown(() => {
-        sinon.restore();
+        sandbox.restore();
     });
 
     test('Calling postEvent should not throw (telemetry disabled)', () => {

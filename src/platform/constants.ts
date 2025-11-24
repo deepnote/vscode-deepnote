@@ -6,12 +6,9 @@ export const HiddenFileFormatString = '_HiddenFile_{0}.py';
 export const MillisecondsInADay = 24 * 60 * 60 * 1_000;
 
 export function isPreReleaseVersion(): boolean {
-    try {
-        return require('vscode-jupyter-release-version').isPreRelesVersionOfJupyterExtension === true;
-    } catch {
-        // Dev version is treated as pre-release.
-        return true;
-    }
+    // In web/browser contexts, treat as pre-release
+    // Node.js-specific logic is in constants.node.ts
+    return true;
 }
 
 export const Exiting = {

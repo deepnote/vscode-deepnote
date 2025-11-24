@@ -1,5 +1,5 @@
 /** @type {import('tailwindcss').Config} */
-module.exports = {
+export default {
     content: ['./src/webviews/webview-side/dataframe-renderer/**/*.{ts,tsx}'],
     theme: {
         extend: {

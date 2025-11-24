@@ -7,7 +7,7 @@ import * as path from '../../../platform/vscode-path/path';
 import * as uriPath from '../../../platform/vscode-path/resources';
 import { CancellationToken, Uri } from 'vscode';
 import { logger, errorDecorator } from '../../../platform/logging';
-import { getDisplayPath, getFilePath } from '../../../platform/common/platform/fs-paths';
+import { getDisplayPath, getFilePath } from '../../../platform/common/platform/fs-paths.node';
 import { IFileSystemNode } from '../../../platform/common/platform/types.node';
 import { Resource, ReadWrite, IDisplayOptions } from '../../../platform/common/types';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';

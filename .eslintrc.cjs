@@ -47,7 +47,7 @@ module.exports = {
         '@typescript-eslint/no-explicit-any': 'error',
         '@typescript-eslint/no-non-null-assertion': 'off',
         'no-unused-vars': 'off',
-        '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '_\\w*' }],
+        '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '_\\w*', varsIgnorePattern: '_\\w*' }],
         'no-use-before-define': 'off',
         '@typescript-eslint/no-use-before-define': [
             'error',
@@ -74,7 +74,14 @@ module.exports = {
         'import/no-unresolved': [
             'error',
             {
-                ignore: ['monaco-editor', 'vscode', 'react-error-boundary']
+                ignore: [
+                    'monaco-editor',
+                    'vscode',
+                    'react-error-boundary',
+                    'vega-lite',
+                    'vega-embed',
+                    'why-is-node-running'
+                ]
             }
         ],
         'import/prefer-default-export': 'off',
@@ -226,17 +233,31 @@ module.exports = {
             }
         },
         {
+            files: ['src/kernels/**/*.ts'],
+            rules: {
+                '@typescript-eslint/no-restricted-imports': 'off'
+            }
+        },
+        {
+            files: ['src/notebooks/**/*.ts', 'src/webviews/**/*.ts'],
+            rules: {
+                '@typescript-eslint/no-restricted-imports': 'off'
+            }
+        },
+        {
             files: ['**/*.test.ts'],
             rules: {
                 '@typescript-eslint/no-explicit-any': 'off',
-                '@typescript-eslint/no-restricted-imports': 'off'
+                '@typescript-eslint/no-restricted-imports': 'off',
+                '@typescript-eslint/no-empty-function': 'off'
             }
         },
         {
             files: ['src/test/**/*.ts'],
             rules: {
                 '@typescript-eslint/no-explicit-any': 'off',
-                '@typescript-eslint/no-restricted-imports': 'off'
+                '@typescript-eslint/no-restricted-imports': 'off',
+                '@typescript-eslint/no-empty-function': 'off'
             }
         },
         {

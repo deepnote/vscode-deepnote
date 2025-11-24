@@ -12,9 +12,8 @@ import { IPlatformService } from '../../platform/common/platform/types';
 import { stripAnsi } from '../../platform/common/utils/regexp';
 import { IConfigurationService } from '../../platform/common/types';
 import { IReplNotebookTrackerService } from '../../platform/notebooks/replNotebookTrackerService';
+import escapeRegExp from 'lodash/escapeRegExp';
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
-const _escapeRegExp = require('lodash/escapeRegExp') as typeof import('lodash/escapeRegExp'); // NOSONAR
 const LineNumberMatchRegex = /(;32m[ ->]*?)(\d+)(.*)/g;
 
 /**
@@ -154,10 +153,9 @@ export class InteractiveWindowTracebackFormatter implements ITracebackFormatter 
             }
 
             if (
-                (traceFrame.includes(filePath) &&
-                    new RegExp(`\\[.*?;32m${_escapeRegExp(filePath)}`).test(traceFrame)) ||
+                (traceFrame.includes(filePath) && new RegExp(`\\[.*?;32m${escapeRegExp(filePath)}`).test(traceFrame)) ||
                 (traceFrame.includes(displayPath) &&
-                    new RegExp(`\\[.*?;32m${_escapeRegExp(displayPath)}`).test(traceFrame))
+                    new RegExp(`\\[.*?;32m${escapeRegExp(displayPath)}`).test(traceFrame))
             ) {
                 // We have a match, pull out the source lines
                 let sourceLines = '';

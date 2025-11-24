@@ -2,6 +2,9 @@
 // Licensed under the MIT License.
 
 import type { Kernel, KernelSpec, KernelMessage, ServerConnection } from '@jupyterlab/services';
+import * as jupyterLab from '@jupyterlab/services';
+import * as jupyterLabSerialize from '@jupyterlab/services/lib/kernel/serialize';
+import * as jupyterLabKernelDefault from '@jupyterlab/services/lib/kernel/default';
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports */
 import { logger } from '../../../platform/logging';
 import { IDisposable, Resource } from '../../../platform/common/types';
@@ -358,7 +361,6 @@ export class RawKernelConnection implements Kernel.IKernelConnection {
             return this.kernelProcess?.interrupt();
         } else if (this.kernelConnectionMetadata.kernelSpec.interrupt_mode === 'message') {
             logger.info(`Interrupting kernel with a shell message`);
-            const jupyterLab = require('@jupyterlab/services') as typeof import('@jupyterlab/services');
             const msg = jupyterLab.KernelMessage.createMessage({
                 msgType: 'interrupt_request' as any,
                 channel: 'shell',
@@ -528,7 +530,6 @@ async function postStartKernel(
     kernelInfoRequestHandled.promise.catch(noop);
     kernel.iopubMessage.connect(iopubHandler);
     const sendKernelInfoRequestOnControlChannel = () => {
-        const jupyterLab = require('@jupyterlab/services') as typeof import('@jupyterlab/services');
         const msg = jupyterLab.KernelMessage.createMessage({
             msgType: 'kernel_info_request',
             // Cast to Shell, js code only allows sending kernel info request on shell channel
@@ -637,10 +638,6 @@ async function postStartKernel(
 }
 
 function newRawKernel(kernelProcess: IKernelProcess, clientId: string, username: string, model: Kernel.IModel) {
-    const jupyterLab = require('@jupyterlab/services') as typeof import('@jupyterlab/services'); // NOSONAR
-    const jupyterLabSerialize =
-        require('@jupyterlab/services/lib/kernel/serialize') as typeof import('@jupyterlab/services/lib/kernel/serialize'); // NOSONAR
-
     // Dummy websocket we give to the underlying real kernel
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let socketInstance: IKernelSocket & IWebSocketLike & IDisposable;
@@ -671,7 +668,7 @@ function newRawKernel(kernelProcess: IKernelProcess, clientId: string, username:
     if (!jupyterLabKernel) {
         // Note, this is done with a postInstall step (found in build\ci\postInstall.js). In that post install step
         // we eliminate the serialize import from the default kernel and remap it to do nothing.
-        jupyterLabKernel = require('@jupyterlab/services/lib/kernel/default'); // NOSONAR
+        jupyterLabKernel = jupyterLabKernelDefault; // NOSONAR
     }
     const realKernel = new jupyterLabKernel.KernelConnection({
         serverSettings: settings,

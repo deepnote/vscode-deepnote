@@ -4,22 +4,25 @@
 import { assert } from 'chai';
 import * as sinon from 'sinon';
 import { anything, instance, mock, when } from 'ts-mockito';
-import * as tasClient from 'vscode-tas-client';
 import { ApplicationEnvironment } from '../application/applicationEnvironment';
 import { IApplicationEnvironment } from '../application/types';
 import { ConfigurationService } from '../configuration/service.node';
 import { ExperimentService } from './service';
 import { IConfigurationService } from '../types';
 import * as Telemetry from '../../telemetry/index';
+import { telemetryWrapper } from '../../telemetry/wrapper';
 import { MockMemento } from '../../../test/mocks/mementos';
 import { Experiments } from '../types';
 import { mockedVSCodeNamespaces } from '../../../test/vscode-mock';
+import { tasClientWrapper } from './tasClientWrapper';
 suite('Experimentation service', () => {
     let configurationService: IConfigurationService;
     let appEnvironment: IApplicationEnvironment;
     let globalMemento: MockMemento;
+    let sandbox: sinon.SinonSandbox;
 
     setup(() => {
+        sandbox = sinon.createSandbox();
         configurationService = mock(ConfigurationService);
         appEnvironment = mock(ApplicationEnvironment);
         globalMemento = new MockMemento();
@@ -32,7 +35,7 @@ suite('Experimentation service', () => {
     });
 
     teardown(() => {
-        sinon.restore();
+        sandbox.restore();
         Telemetry._resetSharedProperties();
     });
 
@@ -49,7 +52,7 @@ suite('Experimentation service', () => {
 
     suite('Initialization', () => {
         test('Users can only opt into experiment groups', () => {
-            sinon.stub(tasClient, 'getExperimentationService');
+            sandbox.replace(tasClientWrapper, 'getExperimentationService', sinon.stub());
 
             configureSettings(true, ['Foo - experiment', 'Bar - control'], []);
 
@@ -63,7 +66,7 @@ suite('Experimentation service', () => {
         });
 
         test('Users can only opt out of experiment groups', () => {
-            sinon.stub(tasClient, 'getExperimentationService');
+            sandbox.replace(tasClientWrapper, 'getExperimentationService', sinon.stub());
             configureSettings(true, [], ['Foo - experiment', 'Bar - control']);
 
             const experimentService = new ExperimentService(
@@ -83,17 +86,21 @@ suite('Experimentation service', () => {
         let sendTelemetryEventStub: sinon.SinonStub;
 
         setup(() => {
-            sendTelemetryEventStub = sinon
-                .stub(Telemetry, 'sendTelemetryEvent')
+            sendTelemetryEventStub = sandbox
+                .stub(telemetryWrapper, 'sendTelemetryEvent')
                 .callsFake((eventName: string, _, properties: object | undefined) => {
                     const telemetry = { eventName, properties };
                     telemetryEvents.push(telemetry);
                 });
 
-            sinon.stub(tasClient, 'getExperimentationService').returns({
-                getTreatmentVariable: () => true
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            } as any);
+            sandbox.replace(
+                tasClientWrapper,
+                'getExperimentationService',
+                sinon.stub().returns({
+                    getTreatmentVariable: () => true
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                } as any)
+            );
         });
 
         teardown(() => {
@@ -159,10 +166,14 @@ suite('Experimentation service', () => {
         const experiment = 'Test Experiment - experiment' as unknown as Experiments;
 
         setup(() => {
-            sinon.stub(tasClient, 'getExperimentationService').returns({
-                getTreatmentVariable: () => 'value'
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            } as any);
+            sandbox.replace(
+                tasClientWrapper,
+                'getExperimentationService',
+                sinon.stub().returns({
+                    getTreatmentVariable: () => 'value'
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                } as any)
+            );
         });
 
         test.skip('If the service is enabled and the opt-out array is empty,return the value from the experimentation framework for a given experiment', async () => {

@@ -9,6 +9,10 @@ import { Telemetry, sendTelemetryEvent } from '../../../telemetry';
 import { noop } from '../../../platform/common/utils/misc';
 import { DistroInfo, getDistroInfo } from '../../../platform/common/platform/linuxDistro.node';
 import { EXTENSION_ROOT_DIR } from '../../../platform/constants.node';
+import { createRequire } from 'module';
+
+// Use createRequire for dynamic loading of zeromq, which is a native module
+const require = createRequire(import.meta.url);
 const zeromqModuleName = `${'zeromq'}`;
 export function getZeroMQ(): typeof import('zeromq') {
     try {

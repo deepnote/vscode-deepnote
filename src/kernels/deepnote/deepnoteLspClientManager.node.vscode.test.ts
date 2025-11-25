@@ -5,6 +5,7 @@ import { DeepnoteLspClientManager } from './deepnoteLspClientManager.node';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import * as path from '../../platform/vscode-path/path';
+import { noop } from '../../platform/common/utils/misc';
 
 suite('DeepnoteLspClientManager Integration Tests', () => {
     let lspClientManager: DeepnoteLspClientManager;
@@ -21,13 +22,23 @@ suite('DeepnoteLspClientManager Integration Tests', () => {
     const testNotebookUri = Uri.file(testNotebookPath);
 
     // Mock disposable registry
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mockDisposableRegistry: IDisposableRegistry = {
         push: () => 0,
         dispose: () => Promise.resolve()
     } as any;
 
+    // Mock integration storage
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mockIntegrationStorage = {
+        getAll: async () => [],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        onDidChangeIntegrations: { dispose: noop } as any,
+        dispose: noop
+    } as any;
+
     setup(() => {
-        lspClientManager = new DeepnoteLspClientManager(mockDisposableRegistry);
+        lspClientManager = new DeepnoteLspClientManager(mockDisposableRegistry, mockIntegrationStorage);
         lspClientManager.activate();
     });
 

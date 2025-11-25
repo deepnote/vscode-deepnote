@@ -182,9 +182,11 @@ Deepnote maintains forks of well-established LSP servers:
 
 #### sql-language-server
 
-- Provides SQL-specific intelligence
-- Understands database schemas
-- Offers query optimization suggestions
+- Provides SQL-specific intelligence for SQL cells in Deepnote notebooks
+- Runs locally as a separate process using stdio communication
+- Integrates with configured database integrations (PostgreSQL, MySQL, BigQuery)
+- Offers autocomplete, error detection, and schema awareness
+- Uses the [@deepnote/sql-language-server](https://github.com/deepnote/sql-language-server) package
 
 ## Benefits for Users
 
@@ -334,19 +336,22 @@ When you open a `.deepnote` file in VS Code:
 1. **Environment Creation**: The extension creates a dedicated virtual environment for the notebook
 2. **Toolkit Installation**: Installs `deepnote-toolkit` and `python-lsp-server[all]` in the venv
 3. **Kernel Launch**: Starts the Deepnote kernel using the toolkit
-4. **LSP Activation**: Automatically starts the LSP client for code intelligence
+4. **LSP Activation**: Automatically starts LSP clients for code intelligence
+   - **Python**: Uses python-lsp-server for Python code intelligence
+   - **SQL**: Uses sql-language-server for SQL code intelligence
 
 #### 2. LSP Client Management
 
 The `DeepnoteLspClientManager` (in `src/kernels/deepnote/deepnoteLspClientManager.node.ts`) handles:
 
 #### Client Lifecycle
+
 ```typescript
 // When kernel starts
 await lspClientManager.startLspClients(
-    serverInfo,      // Deepnote server connection info
-    notebookUri,     // Notebook file URI
-    interpreter      // Python environment from venv
+  serverInfo, // Deepnote server connection info
+  notebookUri, // Notebook file URI
+  interpreter // Python environment from venv
 );
 
 // When notebook closes
@@ -354,28 +359,43 @@ await lspClientManager.stopLspClients(notebookUri);
 ```
 
 #### Per-Notebook Isolation
+
 - Each notebook gets its own LSP client instance
 - Clients are isolated to prevent conflicts
 - Automatic cleanup when notebooks close
 
 #### Duplicate Prevention
+
 - Prevents multiple clients for the same notebook
 - Reuses existing clients when possible
 - Graceful handling of client errors
 
 #### 3. Language Server Process
 
-The extension uses `python-lsp-server` in stdio mode:
+The extension runs dedicated language servers for both Python and SQL:
+
+**Python LSP:**
 
 ```typescript
 const serverOptions: Executable = {
-    command: pythonPath,           // Python from venv
-    args: ['-m', 'pylsp'],        // Start python-lsp-server
-    options: { env: { ...process.env } }
+  command: pythonPath, // Python from venv
+  args: ['-m', 'pylsp'], // Start python-lsp-server
+  options: { env: { ...process.env } }
+};
+```
+
+**SQL LSP:**
+
+```typescript
+const serverOptions: Executable = {
+  command: sqlLspPath, // Path to sql-language-server binary
+  args: ['up', '--method', 'stdio'],
+  options: { env: { ...process.env } }
 };
 ```
 
 **Why stdio instead of TCP:**
+
 - Simpler process management
 - Better isolation
 - Standard LSP pattern
@@ -387,20 +407,21 @@ The LSP client is configured to provide intelligence for Python cells in Deepnot
 
 ```typescript
 documentSelector: [
-    {
-        scheme: 'vscode-notebook-cell',  // Notebook cells
-        language: 'python',
-        pattern: '**/*.deepnote'
-    },
-    {
-        scheme: 'file',
-        language: 'python',
-        pattern: '**/*.deepnote'
-    }
-]
+  {
+    scheme: 'vscode-notebook-cell', // Notebook cells
+    language: 'python',
+    pattern: '**/*.deepnote'
+  },
+  {
+    scheme: 'file',
+    language: 'python',
+    pattern: '**/*.deepnote'
+  }
+];
 ```
 
 This ensures code intelligence works in:
+
 - Interactive notebook cells
 - Cell outputs
 - Notebook file contexts
@@ -408,17 +429,20 @@ This ensures code intelligence works in:
 ### Features Provided
 
 #### Real-Time Code Intelligence
+
 - Autocomplete as you type in notebook cells
 - Hover documentation for functions and variables
 - Signature help for function parameters
 - Error detection before execution
 
 #### Context Awareness
+
 - Understands imports and dependencies from the venv
 - Knows about variables defined in earlier cells
 - Provides relevant suggestions based on cell context
 
 #### Integration with Kernel
+
 - LSP runs alongside the Deepnote kernel
 - Both share the same Python environment
 - Consistent experience between static analysis and execution
@@ -431,10 +455,7 @@ The LSP client manager is registered as a singleton service:
 
 ```typescript
 // In src/notebooks/serviceRegistry.node.ts
-serviceManager.addSingleton<IDeepnoteLspClientManager>(
-    IDeepnoteLspClientManager,
-    DeepnoteLspClientManager
-);
+serviceManager.addSingleton<IDeepnoteLspClientManager>(IDeepnoteLspClientManager, DeepnoteLspClientManager);
 ```
 
 #### Kernel Lifecycle Integration
@@ -455,6 +476,7 @@ await this.lspClientManager.startLspClients(
 #### Error Handling
 
 The implementation gracefully handles:
+
 - Missing `python-lsp-server` installation
 - LSP server crashes
 - Connection failures
@@ -463,16 +485,19 @@ The implementation gracefully handles:
 ### User Experience
 
 #### Transparent Operation
+
 - No manual configuration required
 - Automatically starts with notebooks
 - Seamlessly integrates with VS Code features
 
 #### Performance
+
 - Lightweight per-notebook clients
 - Fast response times for code intelligence
 - Minimal impact on notebook execution
 
 #### Reliability
+
 - Robust error handling
 - Automatic reconnection on failures
 - Clean shutdown on notebook close
@@ -491,21 +516,95 @@ The extension includes comprehensive integration tests:
 ```
 
 Tests run in a real VS Code environment to ensure:
+
 - `vscode-languageclient` works correctly
 - LanguageClient lifecycle is properly managed
 - Integration with VS Code APIs functions as expected
+
+### SQL LSP Integration
+
+The extension also provides SQL language intelligence using the `sql-language-server` package.
+
+#### How SQL LSP Works
+
+**Local Process Approach:**
+
+- SQL LSP runs as a separate local process (similar to Python LSP)
+- Uses stdio communication mode for simplicity and consistency
+- Automatically starts when notebooks are opened
+- No external server or port configuration required
+
+**Database Integration:**
+
+```typescript
+// SQL LSP automatically discovers database integrations
+const connections = await integrationStorage.getAll();
+
+// Converts extension's integration configs to sql-language-server format
+const sqlConnections = connections
+  .filter((config) => isSupportedType(config.type))
+  .map((config) => convertToSqlLspConnection(config));
+
+// Passes connections to SQL LSP via initializationOptions
+initializationOptions: {
+  connections: sqlConnections;
+}
+```
+
+**Supported Database Types:**
+
+- PostgreSQL (`pgsql`)
+- MySQL (`mysql`)
+- BigQuery (`big-query`)
+
+**Features:**
+
+- SQL autocomplete with table and column suggestions
+- Schema-aware query validation
+- Error detection for syntax and semantic issues
+- Hover information for database objects
+- Works with configured database integrations from extension storage
+
+**Configuration:**
+
+- No manual configuration required
+- Automatically uses database integrations configured in the extension
+- Credentials are passed securely from integration storage
+- Falls back gracefully if no integrations are configured
+
+#### SQL LSP Startup Flow
+
+1. **Notebook Opens**: User opens a `.deepnote` file
+2. **Kernel Selection**: DeepnoteKernelAutoSelector starts the kernel
+3. **Python LSP Start**: Python LSP client starts for Python cells
+4. **SQL LSP Start**: SQL LSP client starts for SQL cells
+   - Gets path to `sql-language-server` binary from `node_modules`
+   - Retrieves configured database integrations from storage
+   - Converts integration configs to sql-language-server format
+   - Starts server with `['up', '--method', 'stdio']` args
+   - Passes database connections via initialization options
+5. **Ready**: Both Python and SQL intelligence available
+
+#### Error Handling
+
+The SQL LSP implementation handles errors gracefully:
+
+- If `sql-language-server` binary is missing, logs warning and continues
+- If no database integrations are configured, SQL LSP still starts (but has no schemas)
+- If integration conversion fails, logs error and skips that integration
+- Python LSP is never affected by SQL LSP failures
 
 ### Differences from Toolkit LSP
 
 The extension's LSP integration differs from the toolkit's in key ways:
 
-| Aspect | Toolkit (Server-Side) | VS Code Extension (Client-Side) |
-|--------|----------------------|----------------------------------|
-| **Scope** | Multiple editors/clients | Single VS Code instance |
-| **Lifecycle** | Runs continuously with server | Per-notebook, on-demand |
-| **Transport** | WebSocket/TCP (multi-client) | stdio (process-based) |
-| **Management** | Toolkit manages all processes | Extension manages per-notebook |
-| **Use Case** | JupyterLab, web interfaces | VS Code editor integration |
+| Aspect         | Toolkit (Server-Side)         | VS Code Extension (Client-Side) |
+| -------------- | ----------------------------- | ------------------------------- |
+| **Scope**      | Multiple editors/clients      | Single VS Code instance         |
+| **Lifecycle**  | Runs continuously with server | Per-notebook, on-demand         |
+| **Transport**  | WebSocket/TCP (multi-client)  | stdio (process-based)           |
+| **Management** | Toolkit manages all processes | Extension manages per-notebook  |
+| **Use Case**   | JupyterLab, web interfaces    | VS Code editor integration      |
 
 Both approaches are complementary—the toolkit provides server infrastructure while the extension provides client integration.
 
@@ -518,8 +617,8 @@ The LSP integration opens up many possibilities:
 - **Team Features**: Shared language server configurations
 - **Custom Servers**: Domain-specific intelligence for specialized workflows
 - **Enhanced Debugging**: Inline variable inspection and breakpoints
-- **SQL LSP Integration**: Extend support to SQL cells in notebooks (planned)
 - **Multi-Language Support**: Add LSP clients for R, JavaScript, and other languages
+- **Enhanced SQL Support**: Add support for more database types beyond current MySQL, PostgreSQL, BigQuery
 
 ## Resources
 

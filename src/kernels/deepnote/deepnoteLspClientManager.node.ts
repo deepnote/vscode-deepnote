@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { inject, injectable } from 'inversify';
-import { LanguageClient, LanguageClientOptions, Executable } from 'vscode-languageclient/node';
+import type { LanguageClient, LanguageClientOptions, Executable } from 'vscode-languageclient/node';
 
 import { IDisposable, IDisposableRegistry } from '../../platform/common/types';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
@@ -194,6 +194,9 @@ export class DeepnoteLspClientManager
         if (token?.isCancellationRequested) {
             throw new Error('Operation cancelled');
         }
+
+        // Dynamically import vscode-languageclient to avoid bundling issues
+        const { LanguageClient } = await import('vscode-languageclient/node');
 
         const pythonPath = interpreter.uri.fsPath;
 

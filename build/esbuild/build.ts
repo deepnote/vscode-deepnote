@@ -43,7 +43,7 @@ const deskTopNodeModulesToExternalize = [
     // Lazy loaded modules.
     'vscode-languageclient/node',
     '@jupyterlab/nbformat',
-    'vscode-jsonrpc' // Used by a few modules, might as well pull this out, instead of duplicating it in separate bundles.
+    'vscode-jsonrpc'
 ];
 const commonExternals = [
     'log4js',
@@ -534,6 +534,7 @@ async function copyNodeGypBuild() {
     await fs.ensureDir(target);
     await fs.copy(source, target, { recursive: true });
 }
+
 async function buildVSCodeJsonRPC() {
     const source = path.join(extensionFolder, 'node_modules', 'vscode-jsonrpc');
     const target = path.join(extensionFolder, 'dist', 'node_modules', 'vscode-jsonrpc', 'index.js');

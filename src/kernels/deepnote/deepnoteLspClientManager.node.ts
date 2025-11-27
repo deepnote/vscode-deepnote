@@ -191,6 +191,11 @@ export class DeepnoteLspClientManager
 
         this.outputChannel.dispose();
         void this.stopAllClients();
+
+        if (this.fileSystemWatcher) {
+            this.fileSystemWatcher.dispose();
+            this.fileSystemWatcher = undefined;
+        }
     }
 
     private async createPythonLspClient(

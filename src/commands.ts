@@ -181,8 +181,6 @@ export interface ICommandNameArgumentTypeMapping {
     [DSCommands.RunAndDebugCell]: [NotebookCell];
     [DSCommands.RunByLineNext]: [NotebookCell];
     [DSCommands.RunByLineStop]: [NotebookCell];
-    [DSCommands.ReplayPylanceLog]: [Uri];
-    [DSCommands.ReplayPylanceLogStep]: [];
     [DSCommands.InstallPythonExtensionViaKernelPicker]: [];
     [DSCommands.InstallPythonViaKernelPicker]: [];
     [DSCommands.ContinueEditSessionInCodespace]: [];

@@ -26,6 +26,7 @@ import {
     DeepnoteKernelConnectionMetadata,
     IDeepnoteEnvironmentManager,
     IDeepnoteKernelAutoSelector,
+    IDeepnoteLspClientManager,
     IDeepnoteNotebookEnvironmentMapper,
     IDeepnoteServerProvider,
     IDeepnoteServerStarter
@@ -40,6 +41,7 @@ import {
 import { IJupyterKernelSpec, IKernel, IKernelProvider } from '../../kernels/types';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IPythonExtensionChecker } from '../../platform/api/types';
+import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { Cancellation } from '../../platform/common/cancellation';
 import { JVSC_EXTENSION_ID, STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
 import { getDisplayPath } from '../../platform/common/platform/fs-paths.node';
@@ -81,6 +83,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         @inject(IControllerRegistration) private readonly controllerRegistration: IControllerRegistration,
         @inject(IPythonExtensionChecker) private readonly pythonExtensionChecker: IPythonExtensionChecker,
         @inject(IDeepnoteServerProvider) private readonly serverProvider: IDeepnoteServerProvider,
+        @inject(IDeepnoteLspClientManager) private readonly lspClientManager: IDeepnoteLspClientManager,
         @inject(IJupyterRequestCreator) private readonly requestCreator: IJupyterRequestCreator,
         @inject(IJupyterRequestAgentCreator)
         @optional()
@@ -565,8 +568,23 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         this.serverProvider.registerServer(serverProviderHandle.handle, serverInfo);
         this.projectServerHandles.set(projectKey, serverProviderHandle.handle);
 
-        // Connect to the server and get available kernel specs
+        const lspInterpreterUri = this.getVenvInterpreterUri(configuration.venvPath);
+
+        const lspInterpreter: PythonEnvironment = {
+            uri: lspInterpreterUri,
+            id: lspInterpreterUri.fsPath
+        } as PythonEnvironment;
+
+        try {
+            await this.lspClientManager.startLspClients(serverInfo, notebook.uri, lspInterpreter, progressToken);
+
+            logger.info(`✓ LSP clients started for ${notebookKey}`);
+        } catch (error) {
+            logger.error(`Failed to start LSP clients for ${notebookKey}:`, error);
+        }
+
         progress.report({ message: 'Connecting to kernel...' });
+
         const connectionInfo = createJupyterConnectionInfo(
             serverProviderHandle,
             {
@@ -597,11 +615,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         progress.report({ message: 'Finalizing kernel setup...' });
 
-        // Get the venv Python interpreter (not the base interpreter)
-        const venvInterpreter =
-            process.platform === 'win32'
-                ? Uri.joinPath(configuration.venvPath, 'Scripts', 'python.exe')
-                : Uri.joinPath(configuration.venvPath, 'bin', 'python');
+        const venvInterpreter = this.getVenvInterpreterUri(configuration.venvPath);
 
         logger.info(`Using venv path: ${configuration.venvPath.fsPath}`);
         logger.info(`Venv interpreter path: ${venvInterpreter.fsPath}`);
@@ -778,6 +792,12 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 `Cleared controller for notebook ${getDisplayPath(notebook.uri)} (environment ${environmentId})`
             );
         }
+    }
+
+    private getVenvInterpreterUri(venvPath: Uri): Uri {
+        return process.platform === 'win32'
+            ? Uri.joinPath(venvPath, 'Scripts', 'python.exe')
+            : Uri.joinPath(venvPath, 'bin', 'python');
     }
 
     /**

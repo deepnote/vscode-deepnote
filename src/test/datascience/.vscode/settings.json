@@ -30,11 +30,12 @@
     "python.experiments.enabled": true,
     // See https://github.com/microsoft/vscode-jupyter/issues/10258
     "deepnote.forceIPyKernelDebugger": false,
-    "python.defaultInterpreterPath": "",
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
     "task.problemMatchers.neverPrompt": {
         "shell": true,
         "npm": true
     },
     "deepnote.interactiveWindow.creationMode": "multiple",
     "deepnote.interactiveWindow.textEditor.magicCommandsAsComments": false,
+    "python.envFile": "${workspaceFolder}/.env",
 }

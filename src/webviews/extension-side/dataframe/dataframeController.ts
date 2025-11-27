@@ -237,7 +237,7 @@ export class DataframeController implements IExtensionSyncActivationService {
 
                 await workspace.fs.writeFile(uri, encoder.encode(csv));
 
-                await window.showInformationMessage(l10n.t('File saved to {0}', uri));
+                await window.showInformationMessage(l10n.t('File saved to {0}', String(uri)));
             }
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);

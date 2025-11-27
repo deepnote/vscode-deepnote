@@ -4,7 +4,7 @@
 import { injectable } from 'inversify';
 import { ConfigurationTarget, commands, extensions } from 'vscode';
 import { IExtensionSyncActivationService } from '../../../activation/types';
-import { PythonExtension, PylanceExtension } from '../../constants';
+import { PythonExtension } from '../../constants';
 import { noop } from '../../utils/misc';
 import { workspace } from 'vscode';
 
@@ -36,10 +36,6 @@ export class RunInDedicatedExtensionHostCommandHandler implements IExtensionSync
 
         if (extensions.getExtension(PythonExtension)) {
             update[PythonExtension] = targetAffinity;
-        }
-
-        if (extensions.getExtension(PylanceExtension)) {
-            update[PylanceExtension] = targetAffinity;
         }
 
         await workspace.getConfiguration('extensions').update(

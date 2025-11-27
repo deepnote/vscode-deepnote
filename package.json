@@ -2547,7 +2547,7 @@
         "vega-embed": "^7.1.0",
         "vega-lite": "^6.4.1",
         "vscode-debugprotocol": "^1.41.0",
-        "vscode-languageclient": "8.0.2-next.5",
+        "vscode-languageclient": "^9.0.1",
         "vscode-tas-client": "^0.1.84",
         "ws": "^6.2.3",
         "zeromq": "^6.5.0",

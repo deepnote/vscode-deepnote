@@ -1,13 +1,19 @@
 import * as vscode from 'vscode';
 import { inject, injectable } from 'inversify';
-import {
-    LanguageClient,
+import { createRequire } from 'module';
+import type {
+    LanguageClient as LanguageClientType,
     LanguageClientOptions,
     Executable,
-    RevealOutputChannelOn,
-    ServerOptions,
-    TransportKind
+    ServerOptions
 } from 'vscode-languageclient/node';
+
+// Use createRequire for ESM compatibility with vscode-languageclient
+// The bundled module uses ESM default export, so we need to access .default
+const require = createRequire(import.meta.url);
+const languageClientModule = require('vscode-languageclient/node');
+const { LanguageClient, TransportKind, RevealOutputChannelOn } = (languageClientModule.default ??
+    languageClientModule) as typeof import('vscode-languageclient/node');
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposable, IDisposableRegistry } from '../../platform/common/types';
@@ -20,8 +26,8 @@ import { IIntegrationStorage } from '../../platform/notebooks/deepnote/types';
 import { SqlLspConnection, isSupportedBySqlLsp, convertToSqlLspConnection } from './sqlLspConnectionUtils';
 
 interface LspClientInfo {
-    pythonClient?: LanguageClient;
-    sqlClient?: LanguageClient;
+    pythonClient?: LanguageClientType;
+    sqlClient?: LanguageClientType;
 }
 
 const sqlLintRules = {} as const;
@@ -100,7 +106,7 @@ export class DeepnoteLspClientManager
                 return;
             }
 
-            let sqlClient: LanguageClient | undefined;
+            let sqlClient: LanguageClientType | undefined;
 
             try {
                 sqlClient = await this.createSqlLspClient(notebookUri, token);
@@ -232,7 +238,7 @@ export class DeepnoteLspClientManager
         notebookUri: vscode.Uri,
         interpreter: PythonEnvironment,
         token?: vscode.CancellationToken
-    ): Promise<LanguageClient> {
+    ): Promise<LanguageClientType> {
         // Check cancellation before creating client
         if (token?.isCancellationRequested) {
             throw new Error('Operation cancelled');
@@ -291,7 +297,7 @@ export class DeepnoteLspClientManager
     private async createSqlLspClient(
         notebookUri: vscode.Uri,
         token?: vscode.CancellationToken
-    ): Promise<LanguageClient> {
+    ): Promise<LanguageClientType> {
         if (token?.isCancellationRequested) {
             throw new Error('Operation cancelled');
         }
@@ -344,6 +350,32 @@ export class DeepnoteLspClientManager
                 supportHtml: true
             },
             middleware: {
+                provideCompletionItem: async (document, position, context, token, next) => {
+                    const result = await next(document, position, context, token);
+
+                    if (!result) {
+                        return result;
+                    }
+
+                    // Handle both CompletionList and CompletionItem[] formats
+                    const items = Array.isArray(result) ? result : result.items;
+
+                    // Fix completion items that incorrectly add "AS <alias>" suffix
+                    // sql-language-server sometimes adds aliases based on what the user typed
+                    for (const item of items) {
+                        if (typeof item.insertText === 'string') {
+                            // Remove "AS <alias>" suffix pattern from insert text
+                            item.insertText = item.insertText.replace(/\s+AS\s+\w+$/i, '');
+                        }
+
+                        if (item.textEdit && 'newText' in item.textEdit) {
+                            // Remove "AS <alias>" suffix pattern from text edit
+                            item.textEdit.newText = item.textEdit.newText.replace(/\s+AS\s+\w+$/i, '');
+                        }
+                    }
+
+                    return result;
+                },
                 workspace: {
                     configuration: async (params, _token, next) => {
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -1,8 +1,9 @@
 {
-    "require": ["ts-node/register", "out/test/unittests.js"],
+    "loader": ["ts-node/esm", "./build/mocha-esm-loader.js"],
     "reporter": "mocha-multi-reporters",
     "reporter-option": "configFile=build/.mocha-multi-reporters.config",
     "ui": "tdd",
     "recursive": true,
-    "colors": true
+    "colors": true,
+    "node-option": ["--no-warnings=ExperimentalWarning"]
 }

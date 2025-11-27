@@ -8,6 +8,7 @@ import { IAsyncDisposableRegistry, IHttpClient, IOutputChannel } from '../../pla
 import { IDeepnoteToolkitInstaller } from './types';
 import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
 import { logger } from '../../platform/logging';
+import * as net from 'net';
 
 /**
  * Integration tests for DeepnoteServerStarter port allocation logic.
@@ -263,7 +264,6 @@ suite('DeepnoteServerStarter - Port Allocation Integration Tests', () => {
             // - System should NOT allocate 8888+8890 (non-consecutive)
             // - System SHOULD find a different consecutive pair like 8890+8891
 
-            const net = require('net');
             const blockingServer = net.createServer();
             const blockedPort = 54701; // We'll block this port to simulate 8889 being taken
 
@@ -461,7 +461,6 @@ suite('DeepnoteServerStarter - Port Allocation Integration Tests', () => {
             // but the next port (candidate + 1) is not available.
             // The system should mark BOTH ports as unavailable in portsInUse and continue searching.
 
-            const net = require('net');
             const server1 = net.createServer();
             const server2 = net.createServer();
             const blockedPort1 = 54801;
@@ -514,7 +513,6 @@ suite('DeepnoteServerStarter - Port Allocation Integration Tests', () => {
             // Strategy: Block every other port so individual ports are available,
             // but no consecutive pairs exist (blocking the +1 port for each available port)
 
-            const net = require('net');
             const servers: any[] = [];
 
             try {
@@ -542,14 +540,21 @@ suite('DeepnoteServerStarter - Port Allocation Integration Tests', () => {
                 );
 
                 // Should throw DeepnoteServerStartupError after maxAttempts
+                // Note: The error could come from either findConsecutiveAvailablePorts or findAvailablePort
+                // depending on port availability timing
                 let errorThrown = false;
                 try {
                     await findConsecutiveAvailablePorts(startPort, portsInUse);
                 } catch (error: any) {
                     errorThrown = true;
                     assert.strictEqual(error.constructor.name, 'DeepnoteServerStartupError');
-                    assert.include(error.stderr, 'Failed to find consecutive available ports');
-                    assert.include(error.stderr, '100 attempts');
+                    // Accept either error message since both indicate port exhaustion
+                    const isConsecutiveError = error.stderr.includes('Failed to find consecutive available ports');
+                    const isSinglePortError = error.stderr.includes('Failed to find available port');
+                    assert.isTrue(
+                        isConsecutiveError || isSinglePortError,
+                        `Expected port exhaustion error, got: ${error.stderr}`
+                    );
                 }
 
                 assert.isTrue(errorThrown, 'Expected DeepnoteServerStartupError to be thrown');

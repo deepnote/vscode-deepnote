@@ -15,7 +15,7 @@ import {
 import { JupyterInterpreterStateStore } from './jupyterInterpreterStateStore';
 import { areInterpreterPathsSame } from '../../../platform/pythonEnvironments/info/interpreter';
 import { PlatformService } from '../../../platform/common/platform/platformService.node';
-import { getDisplayPath } from '../../../platform/common/platform/fs-paths';
+import { getDisplayPath } from '../../../platform/common/platform/fs-paths.node';
 import { DataScience } from '../../../platform/common/utils/localize';
 import { ServiceContainer } from '../../../platform/ioc/container';
 import { PythonEnvironmentQuickPickItemProvider } from '../../../platform/interpreter/pythonEnvironmentQuickPickProvider.node';
@@ -66,7 +66,7 @@ export class JupyterInterpreterSelector {
 
         const placeholder = selectedInterpreter
             ? DataScience.currentlySelectedJupyterInterpreterForPlaceholder(
-                  getDisplayPath(selectedInterpreter, workspace.workspaceFolders || [], platformService.homeDir)
+                  getDisplayPath(selectedInterpreter, workspace.workspaceFolders || [])
               )
             : '';
 

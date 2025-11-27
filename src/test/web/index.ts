@@ -21,7 +21,7 @@ import type { IExtensionApi } from '../../standalone/api';
 import type { IExtensionContext } from '../../platform/common/types';
 import { IExtensionTestApi } from '../common';
 import { JVSC_EXTENSION_ID } from '../../platform/common/constants';
-const CustomReporter = require('./customReporter');
+import CustomReporter from './customReporter';
 import { sleep } from '../../platform/common/utils/async';
 
 let activatedResponse: undefined | IExtensionApi;

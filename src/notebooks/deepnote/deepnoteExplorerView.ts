@@ -8,7 +8,7 @@ import { IExtensionContext } from '../../platform/common/types';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteTreeDataProvider } from './deepnoteTreeDataProvider';
 import { type DeepnoteTreeItem, DeepnoteTreeItemType, type DeepnoteTreeItemContext } from './deepnoteTreeItem';
-import { generateUuid } from '../../platform/common/uuid';
+import { uuidUtils } from '../../platform/common/uuid';
 import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { Commands } from '../../platform/common/constants';
 import { readDeepnoteProjectFile } from './deepnoteProjectUtils';
@@ -229,7 +229,7 @@ export class DeepnoteExplorerView {
             // Deep clone the notebook and generate new IDs
             const newNotebook: DeepnoteNotebook = {
                 ...targetNotebook,
-                id: generateUuid(),
+                id: uuidUtils.generateUuid(),
                 name: newName,
                 blocks: targetNotebook.blocks.map((block: DeepnoteBlock) => {
                     // Use structuredClone for deep cloning if available, otherwise fall back to JSON
@@ -239,8 +239,8 @@ export class DeepnoteExplorerView {
                             : JSON.parse(JSON.stringify(block));
 
                     // Update cloned block with new IDs and reset execution state
-                    clonedBlock.id = generateUuid();
-                    clonedBlock.blockGroup = generateUuid();
+                    clonedBlock.id = uuidUtils.generateUuid();
+                    clonedBlock.blockGroup = uuidUtils.generateUuid();
                     clonedBlock.executionCount = undefined;
 
                     return clonedBlock;
@@ -450,12 +450,12 @@ export class DeepnoteExplorerView {
      * @returns The created notebook with a unique ID and initial block
      */
     private createNotebookWithFirstBlock(notebookName: string): DeepnoteNotebook {
-        const notebookId = generateUuid();
+        const notebookId = uuidUtils.generateUuid();
         const firstBlock: DeepnoteBlock = {
-            blockGroup: generateUuid(),
+            blockGroup: uuidUtils.generateUuid(),
             content: '',
             executionCount: undefined,
-            id: generateUuid(),
+            id: uuidUtils.generateUuid(),
             metadata: {},
             outputs: [],
             sortingKey: '0',
@@ -647,14 +647,14 @@ export class DeepnoteExplorerView {
                 // File doesn't exist, continue
             }
 
-            const projectId = generateUuid();
-            const notebookId = generateUuid();
+            const projectId = uuidUtils.generateUuid();
+            const notebookId = uuidUtils.generateUuid();
 
             const firstBlock: DeepnoteBlock = {
-                blockGroup: generateUuid(),
+                blockGroup: uuidUtils.generateUuid(),
                 content: '',
                 executionCount: 0,
-                id: generateUuid(),
+                id: uuidUtils.generateUuid(),
                 metadata: {},
                 outputs: [],
                 sortingKey: '0',

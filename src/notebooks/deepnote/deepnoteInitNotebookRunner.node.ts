@@ -12,7 +12,7 @@ import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
 import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { IKernelProvider } from '../../kernels/types';
-import { getDisplayPath } from '../../platform/common/platform/fs-paths';
+import { getDisplayPath } from '../../platform/common/platform/fs-paths.node';
 
 const DEEPNOTE_CLOUD_INIT_NOTEBOOK_BLOCK_CONTENT = `%%bash
 # If your project has a 'requirements.txt' file, we'll install it here.

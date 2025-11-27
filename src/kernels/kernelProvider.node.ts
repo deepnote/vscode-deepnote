@@ -29,7 +29,7 @@ import { createKernelSettings } from './kernelSettings';
 import { NotebookKernelExecution } from './kernelExecution';
 import { IReplNotebookTrackerService } from '../platform/notebooks/replNotebookTrackerService';
 import { logger } from '../platform/logging';
-import { getDisplayPath } from '../platform/common/platform/fs-paths';
+import { getDisplayPath } from '../platform/common/platform/fs-paths.node';
 import { IRawNotebookSupportedService } from './raw/types';
 
 /**

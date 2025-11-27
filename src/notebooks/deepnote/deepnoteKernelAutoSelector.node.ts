@@ -44,7 +44,7 @@ import { IPythonExtensionChecker } from '../../platform/api/types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { Cancellation } from '../../platform/common/cancellation';
 import { JVSC_EXTENSION_ID, STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
-import { getDisplayPath } from '../../platform/common/platform/fs-paths';
+import { getDisplayPath } from '../../platform/common/platform/fs-paths.node';
 import { IConfigurationService, IDisposableRegistry, IOutputChannel } from '../../platform/common/types';
 import { disposeAsync } from '../../platform/common/utils';
 import { createDeepnoteServerConfigHandle } from '../../platform/deepnote/deepnoteServerUtils.node';

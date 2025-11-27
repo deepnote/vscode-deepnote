@@ -108,7 +108,6 @@ export const DefaultTheme = 'Default Light+';
 export const PythonExtension = 'ms-python.python';
 export const PythonEnvironmentExtension = 'ms-python.vscode-python-envs';
 export const RendererExtension = 'ms-toolsai.jupyter-renderers';
-export const PylanceExtension = 'ms-python.vscode-pylance';
 
 export const LanguagesSupportedByPythonkernel = [
     'python',
@@ -271,8 +270,6 @@ export namespace Commands {
     export const RunAndDebugCell = 'deepnote.runAndDebugCell';
     export const RunByLineNext = 'deepnote.runByLineNext';
     export const RunByLineStop = 'deepnote.runByLineStop';
-    export const ReplayPylanceLog = 'deepnote.replayPylanceLog';
-    export const ReplayPylanceLogStep = 'deepnote.replayPylanceLogStep';
     export const InstallPythonExtensionViaKernelPicker = 'deepnote.installPythonExtensionViaKernelPicker';
     export const InstallPythonViaKernelPicker = 'deepnote.installPythonViaKernelPicker';
     export const ContinueEditSessionInCodespace = 'deepnote.continueEditSessionInCodespace';

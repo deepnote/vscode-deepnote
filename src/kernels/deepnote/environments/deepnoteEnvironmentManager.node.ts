@@ -10,6 +10,7 @@ import { logger } from '../../../platform/logging';
 import { IDeepnoteEnvironmentManager, IDeepnoteServerStarter } from '../types';
 import { CreateDeepnoteEnvironmentOptions, DeepnoteEnvironment } from './deepnoteEnvironment';
 import { DeepnoteEnvironmentStorage } from './deepnoteEnvironmentStorage.node';
+import { IFileSystem } from '../../../platform/common/platform/types';
 
 /**
  * Manager for Deepnote kernel environments.
@@ -30,7 +31,8 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
         @inject(IExtensionContext) private readonly context: IExtensionContext,
         @inject(DeepnoteEnvironmentStorage) private readonly storage: DeepnoteEnvironmentStorage,
         @inject(IDeepnoteServerStarter) private readonly serverStarter: IDeepnoteServerStarter,
-        @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel
+        @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel,
+        @inject(IFileSystem) private readonly fileSystem: IFileSystem
     ) {}
 
     /**
@@ -195,6 +197,21 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
         for (const fileKey of this.environmentServers.get(id) ?? []) {
             await this.serverStarter.stopServer(fileKey, token);
             Cancellation.throwIfCanceled(token);
+        }
+
+        Cancellation.throwIfCanceled(token);
+
+        // Delete the virtual environment directory from disk
+        try {
+            await this.fileSystem.delete(config.venvPath);
+            logger.info(`Deleted virtual environment directory: ${config.venvPath.fsPath}`);
+        } catch (error) {
+            // Log but don't fail - the directory might not exist or might already be deleted
+            logger.warn(`Failed to delete virtual environment directory: ${config.venvPath.fsPath}`, error);
+            const msg = error instanceof Error ? error.message : String(error);
+            this.outputChannel.appendLine(
+                l10n.t('Failed to delete Deepnote virtual environment directory for "{0}": {1}', config.name, msg)
+            );
         }
 
         Cancellation.throwIfCanceled(token);

@@ -12,7 +12,7 @@ import { generateUuid } from '../../platform/common/uuid';
 import { ExportUtilBase } from './exportUtil';
 import { ExportFormat } from './types';
 import { Uri } from 'vscode';
-import { getFilePath } from '../../platform/common/platform/fs-paths';
+import { getFilePath } from '../../platform/common/platform/fs-paths.node';
 import { ExportDialog } from './exportDialog';
 import { ServiceContainer } from '../../platform/ioc/container';
 

@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 import type { ServerConnection } from '@jupyterlab/services';
+import * as jupyterLab from '@jupyterlab/services';
 import * as path from '../../platform/vscode-path/path';
 import { ConfigurationTarget, Uri, window } from 'vscode';
 import { IJupyterConnection } from '../types';
@@ -137,7 +138,6 @@ export function createJupyterConnectionInfo(
         requestInit = { ...requestInit, agent: requestAgent };
     }
 
-    const { ServerConnection } = require('@jupyterlab/services');
     // This replaces the WebSocket constructor in jupyter lab services with our own implementation
     // See _createSocket here:
     // https://github.com/jupyterlab/jupyterlab/blob/cfc8ebda95e882b4ed2eefd54863bb8cdb0ab763/packages/services/src/kernel/default.ts
@@ -173,7 +173,7 @@ export function createJupyterConnectionInfo(
         // For remote jupyter servers that are managed by us, we can provide the auth header.
         // Its crucial this is set to undefined, else password retrieval will not be attempted.
         getAuthHeader,
-        settings: ServerConnection.makeSettings(serverSettings)
+        settings: jupyterLab.ServerConnection.makeSettings(serverSettings)
     };
     return connection;
 }

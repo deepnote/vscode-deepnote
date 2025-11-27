@@ -599,7 +599,7 @@ suite('DeepnoteTreeItem', () => {
             assert.isNull(item.data);
         });
 
-        test('should skip initialization for loading items', () => {
+        test('should set minimal visuals for loading items', () => {
             const context: DeepnoteTreeItemContext = {
                 filePath: '',
                 projectId: ''
@@ -612,17 +612,15 @@ suite('DeepnoteTreeItem', () => {
                 TreeItemCollapsibleState.None
             );
 
-            // Loading items can have label and iconPath set manually after creation
-            // but should not throw during construction
+            // Loading items should have minimal visuals set to show a readable placeholder
             assert.isDefined(item);
             assert.strictEqual(item.type, DeepnoteTreeItemType.Loading);
 
-            // Verify initialization was skipped - these properties should not be set
-            assert.isUndefined(item.tooltip);
-            assert.isUndefined(item.iconPath);
-            assert.isUndefined(item.description);
-            // label is set to empty string by TreeItem base class
-            assert.strictEqual(item.label, '');
+            // Verify minimal visuals are set
+            assert.strictEqual(item.label, 'Loading…');
+            assert.strictEqual(item.tooltip, 'Loading…');
+            assert.strictEqual(item.description, '');
+            assert.isDefined(item.iconPath);
         });
     });
 

@@ -226,9 +226,14 @@ function createConfig(
         inject.push(path.join(__dirname, 'jquery.js'));
     }
     // Create a copy to avoid mutating the original arrays
-    const external = [...(target === 'web' ? webExternals : commonExternals)];
+    let external = [...(target === 'web' ? webExternals : commonExternals)];
     if (source.toLowerCase().endsWith('extension.node.ts')) {
         external.push(...desktopExternals);
+    }
+    // When building vscode-languageclient, bundle vscode-jsonrpc into it
+    // to avoid ESM/CommonJS interop issues at runtime
+    if (source.includes('vscode-languageclient')) {
+        external = external.filter((e) => e !== 'vscode-jsonrpc');
     }
     const isPreRelease = isDevbuild || process.env.IS_PRE_RELEASE_VERSION_OF_JUPYTER_EXTENSION === 'true';
     const releaseVersionScriptFile = isPreRelease ? 'release.pre-release.js' : 'release.stable.js';
@@ -540,15 +545,12 @@ async function buildVSCodeJsonRPC() {
     const target = path.join(extensionFolder, 'dist', 'node_modules', 'vscode-jsonrpc', 'index.js');
     await fs.ensureDir(path.dirname(target));
     const fullPath = require.resolve(source);
-    const contents = `
-/* --------------------------------------------------------------------------------------------
- * Copyright (c) Microsoft Corporation. All rights reserved.
- * Licensed under the MIT License. See License.txt in the project root for license information.
- * ----------------------------------------------------------------------------------------- */
-'use strict';
-
-module.exports = require('./index');`;
+    // ESM re-export for node.js entry point
+    const contents = `export * from './index.js';`;
     await fs.writeFile(path.join(path.dirname(target), 'node.js'), contents);
+    // Add package.json for ESM module resolution
+    const packageJson = JSON.stringify({ type: 'module', main: './index.js' }, null, 2);
+    await fs.writeFile(path.join(path.dirname(target), 'package.json'), packageJson);
     return build(fullPath, target, {
         target: 'desktop',
         watch: false

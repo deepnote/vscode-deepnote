@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { inject, injectable } from 'inversify';
+import { createRequire } from 'module';
 import type { LanguageClient, LanguageClientOptions, Executable } from 'vscode-languageclient/node';
 
 import { IDisposable, IDisposableRegistry } from '../../platform/common/types';
@@ -24,15 +25,19 @@ export class DeepnoteLspClientManager
 {
     private readonly clients = new Map<string, LspClientInfo>();
     private readonly pendingStarts = new Map<string, boolean>();
+    private readonly outputChannel: vscode.OutputChannel;
 
     private disposed = false;
 
     constructor(@inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry) {
         this.disposables.push(this);
+        this.outputChannel = vscode.window.createOutputChannel('Deepnote Python LSP');
     }
 
     public activate(): void {
         logger.info('DeepnoteLspClientManager activated');
+        this.outputChannel.appendLine(`[${new Date().toISOString()}] DeepnoteLspClientManager activated`);
+        this.outputChannel.appendLine(`[${new Date().toISOString()}] Waiting for startLspClients to be called...`);
     }
 
     public async startLspClients(
@@ -195,12 +200,22 @@ export class DeepnoteLspClientManager
             throw new Error('Operation cancelled');
         }
 
-        // Dynamically import vscode-languageclient to avoid bundling issues
-        const { LanguageClient } = await import('vscode-languageclient/node');
+        // Use createRequire for ESM compatibility with vscode-languageclient
+        // The module is externalized and bundled separately in dist/node_modules
+        const require = createRequire(import.meta.url);
+        const { LanguageClient } = require('vscode-languageclient/node') as typeof import('vscode-languageclient/node');
 
         const pythonPath = interpreter.uri.fsPath;
 
         logger.trace(`Creating Python LSP client using interpreter: ${pythonPath}`);
+
+        // Log to the output channel before starting
+        this.outputChannel.appendLine(`[${new Date().toISOString()}] Initializing Python LSP client...`);
+        this.outputChannel.appendLine(`[${new Date().toISOString()}] Notebook: ${notebookUri.toString()}`);
+        this.outputChannel.appendLine(`[${new Date().toISOString()}] Python interpreter: ${pythonPath}`);
+        this.outputChannel.appendLine(
+            `[${new Date().toISOString()}] Starting pylsp with command: ${pythonPath} -m pylsp`
+        );
 
         const serverOptions: Executable = {
             command: pythonPath,
@@ -226,7 +241,7 @@ export class DeepnoteLspClientManager
             synchronize: {
                 fileEvents: vscode.workspace.createFileSystemWatcher('**/*.{py,deepnote}')
             },
-            outputChannelName: 'Deepnote Python LSP'
+            outputChannel: this.outputChannel
         };
 
         const client = new LanguageClient(
@@ -238,11 +253,15 @@ export class DeepnoteLspClientManager
 
         // Check cancellation before starting client
         if (token?.isCancellationRequested) {
+            this.outputChannel.appendLine(`[${new Date().toISOString()}] Client creation cancelled`);
             throw new Error('Operation cancelled');
         }
 
+        this.outputChannel.appendLine(`[${new Date().toISOString()}] Starting language client...`);
+
         await client.start();
 
+        this.outputChannel.appendLine(`[${new Date().toISOString()}] Language client started successfully`);
         logger.info(`Python LSP client started for ${notebookUri.toString()}`);
 
         return client;

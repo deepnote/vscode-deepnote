@@ -27,6 +27,8 @@ export class DeepnoteLspClientManager
     private readonly pendingStarts = new Map<string, boolean>();
     private readonly outputChannel: vscode.OutputChannel;
 
+    private fileSystemWatcher: vscode.FileSystemWatcher | undefined;
+
     private disposed = false;
 
     constructor(@inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry) {
@@ -187,6 +189,7 @@ export class DeepnoteLspClientManager
     public dispose(): void {
         this.disposed = true;
 
+        this.outputChannel.dispose();
         void this.stopAllClients();
     }
 
@@ -225,6 +228,10 @@ export class DeepnoteLspClientManager
             }
         };
 
+        if (!this.fileSystemWatcher) {
+            this.fileSystemWatcher = vscode.workspace.createFileSystemWatcher('**/*.{py,deepnote}');
+        }
+
         const clientOptions: LanguageClientOptions = {
             documentSelector: [
                 {
@@ -239,7 +246,7 @@ export class DeepnoteLspClientManager
                 }
             ],
             synchronize: {
-                fileEvents: vscode.workspace.createFileSystemWatcher('**/*.{py,deepnote}')
+                fileEvents: this.fileSystemWatcher
             },
             outputChannel: this.outputChannel
         };

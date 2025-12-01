@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { CancellationError } from 'vscode';
 import { inject, injectable } from 'inversify';
 import { createRequire } from 'module';
 import type {
@@ -249,7 +250,7 @@ export class DeepnoteLspClientManager
     ): Promise<LanguageClientType> {
         // Check cancellation before creating client
         if (token?.isCancellationRequested) {
-            throw new Error('Operation cancelled');
+            throw new CancellationError();
         }
 
         const pythonPath = interpreter.uri.fsPath;
@@ -292,7 +293,7 @@ export class DeepnoteLspClientManager
 
         // Check cancellation before starting client
         if (token?.isCancellationRequested) {
-            throw new Error('Operation cancelled');
+            throw new CancellationError();
         }
 
         await client.start();
@@ -307,7 +308,7 @@ export class DeepnoteLspClientManager
         token?: vscode.CancellationToken
     ): Promise<LanguageClientType> {
         if (token?.isCancellationRequested) {
-            throw new Error('Operation cancelled');
+            throw new CancellationError();
         }
 
         logger.trace(`Creating SQL LSP client for ${notebookUri.toString()}`);
@@ -317,11 +318,11 @@ export class DeepnoteLspClientManager
 
         const outputChannel = vscode.window.createOutputChannel('Deepnote SQL LSP');
 
-        const safeConnections = connections.map((c) => ({
-            ...c,
-            password: c.password ? '***REDACTED***' : undefined
-        }));
-        outputChannel.appendLine(`[SQL LSP] Connections being sent: ${JSON.stringify(safeConnections, null, 2)}`);
+        const connectionSummary = connections.map((c) => `${c.name} (${c.adapter})`).join(', ');
+
+        outputChannel.appendLine(
+            `[SQL LSP] Starting with ${connections.length} connection(s): ${connectionSummary || 'none'}`
+        );
         logger.info(`Starting SQL LSP with ${connections.length} database connection(s)`);
 
         // Use IPC transport - must match the server's hardcoded 'node-ipc' method
@@ -423,34 +424,18 @@ export class DeepnoteLspClientManager
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         client.onNotification('sqlLanguageServer.finishSetup', (params: any) => {
-            const safeParams = JSON.parse(JSON.stringify(params));
-
-            if (safeParams?.personalConfig?.connections) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                safeParams.personalConfig.connections = safeParams.personalConfig.connections.map((c: any) => ({
-                    ...c,
-                    password: c.password ? '***REDACTED***' : undefined
-                }));
-            }
-
-            if (safeParams?.config?.password) {
-                safeParams.config.password = '***REDACTED***';
-            }
-
-            outputChannel.appendLine(`[SQL LSP] finishSetup received: ${JSON.stringify(safeParams, null, 2)}`);
-
             const connectedTo = params.config?.name || 'unknown';
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const availableConnections = params.personalConfig?.connections?.map((c: any) => c.name) || [];
 
-            outputChannel.appendLine(`[SQL LSP] Connected to: ${connectedTo}`);
+            outputChannel.appendLine(`[SQL LSP] Setup complete - connected to: ${connectedTo}`);
             outputChannel.appendLine(`[SQL LSP] Available connections: ${availableConnections.join(', ') || 'none'}`);
 
             logger.info(`SQL LSP connected to database: ${connectedTo}, available: ${availableConnections.join(', ')}`);
         });
 
         if (token?.isCancellationRequested) {
-            throw new Error('Operation cancelled');
+            throw new CancellationError();
         }
 
         await client.start();
@@ -490,18 +475,26 @@ export class DeepnoteLspClientManager
      * @returns Path to the vscodeExtensionServer.js module for IPC transport
      */
     private getSqlLanguageServerModule(): string {
-        // Try to get extension path from registered extension first
+        // Try require.resolve first - this handles different package layouts
+        try {
+            const serverModule = require.resolve('@deepnote/sql-language-server/dist/bin/vscodeExtensionServer.js');
+
+            logger.trace('SQL LSP server module resolved via require.resolve:', serverModule);
+
+            return serverModule;
+        } catch (error) {
+            logger.trace('require.resolve failed, falling back to path construction:', error);
+        }
+
+        // Fallback: use extension path construction
         let extensionPath = vscode.extensions.getExtension('Deepnote.vscode-deepnote')?.extensionPath;
 
-        // Fallback: use __dirname to find the extension root
-        // In development, the extension might not be registered yet
         if (!extensionPath) {
             // This file is in src/kernels/deepnote/, so go up 3 levels to get to root
             extensionPath = path.join(__dirname, '..', '..', '..');
             logger.trace('Using __dirname to find extension path:', extensionPath);
         }
 
-        // Path to the VS Code extension server module (uses IPC, not CLI stdio)
         const serverModule = path.join(
             extensionPath,
             'node_modules',
@@ -511,7 +504,7 @@ export class DeepnoteLspClientManager
             'bin',
             'vscodeExtensionServer.js'
         );
-        logger.trace('SQL LSP server module:', serverModule);
+        logger.trace('SQL LSP server module (fallback):', serverModule);
 
         return serverModule;
     }

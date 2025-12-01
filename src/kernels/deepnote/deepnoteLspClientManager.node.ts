@@ -22,7 +22,12 @@ import { DeepnoteServerInfo, IDeepnoteLspClientManager } from './types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { logger } from '../../platform/logging';
 import { noop } from '../../platform/common/utils/misc';
-import { IIntegrationStorage } from '../../platform/notebooks/deepnote/types';
+import {
+    IIntegrationStorage,
+    IPlatformNotebookEditorProvider,
+    IPlatformDeepnoteNotebookManager
+} from '../../platform/notebooks/deepnote/types';
+import { ConfigurableDatabaseIntegrationConfig } from '../../platform/notebooks/deepnote/integrationTypes';
 import { SqlLspConnection, isSupportedBySqlLsp, convertToSqlLspConnection } from './sqlLspConnectionUtils';
 
 interface LspClientInfo {
@@ -49,7 +54,10 @@ export class DeepnoteLspClientManager
 
     constructor(
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
-        @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage
+        @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
+        @inject(IPlatformNotebookEditorProvider)
+        private readonly notebookEditorProvider: IPlatformNotebookEditorProvider,
+        @inject(IPlatformDeepnoteNotebookManager) private readonly notebookManager: IPlatformDeepnoteNotebookManager
     ) {
         this.disposables.push(this);
     }
@@ -307,10 +315,16 @@ export class DeepnoteLspClientManager
         const serverModule = this.getSqlLanguageServerModule();
         const connections = await this.getSqlConnections(notebookUri);
 
-        logger.info(`Starting SQL LSP with ${connections.length} database connection(s)`);
-
         const outputChannel = vscode.window.createOutputChannel('Deepnote SQL LSP');
 
+        const safeConnections = connections.map((c) => ({
+            ...c,
+            password: c.password ? '***REDACTED***' : undefined
+        }));
+        outputChannel.appendLine(`[SQL LSP] Connections being sent: ${JSON.stringify(safeConnections, null, 2)}`);
+        logger.info(`Starting SQL LSP with ${connections.length} database connection(s)`);
+
+        // Use IPC transport - must match the server's hardcoded 'node-ipc' method
         const serverOptions: ServerOptions = {
             run: { module: serverModule, transport: TransportKind.ipc },
             debug: {
@@ -409,10 +423,29 @@ export class DeepnoteLspClientManager
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         client.onNotification('sqlLanguageServer.finishSetup', (params: any) => {
+            const safeParams = JSON.parse(JSON.stringify(params));
+
+            if (safeParams?.personalConfig?.connections) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                safeParams.personalConfig.connections = safeParams.personalConfig.connections.map((c: any) => ({
+                    ...c,
+                    password: c.password ? '***REDACTED***' : undefined
+                }));
+            }
+
+            if (safeParams?.config?.password) {
+                safeParams.config.password = '***REDACTED***';
+            }
+
+            outputChannel.appendLine(`[SQL LSP] finishSetup received: ${JSON.stringify(safeParams, null, 2)}`);
+
             const connectedTo = params.config?.name || 'unknown';
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const availableConnections = params.personalConfig?.connections?.map((c: any) => c.name) || [];
+
             outputChannel.appendLine(`[SQL LSP] Connected to: ${connectedTo}`);
+            outputChannel.appendLine(`[SQL LSP] Available connections: ${availableConnections.join(', ') || 'none'}`);
+
             logger.info(`SQL LSP connected to database: ${connectedTo}, available: ${availableConnections.join(', ')}`);
         });
 
@@ -432,6 +465,20 @@ export class DeepnoteLspClientManager
                 }
             }
         });
+
+        // Explicitly switch to the first connection to trigger schema loading
+        // This ensures the database schema is fetched and any errors are properly reported
+        if (connections.length > 0) {
+            try {
+                await client.sendRequest('workspace/executeCommand', {
+                    command: 'sqlLanguageServer.switchDatabaseConnection',
+                    arguments: [connections[0].name]
+                });
+            } catch (error) {
+                outputChannel.appendLine(`[SQL LSP] Failed to switch connection: ${error}`);
+                logger.warn(`SQL LSP: Failed to switch to connection ${connections[0].name}:`, error);
+            }
+        }
 
         logger.info(`SQL LSP client started and ready for ${notebookUri.toString()}`);
 
@@ -458,8 +505,10 @@ export class DeepnoteLspClientManager
         const serverModule = path.join(
             extensionPath,
             'node_modules',
+            '@deepnote',
             'sql-language-server',
             'dist',
+            'bin',
             'vscodeExtensionServer.js'
         );
         logger.trace('SQL LSP server module:', serverModule);
@@ -468,22 +517,53 @@ export class DeepnoteLspClientManager
     }
 
     /**
-     * Get SQL connections configuration from integration storage
-     * Converts extension's integration configs to sql-language-server format
-     * @param notebookUri The notebook URI (used for potential future project-scoped integrations)
+     * Get SQL connections configuration from integration storage for the current project.
+     * Only returns integrations that are configured for the specific project.
+     * @param notebookUri The notebook URI to get project-scoped integrations for
      * @returns Array of connection configurations for sql-language-server
      */
-    private async getSqlConnections(_notebookUri: vscode.Uri): Promise<SqlLspConnection[]> {
+    private async getSqlConnections(notebookUri: vscode.Uri): Promise<SqlLspConnection[]> {
         try {
-            const integrations = await this.integrationStorage.getAll();
+            const notebook = this.notebookEditorProvider.findAssociatedNotebookDocument(notebookUri);
 
-            const connections = integrations
+            if (!notebook) {
+                logger.warn('SQL LSP: No notebook found for URI');
+                return [];
+            }
+
+            const projectId = notebook.metadata?.deepnoteProjectId as string | undefined;
+
+            if (!projectId) {
+                logger.warn('SQL LSP: No project ID in notebook metadata');
+                return [];
+            }
+
+            const project = this.notebookManager.getOriginalProject(projectId);
+
+            if (!project) {
+                logger.warn(`SQL LSP: No project found for ID: ${projectId}`);
+                return [];
+            }
+
+            const projectIntegrations = project.project.integrations?.slice() ?? [];
+
+            logger.trace(`SQL LSP: Found ${projectIntegrations.length} integrations in project ${projectId}`);
+
+            const projectIntegrationConfigs = (
+                await Promise.all(
+                    projectIntegrations.map((integration) =>
+                        this.integrationStorage.getIntegrationConfig(integration.id)
+                    )
+                )
+            ).filter((config): config is ConfigurableDatabaseIntegrationConfig => config != null);
+
+            const connections = projectIntegrationConfigs
                 .filter((config) => isSupportedBySqlLsp(config.type))
                 .map((config) => convertToSqlLspConnection(config))
                 .filter((conn): conn is SqlLspConnection => conn !== null);
 
             logger.trace(
-                `Found ${connections.length} SQL LSP-compatible integrations out of ${integrations.length} total`
+                `SQL LSP: Found ${connections.length} SQL LSP-compatible integrations for project ${projectId}`
             );
 
             return connections;

@@ -32,13 +32,31 @@ suite('DeepnoteLspClientManager Integration Tests', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mockIntegrationStorage = {
         getAll: async () => [],
+        getIntegrationConfig: async () => undefined,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         onDidChangeIntegrations: { dispose: noop } as any,
         dispose: noop
     } as any;
 
+    // Mock notebook editor provider
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mockNotebookEditorProvider = {
+        findAssociatedNotebookDocument: () => undefined
+    } as any;
+
+    // Mock notebook manager
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mockNotebookManager = {
+        getOriginalProject: () => undefined
+    } as any;
+
     setup(() => {
-        lspClientManager = new DeepnoteLspClientManager(mockDisposableRegistry, mockIntegrationStorage);
+        lspClientManager = new DeepnoteLspClientManager(
+            mockDisposableRegistry,
+            mockIntegrationStorage,
+            mockNotebookEditorProvider,
+            mockNotebookManager
+        );
         lspClientManager.activate();
     });
 

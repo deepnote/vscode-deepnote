@@ -97,7 +97,12 @@ jobs:
           node-version-file: '.nvmrc'
 
       - name: Install dependencies
-        run: npm ci --prefer-offline --no-audit
+        run: |
+          npm ci --prefer-offline --no-audit
+          # Verify Tailwind CSS native modules are installed for Linux (npm optional deps bug)
+          # See: https://github.com/npm/cli/issues/4828
+          node -e "require('lightningcss')" || npm install lightningcss-linux-x64-gnu
+          node -e "require('@tailwindcss/oxide')" || npm install @tailwindcss/oxide-linux-x64-gnu
 
       - name: Compile TypeScript
         run: npm run compile

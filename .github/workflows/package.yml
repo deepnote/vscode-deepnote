@@ -30,7 +30,10 @@ jobs:
           node-version-file: '.nvmrc'
 
       - name: Install dependencies
-        run: npm ci --no-audit
+        run: |
+          npm ci --no-audit
+          # Verify lightningcss native module is installed for Linux
+          node -e "require('lightningcss')" || npm install lightningcss-linux-x64-gnu
 
       - name: Install vsce
         run: npm install -g @vscode/vsce

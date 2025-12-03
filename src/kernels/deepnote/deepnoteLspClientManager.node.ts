@@ -33,10 +33,16 @@ import { SqlLspConnection, isSupportedBySqlLsp, convertToSqlLspConnection } from
 
 interface LspClientInfo {
     pythonClient?: LanguageClientType;
-    sqlClient?: LanguageClientType;
+    // Note: SQL client is now shared globally, not per-notebook
 }
 
 const sqlLintRules = {} as const;
+
+// Global shared SQL LSP client to prevent "command already exists" errors
+// The SQL language server registers commands globally, so we can only have one client
+let sharedSqlClient: LanguageClientType | undefined;
+let sharedSqlClientRefCount = 0;
+let sharedSqlClientStarting = false;
 
 export { SqlLspConnection, supportedSqlLspTypes } from './sqlLspConnectionUtils';
 
@@ -115,12 +121,9 @@ export class DeepnoteLspClientManager
                 return;
             }
 
-            let sqlClient: LanguageClientType | undefined;
-
+            // Use the shared SQL LSP client (only one can exist due to global command registration)
             try {
-                sqlClient = await this.createSqlLspClient(notebookUri, token);
-
-                logger.info(`SQL LSP client started successfully for ${notebookKey}`);
+                await this.ensureSharedSqlClient(notebookUri, token);
             } catch (error) {
                 logger.warn(
                     `Failed to start SQL LSP client for ${notebookKey}. ` +
@@ -134,16 +137,13 @@ export class DeepnoteLspClientManager
                 await pythonClient.stop();
                 await pythonClient.dispose();
 
-                if (sqlClient) {
-                    await sqlClient.stop();
-                    await sqlClient.dispose();
-                }
+                this.releaseSharedSqlClient();
+
                 return;
             }
 
             const clientInfo: LspClientInfo = {
-                pythonClient,
-                sqlClient
+                pythonClient
             };
 
             this.clients.set(notebookKey, clientInfo);
@@ -183,14 +183,8 @@ export class DeepnoteLspClientManager
             }
         }
 
-        if (clientInfo.sqlClient) {
-            try {
-                await clientInfo.sqlClient.stop();
-                await clientInfo.sqlClient.dispose();
-            } catch (error) {
-                logger.error(`Error stopping SQL client for ${notebookKey}:`, error);
-            }
-        }
+        // Release reference to shared SQL client
+        this.releaseSharedSqlClient();
 
         this.clients.delete(notebookKey);
 
@@ -221,26 +215,90 @@ export class DeepnoteLspClientManager
                         .then(() => clientInfo.pythonClient!.dispose().catch(noop))
                 );
             }
-
-            if (clientInfo.sqlClient) {
-                // Chain stop() and dispose() sequentially for each client
-                stopPromises.push(
-                    clientInfo.sqlClient
-                        .stop()
-                        .catch(noop)
-                        .then(() => clientInfo.sqlClient!.dispose().catch(noop))
-                );
-            }
         }
 
         await Promise.all(stopPromises);
         this.clients.clear();
+
+        // Force stop the shared SQL client when stopping all clients
+        await this.forceStopSharedSqlClient();
     }
 
     public dispose(): void {
         this.disposed = true;
 
         void this.stopAllClients();
+    }
+
+    /**
+     * Ensures the shared SQL LSP client is running.
+     * Creates it if needed, otherwise increments the reference count.
+     */
+    private async ensureSharedSqlClient(notebookUri: vscode.Uri, token?: vscode.CancellationToken): Promise<void> {
+        // If client already exists, just increment ref count
+        if (sharedSqlClient) {
+            sharedSqlClientRefCount++;
+            logger.trace(`Reusing shared SQL LSP client, ref count: ${sharedSqlClientRefCount}`);
+            return;
+        }
+
+        // If another call is already starting the client, wait for it
+        if (sharedSqlClientStarting) {
+            logger.trace('Waiting for shared SQL LSP client to start...');
+            // Wait for the client to be created by polling
+            const startTime = Date.now();
+            while (sharedSqlClientStarting && Date.now() - startTime < 30000) {
+                await new Promise((resolve) => setTimeout(resolve, 100));
+                if (token?.isCancellationRequested) {
+                    throw new CancellationError();
+                }
+            }
+            if (sharedSqlClient) {
+                sharedSqlClientRefCount++;
+                return;
+            }
+            throw new Error('Shared SQL LSP client failed to start');
+        }
+
+        // Create the shared client
+        sharedSqlClientStarting = true;
+        try {
+            sharedSqlClient = await this.createSqlLspClient(notebookUri, token);
+            sharedSqlClientRefCount = 1;
+            logger.info('Shared SQL LSP client created successfully');
+        } finally {
+            sharedSqlClientStarting = false;
+        }
+    }
+
+    /**
+     * Releases a reference to the shared SQL LSP client.
+     * Does not actually stop the client - it stays alive for other notebooks.
+     */
+    private releaseSharedSqlClient(): void {
+        if (sharedSqlClientRefCount > 0) {
+            sharedSqlClientRefCount--;
+            logger.trace(`Released shared SQL LSP client reference, ref count: ${sharedSqlClientRefCount}`);
+        }
+    }
+
+    /**
+     * Force stops the shared SQL LSP client, regardless of reference count.
+     * Used when stopping all clients or disposing.
+     */
+    private async forceStopSharedSqlClient(): Promise<void> {
+        if (sharedSqlClient) {
+            try {
+                logger.info('Force stopping shared SQL LSP client');
+                await sharedSqlClient.stop();
+                await sharedSqlClient.dispose();
+            } catch (error) {
+                logger.error('Error stopping shared SQL client:', error);
+            } finally {
+                sharedSqlClient = undefined;
+                sharedSqlClientRefCount = 0;
+            }
+        }
     }
 
     private async createPythonLspClient(
@@ -284,12 +342,9 @@ export class DeepnoteLspClientManager
             outputChannelName: 'Deepnote Python LSP'
         };
 
-        const client = new LanguageClient(
-            'deepnote-python-lsp',
-            'Deepnote Python Language Server',
-            serverOptions,
-            clientOptions
-        );
+        // Use a unique client ID per notebook to prevent conflicts when multiple LSP clients exist
+        const clientId = `deepnote-python-lsp-${notebookUri.toString()}`;
+        const client = new LanguageClient(clientId, 'Deepnote Python Language Server', serverOptions, clientOptions);
 
         // Check cancellation before starting client
         if (token?.isCancellationRequested) {
@@ -410,6 +465,8 @@ export class DeepnoteLspClientManager
             }
         };
 
+        // Use a static client ID since there's only one shared SQL LSP client
+        // (The SQL server registers commands globally, so only one instance can exist)
         const client = new LanguageClient(
             'deepnote-sql-lsp',
             'Deepnote SQL Language Server',

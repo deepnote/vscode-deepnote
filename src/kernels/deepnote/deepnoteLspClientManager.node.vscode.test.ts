@@ -153,4 +153,53 @@ suite('DeepnoteLspClientManager Integration Tests', () => {
             assert.ok(true, 'Duplicate prevention tested despite LSP unavailability');
         }
     });
+
+    test('Should allow restarting LSP clients after stopping them', async function () {
+        this.timeout(15000);
+
+        const mockInterpreter: PythonEnvironment = {
+            id: '/nonexistent/path/to/python',
+            uri: Uri.file('/nonexistent/path/to/python')
+        } as PythonEnvironment;
+
+        const mockServerInfo = {
+            url: 'http://localhost:8888',
+            jupyterPort: 8888,
+            lspPort: 8889,
+            token: 'test-token'
+        };
+
+        try {
+            // First start
+            await lspClientManager.startLspClients(mockServerInfo, testNotebookUri, mockInterpreter);
+
+            // Stop clients (simulating environment switch cleanup)
+            await lspClientManager.stopLspClients(testNotebookUri);
+
+            // Second start with different interpreter (simulating new environment)
+            const newMockInterpreter: PythonEnvironment = {
+                id: '/another/path/to/python',
+                uri: Uri.file('/another/path/to/python')
+            } as PythonEnvironment;
+
+            // This should NOT throw "command already exists" error
+            await lspClientManager.startLspClients(mockServerInfo, testNotebookUri, newMockInterpreter);
+
+            // Clean up
+            await lspClientManager.stopLspClients(testNotebookUri);
+
+            assert.ok(true, 'LSP client restart after stop works correctly');
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+
+            // The bug we're fixing: "command already exists" means clients weren't properly cleaned up
+            if (errorMessage.includes('already exists')) {
+                assert.fail(`LSP client restart failed with duplicate command error: ${errorMessage}`);
+            }
+
+            // Other errors (like missing pylsp) are acceptable in test environment
+            console.log(`LSP client test completed with expected error: ${errorMessage}`);
+            assert.ok(true, 'Test completed (LSP may not be available in test env)');
+        }
+    });
 });

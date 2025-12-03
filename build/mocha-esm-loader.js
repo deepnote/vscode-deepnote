@@ -69,7 +69,8 @@ export async function resolve(specifier, context, nextResolve) {
         };
     }
 
-    // Intercept @deepnote/convert
+    // Intercept @deepnote/convert - needed because the real package performs file I/O
+    // that we need to control in tests
     if (specifier === '@deepnote/convert') {
         return {
             url: 'vscode-mock:///deepnote-convert',
@@ -306,13 +307,39 @@ export async function load(url, context, nextLoad) {
             };
         }
 
-        // Handle deepnote convert mock
+        // Handle deepnote convert mock - needed because the real package performs file I/O
         if (moduleName === 'deepnote-convert') {
             return {
                 format: 'module',
                 source: `
                     export const convertIpynbFilesToDeepnoteFile = async () => {
                         // Mock implementation - does nothing in tests
+                    };
+
+                    export const convertDeepnoteToJupyterNotebooks = (deepnoteFile) => {
+                        // Mock implementation that converts Deepnote notebooks to Jupyter format
+                        const notebooks = deepnoteFile?.project?.notebooks || [];
+                        return notebooks.map(nb => ({
+                            filename: nb.name.replace(/[<>:"/\\\\|?*]/g, '_').replace(/\\s+/g, '-') + '.ipynb',
+                            notebook: {
+                                cells: (nb.blocks || []).map(block => ({
+                                    cell_type: block.type === 'markdown' ? 'markdown' : 'code',
+                                    source: block.content || '',
+                                    metadata: {
+                                        deepnote_cell_type: block.type,
+                                        cell_id: block.id
+                                    },
+                                    outputs: block.outputs || []
+                                })),
+                                metadata: {
+                                    deepnote_notebook_id: nb.id,
+                                    deepnote_notebook_name: nb.name,
+                                    deepnote_execution_mode: nb.executionMode
+                                },
+                                nbformat: 4,
+                                nbformat_minor: 5
+                            }
+                        }));
                     };
                 `,
                 shortCircuit: true

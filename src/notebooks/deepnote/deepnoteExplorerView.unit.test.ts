@@ -1771,4 +1771,757 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             verify(mockFS.writeFile(anything(), anything())).never();
         });
     });
+
+    suite('exportProject', () => {
+        test('should return early if user cancels format selection', async () => {
+            resetVSCodeMocks();
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            // User cancels format selection
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve(undefined)
+            );
+
+            const treeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.ProjectFile,
+                context: {
+                    filePath: '/test/project.deepnote',
+                    projectId: 'project-id'
+                }
+            };
+
+            await (explorerView as any).exportProject(treeItem);
+
+            // Verify no file operations occurred
+            verify(mockFS.writeFile(anything(), anything())).never();
+            verify(mockFS.readFile(anything())).never();
+        });
+
+        test('should return early if user cancels folder selection', async () => {
+            resetVSCodeMocks();
+
+            const projectData = {
+                version: '1.0.0',
+                metadata: { createdAt: '2024-01-01T00:00:00.000Z' },
+                project: {
+                    id: 'project-id',
+                    name: 'Test Project',
+                    notebooks: [{ id: 'nb-1', name: 'Notebook 1', blocks: [], executionMode: 'block' }]
+                }
+            };
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(projectData))));
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            // User selects format but cancels folder selection
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ label: 'Jupyter Notebook (.ipynb)', value: 'jupyter' }) as any
+            );
+            when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(Promise.resolve(undefined));
+
+            const treeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.ProjectFile,
+                context: {
+                    filePath: '/test/project.deepnote',
+                    projectId: 'project-id'
+                }
+            };
+
+            await (explorerView as any).exportProject(treeItem);
+
+            // Verify no file was written
+            verify(mockFS.writeFile(anything(), anything())).never();
+        });
+
+        test('should show error for invalid Deepnote file format', async () => {
+            resetVSCodeMocks();
+
+            // Invalid project data (no project property)
+            const invalidData = {
+                version: '1.0.0',
+                metadata: { createdAt: '2024-01-01T00:00:00.000Z' }
+            };
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(invalidData))));
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ label: 'Jupyter Notebook (.ipynb)', value: 'jupyter' }) as any
+            );
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+
+            const treeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.ProjectFile,
+                context: {
+                    filePath: '/test/project.deepnote',
+                    projectId: 'project-id'
+                }
+            };
+
+            await (explorerView as any).exportProject(treeItem);
+
+            // Verify error message was shown
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+        });
+
+        test('should export all notebooks when triggered from project', async () => {
+            resetVSCodeMocks();
+
+            const projectData = {
+                version: '1.0.0',
+                metadata: { createdAt: '2024-01-01T00:00:00.000Z' },
+                project: {
+                    id: 'project-id',
+                    name: 'Test Project',
+                    notebooks: [
+                        { id: 'nb-1', name: 'Notebook 1', blocks: [], executionMode: 'block' },
+                        { id: 'nb-2', name: 'Notebook 2', blocks: [], executionMode: 'block' }
+                    ]
+                }
+            };
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(projectData))));
+            when(mockFS.stat(anything())).thenReject(new Error('File not found'));
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ label: 'Jupyter Notebook (.ipynb)', value: 'jupyter' }) as any
+            );
+            when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(
+                Promise.resolve([Uri.file('/output/folder')])
+            );
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenReturn(
+                Promise.resolve(undefined)
+            );
+
+            let writeCount = 0;
+            when(mockFS.writeFile(anything(), anything())).thenCall(() => {
+                writeCount++;
+                return Promise.resolve();
+            });
+
+            const treeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.ProjectFile,
+                context: {
+                    filePath: '/test/project.deepnote',
+                    projectId: 'project-id'
+                }
+            };
+
+            await (explorerView as any).exportProject(treeItem);
+
+            // Verify both notebooks were exported
+            assert.strictEqual(writeCount, 2);
+            verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
+        });
+
+        test('should write correct Jupyter notebook JSON format', async () => {
+            resetVSCodeMocks();
+
+            const projectData = {
+                version: '1.0.0',
+                metadata: { createdAt: '2024-01-01T00:00:00.000Z' },
+                project: {
+                    id: 'project-id',
+                    name: 'Test Project',
+                    notebooks: [
+                        {
+                            id: 'nb-1',
+                            name: 'Test Notebook',
+                            blocks: [{ id: 'block-1', type: 'code', content: 'print("hello")', sortingKey: '0' }],
+                            executionMode: 'block'
+                        }
+                    ]
+                }
+            };
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(projectData))));
+            when(mockFS.stat(anything())).thenReject(new Error('File not found'));
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ label: 'Jupyter Notebook (.ipynb)', value: 'jupyter' }) as any
+            );
+            when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(
+                Promise.resolve([Uri.file('/output/folder')])
+            );
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenReturn(
+                Promise.resolve(undefined)
+            );
+
+            let capturedContent: Uint8Array | undefined;
+            when(mockFS.writeFile(anything(), anything())).thenCall((_uri: Uri, content: Uint8Array) => {
+                capturedContent = content;
+                return Promise.resolve();
+            });
+
+            const treeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.ProjectFile,
+                context: {
+                    filePath: '/test/project.deepnote',
+                    projectId: 'project-id'
+                }
+            };
+
+            await (explorerView as any).exportProject(treeItem);
+
+            // Verify the exported content is valid Jupyter notebook JSON
+            assert.isDefined(capturedContent);
+            const notebook = JSON.parse(Buffer.from(capturedContent!).toString('utf8'));
+
+            assert.isDefined(notebook.cells);
+            assert.isDefined(notebook.metadata);
+            assert.strictEqual(notebook.metadata.deepnote_notebook_id, 'nb-1');
+            assert.strictEqual(notebook.metadata.deepnote_notebook_name, 'Test Notebook');
+        });
+
+        test('should use correct output path with Uri.joinPath', async () => {
+            resetVSCodeMocks();
+
+            const projectData = {
+                version: '1.0.0',
+                metadata: { createdAt: '2024-01-01T00:00:00.000Z' },
+                project: {
+                    id: 'project-id',
+                    name: 'Test Project',
+                    notebooks: [{ id: 'nb-1', name: 'My Notebook', blocks: [], executionMode: 'block' }]
+                }
+            };
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(projectData))));
+            when(mockFS.stat(anything())).thenReject(new Error('File not found'));
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ label: 'Jupyter Notebook (.ipynb)', value: 'jupyter' }) as any
+            );
+            when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(
+                Promise.resolve([Uri.file('/output/folder')])
+            );
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenReturn(
+                Promise.resolve(undefined)
+            );
+
+            let capturedUri: Uri | undefined;
+            when(mockFS.writeFile(anything(), anything())).thenCall((uri: Uri) => {
+                capturedUri = uri;
+                return Promise.resolve();
+            });
+
+            const treeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.ProjectFile,
+                context: {
+                    filePath: '/test/project.deepnote',
+                    projectId: 'project-id'
+                }
+            };
+
+            await (explorerView as any).exportProject(treeItem);
+
+            // Verify the output path is correctly constructed
+            assert.isDefined(capturedUri);
+            assert.isTrue(capturedUri!.fsPath.startsWith('/output/folder'));
+            assert.isTrue(capturedUri!.fsPath.endsWith('.ipynb'));
+        });
+
+        test('should handle export errors gracefully', async () => {
+            resetVSCodeMocks();
+
+            const projectData = {
+                version: '1.0.0',
+                metadata: { createdAt: '2024-01-01T00:00:00.000Z' },
+                project: {
+                    id: 'project-id',
+                    name: 'Test Project',
+                    notebooks: [{ id: 'nb-1', name: 'Notebook 1', blocks: [], executionMode: 'block' }]
+                }
+            };
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(projectData))));
+            when(mockFS.stat(anything())).thenReject(new Error('File not found'));
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ label: 'Jupyter Notebook (.ipynb)', value: 'jupyter' }) as any
+            );
+            when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(
+                Promise.resolve([Uri.file('/output/folder')])
+            );
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+
+            // Simulate write error
+            when(mockFS.writeFile(anything(), anything())).thenReject(new Error('Permission denied'));
+
+            const treeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.ProjectFile,
+                context: {
+                    filePath: '/test/project.deepnote',
+                    projectId: 'project-id'
+                }
+            };
+
+            await (explorerView as any).exportProject(treeItem);
+
+            // Verify error message was shown
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+        });
+
+        test('should prompt for overwrite when files already exist and cancel if declined', async () => {
+            resetVSCodeMocks();
+
+            const projectData = {
+                version: '1.0.0',
+                metadata: { createdAt: '2024-01-01T00:00:00.000Z' },
+                project: {
+                    id: 'project-id',
+                    name: 'Test Project',
+                    notebooks: [
+                        { id: 'nb-1', name: 'Notebook 1', blocks: [], executionMode: 'block' },
+                        { id: 'nb-2', name: 'Notebook 2', blocks: [], executionMode: 'block' }
+                    ]
+                }
+            };
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(projectData))));
+            // Files exist - stat returns successfully
+            when(mockFS.stat(anything())).thenReturn(Promise.resolve({} as any));
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ label: 'Jupyter Notebook (.ipynb)', value: 'jupyter' }) as any
+            );
+            when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(
+                Promise.resolve([Uri.file('/output/folder')])
+            );
+            // User cancels overwrite
+            when(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).thenReturn(
+                Promise.resolve(undefined)
+            );
+
+            const treeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.ProjectFile,
+                context: {
+                    filePath: '/test/project.deepnote',
+                    projectId: 'project-id'
+                }
+            };
+
+            await (explorerView as any).exportProject(treeItem);
+
+            // Verify warning message was shown about files existing
+            verify(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).once();
+            // Verify no files were written
+            verify(mockFS.writeFile(anything(), anything())).never();
+        });
+
+        test('should overwrite files when user confirms', async () => {
+            resetVSCodeMocks();
+
+            const projectData = {
+                version: '1.0.0',
+                metadata: { createdAt: '2024-01-01T00:00:00.000Z' },
+                project: {
+                    id: 'project-id',
+                    name: 'Test Project',
+                    notebooks: [{ id: 'nb-1', name: 'Notebook 1', blocks: [], executionMode: 'block' }]
+                }
+            };
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(projectData))));
+            // File exists - stat returns successfully
+            when(mockFS.stat(anything())).thenReturn(Promise.resolve({} as any));
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ label: 'Jupyter Notebook (.ipynb)', value: 'jupyter' }) as any
+            );
+            when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(
+                Promise.resolve([Uri.file('/output/folder')])
+            );
+            // User confirms overwrite
+            when(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).thenReturn(
+                Promise.resolve('Overwrite') as any
+            );
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenReturn(
+                Promise.resolve(undefined)
+            );
+
+            let writeCount = 0;
+            when(mockFS.writeFile(anything(), anything())).thenCall(() => {
+                writeCount++;
+                return Promise.resolve();
+            });
+
+            const treeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.ProjectFile,
+                context: {
+                    filePath: '/test/project.deepnote',
+                    projectId: 'project-id'
+                }
+            };
+
+            await (explorerView as any).exportProject(treeItem);
+
+            // Verify file was written after user confirmed overwrite
+            assert.strictEqual(writeCount, 1);
+        });
+    });
+
+    suite('exportNotebook', () => {
+        test('should return early if user cancels format selection', async () => {
+            resetVSCodeMocks();
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            // User cancels format selection
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve(undefined)
+            );
+
+            const treeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.Notebook,
+                context: {
+                    filePath: '/test/project.deepnote',
+                    projectId: 'project-id',
+                    notebookId: 'nb-1'
+                }
+            };
+
+            await (explorerView as any).exportNotebook(treeItem);
+
+            // Verify no file operations occurred
+            verify(mockFS.writeFile(anything(), anything())).never();
+            verify(mockFS.readFile(anything())).never();
+        });
+
+        test('should return early if user cancels folder selection', async () => {
+            resetVSCodeMocks();
+
+            const projectData = {
+                version: '1.0.0',
+                metadata: { createdAt: '2024-01-01T00:00:00.000Z' },
+                project: {
+                    id: 'project-id',
+                    name: 'Test Project',
+                    notebooks: [{ id: 'nb-1', name: 'Notebook 1', blocks: [], executionMode: 'block' }]
+                }
+            };
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(projectData))));
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            // User selects format but cancels folder selection
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ label: 'Jupyter Notebook (.ipynb)', value: 'jupyter' }) as any
+            );
+            when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(Promise.resolve(undefined));
+
+            const treeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.Notebook,
+                context: {
+                    filePath: '/test/project.deepnote',
+                    projectId: 'project-id',
+                    notebookId: 'nb-1'
+                }
+            };
+
+            await (explorerView as any).exportNotebook(treeItem);
+
+            // Verify no file was written
+            verify(mockFS.writeFile(anything(), anything())).never();
+        });
+
+        test('should show error for invalid Deepnote file format', async () => {
+            resetVSCodeMocks();
+
+            // Invalid project data (no project property)
+            const invalidData = {
+                version: '1.0.0',
+                metadata: { createdAt: '2024-01-01T00:00:00.000Z' }
+            };
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(invalidData))));
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ label: 'Jupyter Notebook (.ipynb)', value: 'jupyter' }) as any
+            );
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+
+            const treeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.Notebook,
+                context: {
+                    filePath: '/test/project.deepnote',
+                    projectId: 'project-id',
+                    notebookId: 'nb-1'
+                }
+            };
+
+            await (explorerView as any).exportNotebook(treeItem);
+
+            // Verify error message was shown
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+        });
+
+        test('should export single notebook matching the notebookId', async () => {
+            resetVSCodeMocks();
+
+            const targetNotebookId = 'nb-2';
+            const projectData = {
+                version: '1.0.0',
+                metadata: { createdAt: '2024-01-01T00:00:00.000Z' },
+                project: {
+                    id: 'project-id',
+                    name: 'Test Project',
+                    notebooks: [
+                        { id: 'nb-1', name: 'Notebook 1', blocks: [], executionMode: 'block' },
+                        { id: targetNotebookId, name: 'Notebook 2', blocks: [], executionMode: 'block' }
+                    ]
+                }
+            };
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(projectData))));
+            when(mockFS.stat(anything())).thenReject(new Error('File not found'));
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ label: 'Jupyter Notebook (.ipynb)', value: 'jupyter' }) as any
+            );
+            when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(
+                Promise.resolve([Uri.file('/output/folder')])
+            );
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenReturn(
+                Promise.resolve(undefined)
+            );
+
+            let writeCount = 0;
+            const writtenFiles: { uri: Uri; content: Uint8Array }[] = [];
+            when(mockFS.writeFile(anything(), anything())).thenCall((uri: Uri, content: Uint8Array) => {
+                writeCount++;
+                writtenFiles.push({ uri, content });
+                return Promise.resolve();
+            });
+
+            // Notebook tree item with specific notebookId
+            const treeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.Notebook,
+                context: {
+                    filePath: '/test/project.deepnote',
+                    projectId: 'project-id',
+                    notebookId: targetNotebookId
+                }
+            };
+
+            await (explorerView as any).exportNotebook(treeItem);
+
+            // Verify only one notebook was exported
+            assert.strictEqual(writeCount, 1);
+
+            // Verify the exported notebook has correct metadata
+            const exportedContent = JSON.parse(Buffer.from(writtenFiles[0].content).toString('utf8'));
+            assert.strictEqual(exportedContent.metadata.deepnote_notebook_id, targetNotebookId);
+        });
+
+        test('should show error if notebook not found', async () => {
+            resetVSCodeMocks();
+
+            const projectData = {
+                version: '1.0.0',
+                metadata: { createdAt: '2024-01-01T00:00:00.000Z' },
+                project: {
+                    id: 'project-id',
+                    name: 'Test Project',
+                    notebooks: [{ id: 'nb-1', name: 'Notebook 1', blocks: [], executionMode: 'block' }]
+                }
+            };
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(projectData))));
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ label: 'Jupyter Notebook (.ipynb)', value: 'jupyter' }) as any
+            );
+            when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(
+                Promise.resolve([Uri.file('/output/folder')])
+            );
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+
+            // Notebook tree item with non-existent notebookId
+            const treeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.Notebook,
+                context: {
+                    filePath: '/test/project.deepnote',
+                    projectId: 'project-id',
+                    notebookId: 'non-existent-nb'
+                }
+            };
+
+            await (explorerView as any).exportNotebook(treeItem);
+
+            // Verify error message was shown
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            // Verify no file was written
+            verify(mockFS.writeFile(anything(), anything())).never();
+        });
+
+        test('should handle export errors gracefully', async () => {
+            resetVSCodeMocks();
+
+            const projectData = {
+                version: '1.0.0',
+                metadata: { createdAt: '2024-01-01T00:00:00.000Z' },
+                project: {
+                    id: 'project-id',
+                    name: 'Test Project',
+                    notebooks: [{ id: 'nb-1', name: 'Notebook 1', blocks: [], executionMode: 'block' }]
+                }
+            };
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(projectData))));
+            when(mockFS.stat(anything())).thenReject(new Error('File not found'));
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ label: 'Jupyter Notebook (.ipynb)', value: 'jupyter' }) as any
+            );
+            when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(
+                Promise.resolve([Uri.file('/output/folder')])
+            );
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+
+            // Simulate write error
+            when(mockFS.writeFile(anything(), anything())).thenReject(new Error('Permission denied'));
+
+            const treeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.Notebook,
+                context: {
+                    filePath: '/test/project.deepnote',
+                    projectId: 'project-id',
+                    notebookId: 'nb-1'
+                }
+            };
+
+            await (explorerView as any).exportNotebook(treeItem);
+
+            // Verify error message was shown
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+        });
+
+        test('should prompt for overwrite when file already exists and cancel if declined', async () => {
+            resetVSCodeMocks();
+
+            const projectData = {
+                version: '1.0.0',
+                metadata: { createdAt: '2024-01-01T00:00:00.000Z' },
+                project: {
+                    id: 'project-id',
+                    name: 'Test Project',
+                    notebooks: [{ id: 'nb-1', name: 'Notebook 1', blocks: [], executionMode: 'block' }]
+                }
+            };
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(projectData))));
+            // File exists - stat returns successfully
+            when(mockFS.stat(anything())).thenReturn(Promise.resolve({} as any));
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ label: 'Jupyter Notebook (.ipynb)', value: 'jupyter' }) as any
+            );
+            when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(
+                Promise.resolve([Uri.file('/output/folder')])
+            );
+            // User cancels overwrite
+            when(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).thenReturn(
+                Promise.resolve(undefined)
+            );
+
+            const treeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.Notebook,
+                context: {
+                    filePath: '/test/project.deepnote',
+                    projectId: 'project-id',
+                    notebookId: 'nb-1'
+                }
+            };
+
+            await (explorerView as any).exportNotebook(treeItem);
+
+            // Verify warning message was shown about file existing
+            verify(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).once();
+            // Verify no file was written
+            verify(mockFS.writeFile(anything(), anything())).never();
+        });
+
+        test('should overwrite file when user confirms', async () => {
+            resetVSCodeMocks();
+
+            const projectData = {
+                version: '1.0.0',
+                metadata: { createdAt: '2024-01-01T00:00:00.000Z' },
+                project: {
+                    id: 'project-id',
+                    name: 'Test Project',
+                    notebooks: [{ id: 'nb-1', name: 'Notebook 1', blocks: [], executionMode: 'block' }]
+                }
+            };
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(projectData))));
+            // File exists - stat returns successfully
+            when(mockFS.stat(anything())).thenReturn(Promise.resolve({} as any));
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ label: 'Jupyter Notebook (.ipynb)', value: 'jupyter' }) as any
+            );
+            when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(
+                Promise.resolve([Uri.file('/output/folder')])
+            );
+            // User confirms overwrite
+            when(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).thenReturn(
+                Promise.resolve('Overwrite') as any
+            );
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenReturn(
+                Promise.resolve(undefined)
+            );
+
+            let writeCount = 0;
+            when(mockFS.writeFile(anything(), anything())).thenCall(() => {
+                writeCount++;
+                return Promise.resolve();
+            });
+
+            const treeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.Notebook,
+                context: {
+                    filePath: '/test/project.deepnote',
+                    projectId: 'project-id',
+                    notebookId: 'nb-1'
+                }
+            };
+
+            await (explorerView as any).exportNotebook(treeItem);
+
+            // Verify file was written after user confirmed overwrite
+            assert.strictEqual(writeCount, 1);
+        });
+    });
 });

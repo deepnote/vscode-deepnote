@@ -273,6 +273,8 @@
     "deepnote.commands.deleteNotebook.title": "Delete Notebook",
     "deepnote.commands.duplicateNotebook.title": "Duplicate Notebook",
     "deepnote.commands.addNotebookToProject.title": "Add Notebook",
+    "deepnote.commands.exportProject.title": "Export Project...",
+    "deepnote.commands.exportNotebook.title": "Export Notebook...",
     "deepnote.views.explorer.name": "Explorer",
     "deepnote.views.explorer.welcome": "No Deepnote notebooks found in this workspace.",
     "deepnote.views.environments.name": "Environments",

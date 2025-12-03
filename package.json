@@ -280,6 +280,18 @@
                 "icon": "$(add)"
             },
             {
+                "command": "deepnote.exportProject",
+                "title": "%deepnote.commands.exportProject.title%",
+                "category": "Deepnote",
+                "icon": "$(export)"
+            },
+            {
+                "command": "deepnote.exportNotebook",
+                "title": "%deepnote.commands.exportNotebook.title%",
+                "category": "Deepnote",
+                "icon": "$(export)"
+            },
+            {
                 "command": "dataScience.ClearCache",
                 "title": "%deepnote.command.dataScience.clearCache.title%",
                 "category": "Jupyter (Dev)",
@@ -1569,12 +1581,17 @@
                 {
                     "command": "deepnote.addNotebookToProject",
                     "when": "view == deepnoteExplorer && viewItem == projectFile",
-                    "group": "1_project@1"
+                    "group": "1_add@1"
                 },
                 {
                     "command": "deepnote.renameProject",
                     "when": "view == deepnoteExplorer && viewItem == projectFile",
-                    "group": "2_edit@1"
+                    "group": "2_manage@1"
+                },
+                {
+                    "command": "deepnote.exportProject",
+                    "when": "view == deepnoteExplorer && viewItem == projectFile",
+                    "group": "2_manage@2"
                 },
                 {
                     "command": "deepnote.deleteProject",
@@ -1584,12 +1601,17 @@
                 {
                     "command": "deepnote.renameNotebook",
                     "when": "view == deepnoteExplorer && viewItem == notebook",
-                    "group": "2_edit@1"
+                    "group": "1_edit@1"
                 },
                 {
                     "command": "deepnote.duplicateNotebook",
                     "when": "view == deepnoteExplorer && viewItem == notebook",
-                    "group": "2_edit@2"
+                    "group": "1_edit@2"
+                },
+                {
+                    "command": "deepnote.exportNotebook",
+                    "when": "view == deepnoteExplorer && viewItem == notebook",
+                    "group": "2_export@1"
                 },
                 {
                     "command": "deepnote.deleteNotebook",
@@ -2480,7 +2502,7 @@
     "dependencies": {
         "@c4312/evt": "^0.1.1",
         "@deepnote/blocks": "^1.3.5",
-        "@deepnote/convert": "^1.2.0",
+        "@deepnote/convert": "^1.3.0",
         "@deepnote/database-integrations": "^1.3.0",
         "@enonic/fnv-plus": "^1.3.0",
         "@jupyter-widgets/base": "^6.0.8",

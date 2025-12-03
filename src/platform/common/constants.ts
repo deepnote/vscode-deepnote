@@ -247,6 +247,8 @@ export namespace Commands {
     export const DeleteNotebook = 'deepnote.deleteNotebook';
     export const DuplicateNotebook = 'deepnote.duplicateNotebook';
     export const AddNotebookToProject = 'deepnote.addNotebookToProject';
+    export const ExportProject = 'deepnote.exportProject';
+    export const ExportNotebook = 'deepnote.exportNotebook';
     export const OpenInDeepnote = 'deepnote.openInDeepnote';
     export const ExportAsPythonScript = 'deepnote.exportAsPythonScript';
     export const ExportToHTML = 'deepnote.exportToHTML';

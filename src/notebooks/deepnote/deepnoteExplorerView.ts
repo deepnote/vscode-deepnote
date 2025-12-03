@@ -2,7 +2,7 @@ import { injectable, inject } from 'inversify';
 import { commands, window, workspace, type TreeView, Uri, l10n } from 'vscode';
 import * as yaml from 'js-yaml';
 import { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
-import { convertIpynbFilesToDeepnoteFile } from '@deepnote/convert';
+import { convertDeepnoteToJupyterNotebooks, convertIpynbFilesToDeepnoteFile } from '@deepnote/convert';
 
 import { IExtensionContext } from '../../platform/common/types';
 import { IDeepnoteNotebookManager } from '../types';
@@ -396,6 +396,18 @@ export class DeepnoteExplorerView {
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.AddNotebookToProject, (treeItem: DeepnoteTreeItem) =>
                 this.addNotebookToProject(treeItem)
+            )
+        );
+
+        this.extensionContext.subscriptions.push(
+            commands.registerCommand(Commands.ExportProject, (treeItem: DeepnoteTreeItem) =>
+                this.exportProject(treeItem)
+            )
+        );
+
+        this.extensionContext.subscriptions.push(
+            commands.registerCommand(Commands.ExportNotebook, (treeItem: DeepnoteTreeItem) =>
+                this.exportNotebook(treeItem)
             )
         );
     }
@@ -964,6 +976,122 @@ export class DeepnoteExplorerView {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             await window.showErrorMessage(l10n.t('Failed to add notebook: {0}', errorMessage));
+        }
+    }
+
+    /**
+     * Exports all notebooks from a Deepnote project to Jupyter format
+     * @param treeItem The tree item representing a project
+     */
+    private async exportProject(treeItem: DeepnoteTreeItem): Promise<void> {
+        try {
+            const format = await window.showQuickPick([{ label: 'Jupyter Notebook (.ipynb)', value: 'jupyter' }], {
+                placeHolder: l10n.t('Select export format')
+            });
+
+            if (!format) {
+                return;
+            }
+
+            const fileUri = Uri.file(treeItem.context.filePath);
+            const projectData = await readDeepnoteProjectFile(fileUri);
+
+            if (!projectData?.project) {
+                await window.showErrorMessage(l10n.t('Invalid Deepnote file format'));
+
+                return;
+            }
+
+            const outputFolder = await window.showOpenDialog({
+                canSelectFiles: false,
+                canSelectFolders: true,
+                canSelectMany: false,
+                openLabel: l10n.t('Export Here'),
+                title: l10n.t('Select Export Location')
+            });
+
+            if (!outputFolder?.length) {
+                return;
+            }
+
+            const jupyterNotebooks = convertDeepnoteToJupyterNotebooks(projectData);
+
+            for (const { filename, notebook } of jupyterNotebooks) {
+                const outputPath = Uri.joinPath(outputFolder[0], filename);
+
+                await workspace.fs.writeFile(outputPath, new TextEncoder().encode(JSON.stringify(notebook, null, 2)));
+            }
+
+            const count = jupyterNotebooks.length;
+            const message =
+                count === 1
+                    ? l10n.t('Exported 1 notebook successfully')
+                    : l10n.t('Exported {0} notebooks successfully', count);
+
+            await window.showInformationMessage(message);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            await window.showErrorMessage(l10n.t('Failed to export: {0}', errorMessage));
+        }
+    }
+
+    /**
+     * Exports a single notebook from a Deepnote project to Jupyter format
+     * @param treeItem The tree item representing a notebook
+     */
+    private async exportNotebook(treeItem: DeepnoteTreeItem): Promise<void> {
+        try {
+            const format = await window.showQuickPick([{ label: 'Jupyter Notebook (.ipynb)', value: 'jupyter' }], {
+                placeHolder: l10n.t('Select export format')
+            });
+
+            if (!format) {
+                return;
+            }
+
+            const fileUri = Uri.file(treeItem.context.filePath);
+            const projectData = await readDeepnoteProjectFile(fileUri);
+
+            if (!projectData?.project) {
+                await window.showErrorMessage(l10n.t('Invalid Deepnote file format'));
+
+                return;
+            }
+
+            const outputFolder = await window.showOpenDialog({
+                canSelectFiles: false,
+                canSelectFolders: true,
+                canSelectMany: false,
+                openLabel: l10n.t('Export Here'),
+                title: l10n.t('Select Export Location')
+            });
+
+            if (!outputFolder?.length) {
+                return;
+            }
+
+            const jupyterNotebooks = convertDeepnoteToJupyterNotebooks(projectData);
+            const notebookToExport = jupyterNotebooks.find(
+                ({ notebook }) => notebook.metadata.deepnote_notebook_id === treeItem.context.notebookId
+            );
+
+            if (!notebookToExport) {
+                await window.showErrorMessage(l10n.t('Notebook not found'));
+
+                return;
+            }
+
+            const outputPath = Uri.joinPath(outputFolder[0], notebookToExport.filename);
+
+            await workspace.fs.writeFile(
+                outputPath,
+                new TextEncoder().encode(JSON.stringify(notebookToExport.notebook, null, 2))
+            );
+
+            await window.showInformationMessage(l10n.t('Exported 1 notebook successfully'));
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            await window.showErrorMessage(l10n.t('Failed to export: {0}', errorMessage));
         }
     }
 }

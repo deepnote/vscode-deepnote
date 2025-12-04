@@ -243,9 +243,9 @@ export class DeepnoteDataConverter {
                 } else if (item.mime === 'application/json') {
                     data['application/json'] = JSON.parse(new TextDecoder().decode(item.data));
                 } else if (item.mime === 'image/png') {
-                    data['image/png'] = this.uint8ArrayToBase64(new Uint8Array(item.data));
+                    data['image/png'] = this.uint8ArrayToBase64(item.data);
                 } else if (item.mime === 'image/jpeg') {
-                    data['image/jpeg'] = this.uint8ArrayToBase64(new Uint8Array(item.data));
+                    data['image/jpeg'] = this.uint8ArrayToBase64(item.data);
                 } else if (item.mime === 'application/vnd.deepnote.dataframe.v3+json') {
                     data['application/vnd.deepnote.dataframe.v3+json'] = JSON.parse(
                         new TextDecoder().decode(item.data)

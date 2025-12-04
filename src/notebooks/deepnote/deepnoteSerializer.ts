@@ -11,30 +11,35 @@ export { DeepnoteBlock, DeepnoteNotebook, DeepnoteOutput, DeepnoteFile } from '.
 
 /**
  * Deep clones an object while removing circular references.
- * Circular references are replaced with undefined to make the object serializable.
+ * Uses a recursion stack pattern to only drop true cycles, preserving shared references.
  */
-function cloneWithoutCircularRefs<T>(obj: T, seen = new WeakSet()): T {
+function cloneWithoutCircularRefs<T>(obj: T, seen = new WeakSet<object>()): T {
     if (obj === null || typeof obj !== 'object') {
         return obj;
     }
 
-    if (seen.has(obj)) {
+    if (seen.has(obj as object)) {
+        // True circular reference on the current path - drop it
         return undefined as T;
     }
 
-    seen.add(obj);
+    seen.add(obj as object);
 
-    if (Array.isArray(obj)) {
-        return obj.map((item) => cloneWithoutCircularRefs(item, seen)) as T;
+    try {
+        if (Array.isArray(obj)) {
+            return obj.map((item) => cloneWithoutCircularRefs(item, seen)) as T;
+        }
+
+        const clone: Record<string, unknown> = {};
+
+        for (const key of Object.keys(obj as Record<string, unknown>)) {
+            clone[key] = cloneWithoutCircularRefs((obj as Record<string, unknown>)[key], seen);
+        }
+
+        return clone as T;
+    } finally {
+        seen.delete(obj as object);
     }
-
-    const clone: Record<string, unknown> = {};
-
-    for (const key of Object.keys(obj)) {
-        clone[key] = cloneWithoutCircularRefs((obj as Record<string, unknown>)[key], seen);
-    }
-
-    return clone as T;
 }
 
 /**

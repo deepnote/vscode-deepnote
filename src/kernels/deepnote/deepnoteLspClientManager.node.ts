@@ -381,12 +381,20 @@ export class DeepnoteLspClientManager
         logger.info(`Starting SQL LSP with ${connections.length} database connection(s)`);
 
         // Use IPC transport - must match the server's hardcoded 'node-ipc' method
+        // Set NODE_PATH to include the sql-lsp-modules directory for runtime dependencies
+        const sqlLspModulesPath = this.getSqlLspModulesPath();
+        const nodePathEnv = sqlLspModulesPath ? { NODE_PATH: sqlLspModulesPath } : {};
+
         const serverOptions: ServerOptions = {
-            run: { module: serverModule, transport: TransportKind.ipc },
+            run: {
+                module: serverModule,
+                transport: TransportKind.ipc,
+                options: { env: { ...process.env, ...nodePathEnv } }
+            },
             debug: {
                 module: serverModule,
                 transport: TransportKind.ipc,
-                options: { execArgv: ['--nolazy', '--inspect=6009'] }
+                options: { execArgv: ['--nolazy', '--inspect=6009'], env: { ...process.env, ...nodePathEnv } }
             }
         };
 
@@ -532,7 +540,7 @@ export class DeepnoteLspClientManager
      * @returns Path to the vscodeExtensionServer.js module for IPC transport
      */
     private getSqlLanguageServerModule(): string {
-        // Try require.resolve first - this handles different package layouts
+        // Try require.resolve first - this handles different package layouts (works in dev mode)
         try {
             const serverModule = require.resolve('@deepnote/sql-language-server/dist/bin/vscodeExtensionServer.js');
 
@@ -543,7 +551,8 @@ export class DeepnoteLspClientManager
             logger.trace('require.resolve failed, falling back to path construction:', error);
         }
 
-        // Fallback: use extension path construction
+        // Fallback: use extension path construction (works in packaged extension)
+        // The sql-language-server is bundled into dist/sqlLanguageServer.js during build
         let extensionPath = vscode.extensions.getExtension('Deepnote.vscode-deepnote')?.extensionPath;
 
         if (!extensionPath) {
@@ -552,18 +561,26 @@ export class DeepnoteLspClientManager
             logger.trace('Using __dirname to find extension path:', extensionPath);
         }
 
-        const serverModule = path.join(
-            extensionPath,
-            'node_modules',
-            '@deepnote',
-            'sql-language-server',
-            'dist',
-            'bin',
-            'vscodeExtensionServer.js'
-        );
+        const serverModule = path.join(extensionPath, 'dist', 'sqlLanguageServer.cjs');
         logger.trace('SQL LSP server module (fallback):', serverModule);
 
         return serverModule;
+    }
+
+    /**
+     * Get the path to the sql-lsp-modules directory containing runtime dependencies
+     * @returns Path to the node_modules directory for SQL LSP, or undefined if not found
+     */
+    private getSqlLspModulesPath(): string | undefined {
+        let extensionPath = vscode.extensions.getExtension('Deepnote.vscode-deepnote')?.extensionPath;
+
+        if (!extensionPath) {
+            extensionPath = path.join(__dirname, '..', '..', '..');
+        }
+
+        const modulesPath = path.join(extensionPath, 'dist', 'sql-lsp-modules', 'node_modules');
+
+        return modulesPath;
     }
 
     /**

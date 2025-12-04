@@ -483,7 +483,8 @@ async function buildAll() {
             copyZeroMQ(),
             copyZeroMQOld(),
             copyNodeGypBuild(),
-            buildVSCodeJsonRPC()
+            buildVSCodeJsonRPC(),
+            buildSqlLanguageServer()
         );
     }
 
@@ -538,6 +539,84 @@ async function copyNodeGypBuild() {
     await fs.ensureDir(path.dirname(target));
     await fs.ensureDir(target);
     await fs.copy(source, target, { recursive: true });
+}
+
+async function buildSqlLanguageServer() {
+    // Bundle the sql-language-server with all its dependencies into a single file
+    const entryPoint = path.join(
+        extensionFolder,
+        'node_modules',
+        '@deepnote',
+        'sql-language-server',
+        'dist',
+        'bin',
+        'vscodeExtensionServer.js'
+    );
+    const outfile = path.join(extensionFolder, 'dist', 'sqlLanguageServer.cjs');
+
+    await esbuild.build({
+        entryPoints: [entryPoint],
+        bundle: true,
+        platform: 'node',
+        target: 'node18',
+        outfile,
+        format: 'cjs',
+        external: [
+            // These are optional database drivers - exclude to reduce bundle size
+            // They will be loaded dynamically if available
+            'sqlite3',
+            'mysql2',
+            'pg',
+            'pg-native',
+            '@google-cloud/bigquery',
+            // SSH tunneling dependencies with native modules - must be copied separately
+            'ssh2',
+            'cpu-features',
+            'node-ssh-forward'
+        ],
+        minify: false,
+        sourcemap: false
+    });
+
+    // Copy ALL node_modules that the sql-language-server needs
+    // This includes the full transitive dependency tree for:
+    // - node-ssh-forward (SSH tunneling)
+    // - mysql2, pg, sqlite3 (database drivers)
+    // Instead of manually tracking dependencies, we copy all required packages
+    const sqlLspNodeModules = path.join(extensionFolder, 'dist', 'sql-lsp-modules');
+    await fs.ensureDir(sqlLspNodeModules);
+
+    // Create a minimal package.json and install dependencies
+    const packageJson = {
+        name: 'sql-lsp-deps',
+        version: '1.0.0',
+        dependencies: {
+            'node-ssh-forward': '^0.6.3',
+            mysql2: '^3.9.8',
+            pg: '^8.9.0',
+            sqlite3: '^5.0.3',
+            '@google-cloud/bigquery': '^8.1.1'
+        }
+    };
+
+    const packageJsonPath = path.join(sqlLspNodeModules, 'package.json');
+    await fs.writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2));
+
+    // Run npm install in the sql-lsp-modules directory
+    const { execSync } = require('child_process');
+
+    try {
+        execSync('npm install --omit=dev --ignore-scripts', {
+            cwd: sqlLspNodeModules,
+            stdio: 'inherit'
+        });
+    } catch (error) {
+        console.error('Failed to install sql-lsp dependencies:', error);
+    }
+
+    // Remove the package.json and package-lock.json after install
+    await fs.remove(packageJsonPath);
+    await fs.remove(path.join(sqlLspNodeModules, 'package-lock.json'));
 }
 
 async function buildVSCodeJsonRPC() {

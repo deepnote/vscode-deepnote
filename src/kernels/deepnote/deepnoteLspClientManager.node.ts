@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import * as vscode from 'vscode';
 import { CancellationError } from 'vscode';
 import { inject, injectable } from 'inversify';
@@ -552,7 +553,7 @@ export class DeepnoteLspClientManager
         }
 
         // Fallback: use extension path construction (works in packaged extension)
-        // The sql-language-server is bundled into dist/sqlLanguageServer.js during build
+        // The sql-language-server is bundled into dist/sqlLanguageServer.cjs during build
         let extensionPath = vscode.extensions.getExtension('Deepnote.vscode-deepnote')?.extensionPath;
 
         if (!extensionPath) {
@@ -579,6 +580,11 @@ export class DeepnoteLspClientManager
         }
 
         const modulesPath = path.join(extensionPath, 'dist', 'sql-lsp-modules', 'node_modules');
+
+        // Return undefined if the directory doesn't exist
+        if (!fs.existsSync(modulesPath)) {
+            return undefined;
+        }
 
         return modulesPath;
     }

@@ -612,10 +612,10 @@ async function buildSqlLanguageServer() {
         });
     } catch (error) {
         console.error('Failed to install sql-lsp dependencies:', error);
+        throw error;
     }
 
-    // Remove the package.json and package-lock.json after install
-    await fs.remove(packageJsonPath);
+    // Keep package.json for debugging/audit purposes, remove only lock file
     await fs.remove(path.join(sqlLspNodeModules, 'package-lock.json'));
 }
 

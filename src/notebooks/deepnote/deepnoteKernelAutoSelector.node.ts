@@ -418,6 +418,11 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             this.projectServerHandles.delete(projectKey);
         }
 
+        // Stop existing LSP clients so new ones can be created with fresh environment
+        // Without this, the SQL LSP client's command handlers remain registered and
+        // cause "command already exists" errors when trying to start new clients
+        await this.lspClientManager.stopLspClients(notebook.uri, token);
+
         // Update the controller with new environment's metadata
         // Because we use notebook-based controller IDs, addOrUpdate will call updateConnection()
         // on the existing controller instead of creating a new one

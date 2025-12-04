@@ -1,5 +1,5 @@
 import { assert } from 'chai';
-import { NotebookCellKind, type NotebookCellData } from 'vscode';
+import { NotebookCellKind, NotebookCellOutput, NotebookCellOutputItem, type NotebookCellData } from 'vscode';
 
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
 import type { DeepnoteBlock, DeepnoteOutput } from '../../platform/deepnote/deepnoteTypes';
@@ -795,6 +795,53 @@ suite('DeepnoteDataConverter', () => {
 
             // Should preserve all blocks without data loss
             assert.deepStrictEqual(roundTripBlocks, originalBlocks);
+        });
+    });
+
+    suite('large data handling', () => {
+        test('should handle cells with large image data without stack overflow', () => {
+            // Create a large image data buffer (1MB) - this reproduces the bug where
+            // saving fails with "Maximum call stack size exceeded" because
+            // btoa(String.fromCharCode(...largeArray)) causes stack overflow
+            const largeImageSize = 1000000; // 1MB
+            const largeImageData = new Uint8Array(largeImageSize);
+
+            for (let i = 0; i < largeImageSize; i++) {
+                largeImageData[i] = i % 256;
+            }
+
+            const cellWithLargeImage: NotebookCellData = {
+                kind: NotebookCellKind.Code,
+                value: 'display_image()',
+                languageId: 'python',
+                metadata: {
+                    __deepnotePocket: {
+                        type: 'code',
+                        sortingKey: 'a0'
+                    },
+                    id: 'block-1'
+                },
+                outputs: [
+                    new NotebookCellOutput([new NotebookCellOutputItem(largeImageData, 'image/png')], {
+                        cellId: 'block-1',
+                        cellIndex: 0
+                    })
+                ]
+            };
+
+            // This should not throw - it should handle large data gracefully
+            const blocks = converter.convertCellsToBlocks([cellWithLargeImage]);
+
+            assert.strictEqual(blocks.length, 1);
+            assert.strictEqual(blocks[0].type, 'code');
+            assert.isDefined(blocks[0].outputs);
+            assert.strictEqual(blocks[0].outputs!.length, 1);
+
+            // Verify the output data is properly base64 encoded
+            const output = blocks[0].outputs![0] as { data?: Record<string, unknown> };
+            assert.isDefined(output.data);
+            assert.isDefined(output.data!['image/png']);
+            assert.isString(output.data!['image/png']);
         });
     });
 });

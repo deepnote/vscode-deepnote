@@ -325,6 +325,77 @@ project:
         });
     });
 
+    suite('circular reference handling', () => {
+        test('should serialize notebook with circular references in output metadata', async () => {
+            // Create output with circular reference - this reproduces the bug
+            // where saving fails with "Maximum call stack size exceeded"
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const circularOutput: any = {
+                output_type: 'execute_result',
+                execution_count: 1,
+                data: { 'text/plain': 'test' },
+                metadata: {}
+            };
+            // Create circular reference
+            circularOutput.metadata.self = circularOutput;
+
+            const projectWithCircularRef: DeepnoteFile = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2023-01-01T00:00:00Z',
+                    modifiedAt: '2023-01-02T00:00:00Z'
+                },
+                project: {
+                    id: 'project-circular',
+                    name: 'Circular Test',
+                    notebooks: [
+                        {
+                            id: 'notebook-1',
+                            name: 'Test Notebook',
+                            blocks: [
+                                {
+                                    blockGroup: 'group-1',
+                                    id: 'block-1',
+                                    content: 'test',
+                                    sortingKey: 'a0',
+                                    type: 'code',
+                                    outputs: [circularOutput]
+                                }
+                            ],
+                            executionMode: 'block',
+                            isModule: false
+                        }
+                    ],
+                    settings: {}
+                }
+            };
+
+            manager.storeOriginalProject('project-circular', projectWithCircularRef, 'notebook-1');
+
+            const notebookData = {
+                cells: [
+                    {
+                        kind: 2, // NotebookCellKind.Code
+                        value: 'test',
+                        languageId: 'python',
+                        metadata: {}
+                    }
+                ],
+                metadata: {
+                    deepnoteProjectId: 'project-circular',
+                    deepnoteNotebookId: 'notebook-1'
+                }
+            };
+
+            // Should successfully serialize even with circular references
+            const result = await serializer.serializeNotebook(notebookData as any, {} as any);
+
+            assert.instanceOf(result, Uint8Array);
+            const yamlString = new TextDecoder().decode(result);
+            assert.include(yamlString, 'project-circular');
+        });
+    });
+
     suite('integration scenarios', () => {
         test('should maintain independence between serializer instances', () => {
             const manager1 = new DeepnoteNotebookManager();

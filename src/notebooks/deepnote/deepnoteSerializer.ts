@@ -5,9 +5,42 @@ import { l10n, workspace, type CancellationToken, type NotebookData, type Notebo
 import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
-import type { DeepnoteFile, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
+import type { DeepnoteBlock, DeepnoteFile, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 
 export { DeepnoteBlock, DeepnoteNotebook, DeepnoteOutput, DeepnoteFile } from '../../platform/deepnote/deepnoteTypes';
+
+/**
+ * Deep clones an object while removing circular references.
+ * Uses a recursion stack pattern to only drop true cycles, preserving shared references.
+ */
+function cloneWithoutCircularRefs<T>(obj: T, seen = new WeakSet<object>()): T {
+    if (obj === null || typeof obj !== 'object') {
+        return obj;
+    }
+
+    if (seen.has(obj as object)) {
+        // True circular reference on the current path - drop it
+        return undefined as T;
+    }
+
+    seen.add(obj as object);
+
+    try {
+        if (Array.isArray(obj)) {
+            return obj.map((item) => cloneWithoutCircularRefs(item, seen)) as T;
+        }
+
+        const clone: Record<string, unknown> = {};
+
+        for (const key of Object.keys(obj as Record<string, unknown>)) {
+            clone[key] = cloneWithoutCircularRefs((obj as Record<string, unknown>)[key], seen);
+        }
+
+        return clone as T;
+    } finally {
+        seen.delete(obj as object);
+    }
+}
 
 /**
  * Serializer for converting between Deepnote YAML files and VS Code notebook format.
@@ -108,17 +141,23 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
         }
 
         try {
+            logger.debug('SerializeNotebook: Starting serialization');
+
             const projectId = data.metadata?.deepnoteProjectId;
 
             if (!projectId) {
                 throw new Error('Missing Deepnote project ID in notebook metadata');
             }
 
+            logger.debug(`SerializeNotebook: Project ID: ${projectId}`);
+
             const originalProject = this.notebookManager.getOriginalProject(projectId) as DeepnoteFile | undefined;
 
             if (!originalProject) {
                 throw new Error('Original Deepnote project not found. Cannot save changes.');
             }
+
+            logger.debug('SerializeNotebook: Got original project');
 
             const notebookId =
                 data.metadata?.deepnoteNotebookId || this.notebookManager.getTheSelectedNotebookForAProject(projectId);
@@ -127,30 +166,38 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 throw new Error('Cannot determine which notebook to save');
             }
 
-            const notebookIndex = originalProject.project.notebooks.findIndex(
-                (nb: { id: string }) => nb.id === notebookId
-            );
+            logger.debug(`SerializeNotebook: Notebook ID: ${notebookId}`);
 
-            if (notebookIndex === -1) {
+            const notebook = originalProject.project.notebooks.find((nb: { id: string }) => nb.id === notebookId);
+
+            if (!notebook) {
                 throw new Error(`Notebook with ID ${notebookId} not found in project`);
             }
 
-            const updatedProject = JSON.parse(JSON.stringify(originalProject)) as DeepnoteFile;
+            logger.debug(`SerializeNotebook: Found notebook, converting ${data.cells.length} cells to blocks`);
 
-            const updatedBlocks = this.converter.convertCellsToBlocks(data.cells);
+            // Clone blocks while removing circular references that may have been
+            // introduced by VS Code's notebook cell/output handling
+            const blocks = this.converter.convertCellsToBlocks(data.cells);
 
-            updatedProject.project.notebooks[notebookIndex].blocks = updatedBlocks;
+            logger.debug(`SerializeNotebook: Converted to ${blocks.length} blocks, now cloning without circular refs`);
 
-            updatedProject.metadata.modifiedAt = new Date().toISOString();
+            notebook.blocks = cloneWithoutCircularRefs<DeepnoteBlock[]>(blocks);
 
-            const yamlString = yaml.dump(updatedProject, {
+            logger.debug('SerializeNotebook: Cloned blocks, updating modifiedAt');
+
+            originalProject.metadata.modifiedAt = new Date().toISOString();
+
+            logger.debug('SerializeNotebook: Starting yaml.dump');
+
+            const yamlString = yaml.dump(originalProject, {
                 indent: 2,
                 lineWidth: -1,
                 noRefs: true,
                 sortKeys: false
             });
 
-            this.notebookManager.storeOriginalProject(projectId, updatedProject, notebookId);
+            logger.debug(`SerializeNotebook: yaml.dump complete, ${yamlString.length} chars`);
 
             return new TextEncoder().encode(yamlString);
         } catch (error) {

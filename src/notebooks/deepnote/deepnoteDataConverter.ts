@@ -243,9 +243,9 @@ export class DeepnoteDataConverter {
                 } else if (item.mime === 'application/json') {
                     data['application/json'] = JSON.parse(new TextDecoder().decode(item.data));
                 } else if (item.mime === 'image/png') {
-                    data['image/png'] = btoa(String.fromCharCode(...new Uint8Array(item.data)));
+                    data['image/png'] = this.uint8ArrayToBase64(item.data);
                 } else if (item.mime === 'image/jpeg') {
-                    data['image/jpeg'] = btoa(String.fromCharCode(...new Uint8Array(item.data)));
+                    data['image/jpeg'] = this.uint8ArrayToBase64(item.data);
                 } else if (item.mime === 'application/vnd.deepnote.dataframe.v3+json') {
                     data['application/vnd.deepnote.dataframe.v3+json'] = JSON.parse(
                         new TextDecoder().decode(item.data)
@@ -522,5 +522,22 @@ export class DeepnoteDataConverter {
 
             return new NotebookCellOutput([]);
         });
+    }
+
+    /**
+     * Converts a Uint8Array to a base64 string without causing stack overflow.
+     * Uses chunked processing to avoid call stack limits with large arrays.
+     */
+    private uint8ArrayToBase64(data: Uint8Array): string {
+        // Process in chunks to avoid stack overflow from spread operator
+        const chunkSize = 8192;
+        let binaryString = '';
+
+        for (let i = 0; i < data.length; i += chunkSize) {
+            const chunk = data.subarray(i, Math.min(i + chunkSize, data.length));
+            binaryString += String.fromCharCode(...chunk);
+        }
+
+        return btoa(binaryString);
     }
 }

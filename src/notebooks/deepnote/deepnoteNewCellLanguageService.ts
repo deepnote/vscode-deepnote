@@ -28,18 +28,21 @@ export class DeepnoteNewCellLanguageService implements IExtensionSyncActivationS
 
         for (const change of e.contentChanges) {
             for (const cell of change.addedCells) {
-                // Only process empty code cells
-                if (cell.kind !== NotebookCellKind.Code) continue;
-                if (cell.document.getText().trim().length > 0) continue;
-
-                // Check if this is an intentional special block (has __deepnotePocket metadata)
-                const pocketType = cell.metadata?.__deepnotePocket?.type;
-                if (pocketType) {
-                    // This is an intentional SQL, chart, or input block - keep its language
+                if (cell.kind !== NotebookCellKind.Code) {
                     continue;
                 }
 
-                // If the cell inherited a non-Python language, reset to Python
+                if (cell.document.getText().trim().length > 0) {
+                    continue;
+                }
+
+                const pocketType = cell.metadata?.__deepnotePocket?.type;
+
+                if (pocketType) {
+                    continue;
+                }
+
+                // TODO: This will have to be revisited if we add support for other languages in Deepnote.
                 if (cell.document.languageId !== PYTHON_LANGUAGE) {
                     languages.setTextDocumentLanguage(cell.document, PYTHON_LANGUAGE).then(noop, noop);
                 }

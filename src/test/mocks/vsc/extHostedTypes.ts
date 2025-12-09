@@ -103,6 +103,7 @@ export namespace vscMockExtHostedTypes {
     }
     export enum NotebookCellKind {
         Markdown = 1,
+        Markup = 1, // VS Code uses 'Markup' but some older code uses 'Markdown' - both have value 1
         Code = 2
     }
     export enum NotebookCellExecutionState {

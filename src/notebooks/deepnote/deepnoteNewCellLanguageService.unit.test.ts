@@ -9,7 +9,6 @@ import { DeepnoteNewCellLanguageService } from './deepnoteNewCellLanguageService
 suite('DeepnoteNewCellLanguageService', () => {
     let service: DeepnoteNewCellLanguageService;
     let disposables: Disposable[];
-    let mockDisposableRegistry: IDisposableRegistry;
     let notebookChangeHandler: ((e: any) => void) | undefined;
 
     function createMockNotebook(notebookType: string): NotebookDocument {
@@ -45,9 +44,7 @@ suite('DeepnoteNewCellLanguageService', () => {
     setup(() => {
         resetVSCodeMocks();
         disposables = [];
-        mockDisposableRegistry = disposables as unknown as IDisposableRegistry;
 
-        // Capture the notebook change handler when workspace.onDidChangeNotebookDocument is called
         when(mockedVSCodeNamespaces.workspace.onDidChangeNotebookDocument(anything(), anything())).thenCall(
             (handler, thisArg) => {
                 notebookChangeHandler = (e: any) => handler.call(thisArg, e);
@@ -56,268 +53,223 @@ suite('DeepnoteNewCellLanguageService', () => {
             }
         );
 
-        // Mock languages.setTextDocumentLanguage to return a resolved promise
         when(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(anything(), anything())).thenReturn(
             Promise.resolve({} as TextDocument)
         );
 
-        service = new DeepnoteNewCellLanguageService(mockDisposableRegistry);
+        service = new DeepnoteNewCellLanguageService(disposables as unknown as IDisposableRegistry);
     });
 
     teardown(() => {
-        resetVSCodeMocks();
         notebookChangeHandler = undefined;
         disposables.forEach((d) => d.dispose());
     });
 
-    suite('activate', () => {
-        test('registers workspace.onDidChangeNotebookDocument listener', () => {
-            service.activate();
+    test('activate registers onDidChangeNotebookDocument listener', () => {
+        service.activate();
 
-            verify(mockedVSCodeNamespaces.workspace.onDidChangeNotebookDocument(anything(), anything())).once();
-        });
-
-        test('adds disposable to registry', () => {
-            // Reset mocks to isolate this test
-            resetVSCodeMocks();
-            when(mockedVSCodeNamespaces.workspace.onDidChangeNotebookDocument(anything(), anything())).thenCall(
-                (handler, thisArg) => {
-                    notebookChangeHandler = (e: any) => handler.call(thisArg, e);
-
-                    return { dispose: () => undefined };
-                }
-            );
-            disposables = [];
-            mockDisposableRegistry = disposables as unknown as IDisposableRegistry;
-            service = new DeepnoteNewCellLanguageService(mockDisposableRegistry);
-
-            service.activate();
-
-            expect(disposables.length).to.be.greaterThan(0);
-        });
+        verify(mockedVSCodeNamespaces.workspace.onDidChangeNotebookDocument(anything(), anything())).once();
     });
 
-    suite('onDidChangeNotebookDocument', () => {
-        setup(() => {
-            // Reset mock verification state between tests
-            resetVSCodeMocks();
+    test('activate adds disposable to registry', () => {
+        service.activate();
 
-            // Re-setup the mocks after reset
-            when(mockedVSCodeNamespaces.workspace.onDidChangeNotebookDocument(anything(), anything())).thenCall(
-                (handler, thisArg) => {
-                    notebookChangeHandler = (e: any) => handler.call(thisArg, e);
+        expect(disposables.length).to.be.greaterThan(0);
+    });
 
-                    return { dispose: () => undefined };
-                }
-            );
-            when(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(anything(), anything())).thenReturn(
-                Promise.resolve({} as TextDocument)
-            );
+    test('ignores non-deepnote notebooks', async () => {
+        service.activate();
+        const jupyterNotebook = createMockNotebook('jupyter-notebook');
+        const cell = createMockCell({ languageId: 'sql' });
 
-            disposables = [];
-            mockDisposableRegistry = disposables as unknown as IDisposableRegistry;
-            service = new DeepnoteNewCellLanguageService(mockDisposableRegistry);
-            service.activate();
-            expect(notebookChangeHandler).to.not.be.undefined;
+        notebookChangeHandler!({
+            notebook: jupyterNotebook,
+            contentChanges: [{ addedCells: [cell] }]
+        });
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(anything(), anything())).never();
+    });
+
+    test('ignores markdown cells', async () => {
+        service.activate();
+        const notebook = createMockNotebook('deepnote');
+        const cell = createMockCell({ kind: NotebookCellKind.Markup, languageId: 'markdown' });
+
+        notebookChangeHandler!({
+            notebook,
+            contentChanges: [{ addedCells: [cell] }]
+        });
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(anything(), anything())).never();
+    });
+
+    test('ignores cells with content', async () => {
+        service.activate();
+        const notebook = createMockNotebook('deepnote');
+        const cell = createMockCell({ languageId: 'sql', content: 'SELECT * FROM table' });
+
+        notebookChangeHandler!({
+            notebook,
+            contentChanges: [{ addedCells: [cell] }]
+        });
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(anything(), anything())).never();
+    });
+
+    test('ignores cells that already have Python language', async () => {
+        service.activate();
+        const notebook = createMockNotebook('deepnote');
+        const cell = createMockCell({ languageId: 'python' });
+
+        notebookChangeHandler!({
+            notebook,
+            contentChanges: [{ addedCells: [cell] }]
+        });
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(anything(), anything())).never();
+    });
+
+    test('ignores intentional SQL blocks (with __deepnotePocket.type)', async () => {
+        service.activate();
+        const notebook = createMockNotebook('deepnote');
+        const cell = createMockCell({
+            languageId: 'sql',
+            metadata: { __deepnotePocket: { type: 'sql' } }
         });
 
-        test('ignores non-deepnote notebooks', async () => {
-            const jupyterNotebook = createMockNotebook('jupyter-notebook');
-            const cell = createMockCell({ languageId: 'sql' });
+        notebookChangeHandler!({
+            notebook,
+            contentChanges: [{ addedCells: [cell] }]
+        });
+        await new Promise((resolve) => setTimeout(resolve, 10));
 
-            notebookChangeHandler!({
-                notebook: jupyterNotebook,
-                contentChanges: [{ addedCells: [cell] }]
-            });
+        verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(anything(), anything())).never();
+    });
 
-            // Allow async operations to complete
-            await new Promise((resolve) => setTimeout(resolve, 10));
-
-            verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(anything(), anything())).never();
+    test('ignores intentional chart blocks (with __deepnotePocket.type)', async () => {
+        service.activate();
+        const notebook = createMockNotebook('deepnote');
+        const cell = createMockCell({
+            languageId: 'json',
+            metadata: { __deepnotePocket: { type: 'chart-vega' } }
         });
 
-        test('ignores markdown cells', async () => {
-            const notebook = createMockNotebook('deepnote');
-            const cell = createMockCell({ kind: NotebookCellKind.Markup, languageId: 'markdown' });
+        notebookChangeHandler!({
+            notebook,
+            contentChanges: [{ addedCells: [cell] }]
+        });
+        await new Promise((resolve) => setTimeout(resolve, 10));
 
-            notebookChangeHandler!({
-                notebook,
-                contentChanges: [{ addedCells: [cell] }]
-            });
+        verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(anything(), anything())).never();
+    });
 
-            await new Promise((resolve) => setTimeout(resolve, 10));
-
-            verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(anything(), anything())).never();
+    test('ignores intentional input blocks (with __deepnotePocket.type)', async () => {
+        service.activate();
+        const notebook = createMockNotebook('deepnote');
+        const cell = createMockCell({
+            languageId: 'plaintext',
+            metadata: { __deepnotePocket: { type: 'input-text' } }
         });
 
-        test('ignores cells with content', async () => {
-            const notebook = createMockNotebook('deepnote');
-            const cell = createMockCell({ languageId: 'sql', content: 'SELECT * FROM table' });
-
-            notebookChangeHandler!({
-                notebook,
-                contentChanges: [{ addedCells: [cell] }]
-            });
-
-            await new Promise((resolve) => setTimeout(resolve, 10));
-
-            verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(anything(), anything())).never();
+        notebookChangeHandler!({
+            notebook,
+            contentChanges: [{ addedCells: [cell] }]
         });
+        await new Promise((resolve) => setTimeout(resolve, 10));
 
-        test('ignores cells that already have Python language', async () => {
-            const notebook = createMockNotebook('deepnote');
-            const cell = createMockCell({ languageId: 'python' });
+        verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(anything(), anything())).never();
+    });
 
-            notebookChangeHandler!({
-                notebook,
-                contentChanges: [{ addedCells: [cell] }]
-            });
+    test('changes SQL cell to Python when no __deepnotePocket metadata', async () => {
+        service.activate();
+        const notebook = createMockNotebook('deepnote');
+        const cell = createMockCell({ languageId: 'sql' });
 
-            await new Promise((resolve) => setTimeout(resolve, 10));
-
-            verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(anything(), anything())).never();
+        notebookChangeHandler!({
+            notebook,
+            contentChanges: [{ addedCells: [cell] }]
         });
+        await new Promise((resolve) => setTimeout(resolve, 10));
 
-        test('ignores intentional SQL blocks (with __deepnotePocket.type)', async () => {
-            const notebook = createMockNotebook('deepnote');
-            const cell = createMockCell({
-                languageId: 'sql',
-                metadata: { __deepnotePocket: { type: 'sql' } }
-            });
+        verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(cell.document, 'python')).once();
+    });
 
-            notebookChangeHandler!({
-                notebook,
-                contentChanges: [{ addedCells: [cell] }]
-            });
+    test('changes JSON cell to Python when no __deepnotePocket metadata', async () => {
+        service.activate();
+        const notebook = createMockNotebook('deepnote');
+        const cell = createMockCell({ languageId: 'json' });
 
-            await new Promise((resolve) => setTimeout(resolve, 10));
-
-            verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(anything(), anything())).never();
+        notebookChangeHandler!({
+            notebook,
+            contentChanges: [{ addedCells: [cell] }]
         });
+        await new Promise((resolve) => setTimeout(resolve, 10));
 
-        test('ignores intentional chart blocks (with __deepnotePocket.type)', async () => {
-            const notebook = createMockNotebook('deepnote');
-            const cell = createMockCell({
-                languageId: 'json',
-                metadata: { __deepnotePocket: { type: 'chart-vega' } }
-            });
+        verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(cell.document, 'python')).once();
+    });
 
-            notebookChangeHandler!({
-                notebook,
-                contentChanges: [{ addedCells: [cell] }]
-            });
+    test('handles multiple added cells', async () => {
+        service.activate();
+        const notebook = createMockNotebook('deepnote');
+        const sqlCell = createMockCell({ languageId: 'sql' });
+        const pythonCell = createMockCell({ languageId: 'python' });
+        const jsonCell = createMockCell({ languageId: 'json' });
 
-            await new Promise((resolve) => setTimeout(resolve, 10));
-
-            verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(anything(), anything())).never();
+        notebookChangeHandler!({
+            notebook,
+            contentChanges: [{ addedCells: [sqlCell, pythonCell, jsonCell] }]
         });
+        await new Promise((resolve) => setTimeout(resolve, 10));
 
-        test('ignores intentional input blocks (with __deepnotePocket.type)', async () => {
-            const notebook = createMockNotebook('deepnote');
-            const cell = createMockCell({
-                languageId: 'plaintext',
-                metadata: { __deepnotePocket: { type: 'input-text' } }
-            });
+        verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(sqlCell.document, 'python')).once();
+        verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(pythonCell.document, anything())).never();
+        verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(jsonCell.document, 'python')).once();
+    });
 
-            notebookChangeHandler!({
-                notebook,
-                contentChanges: [{ addedCells: [cell] }]
-            });
+    test('handles multiple content changes', async () => {
+        service.activate();
+        const notebook = createMockNotebook('deepnote');
+        const cell1 = createMockCell({ languageId: 'sql' });
+        const cell2 = createMockCell({ languageId: 'javascript' });
 
-            await new Promise((resolve) => setTimeout(resolve, 10));
-
-            verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(anything(), anything())).never();
+        notebookChangeHandler!({
+            notebook,
+            contentChanges: [{ addedCells: [cell1] }, { addedCells: [cell2] }]
         });
+        await new Promise((resolve) => setTimeout(resolve, 10));
 
-        test('changes SQL cell to Python when no __deepnotePocket metadata', async () => {
-            const notebook = createMockNotebook('deepnote');
-            const cell = createMockCell({ languageId: 'sql' });
+        verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(cell1.document, 'python')).once();
+        verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(cell2.document, 'python')).once();
+    });
 
-            notebookChangeHandler!({
-                notebook,
-                contentChanges: [{ addedCells: [cell] }]
-            });
+    test('ignores content changes with no added cells', async () => {
+        service.activate();
+        const notebook = createMockNotebook('deepnote');
 
-            await new Promise((resolve) => setTimeout(resolve, 10));
-
-            verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(cell.document, 'python')).once();
+        notebookChangeHandler!({
+            notebook,
+            contentChanges: [{ addedCells: [] }]
         });
+        await new Promise((resolve) => setTimeout(resolve, 10));
 
-        test('changes JSON cell to Python when no __deepnotePocket metadata', async () => {
-            const notebook = createMockNotebook('deepnote');
-            const cell = createMockCell({ languageId: 'json' });
+        verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(anything(), anything())).never();
+    });
 
-            notebookChangeHandler!({
-                notebook,
-                contentChanges: [{ addedCells: [cell] }]
-            });
+    test('changes cells with whitespace-only content to Python', async () => {
+        service.activate();
+        const notebook = createMockNotebook('deepnote');
+        const cell = createMockCell({ languageId: 'sql', content: '   \n\t  ' });
 
-            await new Promise((resolve) => setTimeout(resolve, 10));
-
-            verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(cell.document, 'python')).once();
+        notebookChangeHandler!({
+            notebook,
+            contentChanges: [{ addedCells: [cell] }]
         });
+        await new Promise((resolve) => setTimeout(resolve, 10));
 
-        test('handles multiple added cells', async () => {
-            const notebook = createMockNotebook('deepnote');
-            const sqlCell = createMockCell({ languageId: 'sql' });
-            const pythonCell = createMockCell({ languageId: 'python' });
-            const jsonCell = createMockCell({ languageId: 'json' });
-
-            notebookChangeHandler!({
-                notebook,
-                contentChanges: [{ addedCells: [sqlCell, pythonCell, jsonCell] }]
-            });
-
-            await new Promise((resolve) => setTimeout(resolve, 10));
-
-            // Should change SQL and JSON, but not Python
-            verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(sqlCell.document, 'python')).once();
-            verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(pythonCell.document, anything())).never();
-            verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(jsonCell.document, 'python')).once();
-        });
-
-        test('handles multiple content changes', async () => {
-            const notebook = createMockNotebook('deepnote');
-            const cell1 = createMockCell({ languageId: 'sql' });
-            const cell2 = createMockCell({ languageId: 'javascript' });
-
-            notebookChangeHandler!({
-                notebook,
-                contentChanges: [{ addedCells: [cell1] }, { addedCells: [cell2] }]
-            });
-
-            await new Promise((resolve) => setTimeout(resolve, 10));
-
-            verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(cell1.document, 'python')).once();
-            verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(cell2.document, 'python')).once();
-        });
-
-        test('ignores content changes with no added cells', async () => {
-            const notebook = createMockNotebook('deepnote');
-
-            notebookChangeHandler!({
-                notebook,
-                contentChanges: [{ addedCells: [] }]
-            });
-
-            await new Promise((resolve) => setTimeout(resolve, 10));
-
-            verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(anything(), anything())).never();
-        });
-
-        test('ignores cells with whitespace-only content', async () => {
-            const notebook = createMockNotebook('deepnote');
-            const cell = createMockCell({ languageId: 'sql', content: '   \n\t  ' });
-
-            notebookChangeHandler!({
-                notebook,
-                contentChanges: [{ addedCells: [cell] }]
-            });
-
-            await new Promise((resolve) => setTimeout(resolve, 10));
-
-            // Cell with only whitespace is considered empty, so it should be changed
-            verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(cell.document, 'python')).once();
-        });
+        verify(mockedVSCodeNamespaces.languages.setTextDocumentLanguage(cell.document, 'python')).once();
     });
 });

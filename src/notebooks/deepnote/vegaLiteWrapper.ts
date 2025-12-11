@@ -12,14 +12,25 @@ let loadPromise: Promise<void> | null = null;
 let loadFailed = false;
 
 async function loadVegaLite(): Promise<void> {
-    if (compileFunction || loadFailed) return;
+    if (typeof compileFunction === 'function' || loadFailed) return;
     if (loadPromise) return loadPromise;
 
     loadPromise = (async () => {
         try {
             const vegaLite = await import('vega-lite');
-            compileFunction = vegaLite.compile;
+
+            if (vegaLite.compile && typeof vegaLite.compile === 'function') {
+                compileFunction = vegaLite.compile;
+            } else {
+                compileFunction = null;
+                loadFailed = true;
+                logger.warn(
+                    'vega-lite module loaded but compile function is missing or not a function. ' +
+                        `Got: ${typeof vegaLite.compile}. Vega-lite chart conversion will be skipped.`
+                );
+            }
         } catch (error) {
+            compileFunction = null;
             loadFailed = true;
             logger.warn('vega-lite could not be loaded. Vega-lite chart conversion will be skipped.', error);
         }
@@ -32,7 +43,7 @@ async function loadVegaLite(): Promise<void> {
  * Check if vega-lite is available for use.
  */
 export function isVegaLiteAvailable(): boolean {
-    return compileFunction !== null;
+    return typeof compileFunction === 'function';
 }
 
 /**
@@ -40,7 +51,7 @@ export function isVegaLiteAvailable(): boolean {
  * Returns undefined if vega-lite is not available.
  */
 export function compile(spec: TopLevelSpec): { spec: VegaSpec } | undefined {
-    if (!compileFunction) {
+    if (typeof compileFunction !== 'function') {
         return undefined;
     }
 

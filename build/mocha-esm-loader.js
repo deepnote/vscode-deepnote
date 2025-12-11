@@ -13,6 +13,40 @@ const projectRoot = path.join(__dirname, '..');
 const vscodeMockPath = pathToFileURL(path.join(projectRoot, 'out/test/vscode-mock.js')).href;
 const telemetryMockPath = pathToFileURL(path.join(projectRoot, 'out/test/mocks/vsc/telemetryReporter.js')).href;
 
+// Mock source for @vscode/python-extension - used in multiple places
+const PYTHON_EXTENSION_MOCK = `
+    // Mock PythonExtension class
+    export class PythonExtension {
+        static api() {
+            return Promise.resolve({
+                environments: {
+                    known: [],
+                    resolveEnvironment: () => Promise.resolve(undefined),
+                    onDidChangeEnvironments: { event: () => ({ dispose: () => {} }) }
+                }
+            });
+        }
+    }
+
+    // Mock Environment type (empty object, just for type compatibility)
+    export const Environment = {};
+
+    // Mock EnvironmentPath type
+    export const EnvironmentPath = {};
+
+    // Mock ResolvedEnvironment type
+    export const ResolvedEnvironment = {};
+
+    // Mock KnownEnvironmentTools
+    export const KnownEnvironmentTools = {};
+
+    // Mock KnownEnvironmentTypes
+    export const KnownEnvironmentTypes = {};
+
+    // Extension ID constant
+    export const PVSC_EXTENSION_ID = 'ms-python.python';
+`;
+
 import { stat } from 'node:fs/promises';
 
 /**
@@ -358,38 +392,7 @@ export async function load(url, context, nextLoad) {
         if (moduleName === 'python-extension') {
             return {
                 format: 'module',
-                source: `
-                    // Mock PythonExtension class
-                    export class PythonExtension {
-                        static api() {
-                            return Promise.resolve({
-                                environments: {
-                                    known: [],
-                                    resolveEnvironment: () => Promise.resolve(undefined),
-                                    onDidChangeEnvironments: { event: () => ({ dispose: () => {} }) }
-                                }
-                            });
-                        }
-                    }
-
-                    // Mock Environment type (empty object, just for type compatibility)
-                    export const Environment = {};
-
-                    // Mock EnvironmentPath type
-                    export const EnvironmentPath = {};
-
-                    // Mock ResolvedEnvironment type
-                    export const ResolvedEnvironment = {};
-
-                    // Mock KnownEnvironmentTools
-                    export const KnownEnvironmentTools = {};
-
-                    // Mock KnownEnvironmentTypes
-                    export const KnownEnvironmentTypes = {};
-
-                    // Extension ID constant
-                    export const PVSC_EXTENSION_ID = 'ms-python.python';
-                `,
+                source: PYTHON_EXTENSION_MOCK,
                 shortCircuit: true
             };
         }
@@ -403,28 +406,7 @@ export async function load(url, context, nextLoad) {
     if (url.includes('@vscode/python-extension') || url.includes('@vscode%2Fpython-extension')) {
         return {
             format: 'module',
-            source: `
-                // Mock PythonExtension class
-                export class PythonExtension {
-                    static api() {
-                        return Promise.resolve({
-                            environments: {
-                                known: [],
-                                resolveEnvironment: () => Promise.resolve(undefined),
-                                onDidChangeEnvironments: { event: () => ({ dispose: () => {} }) }
-                            }
-                        });
-                    }
-                }
-
-                // Mock types for compatibility
-                export const Environment = {};
-                export const EnvironmentPath = {};
-                export const ResolvedEnvironment = {};
-                export const KnownEnvironmentTools = {};
-                export const KnownEnvironmentTypes = {};
-                export const PVSC_EXTENSION_ID = 'ms-python.python';
-            `,
+            source: PYTHON_EXTENSION_MOCK,
             shortCircuit: true
         };
     }

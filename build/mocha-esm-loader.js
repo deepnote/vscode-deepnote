@@ -113,6 +113,8 @@ export async function resolve(specifier, context, nextResolve) {
     }
 
     // Intercept @vscode/python-extension - needed because it requires VS Code runtime
+    // Note: Only exact match is needed - no subpath imports (e.g., '@vscode/python-extension/foo')
+    // exist in the codebase. If subpath imports are added, change to startsWith() match.
     if (specifier === '@vscode/python-extension') {
         return {
             url: 'vscode-mock:///python-extension',
@@ -403,12 +405,20 @@ export async function load(url, context, nextLoad) {
 
     // Handle @vscode/python-extension - it's a CJS module that esmock tries to load directly
     // We intercept and return our mock to avoid CJS/ESM compatibility issues
-    if (url.includes('@vscode/python-extension') || url.includes('@vscode%2Fpython-extension')) {
-        return {
-            format: 'module',
-            source: PYTHON_EXTENSION_MOCK,
-            shortCircuit: true
-        };
+    // Use proper URL parsing and decoding to handle all encoding variants
+    try {
+        const urlObj = new URL(url);
+        const decodedPath = decodeURIComponent(urlObj.pathname);
+
+        if (decodedPath.includes('@vscode/python-extension') || decodedPath.includes('/@vscode/python-extension')) {
+            return {
+                format: 'module',
+                source: PYTHON_EXTENSION_MOCK,
+                shortCircuit: true
+            };
+        }
+    } catch {
+        // If URL parsing fails, fall through to other handlers
     }
 
     // For .js files in the out/ directory, inject CJS globals shims

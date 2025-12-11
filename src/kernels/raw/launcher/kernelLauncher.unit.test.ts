@@ -29,9 +29,6 @@ import { KernelProcess } from './kernelProcess.node';
 import { IPythonExecutionFactory, IPythonExecutionService } from '../../../platform/interpreter/types.node';
 import { UsedPorts } from '../../common/usedPorts';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
-import { getDirname } from '../../../platform/common/esmUtils.node';
-
-const __dirname = getDirname(import.meta.url);
 
 suite('kernel Launcher', () => {
     let disposables: IDisposable[] = [];

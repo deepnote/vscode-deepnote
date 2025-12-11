@@ -43,25 +43,27 @@ const deskTopNodeModulesToExternalize = [
     // Lazy loaded modules.
     'vscode-languageclient/node',
     '@jupyterlab/nbformat',
-    'vscode-jsonrpc'
+    'vscode-jsonrpc',
+    // vega-lite uses top-level await (through vega-canvas), must be external
+    'vega-lite'
 ];
 const commonExternals = [
     'log4js',
     'vscode',
     'commonjs',
-    'module', // Node.js builtin module for createRequire (ESM support)
-    'node:os', // Node.js builtin (use node: prefix for ESM)
-    'ansi-regex', // Used by regexp utils
-    'node:crypto',
-    'node:fs/promises',
-    'node:path',
     'vscode-jsonrpc', // Used by a few modules, might as well pull this out, instead of duplicating it in separate bundles.
     // Ignore telemetry specific packages that are not required.
     'applicationinsights-native-metrics',
     '@opentelemetry/tracing',
     '@azure/opentelemetry-instrumentation-azure-sdk',
     '@opentelemetry/instrumentation',
-    '@azure/functions-core'
+    '@azure/functions-core',
+    // Node.js builtins (with node: prefix)
+    'node:crypto',
+    'node:fs/promises',
+    'node:os',
+    'node:path',
+    'ansi-regex' // Used by regexp utils
 ];
 // Create separate copies to avoid shared-state mutations
 const webExternals = [...commonExternals];
@@ -237,20 +239,23 @@ function createConfig(
     }
     const isPreRelease = isDevbuild || process.env.IS_PRE_RELEASE_VERSION_OF_JUPYTER_EXTENSION === 'true';
     const releaseVersionScriptFile = isPreRelease ? 'release.pre-release.js' : 'release.stable.js';
-    const alias = {
+    const alias: Record<string, string> = {
         moment: path.join(extensionFolder, 'build', 'webpack', 'moment.js'),
         'vscode-jupyter-release-version': path.join(__dirname, releaseVersionScriptFile)
     };
+    // Use ESM entry for jsonc-parser to avoid UMD internal require() issues when bundling
     if (target === 'desktop') {
         alias['jsonc-parser'] = path.join(extensionFolder, 'node_modules', 'jsonc-parser', 'lib', 'esm', 'main.js');
     }
+    // Desktop builds use CommonJS for VS Code/Cursor compatibility
+    // Web builds use ESM for browser compatibility
     const config: SameShape<BuildOptions, BuildOptions> = {
         entryPoints: [source],
         outfile,
         bundle: true,
         external,
         alias,
-        format: 'esm',
+        format: target === 'desktop' ? 'cjs' : 'esm',
         metafile: isDevbuild && !watch,
         define,
         target: target === 'desktop' ? 'node18' : 'es2018',
@@ -262,18 +267,6 @@ function createConfig(
         plugins,
         loader: target === 'desktop' ? {} : loader
     };
-
-    // Add createRequire banner for desktop ESM builds to support external CommonJS modules
-    if (target === 'desktop') {
-        config.banner = {
-            js: `import { createRequire as __createRequire } from 'module';
-import { fileURLToPath as __fileURLToPath } from 'url';
-import { dirname as __getDirname } from 'path';
-const require = __createRequire(import.meta.url);
-const __filename = __fileURLToPath(import.meta.url);
-const __dirname = __getDirname(__filename);`
-        };
-    }
 
     return config;
 }
@@ -452,17 +445,9 @@ async function buildAll() {
             )
         );
         builders.push(
-            build(
-                path.join(extensionFolder, 'src', 'extension.node.proxy.ts'),
-                path.join(extensionFolder, 'dist', 'extension.node.proxy.js'),
-                // This file almost never ever changes, hence no need to watch this.
-                { target: 'desktop', watch: false }
-            )
-        );
-        builders.push(
             ...deskTopNodeModulesToExternalize
-                // zeromq will be manually bundled.
-                .filter((module) => !['zeromq', 'zeromqold', 'vscode-jsonrpc'].includes(module))
+                // zeromq will be manually bundled, vega-lite uses top-level await (can't be CJS bundled)
+                .filter((module) => !['zeromq', 'zeromqold', 'vscode-jsonrpc', 'vega-lite'].includes(module))
 
                 .map(async (module) => {
                     const fullPath = require.resolve(module);

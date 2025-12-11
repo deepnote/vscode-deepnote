@@ -78,6 +78,14 @@ export async function resolve(specifier, context, nextResolve) {
         };
     }
 
+    // Intercept @vscode/python-extension - needed because it requires VS Code runtime
+    if (specifier === '@vscode/python-extension') {
+        return {
+            url: 'vscode-mock:///python-extension',
+            shortCircuit: true
+        };
+    }
+
     // Handle extensionless imports (both relative and node_modules)
     return resolveWithFallback(specifier, context, nextResolve);
 }
@@ -346,8 +354,99 @@ export async function load(url, context, nextLoad) {
             };
         }
 
+        // Handle @vscode/python-extension mock - needed because it requires VS Code runtime
+        if (moduleName === 'python-extension') {
+            return {
+                format: 'module',
+                source: `
+                    // Mock PythonExtension class
+                    export class PythonExtension {
+                        static api() {
+                            return Promise.resolve({
+                                environments: {
+                                    known: [],
+                                    resolveEnvironment: () => Promise.resolve(undefined),
+                                    onDidChangeEnvironments: { event: () => ({ dispose: () => {} }) }
+                                }
+                            });
+                        }
+                    }
+
+                    // Mock Environment type (empty object, just for type compatibility)
+                    export const Environment = {};
+
+                    // Mock EnvironmentPath type
+                    export const EnvironmentPath = {};
+
+                    // Mock ResolvedEnvironment type
+                    export const ResolvedEnvironment = {};
+
+                    // Mock KnownEnvironmentTools
+                    export const KnownEnvironmentTools = {};
+
+                    // Mock KnownEnvironmentTypes
+                    export const KnownEnvironmentTypes = {};
+
+                    // Extension ID constant
+                    export const PVSC_EXTENSION_ID = 'ms-python.python';
+                `,
+                shortCircuit: true
+            };
+        }
+
         // Unknown vscode-mock module
         throw new Error(`Unknown vscode-mock module: ${moduleName}`);
+    }
+
+    // Handle @vscode/python-extension - it's a CJS module that esmock tries to load directly
+    // We intercept and return our mock to avoid CJS/ESM compatibility issues
+    if (url.includes('@vscode/python-extension') || url.includes('@vscode%2Fpython-extension')) {
+        return {
+            format: 'module',
+            source: `
+                // Mock PythonExtension class
+                export class PythonExtension {
+                    static api() {
+                        return Promise.resolve({
+                            environments: {
+                                known: [],
+                                resolveEnvironment: () => Promise.resolve(undefined),
+                                onDidChangeEnvironments: { event: () => ({ dispose: () => {} }) }
+                            }
+                        });
+                    }
+                }
+
+                // Mock types for compatibility
+                export const Environment = {};
+                export const EnvironmentPath = {};
+                export const ResolvedEnvironment = {};
+                export const KnownEnvironmentTools = {};
+                export const KnownEnvironmentTypes = {};
+                export const PVSC_EXTENSION_ID = 'ms-python.python';
+            `,
+            shortCircuit: true
+        };
+    }
+
+    // For .js files in the out/ directory, inject CJS globals shims
+    // This is needed because source files use native __dirname, __filename, require which don't exist in ESM
+    if (url.startsWith('file://') && url.includes('/out/') && url.endsWith('.js')) {
+        const filePath = fileURLToPath(url);
+        const fs = await import('node:fs/promises');
+        const source = await fs.readFile(filePath, 'utf8');
+        const shim = `import { fileURLToPath as __fileURLToPath } from 'url';
+import { dirname as __getDirname } from 'path';
+import { createRequire as __createRequire } from 'module';
+const __filename = __fileURLToPath(import.meta.url);
+const __dirname = __getDirname(__filename);
+const require = __createRequire(import.meta.url);
+`;
+        return {
+            format: 'module',
+            source: shim + source,
+            shortCircuit: true
+        };
     }
 
     // Let Node.js handle all other URLs

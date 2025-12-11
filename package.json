@@ -2,7 +2,6 @@
     "name": "vscode-deepnote",
     "displayName": "Deepnote",
     "version": "1.2.0",
-    "type": "module",
     "description": "Deepnote notebook support.",
     "publisher": "Deepnote",
     "author": {
@@ -62,7 +61,7 @@
         "onNotebook:deepnote",
         "onNotebook:interactive"
     ],
-    "main": "./dist/extension.node.proxy.js",
+    "main": "./dist/extension.node.js",
     "browser": "./dist/extension.web.bundle.js",
     "capabilities": {
         "virtualWorkspaces": true,
@@ -2533,7 +2532,7 @@
         "isomorphic-ws": "^4.0.1",
         "jquery": "^3.6.0",
         "js-yaml": "^4.1.1",
-        "jsonc-parser": "^2.0.3",
+        "jsonc-parser": "3.3.1",
         "lodash": "^4.17.21",
         "marked": "^4.0.10",
         "node-fetch": "^2.6.7",

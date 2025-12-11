@@ -75,6 +75,9 @@ export class PythonEnvFilterCompletionProvider implements CompletionItemProvider
             const settings = document.getText();
             const location = getLocation(settings, document.offsetAt(position));
             const root = parseTree(settings);
+            if (!root) {
+                return [];
+            }
             const settingsNode = findNodeAtLocation(root, [location.path[0]]);
             if (!settingsNode) {
                 return [];

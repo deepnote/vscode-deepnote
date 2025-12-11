@@ -28,9 +28,6 @@ import { stopJupyterServer } from './datascience/notebook/helper.node';
 import { initialize } from './initialize.node';
 import { rootHooks } from './testHooks.node';
 import { isCI } from '../platform/common/constants';
-import { getDirname } from '../platform/common/esmUtils.node';
-
-const __dirname = getDirname(import.meta.url);
 
 type SetupOptions = Mocha.MochaOptions & {
     testFilesSuffix: string;

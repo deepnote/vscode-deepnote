@@ -75,6 +75,9 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             throw new Error('Serialization cancelled');
         }
 
+        // Initialize vega-lite for output conversion (lazy-loaded ESM module)
+        await this.converter.initialize();
+
         try {
             const contentString = new TextDecoder('utf-8').decode(content);
             const deepnoteFile = yaml.load(contentString) as DeepnoteFile;

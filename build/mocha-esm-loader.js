@@ -13,6 +13,40 @@ const projectRoot = path.join(__dirname, '..');
 const vscodeMockPath = pathToFileURL(path.join(projectRoot, 'out/test/vscode-mock.js')).href;
 const telemetryMockPath = pathToFileURL(path.join(projectRoot, 'out/test/mocks/vsc/telemetryReporter.js')).href;
 
+// Mock source for @vscode/python-extension - used in multiple places
+const PYTHON_EXTENSION_MOCK = `
+    // Mock PythonExtension class
+    export class PythonExtension {
+        static api() {
+            return Promise.resolve({
+                environments: {
+                    known: [],
+                    resolveEnvironment: () => Promise.resolve(undefined),
+                    onDidChangeEnvironments: { event: () => ({ dispose: () => {} }) }
+                }
+            });
+        }
+    }
+
+    // Mock Environment type (empty object, just for type compatibility)
+    export const Environment = {};
+
+    // Mock EnvironmentPath type
+    export const EnvironmentPath = {};
+
+    // Mock ResolvedEnvironment type
+    export const ResolvedEnvironment = {};
+
+    // Mock KnownEnvironmentTools
+    export const KnownEnvironmentTools = {};
+
+    // Mock KnownEnvironmentTypes
+    export const KnownEnvironmentTypes = {};
+
+    // Extension ID constant
+    export const PVSC_EXTENSION_ID = 'ms-python.python';
+`;
+
 import { stat } from 'node:fs/promises';
 
 /**
@@ -74,6 +108,16 @@ export async function resolve(specifier, context, nextResolve) {
     if (specifier === '@deepnote/convert') {
         return {
             url: 'vscode-mock:///deepnote-convert',
+            shortCircuit: true
+        };
+    }
+
+    // Intercept @vscode/python-extension - needed because it requires VS Code runtime
+    // Note: Only exact match is needed - no subpath imports (e.g., '@vscode/python-extension/foo')
+    // exist in the codebase. If subpath imports are added, change to startsWith() match.
+    if (specifier === '@vscode/python-extension') {
+        return {
+            url: 'vscode-mock:///python-extension',
             shortCircuit: true
         };
     }
@@ -346,8 +390,55 @@ export async function load(url, context, nextLoad) {
             };
         }
 
+        // Handle @vscode/python-extension mock - needed because it requires VS Code runtime
+        if (moduleName === 'python-extension') {
+            return {
+                format: 'module',
+                source: PYTHON_EXTENSION_MOCK,
+                shortCircuit: true
+            };
+        }
+
         // Unknown vscode-mock module
         throw new Error(`Unknown vscode-mock module: ${moduleName}`);
+    }
+
+    // Handle @vscode/python-extension - it's a CJS module that esmock tries to load directly
+    // We intercept and return our mock to avoid CJS/ESM compatibility issues
+    // Use proper URL parsing and decoding to handle all encoding variants
+    try {
+        const urlObj = new URL(url);
+        const decodedPath = decodeURIComponent(urlObj.pathname);
+
+        if (decodedPath.includes('@vscode/python-extension') || decodedPath.includes('/@vscode/python-extension')) {
+            return {
+                format: 'module',
+                source: PYTHON_EXTENSION_MOCK,
+                shortCircuit: true
+            };
+        }
+    } catch {
+        // If URL parsing fails, fall through to other handlers
+    }
+
+    // For .js files in the out/ directory, inject CJS globals shims
+    // This is needed because source files use native __dirname, __filename, require which don't exist in ESM
+    if (url.startsWith('file://') && url.includes('/out/') && url.endsWith('.js')) {
+        const filePath = fileURLToPath(url);
+        const fs = await import('node:fs/promises');
+        const source = await fs.readFile(filePath, 'utf8');
+        const shim = `import { fileURLToPath as __fileURLToPath } from 'url';
+import { dirname as __getDirname } from 'path';
+import { createRequire as __createRequire } from 'module';
+const __filename = __fileURLToPath(import.meta.url);
+const __dirname = __getDirname(__filename);
+const require = __createRequire(import.meta.url);
+`;
+        return {
+            format: 'module',
+            source: shim + source,
+            shortCircuit: true
+        };
     }
 
     // Let Node.js handle all other URLs

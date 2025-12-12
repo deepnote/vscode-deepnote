@@ -31,12 +31,9 @@ import { KernelConnectionTimeoutError } from '../../errors/kernelConnectionTimeo
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 import type { IFileSystem } from '../../../platform/common/platform/types';
 import { computeLocalWorkingDirectory } from './kernelWorkingDirectory.node';
-import { createRequire } from 'module';
-import { getDirname } from '../../../platform/common/esmUtils.node';
 import esmock from 'esmock';
 
-const __dirname = getDirname(import.meta.url);
-const require = createRequire(import.meta.url);
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const jupyterLabKernel =
     require('@jupyterlab/services/lib/kernel/default') as typeof import('@jupyterlab/services/lib/kernel/default');
 

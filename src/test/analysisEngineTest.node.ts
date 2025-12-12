@@ -3,9 +3,6 @@
 
 /* eslint-disable no-console, @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires */
 import * as path from '../platform/vscode-path/path';
-import { getDirname } from '../platform/common/esmUtils.node';
-
-const __dirname = getDirname(import.meta.url);
 
 process.env.CODE_TESTS_WORKSPACE = path.join(__dirname, '..', '..', 'src', 'test');
 process.env.IS_CI_SERVER_TEST_DEBUGGER = '';

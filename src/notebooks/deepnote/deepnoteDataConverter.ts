@@ -8,7 +8,7 @@ import { CodeBlockConverter } from './converters/codeBlockConverter';
 import { addPocketToCellMetadata, createBlockFromPocket } from '../../platform/deepnote/pocket';
 import { MarkdownBlockConverter } from './converters/markdownBlockConverter';
 import { VisualizationBlockConverter } from './converters/visualizationBlockConverter';
-import { compile as convertVegaLiteSpecToVega } from 'vega-lite';
+import { compile as convertVegaLiteSpecToVega, ensureVegaLiteLoaded } from './vegaLiteWrapper';
 import { produce } from 'immer';
 import { SqlBlockConverter } from './converters/sqlBlockConverter';
 import { TextBlockConverter } from './converters/textBlockConverter';
@@ -52,6 +52,14 @@ export class DeepnoteDataConverter {
         this.registry.register(new SqlBlockConverter());
         this.registry.register(new TextBlockConverter());
         this.registry.register(new VisualizationBlockConverter());
+    }
+
+    /**
+     * Initialize async dependencies like vega-lite.
+     * Must be called before using output conversion methods.
+     */
+    async initialize(): Promise<void> {
+        await ensureVegaLiteLoaded();
     }
 
     /**
@@ -395,8 +403,13 @@ export class DeepnoteDataConverter {
                                 draft.config.customFormatTypes = true;
                             });
 
-                            const vegaSpec = convertVegaLiteSpecToVega(patchedVegaLiteSpec as VegaLiteSpec).spec;
-                            items.push(NotebookCellOutputItem.json(vegaSpec, 'application/vnd.vega.v6+json'));
+                            const vegaResult = convertVegaLiteSpecToVega(patchedVegaLiteSpec as VegaLiteSpec);
+
+                            if (vegaResult) {
+                                items.push(
+                                    NotebookCellOutputItem.json(vegaResult.spec, 'application/vnd.vega.v6+json')
+                                );
+                            }
                         }
 
                         if (data['application/json']) {

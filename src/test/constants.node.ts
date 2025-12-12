@@ -4,12 +4,9 @@
 import * as path from '../platform/vscode-path/path';
 import { setCI, setTestExecution, setUnitTestExecution } from '../platform/common/constants';
 import { setTestSettings } from './constants';
-import { getDirname } from '../platform/common/esmUtils.node';
 export * from './constants';
 
 // Activating extension for Multiroot and Debugger CI tests for Windows takes just over 2 minutes sometimes, so 3 minutes seems like a safe margin
-
-const __dirname = getDirname(import.meta.url);
 export const EXTENSION_ROOT_DIR_FOR_TESTS = path.join(__dirname, '..', '..');
 export const EXTENSION_TEST_DIR_FOR_FILES = path.join(
     EXTENSION_ROOT_DIR_FOR_TESTS,

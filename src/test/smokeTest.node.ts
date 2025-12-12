@@ -12,9 +12,6 @@ import * as fs from 'fs-extra';
 import * as path from '../platform/vscode-path/path';
 import { unzip } from './common.node';
 import { EXTENSION_ROOT_DIR_FOR_TESTS, SMOKE_TEST_EXTENSIONS_DIR } from './constants.node';
-import { getDirname } from '../platform/common/esmUtils.node';
-
-const __dirname = getDirname(import.meta.url);
 
 class TestRunner {
     public async start() {

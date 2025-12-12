@@ -20,9 +20,6 @@ import * as vscode from 'vscode';
 import * as configSettings from '../platform/common/configSettings';
 import * as initializeModule from './initialize.node';
 import StreamZip from 'node-stream-zip';
-import { getDirname } from '../platform/common/esmUtils.node';
-
-const __dirname = getDirname(import.meta.url);
 
 export { createEventHandler } from './common';
 

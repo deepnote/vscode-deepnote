@@ -2,7 +2,6 @@ import * as fs from 'fs';
 import * as vscode from 'vscode';
 import { CancellationError } from 'vscode';
 import { inject, injectable } from 'inversify';
-import { createRequire } from 'module';
 import type {
     LanguageClient as LanguageClientType,
     LanguageClientOptions,
@@ -10,9 +9,8 @@ import type {
     ServerOptions
 } from 'vscode-languageclient/node';
 
-// Use createRequire for ESM compatibility with vscode-languageclient
 // The bundled module uses ESM default export, so we need to access .default
-const require = createRequire(import.meta.url);
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const languageClientModule = require('vscode-languageclient/node');
 const { LanguageClient, TransportKind, RevealOutputChannelOn } = (languageClientModule.default ??
     languageClientModule) as typeof import('vscode-languageclient/node');
@@ -543,6 +541,7 @@ export class DeepnoteLspClientManager
     private getSqlLanguageServerModule(): string {
         // Try require.resolve first - this handles different package layouts (works in dev mode)
         try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
             const serverModule = require.resolve('@deepnote/sql-language-server/dist/bin/vscodeExtensionServer.js');
 
             logger.trace('SQL LSP server module resolved via require.resolve:', serverModule);

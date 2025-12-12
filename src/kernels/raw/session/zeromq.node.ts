@@ -9,13 +9,11 @@ import { Telemetry, sendTelemetryEvent } from '../../../telemetry';
 import { noop } from '../../../platform/common/utils/misc';
 import { DistroInfo, getDistroInfo } from '../../../platform/common/platform/linuxDistro.node';
 import { EXTENSION_ROOT_DIR } from '../../../platform/constants.node';
-import { createRequire } from 'module';
 
-// Use createRequire for dynamic loading of zeromq, which is a native module
-const require = createRequire(import.meta.url);
 const zeromqModuleName = `${'zeromq'}`;
 export function getZeroMQ(): typeof import('zeromq') {
     try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const zmq: typeof import('zeromq') = require(zeromqModuleName);
         // We do not want to block the process from exiting if there are any pending messages.
         zmq.context.blocky = false;
@@ -23,6 +21,7 @@ export function getZeroMQ(): typeof import('zeromq') {
         return zmq;
     } catch (e) {
         try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
             const zmq = require(path.join(EXTENSION_ROOT_DIR, 'dist', 'node_modules', 'zeromqold'));
             logger.info('ZMQ loaded via fallback mechanism.');
             sendZMQTelemetry(false, true, e.message || e.toString()).catch(noop);

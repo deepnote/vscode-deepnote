@@ -5,8 +5,8 @@
 import '../platform/ioc/reflectMetadata';
 
 // Set up CommonJS require hooks for mocking vscode in CJS modules
-import { createRequire } from 'module';
-const Module = createRequire(import.meta.url)('module');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const Module = require('module');
 const originalLoad = Module._load;
 // We'll set up the hook after importing vscode-mock
 

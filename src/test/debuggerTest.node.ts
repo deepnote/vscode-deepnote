@@ -6,9 +6,6 @@
 import * as path from '../platform/vscode-path/path';
 import { runTests } from '@vscode/test-electron';
 import { EXTENSION_ROOT_DIR_FOR_TESTS } from './constants.node';
-import { getDirname } from '../platform/common/esmUtils.node';
-
-const __dirname = getDirname(import.meta.url);
 
 const workspacePath = path.join(__dirname, '..', '..', 'src', 'test', 'testMultiRootWkspc', 'multi.code-workspace');
 process.env.IS_CI_SERVER_TEST_DEBUGGER = '1';

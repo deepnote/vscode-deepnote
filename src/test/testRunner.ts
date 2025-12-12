@@ -12,14 +12,9 @@ import { MAX_EXTENSION_ACTIVATION_TIME } from './constants.node';
 import { noop } from './core';
 import { stopJupyterServer } from './datascience/notebook/helper.node';
 import { initialize } from './initialize.node';
-import { createRequire } from 'module';
-import { getDirname } from '../platform/common/esmUtils.node';
-
-const __dirname = getDirname(import.meta.url);
 
 // Linux: prevent a weird NPE when mocha on Linux requires the window size from the TTY.
 // Since we are not running in a tty environment, we just implement the method statically.
-const require = createRequire(import.meta.url);
 const tty = require('tty');
 if (!tty.getWindowSize) {
     tty.getWindowSize = function (): number[] {

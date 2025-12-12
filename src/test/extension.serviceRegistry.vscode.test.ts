@@ -10,9 +10,6 @@ import * as ts from 'typescript';
 import * as fs from 'fs-extra';
 import glob from 'glob';
 import * as path from '../platform/vscode-path/path';
-import { getDirname } from '../platform/common/esmUtils.node';
-
-const __dirname = getDirname(import.meta.url);
 
 import { initialize } from './initialize.node';
 import { interfaces } from 'inversify/lib/interfaces/interfaces';

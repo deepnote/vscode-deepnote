@@ -19,16 +19,13 @@ async function loadVegaLite(): Promise<void> {
         try {
             const vegaLite = await import('vega-lite');
 
-            if (vegaLite.compile && typeof vegaLite.compile === 'function') {
-                compileFunction = vegaLite.compile;
-            } else {
-                compileFunction = null;
-                loadFailed = true;
-                logger.warn(
-                    'vega-lite module loaded but compile function is missing or not a function. ' +
-                        `Got: ${typeof vegaLite.compile}. Vega-lite chart conversion will be skipped.`
+            if (!vegaLite.compile || typeof vegaLite.compile !== 'function') {
+                throw new Error(
+                    `vega-lite module loaded but compile function is missing or not a function. Got: ${typeof vegaLite.compile}. Vega-lite chart conversion will be skipped.`
                 );
             }
+
+            compileFunction = vegaLite.compile;
         } catch (error) {
             compileFunction = null;
             loadFailed = true;

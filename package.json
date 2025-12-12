@@ -1,7 +1,7 @@
 {
     "name": "vscode-deepnote",
     "displayName": "Deepnote",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "description": "Deepnote notebook support.",
     "publisher": "Deepnote",
     "author": {

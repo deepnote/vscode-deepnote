@@ -4,6 +4,8 @@ import {
     env,
     l10n,
     NotebookEdit,
+    NotebookEditorRevealType,
+    NotebookRange,
     type NotebookCellOutput,
     type NotebookEditor,
     type NotebookRendererMessaging,
@@ -293,6 +295,11 @@ export class DataframeController implements IExtensionSyncActivationService {
             ranges: [{ start: cellIndex, end: cellIndex + 1 }],
             document: editor.notebook.uri
         });
+
+        // Reveal the cell to keep it visible after output size changes
+        const notebookRange = new NotebookRange(cellIndex, cellIndex + 1);
+
+        editor.revealRange(notebookRange, NotebookEditorRevealType.InCenterIfOutsideViewport);
     }
 
     private async handleSelectPageSize(editor: NotebookEditor, message: SelectPageSizeCommand) {
@@ -342,6 +349,11 @@ export class DataframeController implements IExtensionSyncActivationService {
             ranges: [{ start: cellIndex, end: cellIndex + 1 }],
             document: editor.notebook.uri
         });
+
+        // Reveal the cell to keep it visible after output size changes
+        const notebookRange = new NotebookRange(cellIndex, cellIndex + 1);
+
+        editor.revealRange(notebookRange, NotebookEditorRevealType.InCenterIfOutsideViewport);
     }
 
     private async onDidReceiveMessage(

@@ -2500,7 +2500,7 @@
     },
     "dependencies": {
         "@c4312/evt": "^0.1.1",
-        "@deepnote/blocks": "^1.3.5",
+        "@deepnote/blocks": "^1.4.0",
         "@deepnote/convert": "^1.3.0",
         "@deepnote/database-integrations": "^1.3.0",
         "@deepnote/sql-language-server": "^3.0.0",

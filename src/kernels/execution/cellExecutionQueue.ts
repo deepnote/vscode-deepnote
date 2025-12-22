@@ -1,7 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { CancellationToken, Disposable, EventEmitter, NotebookCell } from 'vscode';
+import { CancellationToken, Disposable, EventEmitter, NotebookCell, NotebookDocument } from 'vscode';
+
 import { logger } from '../../platform/logging';
 import { noop } from '../../platform/common/utils/misc';
 import { traceCellMessage } from './helpers';
@@ -13,6 +14,7 @@ import { CodeExecution } from './codeExecution';
 import { once } from '../../platform/common/utils/events';
 import { getCellMetadata } from '../../platform/common/utils';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
+import { ISnapshotMetadataService } from '../../platform/notebooks/deepnote/types';
 
 /**
  * A queue responsible for execution of cells.
@@ -48,7 +50,9 @@ export class CellExecutionQueue implements Disposable {
         private readonly session: Promise<IKernelSession>,
         private readonly executionFactory: CellExecutionFactory,
         readonly metadata: Readonly<KernelConnectionMetadata>,
-        readonly resourceUri: Resource
+        readonly resourceUri: Resource,
+        private readonly notebook?: NotebookDocument,
+        private readonly snapshotService?: ISnapshotMetadataService
     ) {}
 
     public dispose() {
@@ -189,6 +193,18 @@ export class CellExecutionQueue implements Disposable {
     private async executeQueuedCells() {
         let notebookClosed: boolean | undefined;
         const kernelConnection = await this.session;
+
+        // Capture environment before executing any cells
+        if (this.snapshotService && this.notebook) {
+            const notebookUri = this.notebook.uri.toString();
+
+            try {
+                await this.snapshotService.captureEnvironmentBeforeExecution(notebookUri);
+            } catch (error) {
+                logger.warn('[CellExecutionQueue] Failed to capture environment before execution', error);
+            }
+        }
+
         this.queueOfItemsToExecute.forEach(
             (exec) => exec.type === 'cell' && traceCellMessage(exec.cell, 'Ready to execute')
         );

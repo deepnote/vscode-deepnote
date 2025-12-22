@@ -97,7 +97,10 @@ export class DeepnoteDataConverter {
                 type: block.type,
                 sortingKey: block.sortingKey,
                 ...(blockWithOptionalFields.blockGroup && { blockGroup: blockWithOptionalFields.blockGroup }),
+                ...(block.contentHash !== undefined && { contentHash: block.contentHash }),
                 ...(block.executionCount !== undefined && { executionCount: block.executionCount }),
+                ...(block.executionFinishedAt !== undefined && { executionFinishedAt: block.executionFinishedAt }),
+                ...(block.executionStartedAt !== undefined && { executionStartedAt: block.executionStartedAt }),
                 // Track whether this block had outputs for round-trip fidelity
                 __hadOutputs: block.outputs !== undefined
             };

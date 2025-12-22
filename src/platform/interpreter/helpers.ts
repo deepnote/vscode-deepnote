@@ -137,11 +137,13 @@ export function isCondaEnvironmentWithoutPython(interpreter?: { id: string }) {
     if (!interpreter) {
         return false;
     }
+
     if (!pythonApi) {
         return false;
     }
 
     const env = getCachedEnvironment(interpreter);
+
     return env && getEnvironmentType(env) === EnvironmentType.Conda && !env.executable.uri;
 }
 

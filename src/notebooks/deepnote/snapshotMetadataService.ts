@@ -139,7 +139,7 @@ export class SnapshotMetadataService implements ISnapshotMetadataServiceFull, IE
 
         notebookCellExecutions.onDidChangeNotebookCellExecutionState(
             (e) => {
-                logger.info(`[Snapshot] Cell execution state changed: ${e.state} for cell ${e.cell.metadata?.id}`);
+                logger.debug(`[Snapshot] Cell execution state changed: ${e.state} for cell ${e.cell.metadata?.id}`);
                 this.handleCellExecutionStateChange(e.cell, e.state);
             },
             this,

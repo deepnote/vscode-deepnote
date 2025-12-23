@@ -87,6 +87,12 @@ export class EnvironmentCapture implements IEnvironmentCapture {
             this.listPackageVersions(pipBinaryPath)
         ]);
 
+        if (!pythonVersion) {
+            logger.warn('[EnvironmentCapture] Unable to determine Python version');
+
+            return undefined;
+        }
+
         logger.info(`[EnvironmentCapture] Determined Python version ${pythonVersion}.`);
         logger.info(`[EnvironmentCapture] Determined Python environment type ${pythonEnvironment}.`);
         logger.info('[EnvironmentCapture] Determined platform.', { platform });
@@ -131,7 +137,7 @@ export class EnvironmentCapture implements IEnvironmentCapture {
         return 'venv';
     }
 
-    private async determinePythonVersion(interpreter: PythonEnvironment): Promise<string> {
+    private async determinePythonVersion(interpreter: PythonEnvironment): Promise<string | undefined> {
         const pythonVersionFromInterpreter = await this.determinePythonVersionFromRunningTheInterpreter(interpreter);
 
         if (pythonVersionFromInterpreter) {
@@ -144,7 +150,7 @@ export class EnvironmentCapture implements IEnvironmentCapture {
             return pythonVersionFromPath;
         }
 
-        throw new Error('Unable to determine Python version');
+        return undefined;
     }
 
     private determinePythonVersionFromPath(interpreter: PythonEnvironment): string | undefined {

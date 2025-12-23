@@ -236,7 +236,8 @@ export class SnapshotMetadataService implements ISnapshotMetadataServiceFull, IE
                 blocksFailed: state.blocksFailed,
                 blocksSucceeded: state.blocksSucceeded,
                 totalDurationMs: state.totalDurationMs
-            }
+            },
+            triggeredBy: 'user'
         };
 
         if (state.error) {

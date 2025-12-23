@@ -271,46 +271,46 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
      * Adds environment and execution metadata to the project.
      */
     private async addSnapshotMetadataToProject(project: DeepnoteFile, data: NotebookData): Promise<void> {
-        logger.info('[Serializer] addSnapshotMetadataToProject called');
-        logger.info(`[Serializer] snapshotService exists: ${!!this.snapshotService}`);
+        logger.debug('[Serializer] addSnapshotMetadataToProject called');
+        logger.debug(`[Serializer] snapshotService exists: ${!!this.snapshotService}`);
 
         if (!this.snapshotService) {
-            logger.info('[Serializer] No snapshotService, skipping metadata');
+            logger.debug('[Serializer] No snapshotService, skipping metadata');
 
             return;
         }
 
         const notebookUri = this.findNotebookUri(data);
 
-        logger.info(`[Serializer] findNotebookUri returned: ${notebookUri}`);
+        logger.debug(`[Serializer] findNotebookUri returned: ${notebookUri}`);
 
         if (!notebookUri) {
-            logger.info('[Serializer] No notebookUri found, skipping metadata');
+            logger.debug('[Serializer] No notebookUri found, skipping metadata');
 
             return;
         }
 
         const executionMetadata = this.snapshotService.getExecutionMetadata(notebookUri);
 
-        logger.info(`[Serializer] executionMetadata exists: ${!!executionMetadata}`);
+        logger.debug(`[Serializer] executionMetadata exists: ${!!executionMetadata}`);
 
         if (executionMetadata) {
             project.execution = executionMetadata;
-            logger.info('[Serializer] Added execution metadata');
+            logger.debug('[Serializer] Added execution metadata');
         }
 
-        logger.info('[Serializer] Fetching environment metadata.');
+        logger.debug('[Serializer] Fetching environment metadata.');
 
         const environmentMetadata = await this.snapshotService.getEnvironmentMetadata(notebookUri);
 
-        logger.info(`[Serializer] Finished fetching environment metadata.`);
+        logger.debug(`[Serializer] Finished fetching environment metadata.`);
 
         if (environmentMetadata) {
             project.environment = environmentMetadata;
 
-            logger.info('[Serializer] Added environment metadata.');
+            logger.debug('[Serializer] Added environment metadata.');
         } else {
-            logger.info('[Serializer] No environment metadata returned.');
+            logger.debug('[Serializer] No environment metadata returned.');
         }
     }
 

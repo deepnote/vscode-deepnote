@@ -38,6 +38,12 @@ export interface NotebookCellExecutionStateChangeEvent {
     readonly state: NotebookCellExecutionState;
 }
 
+const STATE_NAMES: Record<NotebookCellExecutionState, string> = {
+    [NotebookCellExecutionState.Idle]: 'Idle',
+    [NotebookCellExecutionState.Pending]: 'Pending',
+    [NotebookCellExecutionState.Executing]: 'Executing'
+};
+
 export namespace notebookCellExecutions {
     const eventEmitter = trackDisposable(new EventEmitter<NotebookCellExecutionStateChangeEvent>());
 
@@ -50,20 +56,19 @@ export namespace notebookCellExecutions {
 
     export function changeCellState(cell: NotebookCell, state: NotebookCellExecutionState, executionOrder?: number) {
         const cellId = cell.metadata?.id as string | undefined;
-        const stateNames = { 1: 'Idle', 2: 'Pending', 3: 'Executing' };
-        const stateName = stateNames[state] || String(state);
+        const stateName = STATE_NAMES[state] || String(state);
 
-        logger.info(
+        logger.debug(
             `[CellExecState] changeCellState called: state=${stateName}, cellId=${cellId}, executionOrder=${executionOrder}`
         );
 
         if (state !== NotebookCellExecutionState.Idle || !executionOrder) {
-            logger.info(`[CellExecState] Firing event immediately for state=${stateName}`);
+            logger.debug(`[CellExecState] Firing event immediately for state=${stateName}`);
             eventEmitter.fire({ cell, state });
             return;
         }
         // Wait for VS Code to update the cell execution state before firing the event.
-        logger.info(`[CellExecState] Waiting for VS Code to update cell before firing Idle event`);
+        logger.debug(`[CellExecState] Waiting for VS Code to update cell before firing Idle event`);
         const disposable = trackDisposable(
             workspace.onDidChangeNotebookDocument((e) => {
                 if (e.notebook !== cell.notebook) {
@@ -71,7 +76,7 @@ export namespace notebookCellExecutions {
                 }
                 const currentCellChange = e.cellChanges.find((c) => c.cell === cell);
                 if (currentCellChange?.cell?.executionSummary?.executionOrder === executionOrder) {
-                    logger.info(`[CellExecState] VS Code updated cell, firing Idle event for cellId=${cellId}`);
+                    logger.debug(`[CellExecState] VS Code updated cell, firing Idle event for cellId=${cellId}`);
                     disposable.dispose();
                     eventEmitter.fire({ cell, state: NotebookCellExecutionState.Idle });
                 }

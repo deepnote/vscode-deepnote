@@ -3,13 +3,11 @@ import { instance, mock } from 'ts-mockito';
 
 import { SnapshotMetadataService } from './snapshotMetadataService';
 import { IEnvironmentCapture } from './environmentCapture.node';
-import { IInterpreterService } from '../../platform/interpreter/contracts';
 import { IDisposableRegistry } from '../../platform/common/types';
 
 suite('SnapshotMetadataService', () => {
     let service: SnapshotMetadataService;
     let mockEnvironmentCapture: IEnvironmentCapture;
-    let mockInterpreterService: IInterpreterService;
     let mockDisposables: IDisposableRegistry;
 
     const notebookUri = 'file:///path/to/notebook.deepnote';
@@ -17,14 +15,9 @@ suite('SnapshotMetadataService', () => {
 
     setup(() => {
         mockEnvironmentCapture = mock<IEnvironmentCapture>();
-        mockInterpreterService = mock<IInterpreterService>();
         mockDisposables = [];
 
-        service = new SnapshotMetadataService(
-            instance(mockEnvironmentCapture),
-            instance(mockInterpreterService),
-            mockDisposables
-        );
+        service = new SnapshotMetadataService(instance(mockEnvironmentCapture), mockDisposables);
     });
 
     suite('recordCellExecutionStart', () => {

@@ -4,7 +4,6 @@ import { NotebookCell, workspace } from 'vscode';
 import type { Environment, Execution, ExecutionError } from '@deepnote/blocks';
 
 import { IEnvironmentCapture } from './environmentCapture.node';
-import { IInterpreterService } from '../../platform/interpreter/contracts';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { logger } from '../../platform/logging';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
@@ -124,7 +123,6 @@ export class SnapshotMetadataService implements ISnapshotMetadataServiceFull, IE
 
     constructor(
         @inject(IEnvironmentCapture) private readonly environmentCapture: IEnvironmentCapture,
-        @inject(IInterpreterService) private readonly interpreterService: IInterpreterService,
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry
     ) {}
 
@@ -198,15 +196,17 @@ export class SnapshotMetadataService implements ISnapshotMetadataServiceFull, IE
         if (state.capturePromise && !state.environmentCaptured) {
             logger.info(`[Snapshot] Waiting for capture to complete before returning metadata.`);
 
-            const handle = setTimeout(() => {
-                throw new TimeoutError('Timeout waiting for environment capture.');
-            }, 10_000);
+            const timeoutPromise = new Promise<void>((_, reject) => {
+                setTimeout(() => reject(new TimeoutError('Timeout waiting for environment capture.')), 10_000);
+            });
 
-            try {
-                await state.capturePromise;
-            } finally {
-                clearTimeout(handle);
-            }
+            await Promise.race([state.capturePromise, timeoutPromise]).catch((error) => {
+                if (error instanceof TimeoutError) {
+                    logger.warn('[Snapshot] Timed out waiting for environment capture');
+                } else {
+                    throw error;
+                }
+            });
         }
 
         logger.info(`[Snapshot] state.environment exists: ${!!state.environment}`);

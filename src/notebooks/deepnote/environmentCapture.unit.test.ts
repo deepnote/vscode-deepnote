@@ -1,6 +1,4 @@
 import { assert } from 'chai';
-import * as sinon from 'sinon';
-import { Uri } from 'vscode';
 
 import { parsePipFreeze } from './environmentCapture.node';
 

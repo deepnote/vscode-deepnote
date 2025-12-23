@@ -6,7 +6,6 @@ import { promisify } from 'node:util';
 import type { Environment } from '@deepnote/blocks';
 
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
-import { IPythonExecutionFactory } from '../../platform/interpreter/types.node';
 import { computeHash } from '../../platform/common/crypto';
 import { logger } from '../../platform/logging';
 import { parsePipFreezeFile } from './pipFileParser';
@@ -59,21 +58,24 @@ type PythonEnvironmentType = 'uv' | 'conda' | 'venv' | 'poetry' | 'system';
 @injectable()
 export class EnvironmentCapture implements IEnvironmentCapture {
     constructor(
-        @inject(IPythonExecutionFactory) private readonly executionFactory: IPythonExecutionFactory,
         @inject(IDeepnoteNotebookEnvironmentMapper)
         private readonly environmentMapper: IDeepnoteNotebookEnvironmentMapper,
         @inject(IDeepnoteEnvironmentManager) private readonly environmentManager: IDeepnoteEnvironmentManager
     ) {}
 
-    async captureEnvironment(notebookUri: Uri): Promise<Environment> {
+    async captureEnvironment(notebookUri: Uri): Promise<Environment | undefined> {
         const deepnoteEnvironment = this.getEnvironmentForNotebook(notebookUri);
 
         if (!deepnoteEnvironment) {
-            throw new Error('No Deepnote environment found for the given notebook');
+            logger.warn('[EnvironmentCapture] No Deepnote environment found for the given notebook');
+
+            return undefined;
         }
 
         const interpreterPath = deepnoteEnvironment.pythonInterpreter.uri.fsPath;
-        const pipBinaryPath = path.resolve(deepnoteEnvironment.venvPath.fsPath, 'bin', 'pip');
+        const pipDir = os.platform() === 'win32' ? 'Scripts' : 'bin';
+        const pipBinary = os.platform() === 'win32' ? 'pip.exe' : 'pip';
+        const pipBinaryPath = path.resolve(deepnoteEnvironment.venvPath.fsPath, pipDir, pipBinary);
 
         logger.info(`[EnvironmentCapture] Capturing environment for interpreter ${interpreterPath}`);
 
@@ -94,21 +96,15 @@ export class EnvironmentCapture implements IEnvironmentCapture {
 
         logger.info(`[EnvironmentCapture] Computed environment hash ${hash}.`);
 
-        try {
-            return {
-                hash,
-                packages,
-                platform,
-                python: {
-                    environment: pythonEnvironment,
-                    version: pythonVersion
-                }
-            };
-        } catch (error) {
-            logger.error('Failed to capture environment', error);
-
-            throw error;
-        }
+        return {
+            hash,
+            packages,
+            platform,
+            python: {
+                environment: pythonEnvironment,
+                version: pythonVersion
+            }
+        };
     }
 
     private async computeHash(
@@ -177,6 +173,8 @@ export class EnvironmentCapture implements IEnvironmentCapture {
                 return match[1];
             }
         }
+
+        return undefined;
     }
 
     private async determinePythonVersionFromRunningTheInterpreter(
@@ -222,7 +220,7 @@ export class EnvironmentCapture implements IEnvironmentCapture {
                 const output = await execFileAsync(pipBinaryPath, ['freeze', '--local']);
 
                 if (output.stderr) {
-                    logger.warn('pip freeze returned error output: output.stderr');
+                    logger.warn('pip freeze returned error output', { stderr: output.stderr });
                 }
 
                 if (output.stdout) {

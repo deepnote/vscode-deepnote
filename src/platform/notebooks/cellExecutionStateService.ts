@@ -68,7 +68,7 @@ export namespace notebookCellExecutions {
             return;
         }
 
-        // Wait for VS Code to update the cell execution state before firing the event.
+        // Wait for the Editor to update the cell execution state before firing the event.
         logger.debug(`[CellExecState] Waiting for the Editor to update the cell before firing the "Idle" event.`);
 
         const disposable = trackDisposable(
@@ -78,7 +78,7 @@ export namespace notebookCellExecutions {
                 }
                 const currentCellChange = e.cellChanges.find((c) => c.cell === cell);
                 if (currentCellChange?.cell?.executionSummary?.executionOrder === executionOrder) {
-                    logger.debug(`[CellExecState] VS Code updated cell, firing Idle event for cellId=${cellId}`);
+                    logger.debug(`[CellExecState] Editor updated cell, firing Idle event for cellId=${cellId}`);
                     disposable.dispose();
                     eventEmitter.fire({ cell, state: NotebookCellExecutionState.Idle });
                 }

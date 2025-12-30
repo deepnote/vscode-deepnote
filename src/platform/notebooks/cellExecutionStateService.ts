@@ -67,8 +67,10 @@ export namespace notebookCellExecutions {
             eventEmitter.fire({ cell, state });
             return;
         }
+
         // Wait for VS Code to update the cell execution state before firing the event.
-        logger.debug(`[CellExecState] Waiting for VS Code to update cell before firing Idle event`);
+        logger.debug(`[CellExecState] Waiting for the Editor to update the cell before firing the "Idle" event.`);
+
         const disposable = trackDisposable(
             workspace.onDidChangeNotebookDocument((e) => {
                 if (e.notebook !== cell.notebook) {

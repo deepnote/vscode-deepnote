@@ -7,6 +7,7 @@ import type { Environment } from '@deepnote/blocks';
 
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { computeHash } from '../../platform/common/crypto';
+import { raceTimeout } from '../../platform/common/utils/async';
 import { logger } from '../../platform/logging';
 import { parsePipFreezeFile } from './pipFileParser';
 import { IDeepnoteEnvironmentManager, IDeepnoteNotebookEnvironmentMapper } from '../../kernels/deepnote/types';
@@ -15,31 +16,6 @@ import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnot
 import * as path from '../../platform/vscode-path/path';
 
 const captureTimeoutInMilliseconds = 5_000;
-
-/**
- * Wraps a promise with a timeout. If the promise doesn't resolve within the timeout,
- * returns the fallback value instead of throwing.
- */
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T, operationName: string): Promise<T> {
-    let timeoutId: NodeJS.Timeout | undefined;
-
-    const timeoutPromise = new Promise<T>((resolve) => {
-        timeoutId = setTimeout(() => {
-            logger.warn(`[EnvironmentCapture] ${operationName} timed out after ${timeoutMs}ms`);
-            resolve(fallback);
-        }, timeoutMs);
-    });
-
-    try {
-        const result = await Promise.race([promise, timeoutPromise]);
-
-        return result;
-    } finally {
-        if (timeoutId) {
-            clearTimeout(timeoutId);
-        }
-    }
-}
 
 // Re-export for backward compatibility with existing tests
 export { parsePipFreezeFile, parsePipFreezeFile as parsePipFreeze } from './pipFileParser';
@@ -205,7 +181,7 @@ export class EnvironmentCapture implements IEnvironmentCapture {
             }
         };
 
-        return withTimeout(getVersion(), captureTimeoutInMilliseconds, undefined, 'Python version detection');
+        return raceTimeout(captureTimeoutInMilliseconds, undefined, getVersion());
     }
 
     private getEnvironmentForNotebook(notebookUri: Uri): DeepnoteEnvironment | undefined {
@@ -243,6 +219,6 @@ export class EnvironmentCapture implements IEnvironmentCapture {
             }
         };
 
-        return withTimeout(getPackages(), captureTimeoutInMilliseconds, {}, 'pip freeze');
+        return raceTimeout(captureTimeoutInMilliseconds, {}, getPackages());
     }
 }

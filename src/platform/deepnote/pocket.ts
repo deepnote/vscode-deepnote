@@ -1,6 +1,5 @@
+import type { DeepnoteBlock } from '@deepnote/blocks';
 import { NotebookCellKind, type NotebookCellData } from 'vscode';
-
-import type { DeepnoteBlock } from './deepnoteTypes';
 import { generateBlockId, generateSortingKey } from '../../notebooks/deepnote/dataConversionUtils';
 import { generateUuid } from '../common/uuid';
 

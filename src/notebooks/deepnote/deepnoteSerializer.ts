@@ -1,3 +1,4 @@
+import type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
 import { inject, injectable, optional } from 'inversify';
 import * as yaml from 'js-yaml';
 import { l10n, workspace, type CancellationToken, type NotebookData, type NotebookSerializer } from 'vscode';
@@ -5,11 +6,12 @@ import { l10n, workspace, type CancellationToken, type NotebookData, type Notebo
 import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
-import type { DeepnoteBlock, DeepnoteFile, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
+import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { ISnapshotMetadataService, ISnapshotMetadataServiceFull } from './snapshotMetadataService';
 import { computeHash } from '../../platform/common/crypto';
 
-export { DeepnoteBlock, DeepnoteNotebook, DeepnoteOutput, DeepnoteFile } from '../../platform/deepnote/deepnoteTypes';
+export type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
+export { DeepnoteNotebook, DeepnoteOutput } from '../../platform/deepnote/deepnoteTypes';
 
 /**
  * Deep clones an object while removing circular references.

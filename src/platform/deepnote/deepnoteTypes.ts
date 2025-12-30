@@ -1,40 +1,4 @@
-import { DeepnoteBlock as BaseDeepnoteBlock, DeepnoteFile as BaseDeepnoteFile } from '@deepnote/blocks';
-
-/**
- * Re-export base types from @deepnote/blocks for convenience.
- */
-export type { BaseDeepnoteBlock, BaseDeepnoteFile };
-
-/**
- * Extended DeepnoteBlock with Stage 1 snapshot fields.
- * These fields are optional and backward compatible.
- */
-export interface DeepnoteBlock extends BaseDeepnoteBlock {
-    /** SHA-256 hash of block content (prefixed with "sha256:") */
-    contentHash?: string;
-
-    /** ISO 8601 timestamp when block execution started */
-    executionStartedAt?: string;
-
-    /** ISO 8601 timestamp when block execution finished */
-    executionFinishedAt?: string;
-}
-
-/**
- * Extended DeepnoteFile with Stage 1 snapshot fields.
- * Uses environment and execution types from @deepnote/blocks.
- * The project field is extended to use our DeepnoteBlock type.
- */
-export interface DeepnoteFile extends Omit<BaseDeepnoteFile, 'project'> {
-    /** Project data with extended block types */
-    project: Omit<BaseDeepnoteFile['project'], 'notebooks'> & {
-        notebooks: Array<
-            Omit<BaseDeepnoteFile['project']['notebooks'][number], 'blocks'> & {
-                blocks: DeepnoteBlock[];
-            }
-        >;
-    };
-}
+import { DeepnoteFile } from '@deepnote/blocks';
 
 /**
  * Alias for DeepnoteFile for backward compatibility.

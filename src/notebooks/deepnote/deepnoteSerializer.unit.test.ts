@@ -1,3 +1,4 @@
+import type { DeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import { when } from 'ts-mockito';
 import * as yaml from 'js-yaml';
@@ -6,7 +7,7 @@ import type { NotebookDocument } from 'vscode';
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
 import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
-import type { DeepnoteFile, DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
+import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 import { mockedVSCodeNamespaces } from '../../test/vscode-mock';
 
 suite('DeepnoteNotebookSerializer', () => {

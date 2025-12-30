@@ -1,5 +1,6 @@
-import { injectable, inject } from 'inversify';
+import { injectable, inject, optional } from 'inversify';
 import { workspace } from 'vscode';
+
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IExtensionContext } from '../../platform/common/types';
 import { ILogger } from '../../platform/logging/types';
@@ -8,6 +9,7 @@ import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
 import { DeepnoteExplorerView } from './deepnoteExplorerView';
 import { IIntegrationManager } from './integrations/types';
 import { DeepnoteInputBlockEditProtection } from './deepnoteInputBlockEditProtection';
+import { ISnapshotMetadataService, ISnapshotMetadataServiceFull } from './snapshotMetadataService';
 
 /**
  * Service responsible for activating and configuring Deepnote notebook support in VS Code.
@@ -27,7 +29,8 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
         @inject(IExtensionContext) private extensionContext: IExtensionContext,
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
         @inject(IIntegrationManager) integrationManager: IIntegrationManager,
-        @inject(ILogger) private readonly logger: ILogger
+        @inject(ILogger) private readonly logger: ILogger,
+        @inject(ISnapshotMetadataService) @optional() private readonly snapshotService?: ISnapshotMetadataServiceFull
     ) {
         this.integrationManager = integrationManager;
     }
@@ -37,7 +40,7 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
      * Called during extension activation to set up Deepnote integration.
      */
     public activate() {
-        this.serializer = new DeepnoteNotebookSerializer(this.notebookManager);
+        this.serializer = new DeepnoteNotebookSerializer(this.notebookManager, this.snapshotService);
         this.explorerView = new DeepnoteExplorerView(this.extensionContext, this.notebookManager, this.logger);
         this.editProtection = new DeepnoteInputBlockEditProtection(this.logger);
 

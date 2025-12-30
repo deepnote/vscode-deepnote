@@ -1,9 +1,9 @@
+import type { DeepnoteBlock } from '@deepnote/blocks';
 import { NotebookCellData, NotebookCellKind } from 'vscode';
 import { z } from 'zod';
 
 import { logger } from '../../../platform/logging';
 import type { BlockConverter } from './blockConverter';
-import type { DeepnoteBlock } from '../../../platform/deepnote/deepnoteTypes';
 import {
     DeepnoteTextInputMetadataSchema,
     DeepnoteTextareaInputMetadataSchema,

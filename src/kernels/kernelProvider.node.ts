@@ -1,8 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { inject, injectable, multiInject, named } from 'inversify';
+import { inject, injectable, multiInject, named, optional } from 'inversify';
 import { Memento, NotebookDocument, Uri } from 'vscode';
+
 import {
     IAsyncDisposableRegistry,
     IConfigurationService,
@@ -31,6 +32,7 @@ import { IReplNotebookTrackerService } from '../platform/notebooks/replNotebookT
 import { logger } from '../platform/logging';
 import { getDisplayPath } from '../platform/common/platform/fs-paths.node';
 import { IRawNotebookSupportedService } from './raw/types';
+import { ISnapshotMetadataService } from '../platform/notebooks/deepnote/types';
 
 /**
  * Node version of a kernel provider. Needed in order to create the node version of a kernel.
@@ -50,7 +52,8 @@ export class KernelProvider extends BaseCoreKernelProvider {
         @inject(IMemento) @named(WORKSPACE_MEMENTO) private readonly workspaceStorage: Memento,
         @inject(IReplNotebookTrackerService) private readonly replTracker: IReplNotebookTrackerService,
         @inject(IKernelWorkingDirectory) private readonly kernelWorkingDirectory: IKernelWorkingDirectory,
-        @inject(IRawNotebookSupportedService) private readonly rawKernelSupported: IRawNotebookSupportedService
+        @inject(IRawNotebookSupportedService) private readonly rawKernelSupported: IRawNotebookSupportedService,
+        @inject(ISnapshotMetadataService) @optional() private readonly snapshotService?: ISnapshotMetadataService
     ) {
         super(asyncDisposables, disposables);
         disposables.push(jupyterServerUriStorage.onDidRemove(this.handleServerRemoval.bind(this)));
@@ -109,7 +112,10 @@ export class KernelProvider extends BaseCoreKernelProvider {
             this.disposables
         );
 
-        this.executions.set(kernel, new NotebookKernelExecution(kernel, this.context, this.formatters, notebook));
+        this.executions.set(
+            kernel,
+            new NotebookKernelExecution(kernel, this.context, this.formatters, notebook, this.snapshotService)
+        );
         this.asyncDisposables.push(kernel);
         this.storeKernel(notebook, options, kernel);
         this.deleteMappingIfKernelIsDisposed(kernel);

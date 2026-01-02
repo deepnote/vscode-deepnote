@@ -94,6 +94,7 @@ export interface IDeepnoteToolkitInstaller {
      * Environment-based method.
      * @param baseInterpreter The base Python interpreter to use for creating the venv
      * @param venvPath The path where the venv should be created
+     * @param managedVenv Whether the venv is managed by this extension (created by us)
      * @param token Cancellation token to cancel the operation
      * @returns The Python interpreter from the venv and the toolkit version
      * @throws {DeepnoteVenvCreationError} If venv creation fails
@@ -102,6 +103,7 @@ export interface IDeepnoteToolkitInstaller {
     ensureVenvAndToolkit(
         baseInterpreter: PythonEnvironment,
         venvPath: vscode.Uri,
+        managedVenv: boolean,
         token?: vscode.CancellationToken
     ): Promise<VenvAndToolkitInstallation>;
 
@@ -138,6 +140,7 @@ export interface IDeepnoteServerStarter {
      * Environment-based method.
      * @param interpreter The Python interpreter to use
      * @param venvPath The path to the venv
+     * @param managedVenv Whether the venv is managed by this extension (created by us)
      * @param environmentId The environment ID (for server management)
      * @param deepnoteFileUri The URI of the .deepnote file
      * @param token Cancellation token to cancel the operation
@@ -146,6 +149,7 @@ export interface IDeepnoteServerStarter {
     startServer(
         interpreter: PythonEnvironment,
         venvPath: vscode.Uri,
+        managedVenv: boolean,
         additionalPackages: string[],
         environmentId: string,
         deepnoteFileUri: vscode.Uri,
@@ -222,6 +226,12 @@ export interface IDeepnoteKernelAutoSelector {
      * @param environmentId The environment ID
      */
     clearControllerForEnvironment(notebook: vscode.NotebookDocument, environmentId: string): void;
+
+    /**
+     * Handle kernel selection errors with user-friendly messages and actions
+     * @param error The error to handle
+     */
+    handleKernelSelectionError(error: unknown): Promise<void>;
 }
 
 export const IDeepnoteEnvironmentManager = Symbol('IDeepnoteEnvironmentManager');

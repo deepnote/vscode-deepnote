@@ -4,15 +4,19 @@
 import { inject, injectable, named } from 'inversify';
 import { CancellationToken, l10n, Uri, workspace } from 'vscode';
 
+import { Cancellation } from '../../platform/common/cancellation';
 import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
 import { IFileSystem } from '../../platform/common/platform/types';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { IExtensionContext, IOutputChannel } from '../../platform/common/types';
-import { DeepnoteToolkitInstallError, DeepnoteVenvCreationError } from '../../platform/errors/deepnoteKernelErrors';
+import {
+    DeepnoteToolkitInstallError,
+    DeepnoteToolkitMissingError,
+    DeepnoteVenvCreationError
+} from '../../platform/errors/deepnoteKernelErrors';
 import { logger } from '../../platform/logging';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { DEEPNOTE_TOOLKIT_VERSION, IDeepnoteToolkitInstaller, VenvAndToolkitInstallation } from './types';
-import { Cancellation } from '../../platform/common/cancellation';
 
 /**
  * Handles installation of the deepnote-toolkit Python package.
@@ -77,6 +81,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
     public async ensureVenvAndToolkit(
         baseInterpreter: PythonEnvironment,
         venvPath: Uri,
+        managedVenv: boolean,
         token?: CancellationToken
     ): Promise<VenvAndToolkitInstallation> {
         const venvKey = venvPath.fsPath;
@@ -86,7 +91,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
 
         // Validate that venv path is in current globalStorage (not from a different editor like VS Code)
         const expectedStoragePrefix = this.context.globalStorageUri.fsPath;
-        if (!venvKey.startsWith(expectedStoragePrefix)) {
+        if (managedVenv && !venvKey.startsWith(expectedStoragePrefix)) {
             const error = new Error(
                 `Venv path mismatch! Expected venv under ${expectedStoragePrefix} but got ${venvKey}. ` +
                     `This might happen if the notebook was previously used in a different editor (VS Code vs Cursor).`
@@ -137,6 +142,11 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             } catch {
                 logger.info(`Concurrent installation for ${venvKey} failed, retrying...`);
             }
+        }
+
+        if (!managedVenv) {
+            // this.outputChannel.appendLine(l10n.t('Error: deepnote-toolkit not installed in external venv'));
+            throw new DeepnoteToolkitMissingError(baseInterpreter.uri.fsPath, venvPath.fsPath);
         }
 
         // Start the installation and track it
@@ -365,7 +375,8 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                 'import deepnote_toolkit; print(deepnote_toolkit.__version__)'
             ]);
             logger.info(`isToolkitInstalled result: ${result.stdout}`);
-            return result.stdout.trim();
+            const version = result.stdout.trim();
+            return version.length > 0 ? version : undefined;
         } catch (ex) {
             logger.debug('deepnote-toolkit not found', ex);
             return undefined;

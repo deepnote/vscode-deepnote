@@ -4,12 +4,14 @@ import { anything, instance, mock, when, verify } from 'ts-mockito';
 import { Uri } from 'vscode';
 import * as fs from 'fs';
 import * as os from 'os';
+
 import { DeepnoteEnvironmentManager } from './deepnoteEnvironmentManager.node';
 import { DeepnoteEnvironmentStorage } from './deepnoteEnvironmentStorage.node';
-import { IExtensionContext, IOutputChannel } from '../../../platform/common/types';
-import { IDeepnoteServerStarter } from '../types';
-import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
 import { IFileSystem } from '../../../platform/common/platform/types';
+import { IProcessService, IProcessServiceFactory } from '../../../platform/common/process/types.node';
+import { IExtensionContext, IOutputChannel } from '../../../platform/common/types';
+import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
+import { IDeepnoteServerStarter } from '../types';
 
 use(chaiAsPromised);
 
@@ -20,6 +22,8 @@ suite('DeepnoteEnvironmentManager', () => {
     let mockServerStarter: IDeepnoteServerStarter;
     let mockOutputChannel: IOutputChannel;
     let mockFileSystem: IFileSystem;
+    let mockProcessServiceFactory: IProcessServiceFactory;
+    let mockProcessService: IProcessService;
     let testGlobalStoragePath: string;
 
     const testInterpreter: PythonEnvironment = {
@@ -34,6 +38,8 @@ suite('DeepnoteEnvironmentManager', () => {
         mockServerStarter = mock<IDeepnoteServerStarter>();
         mockOutputChannel = mock<IOutputChannel>();
         mockFileSystem = mock<IFileSystem>();
+        mockProcessServiceFactory = mock<IProcessServiceFactory>();
+        mockProcessService = mock<IProcessService>();
 
         // Create a temporary directory for test storage
         testGlobalStoragePath = fs.mkdtempSync(`${os.tmpdir()}/deepnote-test-`);
@@ -50,12 +56,20 @@ suite('DeepnoteEnvironmentManager', () => {
             return Promise.resolve();
         });
 
+        // Configure mock process service to return "not in venv" by default
+        when(mockProcessServiceFactory.create(anything())).thenResolve(instance(mockProcessService));
+        when(mockProcessService.exec(anything(), anything(), anything())).thenResolve({
+            stdout: '0|/usr/lib/python3',
+            stderr: ''
+        });
+
         manager = new DeepnoteEnvironmentManager(
             instance(mockContext),
             instance(mockStorage),
             instance(mockServerStarter),
             instance(mockOutputChannel),
-            instance(mockFileSystem)
+            instance(mockFileSystem),
+            instance(mockProcessServiceFactory)
         );
     });
 
@@ -74,6 +88,7 @@ suite('DeepnoteEnvironmentManager', () => {
                     name: 'Existing',
                     pythonInterpreter: testInterpreter,
                     venvPath: Uri.file('/path/to/venv'),
+                    managedVenv: true,
                     createdAt: new Date(),
                     lastUsedAt: new Date()
                 }
@@ -326,6 +341,7 @@ suite('DeepnoteEnvironmentManager', () => {
                 name: 'Old Hash Config',
                 pythonInterpreter: testInterpreter,
                 venvPath: Uri.file('/global/storage/deepnote-venvs/venv_7626587d-1.0.0'),
+                managedVenv: true,
                 createdAt: new Date(),
                 lastUsedAt: new Date()
             };
@@ -361,6 +377,7 @@ suite('DeepnoteEnvironmentManager', () => {
                 venvPath: Uri.file(
                     '/Library/Application Support/Code/User/globalStorage/deepnote.vscode-deepnote/deepnote-venvs/cursor-env-id'
                 ),
+                managedVenv: true,
                 createdAt: new Date(),
                 lastUsedAt: new Date(),
                 toolkitVersion: '1.0.0'
@@ -394,6 +411,7 @@ suite('DeepnoteEnvironmentManager', () => {
                 name: 'Correct Config',
                 pythonInterpreter: testInterpreter,
                 venvPath: Uri.file('/global/storage/deepnote-venvs/12345678-1234-1234-1234-123456789abc'),
+                managedVenv: true,
                 createdAt: testDate,
                 lastUsedAt: testDate,
                 toolkitVersion: '1.0.0',
@@ -431,6 +449,7 @@ suite('DeepnoteEnvironmentManager', () => {
                 name: 'Custom ID Environment',
                 pythonInterpreter: testInterpreter,
                 venvPath: Uri.file('/global/storage/deepnote-venvs/my-custom-env-id'),
+                managedVenv: true,
                 createdAt: testDate,
                 lastUsedAt: testDate,
                 toolkitVersion: '1.0.0'
@@ -463,6 +482,7 @@ suite('DeepnoteEnvironmentManager', () => {
                     name: 'Hash Config',
                     pythonInterpreter: testInterpreter,
                     venvPath: Uri.file('/global/storage/deepnote-venvs/venv_abc123-1.0.0'),
+                    managedVenv: true,
                     createdAt: new Date(),
                     lastUsedAt: new Date()
                 },
@@ -471,6 +491,7 @@ suite('DeepnoteEnvironmentManager', () => {
                     name: 'VS Code Config',
                     pythonInterpreter: testInterpreter,
                     venvPath: Uri.file('/Code/globalStorage/deepnote-venvs/uuid2'),
+                    managedVenv: true,
                     createdAt: new Date(),
                     lastUsedAt: new Date()
                 },
@@ -479,6 +500,7 @@ suite('DeepnoteEnvironmentManager', () => {
                     name: 'Correct Config',
                     pythonInterpreter: testInterpreter,
                     venvPath: Uri.file('/global/storage/deepnote-venvs/uuid3'),
+                    managedVenv: true,
                     createdAt: new Date(),
                     lastUsedAt: new Date()
                 }

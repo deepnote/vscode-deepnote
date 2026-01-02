@@ -11,7 +11,14 @@ export enum EnvironmentTreeItemType {
     CreateAction = 'create'
 }
 
-export type DeepnoteEnvironmentTreeInfoItemId = 'python' | 'venv' | 'packages' | 'toolkit' | 'created' | 'lastUsed';
+export type DeepnoteEnvironmentTreeInfoItemId =
+    | 'python'
+    | 'venv'
+    | 'managed'
+    | 'packages'
+    | 'toolkit'
+    | 'created'
+    | 'lastUsed';
 
 /**
  * Tree item for displaying environments and related info
@@ -61,6 +68,11 @@ export class DeepnoteEnvironmentTreeItem extends TreeItem {
             lines.push('');
             lines.push(l10n.t('Python: {0}', environment.pythonInterpreter.uri.toString(true)));
             lines.push(l10n.t('Venv: {0}', environment.venvPath.toString(true)));
+            lines.push(
+                environment.managedVenv
+                    ? l10n.t('Type: Managed (created by extension)')
+                    : l10n.t('Type: External (user-provided)')
+            );
 
             if (environment.packages && environment.packages.length > 0) {
                 lines.push(l10n.t('Packages: {0}', environment.packages.join(', ')));

@@ -1,16 +1,18 @@
 import { inject, injectable, named } from 'inversify';
 import * as path from '../../../platform/vscode-path/path';
 import { CancellationToken, EventEmitter, l10n, Uri } from 'vscode';
+
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
 import { Cancellation } from '../../../platform/common/cancellation';
 import { STANDARD_OUTPUT_CHANNEL } from '../../../platform/common/constants';
+import { IFileSystem } from '../../../platform/common/platform/types';
+import { IProcessServiceFactory } from '../../../platform/common/process/types.node';
 import { IExtensionContext, IOutputChannel } from '../../../platform/common/types';
 import { generateUuid as uuid } from '../../../platform/common/uuid';
 import { logger } from '../../../platform/logging';
 import { IDeepnoteEnvironmentManager, IDeepnoteServerStarter } from '../types';
 import { CreateDeepnoteEnvironmentOptions, DeepnoteEnvironment } from './deepnoteEnvironment';
 import { DeepnoteEnvironmentStorage } from './deepnoteEnvironmentStorage.node';
-import { IFileSystem } from '../../../platform/common/platform/types';
 
 /**
  * Manager for Deepnote kernel environments.
@@ -32,7 +34,8 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
         @inject(DeepnoteEnvironmentStorage) private readonly storage: DeepnoteEnvironmentStorage,
         @inject(IDeepnoteServerStarter) private readonly serverStarter: IDeepnoteServerStarter,
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel,
-        @inject(IFileSystem) private readonly fileSystem: IFileSystem
+        @inject(IFileSystem) private readonly fileSystem: IFileSystem,
+        @inject(IProcessServiceFactory) private readonly processServiceFactory: IProcessServiceFactory
     ) {}
 
     /**
@@ -63,11 +66,15 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
                 // Check if venv path is under current globalStorage
                 const expectedVenvParent = Uri.joinPath(this.context.globalStorageUri, 'deepnote-venvs').fsPath;
                 const actualVenvParent = path.dirname(config.venvPath.fsPath);
+                logger.info(`Actual venv parent: ${actualVenvParent}`);
+                logger.info(`Expected venv parent: ${expectedVenvParent}`);
                 const isInCorrectStorage = actualVenvParent === expectedVenvParent;
+                logger.info(`Is in correct storage: ${isInCorrectStorage}`);
+                logger.info(`Managed venv: ${config.managedVenv}`);
 
                 // Check if directory name matches the environment ID and is in correct storage
                 const isExpectedPath = venvDirName === config.id && isInCorrectStorage;
-                const needsPathMigration = !isExpectedPath;
+                const needsPathMigration = !isExpectedPath && config.managedVenv === true;
 
                 if (needsPathMigration) {
                     logger.info(
@@ -117,12 +124,18 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
         Cancellation.throwIfCanceled(token);
 
         const id = uuid();
-        const venvPath = Uri.joinPath(this.context.globalStorageUri, 'deepnote-venvs', id);
+
+        // Check if the Python interpreter is already in a virtual environment
+        const existingVenvPath = await this.getVenvPathIfInVenv(options.pythonInterpreter.uri);
+        logger.info(`Existing venv path: ${existingVenvPath?.fsPath}`);
+        const venvPath = existingVenvPath ?? Uri.joinPath(this.context.globalStorageUri, 'deepnote-venvs', id);
+        logger.info(`Venv path: ${venvPath.fsPath}`);
 
         const environment: DeepnoteEnvironment = {
             id,
             name: options.name,
             pythonInterpreter: options.pythonInterpreter,
+            managedVenv: existingVenvPath == null,
             venvPath,
             createdAt: new Date(),
             lastUsedAt: new Date(),
@@ -201,17 +214,22 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
 
         Cancellation.throwIfCanceled(token);
 
-        // Delete the virtual environment directory from disk
-        try {
-            await this.fileSystem.delete(config.venvPath);
-            logger.info(`Deleted virtual environment directory: ${config.venvPath.fsPath}`);
-        } catch (error) {
-            // Log but don't fail - the directory might not exist or might already be deleted
-            logger.warn(`Failed to delete virtual environment directory: ${config.venvPath.fsPath}`, error);
-            const msg = error instanceof Error ? error.message : String(error);
-            this.outputChannel.appendLine(
-                l10n.t('Failed to delete Deepnote virtual environment directory for "{0}": {1}', config.name, msg)
-            );
+        // Only delete the virtual environment directory if it was created by us (managed venv)
+        // This prevents accidental deletion of user's original virtual environments
+        if (config.managedVenv) {
+            try {
+                await this.fileSystem.delete(config.venvPath);
+                logger.info(`Deleted virtual environment directory: ${config.venvPath.fsPath}`);
+            } catch (error) {
+                // Log but don't fail - the directory might not exist or might already be deleted
+                logger.warn(`Failed to delete virtual environment directory: ${config.venvPath.fsPath}`, error);
+                const msg = error instanceof Error ? error.message : String(error);
+                this.outputChannel.appendLine(
+                    l10n.t('Failed to delete Deepnote virtual environment directory for "{0}": {1}', config.name, msg)
+                );
+            }
+        } else {
+            logger.info(`Skipping deletion of external virtual environment: ${config.venvPath.fsPath}`);
         }
 
         Cancellation.throwIfCanceled(token);
@@ -235,6 +253,42 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
         config.lastUsedAt = new Date();
         await this.persistEnvironments();
         this._onDidChangeEnvironments.fire();
+    }
+
+    /**
+     * Check if a Python binary is inside a virtual environment by executing it.
+     * Returns the venv root path if it is, otherwise returns undefined.
+     *
+     * Detection is based on comparing sys.prefix vs sys.base_prefix:
+     * - In a virtual environment, sys.prefix points to the venv directory
+     * - sys.base_prefix points to the original Python installation
+     * - If they differ, Python is running inside a venv
+     */
+    private async getVenvPathIfInVenv(pythonUri: Uri): Promise<Uri | undefined> {
+        try {
+            const processService = await this.processServiceFactory.create(undefined);
+
+            // Execute Python to check if sys.prefix differs from sys.base_prefix
+            // If they differ, we're in a virtual environment
+            // Output format: "is_venv|prefix_path" where is_venv is 1 or 0
+            const result = await processService.exec(pythonUri.fsPath, [
+                '-c',
+                'import sys; print("1" if sys.prefix != sys.base_prefix else "0", sys.prefix, sep="|")'
+            ]);
+
+            const output = result.stdout.trim();
+            const [isVenv, prefixPath] = output.split('|');
+
+            if (isVenv === '1' && prefixPath) {
+                logger.info(`Detected existing virtual environment at: ${prefixPath}`);
+                return Uri.file(prefixPath);
+            }
+
+            return undefined;
+        } catch (ex) {
+            logger.warn('Failed to check if Python is in a virtual environment', ex);
+            return undefined;
+        }
     }
 
     /**

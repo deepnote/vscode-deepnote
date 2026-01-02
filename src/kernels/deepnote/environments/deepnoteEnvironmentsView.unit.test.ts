@@ -107,6 +107,7 @@ suite('DeepnoteEnvironmentsView', () => {
             name: 'Original Name',
             pythonInterpreter: testInterpreter,
             venvPath: Uri.file('/path/to/venv'),
+            managedVenv: true,
             createdAt: new Date(),
             lastUsedAt: new Date()
         };
@@ -247,6 +248,7 @@ suite('DeepnoteEnvironmentsView', () => {
             name: 'My Data Science Environment',
             pythonInterpreter: testInterpreter,
             venvPath: Uri.file('/path/to/new/venv'),
+            managedVenv: true,
             packages: ['pandas', 'numpy', 'matplotlib'],
             description: 'Environment for data science work',
             createdAt: new Date(),
@@ -382,6 +384,7 @@ suite('DeepnoteEnvironmentsView', () => {
             name: 'Environment to Delete',
             pythonInterpreter: testInterpreter,
             venvPath: Uri.file('/path/to/venv'),
+            managedVenv: true,
             createdAt: new Date(),
             lastUsedAt: new Date()
         };
@@ -579,6 +582,7 @@ suite('DeepnoteEnvironmentsView', () => {
             name: 'Current Environment',
             pythonInterpreter: testInterpreter1,
             venvPath: Uri.file('/path/to/current/venv'),
+            managedVenv: true,
             createdAt: new Date(),
             lastUsedAt: new Date()
         };
@@ -588,6 +592,7 @@ suite('DeepnoteEnvironmentsView', () => {
             name: 'New Environment',
             pythonInterpreter: testInterpreter2,
             venvPath: Uri.file('/path/to/new/venv'),
+            managedVenv: true,
             packages: ['pandas', 'numpy'],
             createdAt: new Date(),
             lastUsedAt: new Date()
@@ -695,6 +700,7 @@ suite('DeepnoteEnvironmentsView', () => {
             name: 'Test Environment',
             pythonInterpreter: testInterpreter,
             venvPath: Uri.file('/path/to/venv'),
+            managedVenv: true,
             packages: ['numpy', 'pandas'],
             createdAt: new Date(),
             lastUsedAt: new Date()

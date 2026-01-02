@@ -89,6 +89,7 @@ import { DeepnoteEnvironmentTreeDataProvider } from '../kernels/deepnote/environ
 import { OpenInDeepnoteHandler } from './deepnote/openInDeepnoteHandler.node';
 import { IntegrationKernelRestartHandler } from './deepnote/integrations/integrationKernelRestartHandler';
 import { ISnapshotMetadataService, SnapshotMetadataService } from './deepnote/snapshotMetadataService';
+import { ISnapshotFileService, SnapshotFileService } from './deepnote/snapshotFileService.node';
 import { EnvironmentCapture, IEnvironmentCapture } from './deepnote/environmentCapture.node';
 
 export function registerTypes(serviceManager: IServiceManager, isDevMode: boolean) {
@@ -246,6 +247,7 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IEnvironmentCapture>(IEnvironmentCapture, EnvironmentCapture);
     serviceManager.addSingleton<ISnapshotMetadataService>(ISnapshotMetadataService, SnapshotMetadataService);
     serviceManager.addBinding(ISnapshotMetadataService, IExtensionSyncActivationService);
+    serviceManager.addSingleton<ISnapshotFileService>(ISnapshotFileService, SnapshotFileService);
 
     // File export/import
     serviceManager.addSingleton<IFileConverter>(IFileConverter, FileConverter);

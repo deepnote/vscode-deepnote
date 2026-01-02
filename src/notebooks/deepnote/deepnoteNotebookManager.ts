@@ -11,8 +11,8 @@ import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
     private readonly currentNotebookId = new Map<string, string>();
     private readonly originalProjects = new Map<string, DeepnoteProject>();
-    private readonly selectedNotebookByProject = new Map<string, string>();
     private readonly projectsWithInitNotebookRun = new Set<string>();
+    private readonly selectedNotebookByProject = new Map<string, string>();
 
     /**
      * Gets the currently selected notebook ID for a project.

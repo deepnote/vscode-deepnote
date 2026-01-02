@@ -1,6 +1,7 @@
 import { injectable, inject } from 'inversify';
 import {
     commands,
+    ConfigurationTarget,
     window,
     NotebookCellData,
     NotebookCellKind,
@@ -14,7 +15,7 @@ import z from 'zod';
 
 import { logger } from '../../platform/logging';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
-import { IDisposableRegistry } from '../../platform/common/types';
+import { IConfigurationService, IDisposableRegistry } from '../../platform/common/types';
 import { Commands } from '../../platform/common/constants';
 import { notebookUpdaterUtils } from '../../kernels/execution/notebookUpdater';
 import { WrappedError } from '../../platform/errors/types';
@@ -139,7 +140,10 @@ export function getNextDeepnoteVariableName(cells: NotebookCell[], prefix: 'df' 
  */
 @injectable()
 export class DeepnoteNotebookCommandListener implements IExtensionSyncActivationService {
-    constructor(@inject(IDisposableRegistry) private readonly disposableRegistry: IDisposableRegistry) {}
+    constructor(
+        @inject(IConfigurationService) private readonly configurationService: IConfigurationService,
+        @inject(IDisposableRegistry) private readonly disposableRegistry: IDisposableRegistry
+    ) {}
 
     /**
      * Activates the service by registering Deepnote-specific commands.
@@ -180,6 +184,10 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         );
         this.disposableRegistry.push(
             commands.registerCommand(Commands.AddButtonBlock, () => this.addInputBlock('button'))
+        );
+        this.disposableRegistry.push(commands.registerCommand(Commands.EnableSnapshots, () => this.enableSnapshots()));
+        this.disposableRegistry.push(
+            commands.registerCommand(Commands.DisableSnapshots, () => this.disableSnapshots())
         );
     }
 
@@ -367,5 +375,25 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         editor.selection = notebookRange;
         // Enter edit mode on the new cell
         await commands.executeCommand('notebook.cell.edit');
+    }
+
+    private async disableSnapshots(): Promise<void> {
+        await this.configurationService.updateSetting(
+            'snapshots.enabled',
+            false,
+            undefined,
+            ConfigurationTarget.Workspace
+        );
+        void window.showInformationMessage(l10n.t('Snapshots disabled for this workspace.'));
+    }
+
+    private async enableSnapshots(): Promise<void> {
+        await this.configurationService.updateSetting(
+            'snapshots.enabled',
+            true,
+            undefined,
+            ConfigurationTarget.Workspace
+        );
+        void window.showInformationMessage(l10n.t('Snapshots enabled for this workspace.'));
     }
 }

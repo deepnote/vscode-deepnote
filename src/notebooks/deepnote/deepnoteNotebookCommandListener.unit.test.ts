@@ -18,7 +18,7 @@ import {
     InputBlockType
 } from './deepnoteNotebookCommandListener';
 import { formatInputBlockCellContent, getInputBlockLanguage } from './inputBlockContentFormatter';
-import { IDisposable } from '../../platform/common/types';
+import { IConfigurationService, IDisposable } from '../../platform/common/types';
 import * as notebookUpdater from '../../kernels/execution/notebookUpdater';
 import { createMockedNotebookDocument } from '../../test/datascience/editor-integration/helpers';
 import { WrappedError } from '../../platform/errors/types';
@@ -29,11 +29,21 @@ suite('DeepnoteNotebookCommandListener', () => {
     let commandListener: DeepnoteNotebookCommandListener;
     let disposables: IDisposable[];
     let sandbox: sinon.SinonSandbox;
+    let mockConfigService: IConfigurationService;
+
+    function createMockConfigService(): IConfigurationService {
+        return {
+            getSettings: sinon.stub().returns({}),
+            updateSetting: sinon.stub().resolves(),
+            updateSectionSetting: sinon.stub().resolves()
+        } as unknown as IConfigurationService;
+    }
 
     setup(() => {
         sandbox = sinon.createSandbox();
         disposables = [];
-        commandListener = new DeepnoteNotebookCommandListener(disposables);
+        mockConfigService = createMockConfigService();
+        commandListener = new DeepnoteNotebookCommandListener(mockConfigService, disposables);
     });
 
     teardown(() => {
@@ -78,7 +88,7 @@ suite('DeepnoteNotebookCommandListener', () => {
 
             // Create new instance and activate again
             const disposables2: IDisposable[] = [];
-            const commandListener2 = new DeepnoteNotebookCommandListener(disposables2);
+            const commandListener2 = new DeepnoteNotebookCommandListener(createMockConfigService(), disposables2);
             commandListener2.activate();
 
             // Both should register the same number of commands

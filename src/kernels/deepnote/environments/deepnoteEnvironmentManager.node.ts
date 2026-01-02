@@ -271,10 +271,11 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
             // Execute Python to check if sys.prefix differs from sys.base_prefix
             // If they differ, we're in a virtual environment
             // Output format: "is_venv|prefix_path" where is_venv is 1 or 0
-            const result = await processService.exec(pythonUri.fsPath, [
-                '-c',
-                'import sys; print("1" if sys.prefix != sys.base_prefix else "0", sys.prefix, sep="|")'
-            ]);
+            const result = await processService.exec(
+                pythonUri.fsPath,
+                ['-c', 'import sys; print("1" if sys.prefix != sys.base_prefix else "0", sys.prefix, sep="|")'],
+                { timeout: 5000 }
+            );
 
             const output = result.stdout.trim();
             const [isVenv, prefixPath] = output.split('|');

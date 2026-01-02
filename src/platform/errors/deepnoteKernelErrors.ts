@@ -186,7 +186,11 @@ export class DeepnoteToolkitMissingError extends DeepnoteKernelError {
             .filter(Boolean)
             .join('\n');
 
-        this.troubleshootingSteps = [];
+        this.troubleshootingSteps = [
+            'The selected Python environment does not have deepnote-toolkit installed',
+            `Install it manually: ${pythonPath} -m pip install deepnote-toolkit`,
+            'Or create a new managed Deepnote environment from the Deepnote Environments view'
+        ];
     }
 }
 /**

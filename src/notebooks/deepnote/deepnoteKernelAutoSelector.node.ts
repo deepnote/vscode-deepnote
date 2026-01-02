@@ -815,7 +815,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             const copyInstallCommandAction = l10n.t('Copy Install Command');
             const selectedAction = await window.showErrorMessage(
                 l10n.t(
-                    'Failed to switch environment: deepnote-toolkit package is not installed. Install deepnote-toolkit[server] and try again.'
+                    'Failed to switch environment: deepnote-toolkit package is not installed in {0}. Install deepnote-toolkit[server] and try again.',
+                    error.venvPath
                 ),
                 {
                     modal: false

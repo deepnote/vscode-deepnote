@@ -1,9 +1,4 @@
-import { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
-
-/**
- * Re-export types from @deepnote/blocks for convenience.
- */
-export type { DeepnoteBlock, DeepnoteFile };
+import { DeepnoteFile } from '@deepnote/blocks';
 
 /**
  * Alias for DeepnoteFile for backward compatibility.

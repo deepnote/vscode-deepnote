@@ -59,10 +59,12 @@ const commonExternals = [
     '@opentelemetry/instrumentation',
     '@azure/functions-core',
     // Node.js builtins (with node: prefix)
+    'node:child_process',
     'node:crypto',
     'node:fs/promises',
     'node:os',
     'node:path',
+    'node:util',
     'ansi-regex' // Used by regexp utils
 ];
 // Create separate copies to avoid shared-state mutations

@@ -6,6 +6,7 @@ import { Event, EventEmitter, QuickInputButton, QuickPick, QuickPickItem, QuickP
 export class MockQuickPick implements QuickPick<QuickPickItem> {
     public value: string = '';
     public placeholder: string | undefined;
+    public prompt: string | undefined;
     public title: string | undefined = 'foo';
     public step: number | undefined;
     public totalSteps: number | undefined;

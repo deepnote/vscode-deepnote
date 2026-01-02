@@ -1,13 +1,17 @@
-import { inject, injectable } from 'inversify';
+import type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
+import { inject, injectable, optional } from 'inversify';
 import * as yaml from 'js-yaml';
 import { l10n, workspace, type CancellationToken, type NotebookData, type NotebookSerializer } from 'vscode';
 
 import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
-import type { DeepnoteBlock, DeepnoteFile, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
+import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
+import { ISnapshotMetadataService, ISnapshotMetadataServiceFull } from './snapshotMetadataService';
+import { computeHash } from '../../platform/common/crypto';
 
-export { DeepnoteBlock, DeepnoteNotebook, DeepnoteOutput, DeepnoteFile } from '../../platform/deepnote/deepnoteTypes';
+export type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
+export { DeepnoteNotebook, DeepnoteOutput } from '../../platform/deepnote/deepnoteTypes';
 
 /**
  * Deep clones an object while removing circular references.
@@ -50,7 +54,10 @@ function cloneWithoutCircularRefs<T>(obj: T, seen = new WeakSet<object>()): T {
 export class DeepnoteNotebookSerializer implements NotebookSerializer {
     private converter = new DeepnoteDataConverter();
 
-    constructor(@inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager) {}
+    constructor(
+        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
+        @inject(ISnapshotMetadataService) @optional() private readonly snapshotService?: ISnapshotMetadataServiceFull
+    ) {}
 
     /**
      * Gets the data converter instance for cell/block conversion.
@@ -189,11 +196,17 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
             logger.debug(`SerializeNotebook: Converted to ${blocks.length} blocks, now cloning without circular refs`);
 
+            // Add snapshot metadata to blocks (contentHash and execution timing)
+            await this.addSnapshotMetadataToBlocks(blocks, data);
+
             notebook.blocks = cloneWithoutCircularRefs<DeepnoteBlock[]>(blocks);
 
             logger.debug('SerializeNotebook: Cloned blocks, updating modifiedAt');
 
             originalProject.metadata.modifiedAt = new Date().toISOString();
+
+            // Add environment and execution metadata from snapshot service
+            await this.addSnapshotMetadataToProject(originalProject, data);
 
             logger.debug('SerializeNotebook: Starting yaml.dump');
 
@@ -213,6 +226,115 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 `Failed to save Deepnote file: ${error instanceof Error ? error.message : 'Unknown error'}`
             );
         }
+    }
+
+    /**
+     * Adds snapshot metadata (contentHash, execution timing) to blocks.
+     */
+    private async addSnapshotMetadataToBlocks(blocks: DeepnoteBlock[], data: NotebookData): Promise<void> {
+        const notebookUri = this.findNotebookUri(data);
+
+        logger.debug(`[Snapshot] addSnapshotMetadataToBlocks: ${blocks.length} blocks`);
+        logger.debug(`[Snapshot] snapshotService exists: ${!!this.snapshotService}`);
+        logger.debug(`[Snapshot] notebookUri: ${notebookUri}`);
+
+        for (let i = 0; i < blocks.length; i++) {
+            const block = blocks[i];
+            const cell = data.cells[i];
+
+            if (block.content) {
+                try {
+                    const hash = await computeHash(block.content, 'SHA-256');
+
+                    block.contentHash = `sha256:${hash}`;
+                } catch (error) {
+                    logger.warn('Failed to compute contentHash', error);
+                }
+            }
+
+            if (this.snapshotService && notebookUri && cell?.metadata?.id) {
+                const cellId = cell.metadata.id as string;
+                const executionMetadata = this.snapshotService.getBlockExecutionMetadata(notebookUri, cellId);
+
+                if (executionMetadata) {
+                    if (executionMetadata.executionStartedAt) {
+                        block.executionStartedAt = executionMetadata.executionStartedAt;
+                    }
+
+                    if (executionMetadata.executionFinishedAt) {
+                        block.executionFinishedAt = executionMetadata.executionFinishedAt;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Adds environment and execution metadata to the project.
+     */
+    private async addSnapshotMetadataToProject(project: DeepnoteFile, data: NotebookData): Promise<void> {
+        logger.debug('[Serializer] addSnapshotMetadataToProject called');
+        logger.debug(`[Serializer] snapshotService exists: ${!!this.snapshotService}`);
+
+        if (!this.snapshotService) {
+            logger.debug('[Serializer] No snapshotService, skipping metadata');
+
+            return;
+        }
+
+        const notebookUri = this.findNotebookUri(data);
+
+        logger.debug(`[Serializer] findNotebookUri returned: ${notebookUri}`);
+
+        if (!notebookUri) {
+            logger.debug('[Serializer] No notebookUri found, skipping metadata');
+
+            return;
+        }
+
+        const executionMetadata = this.snapshotService.getExecutionMetadata(notebookUri);
+
+        logger.debug(`[Serializer] executionMetadata exists: ${!!executionMetadata}`);
+
+        if (executionMetadata) {
+            project.execution = executionMetadata;
+            logger.debug('[Serializer] Added execution metadata');
+        }
+
+        logger.debug('[Serializer] Fetching environment metadata.');
+
+        const environmentMetadata = await this.snapshotService.getEnvironmentMetadata(notebookUri);
+
+        logger.debug(`[Serializer] Finished fetching environment metadata.`);
+
+        if (environmentMetadata) {
+            project.environment = environmentMetadata;
+
+            logger.debug('[Serializer] Added environment metadata.');
+        } else {
+            logger.debug('[Serializer] No environment metadata returned.');
+        }
+    }
+
+    /**
+     * Finds the notebook URI from the metadata.
+     */
+    private findNotebookUri(data: NotebookData): string | undefined {
+        const projectId = data.metadata?.deepnoteProjectId;
+        const notebookId = data.metadata?.deepnoteNotebookId;
+
+        if (!projectId || !notebookId) {
+            return;
+        }
+
+        const notebookDoc = workspace.notebookDocuments.find(
+            (doc) =>
+                doc.notebookType === 'deepnote' &&
+                doc.metadata?.deepnoteProjectId === projectId &&
+                doc.metadata?.deepnoteNotebookId === notebookId
+        );
+
+        return notebookDoc?.uri.toString();
     }
 
     /**

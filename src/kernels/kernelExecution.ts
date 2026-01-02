@@ -45,6 +45,7 @@ import {
 import { CodeExecution } from './execution/codeExecution';
 import type { ICodeExecution } from './execution/types';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../platform/notebooks/cellExecutionStateService';
+import { ISnapshotMetadataService } from '../platform/notebooks/deepnote/types';
 
 /**
  * Everything in this classes gets disposed via the `onWillCancel` hook.
@@ -65,7 +66,8 @@ export class NotebookKernelExecution implements INotebookKernelExecution {
         private readonly kernel: IKernel,
         context: IExtensionContext,
         formatters: ITracebackFormatter[],
-        private readonly notebook: NotebookDocument
+        private readonly notebook: NotebookDocument,
+        private readonly snapshotService?: ISnapshotMetadataService
     ) {
         const requestListener = new CellExecutionMessageHandlerService(
             kernel.controller,
@@ -361,7 +363,9 @@ export class NotebookKernelExecution implements INotebookKernelExecution {
             sessionPromise,
             this.executionFactory,
             this.kernel.kernelConnectionMetadata,
-            this.kernel.resourceUri
+            this.kernel.resourceUri,
+            document,
+            this.snapshotService
         );
         this.disposables.push(newCellExecutionQueue);
 

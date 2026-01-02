@@ -1,7 +1,7 @@
+import type { DeepnoteBlock } from '@deepnote/blocks';
 import { NotebookCellData, NotebookCellKind } from 'vscode';
 
 import type { BlockConverter } from './blockConverter';
-import type { DeepnoteBlock } from '../../../platform/deepnote/deepnoteTypes';
 import { DeepnoteBigNumberMetadataSchema } from '../deepnoteSchemas';
 import { DEEPNOTE_VSCODE_RAW_CONTENT_KEY } from './constants';
 

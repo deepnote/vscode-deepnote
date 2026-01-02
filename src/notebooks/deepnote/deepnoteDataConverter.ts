@@ -1,7 +1,8 @@
+import type { DeepnoteBlock } from '@deepnote/blocks';
 import { NotebookCellData, NotebookCellKind, NotebookCellOutput, NotebookCellOutputItem } from 'vscode';
 
 import { generateBlockId, generateSortingKey } from './dataConversionUtils';
-import type { DeepnoteBlock, DeepnoteOutput } from '../../platform/deepnote/deepnoteTypes';
+import type { DeepnoteOutput } from '../../platform/deepnote/deepnoteTypes';
 import { ConverterRegistry } from './converters/converterRegistry';
 import { BlockConverter } from './converters/blockConverter';
 import { CodeBlockConverter } from './converters/codeBlockConverter';
@@ -97,7 +98,10 @@ export class DeepnoteDataConverter {
                 type: block.type,
                 sortingKey: block.sortingKey,
                 ...(blockWithOptionalFields.blockGroup && { blockGroup: blockWithOptionalFields.blockGroup }),
+                ...(block.contentHash !== undefined && { contentHash: block.contentHash }),
                 ...(block.executionCount !== undefined && { executionCount: block.executionCount }),
+                ...(block.executionFinishedAt !== undefined && { executionFinishedAt: block.executionFinishedAt }),
+                ...(block.executionStartedAt !== undefined && { executionStartedAt: block.executionStartedAt }),
                 // Track whether this block had outputs for round-trip fidelity
                 __hadOutputs: block.outputs !== undefined
             };

@@ -26,6 +26,7 @@ suite('DeepnoteEnvironmentStorage', () => {
         mockInterpreterService = mock<IInterpreterService>();
         mockGlobalState = mock<Memento>();
 
+        when(mockGlobalState.update(anything(), anything())).thenResolve();
         when(mockContext.globalState).thenReturn(instance(mockGlobalState) as any);
 
         storage = new DeepnoteEnvironmentStorage(instance(mockContext));
@@ -133,8 +134,6 @@ suite('DeepnoteEnvironmentStorage', () => {
                 description: 'Test'
             };
 
-            when(mockGlobalState.update(anything(), anything())).thenResolve();
-
             await storage.saveEnvironments([config]);
 
             verify(
@@ -149,6 +148,7 @@ suite('DeepnoteEnvironmentStorage', () => {
                                 uri: 'file:///usr/bin/python3'
                             },
                             venvPath: 'file:///path/to/venv',
+                            managedVenv: true,
                             createdAt: '2025-01-01T00:00:00.000Z',
                             lastUsedAt: '2025-01-01T00:00:00.000Z',
                             packages: ['numpy'],

@@ -6,6 +6,7 @@ import { IDisposable } from './types';
 import { isPromiseLike } from './utils/async';
 import { Common } from './utils/localize';
 import { dispose } from './utils/lifecycle';
+import { logger } from '../logging';
 
 const canceledName = 'Canceled';
 
@@ -120,6 +121,7 @@ export namespace Cancellation {
      */
     export function throwIfCanceled(cancelToken?: CancellationToken): void {
         if (cancelToken?.isCancellationRequested) {
+            logger.info(`Throwing CancellationError for token`);
             throw new CancellationError();
         }
     }

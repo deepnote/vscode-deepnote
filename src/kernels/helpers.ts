@@ -5,6 +5,7 @@ import * as path from '../platform/vscode-path/path';
 import * as uriPath from '../platform/vscode-path/resources';
 import type * as nbformat from '@jupyterlab/nbformat';
 import type { Kernel, KernelSpec } from '@jupyterlab/services';
+import * as jupyterLab from '@jupyterlab/services';
 import url from 'url-parse';
 import {
     KernelConnectionMetadata,
@@ -300,6 +301,18 @@ export function getDisplayNameOrNameOfKernelConnection(kernelConnection: KernelC
             } else {
                 return `Python ${pythonVersion}`.trim();
             }
+        case 'startUsingDeepnoteKernel': {
+            // Display as "Project Title"
+            if (kernelConnection.projectName) {
+                return kernelConnection.projectName;
+            }
+            // For Deepnote kernels, use the environment name if available
+            if (kernelConnection.environmentName) {
+                return `Deepnote: ${kernelConnection.environmentName}`;
+            }
+            // Fallback to kernelspec display name
+            return oldDisplayName;
+        }
     }
     return oldDisplayName;
 }
@@ -588,6 +601,13 @@ export function areKernelConnectionsEqual(
     if (connection1 && !connection2) {
         return false;
     }
+    if (connection1?.kind === 'startUsingDeepnoteKernel' && connection2?.kind === 'startUsingDeepnoteKernel') {
+        return (
+            connection1?.id === connection2?.id &&
+            connection1?.environmentName === connection2?.environmentName &&
+            connection1?.notebookName === connection2?.notebookName
+        );
+    }
     return connection1?.id === connection2?.id;
 }
 // Check if a name is a default python kernel name and pull the version
@@ -641,8 +661,6 @@ export async function executeSilently(
     logger.trace(
         `Executing silently Code (${kernelConnection.status}) = ${splitLines(code.substring(0, 100)).join('\\n')}`
     );
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const jupyterLab = require('@jupyterlab/services') as typeof import('@jupyterlab/services');
 
     const request = kernelConnection.requestExecute(
         {
@@ -736,8 +754,6 @@ export function executeSilentlyAndEmitOutput(
     onOutput: (output: NotebookCellOutput) => void
 ) {
     code = code.replace(/\r\n/g, '\n');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const jupyterLab = require('@jupyterlab/services') as typeof import('@jupyterlab/services');
 
     const request = kernelConnection.requestExecute(
         {

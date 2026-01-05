@@ -69,6 +69,9 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
             commands.registerCommand(Commands.NotebookEditorRunAllCells, () => this.runAllCells())
         );
         this.disposableRegistry.push(
+            commands.registerCommand(Commands.NotebookEditorRunFocusedCell, () => this.runFocusedCell())
+        );
+        this.disposableRegistry.push(
             commands.registerCommand(Commands.NotebookEditorAddCellBelow, () => this.addCellBelow())
         );
         this.disposableRegistry.push(
@@ -113,6 +116,27 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
         if (window.activeNotebookEditor) {
             commands.executeCommand('notebook.execute').then(noop, noop);
         }
+    }
+
+    private runFocusedCell() {
+        const editor = window.activeNotebookEditor;
+        if (!editor) {
+            return;
+        }
+
+        // Get the first selection range
+        const range = editor.selections[0];
+        if (!range) {
+            return;
+        }
+
+        // Execute the cell at the start of the selection
+        commands
+            .executeCommand('notebook.cell.execute', {
+                ranges: [{ start: range.start, end: range.start + 1 }],
+                document: editor.notebook.uri
+            })
+            .then(noop, noop);
     }
 
     private addCellBelow() {

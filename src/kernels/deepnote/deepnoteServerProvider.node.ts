@@ -85,7 +85,7 @@ export class DeepnoteServerProvider
         for (const [handle, info] of this.servers.entries()) {
             servers.push({
                 id: handle,
-                label: `Deepnote Toolkit (${info.port})`,
+                label: `Deepnote Toolkit (jupyter:${info.jupyterPort}, lsp:${info.lspPort})`,
                 connectionInformation: {
                     baseUrl: Uri.parse(info.url),
                     token: info.token || ''

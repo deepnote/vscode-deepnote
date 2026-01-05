@@ -6,7 +6,7 @@ import { Event, EventEmitter, window } from 'vscode';
 import { IExtensionSyncActivationService } from '../../activation/types';
 import { IInterpreterStatusbarVisibilityFilter, IPythonApiProvider, IPythonExtensionChecker } from '../../api/types';
 import { IDisposableRegistry } from '../../common/types';
-import { isJupyterNotebook } from '../../common/utils';
+import { isDeepnoteNotebook, isJupyterNotebook } from '../../common/utils';
 import { noop } from '../../common/utils/misc';
 
 /**
@@ -44,7 +44,11 @@ export class InterpreterStatusBarVisibility
         return this._changed.event;
     }
     public get hidden() {
-        return window.activeNotebookEditor && isJupyterNotebook(window.activeNotebookEditor.notebook) ? true : false;
+        return window.activeNotebookEditor &&
+            (isJupyterNotebook(window.activeNotebookEditor.notebook) ||
+                isDeepnoteNotebook(window.activeNotebookEditor.notebook))
+            ? true
+            : false;
     }
     private registerStatusFilter() {
         if (this._registered) {

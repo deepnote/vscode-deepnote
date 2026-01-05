@@ -1,0 +1,172 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+import { workspace } from 'vscode';
+import { logger } from '../../platform/logging';
+import fetch from 'node-fetch';
+
+/**
+ * Response from the import initialization endpoint
+ */
+export interface InitImportResponse {
+    importId: string;
+    uploadUrl: string;
+    expiresAt: string;
+}
+
+/**
+ * Error response from the API
+ */
+export interface ApiError {
+    message: string;
+    statusCode: number;
+}
+
+/**
+ * Maximum file size for uploads (100MB)
+ */
+export const MAX_FILE_SIZE = 100 * 1024 * 1024;
+
+/**
+ * Gets the Deepnote domain from configuration
+ */
+function getDomain(): string {
+    const config = workspace.getConfiguration('deepnote');
+    return config.get<string>('domain', 'deepnote.com');
+}
+
+/**
+ * Gets the API endpoint from configuration
+ */
+function getApiEndpoint(): string {
+    const domain = getDomain();
+    return `https://api.${domain}`;
+}
+
+/**
+ * Initializes an import by requesting a presigned upload URL
+ *
+ * @param fileName - Name of the file to import
+ * @param fileSize - Size of the file in bytes
+ * @returns Promise with import ID, upload URL, and expiration time
+ * @throws ApiError if the request fails
+ */
+export async function initImport(fileName: string, fileSize: number): Promise<InitImportResponse> {
+    const apiEndpoint = getApiEndpoint();
+    const url = `${apiEndpoint}/v1/import/init`;
+
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            fileName,
+            fileSize
+        })
+    });
+
+    if (!response.ok) {
+        const responseBody = await response.text();
+        logger.error(`Init import failed - Status: ${response.status}, URL: ${url}, Body: ${responseBody}`);
+
+        const error: ApiError = {
+            message: responseBody,
+            statusCode: response.status
+        };
+        throw error;
+    }
+
+    return await response.json();
+}
+
+/**
+ * Uploads a file to the presigned S3 URL using node-fetch
+ *
+ * @param uploadUrl - Presigned S3 URL for uploading
+ * @param fileBuffer - File contents as a Buffer
+ * @param onProgress - Optional callback for upload progress (0-100)
+ * @returns Promise that resolves when upload is complete
+ * @throws ApiError if the upload fails
+ */
+export async function uploadFile(
+    uploadUrl: string,
+    fileBuffer: Buffer,
+    onProgress?: (progress: number) => void
+): Promise<void> {
+    // Note: Progress tracking is limited in Node.js without additional libraries
+    // For now, we'll report 50% at start and 100% at completion
+    if (onProgress) {
+        onProgress(50);
+    }
+
+    const response = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/octet-stream',
+            'Content-Length': fileBuffer.length.toString()
+        },
+        body: fileBuffer
+    });
+
+    if (!response.ok) {
+        const responseText = await response.text();
+        logger.error(`Upload failed - Status: ${response.status}, Response: ${responseText}, URL: ${uploadUrl}`);
+        const error: ApiError = {
+            message: responseText || 'Upload failed',
+            statusCode: response.status
+        };
+        throw error;
+    }
+
+    if (onProgress) {
+        onProgress(100);
+    }
+}
+
+/**
+ * Gets a user-friendly error message for an API error
+ * Logs the full error details for debugging
+ *
+ * @param error - The error object
+ * @returns A user-friendly error message
+ */
+export function getErrorMessage(error: unknown): string {
+    // Log the full error details for debugging
+    logger.error('Import error details:', error);
+
+    if (typeof error === 'object' && error !== null && 'statusCode' in error) {
+        const apiError = error as ApiError;
+
+        // Log API error specifics
+        logger.error(`API Error - Status: ${apiError.statusCode}, Message: ${apiError.message}`);
+
+        // Handle rate limiting specifically
+        if (apiError.statusCode === 429) {
+            return 'Too many requests. Please try again in a few minutes.';
+        }
+
+        // All other API errors return the message from the server
+        if (apiError.statusCode >= 400) {
+            return apiError.message || 'An error occurred. Please try again.';
+        }
+    }
+
+    if (error instanceof Error) {
+        logger.error(`Error message: ${error.message}`, error.stack);
+        if (error.message.includes('fetch') || error.message.includes('Network')) {
+            return 'Failed to connect. Check your connection and try again.';
+        }
+        return error.message;
+    }
+
+    logger.error('Unknown error type:', typeof error, error);
+    return 'An unknown error occurred';
+}
+
+/**
+ * Gets the Deepnote domain from configuration for building launch URLs
+ */
+export function getDeepnoteDomain(): string {
+    return getDomain();
+}

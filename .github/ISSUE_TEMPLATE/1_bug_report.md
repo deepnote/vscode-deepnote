@@ -8,13 +8,10 @@ labels: bug
 
 ## Environment data
 
--   VS Code version: XXX
--   Jupyter Extension version (available under the Extensions sidebar): XXX
--   Python Extension version (available under the Extensions sidebar): XXX
--   OS (Windows | Mac | Linux distro) and version: XXX
--   Python and/or Anaconda version: XXX
--   Type of virtual environment used (N/A | venv | virtualenv | conda | ...): XXX
--   Jupyter server running: Local | Remote | N/A
+- VS Code version: XXX
+- Deepnote Extension version (available under the Extensions sidebar): XXX
+- OS (Windows | Mac | Linux distro) and version: XXX
+- Python and/or Anaconda version: XXX
 
 ## Expected behaviour
 
@@ -38,7 +35,7 @@ Note: If you think a GIF of what is happening would be helpful, consider tools l
 
 <details>
 
-<summary>Output for <code>Jupyter</code> in the <code>Output</code> panel (<code>View</code>→<code>Output</code>, change the drop-down the upper-right of the <code>Output</code> panel to <code>Jupyter</code>)
+<summary>Output for <code>Deepnote</code> in the <code>Output</code> panel (<code>View</code>→<code>Output</code>, change the drop-down the upper-right of the <code>Output</code> panel to <code>Deepnote</code>)
 </summary>
 
 <p>

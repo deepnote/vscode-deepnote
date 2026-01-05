@@ -4,6 +4,7 @@
 import type * as nbformat from '@jupyterlab/nbformat';
 import type { IKernelConnection } from '@jupyterlab/services/lib/kernel/kernel';
 import type { IIOPubMessage, IOPubMessageType } from '@jupyterlab/services/lib/kernel/messages';
+import * as jupyterLabServices from '@jupyterlab/services';
 import { injectable, inject } from 'inversify';
 import { Disposable, NotebookDocument, NotebookEditor, NotebookRendererMessaging, notebooks } from 'vscode';
 import { IKernel, IKernelProvider } from '../../../kernels/types';
@@ -69,8 +70,6 @@ export class IPyWidgetRendererComms implements IExtensionSyncActivationService {
             })
         );
 
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const jupyterLab = require('@jupyterlab/services') as typeof import('@jupyterlab/services');
         const handler = (kernelConnection: IKernelConnection, msg: IIOPubMessage<IOPubMessageType>) => {
             if (kernelConnection !== previousKernelConnection) {
                 // Must be some old message from a previous kernel (before a restart or the like.)
@@ -78,14 +77,14 @@ export class IPyWidgetRendererComms implements IExtensionSyncActivationService {
             }
 
             if (
-                jupyterLab.KernelMessage.isDisplayDataMsg(msg) ||
-                jupyterLab.KernelMessage.isUpdateDisplayDataMsg(msg) ||
-                jupyterLab.KernelMessage.isExecuteReplyMsg(msg) ||
-                jupyterLab.KernelMessage.isExecuteResultMsg(msg)
+                jupyterLabServices.KernelMessage.isDisplayDataMsg(msg) ||
+                jupyterLabServices.KernelMessage.isUpdateDisplayDataMsg(msg) ||
+                jupyterLabServices.KernelMessage.isExecuteReplyMsg(msg) ||
+                jupyterLabServices.KernelMessage.isExecuteResultMsg(msg)
             ) {
                 this.trackModelId(kernel.notebook, msg);
             } else if (
-                jupyterLab.KernelMessage.isCommOpenMsg(msg) &&
+                jupyterLabServices.KernelMessage.isCommOpenMsg(msg) &&
                 // Track widget model ids as soon as the comm opens to avoid races with renderer queries.
                 msg.content?.target_name === Identifiers.DefaultCommTarget &&
                 typeof msg.content?.comm_id === 'string'

@@ -485,6 +485,7 @@ abstract class BaseKernel implements IBaseKernel {
         }
     }
     protected async startJupyterSession(options: IDisplayOptions = new DisplayOptions(false)): Promise<IKernelSession> {
+        logger.info(`Starting Jupyter Session for ${getDisplayPath(this.uri)}, ${this.uri}`);
         this._startedAtLeastOnce = true;
         if (!options.disableUI) {
             this.startupUI.disableUI = false;
@@ -853,10 +854,22 @@ abstract class BaseKernel implements IBaseKernel {
 
                 // Gather all of the startup code at one time and execute as one cell
                 const startupCode = await this.gatherInternalStartupCode();
-                await this.executeSilently(session, startupCode, {
+                logger.trace(`Executing startup code with ${startupCode.length} lines`);
+
+                const outputs = await this.executeSilently(session, startupCode, {
                     traceErrors: true,
                     traceErrorsMessage: 'Error executing jupyter extension internal startup code'
                 });
+                logger.trace(`Startup code execution completed with ${outputs?.length || 0} outputs`);
+                if (outputs && outputs.length > 0) {
+                    // Avoid logging content; output types only.
+                    logger.trace(
+                        `Startup code produced ${outputs.length} output(s): ${outputs
+                            .map((o) => o.output_type)
+                            .join(', ')}`
+                    );
+                }
+
                 // Run user specified startup commands
                 await this.executeSilently(session, this.getUserStartupCommands(), { traceErrors: false });
             }

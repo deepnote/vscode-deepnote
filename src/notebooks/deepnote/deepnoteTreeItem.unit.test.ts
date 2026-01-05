@@ -2,7 +2,7 @@ import { assert } from 'chai';
 import { TreeItemCollapsibleState, ThemeIcon } from 'vscode';
 
 import { DeepnoteTreeItem, DeepnoteTreeItemType, DeepnoteTreeItemContext } from './deepnoteTreeItem';
-import type { DeepnoteProject, DeepnoteNotebook } from './deepnoteTypes';
+import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 
 suite('DeepnoteTreeItem', () => {
     const mockProject: DeepnoteProject = {
@@ -576,6 +576,51 @@ suite('DeepnoteTreeItem', () => {
             // Verify context wasn't modified
             assert.deepStrictEqual(originalContext, expectedContext);
             assert.deepStrictEqual(item.context, expectedContext);
+        });
+    });
+
+    suite('Loading type', () => {
+        test('should create loading item with null data', () => {
+            const context: DeepnoteTreeItemContext = {
+                filePath: '',
+                projectId: ''
+            };
+
+            const item = new DeepnoteTreeItem(
+                DeepnoteTreeItemType.Loading,
+                context,
+                null,
+                TreeItemCollapsibleState.None
+            );
+
+            assert.strictEqual(item.type, DeepnoteTreeItemType.Loading);
+            assert.strictEqual(item.contextValue, 'loading');
+            assert.strictEqual(item.collapsibleState, TreeItemCollapsibleState.None);
+            assert.isNull(item.data);
+        });
+
+        test('should set minimal visuals for loading items', () => {
+            const context: DeepnoteTreeItemContext = {
+                filePath: '',
+                projectId: ''
+            };
+
+            const item = new DeepnoteTreeItem(
+                DeepnoteTreeItemType.Loading,
+                context,
+                null,
+                TreeItemCollapsibleState.None
+            );
+
+            // Loading items should have minimal visuals set to show a readable placeholder
+            assert.isDefined(item);
+            assert.strictEqual(item.type, DeepnoteTreeItemType.Loading);
+
+            // Verify minimal visuals are set
+            assert.strictEqual(item.label, 'Loading…');
+            assert.strictEqual(item.tooltip, 'Loading…');
+            assert.strictEqual(item.description, '');
+            assert.isDefined(item.iconPath);
         });
     });
 

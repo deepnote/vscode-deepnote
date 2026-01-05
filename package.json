@@ -1,7 +1,7 @@
 {
     "name": "vscode-deepnote",
     "displayName": "Deepnote",
-    "version": "0.1.0",
+    "version": "1.2.1",
     "description": "Deepnote notebook support.",
     "publisher": "Deepnote",
     "author": {
@@ -23,8 +23,14 @@
         "theme": "light"
     },
     "engines": {
-        "vscode": "^1.103.0"
+        "vscode": "^1.95.0"
     },
+    "extensionDependencies": [
+        "ms-toolsai.jupyter-renderers"
+    ],
+    "extensionPack": [
+        "ms-toolsai.jupyter-renderers"
+    ],
     "l10n": "./l10n",
     "extensionKind": [
         "workspace"
@@ -49,13 +55,13 @@
     ],
     "activationEvents": [
         "onLanguage:python",
-        "onLanguageModelTool:configure_notebook",
-        "onLanguageModelTool:notebook_install_packages",
-        "onLanguageModelTool:notebook_list_packages",
+        "onLanguageModelTool:configure_deepnote_notebook",
+        "onLanguageModelTool:deepnote_notebook_install_packages",
+        "onLanguageModelTool:deepnote_notebook_list_packages",
         "onNotebook:deepnote",
         "onNotebook:interactive"
     ],
-    "main": "./dist/extension.node.proxy.js",
+    "main": "./dist/extension.node.js",
     "browser": "./dist/extension.web.bundle.js",
     "capabilities": {
         "virtualWorkspaces": true,
@@ -70,6 +76,14 @@
                 "key": "escape",
                 "when": "isCompositeNotebook && !editorHoverVisible && !suggestWidgetVisible && !isComposing && !inSnippetMode && !exceptionWidgetVisible && !selectionAnchorSet && !LinkedEditingInputVisible && !renameInputVisible && !editorHasSelection && !accessibilityHelpWidgetVisible && !breakpointWidgetVisible && !findWidgetVisible && !markersNavigationVisible && !parameterHintsVisible && !editorHasMultipleSelections && !notificationToastsVisible && !notebookEditorFocused && !inlineChatVisible",
                 "command": "interactive.input.clear"
+            },
+            {
+                "key": "cmd+enter",
+                "mac": "cmd+enter",
+                "win": "ctrl+enter",
+                "linux": "ctrl+enter",
+                "when": "notebookEditorFocused && !findInputFocussed && !replaceInputFocussed",
+                "command": "deepnote.notebookeditor.runfocusedcell"
             }
         ],
         "commands": [
@@ -86,76 +100,267 @@
                 "icon": "$(reveal)"
             },
             {
-                "command": "dataScience.ClearCache",
-                "title": "%jupyter.command.dataScience.clearCache.title%",
-                "category": "Jupyter (Dev)",
-                "enablement": "jupyter.development"
+                "command": "deepnote.environments.create",
+                "title": "%deepnote.commands.environments.create.title%",
+                "category": "Deepnote",
+                "icon": "$(add)"
             },
             {
-                "command": "jupyter.manageAccessToKernels",
-                "title": "%jupyter.command.manageAccessToKernels%",
+                "command": "deepnote.environments.delete",
+                "title": "%deepnote.commands.environments.delete.title%",
+                "category": "Deepnote",
+                "icon": "$(trash)"
+            },
+            {
+                "command": "deepnote.environments.managePackages",
+                "title": "%deepnote.commands.environments.managePackages.title%",
+                "category": "Deepnote",
+                "icon": "$(package)"
+            },
+            {
+                "command": "deepnote.environments.editName",
+                "title": "%deepnote.commands.environments.editName.title%",
+                "category": "Deepnote"
+            },
+            {
+                "command": "deepnote.environments.refresh",
+                "title": "%deepnote.commands.environments.refresh.title%",
+                "category": "Deepnote",
+                "icon": "$(refresh)"
+            },
+            {
+                "command": "deepnote.environments.selectForNotebook",
+                "title": "%deepnote.commands.environments.selectForNotebook.title%",
+                "category": "Deepnote",
+                "icon": "$(server-environment)"
+            },
+            {
+                "command": "deepnote.manageIntegrations",
+                "title": "%deepnote.commands.manageIntegrations.title%",
+                "category": "Deepnote",
+                "icon": "$(plug)"
+            },
+            {
+                "command": "deepnote.openInDeepnote",
+                "title": "Open in Deepnote",
+                "category": "Deepnote",
+                "icon": "$(globe)"
+            },
+            {
+                "command": "deepnote.newProject",
+                "title": "%deepnote.commands.newProject.title%",
+                "category": "Deepnote",
+                "icon": "$(new-file)"
+            },
+            {
+                "command": "deepnote.importNotebook",
+                "title": "%deepnote.commands.importNotebook.title%",
+                "category": "Deepnote",
+                "icon": "$(folder-opened)"
+            },
+            {
+                "command": "deepnote.importJupyterNotebook",
+                "title": "%deepnote.commands.importJupyterNotebook.title%",
+                "category": "Deepnote",
+                "icon": "$(notebook)"
+            },
+            {
+                "command": "deepnote.addSqlBlock",
+                "title": "%deepnote.commands.addSqlBlock.title%",
+                "category": "Deepnote",
+                "icon": "$(database)"
+            },
+            {
+                "command": "deepnote.addBigNumberChartBlock",
+                "title": "%deepnote.commands.addBigNumberChartBlock.title%",
+                "category": "Deepnote",
+                "icon": "$(graph)"
+            },
+            {
+                "command": "deepnote.addChartBlock",
+                "title": "%deepnote.commands.addChartBlock.title%",
+                "category": "Deepnote",
+                "icon": "$(graph-line)"
+            },
+            {
+                "command": "deepnote.addInputTextBlock",
+                "title": "%deepnote.commands.addInputTextBlock.title%",
+                "category": "Deepnote",
+                "icon": "$(symbol-text)"
+            },
+            {
+                "command": "deepnote.addInputTextareaBlock",
+                "title": "%deepnote.commands.addInputTextareaBlock.title%",
+                "category": "Deepnote",
+                "icon": "$(note)"
+            },
+            {
+                "command": "deepnote.addInputSelectBlock",
+                "title": "%deepnote.commands.addInputSelectBlock.title%",
+                "category": "Deepnote",
+                "icon": "$(list-selection)"
+            },
+            {
+                "command": "deepnote.addInputSliderBlock",
+                "title": "%deepnote.commands.addInputSliderBlock.title%",
+                "category": "Deepnote",
+                "icon": "$(settings-more-action)"
+            },
+            {
+                "command": "deepnote.addInputCheckboxBlock",
+                "title": "%deepnote.commands.addInputCheckboxBlock.title%",
+                "category": "Deepnote",
+                "icon": "$(check)"
+            },
+            {
+                "command": "deepnote.addInputDateBlock",
+                "title": "%deepnote.commands.addInputDateBlock.title%",
+                "category": "Deepnote",
+                "icon": "$(calendar)"
+            },
+            {
+                "command": "deepnote.addInputDateRangeBlock",
+                "title": "%deepnote.commands.addInputDateRangeBlock.title%",
+                "category": "Deepnote",
+                "icon": "$(calendar)"
+            },
+            {
+                "command": "deepnote.addInputFileBlock",
+                "title": "%deepnote.commands.addInputFileBlock.title%",
+                "category": "Deepnote",
+                "icon": "$(file)"
+            },
+            {
+                "command": "deepnote.addButtonBlock",
+                "title": "%deepnote.commands.addButtonBlock.title%",
+                "category": "Deepnote",
+                "icon": "$(add)"
+            },
+            {
+                "command": "deepnote.newNotebook",
+                "title": "%deepnote.commands.newNotebook.title%",
+                "category": "Deepnote",
+                "icon": "$(notebook)"
+            },
+            {
+                "command": "deepnote.renameProject",
+                "title": "%deepnote.commands.renameProject.title%",
+                "category": "Deepnote",
+                "icon": "$(edit)"
+            },
+            {
+                "command": "deepnote.deleteProject",
+                "title": "%deepnote.commands.deleteProject.title%",
+                "category": "Deepnote",
+                "icon": "$(trash)"
+            },
+            {
+                "command": "deepnote.renameNotebook",
+                "title": "%deepnote.commands.renameNotebook.title%",
+                "category": "Deepnote",
+                "icon": "$(edit)"
+            },
+            {
+                "command": "deepnote.deleteNotebook",
+                "title": "%deepnote.commands.deleteNotebook.title%",
+                "category": "Deepnote",
+                "icon": "$(trash)"
+            },
+            {
+                "command": "deepnote.duplicateNotebook",
+                "title": "%deepnote.commands.duplicateNotebook.title%",
+                "category": "Deepnote",
+                "icon": "$(copy)"
+            },
+            {
+                "command": "deepnote.addNotebookToProject",
+                "title": "%deepnote.commands.addNotebookToProject.title%",
+                "category": "Deepnote",
+                "icon": "$(add)"
+            },
+            {
+                "command": "deepnote.exportProject",
+                "title": "%deepnote.commands.exportProject.title%",
+                "category": "Deepnote",
+                "icon": "$(export)"
+            },
+            {
+                "command": "deepnote.exportNotebook",
+                "title": "%deepnote.commands.exportNotebook.title%",
+                "category": "Deepnote",
+                "icon": "$(export)"
+            },
+            {
+                "command": "dataScience.ClearCache",
+                "title": "%deepnote.command.dataScience.clearCache.title%",
+                "category": "Jupyter (Dev)",
+                "enablement": "deepnote.development"
+            },
+            {
+                "command": "deepnote.manageAccessToKernels",
+                "title": "%deepnote.command.manageAccessToKernels%",
                 "category": "Jupyter"
             },
             {
                 "command": "dataScience.ClearUserProviderJupyterServerCache",
-                "title": "%jupyter.command.dataScience.clearUserProviderJupyterServerCache.title%",
+                "title": "%deepnote.command.dataScience.clearUserProviderJupyterServerCache.title%",
                 "category": "Jupyter (Dev)",
-                "enablement": "jupyter.development"
+                "enablement": "deepnote.development"
             },
             {
-                "command": "jupyter.replayPylanceLog",
-                "title": "%jupyter.command.jupyter.replayPylanceLog.title%",
+                "command": "deepnote.replayPylanceLog",
+                "title": "%deepnote.command.deepnote.replayPylanceLog.title%",
                 "category": "Jupyter (Dev)",
-                "enablement": "jupyter.development && notebookType == jupyter-notebook && isWorkspaceTrusted && !jupyter.webExtension"
+                "enablement": "deepnote.development && notebookType == jupyter-notebook && isWorkspaceTrusted && !deepnote.webExtension"
             },
             {
-                "command": "jupyter.replayPylanceLogStep",
-                "title": "%jupyter.command.jupyter.replayPylanceLogStep.title%",
+                "command": "deepnote.replayPylanceLogStep",
+                "title": "%deepnote.command.deepnote.replayPylanceLogStep.title%",
                 "category": "Jupyter (Dev)",
                 "icon": "$(debug-start)",
-                "enablement": "jupyter.development && notebookType == jupyter-notebook && isWorkspaceTrusted && jupyter.replayLogLoaded && !jupyter.webExtension"
+                "enablement": "deepnote.development && notebookType == jupyter-notebook && isWorkspaceTrusted && deepnote.replayLogLoaded && !deepnote.webExtension"
             },
             {
-                "command": "jupyter.filterKernels",
-                "title": "%jupyter.command.jupyter.filterKernels.title%",
+                "command": "deepnote.filterKernels",
+                "title": "%deepnote.command.deepnote.filterKernels.title%",
                 "category": "Jupyter",
-                "enablement": "!jupyter.webExtension"
+                "enablement": "!deepnote.webExtension"
             },
             {
-                "command": "jupyter.runByLine",
-                "title": "%jupyter.command.jupyter.runByLine.title%",
+                "command": "deepnote.runByLine",
+                "title": "%deepnote.command.deepnote.runByLine.title%",
                 "icon": "$(debug-line-by-line)",
                 "category": "Jupyter",
-                "enablement": "notebookKernel =~ /^ms-toolsai.jupyter\\// && jupyter.ispythonnotebook && notebookCellType == code && isWorkspaceTrusted && resource not in jupyter.notebookeditor.debugDocuments || !notebookKernel && jupyter.ispythonnotebook && notebookCellType == code && isWorkspaceTrusted"
+                "enablement": "notebookKernel =~ /^ms-toolsai.jupyter\\// && deepnote.ispythonnotebook && notebookCellType == code && isWorkspaceTrusted && resource not in deepnote.notebookeditor.debugDocuments || !notebookKernel && deepnote.ispythonnotebook && notebookCellType == code && isWorkspaceTrusted"
             },
             {
-                "command": "jupyter.runAndDebugCell",
-                "title": "%jupyter.command.jupyter.debugCell.title%",
+                "command": "deepnote.runAndDebugCell",
+                "title": "%deepnote.command.deepnote.debugCell.title%",
                 "icon": "$(debug-alt-small)",
                 "category": "Jupyter",
-                "enablement": "notebookKernel =~ /^ms-toolsai.jupyter\\// && jupyter.ispythonnotebook && notebookCellType == code && isWorkspaceTrusted && resource not in jupyter.notebookeditor.debugDocuments || !notebookKernel && jupyter.ispythonnotebook && notebookCellType == code && isWorkspaceTrusted"
+                "enablement": "notebookKernel =~ /^ms-toolsai.jupyter\\// && deepnote.ispythonnotebook && notebookCellType == code && isWorkspaceTrusted && resource not in deepnote.notebookeditor.debugDocuments || !notebookKernel && deepnote.ispythonnotebook && notebookCellType == code && isWorkspaceTrusted"
             },
             {
-                "command": "jupyter.runByLineNext",
-                "title": "%jupyter.command.jupyter.runByLineNext.title%",
+                "command": "deepnote.runByLineNext",
+                "title": "%deepnote.command.deepnote.runByLineNext.title%",
                 "icon": "$(debug-line-by-line)",
                 "category": "Jupyter",
-                "enablement": "notebookCellResource in jupyter.notebookeditor.runByLineCells"
+                "enablement": "notebookCellResource in deepnote.notebookeditor.runByLineCells"
             },
             {
-                "command": "jupyter.runByLineStop",
-                "title": "%jupyter.command.jupyter.runByLineStop.title%",
+                "command": "deepnote.runByLineStop",
+                "title": "%deepnote.command.deepnote.runByLineStop.title%",
                 "icon": "$(debug-continue-small)",
                 "category": "Jupyter",
-                "enablement": "notebookCellResource in jupyter.notebookeditor.runByLineCells"
+                "enablement": "notebookCellResource in deepnote.notebookeditor.runByLineCells"
             },
             {
-                "command": "jupyter.viewOutput",
-                "title": "%jupyter.command.jupyter.viewOutput.title%",
-                "category": "Jupyter"
+                "command": "deepnote.viewOutput",
+                "title": "%deepnote.command.deepnote.viewOutput.title%",
+                "category": "Deepnote"
             },
             {
-                "command": "jupyter.notebookeditor.export",
+                "command": "deepnote.notebookeditor.export",
                 "title": "%DataScience.notebookExportAs%",
                 "shortTitle": "%DataScience.notebookExportAs.shorttitle%",
                 "category": "Notebook",
@@ -163,382 +368,388 @@
                     "light": "resources/light/export_to_python.svg",
                     "dark": "resources/dark/export_to_python.svg"
                 },
-                "enablement": "notebookType == jupyter-notebook && isWorkspaceTrusted && !jupyter.webExtension || notebookType == jupyter-notebook && isWorkspaceTrusted && jupyter.webExtension && notebookKernel =~ /^ms-toolsai.jupyter\\//"
+                "enablement": "notebookType == jupyter-notebook && isWorkspaceTrusted && !deepnote.webExtension || notebookType == jupyter-notebook && isWorkspaceTrusted && deepnote.webExtension && notebookKernel =~ /^ms-toolsai.jupyter\\//"
             },
             {
-                "command": "jupyter.export",
+                "command": "deepnote.export",
                 "title": "%DataScience.notebookExportAs%",
                 "category": "Jupyter",
-                "enablement": "isWorkspaceTrusted && !jupyter.webExtension || isWorkspaceTrusted && jupyter.webExtension && notebookKernel =~ /^ms-toolsai.jupyter\\//"
+                "enablement": "isWorkspaceTrusted && !deepnote.webExtension || isWorkspaceTrusted && deepnote.webExtension && notebookKernel =~ /^ms-toolsai.jupyter\\//"
             },
             {
-                "command": "jupyter.exportAsPythonScript",
-                "title": "%jupyter.command.jupyter.exportAsPythonScript.title%",
+                "command": "deepnote.exportAsPythonScript",
+                "title": "%deepnote.command.deepnote.exportAsPythonScript.title%",
                 "category": "Jupyter",
-                "enablement": "isWorkspaceTrusted && !jupyter.webExtension || isWorkspaceTrusted && jupyter.webExtension && notebookKernel =~ /^ms-toolsai.jupyter\\//"
+                "enablement": "isWorkspaceTrusted && !deepnote.webExtension || isWorkspaceTrusted && deepnote.webExtension && notebookKernel =~ /^ms-toolsai.jupyter\\//"
             },
             {
-                "command": "jupyter.exportToHTML",
-                "title": "%jupyter.command.jupyter.exportToHTML.title%",
+                "command": "deepnote.exportToHTML",
+                "title": "%deepnote.command.deepnote.exportToHTML.title%",
                 "category": "Jupyter",
-                "enablement": "isWorkspaceTrusted && !jupyter.webExtension || isWorkspaceTrusted && jupyter.webExtension && notebookKernel =~ /^ms-toolsai.jupyter\\//"
+                "enablement": "isWorkspaceTrusted && !deepnote.webExtension || isWorkspaceTrusted && deepnote.webExtension && notebookKernel =~ /^ms-toolsai.jupyter\\//"
             },
             {
-                "command": "jupyter.exportToPDF",
-                "title": "%jupyter.command.jupyter.exportToPDF.title%",
+                "command": "deepnote.exportToPDF",
+                "title": "%deepnote.command.deepnote.exportToPDF.title%",
                 "category": "Jupyter",
-                "enablement": "isWorkspaceTrusted && !jupyter.webExtension || isWorkspaceTrusted && jupyter.webExtension && notebookKernel =~ /^ms-toolsai.jupyter\\//"
+                "enablement": "isWorkspaceTrusted && !deepnote.webExtension || isWorkspaceTrusted && deepnote.webExtension && notebookKernel =~ /^ms-toolsai.jupyter\\//"
             },
             {
-                "command": "jupyter.selectJupyterInterpreter",
-                "title": "%jupyter.command.jupyter.selectJupyterInterpreter.title%",
+                "command": "deepnote.selectJupyterInterpreter",
+                "title": "%deepnote.command.deepnote.selectJupyterInterpreter.title%",
                 "category": "Jupyter",
-                "enablement": "isWorkspaceTrusted && !jupyter.webExtension"
+                "enablement": "isWorkspaceTrusted && !deepnote.webExtension"
             },
             {
-                "command": "jupyter.runcurrentcell",
-                "title": "%jupyter.command.jupyter.runcurrentcell.title%",
-                "category": "Jupyter",
-                "enablement": "isWorkspaceTrusted"
-            },
-            {
-                "command": "jupyter.debugcell",
-                "title": "%jupyter.command.jupyter.debugcell.title%",
+                "command": "deepnote.runcurrentcell",
+                "title": "%deepnote.command.deepnote.runcurrentcell.title%",
                 "category": "Jupyter",
                 "enablement": "isWorkspaceTrusted"
             },
             {
-                "command": "jupyter.debugstepover",
-                "title": "%jupyter.command.jupyter.debugstepover.title%",
+                "command": "deepnote.debugcell",
+                "title": "%deepnote.command.deepnote.debugcell.title%",
                 "category": "Jupyter",
                 "enablement": "isWorkspaceTrusted"
             },
             {
-                "command": "jupyter.debugstop",
-                "title": "%jupyter.command.jupyter.debugstop.title%",
+                "command": "deepnote.debugstepover",
+                "title": "%deepnote.command.deepnote.debugstepover.title%",
                 "category": "Jupyter",
                 "enablement": "isWorkspaceTrusted"
             },
             {
-                "command": "jupyter.debugcontinue",
-                "title": "%jupyter.command.jupyter.debugcontinue.title%",
+                "command": "deepnote.debugstop",
+                "title": "%deepnote.command.deepnote.debugstop.title%",
                 "category": "Jupyter",
                 "enablement": "isWorkspaceTrusted"
             },
             {
-                "command": "jupyter.insertCellBelowPosition",
-                "title": "%jupyter.command.jupyter.insertCellBelowPosition.title%",
-                "category": "Jupyter",
-                "enablement": "isWorkspaceTrusted && !jupyter.webExtension"
-            },
-            {
-                "command": "jupyter.insertCellBelow",
-                "title": "%jupyter.command.jupyter.insertCellBelow.title%",
-                "category": "Jupyter",
-                "enablement": "!jupyter.webExtension"
-            },
-            {
-                "command": "jupyter.insertCellAbove",
-                "title": "%jupyter.command.jupyter.insertCellAbove.title%",
-                "category": "Jupyter",
-                "enablement": "!jupyter.webExtension"
-            },
-            {
-                "command": "jupyter.deleteCells",
-                "title": "%jupyter.command.jupyter.deleteCells.title%",
-                "category": "Jupyter",
-                "enablement": "!jupyter.webExtension"
-            },
-            {
-                "command": "jupyter.selectCell",
-                "title": "%jupyter.command.jupyter.selectCell.title%",
-                "category": "Jupyter",
-                "enablement": "!jupyter.webExtension"
-            },
-            {
-                "command": "jupyter.selectCellContents",
-                "title": "%jupyter.command.jupyter.selectCellContents.title%",
-                "category": "Jupyter",
-                "enablement": "!jupyter.webExtension"
-            },
-            {
-                "command": "jupyter.extendSelectionByCellAbove",
-                "title": "%jupyter.command.jupyter.extendSelectionByCellAbove.title%",
-                "category": "Jupyter",
-                "enablement": "!jupyter.webExtension"
-            },
-            {
-                "command": "jupyter.extendSelectionByCellBelow",
-                "title": "%jupyter.command.jupyter.extendSelectionByCellBelow.title%",
-                "category": "Jupyter",
-                "enablement": "!jupyter.webExtension"
-            },
-            {
-                "command": "jupyter.moveCellsUp",
-                "title": "%jupyter.command.jupyter.moveCellsUp.title%",
-                "category": "Jupyter",
-                "enablement": "!jupyter.webExtension"
-            },
-            {
-                "command": "jupyter.moveCellsDown",
-                "title": "%jupyter.command.jupyter.moveCellsDown.title%",
-                "category": "Jupyter",
-                "enablement": "!jupyter.webExtension"
-            },
-            {
-                "command": "jupyter.changeCellToMarkdown",
-                "title": "%jupyter.command.jupyter.changeCellToMarkdown.title%",
-                "category": "Jupyter",
-                "enablement": "!jupyter.webExtension"
-            },
-            {
-                "command": "jupyter.changeCellToCode",
-                "title": "%jupyter.command.jupyter.changeCellToCode.title%",
-                "category": "Jupyter",
-                "enablement": "!jupyter.webExtension"
-            },
-            {
-                "command": "jupyter.gotoNextCellInFile",
-                "title": "%jupyter.command.jupyter.gotoNextCellInFile.title%",
-                "category": "Jupyter",
-                "enablement": "!jupyter.webExtension"
-            },
-            {
-                "command": "jupyter.gotoPrevCellInFile",
-                "title": "%jupyter.command.jupyter.gotoPrevCellInFile.title%",
-                "category": "Jupyter",
-                "enablement": "!jupyter.webExtension"
-            },
-            {
-                "command": "jupyter.runcurrentcelladvance",
-                "title": "%jupyter.command.jupyter.runcurrentcelladvance.title%",
+                "command": "deepnote.debugcontinue",
+                "title": "%deepnote.command.deepnote.debugcontinue.title%",
                 "category": "Jupyter",
                 "enablement": "isWorkspaceTrusted"
             },
             {
-                "command": "jupyter.runcurrentcellandallbelow.palette",
-                "title": "%jupyter.command.jupyter.runcurrentcellandallbelow.palette.title%",
+                "command": "deepnote.insertCellBelowPosition",
+                "title": "%deepnote.command.deepnote.insertCellBelowPosition.title%",
+                "category": "Jupyter",
+                "enablement": "isWorkspaceTrusted && !deepnote.webExtension"
+            },
+            {
+                "command": "deepnote.insertCellBelow",
+                "title": "%deepnote.command.deepnote.insertCellBelow.title%",
+                "category": "Jupyter",
+                "enablement": "!deepnote.webExtension"
+            },
+            {
+                "command": "deepnote.insertCellAbove",
+                "title": "%deepnote.command.deepnote.insertCellAbove.title%",
+                "category": "Jupyter",
+                "enablement": "!deepnote.webExtension"
+            },
+            {
+                "command": "deepnote.deleteCells",
+                "title": "%deepnote.command.deepnote.deleteCells.title%",
+                "category": "Jupyter",
+                "enablement": "!deepnote.webExtension"
+            },
+            {
+                "command": "deepnote.selectCell",
+                "title": "%deepnote.command.deepnote.selectCell.title%",
+                "category": "Jupyter",
+                "enablement": "!deepnote.webExtension"
+            },
+            {
+                "command": "deepnote.selectCellContents",
+                "title": "%deepnote.command.deepnote.selectCellContents.title%",
+                "category": "Jupyter",
+                "enablement": "!deepnote.webExtension"
+            },
+            {
+                "command": "deepnote.extendSelectionByCellAbove",
+                "title": "%deepnote.command.deepnote.extendSelectionByCellAbove.title%",
+                "category": "Jupyter",
+                "enablement": "!deepnote.webExtension"
+            },
+            {
+                "command": "deepnote.extendSelectionByCellBelow",
+                "title": "%deepnote.command.deepnote.extendSelectionByCellBelow.title%",
+                "category": "Jupyter",
+                "enablement": "!deepnote.webExtension"
+            },
+            {
+                "command": "deepnote.moveCellsUp",
+                "title": "%deepnote.command.deepnote.moveCellsUp.title%",
+                "category": "Jupyter",
+                "enablement": "!deepnote.webExtension"
+            },
+            {
+                "command": "deepnote.moveCellsDown",
+                "title": "%deepnote.command.deepnote.moveCellsDown.title%",
+                "category": "Jupyter",
+                "enablement": "!deepnote.webExtension"
+            },
+            {
+                "command": "deepnote.changeCellToMarkdown",
+                "title": "%deepnote.command.deepnote.changeCellToMarkdown.title%",
+                "category": "Jupyter",
+                "enablement": "!deepnote.webExtension"
+            },
+            {
+                "command": "deepnote.changeCellToCode",
+                "title": "%deepnote.command.deepnote.changeCellToCode.title%",
+                "category": "Jupyter",
+                "enablement": "!deepnote.webExtension"
+            },
+            {
+                "command": "deepnote.gotoNextCellInFile",
+                "title": "%deepnote.command.deepnote.gotoNextCellInFile.title%",
+                "category": "Jupyter",
+                "enablement": "!deepnote.webExtension"
+            },
+            {
+                "command": "deepnote.gotoPrevCellInFile",
+                "title": "%deepnote.command.deepnote.gotoPrevCellInFile.title%",
+                "category": "Jupyter",
+                "enablement": "!deepnote.webExtension"
+            },
+            {
+                "command": "deepnote.runcurrentcelladvance",
+                "title": "%deepnote.command.deepnote.runcurrentcelladvance.title%",
                 "category": "Jupyter",
                 "enablement": "isWorkspaceTrusted"
             },
             {
-                "command": "jupyter.runallcellsabove.palette",
-                "title": "%jupyter.command.jupyter.runallcellsabove.palette.title%",
+                "command": "deepnote.runcurrentcellandallbelow.palette",
+                "title": "%deepnote.command.deepnote.runcurrentcellandallbelow.palette.title%",
                 "category": "Jupyter",
                 "enablement": "isWorkspaceTrusted"
             },
             {
-                "command": "jupyter.debugcurrentcell.palette",
-                "title": "%jupyter.command.jupyter.debugcurrentcell.palette.title%",
-                "category": "Jupyter",
-                "enablement": "isWorkspaceTrusted && !jupyter.webExtension"
-            },
-            {
-                "command": "jupyter.execSelectionInteractive",
-                "title": "%jupyter.command.jupyter.execSelectionInteractive.title%",
+                "command": "deepnote.runallcellsabove.palette",
+                "title": "%deepnote.command.deepnote.runallcellsabove.palette.title%",
                 "category": "Jupyter",
                 "enablement": "isWorkspaceTrusted"
             },
             {
-                "command": "jupyter.createnewinteractive",
-                "title": "%jupyter.command.jupyter.createnewinteractive.title%",
+                "command": "deepnote.debugcurrentcell.palette",
+                "title": "%deepnote.command.deepnote.debugcurrentcell.palette.title%",
+                "category": "Jupyter",
+                "enablement": "isWorkspaceTrusted && !deepnote.webExtension"
+            },
+            {
+                "command": "deepnote.execSelectionInteractive",
+                "title": "%deepnote.command.deepnote.execSelectionInteractive.title%",
                 "category": "Jupyter",
                 "enablement": "isWorkspaceTrusted"
             },
             {
-                "command": "jupyter.runFileInteractive",
-                "title": "%jupyter.command.jupyter.runFileInteractive.title%",
+                "command": "deepnote.createnewinteractive",
+                "title": "%deepnote.command.deepnote.createnewinteractive.title%",
+                "category": "Jupyter",
+                "enablement": "isWorkspaceTrusted"
+            },
+            {
+                "command": "deepnote.runFileInteractive",
+                "title": "%deepnote.command.deepnote.runFileInteractive.title%",
                 "icon": "$(play)",
                 "category": "Jupyter",
                 "enablement": "isWorkspaceTrusted"
             },
             {
-                "command": "jupyter.debugFileInteractive",
-                "title": "%jupyter.command.jupyter.debugFileInteractive.title%",
+                "command": "deepnote.debugFileInteractive",
+                "title": "%deepnote.command.deepnote.debugFileInteractive.title%",
                 "category": "Jupyter",
-                "enablement": "isWorkspaceTrusted && !jupyter.webExtension"
+                "enablement": "isWorkspaceTrusted && !deepnote.webExtension"
             },
             {
-                "command": "jupyter.runallcells",
-                "title": "%jupyter.command.jupyter.runallcells.title%",
-                "category": "Jupyter",
-                "enablement": "isWorkspaceTrusted"
-            },
-            {
-                "command": "jupyter.runallcellsabove",
-                "title": "%jupyter.command.jupyter.runallcellsabove.title%",
+                "command": "deepnote.runallcells",
+                "title": "%deepnote.command.deepnote.runallcells.title%",
                 "category": "Jupyter",
                 "enablement": "isWorkspaceTrusted"
             },
             {
-                "command": "jupyter.runcellandallbelow",
-                "title": "%jupyter.command.jupyter.runcellandallbelow.title%",
+                "command": "deepnote.runallcellsabove",
+                "title": "%deepnote.command.deepnote.runallcellsabove.title%",
                 "category": "Jupyter",
                 "enablement": "isWorkspaceTrusted"
             },
             {
-                "command": "jupyter.runcell",
-                "title": "%jupyter.command.jupyter.runcell.title%",
+                "command": "deepnote.runcellandallbelow",
+                "title": "%deepnote.command.deepnote.runcellandallbelow.title%",
                 "category": "Jupyter",
                 "enablement": "isWorkspaceTrusted"
             },
             {
-                "command": "jupyter.runtoline",
-                "title": "%jupyter.command.jupyter.runtoline.title%",
+                "command": "deepnote.runcell",
+                "title": "%deepnote.command.deepnote.runcell.title%",
                 "category": "Jupyter",
                 "enablement": "isWorkspaceTrusted"
             },
             {
-                "command": "jupyter.runfromline",
-                "title": "%jupyter.command.jupyter.runfromline.title%",
+                "command": "deepnote.runtoline",
+                "title": "%deepnote.command.deepnote.runtoline.title%",
                 "category": "Jupyter",
                 "enablement": "isWorkspaceTrusted"
             },
             {
-                "command": "jupyter.importnotebookfile",
-                "title": "%jupyter.command.jupyter.importnotebookfile.title%",
+                "command": "deepnote.runfromline",
+                "title": "%deepnote.command.deepnote.runfromline.title%",
                 "category": "Jupyter",
-                "enablement": "isWorkspaceTrusted && !jupyter.webExtension"
+                "enablement": "isWorkspaceTrusted"
             },
             {
-                "command": "jupyter.exportfileasnotebook",
-                "title": "%jupyter.command.jupyter.exportfileasnotebook.title%",
+                "command": "deepnote.importnotebookfile",
+                "title": "%deepnote.command.deepnote.importnotebookfile.title%",
                 "category": "Jupyter",
-                "enablement": "isWorkspaceTrusted && !jupyter.webExtension"
+                "enablement": "isWorkspaceTrusted && !deepnote.webExtension"
             },
             {
-                "command": "jupyter.interruptkernel",
-                "title": "%jupyter.command.jupyter.interruptkernel.title%",
-                "shortTitle": "%jupyter.command.jupyter.interruptkernel.shorttitle%",
+                "command": "deepnote.exportfileasnotebook",
+                "title": "%deepnote.command.deepnote.exportfileasnotebook.title%",
+                "category": "Jupyter",
+                "enablement": "isWorkspaceTrusted && !deepnote.webExtension"
+            },
+            {
+                "command": "deepnote.interruptkernel",
+                "title": "%deepnote.command.deepnote.interruptkernel.title%",
+                "shortTitle": "%deepnote.command.deepnote.interruptkernel.shorttitle%",
                 "category": "Jupyter",
                 "icon": {
                     "light": "resources/light/interrupt.svg",
                     "dark": "resources/dark/interrupt.svg"
                 },
-                "enablement": "isWorkspaceTrusted && jupyter.interactive.canInterruptNotebookKernel"
+                "enablement": "isWorkspaceTrusted && deepnote.interactive.canInterruptNotebookKernel"
             },
             {
-                "command": "jupyter.restartkernel",
-                "title": "%jupyter.command.jupyter.restartkernel.title%",
-                "shortTitle": "%jupyter.command.jupyter.restartkernel.shorttitle%",
+                "command": "deepnote.restartkernel",
+                "title": "%deepnote.command.deepnote.restartkernel.title%",
+                "shortTitle": "%deepnote.command.deepnote.restartkernel.shorttitle%",
                 "category": "Jupyter",
                 "icon": {
                     "light": "resources/light/restart-kernel.svg",
                     "dark": "resources/dark/restart-kernel.svg"
                 },
-                "enablement": "isWorkspaceTrusted && (jupyter.interactive.canRestartNotebookKernel || (notebookKernel =~ /^ms-toolsai.jupyter\\// && jupyter.notebookeditor.canrestartNotebookkernel))"
+                "enablement": "isWorkspaceTrusted && (deepnote.interactive.canRestartNotebookKernel || (notebookKernel =~ /^ms-toolsai.jupyter\\// && deepnote.notebookeditor.canrestartNotebookkernel))"
             },
             {
-                "command": "jupyter.restartkernelandrunallcells",
-                "title": "%jupyter.command.jupyter.restartkernelandrunallcells.title%",
-                "shortTitle": "%jupyter.command.jupyter.restartkernelandrunallcells.shorttitle%",
+                "command": "deepnote.restartkernelandrunallcells",
+                "title": "%deepnote.command.deepnote.restartkernelandrunallcells.title%",
+                "shortTitle": "%deepnote.command.deepnote.restartkernelandrunallcells.shorttitle%",
                 "category": "Jupyter",
-                "enablement": "isWorkspaceTrusted && (jupyter.interactive.canRestartNotebookKernel || (notebookKernel =~ /^ms-toolsai.jupyter\\// && jupyter.notebookeditor.canrestartNotebookkernel))"
+                "enablement": "isWorkspaceTrusted && (deepnote.interactive.canRestartNotebookKernel || (notebookKernel =~ /^ms-toolsai.jupyter\\// && deepnote.notebookeditor.canrestartNotebookkernel))"
             },
             {
-                "command": "jupyter.restartkernelandrunuptoselectedcell",
-                "title": "%jupyter.command.jupyter.restartkernelandrunuptoselectedcell.title%",
-                "shortTitle": "%jupyter.command.jupyter.restartkernelandrunuptoselectedcell.title%",
+                "command": "deepnote.restartkernelandrunuptoselectedcell",
+                "title": "%deepnote.command.deepnote.restartkernelandrunuptoselectedcell.title%",
+                "shortTitle": "%deepnote.command.deepnote.restartkernelandrunuptoselectedcell.title%",
                 "category": "Jupyter",
-                "enablement": "isWorkspaceTrusted && (notebookKernel =~ /^ms-toolsai.jupyter\\// && jupyter.notebookeditor.canrestartNotebookkernel)"
+                "enablement": "isWorkspaceTrusted && (notebookKernel =~ /^ms-toolsai.jupyter\\// && deepnote.notebookeditor.canrestartNotebookkernel)"
             },
             {
-                "command": "jupyter.notebookeditor.addcellbelow",
-                "title": "%jupyter.command.jupyter.notebookeditor.addcellbelow.title%",
+                "command": "deepnote.notebookeditor.addcellbelow",
+                "title": "%deepnote.command.deepnote.notebookeditor.addcellbelow.title%",
                 "category": "Notebook",
-                "enablement": "!jupyter.webExtension"
+                "enablement": "!deepnote.webExtension"
             },
             {
-                "command": "jupyter.notebookeditor.removeallcells",
-                "title": "%jupyter.command.jupyter.notebookeditor.removeallcells.title%",
+                "command": "deepnote.notebookeditor.removeallcells",
+                "title": "%deepnote.command.deepnote.notebookeditor.removeallcells.title%",
                 "category": "Notebook",
-                "enablement": "!jupyter.webExtension"
+                "enablement": "!deepnote.webExtension"
             },
             {
-                "command": "jupyter.expandallcells",
-                "title": "%jupyter.command.jupyter.expandallcells.title%",
-                "shortTitle": "%jupyter.command.jupyter.expandallcells.shorttitle%",
+                "command": "deepnote.notebookeditor.runfocusedcell",
+                "title": "%deepnote.command.deepnote.notebookeditor.runfocusedcell.title%",
+                "category": "Notebook",
+                "enablement": "notebookEditorFocused"
+            },
+            {
+                "command": "deepnote.expandallcells",
+                "title": "%deepnote.command.deepnote.expandallcells.title%",
+                "shortTitle": "%deepnote.command.deepnote.expandallcells.shorttitle%",
                 "category": "Jupyter",
                 "icon": "$(expand-all)"
             },
             {
-                "command": "jupyter.collapseallcells",
-                "title": "%jupyter.command.jupyter.collapseallcells.title%",
-                "shortTitle": "%jupyter.command.jupyter.collapseallcells.shorttitle%",
+                "command": "deepnote.collapseallcells",
+                "title": "%deepnote.command.deepnote.collapseallcells.title%",
+                "shortTitle": "%deepnote.command.deepnote.collapseallcells.shorttitle%",
                 "category": "Jupyter",
                 "icon": "$(collapse-all)"
             },
             {
-                "command": "jupyter.addcellbelow",
-                "title": "%jupyter.command.jupyter.addcellbelow.title%",
+                "command": "deepnote.addcellbelow",
+                "title": "%deepnote.command.deepnote.addcellbelow.title%",
                 "category": "Jupyter",
-                "enablement": "!jupyter.webExtension"
+                "enablement": "!deepnote.webExtension"
             },
             {
-                "command": "jupyter.createnewnotebook",
-                "title": "%jupyter.command.jupyter.createnewnotebook.title%",
+                "command": "deepnote.createnewnotebook",
+                "title": "%deepnote.command.deepnote.createnewnotebook.title%",
                 "category": "Jupyter",
-                "enablement": "!jupyter.webExtension"
+                "enablement": "!deepnote.webExtension"
             },
             {
-                "command": "jupyter.scrolltocell",
-                "title": "%jupyter.command.jupyter.scrolltocell.title%",
+                "command": "deepnote.scrolltocell",
+                "title": "%deepnote.command.deepnote.scrolltocell.title%",
                 "category": "Jupyter",
-                "enablement": "!jupyter.webExtension"
+                "enablement": "!deepnote.webExtension"
             },
             {
-                "command": "jupyter.latestExtension",
+                "command": "deepnote.latestExtension",
                 "title": "DataScience.latestExtension",
                 "category": "Jupyter",
-                "enablement": "!jupyter.webExtension"
+                "enablement": "!deepnote.webExtension"
             },
             {
-                "command": "jupyter.showDataViewer",
-                "title": "%jupyter.command.jupyter.showDataViewer.title%",
-                "enablement": "!jupyter.webExtension",
+                "command": "deepnote.showDataViewer",
+                "title": "%deepnote.command.deepnote.showDataViewer.title%",
+                "enablement": "!deepnote.webExtension",
                 "category": "Jupyter"
             },
             {
-                "command": "jupyter.clearSavedJupyterUris",
-                "title": "%jupyter.command.jupyter.clearSavedJupyterUris.title%",
+                "command": "deepnote.clearSavedJupyterUris",
+                "title": "%deepnote.command.deepnote.clearSavedJupyterUris.title%",
                 "category": "Jupyter"
             },
             {
-                "command": "jupyter.openVariableView",
-                "title": "%jupyter.command.jupyter.openVariableView.title%",
-                "shortTitle": "%jupyter.command.jupyter.openVariableView.shorttitle%",
+                "command": "deepnote.openVariableView",
+                "title": "%deepnote.command.deepnote.openVariableView.title%",
+                "shortTitle": "%deepnote.command.deepnote.openVariableView.shorttitle%",
                 "icon": "$(variable-group)",
                 "category": "Jupyter",
                 "enablement": "notebookType == jupyter-notebook && isWorkspaceTrusted || isCompositeNotebook && isWorkspaceTrusted"
             },
             {
-                "command": "jupyter.openOutlineView",
-                "title": "%jupyter.command.jupyter.openOutlineView.title%",
-                "shortTitle": "%jupyter.command.jupyter.openOutlineView.shorttitle%",
+                "command": "deepnote.openOutlineView",
+                "title": "%deepnote.command.deepnote.openOutlineView.title%",
+                "shortTitle": "%deepnote.command.deepnote.openOutlineView.shorttitle%",
                 "icon": "$(list-unordered)",
                 "category": "Jupyter",
                 "enablement": "notebookType == jupyter-notebook"
             },
             {
-                "command": "jupyter.refreshDataViewer",
+                "command": "deepnote.refreshDataViewer",
                 "title": "%DataScience.refreshDataViewerCommandPalette%",
                 "category": "Jupyter",
-                "enablement": "jupyter.dataViewerActive && isWorkspaceTrusted"
+                "enablement": "deepnote.dataViewerActive && isWorkspaceTrusted"
             },
             {
-                "command": "jupyter.interactive.clearAllCells",
+                "command": "deepnote.interactive.clearAllCells",
                 "title": "%DataScience.interactiveClearAllCells%",
                 "icon": "$(close)",
                 "category": "Jupyter"
             },
             {
-                "command": "jupyter.interactive.goToCode",
+                "command": "deepnote.interactive.goToCode",
                 "title": "%DataScience.interactiveGoToCode%",
                 "icon": "$(go-to-file)",
                 "category": "Jupyter"
             },
             {
-                "command": "jupyter.interactive.exportasnotebook",
+                "command": "deepnote.interactive.exportasnotebook",
                 "title": "%DataScience.exportDialogTitle%",
                 "shortTitle": "%DataScience.exportAsNotebook.shorttitle%",
                 "icon": "$(save-as)",
@@ -546,7 +757,7 @@
                 "category": "Jupyter"
             },
             {
-                "command": "jupyter.interactive.exportas",
+                "command": "deepnote.interactive.exportas",
                 "title": "%DataScience.notebookExport%",
                 "icon": {
                     "light": "resources/light/export_to_python.svg",
@@ -556,19 +767,19 @@
                 "category": "Jupyter"
             },
             {
-                "command": "jupyter.interactive.copyCell",
+                "command": "deepnote.interactive.copyCell",
                 "title": "%DataScience.interactiveCopyCell%",
                 "icon": "$(copy)",
                 "category": "Jupyter"
             },
             {
-                "command": "jupyter.runInDedicatedExtensionHost",
+                "command": "deepnote.runInDedicatedExtensionHost",
                 "title": "%DataScience.runInDedicatedExtensionHost%",
-                "enablement": "!jupyter.webExtension",
+                "enablement": "!deepnote.webExtension",
                 "category": "Jupyter"
             },
             {
-                "command": "jupyter.continueEditSessionInCodespace",
+                "command": "deepnote.continueEditSessionInCodespace",
                 "title": "Continue On Codespace",
                 "shortTitle": "Continue On",
                 "icon": "$(vm)",
@@ -576,661 +787,835 @@
                 "category": "Jupyter"
             },
             {
-                "command": "jupyter.selectPrecedentCells",
+                "command": "deepnote.selectPrecedentCells",
                 "title": "Select Precedent Cells",
                 "icon": "$(gather)",
-                "enablement": "isWorkspaceTrusted && !jupyter.webExtension",
+                "enablement": "isWorkspaceTrusted && !deepnote.webExtension",
                 "category": "Jupyter"
             },
             {
-                "command": "jupyter.selectDependentCells",
+                "command": "deepnote.selectDependentCells",
                 "title": "Select Dependent Cells",
-                "enablement": "isWorkspaceTrusted && !jupyter.webExtension",
+                "enablement": "isWorkspaceTrusted && !deepnote.webExtension",
                 "category": "Jupyter"
             },
             {
-                "command": "jupyter.runPrecedentCells",
+                "command": "deepnote.runPrecedentCells",
                 "title": "Execute with Precedent Cells",
-                "enablement": "isWorkspaceTrusted && !jupyter.webExtension",
+                "enablement": "isWorkspaceTrusted && !deepnote.webExtension",
                 "category": "Jupyter"
             },
             {
-                "command": "jupyter.runDependentCells",
+                "command": "deepnote.runDependentCells",
                 "title": "Execute with Dependent Cells",
-                "enablement": "isWorkspaceTrusted && !jupyter.webExtension",
+                "enablement": "isWorkspaceTrusted && !deepnote.webExtension",
                 "category": "Jupyter"
             },
             {
-                "command": "jupyter.debugCellSymbols",
+                "command": "deepnote.debugCellSymbols",
                 "title": "Debug Cell Symbols",
                 "icon": "$(debug-alt-small)",
-                "enablement": "isWorkspaceTrusted && !jupyter.webExtension",
+                "enablement": "isWorkspaceTrusted && !deepnote.webExtension",
                 "category": "Jupyter"
             },
             {
-                "command": "jupyter.listPipPackages",
+                "command": "deepnote.listPipPackages",
                 "title": "List Pip Packages",
-                "enablement": "isWorkspaceTrusted && !jupyter.webExtension",
+                "enablement": "isWorkspaceTrusted && !deepnote.webExtension",
                 "category": "Jupyter"
             },
             {
-                "command": "jupyter.listVariables",
+                "command": "deepnote.listVariables",
                 "title": "List Variables",
-                "enablement": "isWorkspaceTrusted && !jupyter.webExtension",
+                "enablement": "isWorkspaceTrusted && !deepnote.webExtension",
                 "category": "Jupyter"
             }
         ],
         "submenus": [
             {
-                "id": "editor.interactiveWindow.context",
-                "label": "%jupyter.command.editor.interactiveWindow.context.label%"
+                "id": "deepnote.editor.interactiveWindow.context",
+                "label": "%deepnote.command.editor.interactiveWindow.context.label%"
+            },
+            {
+                "id": "deepnote.explorer.context",
+                "label": "Deepnote"
             }
         ],
         "menus": {
-            "editor/context": [
+            "view/title": [
                 {
-                    "submenu": "editor.interactiveWindow.context",
-                    "group": "Jupyter2"
+                    "command": "deepnote.newProject",
+                    "when": "view == deepnoteExplorer",
+                    "group": "navigation@1"
                 },
                 {
-                    "when": "editorFocus && editorLangId == python && jupyter.hascodecells && !notebookEditorFocused && isWorkspaceTrusted",
-                    "command": "jupyter.exportfileasnotebook",
-                    "group": "Jupyter3@2"
+                    "command": "deepnote.importNotebook",
+                    "when": "view == deepnoteExplorer",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "deepnote.refreshExplorer",
+                    "when": "view == deepnoteExplorer",
+                    "group": "navigation@3"
+                },
+                {
+                    "command": "deepnote.environments.create",
+                    "when": "view == deepnoteEnvironments",
+                    "group": "navigation@4"
+                },
+                {
+                    "command": "deepnote.environments.refresh",
+                    "when": "view == deepnoteEnvironments",
+                    "group": "navigation@5"
                 }
             ],
-            "editor.interactiveWindow.context": [
+            "editor/context": [
                 {
-                    "when": "editorFocus && editorLangId == python && jupyter.hascodecells && !notebookEditorFocused && isWorkspaceTrusted",
-                    "command": "jupyter.runallcells",
-                    "group": "Jupyter2"
+                    "submenu": "deepnote.editor.interactiveWindow.context",
+                    "group": "Deepnote2"
                 },
                 {
-                    "when": "editorFocus && editorLangId == python && jupyter.hascodecells && !notebookEditorFocused && isWorkspaceTrusted",
-                    "command": "jupyter.runcurrentcell",
-                    "group": "Jupyter2"
+                    "when": "editorFocus && editorLangId == python && deepnote.hascodecells && !notebookEditorFocused && isWorkspaceTrusted",
+                    "command": "deepnote.exportfileasnotebook",
+                    "group": "Deepnote3@2"
                 },
                 {
-                    "when": "editorFocus && editorLangId == python && jupyter.hascodecells && !notebookEditorFocused && isWorkspaceTrusted",
-                    "command": "jupyter.runcurrentcelladvance",
-                    "group": "Jupyter2"
+                    "when": "resourceExtname == .deepnote",
+                    "command": "deepnote.openInDeepnote",
+                    "group": "navigation"
+                }
+            ],
+            "deepnote.editor.interactiveWindow.context": [
+                {
+                    "when": "editorFocus && editorLangId == python && deepnote.hascodecells && !notebookEditorFocused && isWorkspaceTrusted",
+                    "command": "deepnote.runallcells",
+                    "group": "Deepnote2"
                 },
                 {
-                    "command": "jupyter.runFileInteractive",
-                    "group": "Jupyter2",
+                    "when": "editorFocus && editorLangId == python && deepnote.hascodecells && !notebookEditorFocused && isWorkspaceTrusted",
+                    "command": "deepnote.runcurrentcell",
+                    "group": "Deepnote2"
+                },
+                {
+                    "when": "editorFocus && editorLangId == python && deepnote.hascodecells && !notebookEditorFocused && isWorkspaceTrusted",
+                    "command": "deepnote.runcurrentcelladvance",
+                    "group": "Deepnote2"
+                },
+                {
+                    "command": "deepnote.runFileInteractive",
+                    "group": "Deepnote2",
                     "when": "editorFocus && editorLangId == python && !notebookEditorFocused && isWorkspaceTrusted"
                 },
                 {
-                    "command": "jupyter.runfromline",
-                    "group": "Jupyter2",
+                    "command": "deepnote.runfromline",
+                    "group": "Deepnote2",
                     "when": "editorFocus && editorLangId == python && !notebookEditorFocused && isWorkspaceTrusted"
                 },
                 {
-                    "command": "jupyter.runtoline",
-                    "group": "Jupyter2",
+                    "command": "deepnote.runtoline",
+                    "group": "Deepnote2",
                     "when": "editorFocus && editorLangId == python && !notebookEditorFocused && isWorkspaceTrusted"
                 },
                 {
-                    "command": "jupyter.execSelectionInteractive",
-                    "group": "Jupyter2",
+                    "command": "deepnote.execSelectionInteractive",
+                    "group": "Deepnote2",
                     "when": "editorFocus && editorLangId == python && !notebookEditorFocused && isWorkspaceTrusted"
+                }
+            ],
+            "deepnote.explorer.context": [
+                {
+                    "command": "deepnote.newProject"
+                },
+                {
+                    "command": "deepnote.importNotebook"
                 }
             ],
             "editor/title": [
                 {
-                    "command": "jupyter.restartkernel",
-                    "title": "%jupyter.command.jupyter.restartkernel.title%",
+                    "command": "deepnote.restartkernel",
+                    "title": "%deepnote.command.deepnote.restartkernel.title%",
                     "group": "navigation@1",
-                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && notebookType == 'jupyter-notebook' && isWorkspaceTrusted && jupyter.notebookeditor.canrestartNotebookkernel && config.notebook.globalToolbar != true"
+                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && notebookType == 'jupyter-notebook' && isWorkspaceTrusted && deepnote.notebookeditor.canrestartNotebookkernel && config.notebook.globalToolbar != true"
                 },
                 {
-                    "command": "jupyter.openVariableView",
-                    "title": "%jupyter.command.jupyter.openVariableView.title%",
+                    "command": "deepnote.openVariableView",
+                    "title": "%deepnote.command.deepnote.openVariableView.title%",
                     "group": "navigation@2",
-                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && notebookType == 'jupyter-notebook' && isWorkspaceTrusted && config.notebook.globalToolbar != true && jupyter.ispythonnotebook"
+                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && notebookType == 'jupyter-notebook' && isWorkspaceTrusted && config.notebook.globalToolbar != true && deepnote.ispythonnotebook"
                 },
                 {
-                    "command": "jupyter.openOutlineView",
-                    "title": "%jupyter.command.jupyter.openOutlineView.title%",
+                    "command": "deepnote.openOutlineView",
+                    "title": "%deepnote.command.deepnote.openOutlineView.title%",
                     "group": "navigation@3",
-                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && notebookType == 'jupyter-notebook' && config.jupyter.showOutlineButtonInNotebookToolbar && config.notebook.globalToolbar != true"
+                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && notebookType == 'jupyter-notebook' && config.deepnote.showOutlineButtonInNotebookToolbar && config.notebook.globalToolbar != true"
                 },
                 {
-                    "command": "jupyter.notebookeditor.export",
+                    "command": "deepnote.notebookeditor.export",
                     "title": "%DataScience.notebookExportAs%",
                     "group": "navigation@4",
                     "when": "notebookType == 'jupyter-notebook' && isWorkspaceTrusted && config.notebook.globalToolbar != true"
                 },
                 {
-                    "command": "jupyter.continueEditSessionInCodespace",
+                    "command": "deepnote.continueEditSessionInCodespace",
                     "group": "navigation@5",
-                    "when": "notebookType == 'jupyter-notebook' && jupyter.kernelSource == 'github-codespaces' && config.notebook.globalToolbar != true"
+                    "when": "notebookType == 'jupyter-notebook' && deepnote.kernelSource == 'github-codespaces' && config.notebook.globalToolbar != true"
                 }
             ],
             "notebook/toolbar": [
                 {
-                    "command": "jupyter.restartkernel",
-                    "group": "navigation/execute@5",
-                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && notebookType == 'jupyter-notebook' && notebookType != 'deepnote' && isWorkspaceTrusted && jupyter.kernel.isjupyter"
+                    "command": "deepnote.openInDeepnote",
+                    "group": "navigation@-1",
+                    "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "jupyter.openVariableView",
+                    "command": "deepnote.environments.selectForNotebook",
+                    "group": "navigation@0",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.manageIntegrations",
                     "group": "navigation@1",
-                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && notebookType == 'jupyter-notebook' && notebookType != 'deepnote' && isWorkspaceTrusted && jupyter.ispythonnotebook && jupyter.kernel.isjupyter"
+                    "when": "notebookType == 'deepnote' && isWorkspaceTrusted"
                 },
                 {
-                    "command": "jupyter.openOutlineView",
+                    "command": "deepnote.newNotebook",
                     "group": "navigation@2",
-                    "when": "notebookType == 'jupyter-notebook' && notebookType != 'deepnote' && config.jupyter.showOutlineButtonInNotebookToolbar"
+                    "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "jupyter.continueEditSessionInCodespace",
+                    "command": "deepnote.addSqlBlock",
                     "group": "navigation@3",
-                    "when": "notebookType == 'jupyter-notebook' && notebookType != 'deepnote' && jupyter.kernelSource == 'github-codespaces'"
+                    "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "jupyter.notebookeditor.export",
-                    "group": "Jupyter",
+                    "command": "deepnote.addChartBlock",
+                    "group": "navigation@4",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addBigNumberChartBlock",
+                    "group": "navigation@5",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addInputTextBlock",
+                    "group": "navigation@6",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addInputTextareaBlock",
+                    "group": "navigation@7",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addInputSelectBlock",
+                    "group": "navigation@8",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addInputSliderBlock",
+                    "group": "navigation@9",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addInputCheckboxBlock",
+                    "group": "navigation@10",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addInputDateBlock",
+                    "group": "navigation@11",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addInputDateRangeBlock",
+                    "group": "navigation@12",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.restartkernel",
+                    "group": "navigation/execute@5",
+                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && notebookType == 'jupyter-notebook' && notebookType != 'deepnote' && isWorkspaceTrusted && deepnote.kernel.isjupyter"
+                },
+                {
+                    "command": "deepnote.openVariableView",
+                    "group": "navigation@1",
+                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && notebookType == 'jupyter-notebook' && notebookType != 'deepnote' && isWorkspaceTrusted && deepnote.ispythonnotebook && deepnote.kernel.isjupyter"
+                },
+                {
+                    "command": "deepnote.openOutlineView",
+                    "group": "navigation@2",
+                    "when": "notebookType == 'jupyter-notebook' && notebookType != 'deepnote' && config.deepnote.showOutlineButtonInNotebookToolbar"
+                },
+                {
+                    "command": "deepnote.continueEditSessionInCodespace",
+                    "group": "navigation@3",
+                    "when": "notebookType == 'jupyter-notebook' && notebookType != 'deepnote' && deepnote.kernelSource == 'github-codespaces'"
+                },
+                {
+                    "command": "deepnote.notebookeditor.export",
+                    "group": "Deepnote",
                     "when": "notebookType == 'jupyter-notebook' && notebookType != 'deepnote' && isWorkspaceTrusted"
                 },
                 {
-                    "command": "jupyter.replayPylanceLogStep",
+                    "command": "deepnote.replayPylanceLogStep",
                     "group": "navigation@1",
-                    "when": "notebookType == 'jupyter-notebook' && notebookType != 'deepnote' && isWorkspaceTrusted && jupyter.replayLogLoaded"
+                    "when": "notebookType == 'jupyter-notebook' && notebookType != 'deepnote' && isWorkspaceTrusted && deepnote.replayLogLoaded"
                 }
             ],
             "notebook/cell/title": [
                 {
-                    "command": "jupyter.runByLine",
-                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && notebookType == jupyter-notebook && notebookType != deepnote && jupyter.ispythonnotebook && notebookCellType == code && isWorkspaceTrusted && resource not in jupyter.notebookeditor.runByLineDocuments || !notebookKernel && notebookType == jupyter-notebook && notebookType != deepnote && jupyter.ispythonnotebook && notebookCellType == code && isWorkspaceTrusted",
+                    "command": "deepnote.runByLine",
+                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && notebookType == jupyter-notebook && notebookType != deepnote && deepnote.ispythonnotebook && notebookCellType == code && isWorkspaceTrusted && resource not in deepnote.notebookeditor.runByLineDocuments || !notebookKernel && notebookType == jupyter-notebook && notebookType != deepnote && deepnote.ispythonnotebook && notebookCellType == code && isWorkspaceTrusted",
                     "group": "inline/cell@0"
                 },
                 {
-                    "command": "jupyter.runByLineNext",
-                    "when": "notebookCellResource in jupyter.notebookeditor.runByLineCells && notebookType != deepnote",
+                    "command": "deepnote.runByLineNext",
+                    "when": "notebookCellResource in deepnote.notebookeditor.runByLineCells && notebookType != deepnote",
                     "group": "inline/cell@0"
                 },
                 {
-                    "command": "jupyter.runByLineStop",
-                    "when": "notebookCellResource in jupyter.notebookeditor.runByLineCells && notebookType != deepnote && notebookCellToolbarLocation == left",
+                    "command": "deepnote.runByLineStop",
+                    "when": "notebookCellResource in deepnote.notebookeditor.runByLineCells && notebookType != deepnote && notebookCellToolbarLocation == left",
                     "group": "inline/cell@1"
                 },
                 {
-                    "command": "jupyter.runByLineStop",
-                    "when": "notebookCellResource in jupyter.notebookeditor.runByLineCells && notebookType != deepnote && notebookCellToolbarLocation == right",
+                    "command": "deepnote.runByLineStop",
+                    "when": "notebookCellResource in deepnote.notebookeditor.runByLineCells && notebookType != deepnote && notebookCellToolbarLocation == right",
                     "group": "inline/cell@0"
                 },
                 {
-                    "command": "jupyter.selectPrecedentCells",
-                    "when": "notebookType == 'jupyter-notebook' && notebookType != 'deepnote' && isWorkspaceTrusted && config.jupyter.executionAnalysis.enabled",
+                    "command": "deepnote.selectPrecedentCells",
+                    "when": "notebookType == 'jupyter-notebook' && notebookType != 'deepnote' && isWorkspaceTrusted && config.deepnote.executionAnalysis.enabled",
                     "group": "executionAnalysis@0"
                 },
                 {
-                    "command": "jupyter.selectDependentCells",
-                    "when": "notebookType == 'jupyter-notebook' && notebookType != 'deepnote' && isWorkspaceTrusted && config.jupyter.executionAnalysis.enabled",
+                    "command": "deepnote.selectDependentCells",
+                    "when": "notebookType == 'jupyter-notebook' && notebookType != 'deepnote' && isWorkspaceTrusted && config.deepnote.executionAnalysis.enabled",
                     "group": "executionAnalysis@1"
                 }
             ],
             "notebook/cell/execute": [
                 {
-                    "command": "jupyter.runAndDebugCell",
-                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && jupyter.ispythonnotebook && notebookType != deepnote && notebookCellType == code && isWorkspaceTrusted && resource not in jupyter.notebookeditor.debugDocuments || !notebookKernel && jupyter.ispythonnotebook && notebookType != deepnote && notebookCellType == code && isWorkspaceTrusted",
+                    "command": "deepnote.runAndDebugCell",
+                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && deepnote.ispythonnotebook && notebookType != deepnote && notebookCellType == code && isWorkspaceTrusted && resource not in deepnote.notebookeditor.debugDocuments || !notebookKernel && deepnote.ispythonnotebook && notebookType != deepnote && notebookCellType == code && isWorkspaceTrusted",
                     "group": "jupyterCellExecute@0"
                 },
                 {
-                    "command": "jupyter.runPrecedentCells",
-                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && jupyter.ispythonnotebook && notebookType != deepnote && notebookCellType == code && isWorkspaceTrusted && config.jupyter.executionAnalysis.enabled",
+                    "command": "deepnote.runPrecedentCells",
+                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && deepnote.ispythonnotebook && notebookType != deepnote && notebookCellType == code && isWorkspaceTrusted && config.deepnote.executionAnalysis.enabled",
                     "group": "jupyterCellExecute@1"
                 },
                 {
-                    "command": "jupyter.runDependentCells",
-                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && jupyter.ispythonnotebook && notebookType != deepnote && notebookCellType == code && isWorkspaceTrusted && config.jupyter.executionAnalysis.enabled",
+                    "command": "deepnote.runDependentCells",
+                    "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && deepnote.ispythonnotebook && notebookType != deepnote && notebookCellType == code && isWorkspaceTrusted && config.deepnote.executionAnalysis.enabled",
                     "group": "jupyterCellExecute@2"
                 }
             ],
             "interactive/toolbar": [
                 {
-                    "command": "jupyter.interactive.clearAllCells",
+                    "command": "deepnote.interactive.clearAllCells",
                     "group": "navigation@0",
                     "when": "isWorkspaceTrusted && notebookKernel =~ /^ms-toolsai.jupyter\\// || isWorkspaceTrusted && !notebookKernel"
                 },
                 {
-                    "command": "jupyter.restartkernel",
+                    "command": "deepnote.restartkernel",
                     "group": "navigation@1",
                     "when": "isWorkspaceTrusted && notebookKernel =~ /^ms-toolsai.jupyter\\// || isWorkspaceTrusted && !notebookKernel"
                 },
                 {
-                    "command": "jupyter.openVariableView",
+                    "command": "deepnote.openVariableView",
                     "group": "navigation@3",
                     "when": "isWorkspaceTrusted && notebookKernel =~ /^ms-toolsai.jupyter\\// || isWorkspaceTrusted && !notebookKernel"
                 },
                 {
-                    "command": "jupyter.interactive.exportasnotebook",
+                    "command": "deepnote.interactive.exportasnotebook",
                     "group": "navigation@4",
                     "when": "isWorkspaceTrusted && notebookKernel =~ /^ms-toolsai.jupyter\\// || isWorkspaceTrusted && !notebookKernel"
                 },
                 {
-                    "command": "jupyter.interactive.exportas",
+                    "command": "deepnote.interactive.exportas",
                     "group": "navigation@5",
                     "when": "isWorkspaceTrusted && notebookKernel =~ /^ms-toolsai.jupyter\\// || isWorkspaceTrusted && !notebookKernel"
                 },
                 {
-                    "command": "jupyter.expandallcells",
+                    "command": "deepnote.expandallcells",
                     "group": "navigation@6",
                     "when": "isWorkspaceTrusted && notebookKernel =~ /^ms-toolsai.jupyter\\// || isWorkspaceTrusted && !notebookKernel"
                 },
                 {
-                    "command": "jupyter.collapseallcells",
+                    "command": "deepnote.collapseallcells",
                     "group": "navigation@7",
                     "when": "isWorkspaceTrusted && notebookKernel =~ /^ms-toolsai.jupyter\\// || isWorkspaceTrusted && !notebookKernel"
                 }
             ],
             "interactive/cell/title": [
                 {
-                    "command": "jupyter.interactive.copyCell",
+                    "command": "deepnote.interactive.copyCell",
                     "group": "inline@0",
                     "when": "isWorkspaceTrusted && notebookKernel =~ /^ms-toolsai.jupyter\\// || isWorkspaceTrusted && !notebookKernel"
                 },
                 {
-                    "command": "jupyter.interactive.goToCode",
+                    "command": "deepnote.interactive.goToCode",
                     "group": "inline@1",
                     "when": "isWorkspaceTrusted && notebookKernel =~ /^ms-toolsai.jupyter\\// || isWorkspaceTrusted && !notebookKernel"
                 }
             ],
             "explorer/context": [
                 {
+                    "submenu": "deepnote.explorer.context",
+                    "when": "isWorkspaceTrusted",
+                    "group": "navigation@10"
+                },
+                {
                     "when": "resourceLangId == python && !notebookEditorFocused && isWorkspaceTrusted",
-                    "command": "jupyter.runFileInteractive",
-                    "group": "Jupyter2"
+                    "command": "deepnote.runFileInteractive",
+                    "group": "Deepnote2"
                 },
                 {
                     "when": "resourceExtname == .ipynb && isWorkspaceTrusted",
-                    "command": "jupyter.importnotebookfile",
-                    "group": "Jupyter"
+                    "command": "deepnote.importnotebookfile",
+                    "group": "Deepnote"
                 }
             ],
             "commandPalette": [
                 {
-                    "command": "jupyter.replayPylanceLog",
-                    "title": "%jupyter.commandPalette.jupyter.replayPylanceLog.title%",
-                    "when": "jupyter.development && isWorkspaceTrusted"
+                    "command": "deepnote.replayPylanceLog",
+                    "title": "%deepnote.commandPalette.deepnote.replayPylanceLog.title%",
+                    "when": "deepnote.development && isWorkspaceTrusted"
                 },
                 {
-                    "command": "jupyter.manageAccessToKernels",
-                    "title": "%jupyter.command.manageAccessToKernels%"
+                    "command": "deepnote.manageAccessToKernels",
+                    "title": "%deepnote.command.manageAccessToKernels%"
                 },
                 {
-                    "command": "jupyter.interactive.copyCell",
+                    "command": "deepnote.interactive.copyCell",
                     "when": "false"
                 },
                 {
-                    "command": "jupyter.exportAsPythonScript",
-                    "title": "%jupyter.command.jupyter.exportAsPythonScript.title%",
+                    "command": "deepnote.exportAsPythonScript",
+                    "title": "%deepnote.command.deepnote.exportAsPythonScript.title%",
                     "category": "Jupyter",
-                    "when": "jupyter.isnativeactive && isWorkspaceTrusted && jupyter.ispythonnotebook && isWorkspaceTrusted"
+                    "when": "deepnote.isnativeactive && isWorkspaceTrusted && deepnote.ispythonnotebook && isWorkspaceTrusted"
                 },
                 {
-                    "command": "jupyter.refreshDataViewer",
+                    "command": "deepnote.refreshDataViewer",
                     "category": "Jupyter",
                     "when": "isWorkspaceTrusted"
                 },
                 {
-                    "command": "jupyter.exportToHTML",
-                    "title": "%jupyter.command.jupyter.exportToHTML.title%",
+                    "command": "deepnote.exportToHTML",
+                    "title": "%deepnote.command.deepnote.exportToHTML.title%",
                     "category": "Jupyter",
-                    "when": "jupyter.isnativeactive && isWorkspaceTrusted"
+                    "when": "deepnote.isnativeactive && isWorkspaceTrusted"
                 },
                 {
-                    "command": "jupyter.exportToPDF",
-                    "title": "%jupyter.command.jupyter.exportToPDF.title%",
+                    "command": "deepnote.exportToPDF",
+                    "title": "%deepnote.command.deepnote.exportToPDF.title%",
                     "category": "Jupyter",
-                    "when": "jupyter.isnativeactive && isWorkspaceTrusted"
+                    "when": "deepnote.isnativeactive && isWorkspaceTrusted"
                 },
                 {
-                    "command": "jupyter.insertCellBelowPosition",
-                    "title": "%jupyter.command.jupyter.insertCellBelowPosition.title%",
+                    "command": "deepnote.insertCellBelowPosition",
+                    "title": "%deepnote.command.deepnote.insertCellBelowPosition.title%",
                     "category": "Jupyter",
-                    "when": "jupyter.hascodecells && !notebookEditorFocused"
+                    "when": "deepnote.hascodecells && !notebookEditorFocused"
                 },
                 {
-                    "command": "jupyter.insertCellBelow",
-                    "title": "%jupyter.command.jupyter.insertCellBelow.title%",
+                    "command": "deepnote.insertCellBelow",
+                    "title": "%deepnote.command.deepnote.insertCellBelow.title%",
                     "category": "Jupyter",
-                    "when": "jupyter.hascodecells && !notebookEditorFocused"
+                    "when": "deepnote.hascodecells && !notebookEditorFocused"
                 },
                 {
-                    "command": "jupyter.insertCellAbove",
-                    "title": "%jupyter.command.jupyter.insertCellAbove.title%",
+                    "command": "deepnote.insertCellAbove",
+                    "title": "%deepnote.command.deepnote.insertCellAbove.title%",
                     "category": "Jupyter",
-                    "when": "jupyter.hascodecells && !notebookEditorFocused"
+                    "when": "deepnote.hascodecells && !notebookEditorFocused"
                 },
                 {
-                    "command": "jupyter.deleteCells",
-                    "title": "%jupyter.command.jupyter.deleteCells.title%",
+                    "command": "deepnote.deleteCells",
+                    "title": "%deepnote.command.deepnote.deleteCells.title%",
                     "category": "Jupyter",
-                    "when": "jupyter.hascodecells && !notebookEditorFocused"
+                    "when": "deepnote.hascodecells && !notebookEditorFocused"
                 },
                 {
-                    "command": "jupyter.selectCell",
-                    "title": "%jupyter.command.jupyter.selectCell.title%",
+                    "command": "deepnote.selectCell",
+                    "title": "%deepnote.command.deepnote.selectCell.title%",
                     "category": "Jupyter",
-                    "when": "jupyter.hascodecells && !notebookEditorFocused"
+                    "when": "deepnote.hascodecells && !notebookEditorFocused"
                 },
                 {
-                    "command": "jupyter.selectCellContents",
-                    "title": "%jupyter.command.jupyter.selectCellContents.title%",
+                    "command": "deepnote.selectCellContents",
+                    "title": "%deepnote.command.deepnote.selectCellContents.title%",
                     "category": "Jupyter",
-                    "when": "jupyter.hascodecells && !notebookEditorFocused"
+                    "when": "deepnote.hascodecells && !notebookEditorFocused"
                 },
                 {
-                    "command": "jupyter.extendSelectionByCellAbove",
-                    "title": "%jupyter.command.jupyter.extendSelectionByCellAbove.title%",
+                    "command": "deepnote.extendSelectionByCellAbove",
+                    "title": "%deepnote.command.deepnote.extendSelectionByCellAbove.title%",
                     "category": "Jupyter",
-                    "when": "jupyter.hascodecells && !notebookEditorFocused"
+                    "when": "deepnote.hascodecells && !notebookEditorFocused"
                 },
                 {
-                    "command": "jupyter.extendSelectionByCellBelow",
-                    "title": "%jupyter.command.jupyter.extendSelectionByCellBelow.title%",
+                    "command": "deepnote.extendSelectionByCellBelow",
+                    "title": "%deepnote.command.deepnote.extendSelectionByCellBelow.title%",
                     "category": "Jupyter",
-                    "when": "jupyter.hascodecells && !notebookEditorFocused"
+                    "when": "deepnote.hascodecells && !notebookEditorFocused"
                 },
                 {
-                    "command": "jupyter.moveCellsUp",
-                    "title": "%jupyter.command.jupyter.moveCellsUp.title%",
+                    "command": "deepnote.moveCellsUp",
+                    "title": "%deepnote.command.deepnote.moveCellsUp.title%",
                     "category": "Jupyter",
-                    "when": "jupyter.hascodecells && !notebookEditorFocused"
+                    "when": "deepnote.hascodecells && !notebookEditorFocused"
                 },
                 {
-                    "command": "jupyter.moveCellsDown",
-                    "title": "%jupyter.command.jupyter.moveCellsDown.title%",
+                    "command": "deepnote.moveCellsDown",
+                    "title": "%deepnote.command.deepnote.moveCellsDown.title%",
                     "category": "Jupyter",
-                    "when": "jupyter.hascodecells && !notebookEditorFocused"
+                    "when": "deepnote.hascodecells && !notebookEditorFocused"
                 },
                 {
-                    "command": "jupyter.changeCellToMarkdown",
-                    "title": "%jupyter.command.jupyter.changeCellToMarkdown.title%",
+                    "command": "deepnote.changeCellToMarkdown",
+                    "title": "%deepnote.command.deepnote.changeCellToMarkdown.title%",
                     "category": "Jupyter",
-                    "when": "jupyter.hascodecells && !notebookEditorFocused"
+                    "when": "deepnote.hascodecells && !notebookEditorFocused"
                 },
                 {
-                    "command": "jupyter.changeCellToCode",
-                    "title": "%jupyter.command.jupyter.changeCellToCode.title%",
+                    "command": "deepnote.changeCellToCode",
+                    "title": "%deepnote.command.deepnote.changeCellToCode.title%",
                     "category": "Jupyter",
-                    "when": "jupyter.hascodecells && !notebookEditorFocused"
+                    "when": "deepnote.hascodecells && !notebookEditorFocused"
                 },
                 {
-                    "command": "jupyter.gotoNextCellInFile",
-                    "title": "%jupyter.command.jupyter.gotoNextCellInFile.title%",
+                    "command": "deepnote.gotoNextCellInFile",
+                    "title": "%deepnote.command.deepnote.gotoNextCellInFile.title%",
                     "category": "Jupyter",
-                    "when": "jupyter.hascodecells && !notebookEditorFocused"
+                    "when": "deepnote.hascodecells && !notebookEditorFocused"
                 },
                 {
-                    "command": "jupyter.gotoPrevCellInFile",
-                    "title": "%jupyter.command.jupyter.gotoPrevCellInFile.title%",
+                    "command": "deepnote.gotoPrevCellInFile",
+                    "title": "%deepnote.command.deepnote.gotoPrevCellInFile.title%",
                     "category": "Jupyter",
-                    "when": "jupyter.hascodecells && !notebookEditorFocused"
+                    "when": "deepnote.hascodecells && !notebookEditorFocused"
                 },
                 {
-                    "command": "jupyter.runcurrentcell",
-                    "title": "%jupyter.command.jupyter.runcurrentcell.title%",
+                    "command": "deepnote.runcurrentcell",
+                    "title": "%deepnote.command.deepnote.runcurrentcell.title%",
                     "category": "Jupyter",
-                    "when": "jupyter.hascodecells && jupyter.ispythonornativeactive && !jupyter.havenativecells && isWorkspaceTrusted"
+                    "when": "deepnote.hascodecells && deepnote.ispythonornativeactive && !deepnote.havenativecells && isWorkspaceTrusted"
                 },
                 {
-                    "command": "jupyter.runcurrentcelladvance",
-                    "title": "%jupyter.command.jupyter.runcurrentcelladvance.title%",
+                    "command": "deepnote.runcurrentcelladvance",
+                    "title": "%deepnote.command.deepnote.runcurrentcelladvance.title%",
                     "category": "Jupyter",
-                    "when": "jupyter.hascodecells && jupyter.ispythonornativeactive && !jupyter.havenativecells && isWorkspaceTrusted"
+                    "when": "deepnote.hascodecells && deepnote.ispythonornativeactive && !deepnote.havenativecells && isWorkspaceTrusted"
                 },
                 {
-                    "command": "jupyter.runcurrentcellandallbelow.palette",
-                    "title": "%jupyter.command.jupyter.runcurrentcellandallbelow.palette.title%",
+                    "command": "deepnote.runcurrentcellandallbelow.palette",
+                    "title": "%deepnote.command.deepnote.runcurrentcellandallbelow.palette.title%",
                     "category": "Jupyter",
-                    "when": "jupyter.hascodecells && jupyter.ispythonornativeactive && !jupyter.havenativecells && isWorkspaceTrusted"
+                    "when": "deepnote.hascodecells && deepnote.ispythonornativeactive && !deepnote.havenativecells && isWorkspaceTrusted"
                 },
                 {
-                    "command": "jupyter.runallcellsabove.palette",
-                    "title": "%jupyter.command.jupyter.runallcellsabove.palette.title%",
+                    "command": "deepnote.runallcellsabove.palette",
+                    "title": "%deepnote.command.deepnote.runallcellsabove.palette.title%",
                     "category": "Jupyter",
-                    "when": "jupyter.hascodecells && jupyter.ispythonornativeactive && !jupyter.havenativecells && isWorkspaceTrusted"
+                    "when": "deepnote.hascodecells && deepnote.ispythonornativeactive && !deepnote.havenativecells && isWorkspaceTrusted"
                 },
                 {
-                    "command": "jupyter.debugcurrentcell.palette",
-                    "title": "%jupyter.command.jupyter.debugcurrentcell.palette.title%",
+                    "command": "deepnote.debugcurrentcell.palette",
+                    "title": "%deepnote.command.deepnote.debugcurrentcell.palette.title%",
                     "category": "Jupyter",
-                    "when": "editorLangId == python && jupyter.hascodecells && isWorkspaceTrusted"
+                    "when": "editorLangId == python && deepnote.hascodecells && isWorkspaceTrusted"
                 },
                 {
-                    "command": "jupyter.createnewinteractive",
-                    "title": "%jupyter.command.jupyter.createnewinteractive.title%",
+                    "command": "deepnote.createnewinteractive",
+                    "title": "%deepnote.command.deepnote.createnewinteractive.title%",
                     "category": "Jupyter",
                     "when": "isWorkspaceTrusted"
                 },
                 {
-                    "command": "jupyter.runallcells",
-                    "title": "%jupyter.command.jupyter.runallcells.title%",
+                    "command": "deepnote.runallcells",
+                    "title": "%deepnote.command.deepnote.runallcells.title%",
                     "category": "Jupyter",
-                    "when": "jupyter.hascodecells && jupyter.ispythonornativeactive && isWorkspaceTrusted"
+                    "when": "deepnote.hascodecells && deepnote.ispythonornativeactive && isWorkspaceTrusted"
                 },
                 {
-                    "command": "jupyter.scrolltocell",
-                    "title": "%jupyter.command.jupyter.scrolltocell.title%",
-                    "category": "Jupyter",
-                    "when": "false"
-                },
-                {
-                    "command": "jupyter.debugcell",
-                    "title": "%jupyter.command.jupyter.debugcell.title%",
-                    "category": "Jupyter",
-                    "when": "config.noExists"
-                },
-                {
-                    "command": "jupyter.runcell",
-                    "title": "%jupyter.command.jupyter.runcell.title%",
-                    "category": "Jupyter",
-                    "when": "config.noExists"
-                },
-                {
-                    "command": "jupyter.runFileInteractive",
-                    "title": "%jupyter.command.jupyter.runFileInteractive.title%",
-                    "category": "Jupyter",
-                    "when": "editorLangId == python && !notebookEditorFocused && isWorkspaceTrusted"
-                },
-                {
-                    "command": "jupyter.debugFileInteractive",
-                    "title": "%jupyter.command.jupyter.debugFileInteractive.title%",
-                    "category": "Jupyter",
-                    "when": "editorLangId == python && !notebookEditorFocused && isWorkspaceTrusted"
-                },
-                {
-                    "command": "jupyter.exportfileasnotebook",
-                    "title": "%jupyter.command.jupyter.exportfileasnotebook.title%",
-                    "category": "Jupyter",
-                    "when": "jupyter.ispythonorinteractiveeactive && !notebookEditorFocused && isWorkspaceTrusted"
-                },
-                {
-                    "command": "jupyter.restartkernel",
-                    "title": "%jupyter.command.jupyter.restartkernel.title%",
-                    "category": "Jupyter",
-                    "when": "(jupyter.ispythonorinteractiveeactive || jupyter.isnativeactive) && isWorkspaceTrusted"
-                },
-                {
-                    "command": "jupyter.notebookeditor.removeallcells",
-                    "title": "%jupyter.command.jupyter.notebookeditor.removeallcells.title%",
-                    "category": "Notebook",
-                    "when": "jupyter.havenativecells && jupyter.isnativeactive && isWorkspaceTrusted"
-                },
-                {
-                    "command": "jupyter.notebookeditor.addcellbelow",
-                    "title": "%jupyter.command.jupyter.notebookeditor.addcellbelow.title%",
-                    "category": "Notebook",
-                    "when": "jupyter.isnativeactive && isWorkspaceTrusted"
-                },
-                {
-                    "command": "jupyter.expandallcells",
-                    "title": "%jupyter.command.jupyter.expandallcells.title%",
-                    "shortTitle": "%jupyter.command.jupyter.expandallcells.shorttitle%",
-                    "category": "Jupyter",
-                    "when": "jupyter.isinteractiveactive"
-                },
-                {
-                    "command": "jupyter.collapseallcells",
-                    "title": "%jupyter.command.jupyter.collapseallcells.title%",
-                    "shortTitle": "%jupyter.command.jupyter.collapseallcells.shorttitle%",
-                    "category": "Jupyter",
-                    "when": "jupyter.isinteractiveactive"
-                },
-                {
-                    "command": "jupyter.runcellandallbelow",
-                    "category": "Jupyter",
-                    "when": "config.noExists"
-                },
-                {
-                    "command": "jupyter.runallcellsabove",
-                    "category": "Jupyter",
-                    "when": "config.noExists"
-                },
-                {
-                    "command": "jupyter.debugcontinue",
-                    "category": "Jupyter",
-                    "when": "config.noExists"
-                },
-                {
-                    "command": "jupyter.debugstop",
-                    "category": "Jupyter",
-                    "when": "config.noExists"
-                },
-                {
-                    "command": "jupyter.debugstepover",
-                    "category": "Jupyter",
-                    "when": "config.noExists"
-                },
-                {
-                    "command": "jupyter.debugcell",
-                    "category": "Jupyter",
-                    "when": "config.noExists"
-                },
-                {
-                    "command": "jupyter.addcellbelow",
-                    "title": "%jupyter.command.jupyter.addcellbelow.title%",
-                    "category": "Jupyter",
-                    "when": "jupyter.hascodecells && jupyter.ispythonornativeactive"
-                },
-                {
-                    "command": "jupyter.createnewnotebook",
+                    "command": "deepnote.scrolltocell",
+                    "title": "%deepnote.command.deepnote.scrolltocell.title%",
                     "category": "Jupyter",
                     "when": "false"
                 },
                 {
-                    "command": "jupyter.runtoline",
+                    "command": "deepnote.debugcell",
+                    "title": "%deepnote.command.deepnote.debugcell.title%",
                     "category": "Jupyter",
                     "when": "config.noExists"
                 },
                 {
-                    "command": "jupyter.runfromline",
+                    "command": "deepnote.runcell",
+                    "title": "%deepnote.command.deepnote.runcell.title%",
                     "category": "Jupyter",
                     "when": "config.noExists"
                 },
                 {
-                    "command": "jupyter.execSelectionInteractive",
+                    "command": "deepnote.runFileInteractive",
+                    "title": "%deepnote.command.deepnote.runFileInteractive.title%",
                     "category": "Jupyter",
                     "when": "editorLangId == python && !notebookEditorFocused && isWorkspaceTrusted"
                 },
                 {
-                    "command": "jupyter.latestExtension",
+                    "command": "deepnote.debugFileInteractive",
+                    "title": "%deepnote.command.deepnote.debugFileInteractive.title%",
+                    "category": "Jupyter",
+                    "when": "editorLangId == python && !notebookEditorFocused && isWorkspaceTrusted"
+                },
+                {
+                    "command": "deepnote.exportfileasnotebook",
+                    "title": "%deepnote.command.deepnote.exportfileasnotebook.title%",
+                    "category": "Jupyter",
+                    "when": "deepnote.ispythonorinteractiveactive && !notebookEditorFocused && isWorkspaceTrusted"
+                },
+                {
+                    "command": "deepnote.restartkernel",
+                    "title": "%deepnote.command.deepnote.restartkernel.title%",
+                    "category": "Jupyter",
+                    "when": "(deepnote.ispythonorinteractiveactive || deepnote.isnativeactive) && isWorkspaceTrusted"
+                },
+                {
+                    "command": "deepnote.notebookeditor.removeallcells",
+                    "title": "%deepnote.command.deepnote.notebookeditor.removeallcells.title%",
+                    "category": "Notebook",
+                    "when": "deepnote.havenativecells && deepnote.isnativeactive && isWorkspaceTrusted"
+                },
+                {
+                    "command": "deepnote.notebookeditor.addcellbelow",
+                    "title": "%deepnote.command.deepnote.notebookeditor.addcellbelow.title%",
+                    "category": "Notebook",
+                    "when": "deepnote.isnativeactive && isWorkspaceTrusted"
+                },
+                {
+                    "command": "deepnote.expandallcells",
+                    "title": "%deepnote.command.deepnote.expandallcells.title%",
+                    "shortTitle": "%deepnote.command.deepnote.expandallcells.shorttitle%",
+                    "category": "Jupyter",
+                    "when": "deepnote.isinteractiveactive"
+                },
+                {
+                    "command": "deepnote.collapseallcells",
+                    "title": "%deepnote.command.deepnote.collapseallcells.title%",
+                    "shortTitle": "%deepnote.command.deepnote.collapseallcells.shorttitle%",
+                    "category": "Jupyter",
+                    "when": "deepnote.isinteractiveactive"
+                },
+                {
+                    "command": "deepnote.runcellandallbelow",
+                    "category": "Jupyter",
+                    "when": "config.noExists"
+                },
+                {
+                    "command": "deepnote.runallcellsabove",
+                    "category": "Jupyter",
+                    "when": "config.noExists"
+                },
+                {
+                    "command": "deepnote.debugcontinue",
+                    "category": "Jupyter",
+                    "when": "config.noExists"
+                },
+                {
+                    "command": "deepnote.debugstop",
+                    "category": "Jupyter",
+                    "when": "config.noExists"
+                },
+                {
+                    "command": "deepnote.debugstepover",
+                    "category": "Jupyter",
+                    "when": "config.noExists"
+                },
+                {
+                    "command": "deepnote.debugcell",
+                    "category": "Jupyter",
+                    "when": "config.noExists"
+                },
+                {
+                    "command": "deepnote.addcellbelow",
+                    "title": "%deepnote.command.deepnote.addcellbelow.title%",
+                    "category": "Jupyter",
+                    "when": "deepnote.hascodecells && deepnote.ispythonornativeactive"
+                },
+                {
+                    "command": "deepnote.createnewnotebook",
+                    "category": "Jupyter",
+                    "when": "false"
+                },
+                {
+                    "command": "deepnote.runtoline",
+                    "category": "Jupyter",
+                    "when": "config.noExists"
+                },
+                {
+                    "command": "deepnote.runfromline",
+                    "category": "Jupyter",
+                    "when": "config.noExists"
+                },
+                {
+                    "command": "deepnote.execSelectionInteractive",
+                    "category": "Jupyter",
+                    "when": "editorLangId == python && !notebookEditorFocused && isWorkspaceTrusted"
+                },
+                {
+                    "command": "deepnote.latestExtension",
                     "title": "%DataScience.latestExtension%",
                     "category": "Jupyter",
                     "when": "false"
                 },
                 {
-                    "command": "jupyter.export",
+                    "command": "deepnote.export",
                     "title": "%DataScience.notebookExportAs%",
                     "category": "Jupyter",
                     "when": "false"
                 },
                 {
-                    "command": "jupyter.notebookeditor.export",
+                    "command": "deepnote.notebookeditor.export",
                     "title": "%DataScience.notebookExportAs%",
                     "category": "Notebook",
                     "when": "false"
                 },
                 {
-                    "command": "jupyter.showDataViewer",
+                    "command": "deepnote.showDataViewer",
                     "category": "Jupyter",
                     "when": "false"
                 },
                 {
-                    "command": "jupyter.openVariableView",
-                    "title": "%jupyter.command.jupyter.openVariableView.title%",
+                    "command": "deepnote.openVariableView",
+                    "title": "%deepnote.command.deepnote.openVariableView.title%",
                     "category": "Jupyter",
                     "when": "notebookType == jupyter-notebook && isWorkspaceTrusted"
                 },
                 {
-                    "command": "jupyter.openOutlineView",
-                    "title": "%jupyter.command.jupyter.openOutlineView.title%",
+                    "command": "deepnote.openOutlineView",
+                    "title": "%deepnote.command.deepnote.openOutlineView.title%",
                     "category": "Jupyter",
                     "when": "notebookType == jupyter-notebook && isWorkspaceTrusted"
                 },
                 {
-                    "command": "jupyter.interactive.goToCode",
+                    "command": "deepnote.interactive.goToCode",
                     "when": "false"
                 },
                 {
-                    "command": "jupyter.interactive.clearAllCells",
+                    "command": "deepnote.interactive.clearAllCells",
                     "when": "editorFocus && editorLangId == python || activeEditor == 'workbench.editor.interactive'"
                 },
                 {
-                    "command": "jupyter.clearSavedJupyterUris",
-                    "title": "%jupyter.command.jupyter.clearSavedJupyterUris.title%"
+                    "command": "deepnote.clearSavedJupyterUris",
+                    "title": "%deepnote.command.deepnote.clearSavedJupyterUris.title%"
                 },
                 {
-                    "command": "jupyter.selectPrecedentCells",
-                    "when": "config.jupyter.executionAnalysis.enabled"
+                    "command": "deepnote.selectPrecedentCells",
+                    "when": "config.deepnote.executionAnalysis.enabled"
                 },
                 {
-                    "command": "jupyter.selectDependentCells",
-                    "when": "config.jupyter.executionAnalysis.enabled"
+                    "command": "deepnote.selectDependentCells",
+                    "when": "config.deepnote.executionAnalysis.enabled"
                 },
                 {
-                    "command": "jupyter.runPrecedentCells",
-                    "when": "config.jupyter.executionAnalysis.enabled"
+                    "command": "deepnote.runPrecedentCells",
+                    "when": "config.deepnote.executionAnalysis.enabled"
                 },
                 {
-                    "command": "jupyter.runDependentCells",
-                    "when": "config.jupyter.executionAnalysis.enabled"
+                    "command": "deepnote.runDependentCells",
+                    "when": "config.deepnote.executionAnalysis.enabled"
                 },
                 {
-                    "command": "jupyter.debugCellSymbols",
-                    "when": "config.jupyter.executionAnalysis.enabled"
+                    "command": "deepnote.debugCellSymbols",
+                    "when": "config.deepnote.executionAnalysis.enabled"
                 },
                 {
-                    "command": "jupyter.listPipPackages",
+                    "command": "deepnote.listPipPackages",
                     "when": "false"
                 },
                 {
-                    "command": "jupyter.listVariables",
+                    "command": "deepnote.listVariables",
                     "when": "false"
                 }
             ],
             "debug/variables/context": [
                 {
-                    "command": "jupyter.showDataViewer",
+                    "command": "deepnote.showDataViewer",
                     "group": "1_view",
                     "when": "debugProtocolVariableMenuContext == 'viewableInDataViewer'"
                 }
             ],
             "editor/title/run": [
                 {
-                    "command": "jupyter.runFileInteractive",
+                    "command": "deepnote.runFileInteractive",
                     "group": "jupyter",
-                    "title": "%jupyter.command.jupyter.runFileInteractive.title%",
+                    "title": "%deepnote.command.deepnote.runFileInteractive.title%",
                     "when": "resourceLangId == python && !isInDiffEditor && isWorkspaceTrusted"
                 }
             ],
             "view/item/context": [
                 {
                     "command": "deepnote.revealInExplorer",
-                    "when": "view == deepnoteExplorer",
+                    "when": "view == deepnoteExplorer && viewItem != loading",
                     "group": "inline@2"
+                },
+                {
+                    "command": "deepnote.environments.managePackages",
+                    "when": "view == deepnoteEnvironments",
+                    "group": "2_manage@1"
+                },
+                {
+                    "command": "deepnote.environments.editName",
+                    "when": "view == deepnoteEnvironments",
+                    "group": "2_manage@2"
+                },
+                {
+                    "command": "deepnote.environments.delete",
+                    "when": "view == deepnoteEnvironments",
+                    "group": "4_danger@1"
+                },
+                {
+                    "command": "deepnote.addNotebookToProject",
+                    "when": "view == deepnoteExplorer && viewItem == projectFile",
+                    "group": "1_add@1"
+                },
+                {
+                    "command": "deepnote.renameProject",
+                    "when": "view == deepnoteExplorer && viewItem == projectFile",
+                    "group": "2_manage@1"
+                },
+                {
+                    "command": "deepnote.exportProject",
+                    "when": "view == deepnoteExplorer && viewItem == projectFile",
+                    "group": "2_manage@2"
+                },
+                {
+                    "command": "deepnote.deleteProject",
+                    "when": "view == deepnoteExplorer && viewItem == projectFile",
+                    "group": "3_delete@1"
+                },
+                {
+                    "command": "deepnote.renameNotebook",
+                    "when": "view == deepnoteExplorer && viewItem == notebook",
+                    "group": "1_edit@1"
+                },
+                {
+                    "command": "deepnote.duplicateNotebook",
+                    "when": "view == deepnoteExplorer && viewItem == notebook",
+                    "group": "1_edit@2"
+                },
+                {
+                    "command": "deepnote.exportNotebook",
+                    "when": "view == deepnoteExplorer && viewItem == notebook",
+                    "group": "2_export@1"
+                },
+                {
+                    "command": "deepnote.deleteNotebook",
+                    "when": "view == deepnoteExplorer && viewItem == notebook",
+                    "group": "3_delete@1"
                 }
             ]
         },
@@ -1238,19 +1623,31 @@
             "type": "object",
             "title": "Deepnote",
             "properties": {
-                "jupyter.experiments.enabled": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "%jupyter.configuration.jupyter.experiments.enabled.description%",
-                    "scope": "machine"
+                "deepnote.domain": {
+                    "type": "string",
+                    "default": "deepnote.com",
+                    "description": "Deepnote domain (e.g., 'deepnote.com' or 'ra-18838.deepnote-staging.com')",
+                    "scope": "application"
                 },
-                "jupyter.showVariableViewWhenDebugging": {
+                "deepnote.disableSSLVerification": {
                     "type": "boolean",
                     "default": false,
-                    "description": "%jupyter.configuration.jupyter.showVariableViewWhenDebugging.description%",
+                    "description": "Disable SSL certificate verification (for development only)",
+                    "scope": "application"
+                },
+                "deepnote.experiments.enabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "%deepnote.configuration.deepnote.experiments.enabled.description%",
+                    "scope": "machine"
+                },
+                "deepnote.showVariableViewWhenDebugging": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "%deepnote.configuration.deepnote.showVariableViewWhenDebugging.description%",
                     "scope": "resource"
                 },
-                "jupyter.logging.level": {
+                "deepnote.logging.level": {
                     "type": "string",
                     "default": "info",
                     "enum": [
@@ -1262,16 +1659,16 @@
                         "trace"
                     ],
                     "enumDescriptions": [
-                        "%jupyter.configuration.jupyter.logging.level.off%",
-                        "%jupyter.configuration.jupyter.logging.level.error%",
-                        "%jupyter.configuration.jupyter.logging.level.warn%",
-                        "%jupyter.configuration.jupyter.logging.level.info%",
-                        "%jupyter.configuration.jupyter.logging.level.debug%",
-                        "%jupyter.configuration.jupyter.logging.level.trace%"
+                        "%deepnote.configuration.deepnote.logging.level.off%",
+                        "%deepnote.configuration.deepnote.logging.level.error%",
+                        "%deepnote.configuration.deepnote.logging.level.warn%",
+                        "%deepnote.configuration.deepnote.logging.level.info%",
+                        "%deepnote.configuration.deepnote.logging.level.debug%",
+                        "%deepnote.configuration.deepnote.logging.level.trace%"
                     ],
-                    "description": "%jupyter.configuration.jupyter.logging.level.description%"
+                    "description": "%deepnote.configuration.deepnote.logging.level.description%"
                 },
-                "jupyter.experiments.optInto": {
+                "deepnote.experiments.optInto": {
                     "type": "array",
                     "default": [],
                     "items": {
@@ -1279,10 +1676,10 @@
                             "DoNotWaitForZmqPortsToBeUsed"
                         ]
                     },
-                    "markdownDescription": "%jupyter.configuration.jupyter.experiments.optInto.markdownDescription%",
+                    "markdownDescription": "%deepnote.configuration.deepnote.experiments.optInto.markdownDescription%",
                     "scope": "application"
                 },
-                "jupyter.experiments.optOutFrom": {
+                "deepnote.experiments.optOutFrom": {
                     "type": "array",
                     "default": [],
                     "items": {
@@ -1290,10 +1687,10 @@
                             "DoNotWaitForZmqPortsToBeUsed"
                         ]
                     },
-                    "markdownDescription": "%jupyter.configuration.jupyter.experiments.optOutFrom.markdownDescription%",
+                    "markdownDescription": "%deepnote.configuration.deepnote.experiments.optOutFrom.markdownDescription%",
                     "scope": "application"
                 },
-                "jupyter.widgetScriptSources": {
+                "deepnote.widgetScriptSources": {
                     "type": "array",
                     "default": [],
                     "items": {
@@ -1301,121 +1698,121 @@
                             {
                                 "type": "string",
                                 "const": "jsdelivr.com",
-                                "description": "%jupyter.configuration.jupyter.widgetScriptSources.items.enumDescriptions.0%"
+                                "description": "%deepnote.configuration.deepnote.widgetScriptSources.items.enumDescriptions.0%"
                             },
                             {
                                 "type": "string",
                                 "const": "unpkg.com",
-                                "description": "%jupyter.configuration.jupyter.widgetScriptSources.items.enumDescriptions.1%"
+                                "description": "%deepnote.configuration.deepnote.widgetScriptSources.items.enumDescriptions.1%"
                             },
                             {
                                 "type": "string",
-                                "description": "%jupyter.configuration.jupyter.widgetScriptSources.items.custom%",
+                                "description": "%deepnote.configuration.deepnote.widgetScriptSources.items.custom%",
                                 "format": "uri"
                             }
                         ]
                     },
                     "uniqueItems": true,
-                    "markdownDescription": "%jupyter.configuration.jupyter.widgetScriptSources.markdownDescription%",
+                    "markdownDescription": "%deepnote.configuration.deepnote.widgetScriptSources.markdownDescription%",
                     "scope": "resource"
                 },
-                "jupyter.askForLargeDataFrames": {
+                "deepnote.askForLargeDataFrames": {
                     "type": "boolean",
                     "default": true,
-                    "description": "%jupyter.configuration.jupyter.askForLargeDataFrames.description%",
+                    "description": "%deepnote.configuration.deepnote.askForLargeDataFrames.description%",
                     "scope": "application"
                 },
-                "jupyter.askForKernelRestart": {
+                "deepnote.askForKernelRestart": {
                     "type": "boolean",
                     "default": true,
-                    "description": "%jupyter.configuration.jupyter.askForKernelRestart.description%"
+                    "description": "%deepnote.configuration.deepnote.askForKernelRestart.description%"
                 },
-                "jupyter.exportWithOutputEnabled": {
+                "deepnote.exportWithOutputEnabled": {
                     "type": "boolean",
                     "default": false,
-                    "description": "%jupyter.configuration.jupyter.exportWithOutputEnabled.description%",
+                    "description": "%deepnote.configuration.deepnote.exportWithOutputEnabled.description%",
                     "scope": "resource"
                 },
-                "jupyter.jupyterLaunchTimeout": {
+                "deepnote.jupyterLaunchTimeout": {
                     "type": "number",
                     "default": 60000,
-                    "description": "%jupyter.configuration.jupyter.jupyterLaunchTimeout.description%"
+                    "description": "%deepnote.configuration.deepnote.jupyterLaunchTimeout.description%"
                 },
-                "jupyter.jupyterLaunchRetries": {
+                "deepnote.jupyterLaunchRetries": {
                     "type": "number",
                     "default": 3,
-                    "description": "%jupyter.configuration.jupyter.jupyterLaunchRetries.description%"
+                    "description": "%deepnote.configuration.deepnote.jupyterLaunchRetries.description%"
                 },
-                "jupyter.jupyterCommandLineArguments": {
+                "deepnote.jupyterCommandLineArguments": {
                     "type": "array",
                     "default": [],
-                    "description": "%jupyter.configuration.jupyter.jupyterCommandLineArguments.description%",
+                    "description": "%deepnote.configuration.deepnote.jupyterCommandLineArguments.description%",
                     "scope": "resource"
                 },
-                "jupyter.notebookFileRoot": {
+                "deepnote.notebookFileRoot": {
                     "type": "string",
                     "default": "${fileDirname}",
-                    "markdownDescription": "%jupyter.configuration.jupyter.notebookFileRoot.description%",
+                    "markdownDescription": "%deepnote.configuration.deepnote.notebookFileRoot.description%",
                     "scope": "resource"
                 },
-                "jupyter.useDefaultConfigForJupyter": {
+                "deepnote.useDefaultConfigForJupyter": {
                     "type": "boolean",
                     "default": true,
-                    "description": "%jupyter.configuration.jupyter.useDefaultConfigForJupyter.description%"
+                    "description": "%deepnote.configuration.deepnote.useDefaultConfigFordeepnote.description%"
                 },
-                "jupyter.jupyterInterruptTimeout": {
+                "deepnote.jupyterInterruptTimeout": {
                     "type": "number",
                     "default": 10000,
-                    "description": "%jupyter.configuration.jupyter.jupyterInterruptTimeout.description%"
+                    "description": "%deepnote.configuration.deepnote.jupyterInterruptTimeout.description%"
                 },
-                "jupyter.interactiveWindow.textEditor.executeSelection": {
+                "deepnote.interactiveWindow.textEditor.executeSelection": {
                     "type": "boolean",
                     "default": false,
-                    "description": "%jupyter.configuration.jupyter.sendSelectionToInteractiveWindow.description%",
+                    "description": "%deepnote.configuration.deepnote.sendSelectionToInteractiveWindow.description%",
                     "scope": "resource"
                 },
-                "jupyter.interactiveWindow.textEditor.normalizeSelection": {
+                "deepnote.interactiveWindow.textEditor.normalizeSelection": {
                     "type": "boolean",
                     "default": false,
-                    "description": "%jupyter.configuration.jupyter.normalizeSelectionForInteractiveWindow.description%",
+                    "description": "%deepnote.configuration.deepnote.normalizeSelectionForInteractiveWindow.description%",
                     "scope": "resource"
                 },
-                "jupyter.interactiveWindow.splitRunFileIntoCells": {
+                "deepnote.interactiveWindow.splitRunFileIntoCells": {
                     "type": "boolean",
                     "default": true,
-                    "description": "%jupyter.configuration.jupyter.splitRunFileIntoCells.description%",
+                    "description": "%deepnote.configuration.deepnote.splitRunFileIntoCells.description%",
                     "scope": "resource"
                 },
-                "jupyter.variableExplorerExclude": {
+                "deepnote.variableExplorerExclude": {
                     "type": "string",
                     "default": "module;function;builtin_function_or_method;ABCMeta;type;ModelMetaclass",
-                    "description": "%jupyter.configuration.jupyter.variableExplorerExclude.description%",
+                    "description": "%deepnote.configuration.deepnote.variableExplorerExclude.description%",
                     "scope": "resource"
                 },
-                "jupyter.interactiveWindow.cellMarker.codeRegex": {
+                "deepnote.interactiveWindow.cellMarker.codeRegex": {
                     "type": "string",
                     "default": "^(#\\s*%%|#\\s*\\<codecell\\>|#\\s*In\\[\\d*?\\]|#\\s*In\\[ \\])",
-                    "description": "%jupyter.configuration.jupyter.codeRegularExpression.description%",
+                    "description": "%deepnote.configuration.deepnote.codeRegularExpression.description%",
                     "scope": "resource"
                 },
-                "jupyter.interactiveWindow.cellMarker.default": {
+                "deepnote.interactiveWindow.cellMarker.default": {
                     "type": "string",
                     "default": "# %%",
-                    "description": "%jupyter.configuration.jupyter.defaultCellMarker.description%",
+                    "description": "%deepnote.configuration.deepnote.defaultCellMarker.description%",
                     "scope": "resource"
                 },
-                "jupyter.interactiveWindow.cellMarker.markdownRegex": {
+                "deepnote.interactiveWindow.cellMarker.markdownRegex": {
                     "type": "string",
                     "default": "^(#\\s*%%\\s*\\[markdown\\]|#\\s*\\<markdowncell\\>)",
-                    "description": "%jupyter.configuration.jupyter.markdownRegularExpression.description%",
+                    "description": "%deepnote.configuration.deepnote.markdownRegularExpression.description%",
                     "scope": "resource"
                 },
-                "jupyter.themeMatplotlibPlots": {
+                "deepnote.themeMatplotlibPlots": {
                     "type": "boolean",
                     "default": false,
-                    "description": "%jupyter.configuration.jupyter.themeMatplotlibPlots.description%"
+                    "description": "%deepnote.configuration.deepnote.themeMatplotlibPlots.description%"
                 },
-                "jupyter.interactiveWindow.cellMarker.decorateCells": {
+                "deepnote.interactiveWindow.cellMarker.decorateCells": {
                     "type": "string",
                     "enum": [
                         "currentCell",
@@ -1423,68 +1820,68 @@
                         "None"
                     ],
                     "default": "currentCell",
-                    "description": "%jupyter.configuration.jupyter.decorateCells.description%",
+                    "description": "%deepnote.configuration.deepnote.decorateCells.description%",
                     "scope": "resource"
                 },
-                "jupyter.interactiveWindow.codeLens.enable": {
+                "deepnote.interactiveWindow.codeLens.enable": {
                     "type": "boolean",
                     "default": true,
-                    "description": "%jupyter.configuration.jupyter.enableCellCodeLens.description%",
+                    "description": "%deepnote.configuration.deepnote.enableCellCodeLens.description%",
                     "scope": "resource"
                 },
-                "jupyter.interactiveWindow.textEditor.autoMoveToNextCell": {
+                "deepnote.interactiveWindow.textEditor.autoMoveToNextCell": {
                     "type": "boolean",
                     "default": true,
-                    "description": "%jupyter.configuration.jupyter.enableAutoMoveToNextCell.description%",
+                    "description": "%deepnote.configuration.deepnote.enableAutoMoveToNextCell.description%",
                     "scope": "resource"
                 },
-                "jupyter.allowUnauthorizedRemoteConnection": {
+                "deepnote.allowUnauthorizedRemoteConnection": {
                     "type": "boolean",
                     "default": false,
-                    "description": "%jupyter.configuration.jupyter.allowUnauthorizedRemoteConnection.description%"
+                    "description": "%deepnote.configuration.deepnote.allowUnauthorizedRemoteConnection.description%"
                 },
-                "jupyter.interactiveWindow.codeLens.commands": {
+                "deepnote.interactiveWindow.codeLens.commands": {
                     "type": "string",
-                    "default": "jupyter.runcell, jupyter.runallcellsabove, jupyter.debugcell",
-                    "description": "%jupyter.configuration.jupyter.codeLenses.description%",
+                    "default": "deepnote.runcell, deepnote.runallcellsabove, deepnote.debugcell",
+                    "description": "%deepnote.configuration.deepnote.codeLenses.description%",
                     "scope": "resource"
                 },
-                "jupyter.interactiveWindow.codeLens.debugCommands": {
+                "deepnote.interactiveWindow.codeLens.debugCommands": {
                     "type": "string",
-                    "default": "jupyter.debugcontinue, jupyter.debugstop, jupyter.debugstepover",
-                    "description": "%jupyter.configuration.jupyter.debugCodeLenses.description%",
+                    "default": "deepnote.debugcontinue, deepnote.debugstop, deepnote.debugstepover",
+                    "description": "%deepnote.configuration.deepnote.debugCodeLenses.description%",
                     "scope": "resource"
                 },
-                "jupyter.debugpyDistPath": {
+                "deepnote.debugpyDistPath": {
                     "type": "string",
                     "default": "",
-                    "description": "%jupyter.configuration.jupyter.debugpyDistPath.description%",
+                    "description": "%deepnote.configuration.deepnote.debugpyDistPath.description%",
                     "scope": "resource"
                 },
-                "jupyter.stopOnFirstLineWhileDebugging": {
+                "deepnote.stopOnFirstLineWhileDebugging": {
                     "type": "boolean",
                     "default": true,
-                    "description": "%jupyter.configuration.jupyter.stopOnFirstLineWhileDebugging.description%",
+                    "description": "%deepnote.configuration.deepnote.stopOnFirstLineWhileDebugging.description%",
                     "scope": "resource"
                 },
-                "jupyter.disableJupyterAutoStart": {
+                "deepnote.disableJupyterAutoStart": {
                     "type": "boolean",
                     "default": false,
-                    "description": "%jupyter.configuration.jupyter.disableJupyterAutoStart.description%"
+                    "description": "%deepnote.configuration.deepnote.disableJupyterAutoStart.description%"
                 },
-                "jupyter.interactiveWindow.codeLens.enableGotoCell": {
+                "deepnote.interactiveWindow.codeLens.enableGotoCell": {
                     "type": "boolean",
                     "default": true,
-                    "description": "%jupyter.configuration.jupyter.addGotoCodeLenses.description%",
+                    "description": "%deepnote.configuration.deepnote.addGotoCodeLenses.description%",
                     "scope": "resource"
                 },
-                "jupyter.kernels.excludePythonEnvironments": {
+                "deepnote.kernels.excludePythonEnvironments": {
                     "type": "array",
                     "items": {
                         "type": "string"
                     },
                     "default": [],
-                    "markdownDescription": "%jupyter.configuration.jupyter.kernels.filter.markdownDescription%",
+                    "markdownDescription": "%deepnote.configuration.deepnote.kernels.filter.markdownDescription%",
                     "scope": "machine-overridable",
                     "examples": [
                         [
@@ -1493,16 +1890,16 @@
                         ]
                     ]
                 },
-                "jupyter.kernels.trusted": {
+                "deepnote.kernels.trusted": {
                     "type": "array",
                     "items": {
                         "type": "string"
                     },
                     "default": [],
-                    "markdownDescription": "%jupyter.configuration.jupyter.kernels.trusted.markdownDescription%",
+                    "markdownDescription": "%deepnote.configuration.deepnote.kernels.trusted.markdownDescription%",
                     "scope": "machine"
                 },
-                "jupyter.interactiveWindow.creationMode": {
+                "deepnote.interactiveWindow.creationMode": {
                     "type": "string",
                     "enum": [
                         "perFile",
@@ -1510,25 +1907,25 @@
                         "multiple"
                     ],
                     "scope": "resource",
-                    "description": "%jupyter.configuration.jupyter.interactiveWindowMode.description%",
+                    "description": "%deepnote.configuration.deepnote.interactiveWindowMode.description%",
                     "default": "multiple"
                 },
-                "jupyter.interactiveWindow.notebookRepl": {
+                "deepnote.interactiveWindow.notebookRepl": {
                     "type": "boolean",
                     "default": false,
-                    "description": "%jupyter.configuration.jupyter.interactiveWindowNotebookRepl.description%",
+                    "description": "%deepnote.configuration.deepnote.interactiveWindowNotebookRepl.description%",
                     "tags": [
                         "experimental",
                         "onExP"
                     ]
                 },
-                "jupyter.interactiveWindow.textEditor.cellFolding": {
+                "deepnote.interactiveWindow.textEditor.cellFolding": {
                     "type": "boolean",
                     "default": true,
-                    "description": "%jupyter.configuration.jupyter.pythonCellFolding.description%",
+                    "description": "%deepnote.configuration.deepnote.pythonCellFolding.description%",
                     "scope": "resource"
                 },
-                "jupyter.interactiveWindow.viewColumn": {
+                "deepnote.interactiveWindow.viewColumn": {
                     "type": "string",
                     "enum": [
                         "beside",
@@ -1536,15 +1933,15 @@
                         "secondGroup"
                     ],
                     "scope": "resource",
-                    "description": "%jupyter.configuration.jupyter.interactiveWindowViewColumn.description%",
+                    "description": "%deepnote.configuration.deepnote.interactiveWindowViewColumn.description%",
                     "default": "secondGroup"
                 },
-                "jupyter.interactiveWindow.textEditor.magicCommandsAsComments": {
+                "deepnote.interactiveWindow.textEditor.magicCommandsAsComments": {
                     "type": "boolean",
                     "default": false,
-                    "description": "%jupyter.configuration.jupyter.magicCommandsAsComments.description%"
+                    "description": "%deepnote.configuration.deepnote.magicCommandsAsComments.description%"
                 },
-                "jupyter.pythonExportMethod": {
+                "deepnote.pythonExportMethod": {
                     "type": "string",
                     "enum": [
                         "direct",
@@ -1552,64 +1949,64 @@
                         "nbconvert"
                     ],
                     "default": "direct",
-                    "description": "%jupyter.configuration.jupyter.pythonExportMethod.description%",
+                    "description": "%deepnote.configuration.deepnote.pythonExportMethod.description%",
                     "scope": "application"
                 },
-                "jupyter.runStartupCommands": {
+                "deepnote.runStartupCommands": {
                     "type": "array",
                     "default": "",
-                    "description": "%jupyter.configuration.jupyter.runStartupCommands.description%",
+                    "description": "%deepnote.configuration.deepnote.runStartupCommands.description%",
                     "scope": "application"
                 },
-                "jupyter.debugJustMyCode": {
+                "deepnote.debugJustMyCode": {
                     "type": "boolean",
                     "default": true,
-                    "description": "%jupyter.configuration.jupyter.debugJustMyCode.description%",
+                    "description": "%deepnote.configuration.deepnote.debugJustMyCode.description%",
                     "scope": "resource"
                 },
-                "jupyter.showOutlineButtonInNotebookToolbar": {
+                "deepnote.showOutlineButtonInNotebookToolbar": {
                     "type": "boolean",
                     "default": true,
-                    "description": "%jupyter.configuration.jupyter.showOutlineButtonInNotebookToolbar.description%"
+                    "description": "%deepnote.configuration.deepnote.showOutlineButtonInNotebookToolbar.description%"
                 },
-                "jupyter.interactiveWindow.textEditor.autoAddNewCell": {
+                "deepnote.interactiveWindow.textEditor.autoAddNewCell": {
                     "type": "boolean",
                     "default": true,
-                    "description": "%jupyter.configuration.jupyter.newCellOnRunLast.description%",
+                    "description": "%deepnote.configuration.deepnote.newCellOnRunLast.description%",
                     "scope": "resource"
                 },
-                "jupyter.pythonCompletionTriggerCharacters": {
+                "deepnote.pythonCompletionTriggerCharacters": {
                     "type": "string",
                     "default": ".%'\"",
-                    "deprecationMessage": "%jupyter.configuration.jupyter.pythonCompletionTriggerCharacters.deprecationMessage%",
-                    "description": "%jupyter.configuration.jupyter.pythonCompletionTriggerCharacters.description%",
+                    "deprecationMessage": "%deepnote.configuration.deepnote.pythonCompletionTriggerCharacters.deprecationMessage%",
+                    "description": "%deepnote.configuration.deepnote.pythonCompletionTriggerCharacters.description%",
                     "scope": "application"
                 },
-                "jupyter.logKernelOutputSeparately": {
+                "deepnote.logKernelOutputSeparately": {
                     "type": "boolean",
                     "default": false,
-                    "description": "%jupyter.configuration.jupyter.logKernelOutputSeparately.description%"
+                    "description": "%deepnote.configuration.deepnote.logKernelOutputSeparately.description%"
                 },
-                "jupyter.excludeUserSitePackages": {
+                "deepnote.excludeUserSitePackages": {
                     "type": "boolean",
                     "default": false,
-                    "description": "%jupyter.configuration.jupyter.excludeUserSitePackages.description%",
+                    "description": "%deepnote.configuration.deepnote.excludeUserSitePackages.description%",
                     "scope": "window"
                 },
-                "jupyter.enableExtendedKernelCompletions": {
+                "deepnote.enableExtendedKernelCompletions": {
                     "type": "boolean",
                     "default": false,
-                    "deprecationMessage": "%jupyter.configuration.jupyter.enableExtendedKernelCompletions.deprecationMessage%",
-                    "markdownDescription": "%jupyter.configuration.jupyter.enableExtendedKernelCompletions.markdownDescription%",
+                    "deprecationMessage": "%deepnote.configuration.deepnote.enableExtendedKernelCompletions.deprecationMessage%",
+                    "markdownDescription": "%deepnote.configuration.deepnote.enableExtendedKernelCompletions.markdownDescription%",
                     "scope": "application"
                 },
-                "jupyter.enableExtendedPythonKernelCompletions": {
+                "deepnote.enableExtendedPythonKernelCompletions": {
                     "type": "boolean",
                     "default": false,
-                    "markdownDescription": "%jupyter.configuration.jupyter.enableExtendedKernelCompletions.markdownDescription%",
+                    "markdownDescription": "%deepnote.configuration.deepnote.enableExtendedKernelCompletions.markdownDescription%",
                     "scope": "application"
                 },
-                "jupyter.executionAnalysis.enabled": {
+                "deepnote.executionAnalysis.enabled": {
                     "type": "boolean",
                     "default": false,
                     "description": "Experimental feature to enable execution analysis in notebooks",
@@ -1618,20 +2015,20 @@
                         "experimental"
                     ]
                 },
-                "jupyter.enableKernelCompletions": {
+                "deepnote.enableKernelCompletions": {
                     "type": "boolean",
                     "default": true,
-                    "markdownDescription": "%jupyter.configuration.jupyter.enableKernelCompletions.markdownDescription%",
+                    "markdownDescription": "%deepnote.configuration.deepnote.enableKernelCompletions.markdownDescription%",
                     "scope": "application"
                 },
-                "jupyter.formatStackTraces": {
+                "deepnote.formatStackTraces": {
                     "type": "boolean",
                     "default": false,
-                    "description": "%jupyter.configuration.jupyter.formatStackTraces.description%",
-                    "deprecationMessage": "%jupyter.configuration.jupyter.formatStackTraces.deprecationMessage%",
+                    "description": "%deepnote.configuration.deepnote.formatStackTraces.description%",
+                    "deprecationMessage": "%deepnote.configuration.deepnote.formatStackTraces.deprecationMessage%",
                     "scope": "application"
                 },
-                "jupyter.completionTriggerCharacters": {
+                "deepnote.completionTriggerCharacters": {
                     "type": "object",
                     "patternProperties": {
                         "^[A-Za-z_][A-Za-z0-9]*": {
@@ -1692,7 +2089,7 @@
                             "<"
                         ]
                     },
-                    "markdownDescription": "%jupyter.configuration.jupyter.completionTriggerCharacters.markdownDescription%",
+                    "markdownDescription": "%deepnote.configuration.deepnote.completionTriggerCharacters.markdownDescription%",
                     "scope": "application",
                     "examples": [
                         {
@@ -1818,6 +2215,34 @@
                     "application/vnd.deepnote.dataframe.v3+json"
                 ],
                 "requiresMessaging": "optional"
+            },
+            {
+                "id": "deepnote-chart-big-number-renderer",
+                "displayName": "Deepnote Chart Big Number Renderer",
+                "entrypoint": "./dist/webviews/webview-side/chartBigNumberRenderer/chartBigNumberRenderer.js",
+                "mimeTypes": [
+                    "application/vnd.deepnote.chart.big-number+json"
+                ],
+                "requiresMessaging": "optional"
+            },
+            {
+                "id": "deepnote-vega-renderer",
+                "displayName": "Deepnote Vega Chart Renderer",
+                "entrypoint": "./dist/webviews/webview-side/vegaRenderer/vegaRenderer.js",
+                "mimeTypes": [
+                    "application/vnd.vega.v6+json",
+                    "application/vnd.vega.v5+json"
+                ],
+                "requiresMessaging": "optional"
+            },
+            {
+                "id": "deepnote-sql-metadata-renderer",
+                "displayName": "Deepnote SQL Metadata Renderer",
+                "entrypoint": "./dist/webviews/webview-side/sqlMetadataRenderer/sqlMetadataRenderer.js",
+                "mimeTypes": [
+                    "application/vnd.deepnote.sql-output-metadata+json"
+                ],
+                "requiresMessaging": "optional"
             }
         ],
         "viewsContainers": {
@@ -1830,40 +2255,49 @@
             ]
         },
         "views": {
-            "jupyter-variables": [
-                {
-                    "type": "webview",
-                    "id": "jupyterViewVariables",
-                    "name": "Jupyter Variables",
-                    "when": "jupyter.hasNativeNotebookOrInteractiveWindowOpen"
-                }
-            ],
             "deepnote": [
                 {
                     "id": "deepnoteExplorer",
                     "name": "%deepnote.views.explorer.name%",
-                    "when": "workspaceFolderCount != 0",
                     "iconPath": {
                         "light": "./resources/light/deepnote-icon.svg",
                         "dark": "./resources/dark/deepnote-icon.svg"
                     }
+                },
+                {
+                    "id": "deepnoteEnvironments",
+                    "name": "%deepnote.views.environments.name%",
+                    "when": "workspaceFolderCount != 0"
+                },
+                {
+                    "type": "webview",
+                    "id": "deepnoteViewVariables",
+                    "name": "Deepnote Variables",
+                    "when": "deepnote.hasNativeNotebookOrInteractiveWindowOpen"
                 }
             ]
         },
+        "viewsWelcome": [
+            {
+                "view": "deepnoteExplorer",
+                "contents": "Welcome to Deepnote for VS Code!\nExplore your data with SQL and Python. Build interactive notebooks, collaborate with your team, and share your insights.\n\n\n\n[$(new-file) New Project](command:deepnote.newProject)\n[$(folder-opened) Import Notebook](command:deepnote.importNotebook)",
+                "when": "deepnote.explorerInitialScanComplete"
+            }
+        ],
         "debuggers": [
             {
                 "type": "Python Kernel Debug Adapter",
-                "label": "%jupyter.debuggers.kernel%"
+                "label": "%deepnote.debuggers.kernel%"
             },
             {
                 "type": "Python Interactive Window Debug Adapter",
-                "label": "%jupyter.debuggers.interactive%"
+                "label": "%deepnote.debuggers.interactive%"
             }
         ],
         "jupyterVariableViewers": [
             {
-                "command": "jupyter.showJupyterDataViewer",
-                "title": "%jupyter.command.jupyter.showDataViewer.title%",
+                "command": "deepnote.showJupyterDataViewer",
+                "title": "%deepnote.command.deepnote.showDataViewer.title%",
                 "dataTypes": [
                     "DataFrame",
                     "list",
@@ -1878,10 +2312,10 @@
         ],
         "languageModelTools": [
             {
-                "name": "configure_notebook",
-                "displayName": "%jupyter.languageModelTools.configure_notebook.displayName%",
+                "name": "configure_deepnote_notebook",
+                "displayName": "%deepnote.languageModelTools.configure_deepnote_notebook.displayName%",
                 "modelDescription": "Tool used to configure a Notebook. ALWAYS use this tool before running/executing any Notebook Cells for the first time or before listing/installing packages in Notebooks for the first time. I.e. there is no need to use this tool more than once for the same notebook.",
-                "userDescription": "%jupyter.languageModelTools.configure_notebook.userDescription%",
+                "userDescription": "%deepnote.languageModelTools.configure_deepnote_notebook.userDescription%",
                 "toolReferenceName": "configureNotebook",
                 "tags": [
                     "python environment",
@@ -1907,56 +2341,10 @@
                 "when": "workspacePlatform != webworker"
             },
             {
-                "name": "configure_python_notebook",
-                "displayName": "Start Notebook Kernel",
-                "modelDescription": "Selects a Python Kernel and starts it.",
-                "tags": [
-                    "extension_installed_by_tool",
-                    "install python package",
-                    "notebooks"
-                ],
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "filePath": {
-                            "description": "The absolute path of the notebook with the active kernel.",
-                            "type": "string"
-                        }
-                    },
-                    "required": [
-                        "filePath"
-                    ]
-                },
-                "when": "false"
-            },
-            {
-                "name": "configure_non_python_notebook",
-                "displayName": "Start Notebook Kernel",
-                "modelDescription": "Selects the Notebook Kernel and starts it.",
-                "tags": [
-                    "extension_installed_by_tool",
-                    "jupyter",
-                    "notebooks"
-                ],
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "filePath": {
-                            "description": "The absolute path of the notebook with the active kernel.",
-                            "type": "string"
-                        }
-                    },
-                    "required": [
-                        "filePath"
-                    ]
-                },
-                "when": "false"
-            },
-            {
-                "name": "notebook_list_packages",
-                "displayName": "List Notebook Kernel Packages",
+                "name": "deepnote_notebook_list_packages",
+                "displayName": "List Deepnote Notebook Kernel Packages",
                 "modelDescription": "List the installed packages that are currently available in the selected kernel for a notebook editor. This tool should be used when working with a jupyter notebook with python code cells. Do not use this tool if not already working with a notebook, or for a language other than python. If the tool configure_notebooks exists, then ensure to call configure_notebooks before using this tool.",
-                "userDescription": "%jupyter.languageModelTools.notebook_list_packages.userDescription%",
+                "userDescription": "%deepnote.languageModelTools.deepnote_notebook_list_packages.userDescription%",
                 "toolReferenceName": "listNotebookPackages",
                 "tags": [
                     "python environment",
@@ -1981,11 +2369,11 @@
                 }
             },
             {
-                "name": "notebook_install_packages",
+                "name": "deepnote_notebook_install_packages",
                 "displayName": "Install Packages for Notebook",
                 "modelDescription": "Install a list of packages on a notebook kernel to be used within that notebook. This tool should be used when working with a jupyter notebook with python code cells. Do not use this tool if not already working with a notebook, or for a language other than python. If the tool configure_notebooks exists, then ensure to call configure_notebooks before using this tool.",
-                "userDescription": "%jupyter.languageModelTools.notebook_install_packages.userDescription%",
-                "toolReferenceName": "installNotebookPackages",
+                "userDescription": "%deepnote.languageModelTools.deepnote_notebook_install_packages.userDescription%",
+                "toolReferenceName": "installDeepnoteNotebookPackages",
                 "tags": [
                     "python environment",
                     "jupyter environment",
@@ -2017,10 +2405,10 @@
                 }
             },
             {
-                "name": "restart_notebook_kernel",
-                "displayName": "Restart Notebook",
+                "name": "restart_deepnote_notebook_kernel",
+                "displayName": "Restart Deepnote Notebook",
                 "modelDescription": "Tool used to restart a Notebook kernel. Some packages require a restart of the kernel after being installed. Use this if after installing a package if you know the package requires a restart, or if still getting an error about a missing package after installing.",
-                "toolReferenceName": "restartNotebookKernel",
+                "toolReferenceName": "restartDeepnoteNotebookKernel",
                 "tags": [
                     "extension_installed_by_tool",
                     "jupyter",
@@ -2066,7 +2454,7 @@
         "build:prerelease": "cross-env IS_PRE_RELEASE_VERSION_OF_JUPYTER_EXTENSION=true npm run build",
         "build:stable": "cross-env IS_PRE_RELEASE_VERSION_OF_JUPYTER_EXTENSION=false npm run build",
         "build": "concurrently npm:compile-release npm:updatePackageJsonForBundle",
-        "check-licenses": "npx license-checker-rseidelsohn --onlyAllow 'MIT;Apache-2.0;Apache v2;ISC;BSD;BSD-2-Clause;BSD-3-Clause;0BSD;Python-2.0;CC0-1.0;CC-BY-3.0;CC-BY-4.0;Unlicense;BlueOak-1.0.0;MPL-2.0' --excludePrivatePackages --excludePackages 'bootstrap-less@3.3.8;chai-as-promised@7.1.1;esbuild-plugin-less@1.3.19;eslint-plugin-local-rules@1.0.0;truncate-utf8-bytes@1.0.2;utf8-byte-length@1.0.4'",
+        "check-licenses": "npx license-checker-rseidelsohn --onlyAllow 'MIT;Apache-2.0;Apache v2;ISC;BSD;BSD-2-Clause;BSD-3-Clause;0BSD;Python-2.0;CC0-1.0;CC-BY-3.0;CC-BY-4.0;Unlicense;BlueOak-1.0.0;MPL-2.0' --excludePrivatePackages --excludePackages 'bootstrap-less@3.3.8;chai-as-promised@7.1.1;esbuild-plugin-less@1.3.19;eslint-plugin-local-rules@1.0.0;truncate-utf8-bytes@1.0.2;utf8-byte-length@1.0.4;@cspell/dict-en-common-misspellings@2.1.6'",
         "checkDependencies": "gulp checkDependencies",
         "clean": "gulp clean",
         "compile-esbuild-watch": "npx tsx build/esbuild/build.ts --watch",
@@ -2083,9 +2471,10 @@
         "lint-fix": "eslint --fix --ext .ts,.js src build pythonExtensionApi gulpfile.js",
         "lint": "eslint --ext .ts,.js src",
         "openInBrowser": "vscode-test-web --extensionDevelopmentPath=. ./src/test/datascience",
-        "package": "gulp clean && npm run build && vsce package -o ms-toolsai-jupyter-insiders.vsix",
+        "package": "gulp clean && npm run build && vsce package --no-dependencies -o vscode-deepnote-insiders.vsix",
         "postdownload-api": "npx vscode-dts main",
         "postinstall": "npm run download-api && node ./build/ci/postInstall.js",
+        "prepare": "husky",
         "pretest:integration:nonpython": "cross-env VSC_JUPYTER_CI_TEST_VSC_CHANNEL=insiders node ./out/test/datascience/dsTestSetup.js",
         "pretest:integration": "node ./out/test/datascience/dsTestSetup.js",
         "pretest:performance:execution": "cross-env VSC_JUPYTER_CI_TEST_GREP=@executionPerformance node ./out/test/datascience/dsTestSetup.js",
@@ -2106,11 +2495,15 @@
         "typecheck": "tsc -p ./ --noEmit",
         "updatePackageJsonForBundle": "gulp updatePackageJsonForBundle",
         "watch-all": "concurrently \"tsc --watch -p ./\" \"npx tsx build/esbuild/build.ts --watch-all\"",
-        "watch": "concurrently \"tsc --watch -p ./\" \"npx tsx build/esbuild/build.ts --watch\""
+        "watch": "concurrently \"tsc --watch -p ./\" \"npx tsx build/esbuild/build.ts --watch\"",
+        "spell-check": "cspell --config cspell.json"
     },
     "dependencies": {
         "@c4312/evt": "^0.1.1",
-        "@deepnote/blocks": "^1.2.0",
+        "@deepnote/blocks": "^1.4.0",
+        "@deepnote/convert": "^1.3.0",
+        "@deepnote/database-integrations": "^1.3.0",
+        "@deepnote/sql-language-server": "^3.0.0",
         "@enonic/fnv-plus": "^1.3.0",
         "@jupyter-widgets/base": "^6.0.8",
         "@jupyter-widgets/controls": "^5.0.9",
@@ -2125,18 +2518,21 @@
         "ansi-to-html": "^0.6.7",
         "bootstrap": "^5.0.0",
         "bootstrap-less": "^3.3.8",
+        "clsx": "^2.1.1",
         "cross-fetch": "^3.1.5",
+        "d3-format": "^3.1.0",
         "encoding": "^0.1.13",
         "fast-deep-equal": "^2.0.1",
         "format-util": "^1.0.5",
         "fs-extra": "^4.0.3",
-        "glob": "^7.1.2",
+        "glob": "^9.3.5",
         "iconv-lite": "^0.6.3",
+        "immer": "^10.1.3",
         "inversify": "^6.0.1",
         "isomorphic-ws": "^4.0.1",
         "jquery": "^3.6.0",
-        "js-yaml": "^4.1.0",
-        "jsonc-parser": "^2.0.3",
+        "js-yaml": "^4.1.1",
+        "jsonc-parser": "3.3.1",
         "lodash": "^4.17.21",
         "marked": "^4.0.10",
         "node-fetch": "^2.6.7",
@@ -2148,9 +2544,11 @@
         "react": "^16.5.2",
         "react-data-grid": "^6.0.2-0",
         "react-dom": "^16.5.2",
+        "react-error-boundary": "^6.0.0",
         "react-redux": "^7.1.1",
         "react-svg-pan-zoom": "3.9.0",
         "react-svgmt": "1.1.11",
+        "react-vega": "^7.7.1",
         "react-virtualized": "^9.21.1",
         "redux": "^4.0.4",
         "redux-logger": "^3.0.6",
@@ -2161,17 +2559,22 @@
         "slickgrid": "^2.4.17",
         "stack-trace": "0.0.10",
         "strip-comments": "^2.0.1",
-        "styled-components": "^5.2.1",
         "svg-to-pdfkit": "^0.1.8",
+        "tailwind-merge": "^3.3.1",
         "tcp-port-used": "^1.0.1",
         "tmp": "^0.2.4",
         "url-parse": "^1.5.10",
+        "uuid": "^13.0.0",
+        "vega": "^6.2.0",
+        "vega-embed": "^7.1.0",
+        "vega-lite": "^6.4.1",
         "vscode-debugprotocol": "^1.41.0",
-        "vscode-languageclient": "8.0.2-next.5",
+        "vscode-languageclient": "^9.0.1",
         "vscode-tas-client": "^0.1.84",
         "ws": "^6.2.3",
         "zeromq": "^6.5.0",
-        "zeromqold": "npm:zeromq@^6.0.0-beta.6"
+        "zeromqold": "npm:zeromq@^6.0.0-beta.6",
+        "zod": "^4.1.12"
     },
     "devDependencies": {
         "@actions/core": "^1.11.1",
@@ -2186,6 +2589,7 @@
         "@types/chai-arrays": "^2.0.1",
         "@types/chai-as-promised": "^7.1.6",
         "@types/cors": "^2.8.6",
+        "@types/d3-format": "^3.0.4",
         "@types/debug": "^4.1.5",
         "@types/dedent": "^0.7.0",
         "@types/del": "^4.0.0",
@@ -2221,7 +2625,6 @@
         "@types/temp": "^0.8.32",
         "@types/tmp": "^0.2.3",
         "@types/url-parse": "^1.4.8",
-        "@types/uuid": "^3.4.3",
         "@types/vscode-notebook-renderer": "^1.60.0",
         "@types/ws": "^6.0.1",
         "@typescript-eslint/eslint-plugin": "^6.9.0",
@@ -2234,16 +2637,17 @@
         "@vscode/zeromq": "^0.2.3",
         "acorn": "^8.9.0",
         "autoprefixer": "^10.4.21",
+        "bare-events": "^2.8.1",
         "buffer": "^6.0.3",
         "bufferutil": "^4.0.6",
         "chai": "^4.3.10",
         "chai-arrays": "^2.2.0",
         "chai-as-promised": "^7.1.1",
         "chai-exclude": "^2.1.0",
-        "codecov": "^3.7.1",
         "colors": "^1.4.0",
         "concurrently": "^8.2.2",
         "cross-env": "^7.0.3",
+        "cspell": "9.2.1",
         "dedent": "^0.7.0",
         "del": "^3.0.0",
         "es-abstract": "^1.19.1",
@@ -2266,18 +2670,20 @@
         "eslint-plugin-prettier": "^5.0.1",
         "eslint-plugin-react": "^7.33.2",
         "eslint-plugin-react-hooks": "^4.6.0",
+        "esmock": "^2.7.3",
         "flat": "^5.0.1",
         "get-port": "^3.2.0",
         "glob-parent": "^6.0.2",
         "gulp": "^5.0.0",
         "gulp-filter": "^7.0.0",
         "gulp-rename": "^2.0.0",
-        "husky": "^8.0.3",
+        "husky": "9.1.7",
         "json2csv": "^5.0.7",
         "jsonschema": "^1.4.1",
         "keyv": "^4.1.0",
         "less": "^4.1.3",
         "less-plugin-inline-urls": "^1.2.0",
+        "lint-staged": "16.2.3",
         "lolex": "^6.0.0",
         "lru-cache": "^10.0.0",
         "mocha": "^11.0.1",
@@ -2306,11 +2712,20 @@
         "utf-8-validate": "^5.0.8",
         "util": "^0.12.4"
     },
+    "lint-staged": {
+        "src/**/*.{ts,tsx}": [
+            "eslint --cache --fix",
+            "prettier --write"
+        ]
+    },
     "optionalDependencies": {
         "fsevents": "^2.3.2"
     },
     "overrides": {
-        "json5": "2.2.2",
+        "braces": "3.0.3",
+        "micromatch": "4.0.8",
+        "ssh2": "1.17.0",
+        "json5": "2.2.3",
         "string_decoder": "1.3.0",
         "simple-get@<3.1.1": "3.1.1",
         "validator@<13.7.0": "13.7.0",
@@ -2328,6 +2743,7 @@
         "@jupyterlab/services": {
             "ws": "7.5.10"
         },
-        "d3-color": "3.1.0"
+        "d3-color": "3.1.0",
+        "vega-embed": "^7.1.0"
     }
 }

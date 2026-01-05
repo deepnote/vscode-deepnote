@@ -1421,6 +1421,7 @@ export async function hijackSavePrompt(
 export class MockQuickPick implements QuickPick<QuickPickItem> {
     value: string;
     placeholder: string | undefined;
+    prompt: string | undefined;
     get onDidChangeValue(): Event<string> {
         return this._onDidChangeValueEmitter.event;
     }

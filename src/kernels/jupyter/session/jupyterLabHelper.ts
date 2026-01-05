@@ -9,6 +9,7 @@ import type {
     Session,
     SessionManager
 } from '@jupyterlab/services';
+import * as jupyterLabServices from '@jupyterlab/services';
 import { JSONObject } from '@lumino/coreutils';
 import { Disposable } from 'vscode';
 import { logger } from '../../../platform/logging';
@@ -33,8 +34,8 @@ export class JupyterLabHelper extends ObservableDisposable {
     private _jupyterlab?: typeof import('@jupyterlab/services');
     private get jupyterlab(): typeof import('@jupyterlab/services') {
         if (!this._jupyterlab) {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            this._jupyterlab = require('@jupyterlab/services');
+            // Lazy load jupyter lab for faster extension loading.
+            this._jupyterlab = jupyterLabServices;
         }
         return this._jupyterlab!;
     }

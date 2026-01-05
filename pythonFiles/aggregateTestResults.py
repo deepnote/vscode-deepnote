@@ -14,7 +14,7 @@ print("Using authtoken with prefix: " + authtoken[:4])
 # %%
 def getRuns(createdDate):
     runsResponse = requests.get(
-        "https://api.github.com/repos/microsoft/vscode-jupyter/actions/workflows/build-test.yml/runs",
+        "https://api.github.com/repos/deepnote/vscode-deepnote/actions/workflows/ci.yml/runs",
         params={"created": createdDate, "branch": "main"},
         headers={
             "Accept": "application/vnd.github+json",
@@ -36,7 +36,7 @@ def getRuns(createdDate):
 
 def getArtifactData(id):
     testResultsResponse = requests.get(
-        f"https://api.github.com/repos/microsoft/vscode-jupyter/actions/artifacts/{id}/zip",
+        f"https://api.github.com/repos/deepnote/vscode-deepnote/actions/artifacts/{id}/zip",
         headers={
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {authtoken}",

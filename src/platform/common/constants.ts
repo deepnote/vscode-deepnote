@@ -21,7 +21,7 @@ export const NOTEBOOK_SELECTOR = [
 ];
 
 export const CodespaceExtensionId = 'GitHub.codespaces';
-export const JVSC_EXTENSION_ID = 'ms-toolsai.jupyter';
+export const JVSC_EXTENSION_ID = 'Deepnote.vscode-deepnote';
 export const DATA_WRANGLER_EXTENSION_ID = 'ms-toolsai.datawrangler';
 export const PROPOSED_API_ALLOWED_PUBLISHERS = ['donjayamanne'];
 export const POWER_TOYS_EXTENSION_ID = 'ms-toolsai.vscode-jupyter-powertoys';
@@ -42,7 +42,7 @@ export namespace Settings {
     export const JupyterServerRemoteLaunchNameSeparator = '\n';
     export const JupyterServerRemoteLaunchService = JVSC_EXTENSION_ID;
     export const JupyterServerUriListMax = 10;
-    // If this timeout expires, ignore the completion request sent to Jupyter.
+    // If this timeout expires, ignore the completion request sent to deepnote.
     export var IntellisenseTimeout = 2_000;
     export const IntellisenseResolveTimeout = 5_000;
 }
@@ -79,7 +79,7 @@ export namespace Identifiers {
     export const MatplotLibDefaultParams = '_VSCode_defaultMatplotlib_Params';
     export const MatplotLibFigureFormats = '_VSCode_matplotLib_FigureFormats';
     export const DefaultCodeCellMarker = '# %%';
-    export const DefaultCommTarget = 'jupyter.widget';
+    export const DefaultCommTarget = 'deepnote.widget';
     export const ALL_VARIABLES = 'ALL_VARIABLES';
     export const KERNEL_VARIABLES = 'KERNEL_VARIABLES';
     export const DEBUGGER_VARIABLES = 'DEBUGGER_VARIABLES';
@@ -108,7 +108,6 @@ export const DefaultTheme = 'Default Light+';
 export const PythonExtension = 'ms-python.python';
 export const PythonEnvironmentExtension = 'ms-python.vscode-python-envs';
 export const RendererExtension = 'ms-toolsai.jupyter-renderers';
-export const PylanceExtension = 'ms-python.vscode-pylance';
 
 export const LanguagesSupportedByPythonkernel = [
     'python',
@@ -125,6 +124,8 @@ export const LanguagesSupportedByPythonkernel = [
     'sql', // %%sql
     'perl', // %%perl
     'qsharp', // %%qsharp
+    'json', // JSON cells for custom block types
+    'plaintext', // plaintext cells (e.g., Deepnote input-text blocks)
     'raw' // raw cells (no formatting)
 ];
 export const jupyterLanguageToMonacoLanguageMapping = new Map([
@@ -168,87 +169,112 @@ export enum CommandSource {
 }
 
 export namespace Commands {
-    export const RunAllCells = 'jupyter.runallcells';
-    export const RunAllCellsAbove = 'jupyter.runallcellsabove';
-    export const RunCellAndAllBelow = 'jupyter.runcellandallbelow';
-    export const RunAllCellsAbovePalette = 'jupyter.runallcellsabove.palette';
-    export const RunCellAndAllBelowPalette = 'jupyter.runcurrentcellandallbelow.palette';
-    export const RunToLine = 'jupyter.runtoline';
-    export const RunFromLine = 'jupyter.runfromline';
-    export const RunCell = 'jupyter.runcell';
-    export const RunCurrentCell = 'jupyter.runcurrentcell';
-    export const RunCurrentCellAdvance = 'jupyter.runcurrentcelladvance';
-    export const CreateNewInteractive = 'jupyter.createnewinteractive';
-    export const ImportNotebookFile = 'jupyter.importnotebookfile';
-    export const ExportFileAsNotebook = 'jupyter.exportfileasnotebook';
-    export const InterruptKernel = 'jupyter.interruptkernel';
-    export const RestartKernel = 'jupyter.restartkernel';
-    export const RestartKernelAndRunAllCells = 'jupyter.restartkernelandrunallcells';
-    export const RestartKernelAndRunUpToSelectedCell = 'jupyter.restartkernelandrunuptoselectedcell';
-    export const NotebookEditorRemoveAllCells = 'jupyter.notebookeditor.removeallcells';
-    export const NotebookEditorRunAllCells = 'jupyter.notebookeditor.runallcells';
-    export const NotebookEditorRunSelectedCell = 'jupyter.notebookeditor.runselectedcell';
-    export const NotebookEditorAddCellBelow = 'jupyter.notebookeditor.addcellbelow';
-    export const ExpandAllCells = 'jupyter.expandallcells';
-    export const CollapseAllCells = 'jupyter.collapseallcells';
-    export const ExecSelectionInInteractiveWindow = 'jupyter.execSelectionInteractive';
-    export const RunFileInInteractiveWindows = 'jupyter.runFileInteractive';
-    export const DebugFileInInteractiveWindows = 'jupyter.debugFileInteractive';
-    export const AddCellBelow = 'jupyter.addcellbelow';
-    export const DebugCurrentCellPalette = 'jupyter.debugcurrentcell.palette';
-    export const DebugCell = 'jupyter.debugcell';
-    export const DebugStepOver = 'jupyter.debugstepover';
-    export const DebugContinue = 'jupyter.debugcontinue';
-    export const DebugStop = 'jupyter.debugstop';
-    export const RunCurrentCellAndAddBelow = 'jupyter.runcurrentcellandaddbelow';
-    export const InsertCellBelowPosition = 'jupyter.insertCellBelowPosition';
-    export const InsertCellBelow = 'jupyter.insertCellBelow';
-    export const InsertCellAbove = 'jupyter.insertCellAbove';
-    export const DeleteCells = 'jupyter.deleteCells';
-    export const SelectCell = 'jupyter.selectCell';
-    export const SelectCellContents = 'jupyter.selectCellContents';
-    export const ExtendSelectionByCellAbove = 'jupyter.extendSelectionByCellAbove';
-    export const ExtendSelectionByCellBelow = 'jupyter.extendSelectionByCellBelow';
-    export const MoveCellsUp = 'jupyter.moveCellsUp';
-    export const MoveCellsDown = 'jupyter.moveCellsDown';
-    export const ChangeCellToMarkdown = 'jupyter.changeCellToMarkdown';
-    export const ChangeCellToCode = 'jupyter.changeCellToCode';
-    export const GotoNextCellInFile = 'jupyter.gotoNextCellInFile';
-    export const GotoPrevCellInFile = 'jupyter.gotoPrevCellInFile';
-    export const ScrollToCell = 'jupyter.scrolltocell';
-    export const CreateNewNotebook = 'jupyter.createnewnotebook';
-    export const ViewJupyterOutput = 'jupyter.viewOutput';
+    export const RunAllCells = 'deepnote.runallcells';
+    export const RunAllCellsAbove = 'deepnote.runallcellsabove';
+    export const RunCellAndAllBelow = 'deepnote.runcellandallbelow';
+    export const RunAllCellsAbovePalette = 'deepnote.runallcellsabove.palette';
+    export const RunCellAndAllBelowPalette = 'deepnote.runcurrentcellandallbelow.palette';
+    export const RunToLine = 'deepnote.runtoline';
+    export const RunFromLine = 'deepnote.runfromline';
+    export const RunCell = 'deepnote.runcell';
+    export const RunCurrentCell = 'deepnote.runcurrentcell';
+    export const RunCurrentCellAdvance = 'deepnote.runcurrentcelladvance';
+    export const CreateNewInteractive = 'deepnote.createnewinteractive';
+    export const ImportNotebookFile = 'deepnote.importnotebookfile';
+    export const ExportFileAsNotebook = 'deepnote.exportfileasnotebook';
+    export const InterruptKernel = 'deepnote.interruptkernel';
+    export const RestartKernel = 'deepnote.restartkernel';
+    export const RestartKernelAndRunAllCells = 'deepnote.restartkernelandrunallcells';
+    export const RestartKernelAndRunUpToSelectedCell = 'deepnote.restartkernelandrunuptoselectedcell';
+    export const NotebookEditorRemoveAllCells = 'deepnote.notebookeditor.removeallcells';
+    export const NotebookEditorRunAllCells = 'deepnote.notebookeditor.runallcells';
+    export const NotebookEditorRunSelectedCell = 'deepnote.notebookeditor.runselectedcell';
+    export const NotebookEditorRunFocusedCell = 'deepnote.notebookeditor.runfocusedcell';
+    export const NotebookEditorAddCellBelow = 'deepnote.notebookeditor.addcellbelow';
+    export const ExpandAllCells = 'deepnote.expandallcells';
+    export const CollapseAllCells = 'deepnote.collapseallcells';
+    export const ExecSelectionInInteractiveWindow = 'deepnote.execSelectionInteractive';
+    export const RunFileInInteractiveWindows = 'deepnote.runFileInteractive';
+    export const DebugFileInInteractiveWindows = 'deepnote.debugFileInteractive';
+    export const AddCellBelow = 'deepnote.addcellbelow';
+    export const DebugCurrentCellPalette = 'deepnote.debugcurrentcell.palette';
+    export const DebugCell = 'deepnote.debugcell';
+    export const DebugStepOver = 'deepnote.debugstepover';
+    export const DebugContinue = 'deepnote.debugcontinue';
+    export const DebugStop = 'deepnote.debugstop';
+    export const RunCurrentCellAndAddBelow = 'deepnote.runcurrentcellandaddbelow';
+    export const InsertCellBelowPosition = 'deepnote.insertCellBelowPosition';
+    export const InsertCellBelow = 'deepnote.insertCellBelow';
+    export const InsertCellAbove = 'deepnote.insertCellAbove';
+    export const DeleteCells = 'deepnote.deleteCells';
+    export const SelectCell = 'deepnote.selectCell';
+    export const SelectCellContents = 'deepnote.selectCellContents';
+    export const ExtendSelectionByCellAbove = 'deepnote.extendSelectionByCellAbove';
+    export const ExtendSelectionByCellBelow = 'deepnote.extendSelectionByCellBelow';
+    export const MoveCellsUp = 'deepnote.moveCellsUp';
+    export const MoveCellsDown = 'deepnote.moveCellsDown';
+    export const ChangeCellToMarkdown = 'deepnote.changeCellToMarkdown';
+    export const ChangeCellToCode = 'deepnote.changeCellToCode';
+    export const GotoNextCellInFile = 'deepnote.gotoNextCellInFile';
+    export const GotoPrevCellInFile = 'deepnote.gotoPrevCellInFile';
+    export const ScrollToCell = 'deepnote.scrolltocell';
+    export const CreateNewNotebook = 'deepnote.createnewnotebook';
+    export const ViewJupyterOutput = 'deepnote.viewOutput';
     export const RefreshDeepnoteExplorer = 'deepnote.refreshExplorer';
     export const OpenDeepnoteNotebook = 'deepnote.openNotebook';
     export const OpenDeepnoteFile = 'deepnote.openFile';
     export const RevealInDeepnoteExplorer = 'deepnote.revealInExplorer';
-    export const ExportAsPythonScript = 'jupyter.exportAsPythonScript';
-    export const ExportToHTML = 'jupyter.exportToHTML';
-    export const ExportToPDF = 'jupyter.exportToPDF';
-    export const Export = 'jupyter.export';
-    export const NativeNotebookExport = 'jupyter.notebookeditor.export';
-    export const LatestExtension = 'jupyter.latestExtension';
-    export const EnableLoadingWidgetsFrom3rdPartySource = 'jupyter.enableLoadingWidgetScriptsFromThirdPartySource';
-    export const ShowDataViewer = 'jupyter.showDataViewer';
-    export const ShowJupyterDataViewer = 'jupyter.showJupyterDataViewer';
-    export const RefreshDataViewer = 'jupyter.refreshDataViewer';
-    export const ClearSavedJupyterUris = 'jupyter.clearSavedJupyterUris';
-    export const OpenVariableView = 'jupyter.openVariableView';
-    export const OpenOutlineView = 'jupyter.openOutlineView';
-    export const InteractiveClearAll = 'jupyter.interactive.clearAllCells';
-    export const InteractiveGoToCode = 'jupyter.interactive.goToCode';
-    export const InteractiveCopyCell = 'jupyter.interactive.copyCell';
-    export const InteractiveExportAsNotebook = 'jupyter.interactive.exportasnotebook';
-    export const InteractiveExportAs = 'jupyter.interactive.exportas';
-    export const RunByLine = 'jupyter.runByLine';
-    export const RunAndDebugCell = 'jupyter.runAndDebugCell';
-    export const RunByLineNext = 'jupyter.runByLineNext';
-    export const RunByLineStop = 'jupyter.runByLineStop';
-    export const ReplayPylanceLog = 'jupyter.replayPylanceLog';
-    export const ReplayPylanceLogStep = 'jupyter.replayPylanceLogStep';
-    export const InstallPythonExtensionViaKernelPicker = 'jupyter.installPythonExtensionViaKernelPicker';
-    export const InstallPythonViaKernelPicker = 'jupyter.installPythonViaKernelPicker';
-    export const ContinueEditSessionInCodespace = 'jupyter.continueEditSessionInCodespace';
+    export const ManageIntegrations = 'deepnote.manageIntegrations';
+    export const AddSqlBlock = 'deepnote.addSqlBlock';
+    export const AddBigNumberChartBlock = 'deepnote.addBigNumberChartBlock';
+    export const AddChartBlock = 'deepnote.addChartBlock';
+    export const AddInputTextBlock = 'deepnote.addInputTextBlock';
+    export const AddInputTextareaBlock = 'deepnote.addInputTextareaBlock';
+    export const AddInputSelectBlock = 'deepnote.addInputSelectBlock';
+    export const AddInputSliderBlock = 'deepnote.addInputSliderBlock';
+    export const AddInputCheckboxBlock = 'deepnote.addInputCheckboxBlock';
+    export const AddInputDateBlock = 'deepnote.addInputDateBlock';
+    export const AddInputDateRangeBlock = 'deepnote.addInputDateRangeBlock';
+    export const AddInputFileBlock = 'deepnote.addInputFileBlock';
+    export const AddButtonBlock = 'deepnote.addButtonBlock';
+    export const NewNotebook = 'deepnote.newNotebook';
+    export const NewProject = 'deepnote.newProject';
+    export const ImportNotebook = 'deepnote.importNotebook';
+    export const ImportJupyterNotebook = 'deepnote.importJupyterNotebook';
+    export const RenameProject = 'deepnote.renameProject';
+    export const DeleteProject = 'deepnote.deleteProject';
+    export const RenameNotebook = 'deepnote.renameNotebook';
+    export const DeleteNotebook = 'deepnote.deleteNotebook';
+    export const DuplicateNotebook = 'deepnote.duplicateNotebook';
+    export const AddNotebookToProject = 'deepnote.addNotebookToProject';
+    export const ExportProject = 'deepnote.exportProject';
+    export const ExportNotebook = 'deepnote.exportNotebook';
+    export const OpenInDeepnote = 'deepnote.openInDeepnote';
+    export const ExportAsPythonScript = 'deepnote.exportAsPythonScript';
+    export const ExportToHTML = 'deepnote.exportToHTML';
+    export const ExportToPDF = 'deepnote.exportToPDF';
+    export const Export = 'deepnote.export';
+    export const NativeNotebookExport = 'deepnote.notebookeditor.export';
+    export const LatestExtension = 'deepnote.latestExtension';
+    export const EnableLoadingWidgetsFrom3rdPartySource = 'deepnote.enableLoadingWidgetScriptsFromThirdPartySource';
+    export const ShowDataViewer = 'deepnote.showDataViewer';
+    export const ShowJupyterDataViewer = 'deepnote.showJupyterDataViewer';
+    export const RefreshDataViewer = 'deepnote.refreshDataViewer';
+    export const ClearSavedJupyterUris = 'deepnote.clearSavedJupyterUris';
+    export const OpenVariableView = 'deepnote.openVariableView';
+    export const OpenOutlineView = 'deepnote.openOutlineView';
+    export const InteractiveClearAll = 'deepnote.interactive.clearAllCells';
+    export const InteractiveGoToCode = 'deepnote.interactive.goToCode';
+    export const InteractiveCopyCell = 'deepnote.interactive.copyCell';
+    export const InteractiveExportAsNotebook = 'deepnote.interactive.exportasnotebook';
+    export const InteractiveExportAs = 'deepnote.interactive.exportas';
+    export const RunByLine = 'deepnote.runByLine';
+    export const RunAndDebugCell = 'deepnote.runAndDebugCell';
+    export const RunByLineNext = 'deepnote.runByLineNext';
+    export const RunByLineStop = 'deepnote.runByLineStop';
+    export const InstallPythonExtensionViaKernelPicker = 'deepnote.installPythonExtensionViaKernelPicker';
+    export const InstallPythonViaKernelPicker = 'deepnote.installPythonViaKernelPicker';
+    export const ContinueEditSessionInCodespace = 'deepnote.continueEditSessionInCodespace';
 }
 
 export namespace CodeLensCommands {
@@ -261,30 +287,30 @@ export namespace CodeLensCommands {
 }
 
 export namespace EditorContexts {
-    export const HasCodeCells = 'jupyter.hascodecells';
-    export const IsInteractiveActive = 'jupyter.isinteractiveactive';
-    export const OwnsSelection = 'jupyter.ownsSelection';
-    export const HaveNativeCells = 'jupyter.havenativecells';
-    export const HaveNative = 'jupyter.havenative';
-    export const IsNativeActive = 'jupyter.isnativeactive';
-    export const IsInteractiveOrNativeActive = 'jupyter.isinteractiveornativeactive';
-    export const IsPythonOrNativeActive = 'jupyter.ispythonornativeactive';
-    export const IsPythonOrInteractiveActive = 'jupyter.ispythonorinteractiveeactive';
-    export const IsPythonOrInteractiveOrNativeActive = 'jupyter.ispythonorinteractiveornativeeactive';
-    export const CanRestartNotebookKernel = 'jupyter.notebookeditor.canrestartNotebookkernel';
-    export const CanInterruptNotebookKernel = 'jupyter.notebookeditor.canInterruptNotebookKernel';
-    export const CanRestartInteractiveWindowKernel = 'jupyter.interactive.canRestartNotebookKernel';
-    export const CanInterruptInteractiveWindowKernel = 'jupyter.interactive.canInterruptNotebookKernel';
-    export const RunByLineCells = 'jupyter.notebookeditor.runByLineCells';
-    export const RunByLineDocuments = 'jupyter.notebookeditor.runByLineDocuments';
-    export const DebugDocuments = 'jupyter.notebookeditor.debugDocuments';
-    export const IsPythonNotebook = 'jupyter.ispythonnotebook';
-    export const IsJupyterKernelSelected = 'jupyter.kernel.isjupyter';
-    export const IsDataViewerActive = 'jupyter.dataViewerActive';
-    export const HasNativeNotebookOrInteractiveWindowOpen = 'jupyter.hasNativeNotebookOrInteractiveWindowOpen';
-    export const ZmqAvailable = 'jupyter.zmqavailable';
-    export const ReplayLogLoaded = 'jupyter.replayLogLoaded';
-    export const KernelSource = 'jupyter.kernelSource';
+    export const HasCodeCells = 'deepnote.hascodecells';
+    export const IsInteractiveActive = 'deepnote.isinteractiveactive';
+    export const OwnsSelection = 'deepnote.ownsSelection';
+    export const HaveNativeCells = 'deepnote.havenativecells';
+    export const HaveNative = 'deepnote.havenative';
+    export const IsNativeActive = 'deepnote.isnativeactive';
+    export const IsInteractiveOrNativeActive = 'deepnote.isinteractiveornativeactive';
+    export const IsPythonOrNativeActive = 'deepnote.ispythonornativeactive';
+    export const IsPythonOrInteractiveActive = 'deepnote.ispythonorinteractiveactive';
+    export const IsPythonOrInteractiveOrNativeActive = 'deepnote.ispythonorinteractiveornativeeactive';
+    export const CanRestartNotebookKernel = 'deepnote.notebookeditor.canrestartNotebookkernel';
+    export const CanInterruptNotebookKernel = 'deepnote.notebookeditor.canInterruptNotebookKernel';
+    export const CanRestartInteractiveWindowKernel = 'deepnote.interactive.canRestartNotebookKernel';
+    export const CanInterruptInteractiveWindowKernel = 'deepnote.interactive.canInterruptNotebookKernel';
+    export const RunByLineCells = 'deepnote.notebookeditor.runByLineCells';
+    export const RunByLineDocuments = 'deepnote.notebookeditor.runByLineDocuments';
+    export const DebugDocuments = 'deepnote.notebookeditor.debugDocuments';
+    export const IsPythonNotebook = 'deepnote.ispythonnotebook';
+    export const IsJupyterKernelSelected = 'deepnote.kernel.isjupyter';
+    export const IsDataViewerActive = 'deepnote.dataViewerActive';
+    export const HasNativeNotebookOrInteractiveWindowOpen = 'deepnote.hasNativeNotebookOrInteractiveWindowOpen';
+    export const ZmqAvailable = 'deepnote.zmqavailable';
+    export const ReplayLogLoaded = 'deepnote.replayLogLoaded';
+    export const KernelSource = 'deepnote.kernelSource';
 }
 
 export namespace RegExpValues {
@@ -496,8 +522,8 @@ export const DataScienceStartupTime = Symbol('DataScienceStartupTime');
 // Default for notebook version (major & minor) used when creating notebooks.
 export const defaultNotebookFormat = { major: 4, minor: 2 };
 
-export const WIDGET_MIMETYPE = 'application/vnd.jupyter.widget-view+json';
-export const WIDGET_STATE_MIMETYPE = 'application/vnd.jupyter.widget-state+json';
+export const WIDGET_MIMETYPE = 'application/vnd.deepnote.widget-view+json';
+export const WIDGET_STATE_MIMETYPE = 'application/vnd.deepnote.widget-state+json';
 export const WIDGET_VERSION_NON_PYTHON_KERNELS = 8;
 
 /**

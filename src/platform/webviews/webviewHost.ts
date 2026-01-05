@@ -221,7 +221,7 @@ export abstract class WebviewHost<IMapping> implements IDisposable {
     }
 
     protected async sendLocStrings() {
-        const locStrings: LocalizedMessages = {
+        const locStrings: Partial<LocalizedMessages> = {
             collapseSingle: localize.WebViews.collapseSingle,
             expandSingle: localize.WebViews.expandSingle,
             openExportFileYes: localize.DataScience.openExportFileYes,
@@ -258,7 +258,14 @@ export abstract class WebviewHost<IMapping> implements IDisposable {
             deletePlot: localize.WebViews.deletePlot,
             selectedImageListLabel: localize.WebViews.selectedImageListLabel,
             selectedImageLabel: localize.WebViews.selectedImageLabel,
-            dvDeprecationWarning: localize.WebViews.dvDeprecationWarning
+            dvDeprecationWarning: localize.WebViews.dvDeprecationWarning,
+            dataframeRowsColumns: localize.WebViews.dataframeRowsColumns,
+            dataframePerPage: localize.WebViews.dataframePerPage,
+            dataframePreviousPage: localize.WebViews.dataframePreviousPage,
+            dataframeNextPage: localize.WebViews.dataframeNextPage,
+            dataframePageOf: localize.WebViews.dataframePageOf,
+            dataframeCopyTable: localize.WebViews.dataframeCopyTable,
+            dataframeExportTable: localize.WebViews.dataframeExportTable
         };
         this.postMessageInternal(SharedMessages.LocInit, JSON.stringify(locStrings)).catch(noop);
     }
@@ -317,7 +324,7 @@ export abstract class WebviewHost<IMapping> implements IDisposable {
             event.affectsConfiguration('editor.scrollbar.horizontalScrollbarSize') ||
             event.affectsConfiguration('files.autoSave') ||
             event.affectsConfiguration('files.autoSaveDelay') ||
-            event.affectsConfiguration('jupyter.widgetScriptSources')
+            event.affectsConfiguration('deepnote.widgetScriptSources')
         ) {
             // See if the theme changed
             const newSettings = await this.generateDataScienceExtraSettings();

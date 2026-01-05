@@ -6,26 +6,28 @@
 /* jshint node: true */
 /* jshint esversion: 6 */
 
-'use strict';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import gulp from 'gulp';
+import glob from 'glob';
+import spawn from 'cross-spawn';
+import path from 'path';
+import del from 'del';
+import fs from 'fs-extra';
+import nativeDependencyChecker from 'node-has-native-dependencies';
+import flat from 'flat';
+import { spawnSync } from 'child_process';
+import { dumpTestSummary } from './build/webTestReporter.js';
+import { Validator } from 'jsonschema';
+import * as common from './build/webpack/common.js';
+import * as jsonc from 'jsonc-parser';
+import { isCI } from './build/constants.js';
 
-const gulp = require('gulp');
-const glob = require('glob');
-const spawn = require('cross-spawn');
-const path = require('path');
-const del = require('del');
-const fs = require('fs-extra');
-const nativeDependencyChecker = require('node-has-native-dependencies');
-const flat = require('flat');
-const { spawnSync } = require('child_process');
-const isCI = process.env.TF_BUILD !== undefined || process.env.GITHUB_ACTIONS === 'true';
-const { dumpTestSummary } = require('./build/webTestReporter');
-const { Validator } = require('jsonschema');
-const common = require('./build/webpack/common');
-const jsonc = require('jsonc-parser');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 gulp.task('createNycFolder', async (done) => {
     try {
-        const fs = require('fs');
         fs.mkdirSync(path.join(__dirname, '.nyc_output'));
     } catch (e) {
         //
@@ -67,7 +69,7 @@ gulp.task('validateTranslationFiles', (done) => {
     glob.sync('package.nls.*.json', { sync: true }).forEach((file) => {
         // Verify we can open and parse as JSON.
         try {
-            const js = JSON.parse(fs.readFileSync(file));
+            const js = JSON.parse(fs.readFileSync(file, 'utf-8'));
             const result = validator.validate(js, schema);
             if (Array.isArray(result.errors) && result.errors.length) {
                 console.error(result.errors);
@@ -104,7 +106,7 @@ gulp.task('checkNpmDependencies', (done) => {
      * Sometimes we have to update the package-lock.json file to upload dependencies.
      * Thisscript will ensure that even if the package-lock.json is re-generated the (minimum) version numbers are still as expected.
      */
-    const packageLock = require('./package-lock.json');
+    const packageLock = JSON.parse(fs.readFileSync(path.join(__dirname, 'package-lock.json'), 'utf-8'));
     const errors = [];
 
     const expectedVersions = [
@@ -249,7 +251,7 @@ function hasNativeDependencies() {
 }
 
 async function generateTelemetry() {
-    const generator = require('./out/telemetryGenerator.node');
+    const generator = await import('./out/telemetryGenerator.node.js');
     await generator.default();
 }
 gulp.task('generateTelemetry', async () => {
@@ -268,9 +270,9 @@ gulp.task('validateTelemetry', async () => {
 
 gulp.task('validatePackageLockJson', async () => {
     const fileName = path.join(__dirname, 'package-lock.json');
-    const oldContents = fs.readFileSync(fileName).toString();
+    const oldContents = fs.readFileSync(fileName, 'utf-8');
     spawnSync('npm', ['install', '--prefer-offline']);
-    const newContents = fs.readFileSync(fileName).toString();
+    const newContents = fs.readFileSync(fileName, 'utf-8');
     if (oldContents.trim() !== newContents.trim()) {
         throw new Error('package-lock.json has changed after running `npm install`');
     }
@@ -278,7 +280,7 @@ gulp.task('validatePackageLockJson', async () => {
 
 gulp.task('verifyUnhandledErrors', async () => {
     const fileName = path.join(__dirname, 'unhandledErrors.txt');
-    const contents = fs.pathExistsSync(fileName) ? fs.readFileSync(fileName, 'utf8') : '';
+    const contents = fs.pathExistsSync(fileName) ? fs.readFileSync(fileName, 'utf-8') : '';
     if (contents.trim().length) {
         console.error(contents);
         throw new Error('Unhandled errors detected. Please fix them before merging this PR.', contents);

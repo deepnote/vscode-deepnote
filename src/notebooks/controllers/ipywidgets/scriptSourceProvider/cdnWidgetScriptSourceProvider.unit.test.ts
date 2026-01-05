@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import { assert } from 'chai';
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import nock from 'nock';
 import * as path from '../../../../platform/vscode-path/path';
 import { Readable } from 'stream';
@@ -23,9 +23,9 @@ import { dispose } from '../../../../platform/common/utils/lifecycle';
 import { Common, DataScience } from '../../../../platform/common/utils/localize';
 import { computeHash } from '../../../../platform/common/crypto';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../../test/vscode-mock';
+import sanitize from 'sanitize-filename';
 
 /* eslint-disable @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports, , @typescript-eslint/no-explicit-any, , no-console */
-const sanitize = require('sanitize-filename');
 
 const unpgkUrl = 'https://unpkg.com/';
 const jsdelivrUrl = 'https://cdn.jsdelivr.net/npm/';

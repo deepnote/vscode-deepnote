@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 import * as vscode from 'vscode';
-import { INotebookLanguageClient } from './pylance';
 import {
     cellIndexesToRanges,
     areRangesEqual,
@@ -12,6 +11,32 @@ import {
     cellRangesToIndexes
 } from './common';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
+
+/**
+ * Interface for a language client that provides notebook-specific features.
+ * Previously provided by Pylance, now needs to be implemented by DeepnoteLspClientManager.
+ */
+export interface INotebookLanguageClient {
+    registerJupyterPythonPathFunction?(func: (uri: vscode.Uri) => Promise<string | undefined>): void;
+    getCompletionItems?(
+        document: vscode.TextDocument,
+        position: vscode.Position,
+        context: vscode.CompletionContext,
+        token: vscode.CancellationToken
+    ): Promise<vscode.CompletionItem[] | vscode.CompletionList | undefined>;
+    getReferences(
+        textDocument: vscode.TextDocument,
+        position: vscode.Position,
+        options: {
+            includeDeclaration: boolean;
+        },
+        token: vscode.CancellationToken
+    ): Promise<LocationWithReferenceKind[] | null | undefined>;
+    getDocumentSymbols?(
+        document: vscode.TextDocument,
+        token: vscode.CancellationToken
+    ): Promise<vscode.DocumentSymbol[] | undefined>;
+}
 
 const writeDecorationType = vscode.window.createTextEditorDecorationType({
     after: {
@@ -714,7 +739,7 @@ export class ExecutionFixCodeActionsProvider implements vscode.CodeActionProvide
         if (matchingRefs.some((r) => r)) {
             const action = new vscode.CodeAction('Run Precedent Cells', vscode.CodeActionKind.QuickFix);
             action.command = {
-                command: 'jupyter.runPrecedentCells',
+                command: 'deepnote.runPrecedentCells',
                 title: 'Run Precedent Cells',
                 arguments: [targetCell]
             };

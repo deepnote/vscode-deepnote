@@ -2,9 +2,10 @@ import { inject, injectable } from 'inversify';
 import { workspace, CancellationToken, window, Uri, l10n } from 'vscode';
 import * as fs from 'fs';
 
-import type { DeepnoteProject } from './deepnoteTypes';
+import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 import { ILogger } from '../../platform/logging/types';
 import { IPersistentStateFactory } from '../../platform/common/types';
+import { Cancellation } from '../../platform/common/cancellation';
 
 const DONT_ASK_OVERWRITE_REQUIREMENTS_KEY = 'DEEPNOTE_DONT_ASK_OVERWRITE_REQUIREMENTS';
 
@@ -30,10 +31,7 @@ export class DeepnoteRequirementsHelper implements IDeepnoteRequirementsHelper {
      */
     async createRequirementsFile(project: DeepnoteProject, token: CancellationToken): Promise<void> {
         try {
-            // Check if the operation has been cancelled
-            if (token.isCancellationRequested) {
-                return;
-            }
+            Cancellation.throwIfCanceled(token);
 
             const requirements = project.project.settings?.requirements;
             if (!requirements || !Array.isArray(requirements) || requirements.length === 0) {
@@ -63,10 +61,7 @@ export class DeepnoteRequirementsHelper implements IDeepnoteRequirementsHelper {
                 return;
             }
 
-            // Check cancellation before performing I/O
-            if (token.isCancellationRequested) {
-                return;
-            }
+            Cancellation.throwIfCanceled(token);
 
             // Use Uri.joinPath to build the filesystem path using the Uri API
             const requirementsPath = Uri.joinPath(workspaceFolders[0].uri, 'requirements.txt').fsPath;
@@ -117,9 +112,7 @@ export class DeepnoteRequirementsHelper implements IDeepnoteRequirementsHelper {
                     );
 
                     // Check cancellation after showing the prompt
-                    if (token.isCancellationRequested) {
-                        return;
-                    }
+                    Cancellation.throwIfCanceled(token);
 
                     switch (response) {
                         case yes:
@@ -152,10 +145,7 @@ export class DeepnoteRequirementsHelper implements IDeepnoteRequirementsHelper {
             await fs.promises.writeFile(requirementsPath, requirementsText, 'utf8');
 
             // Check cancellation after I/O operation
-            if (token.isCancellationRequested) {
-                this.logger.info('Requirements file creation was cancelled after write');
-                return;
-            }
+            Cancellation.throwIfCanceled(token);
 
             this.logger.info(
                 `Created requirements.txt with ${normalizedRequirements.length} dependencies at ${requirementsPath}`

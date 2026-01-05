@@ -5,8 +5,7 @@ import { QuickPickItem, workspace } from 'vscode';
 import { Environment } from '@vscode/python-extension';
 import { BaseProviderBasedQuickPick } from '../common/providerBasedQuickPick';
 import { getEnvironmentType, getPythonEnvDisplayName, isCondaEnvironmentWithoutPython } from './helpers';
-import { getDisplayPath } from '../common/platform/fs-paths';
-import { PlatformService } from '../common/platform/platformService.node';
+import { getDisplayPath } from '../common/platform/fs-paths.node';
 import { DataScience } from '../common/utils/localize';
 import { EnvironmentType } from '../pythonEnvironments/info';
 
@@ -19,11 +18,7 @@ export function pythonEnvironmentQuickPick(item: Environment, quickPick: BasePro
             ? '$(warning) '
             : '';
     const quickPickItem: QuickPickItem = { label: `${icon}${label}` };
-    quickPickItem.description = getDisplayPath(
-        item.executable.uri || item.path,
-        workspace.workspaceFolders || [],
-        new PlatformService().homeDir
-    );
+    quickPickItem.description = getDisplayPath(item.executable.uri || item.path, workspace.workspaceFolders || []);
     quickPickItem.tooltip = isCondaEnvironmentWithoutPython(item) ? DataScience.pythonCondaKernelsWithoutPython : '';
     return quickPickItem;
 }

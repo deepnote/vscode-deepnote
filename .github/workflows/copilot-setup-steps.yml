@@ -12,7 +12,6 @@ on:
       - .github/workflows/copilot-setup-steps.yml
 
 env:
-  NODE_VERSION: 22.15.1
   NPM_VERSION: 10.9.2
   PYTHON_VERSION: 3.12
   DENO_VERSION: '~1.37'
@@ -31,29 +30,26 @@ jobs:
     permissions:
       # If you want to clone the repository as part of your setup steps, for example to install dependencies, you'll need the `contents: read` permission. If you don't clone the repository in your setup steps, Copilot will do this for you automatically after the steps complete.
       contents: read
-      packages: read
 
     # You can define any steps you want, and they will run before the agent starts.
     # If you do not check out your code, Copilot will do this for you.
     steps:
       - name: Checkout code
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
       - name: Use Node ${{env.NODE_VERSION}}
-        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6
         with:
-          node-version: ${{env.NODE_VERSION}}
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@deepnote'
+          node-version-file: '.nvmrc'
 
       - name: Cache npm files
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5
         with:
           path: ~/.npm
           key: ${{runner.os}}-${{env.CACHE_NPM_DEPS}}-${{hashFiles('package-lock.json')}}
 
       - name: Cache the out/ directory
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5
         with:
           path: ./out
           key: ${{runner.os}}-${{env.CACHE_OUT_DIRECTORY}}-${{hashFiles('src/**')}}
@@ -62,8 +58,6 @@ jobs:
       # Let that happen in other jobs, this job needs to be fast
       - name: npm ci
         run: npm ci --ignore-scripts --prefer-offline --no-audit
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: npm run postinstall
         run: npm run postinstall
@@ -79,7 +73,7 @@ jobs:
         continue-on-error: true
 
       - name: Install uv
-        uses: astral-sh/setup-uv@3259c6206f993105e3a61b142c2d97bf4b9ef83d # v7
+        uses: astral-sh/setup-uv@681c641aba71e4a1c380be3ab5e12ad51f415867 # v7
 
       - name: Setup Venv
         run: |

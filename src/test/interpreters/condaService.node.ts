@@ -1,10 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import glob from 'glob';
+import { glob } from 'glob';
 import * as path from '../../platform/vscode-path/path';
 import { parse, SemVer } from 'semver';
-import { promisify } from 'util';
 import { logger } from '../../platform/logging';
 import { arePathsSame } from '../../platform/common/platform/fileUtils.node';
 import { ProcessService } from '../../platform/common/process/proc.node';
@@ -12,10 +11,9 @@ import { parseCondaEnvFileContents } from './condaHelper';
 import { isCondaEnvironment } from './condaLocator.node';
 import { Uri } from 'vscode';
 import { getOSType, OSType } from '../../platform/common/utils/platform';
+import untildify from 'untildify';
 
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
-const untildify: (value: string) => string = require('untildify');
 
 // This glob pattern will match all of the following:
 // ~/anaconda/bin/conda, ~/anaconda3/bin/conda, ~/miniconda/bin/conda, ~/miniconda3/bin/conda
@@ -65,14 +63,14 @@ const CondaLocationsGlobWin = `{${condaGlobPathsForWindows.join(',')}}`;
  */
 async function getCondaFileFromKnownLocations(): Promise<string> {
     const globPattern = getOSType() === OSType.Windows ? CondaLocationsGlobWin : CondaLocationsGlob;
-    const condaFiles = await promisify(glob)(globPattern).catch<string[]>((failReason) => {
+    const condaFiles = await glob(globPattern, {}).catch<string[]>((failReason) => {
         logger.warn(
             'Default conda location search failed.',
             `Searching for default install locations for conda results in error: ${failReason}`
         );
         return [];
     });
-    const validCondaFiles = condaFiles.filter((condaPath) => condaPath.length > 0);
+    const validCondaFiles = condaFiles.filter((condaPath: string) => condaPath.length > 0);
     return validCondaFiles.length === 0 ? 'conda' : validCondaFiles[0];
 }
 

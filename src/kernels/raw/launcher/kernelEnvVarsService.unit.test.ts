@@ -17,6 +17,7 @@ import { IJupyterKernelSpec } from '../../types';
 import { Uri } from 'vscode';
 import { IConfigurationService, IWatchableJupyterSettings, type ReadWrite } from '../../../platform/common/types';
 import { JupyterSettings } from '../../../platform/common/configSettings';
+import { ISqlIntegrationEnvVarsProvider } from '../../../platform/notebooks/deepnote/types';
 
 use(chaiAsPromised);
 
@@ -29,6 +30,7 @@ suite('Kernel Environment Variables Service', () => {
     let interpreterService: IInterpreterService;
     let configService: IConfigurationService;
     let settings: IWatchableJupyterSettings;
+    let sqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider;
     const pathFile = Uri.joinPath(Uri.file('foobar'), 'bar');
     const interpreter: PythonEnvironment = {
         uri: pathFile,
@@ -53,14 +55,8 @@ suite('Kernel Environment Variables Service', () => {
         variablesService = new EnvironmentVariablesService(instance(fs));
         configService = mock<IConfigurationService>();
         settings = mock(JupyterSettings);
+        sqlIntegrationEnvVars = mock<ISqlIntegrationEnvVarsProvider>();
         when(configService.getSettings(anything())).thenReturn(instance(settings));
-        kernelVariablesService = new KernelEnvironmentVariablesService(
-            instance(interpreterService),
-            instance(envActivation),
-            variablesService,
-            instance(customVariablesService),
-            instance(configService)
-        );
         if (process.platform === 'win32') {
             // Win32 will generate upper case all the time
             const entries = Object.entries(process.env);
@@ -72,8 +68,33 @@ suite('Kernel Environment Variables Service', () => {
             processEnv = process.env;
         }
         processPath = Object.keys(processEnv).find((k) => k.toLowerCase() == 'path');
+        kernelVariablesService = buildKernelEnvVarsService();
     });
+
     teardown(() => Object.assign(process.env, originalEnvVars));
+
+    /**
+     * Helper factory function to build KernelEnvironmentVariablesService with optional overrides.
+     * @param overrides Optional overrides for the service dependencies
+     * @returns A new instance of KernelEnvironmentVariablesService
+     */
+    function buildKernelEnvVarsService(overrides?: {
+        sqlIntegrationEnvVars?: ISqlIntegrationEnvVarsProvider | undefined;
+    }): KernelEnvironmentVariablesService {
+        const sqlProvider =
+            overrides && 'sqlIntegrationEnvVars' in overrides
+                ? overrides.sqlIntegrationEnvVars
+                : instance(sqlIntegrationEnvVars);
+
+        return new KernelEnvironmentVariablesService(
+            instance(interpreterService),
+            instance(envActivation),
+            variablesService,
+            instance(customVariablesService),
+            instance(configService),
+            sqlProvider
+        );
+    }
 
     test('Python Interpreter path trumps process', async () => {
         when(envActivation.getActivatedEnvironmentVariables(anything(), anything(), anything())).thenResolve({
@@ -84,6 +105,7 @@ suite('Kernel Environment Variables Service', () => {
         });
         when(customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())).thenResolve();
         when(customVariablesService.getCustomEnvironmentVariables(anything(), anything())).thenResolve();
+        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
 
         const vars = await kernelVariablesService.getEnvironmentVariables(undefined, interpreter, kernelSpec);
 
@@ -100,6 +122,7 @@ suite('Kernel Environment Variables Service', () => {
         });
         when(customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())).thenResolve();
         when(customVariablesService.getCustomEnvironmentVariables(anything(), anything())).thenResolve();
+        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
 
         const vars = await kernelVariablesService.getEnvironmentVariables(undefined, interpreter, kernelSpec);
 
@@ -119,6 +142,7 @@ suite('Kernel Environment Variables Service', () => {
         when(customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())).thenResolve({
             HELLO_VAR: 'new'
         });
+        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
 
         const vars = await kernelVariablesService.getEnvironmentVariables(undefined, interpreter, kernelSpec);
 
@@ -134,6 +158,7 @@ suite('Kernel Environment Variables Service', () => {
         when(customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())).thenResolve({
             HELLO_VAR: 'new'
         });
+        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
 
         const vars = await kernelVariablesService.getEnvironmentVariables(undefined, undefined, kernelSpec);
 
@@ -148,6 +173,7 @@ suite('Kernel Environment Variables Service', () => {
     test('Returns process.env vars if no interpreter and no kernelspec.env', async () => {
         delete kernelSpec.interpreterPath;
         when(customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())).thenResolve();
+        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
 
         const vars = await kernelVariablesService.getEnvironmentVariables(undefined, undefined, kernelSpec);
 
@@ -161,6 +187,7 @@ suite('Kernel Environment Variables Service', () => {
         when(customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())).thenResolve({
             PATH: 'foobaz'
         });
+        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
 
         const vars = await kernelVariablesService.getEnvironmentVariables(undefined, interpreter, kernelSpec);
         assert.isOk(processPath);
@@ -178,6 +205,7 @@ suite('Kernel Environment Variables Service', () => {
         when(customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())).thenResolve({
             PATH: 'foobaz'
         });
+        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
 
         // undefined for interpreter here, interpreterPath from the spec should be used
         const vars = await kernelVariablesService.getEnvironmentVariables(undefined, undefined, kernelSpec);
@@ -196,6 +224,7 @@ suite('Kernel Environment Variables Service', () => {
         when(customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())).thenResolve({
             PATH: 'foobaz'
         });
+        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
         kernelSpec.env = {
             ONE: '1',
             TWO: '2'
@@ -216,6 +245,7 @@ suite('Kernel Environment Variables Service', () => {
         when(customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())).thenResolve({
             PATH: 'foobaz'
         });
+        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
         kernelSpec.env = {
             ONE: '1',
             TWO: '2',
@@ -241,6 +271,7 @@ suite('Kernel Environment Variables Service', () => {
         when(customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())).thenResolve({
             PATH: 'foobaz'
         });
+        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
         when(settings.excludeUserSitePackages).thenReturn(shouldBeSet);
 
         // undefined for interpreter here, interpreterPath from the spec should be used
@@ -261,5 +292,137 @@ suite('Kernel Environment Variables Service', () => {
     });
     test('PYTHONNOUSERSITE should be set for Virtual Env', async () => {
         await testPYTHONNOUSERSITE(EnvironmentType.VirtualEnv, true);
+    });
+
+    suite('SQL Integration Environment Variables', () => {
+        test('SQL integration env vars are merged for Python kernels', async () => {
+            const resource = Uri.file('test.ipynb');
+            when(envActivation.getActivatedEnvironmentVariables(anything(), anything(), anything())).thenResolve({
+                PATH: 'foobar'
+            });
+            when(
+                customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())
+            ).thenResolve();
+            when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({
+                SQL_MY_DB: '{"url":"postgresql://user:pass@host:5432/db","params":{},"param_style":"format"}'
+            });
+
+            const vars = await kernelVariablesService.getEnvironmentVariables(resource, interpreter, kernelSpec);
+
+            assert.strictEqual(
+                vars!['SQL_MY_DB'],
+                '{"url":"postgresql://user:pass@host:5432/db","params":{},"param_style":"format"}'
+            );
+        });
+
+        test('SQL integration env vars are merged for non-Python kernels', async () => {
+            const resource = Uri.file('test.ipynb');
+            delete kernelSpec.interpreterPath;
+            when(
+                customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())
+            ).thenResolve();
+            when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({
+                SQL_MY_DB: '{"url":"postgresql://user:pass@host:5432/db","params":{},"param_style":"format"}'
+            });
+
+            const vars = await kernelVariablesService.getEnvironmentVariables(resource, undefined, kernelSpec);
+
+            assert.strictEqual(
+                vars!['SQL_MY_DB'],
+                '{"url":"postgresql://user:pass@host:5432/db","params":{},"param_style":"format"}'
+            );
+        });
+
+        test('SQL integration env vars are not added when provider returns empty object', async () => {
+            const resource = Uri.file('test.ipynb');
+            when(envActivation.getActivatedEnvironmentVariables(anything(), anything(), anything())).thenResolve({
+                PATH: 'foobar'
+            });
+            when(
+                customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())
+            ).thenResolve();
+            when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
+
+            const vars = await kernelVariablesService.getEnvironmentVariables(resource, interpreter, kernelSpec);
+
+            assert.isUndefined(vars!['SQL_MY_DB']);
+        });
+
+        test('SQL integration env vars are not added when provider returns undefined', async () => {
+            const resource = Uri.file('test.ipynb');
+            when(envActivation.getActivatedEnvironmentVariables(anything(), anything(), anything())).thenResolve({
+                PATH: 'foobar'
+            });
+            when(
+                customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())
+            ).thenResolve();
+            when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
+
+            const vars = await kernelVariablesService.getEnvironmentVariables(resource, interpreter, kernelSpec);
+
+            assert.isUndefined(vars!['SQL_MY_DB']);
+        });
+
+        test('Multiple SQL integration env vars are merged correctly', async () => {
+            const resource = Uri.file('test.ipynb');
+            when(envActivation.getActivatedEnvironmentVariables(anything(), anything(), anything())).thenResolve({
+                PATH: 'foobar'
+            });
+            when(
+                customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())
+            ).thenResolve();
+            when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({
+                SQL_MY_DB: '{"url":"postgresql://user:pass@host:5432/db","params":{},"param_style":"format"}',
+                SQL_ANOTHER_DB: '{"url":"postgresql://user2:pass2@host2:5432/db2","params":{},"param_style":"format"}'
+            });
+
+            const vars = await kernelVariablesService.getEnvironmentVariables(resource, interpreter, kernelSpec);
+
+            assert.strictEqual(
+                vars!['SQL_MY_DB'],
+                '{"url":"postgresql://user:pass@host:5432/db","params":{},"param_style":"format"}'
+            );
+            assert.strictEqual(
+                vars!['SQL_ANOTHER_DB'],
+                '{"url":"postgresql://user2:pass2@host2:5432/db2","params":{},"param_style":"format"}'
+            );
+        });
+
+        test('SQL integration env vars work when provider is undefined (optional dependency)', async () => {
+            const resource = Uri.file('test.ipynb');
+            when(envActivation.getActivatedEnvironmentVariables(anything(), anything(), anything())).thenResolve({
+                PATH: 'foobar'
+            });
+            when(
+                customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())
+            ).thenResolve();
+
+            // Create service without SQL integration provider
+            const serviceWithoutSql = buildKernelEnvVarsService({ sqlIntegrationEnvVars: undefined });
+
+            const vars = await serviceWithoutSql.getEnvironmentVariables(resource, interpreter, kernelSpec);
+
+            assert.isOk(vars);
+            assert.isUndefined(vars!['SQL_MY_DB']);
+        });
+
+        test('SQL integration env vars handle errors gracefully', async () => {
+            const resource = Uri.file('test.ipynb');
+            when(envActivation.getActivatedEnvironmentVariables(anything(), anything(), anything())).thenResolve({
+                PATH: 'foobar'
+            });
+            when(
+                customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())
+            ).thenResolve();
+            when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenReject(
+                new Error('Failed to get SQL env vars')
+            );
+
+            const vars = await kernelVariablesService.getEnvironmentVariables(resource, interpreter, kernelSpec);
+
+            // Should still return vars without SQL integration vars
+            assert.isOk(vars);
+            assert.isUndefined(vars!['SQL_MY_DB']);
+        });
     });
 });

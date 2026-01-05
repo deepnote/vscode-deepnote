@@ -1,5 +1,10 @@
 Copyright (c) Deepnote. All rights reserved.
 
+This product includes code derived from the VS Code Jupyter extension:
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+Both portions are licensed under the MIT License as follows:
+
 MIT License
 
 Permission is hereby granted, free of charge, to any person obtaining a copy

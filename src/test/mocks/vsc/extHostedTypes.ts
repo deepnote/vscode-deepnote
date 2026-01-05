@@ -103,6 +103,7 @@ export namespace vscMockExtHostedTypes {
     }
     export enum NotebookCellKind {
         Markdown = 1,
+        Markup = 1, // VS Code uses 'Markup' but some older code uses 'Markdown' - both have value 1
         Code = 2
     }
     export enum NotebookCellExecutionState {
@@ -2404,6 +2405,29 @@ export namespace vscMockExtHostedTypes {
         constructor(autoForwardAction: PortAutoForwardAction) {
             this.autoForwardAction = autoForwardAction;
         }
+    }
+
+    /**
+     * Notebook editor reveal type.
+     */
+    export enum NotebookEditorRevealType {
+        /**
+         * The range will be revealed with as little scrolling as possible.
+         */
+        Default = 0,
+        /**
+         * The range will always be revealed in the center of the viewport.
+         */
+        InCenter = 1,
+        /**
+         * If the range is outside the viewport, it will be revealed in the center of the viewport.
+         * Otherwise, it will be revealed with as little scrolling as possible.
+         */
+        InCenterIfOutsideViewport = 2,
+        /**
+         * The range will always be revealed at the top of the viewport.
+         */
+        AtTop = 3
     }
 
     /**

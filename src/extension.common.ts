@@ -18,7 +18,6 @@ import {
 import {
     STANDARD_OUTPUT_CHANNEL,
     JUPYTER_OUTPUT_CHANNEL,
-    PylanceExtension,
     PythonExtension,
     Telemetry,
     PythonEnvironmentExtension
@@ -39,7 +38,6 @@ import { IServiceContainer, IServiceManager } from './platform/ioc/types';
 import { initializeLoggers as init, logger } from './platform/logging';
 import { ILogger } from './platform/logging/types';
 import { getJupyterOutputChannel } from './standalone/devTools/jupyterOutputChannel';
-import { isUsingPylance } from './standalone/intellisense/notebookPythonPathService';
 import { noop } from './platform/common/utils/misc';
 import { sendErrorTelemetry } from './platform/telemetry/startupTelemetry';
 import { StopWatch } from './platform/common/utils/stopWatch';
@@ -76,16 +74,6 @@ export async function initializeLoggers(
         );
     } else {
         standardOutputChannel.appendLine('Python Environment Extension not installed.');
-    }
-    const pylanceExtension = extensions.getExtension(PylanceExtension);
-    if (pylanceExtension) {
-        standardOutputChannel.appendLine(
-            `Pylance Extension Version${isUsingPylance() ? '' : ' (Not Used) '}: ${
-                pylanceExtension.packageJSON['version']
-            }.`
-        );
-    } else {
-        standardOutputChannel.appendLine('Pylance Extension not installed.');
     }
     if (options?.platform) {
         standardOutputChannel.appendLine(`Platform: ${options.platform} (${options.arch}).`);
@@ -172,7 +160,7 @@ export async function postActivateLegacy(context: IExtensionContext, serviceCont
     sendTelemetryEvent(Telemetry.ExperimentLoad, { duration });
 
     // "initialize" "services"
-    commands.executeCommand('setContext', 'jupyter.vscode.channel', getVSCodeChannel()).then(noop, noop);
+    commands.executeCommand('setContext', 'deepnote.vscode.channel', getVSCodeChannel()).then(noop, noop);
 
     // "activate" everything else
     serviceContainer.get<IExtensionActivationManager>(IExtensionActivationManager).activate();

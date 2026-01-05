@@ -7,13 +7,7 @@ import * as fs from 'fs-extra';
 import { downloadAndUnzipVSCode, resolveCliPathFromVSCodeExecutablePath, runTests } from '@vscode/test-electron';
 import { EXTENSION_ROOT_DIR_FOR_TESTS, IS_PERF_TEST, IS_SMOKE_TEST } from './constants.node';
 import * as tmp from 'tmp';
-import {
-    PythonExtension,
-    PylanceExtension,
-    setTestExecution,
-    RendererExtension,
-    isCI
-} from '../platform/common/constants';
+import { PythonExtension, setTestExecution, RendererExtension, isCI } from '../platform/common/constants';
 import { DownloadPlatform } from '@vscode/test-electron/out/download';
 import { arch } from 'os';
 
@@ -106,9 +100,6 @@ async function installPythonExtension(vscodeExecutablePath: string, extensionsDi
     const cliPath = resolveCliPathFromVSCodeExecutablePath(vscodeExecutablePath, platform);
     await installExtension(PythonExtension, cliPath, extensionsDir, ['--pre-release']);
 
-    // Make sure pylance is there too as we'll use it for intellisense tests
-    await installExtension(PylanceExtension, cliPath, extensionsDir);
-
     // Make sure renderers is there too as we'll use it for widget tests
     await installExtension(RendererExtension, cliPath, extensionsDir);
 }
@@ -144,7 +135,7 @@ async function createSettings(): Promise<string> {
     const settingsFile = path.join(userDataDirectory, 'User', 'settings.json');
     const defaultSettings: Record<string, string | boolean | string[]> = {
         'python.insidersChannel': 'off',
-        'jupyter.logging.level': 'debug',
+        'deepnote.logging.level': 'debug',
         'python.logging.level': 'debug',
         'files.autoSave': 'off',
         'python.experiments.enabled': true,
@@ -154,9 +145,9 @@ async function createSettings(): Promise<string> {
         // For instance if the start page UI opens up, then active editor, active notebook and the like are empty.
         'python.showStartPage': false,
         // Disable the restart ask so that restart just happens
-        'jupyter.askForKernelRestart': false,
+        'deepnote.askForKernelRestart': false,
         // To get widgets working.
-        'jupyter.widgetScriptSources': ['jsdelivr.com', 'unpkg.com'],
+        'deepnote.widgetScriptSources': ['jsdelivr.com', 'unpkg.com'],
         'notebook.stickyScroll.enabled': true, // Required for perf tests
         'notebook.outline.showCodeCells': true // Required for perf tests
     };
@@ -205,7 +196,6 @@ async function start() {
             .concat(['--enable-proposed-api'])
             .concat(['--timeout', '5000'])
             .concat(['--disable-extension', 'ms-python.isort']) // We don't need this, also has a lot of errors on CI and floods CI logs unnecessarily.
-            .concat(IS_SMOKE_TEST() ? ['--disable-extension', 'ms-python.vscode-pylance'] : []) // For some reason pylance crashes and takes down the entire test run. See https://github.com/microsoft/vscode-jupyter/issues/13200
             .concat(['--extensions-dir', extensionsDir])
             .concat(['--user-data-dir', userDataDirectory]),
         // .concat(['--verbose']), // Too much logging from VS Code, enable this to see what's going on in VSC.

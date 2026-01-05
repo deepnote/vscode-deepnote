@@ -24,6 +24,8 @@ import {
     window,
     extensions
 } from 'vscode';
+import { coerce, SemVer } from 'semver';
+import * as jupyterLab from '@jupyterlab/services';
 
 import type { Kernel } from '@jupyterlab/services';
 import { CellExecutionCreator } from './cellExecutionCreator';
@@ -45,7 +47,7 @@ import { handleTensorBoardDisplayDataOutput } from './executionHelpers';
 import { Identifiers, RendererExtension, WIDGET_MIMETYPE } from '../../platform/common/constants';
 import { CellOutputDisplayIdTracker } from './cellDisplayIdTracker';
 import { createDeferred } from '../../platform/common/utils/async';
-import { coerce, SemVer } from 'semver';
+import { CHART_BIG_NUMBER_MIME_TYPE } from '../../platform/deepnote/deepnoteConstants';
 
 // Helper interface for the set_next_input execute reply payload
 interface ISetNextInputPayload {
@@ -304,8 +306,6 @@ export class CellExecutionMessageHandler implements IDisposable {
         if (this.cell.document.isClosed) {
             return this.endCellExecution();
         }
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const jupyterLab = require('@jupyterlab/services') as typeof import('@jupyterlab/services');
 
         if (!this.request && direction === 'recv') {
             const parentMsgId = getParentHeaderMsgId(msg);
@@ -505,8 +505,6 @@ export class CellExecutionMessageHandler implements IDisposable {
             logger.debug(`Kernel acknowledged execution of cell ${this.cell.index} @ ${this.startTime}`);
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const jupyterLab = require('@jupyterlab/services') as typeof import('@jupyterlab/services');
         if (jupyterLab.KernelMessage.isCommOpenMsg(msg)) {
             this.handleCommOpen(msg);
         } else if (jupyterLab.KernelMessage.isExecuteResultMsg(msg)) {
@@ -1142,9 +1140,6 @@ export class CellExecutionMessageHandler implements IDisposable {
 
     @swallowExceptions()
     private handleReply(msg: KernelMessage.IShellControlMessage) {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const jupyterLab = require('@jupyterlab/services') as typeof import('@jupyterlab/services');
-
         if (jupyterLab.KernelMessage.isExecuteReplyMsg(msg)) {
             this.handleExecuteReply(msg);
 
@@ -1181,6 +1176,15 @@ export class CellExecutionMessageHandler implements IDisposable {
         const output = translateCellDisplayOutput(
             new NotebookCellOutput(outputToBeUpdated.outputItems, outputToBeUpdated.outputContainer.metadata)
         );
+
+        const data = msg.content.data;
+        // deepnote-toolkit returns the text/plain mime type for big number outputs
+        // and for the custom renderer to be used, we need to return the application/vnd.deepnote.chart.big-number+json mime type
+        if (outputToBeUpdated.cell.metadata['__deepnotePocket']?.['type'] === 'big-number') {
+            data[CHART_BIG_NUMBER_MIME_TYPE] = data['text/plain'];
+            delete data['text/plain'];
+        }
+
         const newOutput = cellOutputToVSCCellOutput(
             {
                 ...output,

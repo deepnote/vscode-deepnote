@@ -3,17 +3,26 @@
 
 import * as path from 'path';
 import * as esbuild from 'esbuild';
-import { green } from 'colors';
+import colors from 'colors';
 import type { BuildOptions, Charset, Loader, Plugin, SameShape } from 'esbuild';
 import { lessLoader } from 'esbuild-plugin-less';
 import fs from 'fs-extra';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import { createRequire } from 'module';
 import { getZeroMQPreBuildsFoldersToKeep, getBundleConfiguration, bundleConfiguration } from '../webpack/common';
-import ImportGlobPlugin from 'esbuild-plugin-import-glob';
+import ImportGlobPluginModule from 'esbuild-plugin-import-glob';
 import postcss from 'postcss';
+
+const ImportGlobPlugin = ImportGlobPluginModule.default || ImportGlobPluginModule;
 import tailwindcss from '@tailwindcss/postcss';
 import autoprefixer from 'autoprefixer';
-const plugin = require('node-stdlib-browser/helpers/esbuild/plugin');
-const stdLibBrowser = require('node-stdlib-browser');
+import plugin from 'node-stdlib-browser/helpers/esbuild/plugin';
+import stdLibBrowser from 'node-stdlib-browser';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const require = createRequire(import.meta.url);
 
 // These will not be in the main desktop bundle, but will be in the web bundle.
 // In desktop, we will bundle/copye each of these separately into the node_modules folder.
@@ -24,10 +33,7 @@ const deskTopNodeModulesToExternalize = [
     'png-js',
     'zeromq', // Copy, do not bundle
     'zeromqold', // Copy, do not bundle
-    // Its lazy loaded by Jupyter lab code, & since this isn't used directly in our code
-    // there's no need to include into the main bundle.
-    'node-fetch',
-    // Its loaded by node-fetch, & since that is lazy loaded
+    // Its loaded by node-fetch (which is now bundled), & since that is lazy loaded
     // there's no need to include into the main bundle.
     'iconv-lite',
     // Its loaded by ivonv-lite, & since that is lazy loaded
@@ -36,28 +42,34 @@ const deskTopNodeModulesToExternalize = [
     'svg-to-pdfkit',
     // Lazy loaded modules.
     'vscode-languageclient/node',
-    '@vscode/extension-telemetry',
-    '@jupyterlab/services',
     '@jupyterlab/nbformat',
-    '@jupyterlab/services/lib/kernel/serialize',
-    '@jupyterlab/services/lib/kernel/default',
-    'vscode-jsonrpc' // Used by a few modules, might as well pull this out, instead of duplicating it in separate bundles.
+    'vscode-jsonrpc',
+    // vega-lite uses top-level await (through vega-canvas), must be external
+    'vega-lite'
 ];
 const commonExternals = [
     'log4js',
     'vscode',
     'commonjs',
-    'node:crypto',
     'vscode-jsonrpc', // Used by a few modules, might as well pull this out, instead of duplicating it in separate bundles.
     // Ignore telemetry specific packages that are not required.
     'applicationinsights-native-metrics',
     '@opentelemetry/tracing',
     '@azure/opentelemetry-instrumentation-azure-sdk',
     '@opentelemetry/instrumentation',
-    '@azure/functions-core'
+    '@azure/functions-core',
+    // Node.js builtins (with node: prefix)
+    'node:child_process',
+    'node:crypto',
+    'node:fs/promises',
+    'node:os',
+    'node:path',
+    'node:util',
+    'ansi-regex' // Used by regexp utils
 ];
-const webExternals = commonExternals.concat('os').concat(commonExternals);
-const desktopExternals = commonExternals.concat(deskTopNodeModulesToExternalize);
+// Create separate copies to avoid shared-state mutations
+const webExternals = [...commonExternals];
+const desktopExternals = [...commonExternals, ...deskTopNodeModulesToExternalize];
 const bundleConfig = getBundleConfiguration();
 const isDevbuild = !process.argv.includes('--production');
 const watchAll = process.argv.includes('--watch-all');
@@ -217,26 +229,35 @@ function createConfig(
     if (source.endsWith(path.join('data-explorer', 'index.tsx'))) {
         inject.push(path.join(__dirname, 'jquery.js'));
     }
-    const external = target === 'web' ? webExternals : commonExternals;
+    // Create a copy to avoid mutating the original arrays
+    let external = [...(target === 'web' ? webExternals : commonExternals)];
     if (source.toLowerCase().endsWith('extension.node.ts')) {
         external.push(...desktopExternals);
     }
+    // When building vscode-languageclient, bundle vscode-jsonrpc into it
+    // to avoid ESM/CommonJS interop issues at runtime
+    if (source.includes('vscode-languageclient')) {
+        external = external.filter((e) => e !== 'vscode-jsonrpc');
+    }
     const isPreRelease = isDevbuild || process.env.IS_PRE_RELEASE_VERSION_OF_JUPYTER_EXTENSION === 'true';
     const releaseVersionScriptFile = isPreRelease ? 'release.pre-release.js' : 'release.stable.js';
-    const alias = {
+    const alias: Record<string, string> = {
         moment: path.join(extensionFolder, 'build', 'webpack', 'moment.js'),
         'vscode-jupyter-release-version': path.join(__dirname, releaseVersionScriptFile)
     };
+    // Use ESM entry for jsonc-parser to avoid UMD internal require() issues when bundling
     if (target === 'desktop') {
         alias['jsonc-parser'] = path.join(extensionFolder, 'node_modules', 'jsonc-parser', 'lib', 'esm', 'main.js');
     }
-    return {
+    // Desktop builds use CommonJS for VS Code/Cursor compatibility
+    // Web builds use ESM for browser compatibility
+    const config: SameShape<BuildOptions, BuildOptions> = {
         entryPoints: [source],
         outfile,
         bundle: true,
         external,
         alias,
-        format: target === 'desktop' || source.endsWith('extension.web.ts') || isWebTestSource ? 'cjs' : 'esm',
+        format: target === 'desktop' ? 'cjs' : 'esm',
         metafile: isDevbuild && !watch,
         define,
         target: target === 'desktop' ? 'node18' : 'es2018',
@@ -248,6 +269,8 @@ function createConfig(
         plugins,
         loader: target === 'desktop' ? {} : loader
     };
+
+    return config;
 }
 async function build(source: string, outfile: string, options: { watch: boolean; target: 'desktop' | 'web' }) {
     if (options.watch) {
@@ -257,11 +280,11 @@ async function build(source: string, outfile: string, options: { watch: boolean;
         const result = await esbuild.build(createConfig(source, outfile, options.target, options.watch));
         const size = fs.statSync(outfile).size;
         const relativePath = `./${path.relative(extensionFolder, outfile)}`;
-        console.log(`asset ${green(relativePath)} size: ${(size / 1024).toFixed()} KiB`);
+        console.log(`asset ${colors.green(relativePath)} size: ${(size / 1024).toFixed()} KiB`);
         if (isDevbuild && result.metafile) {
             const metafile = `${outfile}.esbuild.meta.json`;
             await fs.writeFile(metafile, JSON.stringify(result.metafile));
-            console.log(`metafile ${green(`./${path.relative(extensionFolder, metafile)}`)}`);
+            console.log(`metafile ${colors.green(`./${path.relative(extensionFolder, metafile)}`)}`);
         }
     }
 }
@@ -330,6 +353,35 @@ async function buildAll() {
             { target: 'web', watch: isWatchMode }
         ),
         build(
+            path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'chart-big-number-renderer', 'index.ts'),
+            path.join(
+                extensionFolder,
+                'dist',
+                'webviews',
+                'webview-side',
+                'chartBigNumberRenderer',
+                'chartBigNumberRenderer.js'
+            ),
+            { target: 'web', watch: isWatchMode }
+        ),
+        build(
+            path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'vega-renderer', 'index.ts'),
+            path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'vegaRenderer', 'vegaRenderer.js'),
+            { target: 'web', watch: isWatchMode }
+        ),
+        build(
+            path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'sql-metadata-renderer', 'index.ts'),
+            path.join(
+                extensionFolder,
+                'dist',
+                'webviews',
+                'webview-side',
+                'sqlMetadataRenderer',
+                'sqlMetadataRenderer.js'
+            ),
+            { target: 'web', watch: isWatchMode }
+        ),
+        build(
             path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'variable-view', 'index.tsx'),
             path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'viewers', 'variableView.js'),
             { target: 'web', watch: watchAll }
@@ -342,6 +394,21 @@ async function buildAll() {
         build(
             path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'data-explorer', 'index.tsx'),
             path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'viewers', 'dataExplorer.js'),
+            { target: 'web', watch: watchAll }
+        ),
+        build(
+            path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'integrations', 'index.tsx'),
+            path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'integrations', 'index.js'),
+            { target: 'web', watch: watchAll }
+        ),
+        build(
+            path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'selectInputSettings', 'index.tsx'),
+            path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'selectInputSettings', 'index.js'),
+            { target: 'web', watch: watchAll }
+        ),
+        build(
+            path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'bigNumberComparisonSettings', 'index.tsx'),
+            path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'bigNumberComparisonSettings', 'index.js'),
             { target: 'web', watch: watchAll }
         )
     );
@@ -380,17 +447,9 @@ async function buildAll() {
             )
         );
         builders.push(
-            build(
-                path.join(extensionFolder, 'src', 'extension.node.proxy.ts'),
-                path.join(extensionFolder, 'dist', 'extension.node.proxy.js'),
-                // This file almost never ever changes, hence no need to watch this.
-                { target: 'desktop', watch: false }
-            )
-        );
-        builders.push(
             ...deskTopNodeModulesToExternalize
-                // zeromq will be manually bundled.
-                .filter((module) => !['zeromq', 'zeromqold', 'vscode-jsonrpc'].includes(module))
+                // zeromq will be manually bundled, vega-lite uses top-level await (can't be CJS bundled)
+                .filter((module) => !['zeromq', 'zeromqold', 'vscode-jsonrpc', 'vega-lite'].includes(module))
 
                 .map(async (module) => {
                     const fullPath = require.resolve(module);
@@ -411,7 +470,8 @@ async function buildAll() {
             copyZeroMQ(),
             copyZeroMQOld(),
             copyNodeGypBuild(),
-            buildVSCodeJsonRPC()
+            buildVSCodeJsonRPC(),
+            buildSqlLanguageServer()
         );
     }
 
@@ -467,20 +527,96 @@ async function copyNodeGypBuild() {
     await fs.ensureDir(target);
     await fs.copy(source, target, { recursive: true });
 }
+
+async function buildSqlLanguageServer() {
+    // Bundle the sql-language-server with all its dependencies into a single file
+    const entryPoint = path.join(
+        extensionFolder,
+        'node_modules',
+        '@deepnote',
+        'sql-language-server',
+        'dist',
+        'bin',
+        'vscodeExtensionServer.js'
+    );
+    const outfile = path.join(extensionFolder, 'dist', 'sqlLanguageServer.cjs');
+
+    await esbuild.build({
+        entryPoints: [entryPoint],
+        bundle: true,
+        platform: 'node',
+        target: 'node18',
+        outfile,
+        format: 'cjs',
+        external: [
+            // These are optional database drivers - exclude to reduce bundle size
+            // They will be loaded dynamically if available
+            'sqlite3',
+            'mysql2',
+            'pg',
+            'pg-native',
+            '@google-cloud/bigquery',
+            // SSH tunneling dependencies with native modules - must be copied separately
+            'ssh2',
+            'cpu-features',
+            'node-ssh-forward'
+        ],
+        minify: false,
+        sourcemap: false
+    });
+
+    // Copy ALL node_modules that the sql-language-server needs
+    // This includes the full transitive dependency tree for:
+    // - node-ssh-forward (SSH tunneling)
+    // - mysql2, pg, sqlite3 (database drivers)
+    // Instead of manually tracking dependencies, we copy all required packages
+    const sqlLspNodeModules = path.join(extensionFolder, 'dist', 'sql-lsp-modules');
+    await fs.ensureDir(sqlLspNodeModules);
+
+    // Create a minimal package.json and install dependencies
+    const packageJson = {
+        name: 'sql-lsp-deps',
+        version: '1.0.0',
+        dependencies: {
+            'node-ssh-forward': '^0.6.3',
+            mysql2: '^3.9.8',
+            pg: '^8.9.0',
+            sqlite3: '^5.0.3',
+            '@google-cloud/bigquery': '^8.1.1'
+        }
+    };
+
+    const packageJsonPath = path.join(sqlLspNodeModules, 'package.json');
+    await fs.writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2));
+
+    // Run npm install in the sql-lsp-modules directory
+    const { execSync } = require('child_process');
+
+    try {
+        execSync('npm install --omit=dev --ignore-scripts', {
+            cwd: sqlLspNodeModules,
+            stdio: 'inherit'
+        });
+    } catch (error) {
+        console.error('Failed to install sql-lsp dependencies:', error);
+        throw error;
+    }
+
+    // Keep package.json for debugging/audit purposes, remove only lock file
+    await fs.remove(path.join(sqlLspNodeModules, 'package-lock.json'));
+}
+
 async function buildVSCodeJsonRPC() {
     const source = path.join(extensionFolder, 'node_modules', 'vscode-jsonrpc');
     const target = path.join(extensionFolder, 'dist', 'node_modules', 'vscode-jsonrpc', 'index.js');
     await fs.ensureDir(path.dirname(target));
     const fullPath = require.resolve(source);
-    const contents = `
-/* --------------------------------------------------------------------------------------------
- * Copyright (c) Microsoft Corporation. All rights reserved.
- * Licensed under the MIT License. See License.txt in the project root for license information.
- * ----------------------------------------------------------------------------------------- */
-'use strict';
-
-module.exports = require('./index');`;
+    // ESM re-export for node.js entry point
+    const contents = `export * from './index.js';`;
     await fs.writeFile(path.join(path.dirname(target), 'node.js'), contents);
+    // Add package.json for ESM module resolution
+    const packageJson = JSON.stringify({ type: 'module', main: './index.js' }, null, 2);
+    await fs.writeFile(path.join(path.dirname(target), 'package.json'), packageJson);
     return build(fullPath, target, {
         target: 'desktop',
         watch: false

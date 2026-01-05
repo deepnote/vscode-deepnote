@@ -4,7 +4,7 @@
 /* eslint-disable no-console, @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires */
 
 import assert from 'assert';
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import * as path from '../platform/vscode-path/path';
 import * as tmp from 'tmp';
 import * as os from 'os';
@@ -16,10 +16,12 @@ import { IDisposable } from '../platform/common/types';
 import { swallowExceptions } from '../platform/common/utils/misc';
 import { JupyterServer } from './datascience/jupyterServer.node';
 import type { ConfigurationTarget, TextDocument, Uri } from 'vscode';
+import * as vscode from 'vscode';
+import * as configSettings from '../platform/common/configSettings';
+import * as initializeModule from './initialize.node';
+import StreamZip from 'node-stream-zip';
 
 export { createEventHandler } from './common';
-
-const StreamZip = require('node-stream-zip');
 
 export { sleep } from './core';
 
@@ -31,20 +33,16 @@ export const PYTHON_PATH = getPythonPath();
 // Useful to see on CI (when working with conda & non-conda, virtual envs & the like).
 console.log(`Python used in tests is ${PYTHON_PATH}`);
 export async function setPythonPathInWorkspaceRoot(pythonPath: string) {
-    const vscode = require('vscode') as typeof import('vscode');
     return retryAsync(setPythonPathInWorkspace)(undefined, vscode.ConfigurationTarget.Workspace, pythonPath);
 }
 
 export async function setAutoSaveDelayInWorkspaceRoot(delayinMS: number) {
-    const vscode = require('vscode') as typeof import('vscode');
     return retryAsync(setAutoSaveDelay)(undefined, vscode.ConfigurationTarget.Workspace, delayinMS);
 }
 
 export async function getExtensionSettings(resource: Uri | undefined) {
-    const pythonSettings =
-        require('../platform/common/configSettings') as typeof import('../platform/common/configSettings');
     const systemVariables = await import('../platform/common/variables/systemVariables.node');
-    return pythonSettings.JupyterSettings.getInstance(resource, systemVariables.SystemVariables, 'node');
+    return configSettings.JupyterSettings.getInstance(resource, systemVariables.SystemVariables, 'node');
 }
 export function retryAsync(this: any, wrapped: Function, retryCount: number = 2) {
     return async (...args: any[]) => {
@@ -69,7 +67,6 @@ export function retryAsync(this: any, wrapped: Function, retryCount: number = 2)
 }
 
 async function setAutoSaveDelay(resource: string | Uri | undefined, config: ConfigurationTarget, delayinMS: number) {
-    const vscode = require('vscode') as typeof import('vscode');
     if (config === vscode.ConfigurationTarget.WorkspaceFolder && !IS_MULTI_ROOT_TEST()) {
         return;
     }
@@ -89,7 +86,6 @@ async function setPythonPathInWorkspace(
     config: ConfigurationTarget,
     pythonPath?: string
 ) {
-    const vscode = require('vscode') as typeof import('vscode');
     if (config === vscode.ConfigurationTarget.WorkspaceFolder && !IS_MULTI_ROOT_TEST()) {
         return;
     }
@@ -177,7 +173,6 @@ export async function unzip(zipFile: string, targetFolder: string): Promise<void
 }
 
 export async function openFile(file: string): Promise<TextDocument> {
-    const vscode = require('vscode') as typeof import('vscode');
     const textDocument = await vscode.workspace.openTextDocument(file);
     await vscode.window.showTextDocument(textDocument);
     assert(vscode.window.activeTextEditor, 'No active editor');
@@ -198,8 +193,9 @@ export async function captureScreenShot(contextOrFileName: string | Mocha.Contex
         await generateScreenShotFileName(contextOrFileName)
     );
     try {
-        const screenshot = require('screenshot-desktop');
-        await screenshot({ filename });
+        // @ts-expect-error - screenshot-desktop doesn't have type definitions
+        const screenshot = await import('screenshot-desktop');
+        await screenshot.default({ filename });
     } catch (ex) {
         console.error(`Failed to capture screenshot into ${filename}`, ex);
     }
@@ -207,8 +203,8 @@ export async function captureScreenShot(contextOrFileName: string | Mocha.Contex
 
 let remoteUrisCleared = false;
 export function initializeCommonNodeApi() {
-    const { commands, Uri } = require('vscode');
-    const { initialize } = require('./initialize.node');
+    const { commands, Uri } = vscode;
+    const { initialize } = initializeModule;
 
     initializeCommonApi({
         async createTemporaryFile(options: {
@@ -238,7 +234,7 @@ export function initializeCommonNodeApi() {
                     return JupyterServer.instance.startJupyter(options);
                 }
                 if (!remoteUrisCleared) {
-                    await commands.executeCommand('jupyter.clearSavedJupyterUris');
+                    await commands.executeCommand('deepnote.clearSavedJupyterUris');
                     remoteUrisCleared = true;
                 }
                 const url = options.useCert
@@ -246,14 +242,14 @@ export function initializeCommonNodeApi() {
                     : await JupyterServer.instance.startJupyterWithToken();
                 console.info(`Jupyter started and listening at ${url}`);
                 try {
-                    await commands.executeCommand('jupyter.selectjupyteruri', Uri.parse(url));
+                    await commands.executeCommand('deepnote.selectjupyteruri', Uri.parse(url));
                 } catch (ex) {
                     console.error('Failed to select jupyter server, retry in 1s', ex);
                 }
                 // Todo: Fix in debt week, we need to retry, some changes have caused the first connection attempt to fail on CI.
                 // Possible we're trying to connect before the server is ready.
                 await sleep(5_000);
-                await commands.executeCommand('jupyter.selectjupyteruri', Uri.parse(url));
+                await commands.executeCommand('deepnote.selectjupyteruri', Uri.parse(url));
                 return { url, dispose: noop };
             } else {
                 return { url: '', dispose: noop };

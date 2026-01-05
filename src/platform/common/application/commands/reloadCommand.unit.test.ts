@@ -19,7 +19,7 @@ suite('Common Commands ReloadCommand', () => {
     teardown(() => resetVSCodeMocks());
 
     test('Confirm command handler is added', async () => {
-        verify(mockedVSCodeNamespaces.commands.registerCommand('jupyter.reloadVSCode', anything(), anything())).once();
+        verify(mockedVSCodeNamespaces.commands.registerCommand('deepnote.reloadVSCode', anything(), anything())).once();
     });
     test('Display prompt to reload VS Code with message passed into command', async () => {
         const message = 'Hello World!';

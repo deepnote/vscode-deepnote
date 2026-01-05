@@ -80,7 +80,7 @@ export class KernelSourceCommandHandler implements IExtensionSyncActivationServi
                             {
                                 label: DataScience.localPythonEnvironments,
                                 documentation: Uri.parse('https://aka.ms/vscodeJupyterExtKernelPickerPythonEnv'),
-                                command: 'jupyter.kernel.selectLocalPythonEnvironment'
+                                command: 'deepnote.kernel.selectLocalPythonEnvironment'
                             }
                         ];
                     }
@@ -93,7 +93,7 @@ export class KernelSourceCommandHandler implements IExtensionSyncActivationServi
                             {
                                 label: DataScience.localPythonEnvironments,
                                 documentation: Uri.parse('https://aka.ms/vscodeJupyterExtKernelPickerPythonEnv'),
-                                command: 'jupyter.kernel.selectLocalPythonEnvironment'
+                                command: 'deepnote.kernel.selectLocalPythonEnvironment'
                             }
                         ];
                     }
@@ -131,7 +131,7 @@ export class KernelSourceCommandHandler implements IExtensionSyncActivationServi
                         {
                             label: DataScience.localKernelSpecs,
                             documentation: Uri.parse('https://aka.ms/vscodeJupyterExtKernelPickerJupyterKernels'),
-                            command: 'jupyter.kernel.selectLocalKernelSpec'
+                            command: 'deepnote.kernel.selectLocalKernelSpec'
                         }
                     ];
 
@@ -143,21 +143,21 @@ export class KernelSourceCommandHandler implements IExtensionSyncActivationServi
             this.kernelFinder.onDidChangeKernels(() => registerKernelSpecsSource(), this, this.localDisposables);
             this.localDisposables.push(
                 commands.registerCommand(
-                    'jupyter.kernel.selectLocalKernelSpec',
+                    'deepnote.kernel.selectLocalKernelSpec',
                     this.onSelectLocalKernel.bind(this, ContributedKernelFinderKind.LocalKernelSpec),
                     this
                 )
             );
             this.localDisposables.push(
                 commands.registerCommand(
-                    'jupyter.kernel.selectLocalPythonEnvironment',
+                    'deepnote.kernel.selectLocalPythonEnvironment',
                     this.onSelectLocalKernel.bind(this, ContributedKernelFinderKind.LocalPythonEnvironment),
                     this
                 )
             );
         }
         this.localDisposables.push(
-            commands.registerCommand('jupyter.kernel.selectJupyterServerKernel', this.onSelectRemoteKernel, this)
+            commands.registerCommand('deepnote.kernel.selectJupyterServerKernel', this.onSelectRemoteKernel, this)
         );
         const uriRegistration =
             ServiceContainer.instance.get<IJupyterServerProviderRegistry>(IJupyterServerProviderRegistry);
@@ -188,7 +188,7 @@ export class KernelSourceCommandHandler implements IExtensionSyncActivationServi
                                 return collection.documentation;
                             },
                             command: {
-                                command: 'jupyter.kernel.selectJupyterServerKernel',
+                                command: 'deepnote.kernel.selectJupyterServerKernel',
                                 arguments: [collection.extensionId, collection.id],
                                 title: collection.label
                             }
@@ -207,7 +207,7 @@ export class KernelSourceCommandHandler implements IExtensionSyncActivationServi
                                 return collection.documentation;
                             },
                             command: {
-                                command: 'jupyter.kernel.selectJupyterServerKernel',
+                                command: 'deepnote.kernel.selectJupyterServerKernel',
                                 arguments: [collection.extensionId, collection.id],
                                 title: collection.label
                             }

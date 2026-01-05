@@ -3,7 +3,8 @@
 
 import { IExtensionSyncActivationService } from '../platform/activation/types';
 import { IPythonExtensionChecker } from '../platform/api/types';
-import { Identifiers, isPreReleaseVersion } from '../platform/common/constants';
+import { Identifiers } from '../platform/common/constants';
+import { isPreReleaseVersion } from '../platform/constants.node';
 import { IServiceManager } from '../platform/ioc/types';
 import { setSharedProperty } from '../telemetry';
 import { Activation } from './jupyter/interpreter/activation.node';
@@ -48,6 +49,8 @@ import { LastCellExecutionTracker } from './execution/lastCellExecutionTracker';
 import { ClearJupyterServersCommand } from './jupyter/clearJupyterServersCommand';
 import { KernelChatStartupCodeProvider } from './chat/kernelStartupCodeProvider';
 import { KernelWorkingDirectory } from './raw/session/kernelWorkingDirectory.node';
+import { SqlIntegrationEnvironmentVariablesProvider } from '../platform/notebooks/deepnote/sqlIntegrationEnvironmentVariablesProvider';
+import { ISqlIntegrationEnvVarsProvider } from '../platform/notebooks/deepnote/types';
 
 export function registerTypes(serviceManager: IServiceManager, isDevMode: boolean) {
     serviceManager.addSingleton<IExtensionSyncActivationService>(IExtensionSyncActivationService, Activation);
@@ -62,6 +65,10 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     );
     serviceManager.addSingleton<IRawKernelSessionFactory>(IRawKernelSessionFactory, RawKernelSessionFactory);
     serviceManager.addSingleton<IKernelLauncher>(IKernelLauncher, KernelLauncher);
+    serviceManager.addSingleton<ISqlIntegrationEnvVarsProvider>(
+        ISqlIntegrationEnvVarsProvider,
+        SqlIntegrationEnvironmentVariablesProvider
+    );
     serviceManager.addSingleton<KernelEnvironmentVariablesService>(
         KernelEnvironmentVariablesService,
         KernelEnvironmentVariablesService

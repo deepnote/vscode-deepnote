@@ -19,7 +19,7 @@ export class JupyterInterpreterSelectionCommand implements IExtensionSyncActivat
     ) {}
     public activate() {
         this.disposables.push(
-            commands.registerCommand('jupyter.selectJupyterInterpreter', () => {
+            commands.registerCommand('deepnote.selectJupyterInterpreter', () => {
                 this.service.selectInterpreter().catch(noop);
             })
         );

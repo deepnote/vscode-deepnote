@@ -1,8 +1,9 @@
+import type { DeepnoteBlock } from '@deepnote/blocks';
 import { assert } from 'chai';
-import { NotebookCellKind, type NotebookCellData } from 'vscode';
+import { NotebookCellKind, NotebookCellOutput, NotebookCellOutputItem, type NotebookCellData } from 'vscode';
 
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
-import type { DeepnoteBlock, DeepnoteOutput } from './deepnoteTypes';
+import type { DeepnoteOutput } from '../../platform/deepnote/deepnoteTypes';
 
 suite('DeepnoteDataConverter', () => {
     let converter: DeepnoteDataConverter;
@@ -57,6 +58,33 @@ suite('DeepnoteDataConverter', () => {
             // id should be at top level, not in pocket
             assert.strictEqual(cells[0].metadata?.id, 'block2');
             assert.strictEqual(cells[0].metadata?.__deepnotePocket?.type, 'markdown');
+        });
+
+        test('converts SQL block to cell with sql language', () => {
+            const blocks: DeepnoteBlock[] = [
+                {
+                    blockGroup: 'test-group',
+                    id: 'block3',
+                    type: 'sql',
+                    content: 'SELECT * FROM users WHERE id = 1',
+                    sortingKey: 'a2',
+                    metadata: {
+                        sql_integration_id: 'postgres-123'
+                    }
+                }
+            ];
+
+            const cells = converter.convertBlocksToCells(blocks);
+
+            assert.strictEqual(cells.length, 1);
+            assert.strictEqual(cells[0].kind, NotebookCellKind.Code);
+            assert.strictEqual(cells[0].value, 'SELECT * FROM users WHERE id = 1');
+            assert.strictEqual(cells[0].languageId, 'sql');
+            // id should be at top level, not in pocket
+            assert.strictEqual(cells[0].metadata?.id, 'block3');
+            assert.strictEqual(cells[0].metadata?.__deepnotePocket?.type, 'sql');
+            assert.strictEqual(cells[0].metadata?.__deepnotePocket?.sortingKey, 'a2');
+            assert.strictEqual(cells[0].metadata?.sql_integration_id, 'postgres-123');
         });
 
         test('handles execution count', () => {
@@ -147,6 +175,21 @@ suite('DeepnoteDataConverter', () => {
 
             assert.strictEqual(blocks[0].type, 'markdown');
             assert.strictEqual(blocks[0].content, '## Heading');
+        });
+
+        test('converts markdown cell without pocket to markdown block (not code)', () => {
+            const cells: NotebookCellData[] = [
+                {
+                    kind: NotebookCellKind.Markup,
+                    value: '# Title\n\nSome content',
+                    languageId: 'markdown'
+                }
+            ];
+
+            const blocks = converter.convertCellsToBlocks(cells);
+
+            assert.strictEqual(blocks[0].type, 'markdown');
+            assert.strictEqual(blocks[0].content, '# Title\n\nSome content');
         });
 
         test('generates new IDs and sorting keys for cells without metadata', () => {
@@ -404,6 +447,136 @@ suite('DeepnoteDataConverter', () => {
             assert.strictEqual(outputs[0].items[0].mime, 'text/plain');
             assert.strictEqual(new TextDecoder().decode(outputs[0].items[0].data), 'fallback text');
         });
+
+        test('converts SQL metadata output', () => {
+            const sqlMetadata = {
+                status: 'read_from_cache_success',
+                cache_created_at: '2024-10-21T10:30:00Z',
+                compiled_query: 'SELECT * FROM users',
+                variable_type: 'dataframe',
+                integration_id: 'postgres-prod',
+                size_in_bytes: 2621440
+            };
+
+            const deepnoteOutputs: DeepnoteOutput[] = [
+                {
+                    output_type: 'execute_result',
+                    execution_count: 1,
+                    data: {
+                        'application/vnd.deepnote.sql-output-metadata+json': sqlMetadata
+                    }
+                }
+            ];
+
+            const blocks: DeepnoteBlock[] = [
+                {
+                    blockGroup: 'test-group',
+                    id: 'block1',
+                    type: 'code',
+                    content: 'SELECT * FROM users',
+                    sortingKey: 'a0',
+                    outputs: deepnoteOutputs
+                }
+            ];
+
+            const cells = converter.convertBlocksToCells(blocks);
+            const outputs = cells[0].outputs!;
+
+            assert.strictEqual(outputs.length, 1);
+            assert.strictEqual(outputs[0].items.length, 1);
+            assert.strictEqual(outputs[0].items[0].mime, 'application/vnd.deepnote.sql-output-metadata+json');
+
+            const outputData = JSON.parse(new TextDecoder().decode(outputs[0].items[0].data));
+            assert.deepStrictEqual(outputData, sqlMetadata);
+        });
+
+        test('converts text/markdown output', () => {
+            const markdownContent = '## Result\n\nThis is **formatted** output.';
+
+            const deepnoteOutputs: DeepnoteOutput[] = [
+                {
+                    output_type: 'execute_result',
+                    execution_count: 1,
+                    data: {
+                        'text/markdown': markdownContent,
+                        'text/plain': 'Result\n\nThis is formatted output.'
+                    }
+                }
+            ];
+
+            const blocks: DeepnoteBlock[] = [
+                {
+                    blockGroup: 'test-group',
+                    id: 'block1',
+                    type: 'code',
+                    content: 'display_markdown()',
+                    sortingKey: 'a0',
+                    outputs: deepnoteOutputs
+                }
+            ];
+
+            const cells = converter.convertBlocksToCells(blocks);
+            const outputs = cells[0].outputs!;
+
+            assert.strictEqual(outputs.length, 1);
+            assert.strictEqual(outputs[0].items.length, 2);
+
+            const markdownItem = outputs[0].items.find((item) => item.mime === 'text/markdown');
+            const plainItem = outputs[0].items.find((item) => item.mime === 'text/plain');
+
+            assert.ok(markdownItem, 'Should have text/markdown item');
+            assert.ok(plainItem, 'Should have text/plain item');
+            assert.strictEqual(new TextDecoder().decode(markdownItem!.data), markdownContent);
+            assert.strictEqual(new TextDecoder().decode(plainItem!.data), 'Result\n\nThis is formatted output.');
+        });
+
+        test('converts Plotly chart output', () => {
+            const plotlyData = {
+                data: [
+                    {
+                        type: 'bar',
+                        x: ['A', 'B', 'C'],
+                        y: [10, 20, 15]
+                    }
+                ],
+                layout: {
+                    title: 'Sample Chart',
+                    xaxis: { title: 'Category' },
+                    yaxis: { title: 'Value' }
+                }
+            };
+
+            const deepnoteOutputs: DeepnoteOutput[] = [
+                {
+                    output_type: 'execute_result',
+                    execution_count: 1,
+                    data: {
+                        'application/vnd.plotly.v1+json': plotlyData
+                    }
+                }
+            ];
+
+            const blocks: DeepnoteBlock[] = [
+                {
+                    blockGroup: 'test-group',
+                    id: 'block1',
+                    type: 'code',
+                    content: 'fig.show()',
+                    sortingKey: 'a0',
+                    outputs: deepnoteOutputs
+                }
+            ];
+
+            const cells = converter.convertBlocksToCells(blocks);
+            const outputs = cells[0].outputs!;
+
+            assert.strictEqual(outputs.length, 1);
+            assert.strictEqual(outputs[0].items.length, 1);
+            assert.strictEqual(outputs[0].items[0].mime, 'application/vnd.plotly.v1+json');
+
+            const outputData = JSON.parse(new TextDecoder().decode(outputs[0].items[0].data));
+            assert.deepStrictEqual(outputData, plotlyData);
+        });
     });
 
     suite('round trip conversion', () => {
@@ -439,6 +612,113 @@ suite('DeepnoteDataConverter', () => {
             const roundTripBlocks = converter.convertCellsToBlocks(cells);
 
             assert.deepStrictEqual(roundTripBlocks, originalBlocks);
+        });
+
+        test('SQL metadata output round-trips correctly', () => {
+            const sqlMetadata = {
+                status: 'read_from_cache_success',
+                cache_created_at: '2024-10-21T10:30:00Z',
+                compiled_query: 'SELECT * FROM users WHERE active = true',
+                variable_type: 'dataframe',
+                integration_id: 'postgres-prod',
+                size_in_bytes: 2621440
+            };
+
+            const originalBlocks: DeepnoteBlock[] = [
+                {
+                    blockGroup: 'test-group',
+                    id: 'sql-block',
+                    type: 'code',
+                    content: 'SELECT * FROM users WHERE active = true',
+                    sortingKey: 'a0',
+                    executionCount: 1,
+                    metadata: {},
+                    outputs: [
+                        {
+                            output_type: 'execute_result',
+                            execution_count: 1,
+                            data: {
+                                'application/vnd.deepnote.sql-output-metadata+json': sqlMetadata
+                            }
+                        }
+                    ]
+                }
+            ];
+
+            const cells = converter.convertBlocksToCells(originalBlocks);
+            const roundTripBlocks = converter.convertCellsToBlocks(cells);
+
+            // The round-trip should preserve the SQL metadata output
+            assert.strictEqual(roundTripBlocks.length, 1);
+            assert.strictEqual(roundTripBlocks[0].id, 'sql-block');
+            assert.strictEqual(roundTripBlocks[0].outputs?.length, 1);
+
+            const output = roundTripBlocks[0].outputs![0] as {
+                output_type: string;
+                data?: Record<string, unknown>;
+            };
+            assert.strictEqual(output.output_type, 'execute_result');
+            assert.deepStrictEqual(output.data?.['application/vnd.deepnote.sql-output-metadata+json'], sqlMetadata);
+        });
+
+        test('Plotly chart output round-trips correctly', () => {
+            const plotlyData = {
+                data: [
+                    {
+                        type: 'histogram',
+                        x: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                        nbinsx: 30,
+                        opacity: 0.75
+                    }
+                ],
+                layout: {
+                    title: 'Sessions per week by churn status',
+                    xaxis: { title: 'Sessions per week' },
+                    yaxis: { title: 'Users' },
+                    legend: {
+                        yanchor: 'top',
+                        y: 1,
+                        xanchor: 'left',
+                        x: 1.02
+                    }
+                }
+            };
+
+            const originalBlocks: DeepnoteBlock[] = [
+                {
+                    blockGroup: 'test-group',
+                    id: 'plotly-block',
+                    type: 'code',
+                    content: 'fig = px.histogram(df)\nfig.show()',
+                    sortingKey: 'a0',
+                    executionCount: 1,
+                    metadata: {},
+                    outputs: [
+                        {
+                            output_type: 'execute_result',
+                            execution_count: 1,
+                            data: {
+                                'application/vnd.plotly.v1+json': plotlyData
+                            }
+                        }
+                    ]
+                }
+            ];
+
+            const cells = converter.convertBlocksToCells(originalBlocks);
+            const roundTripBlocks = converter.convertCellsToBlocks(cells);
+
+            // The round-trip should preserve the Plotly chart output
+            assert.strictEqual(roundTripBlocks.length, 1);
+            assert.strictEqual(roundTripBlocks[0].id, 'plotly-block');
+            assert.strictEqual(roundTripBlocks[0].outputs?.length, 1);
+
+            const output = roundTripBlocks[0].outputs![0] as {
+                output_type: string;
+                data?: Record<string, unknown>;
+            };
+            assert.strictEqual(output.output_type, 'execute_result');
+            assert.deepStrictEqual(output.data?.['application/vnd.plotly.v1+json'], plotlyData);
         });
 
         test('real deepnote notebook round-trips without losing data', () => {
@@ -516,6 +796,53 @@ suite('DeepnoteDataConverter', () => {
 
             // Should preserve all blocks without data loss
             assert.deepStrictEqual(roundTripBlocks, originalBlocks);
+        });
+    });
+
+    suite('large data handling', () => {
+        test('should handle cells with large image data without stack overflow', () => {
+            // Create a large image data buffer (1MB) - this reproduces the bug where
+            // saving fails with "Maximum call stack size exceeded" because
+            // btoa(String.fromCharCode(...largeArray)) causes stack overflow
+            const largeImageSize = 1000000; // 1MB
+            const largeImageData = new Uint8Array(largeImageSize);
+
+            for (let i = 0; i < largeImageSize; i++) {
+                largeImageData[i] = i % 256;
+            }
+
+            const cellWithLargeImage: NotebookCellData = {
+                kind: NotebookCellKind.Code,
+                value: 'display_image()',
+                languageId: 'python',
+                metadata: {
+                    __deepnotePocket: {
+                        type: 'code',
+                        sortingKey: 'a0'
+                    },
+                    id: 'block-1'
+                },
+                outputs: [
+                    new NotebookCellOutput([new NotebookCellOutputItem(largeImageData, 'image/png')], {
+                        cellId: 'block-1',
+                        cellIndex: 0
+                    })
+                ]
+            };
+
+            // This should not throw - it should handle large data gracefully
+            const blocks = converter.convertCellsToBlocks([cellWithLargeImage]);
+
+            assert.strictEqual(blocks.length, 1);
+            assert.strictEqual(blocks[0].type, 'code');
+            assert.isDefined(blocks[0].outputs);
+            assert.strictEqual(blocks[0].outputs!.length, 1);
+
+            // Verify the output data is properly base64 encoded
+            const output = blocks[0].outputs![0] as { data?: Record<string, unknown> };
+            assert.isDefined(output.data);
+            assert.isDefined(output.data!['image/png']);
+            assert.isString(output.data!['image/png']);
         });
     });
 });

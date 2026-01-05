@@ -16,28 +16,28 @@ export class PythonEnvFilterSettingMigration implements IExtensionSyncActivation
         // As there's no way to provide controllers per folder.
         const workspaceFolders = Array.isArray(workspace.workspaceFolders) ? workspace.workspaceFolders : [];
         await this.migrateWorkspaceFilters(
-            workspace.getConfiguration('jupyter', undefined),
+            workspace.getConfiguration('deepnote', undefined),
             ConfigurationTarget.Global
         );
         if (workspaceFolders.length === 0) {
             await this.migrateWorkspaceFilters(
-                workspace.getConfiguration('jupyter', undefined),
+                workspace.getConfiguration('deepnote', undefined),
                 ConfigurationTarget.Global
             );
         } else if (workspaceFolders.length === 1) {
             await this.migrateWorkspaceFilters(
-                workspace.getConfiguration('jupyter', workspaceFolders[0].uri),
+                workspace.getConfiguration('deepnote', workspaceFolders[0].uri),
                 ConfigurationTarget.WorkspaceFolder
             );
         } else {
             await this.migrateWorkspaceFilters(
-                workspace.getConfiguration('jupyter', undefined),
+                workspace.getConfiguration('deepnote', undefined),
                 ConfigurationTarget.Workspace
             );
             await Promise.all(
                 workspaceFolders.map((workspaceFolder) =>
                     this.migrateWorkspaceFilters(
-                        workspace.getConfiguration('jupyter', workspaceFolder.uri),
+                        workspace.getConfiguration('deepnote', workspaceFolder.uri),
                         ConfigurationTarget.WorkspaceFolder
                     )
                 )

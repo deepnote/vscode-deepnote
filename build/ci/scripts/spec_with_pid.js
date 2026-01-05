@@ -1,4 +1,3 @@
-'use strict';
 /**
  * @module Spec
  */
@@ -6,23 +5,22 @@
  * Module dependencies.
  */
 
-var Base = require('mocha/lib/reporters/base');
-var constants = require('mocha/lib/runner').constants;
-var EVENT_RUN_BEGIN = constants.EVENT_RUN_BEGIN;
-var EVENT_RUN_END = constants.EVENT_RUN_END;
-var EVENT_SUITE_BEGIN = constants.EVENT_SUITE_BEGIN;
-var EVENT_SUITE_END = constants.EVENT_SUITE_END;
-var EVENT_TEST_FAIL = constants.EVENT_TEST_FAIL;
-var EVENT_TEST_PASS = constants.EVENT_TEST_PASS;
-var EVENT_TEST_PENDING = constants.EVENT_TEST_PENDING;
-var inherits = require('mocha/lib/utils').inherits;
-var color = Base.color;
+import Base from 'mocha/lib/reporters/base';
+import { constants } from 'mocha/lib/runner';
+import { inherits } from 'mocha/lib/utils';
+
+const EVENT_RUN_BEGIN = constants.EVENT_RUN_BEGIN;
+const EVENT_RUN_END = constants.EVENT_RUN_END;
+const EVENT_SUITE_BEGIN = constants.EVENT_SUITE_BEGIN;
+const EVENT_SUITE_END = constants.EVENT_SUITE_END;
+const EVENT_TEST_FAIL = constants.EVENT_TEST_FAIL;
+const EVENT_TEST_PASS = constants.EVENT_TEST_PASS;
+const EVENT_TEST_PENDING = constants.EVENT_TEST_PENDING;
+const color = Base.color;
 
 /**
  * Expose `Spec`.
  */
-
-exports = module.exports = Spec;
 
 const prefix = process.env.VSC_JUPYTER_CI_TEST_PARALLEL ? `${process.pid}   ` : '';
 
@@ -96,3 +94,5 @@ function Spec(runner, options) {
 inherits(Spec, Base);
 
 Spec.description = 'hierarchical & verbose [default]';
+
+export default Spec;

@@ -25,17 +25,17 @@ suite('Jupyter Interpreter Command', () => {
     test('Activation should register command', async () => {
         const disposable = mock(Disposable);
         when(
-            mockedVSCodeNamespaces.commands.registerCommand('jupyter.selectJupyterInterpreter', anything())
+            mockedVSCodeNamespaces.commands.registerCommand('deepnote.selectJupyterInterpreter', anything())
         ).thenReturn(instance(disposable));
 
         await interpreterCommand.activate();
 
-        verify(mockedVSCodeNamespaces.commands.registerCommand('jupyter.selectJupyterInterpreter', anything())).once();
+        verify(mockedVSCodeNamespaces.commands.registerCommand('deepnote.selectJupyterInterpreter', anything())).once();
     });
     test('Command handler must be jupyter interpreter selection', async () => {
         const disposable = mock(Disposable);
         let handler: Function | undefined;
-        when(mockedVSCodeNamespaces.commands.registerCommand('jupyter.selectJupyterInterpreter', anything())).thenCall(
+        when(mockedVSCodeNamespaces.commands.registerCommand('deepnote.selectJupyterInterpreter', anything())).thenCall(
             (_, cb: Function) => {
                 handler = cb;
                 return instance(disposable);
@@ -44,7 +44,7 @@ suite('Jupyter Interpreter Command', () => {
 
         await interpreterCommand.activate();
 
-        verify(mockedVSCodeNamespaces.commands.registerCommand('jupyter.selectJupyterInterpreter', anything())).once();
+        verify(mockedVSCodeNamespaces.commands.registerCommand('deepnote.selectJupyterInterpreter', anything())).once();
         assert.isFunction(handler);
 
         // Invoking handler must select jupyter interpreter.

@@ -21,7 +21,7 @@ suite('Trusted Kernel paths', () => {
         function createTrustedPathService() {
             jupyterConfig = mock<WorkspaceConfiguration>();
             when(jupyterConfig.get('kernels.trusted', anything())).thenCall((_, defaultValue) => defaultValue);
-            when(mockedVSCodeNamespaces.workspace.getConfiguration('jupyter', anything())).thenReturn(
+            when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote', anything())).thenReturn(
                 instance(jupyterConfig)
             );
             platform = mock<IPlatformService>();

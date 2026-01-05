@@ -17,7 +17,7 @@ import { BaseTool, IBaseToolParams } from './helper';
 import { WrappedError } from '../../platform/errors/types';
 
 export class ListPackageTool extends BaseTool<IBaseToolParams> {
-    public static toolName = 'notebook_list_packages';
+    public static toolName = 'deepnote_notebook_list_packages';
     constructor(
         private readonly kernelProvider: IKernelProvider,
         private readonly controllerRegistration: IControllerRegistration

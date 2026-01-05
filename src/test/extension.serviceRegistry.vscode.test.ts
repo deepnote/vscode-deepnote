@@ -114,16 +114,8 @@ async function getInjectableClasses(fileNames: string[], options: ts.CompilerOpt
 }
 
 async function getSourceFiles() {
-    const files = await new Promise<string[]>((resolve, reject) => {
-        const globPattern = path.join(__dirname, '..', '..', 'src', '**', '*.ts').replace(/\\/g, '/');
-        glob(globPattern, (ex, res) => {
-            if (ex) {
-                reject(ex);
-            } else {
-                resolve(res);
-            }
-        });
-    });
+    const globPattern = path.join(__dirname, '..', '..', 'src', '**', '*.ts').replace(/\\/g, '/');
+    const files = await glob(globPattern);
     return files;
 }
 

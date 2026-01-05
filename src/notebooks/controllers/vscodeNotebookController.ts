@@ -1,6 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+import type { INotebookMetadata } from '@jupyterlab/nbformat';
+import type { KernelMessage } from '@jupyterlab/services';
+import type { IAnyMessageArgs } from '@jupyterlab/services/lib/kernel/kernel';
 import {
     CancellationError,
     commands,
@@ -20,10 +23,47 @@ import {
     window,
     workspace
 } from 'vscode';
+import { DisplayOptions } from '../../kernels/displayOptions';
+import { KernelDeadError } from '../../kernels/errors/kernelDeadError';
+import { KernelError } from '../../kernels/errors/kernelError';
+import { IDataScienceErrorHandler } from '../../kernels/errors/types';
+import { CellExecutionCreator } from '../../kernels/execution/cellExecutionCreator';
+import { getParentHeaderMsgId } from '../../kernels/execution/cellExecutionMessageHandler';
+import {
+    endCellAndDisplayErrorsInCell,
+    traceCellMessage,
+    updateNotebookMetadataWithSelectedKernel
+} from '../../kernels/execution/helpers';
+import { LastCellExecutionTracker } from '../../kernels/execution/lastCellExecutionTracker';
+import {
+    areKernelConnectionsEqual,
+    getDisplayNameOrNameOfKernelConnection,
+    isPythonKernelConnection
+} from '../../kernels/helpers';
+import { KernelController } from '../../kernels/kernelController';
+import { ITrustedKernelPaths } from '../../kernels/raw/finder/types';
+import { initializeInteractiveOrNotebookTelemetryBasedOnUserAction } from '../../kernels/telemetry/helper';
+import { getNotebookTelemetryTracker, trackControllerCreation } from '../../kernels/telemetry/notebookTelemetry';
+import { sendKernelTelemetryEvent } from '../../kernels/telemetry/sendKernelTelemetryEvent';
+import {
+    IKernel,
+    IKernelController,
+    IKernelProvider,
+    isLocalConnection,
+    KernelConnectionMetadata
+} from '../../kernels/types';
+import { IJupyterVariablesProvider } from '../../kernels/variables/types';
+import { IPyWidgetMessages } from '../../messageTypes';
 import { IPythonExtensionChecker } from '../../platform/api/types';
-import { Exiting, InteractiveWindowView, JupyterNotebookView, PYTHON_LANGUAGE } from '../../platform/common/constants';
-import { dispose } from '../../platform/common/utils/lifecycle';
-import { logger } from '../../platform/logging';
+import { isCancellationError } from '../../platform/common/cancellation';
+import {
+    Commands,
+    Exiting,
+    InteractiveWindowView,
+    JupyterNotebookView,
+    PYTHON_LANGUAGE
+} from '../../platform/common/constants';
+import { openInBrowser } from '../../platform/common/net/browser';
 import { getDisplayPath } from '../../platform/common/platform/fs-paths';
 import {
     IConfigurationService,
@@ -32,57 +72,22 @@ import {
     IDisposableRegistry,
     IExtensionContext
 } from '../../platform/common/types';
-import { createDeferred } from '../../platform/common/utils/async';
-import { DataScience, Common } from '../../platform/common/utils/localize';
-import { noop, swallowExceptions } from '../../platform/common/utils/misc';
-import { sendKernelTelemetryEvent } from '../../kernels/telemetry/sendKernelTelemetryEvent';
-import { IServiceContainer } from '../../platform/ioc/types';
-import { Commands } from '../../platform/common/constants';
-import { Telemetry } from '../../telemetry';
-import { WrappedError } from '../../platform/errors/types';
-import { IPyWidgetMessages } from '../../messageTypes';
-import {
-    getDisplayNameOrNameOfKernelConnection,
-    isPythonKernelConnection,
-    areKernelConnectionsEqual
-} from '../../kernels/helpers';
-import {
-    IKernel,
-    IKernelController,
-    IKernelProvider,
-    isLocalConnection,
-    KernelConnectionMetadata
-} from '../../kernels/types';
-import { KernelDeadError } from '../../kernels/errors/kernelDeadError';
-import { DisplayOptions } from '../../kernels/displayOptions';
 import { getNotebookMetadata, isJupyterNotebook, updateNotebookMetadata } from '../../platform/common/utils';
-import { ConsoleForegroundColors } from '../../platform/logging/types';
-import { KernelConnector } from './kernelConnector';
-import { IConnectionDisplayData, IConnectionDisplayDataProvider, IVSCodeNotebookController } from './types';
-import { isCancellationError } from '../../platform/common/cancellation';
-import { CellExecutionCreator } from '../../kernels/execution/cellExecutionCreator';
-import {
-    traceCellMessage,
-    endCellAndDisplayErrorsInCell,
-    updateNotebookMetadataWithSelectedKernel
-} from '../../kernels/execution/helpers';
-import type { KernelMessage } from '@jupyterlab/services';
-import { initializeInteractiveOrNotebookTelemetryBasedOnUserAction } from '../../kernels/telemetry/helper';
-import { NotebookCellLanguageService } from '../languages/cellLanguageService';
-import { IDataScienceErrorHandler } from '../../kernels/errors/types';
-import { ITrustedKernelPaths } from '../../kernels/raw/finder/types';
-import { KernelController } from '../../kernels/kernelController';
-import { RemoteKernelReconnectBusyIndicator } from './remoteKernelReconnectBusyIndicator';
-import { LastCellExecutionTracker } from '../../kernels/execution/lastCellExecutionTracker';
-import type { IAnyMessageArgs } from '@jupyterlab/services/lib/kernel/kernel';
-import { getParentHeaderMsgId } from '../../kernels/execution/cellExecutionMessageHandler';
-import { DisposableStore } from '../../platform/common/utils/lifecycle';
-import { openInBrowser } from '../../platform/common/net/browser';
-import { KernelError } from '../../kernels/errors/kernelError';
+import { createDeferred } from '../../platform/common/utils/async';
+import { DisposableStore, dispose } from '../../platform/common/utils/lifecycle';
+import { Common, DataScience } from '../../platform/common/utils/localize';
+import { noop, swallowExceptions } from '../../platform/common/utils/misc';
+import { WrappedError } from '../../platform/errors/types';
 import { getVersion } from '../../platform/interpreter/helpers';
-import { getNotebookTelemetryTracker, trackControllerCreation } from '../../kernels/telemetry/notebookTelemetry';
-import { IJupyterVariablesProvider } from '../../kernels/variables/types';
-import type { INotebookMetadata } from '@jupyterlab/nbformat';
+import { IServiceContainer } from '../../platform/ioc/types';
+import { logger } from '../../platform/logging';
+import { ConsoleForegroundColors } from '../../platform/logging/types';
+import { Telemetry } from '../../telemetry';
+import { NotebookCellLanguageService } from '../languages/cellLanguageService';
+import { KernelConnector } from './kernelConnector';
+import { RemoteKernelReconnectBusyIndicator } from './remoteKernelReconnectBusyIndicator';
+import { IConnectionDisplayData, IConnectionDisplayDataProvider, IVSCodeNotebookController } from './types';
+import { notebookPathToDeepnoteProjectFilePath } from '../../platform/deepnote/deepnoteProjectUtils';
 
 /**
  * Our implementation of the VSCode Notebook Controller. Called by VS code to execute cells in a notebook. Also displayed
@@ -168,10 +173,19 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
             displayDataProvider
         );
 
-        try {
-            controller.controller.variableProvider = jupyterVairablesProvider;
-        } catch (ex) {
-            logger.warn('Failed to attach variable provider', ex);
+        // Only attach variable provider if the API is available
+        // The notebookVariableProvider is a proposed API that:
+        // - Works in extension development mode (F5 debugging)
+        // - Does NOT work in published extensions from the Marketplace
+        // - Requires users to manually enable it with --enable-proposed-api flag
+        // See: https://code.visualstudio.com/api/advanced-topics/using-proposed-api
+        // This check allows the extension to gracefully degrade when the API is unavailable
+        if ('variableProvider' in controller.controller) {
+            try {
+                controller.controller.variableProvider = jupyterVairablesProvider;
+            } catch (ex) {
+                logger.warn('Failed to attach variable provider', ex);
+            }
         }
 
         return controller;
@@ -290,8 +304,45 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
         this.disposables.push(disposeAnyHandler);
     }
     public updateConnection(kernelConnection: KernelConnectionMetadata) {
-        if (kernelConnection.kind !== 'connectToLiveRemoteKernel') {
+        // Check if the connection actually changed by comparing connection properties
+        // (not just IDs, since Deepnote uses notebook-based IDs that stay the same)
+        const oldConnection = this.kernelConnection;
+        const hasChanged = !areKernelConnectionsEqual(oldConnection, kernelConnection);
+
+        if (kernelConnection.kind === 'startUsingDeepnoteKernel') {
+            logger.info(`Updating connection for Deepnote notebook from ${oldConnection} to ${kernelConnection}`);
+        }
+
+        // Update the stored connection metadata
+        this.kernelConnection = kernelConnection;
+
+        // Update display name
+        if (kernelConnection.kind === 'startUsingDeepnoteKernel') {
             this.controller.label = getDisplayNameOrNameOfKernelConnection(kernelConnection);
+        }
+
+        // Only dispose kernels if the connection actually changed
+        // This avoids unnecessary kernel restarts when just reopening the same notebook
+        if (hasChanged) {
+            logger.info(`Connection changed - disposing old kernels to force reconnection`);
+
+            // Dispose any existing kernels using the old connection for all associated notebooks
+            // This forces a fresh kernel connection when cells are next executed
+            const allNotebooks = workspace.notebookDocuments;
+            const notebooksToUpdate = allNotebooks.filter(
+                (n) =>
+                    kernelConnection.kind === 'startUsingDeepnoteKernel' &&
+                    notebookPathToDeepnoteProjectFilePath(n.uri).toString() === kernelConnection.projectFilePath
+            );
+            notebooksToUpdate.forEach((notebook) => {
+                const existingKernel = this.kernelProvider.get(notebook);
+                if (existingKernel) {
+                    logger.info(
+                        `Disposing old kernel for notebook ${getDisplayPath(notebook.uri)} due to connection update`
+                    );
+                    existingKernel.dispose().catch(noop);
+                }
+            });
         }
     }
     public asWebviewUri(localResource: Uri): Uri {

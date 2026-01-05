@@ -13,7 +13,7 @@ import { getNotebookMetadata } from '../../platform/common/utils';
 import { JVSC_EXTENSION_ID, PYTHON_LANGUAGE } from '../../platform/common/constants';
 import { getNameOfKernelConnection, isPythonNotebook } from '../../kernels/helpers';
 import { logger } from '../../platform/logging';
-import { getDisplayPath } from '../../platform/common/platform/fs-paths';
+import { getDisplayPath } from '../../platform/common/platform/fs-paths.node';
 import { getPythonPackagesInKernel } from './listPackageTool.node';
 
 export async function sendPipListRequest(kernel: IKernel, token: vscode.CancellationToken) {

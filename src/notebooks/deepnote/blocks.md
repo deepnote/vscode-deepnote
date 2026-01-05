@@ -45,7 +45,7 @@ project:
           type: 'code'
           content: "df = pd.DataFrame({'a': [1, 2, 3]})\ndf"
           sortingKey: '001'
-          blockGroup: 'default-group'
+          blockGroup: 'uuid-v4'
           executionCount: 1
           metadata:
             table_state_spec: '{"pageSize": 25, "pageIndex": 0}'
@@ -150,7 +150,7 @@ Example of a cell after pocket conversion:
         __deepnotePocket: {
             type: 'code',
             sortingKey: '001',
-            blockGroup: 'default-group',
+            blockGroup: 'uuid-v4',
             executionCount: 1
         }
     },
@@ -472,7 +472,7 @@ blocks:
     type: 'big-number'
     content: ''
     sortingKey: '001'
-    blockGroup: 'default-group'
+    blockGroup: 'uuid-v4'
     metadata:
       deepnote_big_number_title: 'Customers'
       deepnote_big_number_value: 'customers'
@@ -517,7 +517,7 @@ When opened in VS Code, the block becomes a cell with JSON content showing the c
         __deepnotePocket: {
             type: 'big-number',
             sortingKey: '001',
-            blockGroup: 'default-group'
+            blockGroup: 'uuid-v4'
         }
     }
 }

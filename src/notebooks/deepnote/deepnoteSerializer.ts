@@ -1,12 +1,50 @@
-import { injectable, inject } from 'inversify';
-import { l10n, type CancellationToken, type NotebookData, type NotebookSerializer, workspace } from 'vscode';
+import type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
+import { inject, injectable, optional } from 'inversify';
 import * as yaml from 'js-yaml';
+import { l10n, workspace, type CancellationToken, type NotebookData, type NotebookSerializer } from 'vscode';
 
+import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
-import type { DeepnoteProject } from './deepnoteTypes';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
+import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
+import { ISnapshotMetadataService, ISnapshotMetadataServiceFull } from './snapshotMetadataService';
+import { computeHash } from '../../platform/common/crypto';
 
-export { DeepnoteProject, DeepnoteNotebook, DeepnoteOutput } from './deepnoteTypes';
+export type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
+export { DeepnoteNotebook, DeepnoteOutput } from '../../platform/deepnote/deepnoteTypes';
+
+/**
+ * Deep clones an object while removing circular references.
+ * Uses a recursion stack pattern to only drop true cycles, preserving shared references.
+ */
+function cloneWithoutCircularRefs<T>(obj: T, seen = new WeakSet<object>()): T {
+    if (obj === null || typeof obj !== 'object') {
+        return obj;
+    }
+
+    if (seen.has(obj as object)) {
+        // True circular reference on the current path - drop it
+        return undefined as T;
+    }
+
+    seen.add(obj as object);
+
+    try {
+        if (Array.isArray(obj)) {
+            return obj.map((item) => cloneWithoutCircularRefs(item, seen)) as T;
+        }
+
+        const clone: Record<string, unknown> = {};
+
+        for (const key of Object.keys(obj as Record<string, unknown>)) {
+            clone[key] = cloneWithoutCircularRefs((obj as Record<string, unknown>)[key], seen);
+        }
+
+        return clone as T;
+    } finally {
+        seen.delete(obj as object);
+    }
+}
 
 /**
  * Serializer for converting between Deepnote YAML files and VS Code notebook format.
@@ -16,7 +54,10 @@ export { DeepnoteProject, DeepnoteNotebook, DeepnoteOutput } from './deepnoteTyp
 export class DeepnoteNotebookSerializer implements NotebookSerializer {
     private converter = new DeepnoteDataConverter();
 
-    constructor(@inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager) {}
+    constructor(
+        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
+        @inject(ISnapshotMetadataService) @optional() private readonly snapshotService?: ISnapshotMetadataServiceFull
+    ) {}
 
     /**
      * Gets the data converter instance for cell/block conversion.
@@ -35,7 +76,14 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
      * @returns Promise resolving to notebook data
      */
     async deserializeNotebook(content: Uint8Array, token: CancellationToken): Promise<NotebookData> {
-        console.log('Deserializing Deepnote notebook');
+        logger.debug('DeepnoteSerializer: Deserializing Deepnote notebook');
+
+        if (token?.isCancellationRequested) {
+            throw new Error('Serialization cancelled');
+        }
+
+        // Initialize vega-lite for output conversion (lazy-loaded ESM module)
+        await this.converter.initialize();
 
         if (token?.isCancellationRequested) {
             throw new Error('Serialization cancelled');
@@ -43,45 +91,50 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
         try {
             const contentString = new TextDecoder('utf-8').decode(content);
-            const deepnoteProject = yaml.load(contentString) as DeepnoteProject;
+            const deepnoteFile = yaml.load(contentString) as DeepnoteFile;
 
-            if (!deepnoteProject.project?.notebooks) {
+            if (!deepnoteFile.project?.notebooks) {
                 throw new Error('Invalid Deepnote file: no notebooks found');
             }
 
-            const projectId = deepnoteProject.project.id;
+            const projectId = deepnoteFile.project.id;
             const notebookId = this.findCurrentNotebookId(projectId);
 
-            console.log(`Selected notebook ID: ${notebookId}.`);
+            logger.debug(`DeepnoteSerializer: Project ID: ${projectId}, Selected notebook ID: ${notebookId}`);
+
+            if (deepnoteFile.project.notebooks.length === 0) {
+                throw new Error('Deepnote project contains no notebooks.');
+            }
 
             const selectedNotebook = notebookId
-                ? deepnoteProject.project.notebooks.find((nb) => nb.id === notebookId)
-                : deepnoteProject.project.notebooks[0];
+                ? deepnoteFile.project.notebooks.find((nb) => nb.id === notebookId)
+                : this.findDefaultNotebook(deepnoteFile);
 
             if (!selectedNotebook) {
                 throw new Error(l10n.t('No notebook selected or found'));
             }
 
-            const cells = this.converter.convertBlocksToCells(selectedNotebook.blocks);
+            const cells = this.converter.convertBlocksToCells(selectedNotebook.blocks ?? []);
 
-            console.log(`Converted ${cells.length} cells from notebook blocks.`);
+            logger.debug(`DeepnoteSerializer: Converted ${cells.length} cells from notebook blocks`);
 
-            this.notebookManager.storeOriginalProject(deepnoteProject.project.id, deepnoteProject, selectedNotebook.id);
+            this.notebookManager.storeOriginalProject(deepnoteFile.project.id, deepnoteFile, selectedNotebook.id);
+            logger.debug(`DeepnoteSerializer: Stored project ${projectId} in notebook manager`);
 
             return {
                 cells,
                 metadata: {
-                    deepnoteProjectId: deepnoteProject.project.id,
-                    deepnoteProjectName: deepnoteProject.project.name,
+                    deepnoteProjectId: deepnoteFile.project.id,
+                    deepnoteProjectName: deepnoteFile.project.name,
                     deepnoteNotebookId: selectedNotebook.id,
                     deepnoteNotebookName: selectedNotebook.name,
-                    deepnoteVersion: deepnoteProject.version,
+                    deepnoteVersion: deepnoteFile.version,
                     name: selectedNotebook.name,
                     display_name: selectedNotebook.name
                 }
             };
         } catch (error) {
-            console.error('Error deserializing Deepnote notebook:', error);
+            logger.error('DeepnoteSerializer: Error deserializing Deepnote notebook', error);
 
             throw new Error(
                 `Failed to parse Deepnote file: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -102,17 +155,23 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
         }
 
         try {
+            logger.debug('SerializeNotebook: Starting serialization');
+
             const projectId = data.metadata?.deepnoteProjectId;
 
             if (!projectId) {
                 throw new Error('Missing Deepnote project ID in notebook metadata');
             }
 
-            const originalProject = this.notebookManager.getOriginalProject(projectId) as DeepnoteProject | undefined;
+            logger.debug(`SerializeNotebook: Project ID: ${projectId}`);
+
+            const originalProject = this.notebookManager.getOriginalProject(projectId) as DeepnoteFile | undefined;
 
             if (!originalProject) {
                 throw new Error('Original Deepnote project not found. Cannot save changes.');
             }
+
+            logger.debug('SerializeNotebook: Got original project');
 
             const notebookId =
                 data.metadata?.deepnoteNotebookId || this.notebookManager.getTheSelectedNotebookForAProject(projectId);
@@ -121,38 +180,161 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 throw new Error('Cannot determine which notebook to save');
             }
 
-            const notebookIndex = originalProject.project.notebooks.findIndex(
-                (nb: { id: string }) => nb.id === notebookId
-            );
+            logger.debug(`SerializeNotebook: Notebook ID: ${notebookId}`);
 
-            if (notebookIndex === -1) {
+            const notebook = originalProject.project.notebooks.find((nb: { id: string }) => nb.id === notebookId);
+
+            if (!notebook) {
                 throw new Error(`Notebook with ID ${notebookId} not found in project`);
             }
 
-            const updatedProject = JSON.parse(JSON.stringify(originalProject)) as DeepnoteProject;
+            logger.debug(`SerializeNotebook: Found notebook, converting ${data.cells.length} cells to blocks`);
 
-            const updatedBlocks = this.converter.convertCellsToBlocks(data.cells);
+            // Clone blocks while removing circular references that may have been
+            // introduced by VS Code's notebook cell/output handling
+            const blocks = this.converter.convertCellsToBlocks(data.cells);
 
-            updatedProject.project.notebooks[notebookIndex].blocks = updatedBlocks;
+            logger.debug(`SerializeNotebook: Converted to ${blocks.length} blocks, now cloning without circular refs`);
 
-            updatedProject.metadata.modifiedAt = new Date().toISOString();
+            // Add snapshot metadata to blocks (contentHash and execution timing)
+            await this.addSnapshotMetadataToBlocks(blocks, data);
 
-            const yamlString = yaml.dump(updatedProject, {
+            notebook.blocks = cloneWithoutCircularRefs<DeepnoteBlock[]>(blocks);
+
+            logger.debug('SerializeNotebook: Cloned blocks, updating modifiedAt');
+
+            originalProject.metadata.modifiedAt = new Date().toISOString();
+
+            // Add environment and execution metadata from snapshot service
+            await this.addSnapshotMetadataToProject(originalProject, data);
+
+            logger.debug('SerializeNotebook: Starting yaml.dump');
+
+            const yamlString = yaml.dump(originalProject, {
                 indent: 2,
                 lineWidth: -1,
                 noRefs: true,
                 sortKeys: false
             });
 
-            this.notebookManager.storeOriginalProject(projectId, updatedProject, notebookId);
+            logger.debug(`SerializeNotebook: yaml.dump complete, ${yamlString.length} chars`);
 
             return new TextEncoder().encode(yamlString);
         } catch (error) {
-            console.error('Error serializing Deepnote notebook:', error);
+            logger.error('DeepnoteSerializer: Error serializing Deepnote notebook', error);
             throw new Error(
                 `Failed to save Deepnote file: ${error instanceof Error ? error.message : 'Unknown error'}`
             );
         }
+    }
+
+    /**
+     * Adds snapshot metadata (contentHash, execution timing) to blocks.
+     */
+    private async addSnapshotMetadataToBlocks(blocks: DeepnoteBlock[], data: NotebookData): Promise<void> {
+        const notebookUri = this.findNotebookUri(data);
+
+        logger.debug(`[Snapshot] addSnapshotMetadataToBlocks: ${blocks.length} blocks`);
+        logger.debug(`[Snapshot] snapshotService exists: ${!!this.snapshotService}`);
+        logger.debug(`[Snapshot] notebookUri: ${notebookUri}`);
+
+        for (let i = 0; i < blocks.length; i++) {
+            const block = blocks[i];
+            const cell = data.cells[i];
+
+            if (block.content) {
+                try {
+                    const hash = await computeHash(block.content, 'SHA-256');
+
+                    block.contentHash = `sha256:${hash}`;
+                } catch (error) {
+                    logger.warn('Failed to compute contentHash', error);
+                }
+            }
+
+            if (this.snapshotService && notebookUri && cell?.metadata?.id) {
+                const cellId = cell.metadata.id as string;
+                const executionMetadata = this.snapshotService.getBlockExecutionMetadata(notebookUri, cellId);
+
+                if (executionMetadata) {
+                    if (executionMetadata.executionStartedAt) {
+                        block.executionStartedAt = executionMetadata.executionStartedAt;
+                    }
+
+                    if (executionMetadata.executionFinishedAt) {
+                        block.executionFinishedAt = executionMetadata.executionFinishedAt;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Adds environment and execution metadata to the project.
+     */
+    private async addSnapshotMetadataToProject(project: DeepnoteFile, data: NotebookData): Promise<void> {
+        logger.debug('[Serializer] addSnapshotMetadataToProject called');
+        logger.debug(`[Serializer] snapshotService exists: ${!!this.snapshotService}`);
+
+        if (!this.snapshotService) {
+            logger.debug('[Serializer] No snapshotService, skipping metadata');
+
+            return;
+        }
+
+        const notebookUri = this.findNotebookUri(data);
+
+        logger.debug(`[Serializer] findNotebookUri returned: ${notebookUri}`);
+
+        if (!notebookUri) {
+            logger.debug('[Serializer] No notebookUri found, skipping metadata');
+
+            return;
+        }
+
+        const executionMetadata = this.snapshotService.getExecutionMetadata(notebookUri);
+
+        logger.debug(`[Serializer] executionMetadata exists: ${!!executionMetadata}`);
+
+        if (executionMetadata) {
+            project.execution = executionMetadata;
+            logger.debug('[Serializer] Added execution metadata');
+        }
+
+        logger.debug('[Serializer] Fetching environment metadata.');
+
+        const environmentMetadata = await this.snapshotService.getEnvironmentMetadata(notebookUri);
+
+        logger.debug(`[Serializer] Finished fetching environment metadata.`);
+
+        if (environmentMetadata) {
+            project.environment = environmentMetadata;
+
+            logger.debug('[Serializer] Added environment metadata.');
+        } else {
+            logger.debug('[Serializer] No environment metadata returned.');
+        }
+    }
+
+    /**
+     * Finds the notebook URI from the metadata.
+     */
+    private findNotebookUri(data: NotebookData): string | undefined {
+        const projectId = data.metadata?.deepnoteProjectId;
+        const notebookId = data.metadata?.deepnoteNotebookId;
+
+        if (!projectId || !notebookId) {
+            return;
+        }
+
+        const notebookDoc = workspace.notebookDocuments.find(
+            (doc) =>
+                doc.notebookType === 'deepnote' &&
+                doc.metadata?.deepnoteProjectId === projectId &&
+                doc.metadata?.deepnoteNotebookId === notebookId
+        );
+
+        return notebookDoc?.uri.toString();
     }
 
     /**
@@ -175,5 +357,27 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
         );
 
         return activeNotebook?.metadata?.deepnoteNotebookId;
+    }
+
+    /**
+     * Finds the default notebook to open when no selection is made.
+     * @param file
+     * @returns
+     */
+    private findDefaultNotebook(file: DeepnoteFile): DeepnoteNotebook | undefined {
+        if (file.project.notebooks.length === 0) {
+            return undefined;
+        }
+
+        const sortedNotebooks = file.project.notebooks.slice().sort((a, b) => a.name.localeCompare(b.name));
+        const sortedNotebooksWithoutInit = file.project.initNotebookId
+            ? sortedNotebooks.filter((nb) => nb.id !== file.project.initNotebookId)
+            : sortedNotebooks;
+
+        if (sortedNotebooksWithoutInit.length > 0) {
+            return sortedNotebooksWithoutInit[0];
+        }
+
+        return sortedNotebooks[0];
     }
 }

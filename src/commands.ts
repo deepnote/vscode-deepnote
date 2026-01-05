@@ -43,12 +43,12 @@ export interface ICommandNameArgumentTypeMapping {
     ['workbench.extensions.search']: [string];
     ['editor.action.formatDocument']: [];
     ['editor.action.rename']: [];
-    ['jupyter.selectJupyterInterpreter']: [];
+    ['deepnote.selectJupyterInterpreter']: [];
     ['dataScience.ClearUserProviderJupyterServerCache']: [];
-    ['jupyterViewVariables.focus']: [];
-    ['jupyter.selectLocalJupyterServer']: [] | [undefined | string];
-    ['workbench.action.openSettings']: ['jupyter.kernels.excludePythonEnvironments'];
-    ['jupyter.getUsedAzMLServerHandles']: [];
+    ['deepnoteViewVariables.focus']: [];
+    ['deepnote.selectLocalJupyterServer']: [] | [undefined | string];
+    ['workbench.action.openSettings']: ['deepnote.kernels.excludePythonEnvironments'];
+    ['deepnote.getUsedAzMLServerHandles']: [];
     [DSCommands.RunCurrentCell]: [];
     [DSCommands.RunCurrentCellAdvance]: [];
     [DSCommands.CreateNewInteractive]: [];
@@ -58,6 +58,7 @@ export interface ICommandNameArgumentTypeMapping {
     [DSCommands.RestartKernelAndRunUpToSelectedCell]: [{ notebookEditor: { notebookUri: Uri } } | undefined];
     [DSCommands.NotebookEditorRemoveAllCells]: [];
     [DSCommands.NotebookEditorRunAllCells]: [];
+    [DSCommands.NotebookEditorRunFocusedCell]: [];
     [DSCommands.NotebookEditorAddCellBelow]: [];
     [DSCommands.ExpandAllCells]: [];
     [DSCommands.CollapseAllCells]: [];
@@ -75,7 +76,7 @@ export interface ICommandNameArgumentTypeMapping {
     ['notebook.cell.collapseCellOutput']: [];
     ['notebook.cell.expandCellOutput']: [];
     ['vscode.openWith']: [Uri, string];
-    ['jupyter.filterKernels']: [never];
+    ['deepnote.filterKernels']: [never];
     ['workbench.action.quickOpen']: [string];
     ['workbench.extensions.installExtension']: [
         Uri | 'ms-toolsai.jupyter' | 'ms-python.python',
@@ -84,9 +85,9 @@ export interface ICommandNameArgumentTypeMapping {
     ['workbench.action.files.openFolder']: [];
     ['workbench.action.openWorkspace']: [];
     ['extension.open']: [string];
-    ['setContext']: [string, ContextKeyValue] | ['jupyter.vscode.channel', Channel];
-    ['jupyter.reloadVSCode']: [string];
-    ['jupyter.runInDedicatedExtensionHost']: [string];
+    ['setContext']: [string, ContextKeyValue] | ['deepnote.vscode.channel', Channel];
+    ['deepnote.reloadVSCode']: [string];
+    ['deepnote.runInDedicatedExtensionHost']: [string];
     ['revealLine']: [{ lineNumber: number; at: 'top' | 'center' | 'bottom' }];
     ['python._loadLanguageServerExtension']: {}[];
     ['python.SelectAndInsertDebugConfiguration']: [TextDocument, Position, CancellationToken];
@@ -180,9 +181,30 @@ export interface ICommandNameArgumentTypeMapping {
     [DSCommands.RunAndDebugCell]: [NotebookCell];
     [DSCommands.RunByLineNext]: [NotebookCell];
     [DSCommands.RunByLineStop]: [NotebookCell];
-    [DSCommands.ReplayPylanceLog]: [Uri];
-    [DSCommands.ReplayPylanceLogStep]: [];
     [DSCommands.InstallPythonExtensionViaKernelPicker]: [];
     [DSCommands.InstallPythonViaKernelPicker]: [];
     [DSCommands.ContinueEditSessionInCodespace]: [];
+    [DSCommands.NewNotebook]: [];
+    [DSCommands.AddSqlBlock]: [];
+    [DSCommands.AddBigNumberChartBlock]: [];
+    [DSCommands.AddChartBlock]: [];
+    [DSCommands.AddInputTextBlock]: [];
+    [DSCommands.AddInputTextareaBlock]: [];
+    [DSCommands.AddInputSelectBlock]: [];
+    [DSCommands.AddInputSliderBlock]: [];
+    [DSCommands.AddInputCheckboxBlock]: [];
+    [DSCommands.AddInputDateBlock]: [];
+    [DSCommands.AddInputDateRangeBlock]: [];
+    [DSCommands.AddInputFileBlock]: [];
+    [DSCommands.AddButtonBlock]: [];
+    [DSCommands.NewProject]: [];
+    [DSCommands.ImportNotebook]: [];
+    [DSCommands.ImportJupyterNotebook]: [];
+    [DSCommands.RenameProject]: [];
+    [DSCommands.DeleteProject]: [];
+    [DSCommands.RenameNotebook]: [];
+    [DSCommands.DeleteNotebook]: [];
+    [DSCommands.DuplicateNotebook]: [];
+    [DSCommands.AddNotebookToProject]: [];
+    [DSCommands.OpenInDeepnote]: [];
 }

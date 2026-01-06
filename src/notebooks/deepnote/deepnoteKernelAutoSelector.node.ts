@@ -24,14 +24,14 @@ import {
 import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnoteEnvironment';
 import {
     DEEPNOTE_NOTEBOOK_TYPE,
-    DEEPNOTE_TOOLKIT_VERSION,
     DeepnoteKernelConnectionMetadata,
     IDeepnoteEnvironmentManager,
     IDeepnoteKernelAutoSelector,
     IDeepnoteLspClientManager,
     IDeepnoteNotebookEnvironmentMapper,
     IDeepnoteServerProvider,
-    IDeepnoteServerStarter
+    IDeepnoteServerStarter,
+    IDeepnoteToolkitInstaller
 } from '../../kernels/deepnote/types';
 import { createJupyterConnectionInfo } from '../../kernels/jupyter/jupyterUtils';
 import { JupyterLabHelper } from '../../kernels/jupyter/session/jupyterLabHelper';
@@ -98,7 +98,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         @inject(IDeepnoteServerStarter) private readonly serverStarter: IDeepnoteServerStarter,
         @inject(IDeepnoteNotebookEnvironmentMapper)
         private readonly notebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper,
-        @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel
+        @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel,
+        @inject(IDeepnoteToolkitInstaller) private readonly toolkitInstaller: IDeepnoteToolkitInstaller
     ) {
         this.deepnoteLoadingKernelController = DeepnoteKernelAutoSelector.createDeepnoteLoadingKernelController();
     }
@@ -156,7 +157,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                             `Failed to auto-select Deepnote kernel for ${getDisplayPath(notebook.uri)}`,
                             error
                         );
-                        void this.handleKernelSelectionError(error);
+                        void this.handleKernelSelectionError(error, notebook);
                         return true;
                     }
                 }
@@ -171,13 +172,13 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                                 `Error showing no environment warning for ${getDisplayPath(notebook.uri)}`,
                                 error
                             );
-                            void this.handleKernelSelectionError(error);
+                            void this.handleKernelSelectionError(error, notebook);
                         });
                     }
                 },
                 (error) => {
                     logger.error(`Error auto-selecting Deepnote kernel for ${getDisplayPath(notebook.uri)}`, error);
-                    void this.handleKernelSelectionError(error);
+                    void this.handleKernelSelectionError(error, notebook);
                 }
             );
     }
@@ -810,29 +811,23 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     /**
      * Handle kernel selection errors with user-friendly messages and actions
      */
-    public async handleKernelSelectionError(error: unknown): Promise<void> {
+    public async handleKernelSelectionError(error: unknown, notebook: NotebookDocument): Promise<void> {
         if (error instanceof DeepnoteToolkitMissingError) {
-            const copyInstallCommandAction = l10n.t('Copy Install Command');
+            const installAction = l10n.t('Install');
+            const changeEnvironmentAction = l10n.t('Change Environment');
             const selectedAction = await window.showErrorMessage(
-                l10n.t(
-                    'Failed to switch environment: deepnote-toolkit package is not installed in {0}. Install deepnote-toolkit[server] and try again.',
-                    error.venvPath
-                ),
-                {
-                    modal: false
-                },
-                copyInstallCommandAction
+                l10n.t('deepnote-toolkit is not installed in {0}', error.venvPath),
+                { modal: true },
+                installAction,
+                changeEnvironmentAction
             );
 
-            if (selectedAction === copyInstallCommandAction) {
-                try {
-                    await env.clipboard.writeText(`pip install deepnote-toolkit[server]==${DEEPNOTE_TOOLKIT_VERSION}`);
-                    void window.showInformationMessage(l10n.t('Install command copied to clipboard'));
-                } catch (clipboardError) {
-                    logger.error('Failed to copy install command to clipboard', clipboardError);
-                    void window.showErrorMessage(l10n.t('Failed to copy install command to clipboard'));
-                }
+            if (selectedAction === installAction) {
+                await this.installToolkitAndNotify(error.venvPath, notebook);
+            } else if (selectedAction === changeEnvironmentAction) {
+                void commands.executeCommand('deepnote.environments.selectForNotebook', { notebook });
             }
+
             return;
         }
 
@@ -886,6 +881,35 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         if (selectedAction === showOutputAction) {
             this.outputChannel.show();
+        }
+    }
+
+    /**
+     * Install deepnote-toolkit in an existing venv and rebuild the controller.
+     */
+    private async installToolkitAndNotify(venvPath: string, notebook: NotebookDocument): Promise<void> {
+        try {
+            await window.withProgress(
+                {
+                    location: ProgressLocation.Notification,
+                    title: l10n.t('Installing deepnote-toolkit...'),
+                    cancellable: true
+                },
+                async (progress, token) => {
+                    await this.toolkitInstaller.installToolkitInExistingVenv(Uri.file(venvPath), token);
+
+                    // After successful installation, rebuild the controller to use the new environment
+                    progress.report({ message: l10n.t('Starting kernel...') });
+                    await this.rebuildController(notebook, progress, token);
+                }
+            );
+
+            void window.showInformationMessage(l10n.t('deepnote-toolkit installed successfully'));
+        } catch (installError) {
+            logger.error('Failed to install deepnote-toolkit', installError);
+            const errorMessage = installError instanceof Error ? installError.message : String(installError);
+
+            void window.showErrorMessage(l10n.t('Failed to install deepnote-toolkit: {0}', errorMessage));
         }
     }
 

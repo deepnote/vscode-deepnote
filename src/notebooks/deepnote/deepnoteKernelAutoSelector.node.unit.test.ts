@@ -7,7 +7,8 @@ import {
     IDeepnoteLspClientManager,
     IDeepnoteNotebookEnvironmentMapper,
     IDeepnoteServerProvider,
-    IDeepnoteServerStarter
+    IDeepnoteServerStarter,
+    IDeepnoteToolkitInstaller
 } from '../../kernels/deepnote/types';
 import { IControllerRegistration, IVSCodeNotebookController } from '../controllers/types';
 import { IDisposableRegistry, IOutputChannel } from '../../platform/common/types';
@@ -41,6 +42,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
     let mockServerStarter: IDeepnoteServerStarter;
     let mockNotebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper;
     let mockOutputChannel: IOutputChannel;
+    let mockToolkitInstaller: IDeepnoteToolkitInstaller;
 
     let mockProgress: { report(value: { message?: string; increment?: number }): void };
     let mockCancellationToken: CancellationToken;
@@ -68,6 +70,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         mockRequirementsHelper = mock<IDeepnoteRequirementsHelper>();
         mockEnvironmentManager = mock<IDeepnoteEnvironmentManager>();
         mockServerStarter = mock<IDeepnoteServerStarter>();
+        mockToolkitInstaller = mock<IDeepnoteToolkitInstaller>();
         mockNotebookEnvironmentMapper = mock<IDeepnoteNotebookEnvironmentMapper>();
         mockOutputChannel = mock<IOutputChannel>();
 
@@ -125,7 +128,8 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             instance(mockEnvironmentManager),
             instance(mockServerStarter),
             instance(mockNotebookEnvironmentMapper),
-            instance(mockOutputChannel)
+            instance(mockOutputChannel),
+            instance(mockToolkitInstaller)
         );
     });
 

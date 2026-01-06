@@ -486,7 +486,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
             void window.showInformationMessage(l10n.t('Environment switched successfully'));
         } catch (error) {
             if (error instanceof DeepnoteToolkitMissingError) {
-                await this.kernelAutoSelector.handleKernelSelectionError(error);
+                await this.kernelAutoSelector.handleKernelSelectionError(error, notebook);
                 return;
             }
 

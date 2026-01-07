@@ -93,6 +93,11 @@ export class DeepnoteEnvironmentTreeDataProvider
             DeepnoteEnvironmentTreeItem.createInfoItem('venv', config.id, `Venv: ${config.venvPath.fsPath}`, 'folder')
         );
 
+        // Managed status
+        const managedLabel = config.managedVenv ? 'Type: Managed' : 'Type: External';
+        const managedIcon = config.managedVenv ? 'shield' : 'link-external';
+        items.push(DeepnoteEnvironmentTreeItem.createInfoItem('managed', config.id, managedLabel, managedIcon));
+
         // Packages
         if (config.packages && config.packages.length > 0) {
             items.push(

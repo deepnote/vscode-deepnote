@@ -1,6 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+import { DeepnoteFile } from '@deepnote/blocks';
+import * as fs from 'fs';
 import { inject, injectable, named, optional } from 'inversify';
 import {
     CancellationToken,
@@ -20,16 +22,17 @@ import {
     workspace
 } from 'vscode';
 import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnoteEnvironment';
-import * as fs from 'fs';
 import {
     DEEPNOTE_NOTEBOOK_TYPE,
+    DEEPNOTE_TOOLKIT_VERSION,
     DeepnoteKernelConnectionMetadata,
     IDeepnoteEnvironmentManager,
     IDeepnoteKernelAutoSelector,
     IDeepnoteLspClientManager,
     IDeepnoteNotebookEnvironmentMapper,
     IDeepnoteServerProvider,
-    IDeepnoteServerStarter
+    IDeepnoteServerStarter,
+    IDeepnoteToolkitInstaller
 } from '../../kernels/deepnote/types';
 import { createJupyterConnectionInfo } from '../../kernels/jupyter/jupyterUtils';
 import { JupyterLabHelper } from '../../kernels/jupyter/session/jupyterLabHelper';
@@ -41,21 +44,20 @@ import {
 import { IJupyterKernelSpec, IKernel, IKernelProvider } from '../../kernels/types';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IPythonExtensionChecker } from '../../platform/api/types';
-import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { Cancellation } from '../../platform/common/cancellation';
 import { JVSC_EXTENSION_ID, STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
 import { getDisplayPath } from '../../platform/common/platform/fs-paths.node';
 import { IConfigurationService, IDisposableRegistry, IOutputChannel } from '../../platform/common/types';
 import { disposeAsync } from '../../platform/common/utils';
 import { createDeepnoteServerConfigHandle } from '../../platform/deepnote/deepnoteServerUtils.node';
-import { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
-import { DeepnoteKernelError } from '../../platform/errors/deepnoteKernelErrors';
+import { DeepnoteKernelError, DeepnoteToolkitMissingError } from '../../platform/errors/deepnoteKernelErrors';
 import { logger } from '../../platform/logging';
+import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { IControllerRegistration, IVSCodeNotebookController } from '../controllers/types';
 import { IDeepnoteNotebookManager } from '../types';
 import { IDeepnoteInitNotebookRunner } from './deepnoteInitNotebookRunner.node';
-import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
 import { computeRequirementsHash } from './deepnoteProjectUtils';
+import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
 
 /**
  * Automatically selects and starts Deepnote kernel for .deepnote notebooks
@@ -73,7 +75,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     // Track projects where we need to run init notebook (set during controller setup)
     private readonly projectsPendingInitNotebook = new Map<
         string,
-        { notebook: NotebookDocument; project: DeepnoteProject }
+        { notebook: NotebookDocument; project: DeepnoteFile }
     >();
 
     private readonly deepnoteLoadingKernelController: NotebookController;
@@ -97,7 +99,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         @inject(IDeepnoteServerStarter) private readonly serverStarter: IDeepnoteServerStarter,
         @inject(IDeepnoteNotebookEnvironmentMapper)
         private readonly notebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper,
-        @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel
+        @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel,
+        @inject(IDeepnoteToolkitInstaller) private readonly toolkitInstaller: IDeepnoteToolkitInstaller
     ) {
         this.deepnoteLoadingKernelController = DeepnoteKernelAutoSelector.createDeepnoteLoadingKernelController();
     }
@@ -155,7 +158,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                             `Failed to auto-select Deepnote kernel for ${getDisplayPath(notebook.uri)}`,
                             error
                         );
-                        void this.handleKernelSelectionError(error);
+                        void this.handleKernelSelectionError(error, notebook);
                         return true;
                     }
                 }
@@ -170,13 +173,13 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                                 `Error showing no environment warning for ${getDisplayPath(notebook.uri)}`,
                                 error
                             );
-                            void this.handleKernelSelectionError(error);
+                            void this.handleKernelSelectionError(error, notebook);
                         });
                     }
                 },
                 (error) => {
                     logger.error(`Error auto-selecting Deepnote kernel for ${getDisplayPath(notebook.uri)}`, error);
-                    void this.handleKernelSelectionError(error);
+                    void this.handleKernelSelectionError(error, notebook);
                 }
             );
     }
@@ -549,6 +552,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         const serverInfo = await this.serverStarter.startServer(
             configuration.pythonInterpreter,
             configuration.venvPath,
+            configuration.managedVenv,
             configuration.packages ?? [],
             configuration.id,
             baseFileUri,
@@ -669,7 +673,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         // Prepare init notebook execution
         const projectId = notebook.metadata?.deepnoteProjectId;
         const project = projectId
-            ? (this.notebookManager.getOriginalProject(projectId) as DeepnoteProject | undefined)
+            ? (this.notebookManager.getOriginalProject(projectId) as DeepnoteFile | undefined)
             : undefined;
 
         if (project) {
@@ -808,7 +812,29 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     /**
      * Handle kernel selection errors with user-friendly messages and actions
      */
-    private async handleKernelSelectionError(error: unknown): Promise<void> {
+    public async handleKernelSelectionError(error: unknown, notebook: NotebookDocument): Promise<void> {
+        if (error instanceof DeepnoteToolkitMissingError) {
+            const installAction = l10n.t('Install');
+            const changeEnvironmentAction = l10n.t('Change Environment');
+            const selectedAction = await window.showWarningMessage(
+                l10n.t(
+                    'Running Deepnote projects requires deepnote-toolkit[server]=={0} to be installed in the selected environment',
+                    DEEPNOTE_TOOLKIT_VERSION
+                ),
+                { modal: true },
+                installAction,
+                changeEnvironmentAction
+            );
+
+            if (selectedAction === installAction) {
+                await this.installToolkitAndNotify(error.venvPath, notebook);
+            } else if (selectedAction === changeEnvironmentAction) {
+                void commands.executeCommand('deepnote.environments.selectForNotebook', { notebook });
+            }
+
+            return;
+        }
+
         // Handle DeepnoteKernelError types with specific guidance
         if (error instanceof DeepnoteKernelError) {
             // Log the technical details
@@ -859,6 +885,35 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         if (selectedAction === showOutputAction) {
             this.outputChannel.show();
+        }
+    }
+
+    /**
+     * Install deepnote-toolkit in an existing venv and rebuild the controller.
+     */
+    private async installToolkitAndNotify(venvPath: string, notebook: NotebookDocument): Promise<void> {
+        try {
+            await window.withProgress(
+                {
+                    location: ProgressLocation.Notification,
+                    title: l10n.t('Installing deepnote-toolkit...'),
+                    cancellable: true
+                },
+                async (progress, token) => {
+                    await this.toolkitInstaller.installToolkitInExistingVenv(Uri.file(venvPath), token);
+
+                    // After successful installation, rebuild the controller to use the new environment
+                    progress.report({ message: l10n.t('Starting kernel...') });
+                    await this.rebuildController(notebook, progress, token);
+                }
+            );
+
+            void window.showInformationMessage(l10n.t('deepnote-toolkit installed successfully'));
+        } catch (installError) {
+            logger.error('Failed to install deepnote-toolkit', installError);
+            const errorMessage = installError instanceof Error ? installError.message : String(installError);
+
+            void window.showErrorMessage(l10n.t('Failed to install deepnote-toolkit: {0}', errorMessage));
         }
     }
 

@@ -567,6 +567,22 @@ async function copyNodeGypBuild() {
 }
 
 /**
+ * Helper to copy a bundle file if it exists, with clear error messaging
+ */
+async function copyBundleIfExists(source: string, target: string, description: string): Promise<void> {
+    const exists = await fs.pathExists(source);
+    if (!exists) {
+        console.warn(
+            colors.yellow(`Warning: ${description} not found at ${source}. `) +
+                colors.yellow('Skipping copy. Install the package if this feature is needed.')
+        );
+        return;
+    }
+    await fs.ensureDir(path.dirname(target));
+    await fs.copyFile(source, target);
+}
+
+/**
  * Copy @vscode/jupyter-ipywidgets7 pre-built bundle for IPyWidget v7 support
  */
 async function copyIPyWidgets7() {
@@ -579,8 +595,7 @@ async function copyIPyWidgets7() {
         'ipywidgets.js'
     );
     const target = path.join(extensionFolder, 'dist', 'renderers', 'ipywidgets7', 'ipywidgets.js');
-    await fs.ensureDir(path.dirname(target));
-    await fs.copyFile(source, target);
+    await copyBundleIfExists(source, target, '@vscode/jupyter-ipywidgets7 bundle');
 }
 
 /**
@@ -596,8 +611,7 @@ async function copyIPyWidgets8() {
         'ipywidgets.js'
     );
     const target = path.join(extensionFolder, 'dist', 'renderers', 'ipywidgets8', 'ipywidgets.js');
-    await fs.ensureDir(path.dirname(target));
-    await fs.copyFile(source, target);
+    await copyBundleIfExists(source, target, '@vscode/jupyter-ipywidgets8 bundle');
 }
 
 async function buildSqlLanguageServer() {

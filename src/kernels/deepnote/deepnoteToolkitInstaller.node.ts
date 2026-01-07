@@ -241,7 +241,16 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         logger.info(`Installing deepnote-toolkit in existing venv at ${venvPath.fsPath}`);
         this.outputChannel.appendLine(l10n.t('Installing deepnote-toolkit in existing environment...'));
 
-        return this.installToolkitPackages(venvInterpreter, venvPath, token);
+        const installation = this.installToolkitPackages(venvInterpreter, venvPath, token);
+        this.pendingInstallations.set(venvKey, installation);
+
+        try {
+            return await installation;
+        } finally {
+            if (this.pendingInstallations.get(venvKey) === installation) {
+                this.pendingInstallations.delete(venvKey);
+            }
+        }
     }
 
     /**

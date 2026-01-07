@@ -248,7 +248,16 @@ function createConfig(
     const releaseVersionScriptFile = isPreRelease ? 'release.pre-release.js' : 'release.stable.js';
     const alias: Record<string, string> = {
         moment: path.join(extensionFolder, 'build', 'webpack', 'moment.js'),
-        'vscode-jupyter-release-version': path.join(__dirname, releaseVersionScriptFile)
+        'vscode-jupyter-release-version': path.join(__dirname, releaseVersionScriptFile),
+        // Stub for @nteract/presentational-components to avoid pulling in vulnerable dependencies
+        '@nteract/presentational-components': path.join(
+            extensionFolder,
+            'src',
+            'renderers',
+            'client',
+            'stubs',
+            'nteract-presentational-components.tsx'
+        )
     };
     // Use ESM entry for jsonc-parser to avoid UMD internal require() issues when bundling
     if (target === 'desktop') {

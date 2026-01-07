@@ -145,7 +145,6 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         }
 
         if (!managedVenv) {
-            // this.outputChannel.appendLine(l10n.t('Error: deepnote-toolkit not installed in external venv'));
             throw new DeepnoteToolkitMissingError(baseInterpreter.uri.fsPath, venvPath.fsPath);
         }
 

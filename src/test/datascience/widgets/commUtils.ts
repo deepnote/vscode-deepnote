@@ -10,7 +10,7 @@ import { noop } from '../../core';
 import colors from 'colors';
 
 export function initializeWidgetComms(disposables: IDisposable[]): Utils {
-    const messageChannel = notebooks.createRendererMessaging('jupyter-ipywidget-renderer');
+    const messageChannel = notebooks.createRendererMessaging('deepnote-ipywidget-renderer');
     if (!messageChannel) {
         throw new Error('No Widget renderer comms channel');
     }

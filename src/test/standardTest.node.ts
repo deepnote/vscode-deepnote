@@ -7,7 +7,7 @@ import * as fs from 'fs-extra';
 import { downloadAndUnzipVSCode, resolveCliPathFromVSCodeExecutablePath, runTests } from '@vscode/test-electron';
 import { EXTENSION_ROOT_DIR_FOR_TESTS, IS_PERF_TEST, IS_SMOKE_TEST } from './constants.node';
 import * as tmp from 'tmp';
-import { PythonExtension, setTestExecution, RendererExtension, isCI } from '../platform/common/constants';
+import { PythonExtension, setTestExecution, isCI } from '../platform/common/constants';
 import { DownloadPlatform } from '@vscode/test-electron/out/download';
 import { arch } from 'os';
 
@@ -100,8 +100,7 @@ async function installPythonExtension(vscodeExecutablePath: string, extensionsDi
     const cliPath = resolveCliPathFromVSCodeExecutablePath(vscodeExecutablePath, platform);
     await installExtension(PythonExtension, cliPath, extensionsDir, ['--pre-release']);
 
-    // Make sure renderers is there too as we'll use it for widget tests
-    await installExtension(RendererExtension, cliPath, extensionsDir);
+    // Note: Renderer extension is now integrated, no need to install it separately
 }
 
 // Make sure renderers is there too as we'll use it for widget tests

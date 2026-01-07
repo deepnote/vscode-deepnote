@@ -261,6 +261,29 @@ class ProxyKernel implements IMessageHandler, Kernel.IKernelConnection {
     }): Promise<KernelMessage.ICommInfoReplyMsg> {
         return this.realKernel.requestCommInfo(content);
     }
+    // Subshell support (JEP 91) - delegated to real kernel
+    public readonly subshellId: string | null = null;
+    public get supportsSubshells(): boolean {
+        return this.realKernel.supportsSubshells;
+    }
+    public requestCreateSubshell(
+        content: KernelMessage.ICreateSubshellRequestMsg['content'],
+        disposeOnDone?: boolean
+    ): Kernel.IControlFuture<KernelMessage.ICreateSubshellRequestMsg, KernelMessage.ICreateSubshellReplyMsg> {
+        return this.realKernel.requestCreateSubshell(content, disposeOnDone);
+    }
+    public requestDeleteSubshell(
+        content: KernelMessage.IDeleteSubshellRequestMsg['content'],
+        disposeOnDone?: boolean
+    ): Kernel.IControlFuture<KernelMessage.IDeleteSubshellRequestMsg, KernelMessage.IDeleteSubshellReplyMsg> {
+        return this.realKernel.requestDeleteSubshell(content, disposeOnDone);
+    }
+    public requestListSubshell(
+        content: KernelMessage.IListSubshellRequestMsg['content'],
+        disposeOnDone?: boolean
+    ): Kernel.IControlFuture<KernelMessage.IListSubshellRequestMsg, KernelMessage.IListSubshellReplyMsg> {
+        return this.realKernel.requestListSubshell(content, disposeOnDone);
+    }
     public sendInputReply(
         content: KernelMessage.IInputReplyMsg['content'],
         parent_header: KernelMessage.IInputReplyMsg['parent_header']

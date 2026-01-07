@@ -4,10 +4,10 @@
 export const renderersAndMimetypes = new Map<string, string[]>([
     // Ability to render nested outputs widgets.
     // I.e. Jupyter Labl widget manager must be able to render a widget as well, not just regular mimetypes.
-    ['jupyter-ipywidget-renderer', ['application/vnd.jupyter.widget-view+json']],
+    ['deepnote-ipywidget-renderer', ['application/vnd.jupyter.widget-view+json']],
     // https://github.com/microsoft/vscode-notebook-renderers/blob/homely-louse/package.json#L80
     [
-        'jupyter-notebook-renderer',
+        'deepnote-notebook-renderer',
         [
             'image/gif',
             'image/png',

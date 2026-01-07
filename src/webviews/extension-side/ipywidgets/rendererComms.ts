@@ -38,7 +38,7 @@ export class IPyWidgetRendererComms implements IExtensionSyncActivationService {
         dispose(this.disposables);
     }
     activate() {
-        const comms = notebooks.createRendererMessaging('jupyter-ipywidget-renderer');
+        const comms = notebooks.createRendererMessaging('deepnote-ipywidget-renderer');
         comms.onDidReceiveMessage(this.onDidReceiveMessage.bind(this, comms), this, this.disposables);
         this.kernelProvider.onDidStartKernel(this.onDidStartKernel, this, this.disposables);
     }

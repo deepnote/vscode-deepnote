@@ -949,11 +949,11 @@ abstract class BaseKernel implements IBaseKernel {
                         return;
                     }
                     const message = msg.msg;
+                    const data = message.content && 'data' in message.content ? message.content.data : undefined;
                     if (
                         message.content &&
-                        'data' in message.content &&
-                        message.content.data &&
-                        (message.content.data[WIDGET_MIMETYPE] ||
+                        data &&
+                        ((data as Record<string, unknown>)[WIDGET_MIMETYPE] ||
                             ('target_name' in message.content &&
                                 message.content.target_name === Identifiers.DefaultCommTarget))
                     ) {

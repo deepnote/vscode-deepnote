@@ -75,7 +75,7 @@ export class RawSessionConnection implements Session.ISessionConnection {
     // RawSession owns the lifetime of the kernel process and will dispose it
     // Return the current kernel for this session
     get kernel(): Kernel.IKernelConnection | null {
-        return this._kernel as Kernel.IKernelConnection | null;
+        return this._kernel;
     }
 
     constructor(
@@ -157,7 +157,7 @@ export class RawSessionConnection implements Session.ISessionConnection {
         this.terminated.emit();
         this.statusChanged.emit(this.status);
     }
-    private onKernelStatus(_sender: Kernel.IKernelConnection, state: KernelMessage.Status) {
+    private onKernelStatus(_sender: RawKernelConnection, state: KernelMessage.Status) {
         logger.ci(`RawSession status changed to ${state}`);
         this.statusChanged.emit(state);
     }
@@ -175,19 +175,19 @@ export class RawSessionConnection implements Session.ISessionConnection {
         throw new Error('changeKernel is not implemented for raw kernel connections');
     }
 
-    private onIOPubMessage(_sender: Kernel.IKernelConnection, msg: KernelMessage.IIOPubMessage) {
+    private onIOPubMessage(_sender: RawKernelConnection, msg: KernelMessage.IIOPubMessage) {
         this.iopubMessage.emit(msg);
     }
-    private onAnyMessage(_sender: Kernel.IKernelConnection, msg: Kernel.IAnyMessageArgs) {
+    private onAnyMessage(_sender: RawKernelConnection, msg: Kernel.IAnyMessageArgs) {
         this.anyMessage.emit(msg);
     }
-    private onUnhandledMessage(_sender: Kernel.IKernelConnection, msg: KernelMessage.IMessage) {
+    private onUnhandledMessage(_sender: RawKernelConnection, msg: KernelMessage.IMessage) {
         this.unhandledMessage.emit(msg);
     }
-    private onKernelConnectionStatus(_sender: Kernel.IKernelConnection, state: Kernel.ConnectionStatus) {
+    private onKernelConnectionStatus(_sender: RawKernelConnection, state: Kernel.ConnectionStatus) {
         this.connectionStatusChanged.emit(state);
     }
-    private onDisposed(_sender: Kernel.IKernelConnection) {
+    private onDisposed(_sender: RawKernelConnection) {
         this.disposed.emit();
     }
 }

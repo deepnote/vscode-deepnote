@@ -24,6 +24,7 @@ import {
 import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnoteEnvironment';
 import {
     DEEPNOTE_NOTEBOOK_TYPE,
+    DEEPNOTE_TOOLKIT_VERSION,
     DeepnoteKernelConnectionMetadata,
     IDeepnoteEnvironmentManager,
     IDeepnoteKernelAutoSelector,
@@ -815,8 +816,11 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         if (error instanceof DeepnoteToolkitMissingError) {
             const installAction = l10n.t('Install');
             const changeEnvironmentAction = l10n.t('Change Environment');
-            const selectedAction = await window.showErrorMessage(
-                l10n.t('deepnote-toolkit is not installed in {0}', error.venvPath),
+            const selectedAction = await window.showWarningMessage(
+                l10n.t(
+                    'Running Deepnote projects requires deepnote-toolkit[server]=={0} to be installed in the selected environment',
+                    DEEPNOTE_TOOLKIT_VERSION
+                ),
                 { modal: true },
                 installAction,
                 changeEnvironmentAction

@@ -224,6 +224,15 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         venvPath: Uri,
         token?: CancellationToken
     ): Promise<VenvAndToolkitInstallation> {
+        const venvKey = venvPath.fsPath;
+
+        // Wait for any pending installation
+        const pendingInstall = this.pendingInstallations.get(venvKey);
+        if (pendingInstall) {
+            logger.info(`Waiting for pending installation for ${venvKey}...`);
+            return pendingInstall;
+        }
+
         const venvInterpreter = await this.getVenvInterpreterByPath(venvPath);
         if (!venvInterpreter) {
             throw new Error(`Venv not found at ${venvPath.fsPath}`);

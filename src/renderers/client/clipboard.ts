@@ -11,10 +11,10 @@ declare interface ClipboardItem {
 }
 
 export async function writeImageToClipboard(blob: Blob) {
-    const item = new ClipboardItem({ 'image/png': blob });
     if (!('write' in navigator.clipboard)) {
         throw new Error('navigator.clipboard.write not supported');
     }
+    const item = new ClipboardItem({ 'image/png': blob });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (navigator.clipboard as any).write([item]);
 }

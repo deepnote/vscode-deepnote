@@ -262,7 +262,9 @@ class ProxyKernel implements IMessageHandler, Kernel.IKernelConnection {
         return this.realKernel.requestCommInfo(content);
     }
     // Subshell support (JEP 91) - delegated to real kernel
-    public readonly subshellId: string | null = null;
+    public get subshellId(): string | null {
+        return this.realKernel.subshellId;
+    }
     public get supportsSubshells(): boolean {
         return this.realKernel.supportsSubshells;
     }

@@ -31,9 +31,6 @@ export async function activate(ctx: RendererContext<void>) {
                 script: string,
                 _signal: AbortSignal
             ): Promise<string | undefined> {
-                if (ctx.postMessage) {
-                    ctx.postMessage({ type: 'from Renderer', payload: 'Hello World' });
-                }
                 const metadata =
                     outputItem.metadata && typeof outputItem.metadata === 'object' && 'metadata' in outputItem.metadata
                         ? // eslint-disable-next-line @typescript-eslint/no-explicit-any

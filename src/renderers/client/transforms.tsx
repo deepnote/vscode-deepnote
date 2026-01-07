@@ -114,7 +114,7 @@ export function getTransform(mimeType: string, loadingMessage = 'Loading...'): L
                 return transform;
             }
 
-            return <div>`Transform not found for mimetype ${mimeType}`</div>;
+            return () => <div>Transform not found for mimetype {mimeType}</div>;
         },
         { fallback: <div>{loadingMessage}</div> }
     );
@@ -127,5 +127,5 @@ export async function forceLoad() {
 
 export function isMimeTypeSupported(mimeType: string): boolean {
     const match = mimeTypeToImport.find((m) => m.mimeType === mimeType);
-    return match ? true : false;
+    return !!match;
 }

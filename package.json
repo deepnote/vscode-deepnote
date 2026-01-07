@@ -2635,7 +2635,7 @@
         "node-fetch": "^2.6.7",
         "node-gyp-build": "^4.6.0",
         "node-stream-zip": "^1.6.0",
-        "path-browserify": "^0.0.1",
+        "path-browserify": "^1.0.1",
         "pdfkit": "^0.13.0",
         "pidtree": "^0.6.0",
         "plotly.js-dist": "^3.0.1",

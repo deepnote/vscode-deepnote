@@ -6,7 +6,7 @@ import * as React from 'react';
 import type { RendererContext } from 'vscode-notebook-renderer';
 import { concatMultilineString } from './helpers';
 import { getTransform } from './transforms';
-import { OpenImageInPlotViewer, SaveImageAs, IsDeepnoteExtensionInstalled, noop } from './constants';
+import { OpenImageInPlotViewer, SaveImageAs, IsDeepnoteExtensionInstalled } from './constants';
 import { writeImageToClipboard } from './clipboard';
 
 (globalThis as any).__isDeepnoteInstalled = false;
@@ -155,18 +155,25 @@ export class CellOutput extends React.Component<ICellOutputProps> {
             }
         };
         const contents = imgSrc ? (
-            <img src={imgSrc} style={imgStyle} {...imgHeightWidth}></img>
+            <img src={imgSrc} alt="Cell output image" style={imgStyle} {...imgHeightWidth}></img>
         ) : (
             <div className={'svgContainerStyle'} dangerouslySetInnerHTML={{ __html: data.toString() }} />
         );
         return (
-            <div className={'display'} style={divStyle} onMouseOver={onMouseOver} onMouseOut={onMouseOut}>
+            <div
+                className={'display'}
+                style={divStyle}
+                onMouseOver={onMouseOver}
+                onMouseOut={onMouseOut}
+                onFocus={onMouseOver}
+                onBlur={onMouseOut}
+            >
                 <button
                     ref={this.saveAsIcon}
+                    type="button"
                     style={{ position: 'absolute', top: '5px', right: '5px' }}
                     className={'plotIcon hidden'}
                     onClick={saveAs}
-                    role="button"
                     aria-pressed="false"
                     title="Save As"
                     aria-label="Save As"
@@ -179,7 +186,9 @@ export class CellOutput extends React.Component<ICellOutputProps> {
                                 viewBox="0 0 16 16"
                                 fill="none"
                                 xmlns="http://www.w3.org/2000/svg"
+                                aria-hidden="true"
                             >
+                                <title>Save</title>
                                 <path
                                     className={'plotIconSvgPath'}
                                     d="M12.0147 2.8595L13.1397 3.9845L13.25 4.25V12.875L12.875 13.25H3.125L2.75 12.875V3.125L3.125 2.75H11.75L12.0147 2.8595ZM3.5 3.5V12.5H12.5V4.406L11.5947 3.5H10.25V6.5H5V3.5H3.5ZM8 3.5V5.75H9.5V3.5H8Z"
@@ -191,10 +200,10 @@ export class CellOutput extends React.Component<ICellOutputProps> {
                 {showPlotViewer ? (
                     <button
                         ref={this.plotIcon}
+                        type="button"
                         style={{ position: 'absolute', top: '5px', right: '45px' }}
                         className={'plotIcon hidden'}
                         onClick={openPlot}
-                        role="button"
                         aria-pressed="false"
                         title="Expand image"
                         aria-label="Expand image"
@@ -207,7 +216,9 @@ export class CellOutput extends React.Component<ICellOutputProps> {
                                     viewBox="0 0 16 16"
                                     fill="none"
                                     xmlns="http://www.w3.org/2000/svg"
+                                    aria-hidden="true"
                                 >
+                                    <title>Expand</title>
                                     <path
                                         className={'plotIconSvgPath'}
                                         d="M9.71429 6.28571V12.2857H7.14286V6.28571H9.71429ZM13.1429 2.85714V12.2857H10.5714V2.85714H13.1429ZM2.85714 13.1429H14V14H2V2H2.85714V13.1429ZM6.28571 4.57143V12.2857H3.71429V4.57143H6.28571Z"
@@ -220,10 +231,10 @@ export class CellOutput extends React.Component<ICellOutputProps> {
                 {showCopyImage ? (
                     <button
                         ref={this.copyImageIcon}
+                        type="button"
                         style={{ position: 'absolute', top: '5px', right: copyButtonMargin }}
                         className={'plotIcon hidden'}
                         onClick={copyPlotImage}
-                        role="button"
                         aria-pressed="false"
                         title="Copy to Clipboard"
                         aria-label="Copy to Clipboard"
@@ -236,7 +247,9 @@ export class CellOutput extends React.Component<ICellOutputProps> {
                                     viewBox="0 0 16 16"
                                     fill="none"
                                     xmlns="http://www.w3.org/2000/svg"
+                                    aria-hidden="true"
                                 >
+                                    <title>Copy</title>
                                     <path
                                         className={'plotIconSvgPath'}
                                         d="m4 4l1-1h5.414L14 6.586V14l-1 1H5l-1-1V4zm9 3l-3-3H5v10h8V7z"

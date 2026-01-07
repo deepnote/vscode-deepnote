@@ -1,18 +1,6 @@
 export const DeepnoteNotebookRenderer = 'deepnote-notebook-renderer';
-export type OpenImageInPlotViewer = {
-    type: 'openImageInPlotViewer';
-    outputId: string;
-    mimeType: string;
-};
-export type IsDeepnoteExtensionInstalled = {
-    type: 'isDeepnoteExtensionInstalled';
-    response?: boolean;
-};
-export type SaveImageAs = {
-    type: 'saveImageAs';
-    outputId: string;
-    mimeType: string;
-};
+
+export { OpenImageInPlotViewer, IsDeepnoteExtensionInstalled, SaveImageAs } from '../shared/types';
 export declare const ClipboardItem: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     prototype: any;

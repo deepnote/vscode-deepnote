@@ -5,7 +5,7 @@ import { CancellationToken, Disposable, NotebookDocument, ProgressOptions, Uri }
 import { DeepnoteEnvironmentsView } from './deepnoteEnvironmentsView.node';
 import { IDeepnoteEnvironmentManager, IDeepnoteKernelAutoSelector, IDeepnoteNotebookEnvironmentMapper } from '../types';
 import { IPythonApiProvider } from '../../../platform/api/types';
-import { IDisposableRegistry } from '../../../platform/common/types';
+import { IDisposableRegistry, IOutputChannel } from '../../../platform/common/types';
 import { IKernelProvider } from '../../../kernels/types';
 import { DeepnoteEnvironment } from './deepnoteEnvironment';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
@@ -24,6 +24,7 @@ suite('DeepnoteEnvironmentsView', () => {
     let mockKernelAutoSelector: IDeepnoteKernelAutoSelector;
     let mockNotebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper;
     let mockKernelProvider: IKernelProvider;
+    let mockOutputChannel: IOutputChannel;
     let disposables: Disposable[] = [];
     let pythonEnvironments: PythonExtension['environments'];
 
@@ -41,6 +42,7 @@ suite('DeepnoteEnvironmentsView', () => {
         mockKernelAutoSelector = mock<IDeepnoteKernelAutoSelector>();
         mockNotebookEnvironmentMapper = mock<IDeepnoteNotebookEnvironmentMapper>();
         mockKernelProvider = mock<IKernelProvider>();
+        mockOutputChannel = mock<IOutputChannel>();
 
         // Mock onDidChangeEnvironments to return a disposable event
         when(mockConfigManager.onDidChangeEnvironments).thenReturn((_listener: () => void) => {
@@ -58,7 +60,8 @@ suite('DeepnoteEnvironmentsView', () => {
             instance(mockDisposableRegistry),
             instance(mockKernelAutoSelector),
             instance(mockNotebookEnvironmentMapper),
-            instance(mockKernelProvider)
+            instance(mockKernelProvider),
+            instance(mockOutputChannel)
         );
     });
 
@@ -107,6 +110,17 @@ suite('DeepnoteEnvironmentsView', () => {
             name: 'Original Name',
             pythonInterpreter: testInterpreter,
             venvPath: Uri.file('/path/to/venv'),
+            managedVenv: true,
+            createdAt: new Date(),
+            lastUsedAt: new Date()
+        };
+
+        const testEnvironmentExternal: DeepnoteEnvironment = {
+            id: testEnvironmentId,
+            name: 'Original Name',
+            pythonInterpreter: testInterpreter,
+            venvPath: Uri.file('/path/to/external/venv'),
+            managedVenv: false,
             createdAt: new Date(),
             lastUsedAt: new Date()
         };
@@ -233,6 +247,22 @@ suite('DeepnoteEnvironmentsView', () => {
             assert.ok(capturedOptions, 'Options should be provided');
             assert.strictEqual(capturedOptions.value, 'Original Name');
         });
+
+        test('should successfully rename external environment (managedVenv: false)', async () => {
+            when(mockConfigManager.getEnvironment(testEnvironmentId)).thenReturn(testEnvironmentExternal);
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(
+                Promise.resolve('New External Name')
+            );
+            when(mockConfigManager.updateEnvironment(anything(), anything())).thenResolve();
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenResolve();
+
+            await view.editEnvironmentName(testEnvironmentId);
+
+            verify(
+                mockConfigManager.updateEnvironment(testEnvironmentId, deepEqual({ name: 'New External Name' }))
+            ).once();
+            verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
+        });
     });
 
     suite('createEnvironmentCommand', () => {
@@ -247,6 +277,7 @@ suite('DeepnoteEnvironmentsView', () => {
             name: 'My Data Science Environment',
             pythonInterpreter: testInterpreter,
             venvPath: Uri.file('/path/to/new/venv'),
+            managedVenv: true,
             packages: ['pandas', 'numpy', 'matplotlib'],
             description: 'Environment for data science work',
             createdAt: new Date(),
@@ -371,6 +402,7 @@ suite('DeepnoteEnvironmentsView', () => {
 
     suite('deleteEnvironmentCommand', () => {
         const testEnvironmentId = 'test-env-id-to-delete';
+        const testExternalEnvironmentId = 'test-external-env-id-to-delete';
         const testInterpreter: PythonEnvironment = {
             id: 'test-python-id',
             uri: Uri.file('/usr/bin/python3.11'),
@@ -382,6 +414,17 @@ suite('DeepnoteEnvironmentsView', () => {
             name: 'Environment to Delete',
             pythonInterpreter: testInterpreter,
             venvPath: Uri.file('/path/to/venv'),
+            managedVenv: true,
+            createdAt: new Date(),
+            lastUsedAt: new Date()
+        };
+
+        const testExternalEnvironment: DeepnoteEnvironment = {
+            id: testExternalEnvironmentId,
+            name: 'External Environment to Delete',
+            pythonInterpreter: testInterpreter,
+            venvPath: Uri.file('/path/to/external/venv'),
+            managedVenv: false,
             createdAt: new Date(),
             lastUsedAt: new Date()
         };
@@ -559,6 +602,146 @@ suite('DeepnoteEnvironmentsView', () => {
                 'Kernel using different environment should not be disposed'
             );
         });
+
+        test('should successfully delete external environment (managedVenv: false) with same side effects', async () => {
+            // Mock environment exists - external environment
+            when(mockConfigManager.getEnvironment(testExternalEnvironmentId)).thenReturn(testExternalEnvironment);
+
+            // Mock user confirmation - user clicks "Delete" button
+            when(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).thenReturn(
+                Promise.resolve('Delete')
+            );
+
+            // Mock notebooks using this environment
+            const notebook1Uri = Uri.file('/workspace/notebook1.deepnote');
+            const notebook2Uri = Uri.file('/workspace/notebook2.deepnote');
+            when(mockNotebookEnvironmentMapper.getNotebooksUsingEnvironment(testExternalEnvironmentId)).thenReturn([
+                notebook1Uri,
+                notebook2Uri
+            ]);
+
+            // Mock removing environment mappings
+            when(mockNotebookEnvironmentMapper.removeEnvironmentForNotebook(anything())).thenResolve();
+
+            // Mock open notebooks
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([]);
+
+            // Mock window.withProgress to execute the callback
+            when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall(
+                (_options: ProgressOptions, callback: Function) => {
+                    const mockProgress = {
+                        report: (_value: { message?: string; increment?: number }) => {
+                            // Mock progress reporting
+                        }
+                    };
+                    const mockToken: CancellationToken = {
+                        isCancellationRequested: false,
+                        onCancellationRequested: (_listener: any) => {
+                            return {
+                                dispose: () => {
+                                    // Mock disposable
+                                }
+                            };
+                        }
+                    };
+                    return callback(mockProgress, mockToken);
+                }
+            );
+
+            // Mock environment deletion - the manager handles managedVenv check internally
+            when(mockConfigManager.deleteEnvironment(testExternalEnvironmentId, anything())).thenResolve();
+
+            // Mock success message
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenResolve(undefined);
+
+            // Execute the command
+            await view.deleteEnvironmentCommand(testExternalEnvironmentId);
+
+            // Verify API calls - same as for managed venv
+            verify(mockConfigManager.getEnvironment(testExternalEnvironmentId)).once();
+            verify(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).once();
+            verify(mockNotebookEnvironmentMapper.getNotebooksUsingEnvironment(testExternalEnvironmentId)).once();
+
+            // Verify environment mappings were removed for both notebooks
+            verify(mockNotebookEnvironmentMapper.removeEnvironmentForNotebook(notebook1Uri)).once();
+            verify(mockNotebookEnvironmentMapper.removeEnvironmentForNotebook(notebook2Uri)).once();
+
+            // Verify environment deletion - the manager is responsible for checking managedVenv
+            verify(mockConfigManager.deleteEnvironment(testExternalEnvironmentId, anything())).once();
+
+            // Verify success message was shown
+            verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
+        });
+
+        test('should dispose kernels from open notebooks using deleted external environment (managedVenv: false)', async () => {
+            // Mock environment exists - external environment
+            when(mockConfigManager.getEnvironment(testExternalEnvironmentId)).thenReturn(testExternalEnvironment);
+
+            // Mock user confirmation
+            when(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).thenReturn(
+                Promise.resolve('Delete')
+            );
+
+            // Mock notebooks using this environment
+            when(mockNotebookEnvironmentMapper.getNotebooksUsingEnvironment(testExternalEnvironmentId)).thenReturn([]);
+            when(mockNotebookEnvironmentMapper.removeEnvironmentForNotebook(anything())).thenResolve();
+
+            // Mock open notebooks with kernels
+            const openNotebook1 = {
+                uri: Uri.file('/workspace/open-notebook1.deepnote'),
+                notebookType: 'deepnote',
+                isClosed: false
+            } as any;
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([openNotebook1]);
+
+            // Mock kernel using the external environment
+            const mockKernel1 = {
+                kernelConnectionMetadata: {
+                    kind: 'startUsingDeepnoteKernel',
+                    serverProviderHandle: {
+                        handle: createDeepnoteServerConfigHandle(testExternalEnvironmentId, openNotebook1.uri)
+                    }
+                },
+                dispose: sinon.stub().resolves()
+            };
+
+            when(mockKernelProvider.get(openNotebook1)).thenReturn(mockKernel1 as any);
+
+            // Mock window.withProgress
+            when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall(
+                (_options: ProgressOptions, callback: Function) => {
+                    const mockProgress = {
+                        report: () => {
+                            // Mock progress reporting
+                        }
+                    };
+                    const mockToken: CancellationToken = {
+                        isCancellationRequested: false,
+                        onCancellationRequested: () => ({
+                            dispose: () => {
+                                // Mock disposable
+                            }
+                        })
+                    };
+                    return callback(mockProgress, mockToken);
+                }
+            );
+
+            // Mock environment deletion
+            when(mockConfigManager.deleteEnvironment(testExternalEnvironmentId, anything())).thenResolve();
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenResolve(undefined);
+
+            // Execute the command
+            await view.deleteEnvironmentCommand(testExternalEnvironmentId);
+
+            // Verify that kernel was disposed even for external environment
+            assert.strictEqual(
+                mockKernel1.dispose.callCount,
+                1,
+                'Kernel using deleted external environment should be disposed'
+            );
+        });
     });
 
     suite('selectEnvironmentForNotebook', () => {
@@ -579,6 +762,17 @@ suite('DeepnoteEnvironmentsView', () => {
             name: 'Current Environment',
             pythonInterpreter: testInterpreter1,
             venvPath: Uri.file('/path/to/current/venv'),
+            managedVenv: true,
+            createdAt: new Date(),
+            lastUsedAt: new Date()
+        };
+
+        const currentExternalEnvironment: DeepnoteEnvironment = {
+            id: 'current-external-env-id',
+            name: 'Current External Environment',
+            pythonInterpreter: testInterpreter1,
+            venvPath: Uri.file('/path/to/external/current/venv'),
+            managedVenv: false,
             createdAt: new Date(),
             lastUsedAt: new Date()
         };
@@ -588,7 +782,19 @@ suite('DeepnoteEnvironmentsView', () => {
             name: 'New Environment',
             pythonInterpreter: testInterpreter2,
             venvPath: Uri.file('/path/to/new/venv'),
+            managedVenv: true,
             packages: ['pandas', 'numpy'],
+            createdAt: new Date(),
+            lastUsedAt: new Date()
+        };
+
+        const newExternalEnvironment: DeepnoteEnvironment = {
+            id: 'new-external-env-id',
+            name: 'New External Environment',
+            pythonInterpreter: testInterpreter2,
+            venvPath: Uri.file('/path/to/external/new/venv'),
+            managedVenv: false,
+            packages: ['requests'],
             createdAt: new Date(),
             lastUsedAt: new Date()
         };
@@ -680,10 +886,160 @@ suite('DeepnoteEnvironmentsView', () => {
             // Verify success message was shown
             verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
         });
+
+        test('should successfully switch from managed to external environment (managedVenv: false)', async () => {
+            // Mock active notebook
+            const notebookUri = Uri.file('/workspace/notebook.deepnote');
+            const mockNotebook = {
+                uri: notebookUri,
+                notebookType: 'deepnote',
+                cellCount: 5
+            };
+            const mockNotebookEditor = {
+                notebook: mockNotebook
+            };
+
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(mockNotebookEditor as any);
+
+            // Mock current environment mapping (managed)
+            const baseFileUri = notebookUri.with({ query: '', fragment: '' });
+            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri)).thenReturn(
+                currentEnvironment.id
+            );
+            when(mockConfigManager.getEnvironment(currentEnvironment.id)).thenReturn(currentEnvironment);
+
+            // Mock available environments (mix of managed and external)
+            when(mockConfigManager.listEnvironments()).thenReturn([
+                currentEnvironment,
+                newEnvironment,
+                newExternalEnvironment
+            ]);
+
+            // Mock environment status
+            when(mockConfigManager.getEnvironment(newExternalEnvironment.id)).thenReturn(newExternalEnvironment);
+
+            // Mock user selecting the new external environment
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenCall((items: any[]) => {
+                // Find the item for the new external environment
+                const selectedItem = items.find((item) => item.environmentId === newExternalEnvironment.id);
+                return Promise.resolve(selectedItem);
+            });
+
+            // Mock no executing cells
+            const mockKernel = { id: 'test-kernel' };
+            const mockKernelExecution = {
+                pendingCells: []
+            };
+            when(mockKernelProvider.get(mockNotebook as any)).thenReturn(mockKernel as any);
+            when(mockKernelProvider.getKernelExecution(mockKernel as any)).thenReturn(mockKernelExecution as any);
+
+            // Mock window.withProgress to execute the callback
+            when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall(
+                (_options: ProgressOptions, callback: Function) => {
+                    return callback();
+                }
+            );
+
+            // Mock environment mapping update
+            when(
+                mockNotebookEnvironmentMapper.setEnvironmentForNotebook(baseFileUri, newExternalEnvironment.id)
+            ).thenResolve();
+
+            // Mock controller rebuild
+            when(mockKernelAutoSelector.rebuildController(mockNotebook as any, anything(), anything())).thenResolve();
+
+            // Mock success message
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenResolve(undefined);
+
+            // Execute the command
+            await view.selectEnvironmentForNotebook({ notebook: mockNotebook as NotebookDocument });
+
+            // Verify environment switch to external environment
+            verify(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).once();
+            verify(
+                mockNotebookEnvironmentMapper.setEnvironmentForNotebook(baseFileUri, newExternalEnvironment.id)
+            ).once();
+            verify(mockKernelAutoSelector.rebuildController(mockNotebook as any, anything(), anything())).once();
+
+            // Verify success message was shown
+            verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
+        });
+
+        test('should successfully switch from external to managed environment', async () => {
+            // Mock active notebook
+            const notebookUri = Uri.file('/workspace/notebook.deepnote');
+            const mockNotebook = {
+                uri: notebookUri,
+                notebookType: 'deepnote',
+                cellCount: 5
+            };
+            const mockNotebookEditor = {
+                notebook: mockNotebook
+            };
+
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(mockNotebookEditor as any);
+
+            // Mock current environment mapping (external)
+            const baseFileUri = notebookUri.with({ query: '', fragment: '' });
+            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri)).thenReturn(
+                currentExternalEnvironment.id
+            );
+            when(mockConfigManager.getEnvironment(currentExternalEnvironment.id)).thenReturn(
+                currentExternalEnvironment
+            );
+
+            // Mock available environments
+            when(mockConfigManager.listEnvironments()).thenReturn([currentExternalEnvironment, newEnvironment]);
+
+            // Mock environment status
+            when(mockConfigManager.getEnvironment(newEnvironment.id)).thenReturn(newEnvironment);
+
+            // Mock user selecting the new managed environment
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenCall((items: any[]) => {
+                const selectedItem = items.find((item) => item.environmentId === newEnvironment.id);
+                return Promise.resolve(selectedItem);
+            });
+
+            // Mock no executing cells
+            const mockKernel = { id: 'test-kernel' };
+            const mockKernelExecution = {
+                pendingCells: []
+            };
+            when(mockKernelProvider.get(mockNotebook as any)).thenReturn(mockKernel as any);
+            when(mockKernelProvider.getKernelExecution(mockKernel as any)).thenReturn(mockKernelExecution as any);
+
+            // Mock window.withProgress to execute the callback
+            when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall(
+                (_options: ProgressOptions, callback: Function) => {
+                    return callback();
+                }
+            );
+
+            // Mock environment mapping update
+            when(mockNotebookEnvironmentMapper.setEnvironmentForNotebook(baseFileUri, newEnvironment.id)).thenResolve();
+
+            // Mock controller rebuild
+            when(mockKernelAutoSelector.rebuildController(mockNotebook as any, anything(), anything())).thenResolve();
+
+            // Mock success message
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenResolve(undefined);
+
+            // Execute the command
+            await view.selectEnvironmentForNotebook({ notebook: mockNotebook as NotebookDocument });
+
+            // Verify environment switch from external to managed
+            verify(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).once();
+            verify(mockNotebookEnvironmentMapper.setEnvironmentForNotebook(baseFileUri, newEnvironment.id)).once();
+            verify(mockKernelAutoSelector.rebuildController(mockNotebook as any, anything(), anything())).once();
+
+            // Verify success message was shown
+            verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
+        });
     });
 
     suite('managePackages', () => {
         const testEnvironmentId = 'test-env-id';
+        const testExternalEnvironmentId = 'test-external-env-id';
         const testInterpreter: PythonEnvironment = {
             id: 'test-python-id',
             uri: Uri.file('/usr/bin/python3'),
@@ -695,7 +1051,19 @@ suite('DeepnoteEnvironmentsView', () => {
             name: 'Test Environment',
             pythonInterpreter: testInterpreter,
             venvPath: Uri.file('/path/to/venv'),
+            managedVenv: true,
             packages: ['numpy', 'pandas'],
+            createdAt: new Date(),
+            lastUsedAt: new Date()
+        };
+
+        const testExternalEnvironment: DeepnoteEnvironment = {
+            id: testExternalEnvironmentId,
+            name: 'Test External Environment',
+            pythonInterpreter: testInterpreter,
+            venvPath: Uri.file('/path/to/external/venv'),
+            managedVenv: false,
+            packages: ['requests'],
             createdAt: new Date(),
             lastUsedAt: new Date()
         };
@@ -726,6 +1094,31 @@ suite('DeepnoteEnvironmentsView', () => {
                 mockConfigManager.updateEnvironment(
                     testEnvironmentId,
                     deepEqual({ packages: ['matplotlib', 'scipy', 'sklearn'] })
+                )
+            ).once();
+        });
+
+        test('should update packages for external environment (managedVenv: false)', async () => {
+            when(mockConfigManager.getEnvironment(testExternalEnvironmentId)).thenReturn(testExternalEnvironment);
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(
+                Promise.resolve('flask, sqlalchemy')
+            );
+            when(mockConfigManager.updateEnvironment(anything(), anything())).thenResolve();
+
+            when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall(
+                (_options: ProgressOptions, callback: Function) => {
+                    return callback();
+                }
+            );
+
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenResolve(undefined);
+
+            await (view as any).managePackages(testExternalEnvironmentId);
+
+            verify(
+                mockConfigManager.updateEnvironment(
+                    testExternalEnvironmentId,
+                    deepEqual({ packages: ['flask', 'sqlalchemy'] })
                 )
             ).once();
         });

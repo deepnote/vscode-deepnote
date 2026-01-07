@@ -69,6 +69,7 @@ export class DeepnoteEnvironmentStorage {
                 uri: config.pythonInterpreter.uri.toString(true)
             },
             venvPath: config.venvPath.toString(true),
+            managedVenv: config.managedVenv,
             createdAt: config.createdAt.toISOString(),
             lastUsedAt: config.lastUsedAt.toISOString(),
             packages: config.packages,
@@ -94,6 +95,7 @@ export class DeepnoteEnvironmentStorage {
                 name: state.name,
                 pythonInterpreter: interpreter,
                 venvPath: Uri.parse(state.venvPath),
+                managedVenv: state.managedVenv ?? true,
                 createdAt: new Date(state.createdAt),
                 lastUsedAt: new Date(state.lastUsedAt),
                 packages: state.packages,

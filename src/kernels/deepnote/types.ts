@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 import * as vscode from 'vscode';
+
 import { serializePythonEnvironment } from '../../platform/api/pythonApi';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { getTelemetrySafeHashedString } from '../../platform/telemetry/helpers';
@@ -94,6 +95,7 @@ export interface IDeepnoteToolkitInstaller {
      * Environment-based method.
      * @param baseInterpreter The base Python interpreter to use for creating the venv
      * @param venvPath The path where the venv should be created
+     * @param managedVenv Whether the venv is managed by this extension (created by us)
      * @param token Cancellation token to cancel the operation
      * @returns The Python interpreter from the venv and the toolkit version
      * @throws {DeepnoteVenvCreationError} If venv creation fails
@@ -102,6 +104,7 @@ export interface IDeepnoteToolkitInstaller {
     ensureVenvAndToolkit(
         baseInterpreter: PythonEnvironment,
         venvPath: vscode.Uri,
+        managedVenv: boolean,
         token?: vscode.CancellationToken
     ): Promise<VenvAndToolkitInstallation>;
 
@@ -116,6 +119,19 @@ export interface IDeepnoteToolkitInstaller {
         packages: string[],
         token?: vscode.CancellationToken
     ): Promise<void>;
+
+    /**
+     * Install deepnote-toolkit in an existing external venv.
+     * This is used when the user has an external venv without toolkit installed.
+     * @param venvPath Path to the existing venv
+     * @param token Cancellation token to cancel the operation
+     * @returns The venv Python interpreter and toolkit version if successful
+     * @throws {DeepnoteToolkitInstallError} If toolkit installation fails
+     */
+    installToolkitInExistingVenv(
+        venvPath: vscode.Uri,
+        token?: vscode.CancellationToken
+    ): Promise<VenvAndToolkitInstallation>;
 
     /**
      * Gets the venv Python interpreter if toolkit is installed, undefined otherwise.
@@ -138,6 +154,7 @@ export interface IDeepnoteServerStarter {
      * Environment-based method.
      * @param interpreter The Python interpreter to use
      * @param venvPath The path to the venv
+     * @param managedVenv Whether the venv is managed by this extension (created by us)
      * @param environmentId The environment ID (for server management)
      * @param deepnoteFileUri The URI of the .deepnote file
      * @param token Cancellation token to cancel the operation
@@ -146,6 +163,7 @@ export interface IDeepnoteServerStarter {
     startServer(
         interpreter: PythonEnvironment,
         venvPath: vscode.Uri,
+        managedVenv: boolean,
         additionalPackages: string[],
         environmentId: string,
         deepnoteFileUri: vscode.Uri,
@@ -222,6 +240,13 @@ export interface IDeepnoteKernelAutoSelector {
      * @param environmentId The environment ID
      */
     clearControllerForEnvironment(notebook: vscode.NotebookDocument, environmentId: string): void;
+
+    /**
+     * Handle kernel selection errors with user-friendly messages and actions
+     * @param error The error to handle
+     * @param notebook The notebook document associated with the error
+     */
+    handleKernelSelectionError(error: unknown, notebook: vscode.NotebookDocument): Promise<void>;
 }
 
 export const IDeepnoteEnvironmentManager = Symbol('IDeepnoteEnvironmentManager');

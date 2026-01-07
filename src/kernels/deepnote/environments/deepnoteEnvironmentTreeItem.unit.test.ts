@@ -16,6 +16,7 @@ suite('DeepnoteEnvironmentTreeItem', () => {
         name: 'Test Environment',
         pythonInterpreter: testInterpreter,
         venvPath: Uri.file('/path/to/venv'),
+        managedVenv: true,
         createdAt: new Date('2024-01-01T10:00:00Z'),
         lastUsedAt: new Date('2024-01-01T12:00:00Z')
     };

@@ -29,6 +29,13 @@ export interface DeepnoteEnvironment {
     venvPath: Uri;
 
     /**
+     * Whether the venv is managed by this extension (created by us).
+     * If true, the venv can be deleted when the environment is removed.
+     * If false, the venv is external and should be preserved.
+     */
+    managedVenv: boolean;
+
+    /**
      * Server information (set when server is running)
      */
     serverInfo?: DeepnoteServerInfo;
@@ -71,6 +78,7 @@ export interface DeepnoteEnvironmentState {
         uri: string;
     };
     venvPath: string;
+    managedVenv?: boolean;
     createdAt: string;
     lastUsedAt: string;
     packages?: string[];

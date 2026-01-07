@@ -2640,7 +2640,7 @@
         "pidtree": "^0.6.0",
         "plotly.js-dist": "^3.0.1",
         "portfinder": "^1.0.25",
-        "re-resizable": "~6.5.5",
+        "re-resizable": "^6.5.5",
         "react": "^16.5.2",
         "react-data-grid": "^6.0.2-0",
         "react-dom": "^16.5.2",

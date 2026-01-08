@@ -189,6 +189,9 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             commands.registerCommand(Commands.AddButtonBlock, () => this.addInputBlock('button'))
         );
         this.disposableRegistry.push(
+            commands.registerCommand(Commands.AddInputBlock, () => this.addInputBlockThroughPicker())
+        );
+        this.disposableRegistry.push(
             commands.registerCommand(Commands.AddTextBlock, () => this.addTextBlockThroughPicker())
         );
         this.disposableRegistry.push(
@@ -435,6 +438,37 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         logger.info(`Selected text block type: ${selected.textBlockType}`);
 
         await this.addTextBlock({ editor, textBlockType: selected.textBlockType });
+    }
+
+    public async addInputBlockThroughPicker(): Promise<void> {
+        const editor = window.activeNotebookEditor;
+        if (!editor) {
+            throw new Error(l10n.t('No active notebook editor found'));
+        }
+
+        const items: (QuickPickItem & { inputBlockType: InputBlockType })[] = [
+            { label: l10n.t('Text Input'), inputBlockType: 'input-text' },
+            { label: l10n.t('Textarea'), inputBlockType: 'input-textarea' },
+            { label: l10n.t('Select Dropdown'), inputBlockType: 'input-select' },
+            { label: l10n.t('Slider'), inputBlockType: 'input-slider' },
+            { label: l10n.t('Checkbox'), inputBlockType: 'input-checkbox' },
+            { label: l10n.t('Date'), inputBlockType: 'input-date' },
+            { label: l10n.t('Date Range'), inputBlockType: 'input-date-range' },
+            { label: l10n.t('File Upload'), inputBlockType: 'input-file' },
+            { label: l10n.t('Button'), inputBlockType: 'button' }
+        ];
+
+        const selected = await window.showQuickPick(items, {
+            placeHolder: l10n.t('Select an input block type')
+        });
+
+        if (selected == null) {
+            return;
+        }
+
+        logger.info(`Selected input block type: ${selected.inputBlockType}`);
+
+        await this.addInputBlock(selected.inputBlockType);
     }
 
     public async addTextBlockCommandHandler({ textBlockType }: { textBlockType: TextBlockType }): Promise<void> {

@@ -8,7 +8,9 @@ import {
     NotebookRange,
     NotebookCell,
     NotebookEditorRevealType,
-    l10n
+    l10n,
+    QuickPickItem,
+    NotebookEditor
 } from 'vscode';
 import z from 'zod';
 
@@ -33,6 +35,7 @@ import {
     DeepnoteSqlMetadata
 } from './deepnoteSchemas';
 import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
+import { Pocket } from '../../platform/deepnote/pocket';
 
 export type InputBlockType =
     | 'input-text'
@@ -44,6 +47,10 @@ export type InputBlockType =
     | 'input-date-range'
     | 'input-file'
     | 'button';
+
+export const TEXT_BLOCK_TYPES = ['text-cell-p', 'text-cell-h1', 'text-cell-h2', 'text-cell-h3'] as const;
+
+export type TextBlockType = (typeof TEXT_BLOCK_TYPES)[number];
 
 export function getInputBlockMetadata(blockType: InputBlockType, variableName: string) {
     const defaultInput = {
@@ -180,6 +187,29 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         );
         this.disposableRegistry.push(
             commands.registerCommand(Commands.AddButtonBlock, () => this.addInputBlock('button'))
+        );
+        this.disposableRegistry.push(
+            commands.registerCommand(Commands.AddTextBlock, () => this.addTextBlockThroughPicker())
+        );
+        this.disposableRegistry.push(
+            commands.registerCommand(Commands.addTextBlockHeading1, () =>
+                this.addTextBlockCommandHandler({ textBlockType: 'text-cell-h1' })
+            )
+        );
+        this.disposableRegistry.push(
+            commands.registerCommand(Commands.addTextBlockHeading2, () =>
+                this.addTextBlockCommandHandler({ textBlockType: 'text-cell-h2' })
+            )
+        );
+        this.disposableRegistry.push(
+            commands.registerCommand(Commands.addTextBlockHeading3, () =>
+                this.addTextBlockCommandHandler({ textBlockType: 'text-cell-h3' })
+            )
+        );
+        this.disposableRegistry.push(
+            commands.registerCommand(Commands.AddTextBlockParagraph, () =>
+                this.addTextBlockCommandHandler({ textBlockType: 'text-cell-p' })
+            )
         );
     }
 
@@ -360,6 +390,92 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         });
         if (result !== true) {
             throw new Error(l10n.t('Failed to insert input block'));
+        }
+
+        const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
+        editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
+        editor.selection = notebookRange;
+        // Enter edit mode on the new cell
+        await commands.executeCommand('notebook.cell.edit');
+    }
+
+    public async addTextBlockThroughPicker(): Promise<void> {
+        const TEXT_BLOCK_TYPE_LABELS = {
+            'text-cell-p': l10n.t('Paragraph'),
+            'text-cell-h1': l10n.t('Header 1'),
+            'text-cell-h2': l10n.t('Header 2'),
+            'text-cell-h3': l10n.t('Header 3')
+        } as const satisfies Record<TextBlockType, string>;
+
+        const editor = window.activeNotebookEditor;
+        if (!editor) {
+            throw new Error(l10n.t('No active notebook editor found'));
+        }
+
+        const items: (QuickPickItem & { textBlockType: TextBlockType })[] = TEXT_BLOCK_TYPES.map((textBlockType) => {
+            return {
+                label: TEXT_BLOCK_TYPE_LABELS[textBlockType],
+                description: l10n.t('Add a {0} text block', textBlockType),
+                textBlockType
+            };
+        });
+
+        const selected = await window.showQuickPick(items, {
+            placeHolder: l10n.t('Select an environment for this notebook'),
+            matchOnDescription: true,
+            matchOnDetail: true
+        });
+
+        if (selected == null) {
+            return;
+        }
+
+        logger.info(`Selected text block type: ${selected.textBlockType}`);
+
+        await this.addTextBlock({ editor, textBlockType: selected.textBlockType });
+    }
+
+    public async addTextBlockCommandHandler({ textBlockType }: { textBlockType: TextBlockType }): Promise<void> {
+        const editor = window.activeNotebookEditor;
+        if (!editor) {
+            throw new Error(l10n.t('No active notebook editor found'));
+        }
+
+        await this.addTextBlock({ editor, textBlockType });
+    }
+
+    public async addTextBlock({
+        editor,
+        textBlockType
+    }: {
+        editor: NotebookEditor;
+        textBlockType: TextBlockType;
+    }): Promise<void> {
+        const TEXT_BLOCK_TYPE_EMPTY_VALUES = {
+            'text-cell-p': '',
+            'text-cell-h1': '# ',
+            'text-cell-h2': '## ',
+            'text-cell-h3': '### '
+        } as const satisfies Record<TextBlockType, string>;
+
+        const cellContent = TEXT_BLOCK_TYPE_EMPTY_VALUES[textBlockType];
+
+        const document = editor.notebook;
+        const selection = editor.selection;
+        const insertIndex = selection ? selection.end : document.cellCount;
+
+        const result = await notebookUpdaterUtils.chainWithPendingUpdates(document, (edit) => {
+            const newCell = new NotebookCellData(NotebookCellKind.Markup, cellContent, 'markdown');
+            newCell.metadata = {
+                __deepnotePocket: {
+                    type: textBlockType
+                } satisfies Pocket
+            };
+            const nbEdit = NotebookEdit.insertCells(insertIndex, [newCell]);
+            edit.set(document.uri, [nbEdit]);
+        });
+        if (result !== true) {
+            throw new Error(l10n.t('Failed to insert text block'));
         }
 
         const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);

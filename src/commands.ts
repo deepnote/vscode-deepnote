@@ -197,6 +197,11 @@ export interface ICommandNameArgumentTypeMapping {
     [DSCommands.AddInputDateRangeBlock]: [];
     [DSCommands.AddInputFileBlock]: [];
     [DSCommands.AddButtonBlock]: [];
+    [DSCommands.AddTextBlock]: [];
+    [DSCommands.addTextBlockHeading1]: [];
+    [DSCommands.addTextBlockHeading2]: [];
+    [DSCommands.addTextBlockHeading3]: [];
+    [DSCommands.AddTextBlockParagraph]: [];
     [DSCommands.NewProject]: [];
     [DSCommands.ImportNotebook]: [];
     [DSCommands.ImportJupyterNotebook]: [];

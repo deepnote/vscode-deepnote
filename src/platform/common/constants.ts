@@ -236,6 +236,11 @@ export namespace Commands {
     export const AddInputDateRangeBlock = 'deepnote.addInputDateRangeBlock';
     export const AddInputFileBlock = 'deepnote.addInputFileBlock';
     export const AddButtonBlock = 'deepnote.addButtonBlock';
+    export const AddTextBlock = 'deepnote.addTextBlock';
+    export const addTextBlockHeading1 = 'deepnote.addTextBlockHeading1';
+    export const addTextBlockHeading2 = 'deepnote.addTextBlockHeading2';
+    export const addTextBlockHeading3 = 'deepnote.addTextBlockHeading3';
+    export const AddTextBlockParagraph = 'deepnote.addTextBlockParagraph';
     export const NewNotebook = 'deepnote.newNotebook';
     export const NewProject = 'deepnote.newProject';
     export const ImportNotebook = 'deepnote.importNotebook';

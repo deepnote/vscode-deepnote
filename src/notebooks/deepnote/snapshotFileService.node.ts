@@ -1,4 +1,5 @@
 import type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
+import fastDeepEqual from 'fast-deep-equal';
 import { injectable } from 'inversify';
 import * as yaml from 'js-yaml';
 import { Uri, workspace } from 'vscode';
@@ -220,10 +221,7 @@ export class SnapshotFileService implements ISnapshotFileService {
             const existingProject = this.getComparableProjectContent(existingData);
             const newProject = this.getComparableProjectContent(projectData);
 
-            const existingJson = JSON.stringify(existingProject);
-            const newJson = JSON.stringify(newProject);
-
-            return existingJson !== newJson;
+            return !fastDeepEqual(existingProject, newProject);
         } catch {
             // If we can't read the existing snapshot, treat it as having changes
             logger.debug(`[SnapshotFileService] No existing snapshot found, treating as changed`);

@@ -68,7 +68,12 @@ const commonExternals = [
     'ansi-regex' // Used by regexp utils
 ];
 // Create separate copies to avoid shared-state mutations
-const webExternals = [...commonExternals];
+// For web, add Node.js native modules that can't run in browser
+const webExternals = [
+    ...commonExternals,
+    'canvas', // Native module used by vega for server-side rendering, not needed in browser
+    'mathjax-electron' // Uses Node.js path module, MathJax rendering handled differently in browser
+];
 const desktopExternals = [...commonExternals, ...deskTopNodeModulesToExternalize];
 const bundleConfig = getBundleConfiguration();
 const isDevbuild = !process.argv.includes('--production');
@@ -243,7 +248,16 @@ function createConfig(
     const releaseVersionScriptFile = isPreRelease ? 'release.pre-release.js' : 'release.stable.js';
     const alias: Record<string, string> = {
         moment: path.join(extensionFolder, 'build', 'webpack', 'moment.js'),
-        'vscode-jupyter-release-version': path.join(__dirname, releaseVersionScriptFile)
+        'vscode-jupyter-release-version': path.join(__dirname, releaseVersionScriptFile),
+        // Stub for @nteract/presentational-components to avoid pulling in vulnerable dependencies
+        '@nteract/presentational-components': path.join(
+            extensionFolder,
+            'src',
+            'renderers',
+            'client',
+            'stubs',
+            'nteract-presentational-components.tsx'
+        )
     };
     // Use ESM entry for jsonc-parser to avoid UMD internal require() issues when bundling
     if (target === 'desktop') {
@@ -410,8 +424,32 @@ async function buildAll() {
             path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'bigNumberComparisonSettings', 'index.tsx'),
             path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'bigNumberComparisonSettings', 'index.js'),
             { target: 'web', watch: watchAll }
+        ),
+        // Notebook renderers (integrated from jupyter-renderers)
+        build(
+            path.join(extensionFolder, 'src', 'renderers', 'client', 'index.tsx'),
+            path.join(extensionFolder, 'dist', 'renderers', 'client', 'renderers.js'),
+            { target: 'web', watch: watchAll }
+        ),
+        build(
+            path.join(extensionFolder, 'src', 'renderers', 'client', 'builtinRendererHooks.ts'),
+            path.join(extensionFolder, 'dist', 'renderers', 'client', 'builtinRendererHooks.js'),
+            { target: 'web', watch: watchAll }
+        ),
+        build(
+            path.join(extensionFolder, 'src', 'renderers', 'client', 'markdown.ts'),
+            path.join(extensionFolder, 'dist', 'renderers', 'client', 'markdown.js'),
+            { target: 'web', watch: watchAll }
+        ),
+        build(
+            path.join(extensionFolder, 'src', 'renderers', 'client', 'preload.ts'),
+            path.join(extensionFolder, 'dist', 'renderers', 'client', 'preload.js'),
+            { target: 'web', watch: watchAll }
         )
     );
+
+    // Copy ipywidgets from node_modules
+    builders.push(copyIPyWidgets7(), copyIPyWidgets8());
 
     if (isDevbuild) {
         builders.push(
@@ -526,6 +564,54 @@ async function copyNodeGypBuild() {
     await fs.ensureDir(path.dirname(target));
     await fs.ensureDir(target);
     await fs.copy(source, target, { recursive: true });
+}
+
+/**
+ * Helper to copy a bundle file if it exists, with clear error messaging
+ */
+async function copyBundleIfExists(source: string, target: string, description: string): Promise<void> {
+    const exists = await fs.pathExists(source);
+    if (!exists) {
+        console.warn(
+            colors.yellow(`Warning: ${description} not found at ${source}. `) +
+                colors.yellow('Skipping copy. Install the package if this feature is needed.')
+        );
+        return;
+    }
+    await fs.ensureDir(path.dirname(target));
+    await fs.copyFile(source, target);
+}
+
+/**
+ * Copy @vscode/jupyter-ipywidgets7 pre-built bundle for IPyWidget v7 support
+ */
+async function copyIPyWidgets7() {
+    const source = path.join(
+        extensionFolder,
+        'node_modules',
+        '@vscode',
+        'jupyter-ipywidgets7',
+        'dist',
+        'ipywidgets.js'
+    );
+    const target = path.join(extensionFolder, 'dist', 'renderers', 'ipywidgets7', 'ipywidgets.js');
+    await copyBundleIfExists(source, target, '@vscode/jupyter-ipywidgets7 bundle');
+}
+
+/**
+ * Copy @vscode/jupyter-ipywidgets8 pre-built bundle for IPyWidget v8 support
+ */
+async function copyIPyWidgets8() {
+    const source = path.join(
+        extensionFolder,
+        'node_modules',
+        '@vscode',
+        'jupyter-ipywidgets8',
+        'dist',
+        'ipywidgets.js'
+    );
+    const target = path.join(extensionFolder, 'dist', 'renderers', 'ipywidgets8', 'ipywidgets.js');
+    await copyBundleIfExists(source, target, '@vscode/jupyter-ipywidgets8 bundle');
 }
 
 async function buildSqlLanguageServer() {

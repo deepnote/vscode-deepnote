@@ -168,6 +168,31 @@ export class DeepnoteToolkitInstallError extends DeepnoteKernelError {
     }
 }
 
+export class DeepnoteToolkitMissingError extends DeepnoteKernelError {
+    public readonly userMessage: string;
+    public readonly technicalDetails: string;
+    public readonly troubleshootingSteps: string[];
+
+    constructor(
+        public readonly pythonPath: string,
+        public readonly venvPath: string
+    ) {
+        super('Deepnote toolkit missing');
+        this.name = 'DeepnoteToolkitMissingError';
+
+        this.userMessage = 'deepnote-toolkit package is not installed';
+
+        this.technicalDetails = [`Python interpreter: ${pythonPath}`, `Virtual environment: ${venvPath}`]
+            .filter(Boolean)
+            .join('\n');
+
+        this.troubleshootingSteps = [
+            'The selected Python environment does not have deepnote-toolkit installed',
+            `Install it manually: ${pythonPath} -m pip install deepnote-toolkit`,
+            'Or create a new managed Deepnote environment from the Deepnote Environments view'
+        ];
+    }
+}
 /**
  * Error thrown when the Deepnote server fails to start
  */

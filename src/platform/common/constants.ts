@@ -79,7 +79,7 @@ export namespace Identifiers {
     export const MatplotLibDefaultParams = '_VSCode_defaultMatplotlib_Params';
     export const MatplotLibFigureFormats = '_VSCode_matplotLib_FigureFormats';
     export const DefaultCodeCellMarker = '# %%';
-    export const DefaultCommTarget = 'deepnote.widget';
+    export const DefaultCommTarget = 'jupyter.widget';
     export const ALL_VARIABLES = 'ALL_VARIABLES';
     export const KERNEL_VARIABLES = 'KERNEL_VARIABLES';
     export const DEBUGGER_VARIABLES = 'DEBUGGER_VARIABLES';
@@ -107,7 +107,6 @@ export const DefaultTheme = 'Default Light+';
 
 export const PythonExtension = 'ms-python.python';
 export const PythonEnvironmentExtension = 'ms-python.vscode-python-envs';
-export const RendererExtension = 'ms-toolsai.jupyter-renderers';
 
 export const LanguagesSupportedByPythonkernel = [
     'python',
@@ -524,8 +523,8 @@ export const DataScienceStartupTime = Symbol('DataScienceStartupTime');
 // Default for notebook version (major & minor) used when creating notebooks.
 export const defaultNotebookFormat = { major: 4, minor: 2 };
 
-export const WIDGET_MIMETYPE = 'application/vnd.deepnote.widget-view+json';
-export const WIDGET_STATE_MIMETYPE = 'application/vnd.deepnote.widget-state+json';
+export const WIDGET_MIMETYPE = 'application/vnd.jupyter.widget-view+json';
+export const WIDGET_STATE_MIMETYPE = 'application/vnd.jupyter.widget-state+json';
 export const WIDGET_VERSION_NON_PYTHON_KERNELS = 8;
 
 /**

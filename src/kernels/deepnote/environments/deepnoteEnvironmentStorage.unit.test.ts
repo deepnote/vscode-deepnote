@@ -26,6 +26,7 @@ suite('DeepnoteEnvironmentStorage', () => {
         mockInterpreterService = mock<IInterpreterService>();
         mockGlobalState = mock<Memento>();
 
+        when(mockGlobalState.update(anything(), anything())).thenResolve();
         when(mockContext.globalState).thenReturn(instance(mockGlobalState) as any);
 
         storage = new DeepnoteEnvironmentStorage(instance(mockContext));
@@ -125,14 +126,13 @@ suite('DeepnoteEnvironmentStorage', () => {
                 name: 'Test Config',
                 pythonInterpreter: testInterpreter,
                 venvPath: Uri.file('/path/to/venv'),
+                managedVenv: true,
                 createdAt: new Date('2025-01-01T00:00:00.000Z'),
                 lastUsedAt: new Date('2025-01-01T00:00:00.000Z'),
                 packages: ['numpy'],
                 toolkitVersion: '0.2.30',
                 description: 'Test'
             };
-
-            when(mockGlobalState.update(anything(), anything())).thenResolve();
 
             await storage.saveEnvironments([config]);
 
@@ -148,6 +148,7 @@ suite('DeepnoteEnvironmentStorage', () => {
                                 uri: 'file:///usr/bin/python3'
                             },
                             venvPath: 'file:///path/to/venv',
+                            managedVenv: true,
                             createdAt: '2025-01-01T00:00:00.000Z',
                             lastUsedAt: '2025-01-01T00:00:00.000Z',
                             packages: ['numpy'],
@@ -166,6 +167,7 @@ suite('DeepnoteEnvironmentStorage', () => {
                     name: 'Config 1',
                     pythonInterpreter: testInterpreter,
                     venvPath: Uri.file('/path/to/venv1'),
+                    managedVenv: true,
                     createdAt: new Date('2025-01-01T00:00:00.000Z'),
                     lastUsedAt: new Date('2025-01-01T00:00:00.000Z')
                 },
@@ -174,6 +176,7 @@ suite('DeepnoteEnvironmentStorage', () => {
                     name: 'Config 2',
                     pythonInterpreter: testInterpreter,
                     venvPath: Uri.file('/path/to/venv2'),
+                    managedVenv: true,
                     createdAt: new Date('2025-01-02T00:00:00.000Z'),
                     lastUsedAt: new Date('2025-01-02T00:00:00.000Z')
                 }
@@ -192,6 +195,7 @@ suite('DeepnoteEnvironmentStorage', () => {
                 name: 'Test Config',
                 pythonInterpreter: testInterpreter,
                 venvPath: Uri.file('/path/to/venv'),
+                managedVenv: true,
                 createdAt: new Date(),
                 lastUsedAt: new Date()
             };

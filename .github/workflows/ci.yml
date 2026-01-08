@@ -71,7 +71,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install qlty
-        uses: qltysh/qlty-action/install@c1d9ae56aba737dfb3c83921007a2610f1dad51c
+        uses: qltysh/qlty-action/install@ea1f343351856554424688e75be09f7fd59936a6
 
       - name: Run qlty check
         run: qlty check
@@ -113,7 +113,7 @@ jobs:
           VSC_JUPYTER_INSTRUMENT_CODE_FOR_COVERAGE: true
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 # v5
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
         with:
           use_oidc: true
           files: coverage/lcov.info
@@ -121,11 +121,12 @@ jobs:
 
       - name: Upload test results to Codecov
         if: '!cancelled()'
-        uses: codecov/test-results-action@47f89e9acb64b76debcd5ea40642d25a4adced9f # v1
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
         with:
           use_oidc: true
           files: test-results.xml
           fail_ci_if_error: true
+          report_type: test_results
 
       - name: Check dependencies
         run: npm run checkDependencies

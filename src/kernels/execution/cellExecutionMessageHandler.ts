@@ -21,10 +21,8 @@ import {
     NotebookEdit,
     NotebookCellOutputItem,
     Disposable,
-    window,
-    extensions
+    window
 } from 'vscode';
-import { coerce, SemVer } from 'semver';
 import * as jupyterLab from '@jupyterlab/services';
 
 import type { Kernel } from '@jupyterlab/services';
@@ -44,7 +42,7 @@ import { swallowExceptions } from '../../platform/common/utils/decorators';
 import { noop } from '../../platform/common/utils/misc';
 import { IKernelController, ITracebackFormatter } from '../../kernels/types';
 import { handleTensorBoardDisplayDataOutput } from './executionHelpers';
-import { Identifiers, RendererExtension, WIDGET_MIMETYPE } from '../../platform/common/constants';
+import { Identifiers, WIDGET_MIMETYPE } from '../../platform/common/constants';
 import { CellOutputDisplayIdTracker } from './cellDisplayIdTracker';
 import { createDeferred } from '../../platform/common/utils/async';
 import { CHART_BIG_NUMBER_MIME_TYPE } from '../../platform/deepnote/deepnoteConstants';
@@ -1272,14 +1270,6 @@ export class CellExecutionMessageHandler implements IDisposable {
 }
 
 function doesNotebookRendererSupportRenderingNestedOutputsInWidgets() {
-    const rendererExtension = extensions.getExtension(RendererExtension);
-    if (!rendererExtension) {
-        return false;
-    }
-
-    const version = coerce(rendererExtension.packageJSON.version);
-    if (!version) {
-        return false;
-    }
-    return version.compare(new SemVer('1.1.0')) >= 0;
+    // Renderer is now integrated into the extension and always supports nested outputs
+    return true;
 }

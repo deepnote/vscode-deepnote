@@ -1,4 +1,4 @@
-import { inject, injectable } from 'inversify';
+import { inject, injectable, named } from 'inversify';
 import {
     commands,
     Disposable,
@@ -10,26 +10,28 @@ import {
     window,
     workspace
 } from 'vscode';
-import { IDisposableRegistry } from '../../../platform/common/types';
-import { logger } from '../../../platform/logging';
 import { IPythonApiProvider } from '../../../platform/api/types';
+import { STANDARD_OUTPUT_CHANNEL } from '../../../platform/common/constants';
+import { getDisplayPath } from '../../../platform/common/platform/fs-paths.node';
+import { IDisposableRegistry, IOutputChannel } from '../../../platform/common/types';
+import { createDeepnoteServerConfigHandle } from '../../../platform/deepnote/deepnoteServerUtils.node';
+import { DeepnoteToolkitMissingError } from '../../../platform/errors/deepnoteKernelErrors';
+import {
+    getCachedEnvironment,
+    getPythonEnvironmentName,
+    resolvedPythonEnvToJupyterEnv
+} from '../../../platform/interpreter/helpers';
+import { logger } from '../../../platform/logging';
+import { IKernelProvider } from '../../types';
 import {
     DeepnoteKernelConnectionMetadata,
     IDeepnoteEnvironmentManager,
     IDeepnoteKernelAutoSelector,
     IDeepnoteNotebookEnvironmentMapper
 } from '../types';
+import { CreateDeepnoteEnvironmentOptions, DeepnoteEnvironment } from './deepnoteEnvironment';
 import { DeepnoteEnvironmentTreeDataProvider } from './deepnoteEnvironmentTreeDataProvider.node';
 import { DeepnoteEnvironmentTreeItem } from './deepnoteEnvironmentTreeItem.node';
-import { CreateDeepnoteEnvironmentOptions, DeepnoteEnvironment } from './deepnoteEnvironment';
-import {
-    getCachedEnvironment,
-    resolvedPythonEnvToJupyterEnv,
-    getPythonEnvironmentName
-} from '../../../platform/interpreter/helpers';
-import { getDisplayPath } from '../../../platform/common/platform/fs-paths.node';
-import { IKernelProvider } from '../../types';
-import { createDeepnoteServerConfigHandle } from '../../../platform/deepnote/deepnoteServerUtils.node';
 
 /**
  * View controller for the Deepnote kernel environments tree view.
@@ -49,7 +51,8 @@ export class DeepnoteEnvironmentsView implements Disposable {
         @inject(IDeepnoteKernelAutoSelector) private readonly kernelAutoSelector: IDeepnoteKernelAutoSelector,
         @inject(IDeepnoteNotebookEnvironmentMapper)
         private readonly notebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper,
-        @inject(IKernelProvider) private readonly kernelProvider: IKernelProvider
+        @inject(IKernelProvider) private readonly kernelProvider: IKernelProvider,
+        @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel
     ) {
         // Create tree data provider
 
@@ -482,8 +485,23 @@ export class DeepnoteEnvironmentsView implements Disposable {
 
             void window.showInformationMessage(l10n.t('Environment switched successfully'));
         } catch (error) {
+            if (error instanceof DeepnoteToolkitMissingError) {
+                await this.kernelAutoSelector.handleKernelSelectionError(error, notebook);
+                return;
+            }
+
             logger.error('Failed to switch environment', error);
-            void window.showErrorMessage(l10n.t('Failed to switch environment. See output for details.'));
+            const showOutputAction = l10n.t('Show Output');
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            const selectedAction = await window.showErrorMessage(
+                l10n.t('Failed to switch environment: {0}', errorMessage),
+                { modal: false },
+                showOutputAction
+            );
+
+            if (selectedAction === showOutputAction) {
+                this.outputChannel.show();
+            }
         }
     }
 

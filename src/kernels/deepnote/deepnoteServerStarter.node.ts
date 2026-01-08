@@ -95,6 +95,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
      * Environment-based method: Start a server for a kernel environment.
      * @param interpreter The Python interpreter to use
      * @param venvPath The path to the venv
+     * @param managedVenv Whether the venv is managed by this extension (created by us)
      * @param environmentId The environment ID (used as key for server management)
      * @param token Cancellation token
      * @returns Server connection information
@@ -102,6 +103,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
     public async startServer(
         interpreter: PythonEnvironment,
         venvPath: Uri,
+        managedVenv: boolean,
         additionalPackages: string[],
         environmentId: string,
         deepnoteFileUri: Uri,
@@ -165,6 +167,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                 existingContext,
                 interpreter,
                 venvPath,
+                managedVenv,
                 additionalPackages,
                 environmentId,
                 deepnoteFileUri,
@@ -235,6 +238,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         projectContext: ProjectContext,
         interpreter: PythonEnvironment,
         venvPath: Uri,
+        managedVenv: boolean,
         additionalPackages: string[],
         environmentId: string,
         deepnoteFileUri: Uri,
@@ -250,6 +254,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         const { pythonInterpreter: venvInterpreter } = await this.toolkitInstaller.ensureVenvAndToolkit(
             interpreter,
             venvPath,
+            managedVenv,
             token
         );
 

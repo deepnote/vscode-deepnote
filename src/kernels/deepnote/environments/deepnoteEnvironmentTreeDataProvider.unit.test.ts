@@ -22,6 +22,7 @@ suite('DeepnoteEnvironmentTreeDataProvider', () => {
         name: 'Config 1',
         pythonInterpreter: testInterpreter,
         venvPath: Uri.file('/path/to/venv1'),
+        managedVenv: true,
         createdAt: new Date(),
         lastUsedAt: new Date()
     };
@@ -31,6 +32,7 @@ suite('DeepnoteEnvironmentTreeDataProvider', () => {
         name: 'Config 2',
         pythonInterpreter: testInterpreter,
         venvPath: Uri.file('/path/to/venv2'),
+        managedVenv: true,
         createdAt: new Date(),
         lastUsedAt: new Date(),
         packages: ['numpy'],

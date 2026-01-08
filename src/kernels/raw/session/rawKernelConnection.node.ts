@@ -368,7 +368,7 @@ export class RawKernelConnection implements Kernel.IKernelConnection {
                 session: this.realKernel!.clientId,
                 content: {}
             }) as any as KernelMessage.IShellMessage<'inspect_request'>;
-            await this.realKernel!.sendShellMessage<'interrupt_request'>(msg as any, true, true).done.catch((ex) =>
+            await (this.realKernel!.sendShellMessage as any)(msg, true, true).done.catch((ex: unknown) =>
                 logger.error('Failed to interrupt via a message', ex)
             );
         } else {
@@ -425,6 +425,29 @@ export class RawKernelConnection implements Kernel.IKernelConnection {
         target?: string;
     }): Promise<KernelMessage.ICommInfoReplyMsg> {
         return this.realKernel!.requestCommInfo(content);
+    }
+    // Subshell support (JEP 91) - not supported in raw kernels
+    public readonly subshellId: string | null = null;
+    public get supportsSubshells(): boolean {
+        return false;
+    }
+    public requestCreateSubshell(
+        content: KernelMessage.ICreateSubshellRequestMsg['content'],
+        disposeOnDone?: boolean
+    ): Kernel.IControlFuture<KernelMessage.ICreateSubshellRequestMsg, KernelMessage.ICreateSubshellReplyMsg> {
+        return this.realKernel!.requestCreateSubshell(content, disposeOnDone);
+    }
+    public requestDeleteSubshell(
+        content: KernelMessage.IDeleteSubshellRequestMsg['content'],
+        disposeOnDone?: boolean
+    ): Kernel.IControlFuture<KernelMessage.IDeleteSubshellRequestMsg, KernelMessage.IDeleteSubshellReplyMsg> {
+        return this.realKernel!.requestDeleteSubshell(content, disposeOnDone);
+    }
+    public requestListSubshell(
+        content: KernelMessage.IListSubshellRequestMsg['content'],
+        disposeOnDone?: boolean
+    ): Kernel.IControlFuture<KernelMessage.IListSubshellRequestMsg, KernelMessage.IListSubshellReplyMsg> {
+        return this.realKernel!.requestListSubshell(content, disposeOnDone);
     }
     public sendInputReply(
         content: KernelMessage.IInputReplyMsg['content'],

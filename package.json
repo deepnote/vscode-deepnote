@@ -1,7 +1,7 @@
 {
     "name": "vscode-deepnote",
     "displayName": "Deepnote",
-    "version": "1.2.1",
+    "version": "1.3.0",
     "description": "Deepnote notebook support.",
     "publisher": "Deepnote",
     "author": {
@@ -25,12 +25,6 @@
     "engines": {
         "vscode": "^1.95.0"
     },
-    "extensionDependencies": [
-        "ms-toolsai.jupyter-renderers"
-    ],
-    "extensionPack": [
-        "ms-toolsai.jupyter-renderers"
-    ],
     "l10n": "./l10n",
     "extensionKind": [
         "workspace"
@@ -2215,11 +2209,54 @@
                 "entrypoint": "./dist/webviews/webview-side/ipywidgetsKernel/ipywidgetsKernel.js"
             },
             {
+                "type": "jupyter-notebook",
+                "localResourceRoots": [
+                    "./temp"
+                ],
+                "entrypoint": "./dist/webviews/webview-side/ipywidgetsKernel/ipywidgetsKernel.js"
+            },
+            {
                 "type": "interactive",
                 "localResourceRoots": [
                     "./temp"
                 ],
                 "entrypoint": "./dist/webviews/webview-side/ipywidgetsKernel/ipywidgetsKernel.js"
+            },
+            {
+                "type": "deepnote",
+                "entrypoint": "./dist/renderers/ipywidgets7/ipywidgets.js"
+            },
+            {
+                "type": "deepnote",
+                "entrypoint": "./dist/renderers/ipywidgets8/ipywidgets.js"
+            },
+            {
+                "type": "deepnote",
+                "entrypoint": "./dist/renderers/client/preload.js"
+            },
+            {
+                "type": "jupyter-notebook",
+                "entrypoint": "./dist/renderers/ipywidgets7/ipywidgets.js"
+            },
+            {
+                "type": "jupyter-notebook",
+                "entrypoint": "./dist/renderers/ipywidgets8/ipywidgets.js"
+            },
+            {
+                "type": "jupyter-notebook",
+                "entrypoint": "./dist/renderers/client/preload.js"
+            },
+            {
+                "type": "interactive",
+                "entrypoint": "./dist/renderers/ipywidgets7/ipywidgets.js"
+            },
+            {
+                "type": "interactive",
+                "entrypoint": "./dist/renderers/ipywidgets8/ipywidgets.js"
+            },
+            {
+                "type": "interactive",
+                "entrypoint": "./dist/renderers/client/preload.js"
             }
         ],
         "notebookRenderer": [
@@ -2259,6 +2296,58 @@
                     "application/vnd.deepnote.sql-output-metadata+json"
                 ],
                 "requiresMessaging": "optional"
+            },
+            {
+                "id": "deepnote-notebook-renderer",
+                "displayName": "Deepnote Notebook Renderer",
+                "entrypoint": "./dist/renderers/client/renderers.js",
+                "requiresMessaging": "optional",
+                "mimeTypes": [
+                    "image/gif",
+                    "image/png",
+                    "image/jpeg",
+                    "image/webp",
+                    "image/svg+xml",
+                    "application/geo+json",
+                    "application/vdom.v1+json",
+                    "application/vnd.plotly.v1+json",
+                    "application/vnd.vega.v2+json",
+                    "application/vnd.vega.v3+json",
+                    "application/vnd.vega.v4+json",
+                    "application/vnd.vegalite.v1+json",
+                    "application/vnd.vegalite.v2+json",
+                    "application/vnd.vegalite.v3+json",
+                    "application/vnd.vegalite.v4+json",
+                    "application/vnd.vegalite.v5+json",
+                    "application/x-nteract-model-debug+json",
+                    "text/vnd.plotly.v1+html"
+                ]
+            },
+            {
+                "id": "deepnote-builtin-renderer-hooks",
+                "displayName": "Deepnote Html/JavaScript Renderer",
+                "requiresMessaging": "optional",
+                "entrypoint": {
+                    "extends": "vscode.builtin-renderer",
+                    "path": "./dist/renderers/client/builtinRendererHooks.js"
+                }
+            },
+            {
+                "id": "deepnote-markdown-styles",
+                "displayName": "Deepnote Markdown styles",
+                "entrypoint": {
+                    "extends": "vscode.markdown-it-renderer",
+                    "path": "./dist/renderers/client/markdown.js"
+                }
+            },
+            {
+                "id": "deepnote-ipywidget-renderer",
+                "displayName": "Deepnote IPyWidget Renderer",
+                "entrypoint": "./dist/webviews/webview-side/ipywidgetsRenderer/ipywidgetsRenderer.js",
+                "mimeTypes": [
+                    "application/vnd.jupyter.widget-view+json"
+                ],
+                "requiresMessaging": "always"
             }
         ],
         "viewsContainers": {
@@ -2527,9 +2616,17 @@
         "@jupyterlab/coreutils": "^6.2.4",
         "@jupyterlab/nbformat": "^4.2.4",
         "@jupyterlab/services": "^7.2.4",
+        "@loadable/component": "^5.16.4",
         "@lumino/widgets": "^2.4.0",
         "@nteract/messaging": "^7.0.0",
+        "@nteract/transform-geojson": "^3.2.3",
+        "@nteract/transform-model-debug": "^3.2.3",
+        "@nteract/transform-plotly": "^7.0.0",
+        "@nteract/transform-vega": "^7.0.6",
+        "@nteract/transforms": "^3.2.0",
         "@vscode/extension-telemetry": "^0.7.7",
+        "@vscode/jupyter-ipywidgets7": "^2.0.4",
+        "@vscode/jupyter-ipywidgets8": "^1.0.9",
         "@vscode/python-extension": "^1.0.4",
         "ansi-to-html": "^0.6.7",
         "bootstrap": "^5.0.0",
@@ -2554,9 +2651,12 @@
         "node-fetch": "^2.6.7",
         "node-gyp-build": "^4.6.0",
         "node-stream-zip": "^1.6.0",
+        "path-browserify": "^1.0.1",
         "pdfkit": "^0.13.0",
         "pidtree": "^0.6.0",
+        "plotly.js-dist": "^3.0.1",
         "portfinder": "^1.0.25",
+        "re-resizable": "^6.5.5",
         "react": "^16.5.2",
         "react-data-grid": "^6.0.2-0",
         "react-dom": "^16.5.2",
@@ -2564,6 +2664,7 @@
         "react-redux": "^7.1.1",
         "react-svg-pan-zoom": "3.9.0",
         "react-svgmt": "1.1.11",
+        "react-toggle": "^4.1.2",
         "react-vega": "^7.7.1",
         "react-virtualized": "^9.21.1",
         "redux": "^4.0.4",
@@ -2575,6 +2676,7 @@
         "slickgrid": "^2.4.17",
         "stack-trace": "0.0.10",
         "strip-comments": "^2.0.1",
+        "styled-components": "^6.1.13",
         "svg-to-pdfkit": "^0.1.8",
         "tailwind-merge": "^3.3.1",
         "tcp-port-used": "^1.0.1",
@@ -2760,6 +2862,7 @@
             "ws": "7.5.10"
         },
         "d3-color": "3.1.0",
-        "vega-embed": "^7.1.0"
+        "vega-embed": "^7.1.0",
+        "@mermaid-js/layout-elk": "npm:empty-pkg@1.0.0"
     }
 }

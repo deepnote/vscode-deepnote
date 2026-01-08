@@ -250,6 +250,8 @@
     "deepnote.commands.openNotebook.title": "Open Notebook",
     "deepnote.commands.openFile.title": "Open File",
     "deepnote.commands.revealInExplorer.title": "Reveal in Explorer",
+    "deepnote.commands.enableSnapshots.title": "Enable Snapshots",
+    "deepnote.commands.disableSnapshots.title": "Disable Snapshots",
     "deepnote.commands.manageIntegrations.title": "Manage Integrations",
     "deepnote.commands.newProject.title": "New Project",
     "deepnote.commands.importNotebook.title": "Import Notebook",

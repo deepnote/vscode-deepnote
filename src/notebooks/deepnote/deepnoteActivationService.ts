@@ -10,7 +10,7 @@ import { DeepnoteExplorerView } from './deepnoteExplorerView';
 import { IIntegrationManager } from './integrations/types';
 import { DeepnoteInputBlockEditProtection } from './deepnoteInputBlockEditProtection';
 import { ISnapshotMetadataService, ISnapshotMetadataServiceFull } from './snapshotMetadataService';
-import { ISnapshotFileService } from './snapshotFileService.node';
+import { ISnapshotFileService } from './snapshotFileServiceTypes';
 
 /**
  * Service responsible for activating and configuring Deepnote notebook support in VS Code.

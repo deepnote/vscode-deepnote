@@ -2,6 +2,7 @@ import type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
 import { injectable } from 'inversify';
 import * as yaml from 'js-yaml';
 import { Uri, workspace } from 'vscode';
+import { Utils } from 'vscode-uri';
 
 import { logger } from '../../platform/logging';
 import type { DeepnoteOutput } from '../../platform/deepnote/deepnoteTypes';
@@ -93,8 +94,8 @@ export class SnapshotFileService implements ISnapshotFileService {
             .filter((uri) => !uri.fsPath.includes('_latest.'))
             .sort((a, b) => {
                 // Sort by filename descending (timestamps sort lexicographically)
-                const nameA = a.fsPath.split('/').pop() || '';
-                const nameB = b.fsPath.split('/').pop() || '';
+                const nameA = Utils.basename(a);
+                const nameB = Utils.basename(b);
 
                 return nameB.localeCompare(nameA);
             });
@@ -241,13 +242,16 @@ export class SnapshotFileService implements ISnapshotFileService {
      * Updates blocks in place.
      */
     mergeOutputsIntoBlocks(blocks: DeepnoteBlock[], outputs: Map<string, DeepnoteOutput[]>): void {
+        let mergedCount = 0;
+
         for (const block of blocks) {
             if (block.id && outputs.has(block.id)) {
                 block.outputs = outputs.get(block.id);
+                mergedCount++;
             }
         }
 
-        logger.debug(`[SnapshotFileService] Merged outputs into ${blocks.length} blocks`);
+        logger.debug(`[SnapshotFileService] Merged outputs into ${mergedCount}/${blocks.length} blocks`);
     }
 
     /**
@@ -256,11 +260,10 @@ export class SnapshotFileService implements ISnapshotFileService {
      */
     stripOutputsFromBlocks(blocks: DeepnoteBlock[]): DeepnoteBlock[] {
         return blocks.map((block) => {
-            const strippedBlock = { ...block };
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { outputs, ...strippedBlock } = block;
 
-            delete strippedBlock.outputs;
-
-            return strippedBlock;
+            return strippedBlock as DeepnoteBlock;
         });
     }
 

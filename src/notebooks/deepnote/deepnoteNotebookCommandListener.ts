@@ -378,22 +378,32 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
     }
 
     private async disableSnapshots(): Promise<void> {
-        await this.configurationService.updateSetting(
-            'snapshots.enabled',
-            false,
-            undefined,
-            ConfigurationTarget.Workspace
-        );
-        void window.showInformationMessage(l10n.t('Snapshots disabled for this workspace.'));
+        try {
+            await this.configurationService.updateSetting(
+                'snapshots.enabled',
+                false,
+                undefined,
+                ConfigurationTarget.Workspace
+            );
+            void window.showInformationMessage(l10n.t('Snapshots disabled for this workspace.'));
+        } catch (error) {
+            logger.error('Failed to disable snapshots', error);
+            void window.showErrorMessage(l10n.t('Failed to disable snapshots.'));
+        }
     }
 
     private async enableSnapshots(): Promise<void> {
-        await this.configurationService.updateSetting(
-            'snapshots.enabled',
-            true,
-            undefined,
-            ConfigurationTarget.Workspace
-        );
-        void window.showInformationMessage(l10n.t('Snapshots enabled for this workspace.'));
+        try {
+            await this.configurationService.updateSetting(
+                'snapshots.enabled',
+                true,
+                undefined,
+                ConfigurationTarget.Workspace
+            );
+            void window.showInformationMessage(l10n.t('Snapshots enabled for this workspace.'));
+        } catch (error) {
+            logger.error('Failed to enable snapshots', error);
+            void window.showErrorMessage(l10n.t('Failed to enable snapshots.'));
+        }
     }
 }

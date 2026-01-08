@@ -126,9 +126,10 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
                 if (snapshotOutputs) {
                     logger.debug(`DeepnoteSerializer: Merging ${snapshotOutputs.size} outputs from snapshot`);
-                    this.snapshotFileService.mergeOutputsIntoBlocks(selectedNotebook.blocks ?? [], snapshotOutputs);
+                    const blocksWithOutputs = structuredClone(selectedNotebook.blocks ?? []);
+                    this.snapshotFileService.mergeOutputsIntoBlocks(blocksWithOutputs, snapshotOutputs);
 
-                    cells = this.converter.convertBlocksToCells(selectedNotebook.blocks ?? []);
+                    cells = this.converter.convertBlocksToCells(blocksWithOutputs);
                 }
             }
 
@@ -221,7 +222,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                     logger.debug('SerializeNotebook: Snapshots enabled, creating snapshot');
 
                     // Create snapshot project with full outputs
-                    const snapshotProject = structuredClone(originalProject) as DeepnoteFile;
+                    const snapshotProject = cloneWithoutCircularRefs(originalProject) as DeepnoteFile;
                     const snapshotNotebook = snapshotProject.project.notebooks.find(
                         (nb: { id: string }) => nb.id === notebookId
                     );

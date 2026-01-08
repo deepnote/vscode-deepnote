@@ -101,12 +101,12 @@
             },
             {
                 "command": "deepnote.enableSnapshots",
-                "title": "Enable Snapshots",
+                "title": "%deepnote.commands.enableSnapshots.title%",
                 "category": "Deepnote"
             },
             {
                 "command": "deepnote.disableSnapshots",
-                "title": "Disable Snapshots",
+                "title": "%deepnote.commands.disableSnapshots.title%",
                 "category": "Deepnote"
             },
             {

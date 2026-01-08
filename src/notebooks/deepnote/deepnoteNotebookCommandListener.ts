@@ -192,17 +192,17 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             commands.registerCommand(Commands.AddTextBlock, () => this.addTextBlockThroughPicker())
         );
         this.disposableRegistry.push(
-            commands.registerCommand(Commands.addTextBlockHeading1, () =>
+            commands.registerCommand(Commands.AddTextBlockHeading1, () =>
                 this.addTextBlockCommandHandler({ textBlockType: 'text-cell-h1' })
             )
         );
         this.disposableRegistry.push(
-            commands.registerCommand(Commands.addTextBlockHeading2, () =>
+            commands.registerCommand(Commands.AddTextBlockHeading2, () =>
                 this.addTextBlockCommandHandler({ textBlockType: 'text-cell-h2' })
             )
         );
         this.disposableRegistry.push(
-            commands.registerCommand(Commands.addTextBlockHeading3, () =>
+            commands.registerCommand(Commands.AddTextBlockHeading3, () =>
                 this.addTextBlockCommandHandler({ textBlockType: 'text-cell-h3' })
             )
         );
@@ -413,9 +413,11 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         }
 
         const items: (QuickPickItem & { textBlockType: TextBlockType })[] = TEXT_BLOCK_TYPES.map((textBlockType) => {
+            const label = TEXT_BLOCK_TYPE_LABELS[textBlockType];
+            const description = l10n.t('Add a {0} text block', textBlockType);
             return {
-                label: TEXT_BLOCK_TYPE_LABELS[textBlockType],
-                description: l10n.t('Add a {0} text block', textBlockType),
+                label,
+                description,
                 textBlockType
             };
         });
@@ -475,7 +477,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             edit.set(document.uri, [nbEdit]);
         });
         if (result !== true) {
-            throw new Error(l10n.t('Failed to insert text block'));
+            throw new WrappedError(l10n.t('Failed to insert text block'));
         }
 
         const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);

@@ -198,9 +198,9 @@ export interface ICommandNameArgumentTypeMapping {
     [DSCommands.AddInputFileBlock]: [];
     [DSCommands.AddButtonBlock]: [];
     [DSCommands.AddTextBlock]: [];
-    [DSCommands.addTextBlockHeading1]: [];
-    [DSCommands.addTextBlockHeading2]: [];
-    [DSCommands.addTextBlockHeading3]: [];
+    [DSCommands.AddTextBlockHeading1]: [];
+    [DSCommands.AddTextBlockHeading2]: [];
+    [DSCommands.AddTextBlockHeading3]: [];
     [DSCommands.AddTextBlockParagraph]: [];
     [DSCommands.NewProject]: [];
     [DSCommands.ImportNotebook]: [];

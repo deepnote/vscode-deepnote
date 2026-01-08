@@ -13,14 +13,21 @@ export { ISnapshotFileService } from './snapshotFileServiceTypes';
 /**
  * Slugifies a project name for use in filenames.
  * Converts to lowercase, replaces spaces with hyphens, removes non-alphanumeric chars.
+ * @throws Error if the result is empty after transformation
  */
 function slugifyProjectName(name: string): string {
-    return name
+    const slug = name
         .toLowerCase()
         .replace(/\s+/g, '-')
         .replace(/[^a-z0-9-]/g, '')
         .replace(/-+/g, '-')
         .replace(/^-|-$/g, '');
+
+    if (!slug) {
+        throw new Error('Project name cannot be empty or contain only special characters');
+    }
+
+    return slug;
 }
 
 /**

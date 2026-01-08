@@ -78,6 +78,39 @@ suite('SnapshotFileService', () => {
             assert.include(result.fsPath, 'my-project-name');
             assert.notInclude(result.fsPath, '--');
         });
+
+        test('should throw error for empty project name', () => {
+            const projectUri = Uri.file('/path/to/file.deepnote');
+            const projectId = 'abc-123';
+            const projectName = '';
+
+            assert.throws(
+                () => serviceAny.buildSnapshotPath(projectUri, projectId, projectName, 'latest'),
+                'Project name cannot be empty or contain only special characters'
+            );
+        });
+
+        test('should throw error for project name with only special characters', () => {
+            const projectUri = Uri.file('/path/to/file.deepnote');
+            const projectId = 'abc-123';
+            const projectName = '@#$%^&*()';
+
+            assert.throws(
+                () => serviceAny.buildSnapshotPath(projectUri, projectId, projectName, 'latest'),
+                'Project name cannot be empty or contain only special characters'
+            );
+        });
+
+        test('should throw error for project name with only whitespace', () => {
+            const projectUri = Uri.file('/path/to/file.deepnote');
+            const projectId = 'abc-123';
+            const projectName = '   ';
+
+            assert.throws(
+                () => serviceAny.buildSnapshotPath(projectUri, projectId, projectName, 'latest'),
+                'Project name cannot be empty or contain only special characters'
+            );
+        });
     });
 
     suite('mergeOutputsIntoBlocks', () => {

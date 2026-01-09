@@ -1,5 +1,6 @@
-import { inject, injectable } from 'inversify';
-import { NotebookCell, workspace } from 'vscode';
+import type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
+import { inject, injectable, optional } from 'inversify';
+import { NotebookCell, Uri, workspace } from 'vscode';
 
 import type { Environment, Execution, ExecutionError } from '@deepnote/blocks';
 
@@ -9,6 +10,9 @@ import { logger } from '../../platform/logging';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { notebookCellExecutions, NotebookCellExecutionState } from '../../platform/notebooks/cellExecutionStateService';
 import { ISnapshotMetadataService as IPlatformSnapshotMetadataService } from '../../platform/notebooks/deepnote/types';
+import { IDeepnoteNotebookManager } from '../types';
+import { DeepnoteDataConverter } from './deepnoteDataConverter';
+import { ISnapshotFileService } from './snapshotFileServiceTypes';
 
 class TimeoutError extends Error {
     constructor(message: string) {
@@ -119,11 +123,15 @@ export interface ISnapshotMetadataServiceFull extends IPlatformSnapshotMetadataS
  */
 @injectable()
 export class SnapshotMetadataService implements ISnapshotMetadataServiceFull, IExtensionSyncActivationService {
+    private readonly converter = new DeepnoteDataConverter();
     private readonly executionStates = new Map<string, NotebookExecutionState>();
+    private readonly runAllModeNotebooks = new Set<string>();
 
     constructor(
         @inject(IEnvironmentCapture) private readonly environmentCapture: IEnvironmentCapture,
-        @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry
+        @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
+        @inject(IDeepnoteNotebookManager) @optional() private readonly notebookManager?: IDeepnoteNotebookManager,
+        @inject(ISnapshotFileService) @optional() private readonly snapshotFileService?: ISnapshotFileService
     ) {}
 
     activate(): void {
@@ -166,8 +174,146 @@ export class SnapshotMetadataService implements ISnapshotMetadataServiceFull, IE
 
     clearExecutionState(notebookUri: string): void {
         this.executionStates.delete(notebookUri);
+        this.runAllModeNotebooks.delete(notebookUri);
 
         logger.trace(`[Snapshot] Cleared execution state for ${notebookUri}`);
+    }
+
+    isRunAllMode(notebookUri: string): boolean {
+        return this.runAllModeNotebooks.has(notebookUri);
+    }
+
+    async onExecutionComplete(notebookUri: string): Promise<void> {
+        logger.debug(`[Snapshot] onExecutionComplete called for ${notebookUri}`);
+
+        // Check if snapshots are enabled
+        if (!this.snapshotFileService?.isSnapshotsEnabled()) {
+            logger.debug(`[Snapshot] Snapshots not enabled, skipping`);
+            this.runAllModeNotebooks.delete(notebookUri);
+
+            return;
+        }
+
+        // Find the notebook document
+        const notebook = workspace.notebookDocuments.find((n) => n.uri.toString() === notebookUri);
+
+        if (!notebook) {
+            logger.warn(`[Snapshot] Could not find notebook document for ${notebookUri}`);
+            this.runAllModeNotebooks.delete(notebookUri);
+
+            return;
+        }
+
+        // Get project ID from notebook metadata
+        const projectId = notebook.metadata?.deepnoteProjectId as string | undefined;
+
+        if (!projectId) {
+            logger.warn(`[Snapshot] No project ID in notebook metadata`);
+            this.runAllModeNotebooks.delete(notebookUri);
+
+            return;
+        }
+
+        // Get project data from notebook manager
+        const originalProject = this.notebookManager?.getOriginalProject(projectId);
+
+        if (!originalProject) {
+            logger.warn(`[Snapshot] No original project found for ${projectId}`);
+            this.runAllModeNotebooks.delete(notebookUri);
+
+            return;
+        }
+
+        // Find the project URI
+        const projectUri = this.findProjectUriFromId(projectId);
+
+        if (!projectUri) {
+            logger.warn(`[Snapshot] Could not find project URI for ${projectId}`);
+            this.runAllModeNotebooks.delete(notebookUri);
+
+            return;
+        }
+
+        // Get current notebook ID
+        const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
+
+        if (!notebookId) {
+            logger.warn(`[Snapshot] No notebook ID in notebook metadata`);
+            this.runAllModeNotebooks.delete(notebookUri);
+
+            return;
+        }
+
+        // Find the notebook in the project
+        const deepnoteNotebook = originalProject.project.notebooks?.find((nb) => nb.id === notebookId);
+
+        if (!deepnoteNotebook) {
+            logger.warn(`[Snapshot] Notebook ${notebookId} not found in project`);
+            this.runAllModeNotebooks.delete(notebookUri);
+
+            return;
+        }
+
+        // Convert current VS Code cells to blocks with outputs
+        // Map NotebookCell to NotebookCellData format expected by converter
+        const cellData = notebook.getCells().map((cell) => ({
+            kind: cell.kind,
+            value: cell.document.getText(),
+            languageId: cell.document.languageId,
+            metadata: cell.metadata,
+            outputs: [...cell.outputs]
+        }));
+        const blocks = this.converter.convertCellsToBlocks(cellData);
+
+        // Prepare snapshot project data
+        const snapshotProject = structuredClone(originalProject) as DeepnoteFile;
+        const snapshotNotebook = snapshotProject.project.notebooks?.find((nb) => nb.id === notebookId);
+
+        if (snapshotNotebook) {
+            snapshotNotebook.blocks = blocks as DeepnoteBlock[];
+        }
+
+        // Determine snapshot type based on runAll mode
+        const isRunAll = this.runAllModeNotebooks.has(notebookUri);
+
+        if (isRunAll) {
+            // Full snapshot (timestamped + latest)
+            logger.debug(`[Snapshot] Creating full snapshot (Run All mode)`);
+
+            const snapshotUri = await this.snapshotFileService.createSnapshot(
+                projectUri,
+                projectId,
+                originalProject.project.name,
+                snapshotProject
+            );
+
+            if (snapshotUri) {
+                logger.info(`[Snapshot] Created full snapshot: ${snapshotUri.toString()}`);
+            }
+        } else {
+            // Partial snapshot (latest only)
+            logger.debug(`[Snapshot] Updating latest snapshot only (partial run)`);
+
+            const snapshotUri = await this.snapshotFileService.updateLatestSnapshot(
+                projectUri,
+                projectId,
+                originalProject.project.name,
+                snapshotProject
+            );
+
+            if (snapshotUri) {
+                logger.info(`[Snapshot] Updated latest snapshot: ${snapshotUri.toString()}`);
+            }
+        }
+
+        // Clear the runAll flag after handling
+        this.runAllModeNotebooks.delete(notebookUri);
+    }
+
+    setRunAllMode(notebookUri: string): void {
+        this.runAllModeNotebooks.add(notebookUri);
+
+        logger.debug(`[Snapshot] Set Run All mode for ${notebookUri}`);
     }
 
     getBlockExecutionMetadata(notebookUri: string, cellId: string): BlockExecutionMetadata | undefined {
@@ -396,6 +542,14 @@ export class SnapshotMetadataService implements ISnapshotMetadataServiceFull, IE
         }
 
         return state;
+    }
+
+    private findProjectUriFromId(projectId: string): Uri | undefined {
+        const notebookDoc = workspace.notebookDocuments.find(
+            (doc) => doc.notebookType === 'deepnote' && doc.metadata?.deepnoteProjectId === projectId
+        );
+
+        return notebookDoc?.uri.with({ query: '' });
     }
 
     private handleCellExecutionStateChange(cell: NotebookCell, state: NotebookCellExecutionState): void {

@@ -24,10 +24,22 @@ export interface ISnapshotFileService {
      * Create a snapshot of the project data if there are changes.
      * Compares with the existing latest snapshot and skips if content is identical.
      * Writes to a timestamped file first, then copies to 'latest' if successful.
-     * This ensures atomic operation - existing files aren't corrupted on failure.
+     * Used for "Run All" command to create a historical snapshot.
      * @returns URI of the timestamped snapshot file, or undefined if no changes
      */
     createSnapshot(
+        projectUri: Uri,
+        projectId: string,
+        projectName: string,
+        projectData: DeepnoteFile
+    ): Promise<Uri | undefined>;
+
+    /**
+     * Update only the latest snapshot file without creating a timestamped copy.
+     * Used for partial execution (running individual cells, not "Run All").
+     * @returns URI of the latest snapshot file, or undefined if no changes
+     */
+    updateLatestSnapshot(
         projectUri: Uri,
         projectId: string,
         projectName: string,

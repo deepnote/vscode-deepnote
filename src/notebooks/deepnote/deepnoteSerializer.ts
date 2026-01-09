@@ -1,7 +1,7 @@
 import type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
 import { inject, injectable, optional } from 'inversify';
 import * as yaml from 'js-yaml';
-import { l10n, Uri, workspace, type CancellationToken, type NotebookData, type NotebookSerializer } from 'vscode';
+import { l10n, workspace, type CancellationToken, type NotebookData, type NotebookSerializer } from 'vscode';
 
 import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
@@ -214,43 +214,11 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             // Add snapshot metadata to blocks (contentHash and execution timing)
             await this.addSnapshotMetadataToBlocks(blocks, data);
 
-            // Handle snapshot file logic if enabled
+            // Handle snapshot mode: strip outputs from main file (snapshots are created on execution, not save)
             if (this.snapshotFileService?.isSnapshotsEnabled()) {
-                const projectUri = this.findProjectUriFromId(projectId);
-
-                if (projectUri) {
-                    logger.debug('SerializeNotebook: Snapshots enabled, creating snapshot');
-
-                    // Create snapshot project with full outputs
-                    const snapshotProject = cloneWithoutCircularRefs(originalProject) as DeepnoteFile;
-                    const snapshotNotebook = snapshotProject.project.notebooks.find(
-                        (nb: { id: string }) => nb.id === notebookId
-                    );
-
-                    if (snapshotNotebook) {
-                        snapshotNotebook.blocks = cloneWithoutCircularRefs<DeepnoteBlock[]>(blocks);
-                    }
-
-                    // Create snapshot if there are changes (writes timestamped first, then copies to latest)
-                    const snapshotUri = await this.snapshotFileService.createSnapshot(
-                        projectUri,
-                        projectId,
-                        originalProject.project.name,
-                        snapshotProject
-                    );
-
-                    // Strip outputs from main file blocks
-                    notebook.blocks = this.snapshotFileService.stripOutputsFromBlocks(blocks);
-
-                    if (snapshotUri) {
-                        logger.debug('SerializeNotebook: Created snapshot and stripped outputs from main file');
-                    } else {
-                        logger.debug('SerializeNotebook: No changes, skipped snapshot creation');
-                    }
-                } else {
-                    // Fallback if we can't find the project URI
-                    notebook.blocks = cloneWithoutCircularRefs<DeepnoteBlock[]>(blocks);
-                }
+                // Strip outputs from main file blocks - snapshots are created during cell execution
+                notebook.blocks = this.snapshotFileService.stripOutputsFromBlocks(blocks);
+                logger.debug('SerializeNotebook: Stripped outputs from main file (snapshot mode)');
             } else {
                 // Default behavior: outputs in main file
                 notebook.blocks = cloneWithoutCircularRefs<DeepnoteBlock[]>(blocks);
@@ -390,19 +358,6 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
         );
 
         return notebookDoc?.uri.toString();
-    }
-
-    /**
-     * Finds the project URI from the project ID by looking at open notebook documents.
-     * @param projectId The project ID to find the URI for
-     * @returns The project URI (without query params), or undefined if not found
-     */
-    private findProjectUriFromId(projectId: string): Uri | undefined {
-        const notebookDoc = workspace.notebookDocuments.find(
-            (doc) => doc.notebookType === 'deepnote' && doc.metadata?.deepnoteProjectId === projectId
-        );
-
-        return notebookDoc?.uri.with({ query: '' });
     }
 
     /**

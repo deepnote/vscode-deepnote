@@ -2,7 +2,7 @@ import type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
 import fastDeepEqual from 'fast-deep-equal';
 import { injectable } from 'inversify';
 import * as yaml from 'js-yaml';
-import { Uri, workspace } from 'vscode';
+import { RelativePattern, Uri, workspace } from 'vscode';
 import { Utils } from 'vscode-uri';
 
 import { logger } from '../../platform/logging';
@@ -77,28 +77,53 @@ export class SnapshotFileService implements ISnapshotFileService {
     /**
      * Read outputs from a snapshot file by searching for files matching the projectId.
      * First tries the 'latest' snapshot, then falls back to the most recent timestamped snapshot.
-     * Uses workspace.findFiles() to locate snapshots without needing the project URI.
-     * @returns Map of block ID to outputs, or undefined if no snapshot exists
+     * Uses workspace.findFiles() with RelativePattern to scope searches to workspace folders.
+     * @returns Map of block ID to outputs, or undefined if no snapshot exists or on parse error
      */
     async readSnapshot(projectId: string): Promise<Map<string, DeepnoteOutput[]> | undefined> {
+        const workspaceFolders = workspace.workspaceFolders;
+
+        if (!workspaceFolders || workspaceFolders.length === 0) {
+            logger.debug(`[SnapshotFileService] No workspace folders found`);
+
+            return undefined;
+        }
+
         // 1. Try to find a 'latest' snapshot file
-        const latestPattern = `**/snapshots/*_${projectId}_latest.snapshot.deepnote`;
-        const latestFiles = await workspace.findFiles(latestPattern, null, 1);
+        const latestGlob = `**/snapshots/*_${projectId}_latest.snapshot.deepnote`;
 
-        if (latestFiles.length > 0) {
-            logger.debug(`[SnapshotFileService] Found latest snapshot: ${latestFiles[0].fsPath}`);
+        for (const folder of workspaceFolders) {
+            const latestPattern = new RelativePattern(folder, latestGlob);
+            const latestFiles = await workspace.findFiles(latestPattern, null, 1);
 
-            return this.parseSnapshotFile(latestFiles[0]);
+            if (latestFiles.length > 0) {
+                logger.debug(`[SnapshotFileService] Found latest snapshot: ${latestFiles[0].fsPath}`);
+
+                try {
+                    return await this.parseSnapshotFile(latestFiles[0]);
+                } catch (error) {
+                    logger.error(`[SnapshotFileService] Failed to parse snapshot: ${latestFiles[0].fsPath}`, error);
+
+                    return undefined;
+                }
+            }
         }
 
         logger.debug(`[SnapshotFileService] No latest snapshot found, looking for timestamped files`);
 
-        // 2. Find timestamped snapshots
-        const timestampedPattern = `**/snapshots/*_${projectId}_*.snapshot.deepnote`;
-        const timestampedFiles = await workspace.findFiles(timestampedPattern, null, 100);
+        // 2. Find timestamped snapshots across all workspace folders
+        const timestampedGlob = `**/snapshots/*_${projectId}_*.snapshot.deepnote`;
+        let allTimestampedFiles: Uri[] = [];
+
+        for (const folder of workspaceFolders) {
+            const timestampedPattern = new RelativePattern(folder, timestampedGlob);
+            const files = await workspace.findFiles(timestampedPattern, null, 100);
+
+            allTimestampedFiles = allTimestampedFiles.concat(files);
+        }
 
         // Filter out 'latest' files (in case glob matched them) and sort by filename descending
-        const sortedFiles = timestampedFiles
+        const sortedFiles = allTimestampedFiles
             .filter((uri) => !uri.fsPath.includes('_latest.'))
             .sort((a, b) => {
                 // Sort by filename descending (timestamps sort lexicographically)
@@ -118,22 +143,66 @@ export class SnapshotFileService implements ISnapshotFileService {
 
         logger.debug(`[SnapshotFileService] Using timestamped snapshot: ${newestFile.fsPath}`);
 
-        return this.parseSnapshotFile(newestFile);
+        try {
+            return await this.parseSnapshotFile(newestFile);
+        } catch (error) {
+            logger.error(`[SnapshotFileService] Failed to parse snapshot: ${newestFile.fsPath}`, error);
+
+            return undefined;
+        }
     }
 
     /**
      * Parse a snapshot file and extract outputs.
+     * @returns Map of block ID to outputs, or empty map if parsing fails or structure is invalid
      */
     private async parseSnapshotFile(path: Uri): Promise<Map<string, DeepnoteOutput[]>> {
-        const content = await workspace.fs.readFile(path);
-        const contentString = new TextDecoder('utf-8').decode(content);
-        const snapshotData = yaml.load(contentString) as DeepnoteFile;
-
         const outputsMap = new Map<string, DeepnoteOutput[]>();
 
-        for (const notebook of snapshotData.project?.notebooks ?? []) {
-            for (const block of notebook.blocks ?? []) {
-                if (block.id && block.outputs) {
+        let snapshotData: unknown;
+
+        try {
+            const content = await workspace.fs.readFile(path);
+            const contentString = new TextDecoder('utf-8').decode(content);
+
+            snapshotData = yaml.load(contentString);
+        } catch (error) {
+            logger.error(`[SnapshotFileService] Failed to read or parse snapshot file: ${path.fsPath}`, error);
+
+            return outputsMap;
+        }
+
+        // Validate snapshotData is an object
+        if (typeof snapshotData !== 'object' || snapshotData === null) {
+            logger.error(`[SnapshotFileService] Invalid snapshot structure (not an object): ${path.fsPath}`);
+
+            return outputsMap;
+        }
+
+        const data = snapshotData as DeepnoteFile;
+        const notebooks = data.project?.notebooks;
+
+        // Validate notebooks is an array
+        if (!Array.isArray(notebooks)) {
+            logger.debug(`[SnapshotFileService] No notebooks array in snapshot: ${path.fsPath}`);
+
+            return outputsMap;
+        }
+
+        for (const notebook of notebooks) {
+            const blocks = notebook?.blocks;
+
+            if (!Array.isArray(blocks)) {
+                continue;
+            }
+
+            for (const block of blocks) {
+                if (
+                    typeof block === 'object' &&
+                    block !== null &&
+                    typeof block.id === 'string' &&
+                    Array.isArray(block.outputs)
+                ) {
                     outputsMap.set(block.id, block.outputs as DeepnoteOutput[]);
                 }
             }
@@ -147,9 +216,14 @@ export class SnapshotFileService implements ISnapshotFileService {
     /**
      * Create a snapshot of the project data if there are changes.
      * Compares with the existing latest snapshot and skips if content is identical.
-     * Writes to a timestamped file first, then copies to 'latest' if successful.
-     * This ensures atomic operation - existing files aren't corrupted on failure.
-     * @returns URI of the timestamped snapshot file, or undefined if no changes
+     *
+     * Write strategy: Writes to a timestamped file first, then updates 'latest'.
+     * This is not truly atomic (two separate writes), but ensures:
+     * - The existing 'latest' file is never corrupted mid-write
+     * - If timestamped write fails, nothing changes
+     * - If 'latest' write fails, the timestamped snapshot still exists as a recovery point
+     *
+     * @returns URI of the timestamped snapshot file, or undefined if no changes or on write failure
      */
     async createSnapshot(
         projectUri: Uri,
@@ -165,7 +239,17 @@ export class SnapshotFileService implements ISnapshotFileService {
             await workspace.fs.stat(snapshotsDir);
         } catch {
             logger.debug(`[SnapshotFileService] Creating snapshots directory: ${snapshotsDir.fsPath}`);
-            await workspace.fs.createDirectory(snapshotsDir);
+
+            try {
+                await workspace.fs.createDirectory(snapshotsDir);
+            } catch (error) {
+                logger.error(
+                    `[SnapshotFileService] Failed to create snapshots directory: ${snapshotsDir.fsPath}`,
+                    error
+                );
+
+                return undefined;
+            }
         }
 
         // Check if there are changes compared to the existing latest snapshot
@@ -196,14 +280,103 @@ export class SnapshotFileService implements ISnapshotFileService {
         const content = new TextEncoder().encode(yamlString);
 
         // Write to timestamped file first (safe - doesn't touch existing files)
-        await workspace.fs.writeFile(timestampedPath, content);
-        logger.debug(`[SnapshotFileService] Wrote timestamped snapshot: ${timestampedPath.fsPath}`);
+        try {
+            await workspace.fs.writeFile(timestampedPath, content);
+            logger.debug(`[SnapshotFileService] Wrote timestamped snapshot: ${timestampedPath.fsPath}`);
+        } catch (error) {
+            logger.error(
+                `[SnapshotFileService] Failed to write timestamped snapshot: ${timestampedPath.fsPath}`,
+                error
+            );
 
-        // Copy to latest (only after timestamped write succeeded)
-        await workspace.fs.writeFile(latestPath, content);
-        logger.debug(`[SnapshotFileService] Updated latest snapshot: ${latestPath.fsPath}`);
+            return undefined;
+        }
+
+        // Update 'latest' pointer (only after timestamped write succeeded)
+        // If this fails, the timestamped snapshot still exists as a recovery point
+        try {
+            await workspace.fs.writeFile(latestPath, content);
+            logger.debug(`[SnapshotFileService] Updated latest snapshot: ${latestPath.fsPath}`);
+        } catch (error) {
+            logger.warn(
+                `[SnapshotFileService] Wrote timestamped snapshot but failed to update latest pointer: ${latestPath.fsPath}. ` +
+                    `Timestamped snapshot available at: ${timestampedPath.fsPath}`,
+                error
+            );
+            // Still return timestampedPath since the snapshot data was saved successfully
+        }
 
         return timestampedPath;
+    }
+
+    /**
+     * Update only the latest snapshot file without creating a timestamped copy.
+     * Used for partial execution (running individual cells, not "Run All").
+     *
+     * @returns URI of the latest snapshot file, or undefined if no changes or on write failure
+     */
+    async updateLatestSnapshot(
+        projectUri: Uri,
+        projectId: string,
+        projectName: string,
+        projectData: DeepnoteFile
+    ): Promise<Uri | undefined> {
+        const latestPath = this.buildSnapshotPath(projectUri, projectId, projectName, 'latest');
+        const snapshotsDir = Uri.joinPath(latestPath, '..');
+
+        // Ensure snapshots directory exists
+        try {
+            await workspace.fs.stat(snapshotsDir);
+        } catch {
+            logger.debug(`[SnapshotFileService] Creating snapshots directory: ${snapshotsDir.fsPath}`);
+
+            try {
+                await workspace.fs.createDirectory(snapshotsDir);
+            } catch (error) {
+                logger.error(
+                    `[SnapshotFileService] Failed to create snapshots directory: ${snapshotsDir.fsPath}`,
+                    error
+                );
+
+                return undefined;
+            }
+        }
+
+        // Check if there are changes compared to the existing latest snapshot
+        const hasChanges = await this.hasSnapshotChanges(latestPath, projectData);
+
+        if (!hasChanges) {
+            logger.debug(`[SnapshotFileService] No changes detected, skipping latest snapshot update`);
+
+            return undefined;
+        }
+
+        // Prepare snapshot data with timestamp
+        const snapshotData = structuredClone(projectData);
+
+        snapshotData.metadata = snapshotData.metadata || { createdAt: new Date().toISOString() };
+        snapshotData.metadata.modifiedAt = new Date().toISOString();
+
+        const yamlString = yaml.dump(snapshotData, {
+            indent: 2,
+            lineWidth: -1,
+            noRefs: true,
+            sortKeys: false
+        });
+
+        const content = new TextEncoder().encode(yamlString);
+
+        // Write only to latest file (no timestamped copy for partial runs)
+        try {
+            await workspace.fs.writeFile(latestPath, content);
+            logger.debug(`[SnapshotFileService] Updated latest snapshot: ${latestPath.fsPath}`);
+
+            return latestPath;
+        } catch (error) {
+            logger.error(`[SnapshotFileService] Failed to update latest snapshot: ${latestPath.fsPath}`, error);
+
+            return undefined;
+        }
     }
 
     /**

@@ -34,6 +34,7 @@ import { KernelConnector } from './controllers/kernelConnector';
 import { IControllerRegistration } from './controllers/types';
 import { IExtensionSyncActivationService } from '../platform/activation/types';
 import { IKernelStatusProvider } from '../kernels/kernelStatusProvider';
+import { ISnapshotMetadataService } from '../platform/notebooks/deepnote/types';
 
 export const INotebookCommandHandler = Symbol('INotebookCommandHandler');
 export interface INotebookCommandHandler {
@@ -54,7 +55,8 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
         @inject(IDataScienceErrorHandler) private errorHandler: IDataScienceErrorHandler,
         @inject(INotebookEditorProvider) private notebookEditorProvider: INotebookEditorProvider,
         @inject(IServiceContainer) private serviceContainer: IServiceContainer,
-        @inject(IKernelStatusProvider) private kernelStatusProvider: IKernelStatusProvider
+        @inject(IKernelStatusProvider) private kernelStatusProvider: IKernelStatusProvider,
+        @inject(ISnapshotMetadataService) private snapshotMetadataService: ISnapshotMetadataService
     ) {}
 
     activate(): void {
@@ -114,6 +116,9 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
 
     private runAllCells() {
         if (window.activeNotebookEditor) {
+            const notebookUri = window.activeNotebookEditor.notebook.uri.toString();
+
+            this.snapshotMetadataService.setRunAllMode(notebookUri);
             commands.executeCommand('notebook.execute').then(noop, noop);
         }
     }

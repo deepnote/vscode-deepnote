@@ -324,5 +324,14 @@ export class CellExecutionQueue implements Disposable {
                 break;
             }
         }
+
+        // Notify snapshot service that execution is complete
+        if (this.snapshotService && this.notebook) {
+            try {
+                await this.snapshotService.onExecutionComplete(this.notebook.uri.toString());
+            } catch (error) {
+                logger.warn('[CellExecutionQueue] Failed to handle execution complete for snapshots', error);
+            }
+        }
     }
 }

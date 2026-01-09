@@ -203,8 +203,9 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         for (const workspaceFolder of workspace.workspaceFolders || []) {
             const pattern = new RelativePattern(workspaceFolder, '**/*.deepnote');
             const files = await workspace.findFiles(pattern);
+            const projectFiles = files.filter((file) => !file.path.endsWith('.snapshot.deepnote'));
 
-            for (const file of files) {
+            for (const file of projectFiles) {
                 try {
                     const project = await this.loadDeepnoteProject(file);
                     if (!project) {
@@ -316,16 +317,25 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         }
 
         this.fileWatcher.onDidChange((uri) => {
+            if (uri.path.endsWith('.snapshot.deepnote')) {
+                return;
+            }
             // Use granular refresh for file changes
             void this.refreshProject(uri.path);
         });
 
-        this.fileWatcher.onDidCreate(() => {
+        this.fileWatcher.onDidCreate((uri) => {
+            if (uri.path.endsWith('.snapshot.deepnote')) {
+                return;
+            }
             // New file created, do full refresh
             this._onDidChangeTreeData.fire();
         });
 
         this.fileWatcher.onDidDelete((uri) => {
+            if (uri.path.endsWith('.snapshot.deepnote')) {
+                return;
+            }
             // File deleted, clear both caches and do full refresh
             this.cachedProjects.delete(uri.path);
             this.treeItemCache.delete(`project:${uri.path}`);

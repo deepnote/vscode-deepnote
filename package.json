@@ -241,6 +241,36 @@
                 "icon": "$(add)"
             },
             {
+                "command": "deepnote.addTextBlock",
+                "title": "%deepnote.commands.addTextBlock.title%",
+                "category": "Deepnote",
+                "icon": "$(text-size)"
+            },
+            {
+                "command": "deepnote.addTextBlockParagraph",
+                "title": "%deepnote.commands.addTextBlockParagraph.title%",
+                "category": "Deepnote",
+                "icon": "$(text-size)"
+            },
+            {
+                "command": "deepnote.addTextBlockHeading1",
+                "title": "%deepnote.commands.addTextBlockHeading1.title%",
+                "category": "Deepnote",
+                "icon": "$(text-size)"
+            },
+            {
+                "command": "deepnote.addTextBlockHeading2",
+                "title": "%deepnote.commands.addTextBlockHeading2.title%",
+                "category": "Deepnote",
+                "icon": "$(text-size)"
+            },
+            {
+                "command": "deepnote.addTextBlockHeading3",
+                "title": "%deepnote.commands.addTextBlockHeading3.title%",
+                "category": "Deepnote",
+                "icon": "$(text-size)"
+            },
+            {
                 "command": "deepnote.newNotebook",
                 "title": "%deepnote.commands.newNotebook.title%",
                 "category": "Deepnote",
@@ -1034,6 +1064,11 @@
                 {
                     "command": "deepnote.addInputDateRangeBlock",
                     "group": "navigation@12",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addTextBlock",
+                    "group": "navigation@13",
                     "when": "notebookType == 'deepnote'"
                 },
                 {

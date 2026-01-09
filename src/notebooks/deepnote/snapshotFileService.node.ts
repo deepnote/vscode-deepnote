@@ -7,6 +7,7 @@ import { Utils } from 'vscode-uri';
 
 import { logger } from '../../platform/logging';
 import type { DeepnoteOutput } from '../../platform/deepnote/deepnoteTypes';
+import { InvalidProjectNameError } from './errors';
 import type { ISnapshotFileService } from './snapshotFileServiceTypes';
 
 export { ISnapshotFileService } from './snapshotFileServiceTypes';
@@ -25,7 +26,7 @@ function slugifyProjectName(name: string): string {
         .replace(/^-|-$/g, '');
 
     if (!slug) {
-        throw new Error('Project name cannot be empty or contain only special characters');
+        throw new InvalidProjectNameError();
     }
 
     return slug;
@@ -214,6 +215,79 @@ export class SnapshotFileService implements ISnapshotFileService {
     }
 
     /**
+     * Ensures the snapshots directory exists, creating it if necessary.
+     * @returns true if directory exists or was created, false on failure
+     */
+    private async ensureSnapshotsDirectory(snapshotsDir: Uri): Promise<boolean> {
+        try {
+            await workspace.fs.stat(snapshotsDir);
+
+            return true;
+        } catch {
+            logger.debug(`[SnapshotFileService] Creating snapshots directory: ${snapshotsDir.fsPath}`);
+
+            try {
+                await workspace.fs.createDirectory(snapshotsDir);
+
+                return true;
+            } catch (error) {
+                logger.error(
+                    `[SnapshotFileService] Failed to create snapshots directory: ${snapshotsDir.fsPath}`,
+                    error
+                );
+
+                return false;
+            }
+        }
+    }
+
+    /**
+     * Prepares snapshot data for writing.
+     * Checks for changes compared to existing snapshot and serializes to YAML.
+     * @returns { latestPath, content } or undefined if no changes detected
+     */
+    private async prepareSnapshotData(
+        projectUri: Uri,
+        projectId: string,
+        projectName: string,
+        projectData: DeepnoteFile
+    ): Promise<{ latestPath: Uri; content: Uint8Array } | undefined> {
+        const latestPath = this.buildSnapshotPath(projectUri, projectId, projectName, 'latest');
+        const snapshotsDir = Uri.joinPath(latestPath, '..');
+
+        // Ensure snapshots directory exists
+        const dirExists = await this.ensureSnapshotsDirectory(snapshotsDir);
+
+        if (!dirExists) {
+            return undefined;
+        }
+
+        // Check if there are changes compared to the existing latest snapshot
+        const hasChanges = await this.hasSnapshotChanges(latestPath, projectData);
+
+        if (!hasChanges) {
+            return undefined;
+        }
+
+        // Prepare snapshot data with timestamp
+        const snapshotData = structuredClone(projectData);
+
+        snapshotData.metadata = snapshotData.metadata || { createdAt: new Date().toISOString() };
+        snapshotData.metadata.modifiedAt = new Date().toISOString();
+
+        const yamlString = yaml.dump(snapshotData, {
+            indent: 2,
+            lineWidth: -1,
+            noRefs: true,
+            sortKeys: false
+        });
+
+        const content = new TextEncoder().encode(yamlString);
+
+        return { latestPath, content };
+    }
+
+    /**
      * Create a snapshot of the project data if there are changes.
      * Compares with the existing latest snapshot and skips if content is identical.
      *
@@ -231,53 +305,17 @@ export class SnapshotFileService implements ISnapshotFileService {
         projectName: string,
         projectData: DeepnoteFile
     ): Promise<Uri | undefined> {
-        const latestPath = this.buildSnapshotPath(projectUri, projectId, projectName, 'latest');
-        const snapshotsDir = Uri.joinPath(latestPath, '..');
+        const prepared = await this.prepareSnapshotData(projectUri, projectId, projectName, projectData);
 
-        // Ensure snapshots directory exists
-        try {
-            await workspace.fs.stat(snapshotsDir);
-        } catch {
-            logger.debug(`[SnapshotFileService] Creating snapshots directory: ${snapshotsDir.fsPath}`);
-
-            try {
-                await workspace.fs.createDirectory(snapshotsDir);
-            } catch (error) {
-                logger.error(
-                    `[SnapshotFileService] Failed to create snapshots directory: ${snapshotsDir.fsPath}`,
-                    error
-                );
-
-                return undefined;
-            }
-        }
-
-        // Check if there are changes compared to the existing latest snapshot
-        const hasChanges = await this.hasSnapshotChanges(latestPath, projectData);
-
-        if (!hasChanges) {
+        if (!prepared) {
             logger.debug(`[SnapshotFileService] No changes detected, skipping snapshot creation`);
 
             return undefined;
         }
 
+        const { latestPath, content } = prepared;
         const timestamp = generateTimestamp();
         const timestampedPath = this.buildSnapshotPath(projectUri, projectId, projectName, timestamp);
-
-        // Prepare snapshot data with timestamp
-        const snapshotData = structuredClone(projectData);
-
-        snapshotData.metadata = snapshotData.metadata || { createdAt: new Date().toISOString() };
-        snapshotData.metadata.modifiedAt = new Date().toISOString();
-
-        const yamlString = yaml.dump(snapshotData, {
-            indent: 2,
-            lineWidth: -1,
-            noRefs: true,
-            sortKeys: false
-        });
-
-        const content = new TextEncoder().encode(yamlString);
 
         // Write to timestamped file first (safe - doesn't touch existing files)
         try {
@@ -321,50 +359,15 @@ export class SnapshotFileService implements ISnapshotFileService {
         projectName: string,
         projectData: DeepnoteFile
     ): Promise<Uri | undefined> {
-        const latestPath = this.buildSnapshotPath(projectUri, projectId, projectName, 'latest');
-        const snapshotsDir = Uri.joinPath(latestPath, '..');
+        const prepared = await this.prepareSnapshotData(projectUri, projectId, projectName, projectData);
 
-        // Ensure snapshots directory exists
-        try {
-            await workspace.fs.stat(snapshotsDir);
-        } catch {
-            logger.debug(`[SnapshotFileService] Creating snapshots directory: ${snapshotsDir.fsPath}`);
-
-            try {
-                await workspace.fs.createDirectory(snapshotsDir);
-            } catch (error) {
-                logger.error(
-                    `[SnapshotFileService] Failed to create snapshots directory: ${snapshotsDir.fsPath}`,
-                    error
-                );
-
-                return undefined;
-            }
-        }
-
-        // Check if there are changes compared to the existing latest snapshot
-        const hasChanges = await this.hasSnapshotChanges(latestPath, projectData);
-
-        if (!hasChanges) {
+        if (!prepared) {
             logger.debug(`[SnapshotFileService] No changes detected, skipping latest snapshot update`);
 
             return undefined;
         }
 
-        // Prepare snapshot data with timestamp
-        const snapshotData = structuredClone(projectData);
-
-        snapshotData.metadata = snapshotData.metadata || { createdAt: new Date().toISOString() };
-        snapshotData.metadata.modifiedAt = new Date().toISOString();
-
-        const yamlString = yaml.dump(snapshotData, {
-            indent: 2,
-            lineWidth: -1,
-            noRefs: true,
-            sortKeys: false
-        });
-
-        const content = new TextEncoder().encode(yamlString);
+        const { latestPath, content } = prepared;
 
         // Write only to latest file (no timestamped copy for partial runs)
         try {

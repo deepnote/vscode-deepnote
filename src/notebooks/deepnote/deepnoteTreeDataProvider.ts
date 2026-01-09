@@ -18,6 +18,9 @@ import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/
 import { readDeepnoteProjectFile } from './deepnoteProjectUtils';
 import { ILogger } from '../../platform/logging/types';
 
+/** File suffix for snapshot files, used to filter them from the explorer */
+const SNAPSHOT_FILE_SUFFIX = '.snapshot.deepnote';
+
 /**
  * Comparator function for sorting tree items alphabetically by label (case-insensitive)
  */
@@ -203,7 +206,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         for (const workspaceFolder of workspace.workspaceFolders || []) {
             const pattern = new RelativePattern(workspaceFolder, '**/*.deepnote');
             const files = await workspace.findFiles(pattern);
-            const projectFiles = files.filter((file) => !file.path.endsWith('.snapshot.deepnote'));
+            const projectFiles = files.filter((file) => !file.path.endsWith(SNAPSHOT_FILE_SUFFIX));
 
             for (const file of projectFiles) {
                 try {
@@ -317,7 +320,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         }
 
         this.fileWatcher.onDidChange((uri) => {
-            if (uri.path.endsWith('.snapshot.deepnote')) {
+            if (uri.path.endsWith(SNAPSHOT_FILE_SUFFIX)) {
                 return;
             }
             // Use granular refresh for file changes
@@ -325,7 +328,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         });
 
         this.fileWatcher.onDidCreate((uri) => {
-            if (uri.path.endsWith('.snapshot.deepnote')) {
+            if (uri.path.endsWith(SNAPSHOT_FILE_SUFFIX)) {
                 return;
             }
             // New file created, do full refresh
@@ -333,7 +336,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         });
 
         this.fileWatcher.onDidDelete((uri) => {
-            if (uri.path.endsWith('.snapshot.deepnote')) {
+            if (uri.path.endsWith(SNAPSHOT_FILE_SUFFIX)) {
                 return;
             }
             // File deleted, clear both caches and do full refresh

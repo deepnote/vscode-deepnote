@@ -122,14 +122,22 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
             // Merge outputs from snapshot if snapshots are enabled
             if (this.snapshotFileService?.isSnapshotsEnabled()) {
-                const snapshotOutputs = await this.snapshotFileService.readSnapshot(projectId);
+                try {
+                    const snapshotOutputs = await this.snapshotFileService.readSnapshot(projectId);
 
-                if (snapshotOutputs) {
-                    logger.debug(`DeepnoteSerializer: Merging ${snapshotOutputs.size} outputs from snapshot`);
-                    const blocksWithOutputs = structuredClone(selectedNotebook.blocks ?? []);
-                    this.snapshotFileService.mergeOutputsIntoBlocks(blocksWithOutputs, snapshotOutputs);
+                    if (snapshotOutputs) {
+                        logger.debug(`DeepnoteSerializer: Merging ${snapshotOutputs.size} outputs from snapshot`);
+                        const blocksWithOutputs = structuredClone(selectedNotebook.blocks ?? []);
+                        this.snapshotFileService.mergeOutputsIntoBlocks(blocksWithOutputs, snapshotOutputs);
 
-                    cells = this.converter.convertBlocksToCells(blocksWithOutputs);
+                        cells = this.converter.convertBlocksToCells(blocksWithOutputs);
+                    }
+                } catch (error) {
+                    logger.warn(
+                        `DeepnoteSerializer: Failed to merge snapshot outputs for project ${projectId}, using baseline cells`,
+                        error
+                    );
+                    // Fall back to baseline cells (already set above)
                 }
             }
 

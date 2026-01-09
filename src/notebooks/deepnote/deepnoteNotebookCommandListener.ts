@@ -414,7 +414,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
 
         const items: (QuickPickItem & { textBlockType: TextBlockType })[] = TEXT_BLOCK_TYPES.map((textBlockType) => {
             const label = TEXT_BLOCK_TYPE_LABELS[textBlockType];
-            const description = l10n.t('Add a {0} text block', textBlockType);
+            const description = l10n.t('Add a {0} text block', label);
             return {
                 label,
                 description,
@@ -477,7 +477,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             edit.set(document.uri, [nbEdit]);
         });
         if (result !== true) {
-            throw new WrappedError(l10n.t('Failed to insert text block'));
+            throw new Error(l10n.t('Failed to insert text block'));
         }
 
         const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);

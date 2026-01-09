@@ -7,7 +7,7 @@ import { Utils } from 'vscode-uri';
 
 import { logger } from '../../platform/logging';
 import type { DeepnoteOutput } from '../../platform/deepnote/deepnoteTypes';
-import { InvalidProjectNameError } from './errors';
+import { InvalidProjectNameError } from '../../platform/errors/invalidProjectNameError';
 import type { ISnapshotFileService } from './snapshotFileServiceTypes';
 
 export { ISnapshotFileService } from './snapshotFileServiceTypes';
@@ -18,6 +18,10 @@ export { ISnapshotFileService } from './snapshotFileServiceTypes';
  * @throws Error if the result is empty after transformation
  */
 function slugifyProjectName(name: string): string {
+    if (typeof name !== 'string' || !name.trim()) {
+        throw new InvalidProjectNameError();
+    }
+
     const slug = name
         .toLowerCase()
         .replace(/\s+/g, '-')

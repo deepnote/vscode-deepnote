@@ -22,6 +22,13 @@ import { ILogger } from '../../platform/logging/types';
 const SNAPSHOT_FILE_SUFFIX = '.snapshot.deepnote';
 
 /**
+ * Checks if a URI represents a snapshot file
+ */
+function isSnapshotFile(uri: Uri): boolean {
+    return uri.path.endsWith(SNAPSHOT_FILE_SUFFIX);
+}
+
+/**
  * Comparator function for sorting tree items alphabetically by label (case-insensitive)
  */
 export function compareTreeItemsByLabel(a: DeepnoteTreeItem, b: DeepnoteTreeItem): number {
@@ -320,7 +327,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         }
 
         this.fileWatcher.onDidChange((uri) => {
-            if (uri.path.endsWith(SNAPSHOT_FILE_SUFFIX)) {
+            if (isSnapshotFile(uri)) {
                 return;
             }
             // Use granular refresh for file changes
@@ -328,7 +335,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         });
 
         this.fileWatcher.onDidCreate((uri) => {
-            if (uri.path.endsWith(SNAPSHOT_FILE_SUFFIX)) {
+            if (isSnapshotFile(uri)) {
                 return;
             }
             // New file created, do full refresh
@@ -336,7 +343,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         });
 
         this.fileWatcher.onDidDelete((uri) => {
-            if (uri.path.endsWith(SNAPSHOT_FILE_SUFFIX)) {
+            if (isSnapshotFile(uri)) {
                 return;
             }
             // File deleted, clear both caches and do full refresh

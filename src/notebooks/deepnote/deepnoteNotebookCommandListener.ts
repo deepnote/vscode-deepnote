@@ -474,7 +474,9 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         );
 
         const selected = await window.showQuickPick(items, {
-            placeHolder: l10n.t('Select an input block type')
+            placeHolder: l10n.t('Select an input block type'),
+            matchOnDescription: true,
+            matchOnDetail: true
         });
 
         if (selected == null) {

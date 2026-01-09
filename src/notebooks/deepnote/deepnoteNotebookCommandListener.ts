@@ -402,9 +402,9 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
     public async addTextBlockThroughPicker(): Promise<void> {
         const TEXT_BLOCK_TYPE_LABELS = {
             'text-cell-p': l10n.t('Paragraph'),
-            'text-cell-h1': l10n.t('Header 1'),
-            'text-cell-h2': l10n.t('Header 2'),
-            'text-cell-h3': l10n.t('Header 3')
+            'text-cell-h1': l10n.t('Heading 1'),
+            'text-cell-h2': l10n.t('Heading 2'),
+            'text-cell-h3': l10n.t('Heading 3')
         } as const satisfies Record<TextBlockType, string>;
 
         const editor = window.activeNotebookEditor;

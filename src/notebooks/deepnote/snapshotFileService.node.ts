@@ -2,7 +2,7 @@ import type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
 import fastDeepEqual from 'fast-deep-equal';
 import { injectable } from 'inversify';
 import * as yaml from 'js-yaml';
-import { RelativePattern, Uri, workspace } from 'vscode';
+import { FileType, RelativePattern, Uri, workspace } from 'vscode';
 import { Utils } from 'vscode-uri';
 
 import { logger } from '../../platform/logging';
@@ -102,12 +102,15 @@ export class SnapshotFileService implements ISnapshotFileService {
             const latestFiles = await workspace.findFiles(latestPattern, null, 1);
 
             if (latestFiles.length > 0) {
-                logger.debug(`[SnapshotFileService] Found latest snapshot: ${latestFiles[0].fsPath}`);
+                logger.debug(`[SnapshotFileService] Found latest snapshot: ${Utils.basename(latestFiles[0])}`);
 
                 try {
                     return await this.parseSnapshotFile(latestFiles[0]);
                 } catch (error) {
-                    logger.error(`[SnapshotFileService] Failed to parse snapshot: ${latestFiles[0].fsPath}`, error);
+                    logger.error(
+                        `[SnapshotFileService] Failed to parse snapshot: ${Utils.basename(latestFiles[0])}`,
+                        error
+                    );
 
                     return undefined;
                 }
@@ -146,12 +149,12 @@ export class SnapshotFileService implements ISnapshotFileService {
 
         const newestFile = sortedFiles[0];
 
-        logger.debug(`[SnapshotFileService] Using timestamped snapshot: ${newestFile.fsPath}`);
+        logger.debug(`[SnapshotFileService] Using timestamped snapshot: ${Utils.basename(newestFile)}`);
 
         try {
             return await this.parseSnapshotFile(newestFile);
         } catch (error) {
-            logger.error(`[SnapshotFileService] Failed to parse snapshot: ${newestFile.fsPath}`, error);
+            logger.error(`[SnapshotFileService] Failed to parse snapshot: ${Utils.basename(newestFile)}`, error);
 
             return undefined;
         }
@@ -172,14 +175,14 @@ export class SnapshotFileService implements ISnapshotFileService {
 
             snapshotData = yaml.load(contentString);
         } catch (error) {
-            logger.error(`[SnapshotFileService] Failed to read or parse snapshot file: ${path.fsPath}`, error);
+            logger.error(`[SnapshotFileService] Failed to read or parse snapshot file: ${Utils.basename(path)}`, error);
 
             return outputsMap;
         }
 
         // Validate snapshotData is an object
         if (typeof snapshotData !== 'object' || snapshotData === null) {
-            logger.error(`[SnapshotFileService] Invalid snapshot structure (not an object): ${path.fsPath}`);
+            logger.error(`[SnapshotFileService] Invalid snapshot structure (not an object): ${Utils.basename(path)}`);
 
             return outputsMap;
         }
@@ -189,7 +192,7 @@ export class SnapshotFileService implements ISnapshotFileService {
 
         // Validate notebooks is an array
         if (!Array.isArray(notebooks)) {
-            logger.debug(`[SnapshotFileService] No notebooks array in snapshot: ${path.fsPath}`);
+            logger.debug(`[SnapshotFileService] No notebooks array in snapshot: ${Utils.basename(path)}`);
 
             return outputsMap;
         }
@@ -224,11 +227,21 @@ export class SnapshotFileService implements ISnapshotFileService {
      */
     private async ensureSnapshotsDirectory(snapshotsDir: Uri): Promise<boolean> {
         try {
-            await workspace.fs.stat(snapshotsDir);
+            const stat = await workspace.fs.stat(snapshotsDir);
+
+            if (stat.type !== FileType.Directory) {
+                logger.error(
+                    `[SnapshotFileService] Snapshots path exists but is not a directory: ${Utils.basename(
+                        snapshotsDir
+                    )}`
+                );
+
+                return false;
+            }
 
             return true;
         } catch {
-            logger.debug(`[SnapshotFileService] Creating snapshots directory: ${snapshotsDir.fsPath}`);
+            logger.debug(`[SnapshotFileService] Creating snapshots directory: ${Utils.basename(snapshotsDir)}`);
 
             try {
                 await workspace.fs.createDirectory(snapshotsDir);
@@ -236,7 +249,7 @@ export class SnapshotFileService implements ISnapshotFileService {
                 return true;
             } catch (error) {
                 logger.error(
-                    `[SnapshotFileService] Failed to create snapshots directory: ${snapshotsDir.fsPath}`,
+                    `[SnapshotFileService] Failed to create snapshots directory: ${Utils.basename(snapshotsDir)}`,
                     error
                 );
 
@@ -256,7 +269,19 @@ export class SnapshotFileService implements ISnapshotFileService {
         projectName: string,
         projectData: DeepnoteFile
     ): Promise<{ latestPath: Uri; content: Uint8Array } | undefined> {
-        const latestPath = this.buildSnapshotPath(projectUri, projectId, projectName, 'latest');
+        let latestPath: Uri;
+
+        try {
+            latestPath = this.buildSnapshotPath(projectUri, projectId, projectName, 'latest');
+        } catch (error) {
+            if (error instanceof InvalidProjectNameError) {
+                logger.warn('[SnapshotFileService] Skipping snapshots due to invalid project name', error);
+
+                return undefined;
+            }
+            throw error;
+        }
+
         const snapshotsDir = Uri.joinPath(latestPath, '..');
 
         // Ensure snapshots directory exists
@@ -324,10 +349,10 @@ export class SnapshotFileService implements ISnapshotFileService {
         // Write to timestamped file first (safe - doesn't touch existing files)
         try {
             await workspace.fs.writeFile(timestampedPath, content);
-            logger.debug(`[SnapshotFileService] Wrote timestamped snapshot: ${timestampedPath.fsPath}`);
+            logger.debug(`[SnapshotFileService] Wrote timestamped snapshot: ${Utils.basename(timestampedPath)}`);
         } catch (error) {
             logger.error(
-                `[SnapshotFileService] Failed to write timestamped snapshot: ${timestampedPath.fsPath}`,
+                `[SnapshotFileService] Failed to write timestamped snapshot: ${Utils.basename(timestampedPath)}`,
                 error
             );
 
@@ -338,11 +363,12 @@ export class SnapshotFileService implements ISnapshotFileService {
         // If this fails, the timestamped snapshot still exists as a recovery point
         try {
             await workspace.fs.writeFile(latestPath, content);
-            logger.debug(`[SnapshotFileService] Updated latest snapshot: ${latestPath.fsPath}`);
+            logger.debug(`[SnapshotFileService] Updated latest snapshot: ${Utils.basename(latestPath)}`);
         } catch (error) {
             logger.warn(
-                `[SnapshotFileService] Wrote timestamped snapshot but failed to update latest pointer: ${latestPath.fsPath}. ` +
-                    `Timestamped snapshot available at: ${timestampedPath.fsPath}`,
+                `[SnapshotFileService] Wrote timestamped snapshot but failed to update latest pointer: ${Utils.basename(
+                    latestPath
+                )}. ` + `Timestamped snapshot available at: ${Utils.basename(timestampedPath)}`,
                 error
             );
             // Still return timestampedPath since the snapshot data was saved successfully
@@ -376,11 +402,14 @@ export class SnapshotFileService implements ISnapshotFileService {
         // Write only to latest file (no timestamped copy for partial runs)
         try {
             await workspace.fs.writeFile(latestPath, content);
-            logger.debug(`[SnapshotFileService] Updated latest snapshot: ${latestPath.fsPath}`);
+            logger.debug(`[SnapshotFileService] Updated latest snapshot: ${Utils.basename(latestPath)}`);
 
             return latestPath;
         } catch (error) {
-            logger.error(`[SnapshotFileService] Failed to update latest snapshot: ${latestPath.fsPath}`, error);
+            logger.error(
+                `[SnapshotFileService] Failed to update latest snapshot: ${Utils.basename(latestPath)}`,
+                error
+            );
 
             return undefined;
         }
@@ -430,8 +459,14 @@ export class SnapshotFileService implements ISnapshotFileService {
         let mergedCount = 0;
 
         for (const block of blocks) {
-            if (block.id && outputs.has(block.id)) {
-                block.outputs = outputs.get(block.id);
+            if (!block.id) {
+                continue;
+            }
+
+            const blockOutputs = outputs.get(block.id);
+
+            if (blockOutputs !== undefined) {
+                block.outputs = blockOutputs;
                 mergedCount++;
             }
         }

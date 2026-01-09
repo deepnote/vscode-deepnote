@@ -423,7 +423,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         });
 
         const selected = await window.showQuickPick(items, {
-            placeHolder: l10n.t('Select an environment for this notebook'),
+            placeHolder: l10n.t('Select a text block type'),
             matchOnDescription: true,
             matchOnDetail: true
         });

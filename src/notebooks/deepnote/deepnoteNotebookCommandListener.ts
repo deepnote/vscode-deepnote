@@ -37,16 +37,19 @@ import {
 import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
 import { Pocket } from '../../platform/deepnote/pocket';
 
-export type InputBlockType =
-    | 'input-text'
-    | 'input-textarea'
-    | 'input-select'
-    | 'input-slider'
-    | 'input-checkbox'
-    | 'input-date'
-    | 'input-date-range'
-    | 'input-file'
-    | 'button';
+export const INPUT_BLOCK_TYPES = [
+    'input-text',
+    'input-textarea',
+    'input-select',
+    'input-slider',
+    'input-checkbox',
+    'input-date',
+    'input-date-range',
+    'input-file',
+    'button'
+] as const;
+
+export type InputBlockType = (typeof INPUT_BLOCK_TYPES)[number];
 
 export const TEXT_BLOCK_TYPES = ['text-cell-p', 'text-cell-h1', 'text-cell-h2', 'text-cell-h3'] as const;
 
@@ -441,22 +444,34 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
     }
 
     public async addInputBlockThroughPicker(): Promise<void> {
+        const INPUT_BLOCK_TYPE_LABELS = {
+            'input-text': l10n.t('Text Input'),
+            'input-textarea': l10n.t('Textarea'),
+            'input-select': l10n.t('Select Dropdown'),
+            'input-slider': l10n.t('Slider'),
+            'input-checkbox': l10n.t('Checkbox'),
+            'input-date': l10n.t('Date'),
+            'input-date-range': l10n.t('Date Range'),
+            'input-file': l10n.t('File Upload'),
+            button: l10n.t('Button')
+        } as const satisfies Record<InputBlockType, string>;
+
         const editor = window.activeNotebookEditor;
         if (!editor) {
             throw new Error(l10n.t('No active notebook editor found'));
         }
 
-        const items: (QuickPickItem & { inputBlockType: InputBlockType })[] = [
-            { label: l10n.t('Text Input'), inputBlockType: 'input-text' },
-            { label: l10n.t('Textarea'), inputBlockType: 'input-textarea' },
-            { label: l10n.t('Select Dropdown'), inputBlockType: 'input-select' },
-            { label: l10n.t('Slider'), inputBlockType: 'input-slider' },
-            { label: l10n.t('Checkbox'), inputBlockType: 'input-checkbox' },
-            { label: l10n.t('Date'), inputBlockType: 'input-date' },
-            { label: l10n.t('Date Range'), inputBlockType: 'input-date-range' },
-            { label: l10n.t('File Upload'), inputBlockType: 'input-file' },
-            { label: l10n.t('Button'), inputBlockType: 'button' }
-        ];
+        const items: (QuickPickItem & { inputBlockType: InputBlockType })[] = INPUT_BLOCK_TYPES.map(
+            (inputBlockType) => {
+                const label = INPUT_BLOCK_TYPE_LABELS[inputBlockType];
+                const description = l10n.t('Add a {0} block', label);
+                return {
+                    label,
+                    description,
+                    inputBlockType
+                };
+            }
+        );
 
         const selected = await window.showQuickPick(items, {
             placeHolder: l10n.t('Select an input block type')

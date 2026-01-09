@@ -405,9 +405,9 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
     public async addTextBlockThroughPicker(): Promise<void> {
         const TEXT_BLOCK_TYPE_LABELS = {
             'text-cell-p': l10n.t('Paragraph'),
-            'text-cell-h1': l10n.t('Header 1'),
-            'text-cell-h2': l10n.t('Header 2'),
-            'text-cell-h3': l10n.t('Header 3')
+            'text-cell-h1': l10n.t('Heading 1'),
+            'text-cell-h2': l10n.t('Heading 2'),
+            'text-cell-h3': l10n.t('Heading 3')
         } as const satisfies Record<TextBlockType, string>;
 
         const editor = window.activeNotebookEditor;
@@ -417,7 +417,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
 
         const items: (QuickPickItem & { textBlockType: TextBlockType })[] = TEXT_BLOCK_TYPES.map((textBlockType) => {
             const label = TEXT_BLOCK_TYPE_LABELS[textBlockType];
-            const description = l10n.t('Add a {0} text block', textBlockType);
+            const description = l10n.t('Add a {0} text block', label);
             return {
                 label,
                 description,
@@ -426,7 +426,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         });
 
         const selected = await window.showQuickPick(items, {
-            placeHolder: l10n.t('Select an environment for this notebook'),
+            placeHolder: l10n.t('Select a text block type'),
             matchOnDescription: true,
             matchOnDetail: true
         });
@@ -511,7 +511,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             edit.set(document.uri, [nbEdit]);
         });
         if (result !== true) {
-            throw new WrappedError(l10n.t('Failed to insert text block'));
+            throw new Error(l10n.t('Failed to insert text block'));
         }
 
         const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);

@@ -140,7 +140,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     needs: [build]
-    if: "!contains(github.event.head_commit.message, '[skip-integration]')"
+    # Run on all PRs and main branch pushes
+    # Can be disabled by adding [skip-integration] to PR title or commit message
+    if: "!contains(github.event.pull_request.title || github.event.head_commit.message || '', '[skip-integration]')"
     steps:
       - name: Checkout
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
@@ -160,7 +162,8 @@ jobs:
       - name: Install npm dependencies
         run: |
           npm ci --prefer-offline --no-audit
-          # Verify Tailwind CSS native modules are installed for Linux
+          # Verify Tailwind CSS native modules are installed for Linux (npm optional deps bug)
+          # See: https://github.com/npm/cli/issues/4828
           node -e "try { require('lightningcss'); } catch { process.exit(1); }" 2>/dev/null || npm install lightningcss-linux-x64-gnu
           node -e "try { require('@tailwindcss/oxide'); } catch { process.exit(1); }" 2>/dev/null || npm install @tailwindcss/oxide-linux-x64-gnu
 
@@ -184,11 +187,8 @@ jobs:
         run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" npm run test:integration
         env:
           VSC_JUPYTER_CI_TEST: '1'
-          TEST_FILES_SUFFIX: '*.vscode.test,*.vscode.common.test'
-          CODE_TESTS_WORKSPACE: 'src/test/datascience'
-          DISPLAY: ':99'
 
-      - name: Upload test results on failure
+      - name: Upload test artifacts on failure
         if: failure()
         uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4
         with:
@@ -197,16 +197,6 @@ jobs:
             test-results.xml
             logs/
             **/*.png
-          retention-days: 7
-
-      - name: Upload screenshots on failure
-        if: failure()
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4
-        with:
-          name: integration-test-screenshots
-          path: |
-            **/*screenshot*.png
-            **/*Screen*.png
           retention-days: 7
           if-no-files-found: ignore
 

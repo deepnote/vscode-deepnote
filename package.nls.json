@@ -268,6 +268,7 @@
     "deepnote.commands.addInputDateRangeBlock.title": "Add Input Date Range Block",
     "deepnote.commands.addInputFileBlock.title": "Add Input File Block",
     "deepnote.commands.addButtonBlock.title": "Add Button Block",
+    "deepnote.commands.addInputBlock.title": "Add Input Block",
     "deepnote.commands.addTextBlock.title": "Add Text Block",
     "deepnote.commands.addTextBlockParagraph.title": "Add Paragraph Block",
     "deepnote.commands.addTextBlockHeading1.title": "Add Heading 1 Block",

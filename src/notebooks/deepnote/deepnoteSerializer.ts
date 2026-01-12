@@ -7,8 +7,7 @@ import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
 import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
-import { ISnapshotMetadataService, ISnapshotMetadataServiceFull } from './snapshotMetadataService';
-import { ISnapshotFileService } from './snapshotFileServiceTypes';
+import { ISnapshotService } from './snapshotService';
 import { computeHash } from '../../platform/common/crypto';
 
 export type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
@@ -57,8 +56,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
     constructor(
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
-        @inject(ISnapshotMetadataService) @optional() private readonly snapshotService?: ISnapshotMetadataServiceFull,
-        @inject(ISnapshotFileService) @optional() private readonly snapshotFileService?: ISnapshotFileService
+        @inject(ISnapshotService) @optional() private readonly snapshotService?: ISnapshotService
     ) {}
 
     /**
@@ -121,13 +119,13 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             logger.debug(`DeepnoteSerializer: Converted ${cells.length} cells from notebook blocks`);
 
             // Merge outputs from snapshot if snapshots are enabled
-            if (this.snapshotFileService?.isSnapshotsEnabled()) {
+            if (this.snapshotService?.isSnapshotsEnabled()) {
                 try {
-                    const snapshotOutputs = await this.snapshotFileService.readSnapshot(projectId);
+                    const snapshotOutputs = await this.snapshotService.readSnapshot(projectId);
 
                     if (snapshotOutputs) {
                         logger.debug(`DeepnoteSerializer: Merging ${snapshotOutputs.size} outputs from snapshot`);
-                        const blocksWithOutputs = this.snapshotFileService.mergeOutputsIntoBlocks(
+                        const blocksWithOutputs = this.snapshotService.mergeOutputsIntoBlocks(
                             selectedNotebook.blocks ?? [],
                             snapshotOutputs
                         );
@@ -225,10 +223,10 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             await this.addSnapshotMetadataToBlocks(blocks, data);
 
             // Handle snapshot mode: strip outputs from main file (snapshots are created on execution, not save)
-            if (this.snapshotFileService?.isSnapshotsEnabled()) {
+            if (this.snapshotService?.isSnapshotsEnabled()) {
                 // Strip outputs from main file blocks - snapshots are created during cell execution
                 // Also clone to remove circular references that may cause yaml.dump to fail
-                const strippedBlocks = this.snapshotFileService.stripOutputsFromBlocks(blocks);
+                const strippedBlocks = this.snapshotService.stripOutputsFromBlocks(blocks);
                 notebook.blocks = cloneWithoutCircularRefs<DeepnoteBlock[]>(strippedBlocks);
                 logger.debug('SerializeNotebook: Stripped outputs from main file (snapshot mode)');
             } else {

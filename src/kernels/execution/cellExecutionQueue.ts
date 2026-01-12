@@ -325,13 +325,9 @@ export class CellExecutionQueue implements Disposable {
             }
         }
 
-        // Notify snapshot service that execution is complete
-        if (this.snapshotService && this.notebook) {
-            try {
-                await this.snapshotService.onExecutionComplete(this.notebook.uri.toString());
-            } catch (error) {
-                logger.warn('[CellExecutionQueue] Failed to handle execution complete for snapshots', error);
-            }
+        // Notify listeners that execution queue is complete
+        if (this.notebook) {
+            notebookCellExecutions.notifyQueueComplete(this.notebook.uri.toString());
         }
     }
 }

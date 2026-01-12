@@ -4,20 +4,54 @@ import { FileType, Uri, WorkspaceConfiguration, WorkspaceFolder } from 'vscode';
 
 import type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
 
-import { SnapshotFileService } from './snapshotFileService.node';
+import { IEnvironmentCapture } from './environmentCapture.node';
+import { SnapshotService } from './snapshotService';
 import type { DeepnoteOutput } from '../../platform/deepnote/deepnoteTypes';
+import { IDisposableRegistry } from '../../platform/common/types';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 
-suite('SnapshotFileService', () => {
-    let service: SnapshotFileService;
+suite('SnapshotService', () => {
+    let service: SnapshotService;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let serviceAny: any;
+    let mockEnvironmentCapture: IEnvironmentCapture;
+    let mockDisposables: IDisposableRegistry;
 
     setup(() => {
         resetVSCodeMocks();
-        service = new SnapshotFileService();
+        mockEnvironmentCapture = mock<IEnvironmentCapture>();
+        mockDisposables = [];
+        service = new SnapshotService(instance(mockEnvironmentCapture), mockDisposables);
         serviceAny = service;
     });
+
+    function createProjectData(projectId = 'test-project-id-123', projectName = 'My Project'): DeepnoteFile {
+        return {
+            metadata: {
+                createdAt: '2025-01-01T00:00:00Z'
+            },
+            version: '1.0',
+            project: {
+                id: projectId,
+                name: projectName,
+                notebooks: [
+                    {
+                        id: 'notebook-1',
+                        name: 'Notebook 1',
+                        blocks: [
+                            {
+                                id: 'block-1',
+                                type: 'code',
+                                sortingKey: 'a0',
+                                content: 'print(1)',
+                                outputs: [{ output_type: 'stream', text: '1' }]
+                            }
+                        ]
+                    }
+                ]
+            }
+        };
+    }
 
     suite('buildSnapshotPath', () => {
         test('should build correct path for latest variant', () => {
@@ -378,16 +412,6 @@ suite('SnapshotFileService', () => {
 
             assert.isFalse(result);
         });
-
-        test('should return false by default when setting is not configured', () => {
-            const mockConfig = mock<WorkspaceConfiguration>();
-            when(mockConfig.get<boolean>('snapshots.enabled', false)).thenReturn(false);
-            when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote')).thenReturn(instance(mockConfig));
-
-            const result = service.isSnapshotsEnabled();
-
-            assert.isFalse(result);
-        });
     });
 
     suite('readSnapshot', () => {
@@ -568,34 +592,6 @@ project:
         const projectId = 'test-project-id-123';
         const projectName = 'My Project';
 
-        function createProjectData(): DeepnoteFile {
-            return {
-                metadata: {
-                    createdAt: '2025-01-01T00:00:00Z'
-                },
-                version: '1.0',
-                project: {
-                    id: projectId,
-                    name: projectName,
-                    notebooks: [
-                        {
-                            id: 'notebook-1',
-                            name: 'Notebook 1',
-                            blocks: [
-                                {
-                                    id: 'block-1',
-                                    type: 'code',
-                                    sortingKey: 'a0',
-                                    content: 'print(1)',
-                                    outputs: [{ output_type: 'stream', text: '1' }]
-                                }
-                            ]
-                        }
-                    ]
-                }
-            };
-        }
-
         test('should create snapshot files when there are changes', async () => {
             const projectData = createProjectData();
 
@@ -714,34 +710,6 @@ project:
         const projectId = 'test-project-id-123';
         const projectName = 'My Project';
 
-        function createProjectData(): DeepnoteFile {
-            return {
-                metadata: {
-                    createdAt: '2025-01-01T00:00:00Z'
-                },
-                version: '1.0',
-                project: {
-                    id: projectId,
-                    name: projectName,
-                    notebooks: [
-                        {
-                            id: 'notebook-1',
-                            name: 'Notebook 1',
-                            blocks: [
-                                {
-                                    id: 'block-1',
-                                    type: 'code',
-                                    sortingKey: 'a0',
-                                    content: 'print(1)',
-                                    outputs: [{ output_type: 'stream', text: '1' }]
-                                }
-                            ]
-                        }
-                    ]
-                }
-            };
-        }
-
         test('should update only latest snapshot file', async () => {
             const projectData = createProjectData();
 
@@ -827,6 +795,287 @@ project:
 
             assert.isDefined(result);
             assert.include(result!.fsPath, 'latest');
+        });
+    });
+
+    // Metadata tracking tests (now using serviceAny for private methods)
+    suite('execution metadata tracking', () => {
+        const notebookUri = 'file:///path/to/notebook.deepnote';
+        const cellId = 'cell-123';
+
+        suite('recordCellExecutionStart (private)', () => {
+            test('should record cell execution start time', () => {
+                const startTime = Date.now();
+
+                serviceAny.recordCellExecutionStart(notebookUri, cellId, startTime);
+
+                const metadata = service.getBlockExecutionMetadata(notebookUri, cellId);
+                assert.isDefined(metadata);
+                assert.isDefined(metadata!.executionStartedAt);
+                assert.isUndefined(metadata!.executionFinishedAt);
+            });
+
+            test('should initialize notebook execution state', () => {
+                const startTime = Date.now();
+
+                serviceAny.recordCellExecutionStart(notebookUri, cellId, startTime);
+
+                const executionMetadata = service.getExecutionMetadata(notebookUri);
+                // Should not have execution metadata yet since no cells have completed
+                assert.isUndefined(executionMetadata);
+            });
+
+            test('should handle multiple cells in same notebook', () => {
+                const startTime = Date.now();
+
+                serviceAny.recordCellExecutionStart(notebookUri, 'cell-1', startTime);
+                serviceAny.recordCellExecutionStart(notebookUri, 'cell-2', startTime + 1000);
+
+                const metadata1 = service.getBlockExecutionMetadata(notebookUri, 'cell-1');
+                const metadata2 = service.getBlockExecutionMetadata(notebookUri, 'cell-2');
+
+                assert.isDefined(metadata1);
+                assert.isDefined(metadata2);
+                assert.notStrictEqual(metadata1!.executionStartedAt, metadata2!.executionStartedAt);
+            });
+        });
+
+        suite('recordCellExecutionEnd (private)', () => {
+            test('should record successful cell execution end', () => {
+                const startTime = Date.now();
+                const endTime = startTime + 1000;
+
+                serviceAny.recordCellExecutionStart(notebookUri, cellId, startTime);
+                serviceAny.recordCellExecutionEnd(notebookUri, cellId, endTime, true);
+
+                const metadata = service.getBlockExecutionMetadata(notebookUri, cellId);
+                assert.isDefined(metadata);
+                assert.isDefined(metadata!.executionStartedAt);
+                assert.isDefined(metadata!.executionFinishedAt);
+            });
+
+            test('should update execution summary on success', () => {
+                const startTime = Date.now();
+                const endTime = startTime + 1000;
+
+                serviceAny.recordCellExecutionStart(notebookUri, cellId, startTime);
+                serviceAny.recordCellExecutionEnd(notebookUri, cellId, endTime, true);
+
+                const executionMetadata = service.getExecutionMetadata(notebookUri);
+                assert.isDefined(executionMetadata);
+                assert.isDefined(executionMetadata!.summary);
+                assert.strictEqual(executionMetadata!.summary!.blocksExecuted, 1);
+                assert.strictEqual(executionMetadata!.summary!.blocksSucceeded, 1);
+                assert.strictEqual(executionMetadata!.summary!.blocksFailed, 0);
+            });
+
+            test('should update execution summary on failure', () => {
+                const startTime = Date.now();
+                const endTime = startTime + 1000;
+
+                serviceAny.recordCellExecutionStart(notebookUri, cellId, startTime);
+                serviceAny.recordCellExecutionEnd(notebookUri, cellId, endTime, false);
+
+                const executionMetadata = service.getExecutionMetadata(notebookUri);
+                assert.isDefined(executionMetadata);
+                assert.isDefined(executionMetadata!.summary);
+                assert.strictEqual(executionMetadata!.summary!.blocksExecuted, 1);
+                assert.strictEqual(executionMetadata!.summary!.blocksSucceeded, 0);
+                assert.strictEqual(executionMetadata!.summary!.blocksFailed, 1);
+            });
+
+            test('should record error details on failure', () => {
+                const startTime = Date.now();
+                const endTime = startTime + 1000;
+                const error = { name: 'TypeError', message: 'undefined is not a function' };
+
+                serviceAny.recordCellExecutionStart(notebookUri, cellId, startTime);
+                serviceAny.recordCellExecutionEnd(notebookUri, cellId, endTime, false, error);
+
+                const executionMetadata = service.getExecutionMetadata(notebookUri);
+                assert.isDefined(executionMetadata);
+                assert.isDefined(executionMetadata!.error);
+                assert.strictEqual(executionMetadata!.error!.name, 'TypeError');
+                assert.strictEqual(executionMetadata!.error!.message, 'undefined is not a function');
+            });
+
+            test('should accumulate multiple cell executions', () => {
+                const startTime = Date.now();
+
+                // Execute 3 cells: 2 successful, 1 failed
+                serviceAny.recordCellExecutionStart(notebookUri, 'cell-1', startTime);
+                serviceAny.recordCellExecutionEnd(notebookUri, 'cell-1', startTime + 100, true);
+
+                serviceAny.recordCellExecutionStart(notebookUri, 'cell-2', startTime + 200);
+                serviceAny.recordCellExecutionEnd(notebookUri, 'cell-2', startTime + 300, true);
+
+                serviceAny.recordCellExecutionStart(notebookUri, 'cell-3', startTime + 400);
+                serviceAny.recordCellExecutionEnd(notebookUri, 'cell-3', startTime + 500, false);
+
+                const executionMetadata = service.getExecutionMetadata(notebookUri);
+                assert.isDefined(executionMetadata);
+                assert.isDefined(executionMetadata!.summary);
+                assert.strictEqual(executionMetadata!.summary!.blocksExecuted, 3);
+                assert.strictEqual(executionMetadata!.summary!.blocksSucceeded, 2);
+                assert.strictEqual(executionMetadata!.summary!.blocksFailed, 1);
+            });
+
+            test('should calculate total duration', () => {
+                const startTime = Date.now();
+                const endTime = startTime + 5000;
+
+                serviceAny.recordCellExecutionStart(notebookUri, cellId, startTime);
+                serviceAny.recordCellExecutionEnd(notebookUri, cellId, endTime, true);
+
+                const executionMetadata = service.getExecutionMetadata(notebookUri);
+                assert.isDefined(executionMetadata);
+                assert.isDefined(executionMetadata!.summary);
+                assert.strictEqual(executionMetadata!.summary!.totalDurationMs, 5000);
+            });
+        });
+
+        suite('getExecutionMetadata', () => {
+            test('should return undefined for unknown notebook', () => {
+                const metadata = service.getExecutionMetadata('unknown-notebook');
+                assert.isUndefined(metadata);
+            });
+
+            test('should return undefined if no cells have been executed', () => {
+                const startTime = Date.now();
+                serviceAny.recordCellExecutionStart(notebookUri, cellId, startTime);
+
+                const metadata = service.getExecutionMetadata(notebookUri);
+                assert.isUndefined(metadata);
+            });
+
+            test('should include ISO timestamps', () => {
+                const startTime = Date.now();
+                serviceAny.recordCellExecutionStart(notebookUri, cellId, startTime);
+                serviceAny.recordCellExecutionEnd(notebookUri, cellId, startTime + 1000, true);
+
+                const metadata = service.getExecutionMetadata(notebookUri);
+                assert.isDefined(metadata);
+                assert.isDefined(metadata!.startedAt);
+                assert.isDefined(metadata!.finishedAt);
+                // Should be valid ISO date strings
+                assert.doesNotThrow(() => new Date(metadata!.startedAt!));
+                assert.doesNotThrow(() => new Date(metadata!.finishedAt!));
+            });
+        });
+
+        suite('getBlockExecutionMetadata', () => {
+            test('should return undefined for unknown notebook', () => {
+                const metadata = service.getBlockExecutionMetadata('unknown-notebook', cellId);
+                assert.isUndefined(metadata);
+            });
+
+            test('should return undefined for unknown cell', () => {
+                const startTime = Date.now();
+                serviceAny.recordCellExecutionStart(notebookUri, cellId, startTime);
+
+                const metadata = service.getBlockExecutionMetadata(notebookUri, 'unknown-cell');
+                assert.isUndefined(metadata);
+            });
+        });
+
+        suite('clearExecutionState', () => {
+            test('should clear all state for a notebook', () => {
+                const startTime = Date.now();
+                serviceAny.recordCellExecutionStart(notebookUri, cellId, startTime);
+                serviceAny.recordCellExecutionEnd(notebookUri, cellId, startTime + 1000, true);
+
+                service.clearExecutionState(notebookUri);
+
+                const executionMetadata = service.getExecutionMetadata(notebookUri);
+                const blockMetadata = service.getBlockExecutionMetadata(notebookUri, cellId);
+
+                assert.isUndefined(executionMetadata);
+                assert.isUndefined(blockMetadata);
+            });
+
+            test('should only clear state for specified notebook', () => {
+                const startTime = Date.now();
+                const otherNotebookUri = 'file:///other/notebook.deepnote';
+
+                serviceAny.recordCellExecutionStart(notebookUri, cellId, startTime);
+                serviceAny.recordCellExecutionEnd(notebookUri, cellId, startTime + 1000, true);
+
+                serviceAny.recordCellExecutionStart(otherNotebookUri, 'other-cell', startTime);
+                serviceAny.recordCellExecutionEnd(otherNotebookUri, 'other-cell', startTime + 1000, true);
+
+                service.clearExecutionState(notebookUri);
+
+                // First notebook should be cleared
+                assert.isUndefined(service.getExecutionMetadata(notebookUri));
+
+                // Second notebook should still have state
+                assert.isDefined(service.getExecutionMetadata(otherNotebookUri));
+            });
+        });
+
+        suite('multiple notebooks', () => {
+            test('should track state independently for different notebooks', () => {
+                const notebook1 = 'file:///notebook1.deepnote';
+                const notebook2 = 'file:///notebook2.deepnote';
+                const startTime = Date.now();
+
+                // Execute cells in different notebooks
+                serviceAny.recordCellExecutionStart(notebook1, 'cell-1', startTime);
+                serviceAny.recordCellExecutionEnd(notebook1, 'cell-1', startTime + 100, true);
+
+                serviceAny.recordCellExecutionStart(notebook2, 'cell-2', startTime);
+                serviceAny.recordCellExecutionEnd(notebook2, 'cell-2', startTime + 200, false);
+
+                const metadata1 = service.getExecutionMetadata(notebook1);
+                const metadata2 = service.getExecutionMetadata(notebook2);
+
+                assert.isDefined(metadata1);
+                assert.isDefined(metadata1!.summary);
+                assert.strictEqual(metadata1!.summary!.blocksSucceeded, 1);
+                assert.strictEqual(metadata1!.summary!.blocksFailed, 0);
+
+                assert.isDefined(metadata2);
+                assert.isDefined(metadata2!.summary);
+                assert.strictEqual(metadata2!.summary!.blocksSucceeded, 0);
+                assert.strictEqual(metadata2!.summary!.blocksFailed, 1);
+            });
+        });
+
+        suite('setRunAllMode / isRunAllMode', () => {
+            test('should return false by default', () => {
+                assert.isFalse(service.isRunAllMode(notebookUri));
+            });
+
+            test('should return true after setting run all mode', () => {
+                service.setRunAllMode(notebookUri);
+
+                assert.isTrue(service.isRunAllMode(notebookUri));
+            });
+
+            test('should track run all mode per notebook', () => {
+                const notebook1 = 'file:///notebook1.deepnote';
+                const notebook2 = 'file:///notebook2.deepnote';
+
+                service.setRunAllMode(notebook1);
+
+                assert.isTrue(service.isRunAllMode(notebook1));
+                assert.isFalse(service.isRunAllMode(notebook2));
+            });
+        });
+
+        suite('captureEnvironmentBeforeExecution', () => {
+            test('should not throw for valid notebook URI', async () => {
+                await service.captureEnvironmentBeforeExecution(notebookUri);
+                // Should complete without error
+            });
+        });
+
+        suite('getEnvironmentMetadata', () => {
+            test('should return undefined when no environment captured', async () => {
+                const result = await service.getEnvironmentMetadata(notebookUri);
+
+                assert.isUndefined(result);
+            });
         });
     });
 });

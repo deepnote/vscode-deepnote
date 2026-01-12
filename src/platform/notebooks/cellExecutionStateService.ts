@@ -38,6 +38,16 @@ export interface NotebookCellExecutionStateChangeEvent {
     readonly state: NotebookCellExecutionState;
 }
 
+/**
+ * An event describing completion of a notebook's cell execution queue.
+ */
+export interface NotebookQueueCompletionEvent {
+    /**
+     * The URI of the notebook whose execution queue has completed.
+     */
+    readonly notebookUri: string;
+}
+
 const STATE_NAMES: Record<NotebookCellExecutionState, string> = {
     [NotebookCellExecutionState.Idle]: 'Idle',
     [NotebookCellExecutionState.Pending]: 'Pending',
@@ -46,6 +56,7 @@ const STATE_NAMES: Record<NotebookCellExecutionState, string> = {
 
 export namespace notebookCellExecutions {
     const eventEmitter = trackDisposable(new EventEmitter<NotebookCellExecutionStateChangeEvent>());
+    const queueCompletionEmitter = trackDisposable(new EventEmitter<NotebookQueueCompletionEvent>());
 
     /**
      * An {@link Event} which fires when the execution state of a cell has changed.
@@ -53,6 +64,21 @@ export namespace notebookCellExecutions {
     // todo@API this is an event that is fired for a property that cells don't have and that makes me wonder
     // how a correct consumer works, e.g the consumer could have been late and missed an event?
     export const onDidChangeNotebookCellExecutionState = eventEmitter.event;
+
+    /**
+     * An {@link Event} which fires when a notebook's cell execution queue has completed.
+     * This is fired after all queued cells have finished executing (success, error, or cancel).
+     */
+    export const onDidCompleteQueueExecution = queueCompletionEmitter.event;
+
+    /**
+     * Notify listeners that a notebook's cell execution queue has completed.
+     * @param notebookUri The URI of the notebook whose queue completed
+     */
+    export function notifyQueueComplete(notebookUri: string) {
+        logger.debug(`[CellExecState] Queue execution complete for ${notebookUri}`);
+        queueCompletionEmitter.fire({ notebookUri });
+    }
 
     export function changeCellState(cell: NotebookCell, state: NotebookCellExecutionState, executionOrder?: number) {
         const cellId = cell.metadata?.id as string | undefined;

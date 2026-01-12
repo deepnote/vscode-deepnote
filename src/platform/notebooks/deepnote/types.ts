@@ -146,12 +146,4 @@ export interface ISnapshotMetadataService {
      * Check if "Run All" mode is set for a notebook.
      */
     isRunAllMode(notebookUri: string): boolean;
-
-    /**
-     * Called when cell execution completes for a notebook.
-     * Creates a snapshot based on whether "Run All" mode was set:
-     * - Run All mode: Creates timestamped + latest snapshot
-     * - Partial run: Updates only the latest snapshot
-     */
-    onExecutionComplete(notebookUri: string): Promise<void>;
 }

@@ -231,6 +231,12 @@
                 "icon": "$(add)"
             },
             {
+                "command": "deepnote.addInputBlock",
+                "title": "%deepnote.commands.addInputBlock.title%",
+                "category": "Deepnote",
+                "icon": "$(symbol-parameter)"
+            },
+            {
                 "command": "deepnote.addTextBlock",
                 "title": "%deepnote.commands.addTextBlock.title%",
                 "category": "Deepnote",
@@ -1022,43 +1028,13 @@
                     "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "deepnote.addInputTextBlock",
+                    "command": "deepnote.addInputBlock",
                     "group": "navigation@6",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "deepnote.addInputTextareaBlock",
-                    "group": "navigation@7",
-                    "when": "notebookType == 'deepnote'"
-                },
-                {
-                    "command": "deepnote.addInputSelectBlock",
-                    "group": "navigation@8",
-                    "when": "notebookType == 'deepnote'"
-                },
-                {
-                    "command": "deepnote.addInputSliderBlock",
-                    "group": "navigation@9",
-                    "when": "notebookType == 'deepnote'"
-                },
-                {
-                    "command": "deepnote.addInputCheckboxBlock",
-                    "group": "navigation@10",
-                    "when": "notebookType == 'deepnote'"
-                },
-                {
-                    "command": "deepnote.addInputDateBlock",
-                    "group": "navigation@11",
-                    "when": "notebookType == 'deepnote'"
-                },
-                {
-                    "command": "deepnote.addInputDateRangeBlock",
-                    "group": "navigation@12",
-                    "when": "notebookType == 'deepnote'"
-                },
-                {
                     "command": "deepnote.addTextBlock",
-                    "group": "navigation@13",
+                    "group": "navigation@7",
                     "when": "notebookType == 'deepnote'"
                 },
                 {

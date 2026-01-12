@@ -135,6 +135,81 @@ jobs:
       - name: Check licenses
         run: npm run check-licenses
 
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: [build]
+    if: "!contains(github.event.head_commit.message, '[skip-integration]')"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6
+        with:
+          cache: 'npm'
+          node-version-file: '.nvmrc'
+
+      - name: Setup Python
+        uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55 # v5.5.0
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install npm dependencies
+        run: |
+          npm ci --prefer-offline --no-audit
+          # Verify Tailwind CSS native modules are installed for Linux
+          node -e "try { require('lightningcss'); } catch { process.exit(1); }" 2>/dev/null || npm install lightningcss-linux-x64-gnu
+          node -e "try { require('@tailwindcss/oxide'); } catch { process.exit(1); }" 2>/dev/null || npm install @tailwindcss/oxide-linux-x64-gnu
+
+      - name: Compile TypeScript
+        run: npm run compile
+
+      - name: Create test virtual environments
+        uses: ./.github/actions/create-venv-for-tests
+        with:
+          IPyWidgetVersion: '8'
+
+      - name: Set Python path for tests
+        uses: ./.github/actions/set-python
+
+      - name: Install xvfb for headless VS Code
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libxkbfile1 libsecret-1-0 libgbm1 libnss3 libatk-bridge2.0-0 libgtk-3-0
+
+      - name: Run integration tests
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" npm run test:integration
+        env:
+          VSC_JUPYTER_CI_TEST: '1'
+          TEST_FILES_SUFFIX: '*.vscode.test,*.vscode.common.test'
+          CODE_TESTS_WORKSPACE: 'src/test/datascience'
+          DISPLAY: ':99'
+
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4
+        with:
+          name: integration-test-results
+          path: |
+            test-results.xml
+            logs/
+            **/*.png
+          retention-days: 7
+
+      - name: Upload screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4
+        with:
+          name: integration-test-screenshots
+          path: |
+            **/*screenshot*.png
+            **/*Screen*.png
+          retention-days: 7
+          if-no-files-found: ignore
+
   check_licenses:
     name: Check Licenses
     runs-on: ubuntu-latest

@@ -46,8 +46,8 @@ export interface ISnapshotFileService {
         projectData: DeepnoteFile
     ): Promise<Uri | undefined>;
 
-    /** Merge outputs from snapshot into notebook blocks */
-    mergeOutputsIntoBlocks(blocks: DeepnoteBlock[], outputs: Map<string, DeepnoteOutput[]>): void;
+    /** Merge outputs from snapshot into notebook blocks, returns new array */
+    mergeOutputsIntoBlocks(blocks: DeepnoteBlock[], outputs: Map<string, DeepnoteOutput[]>): DeepnoteBlock[];
 
     /** Strip outputs from blocks (for saving to main file) */
     stripOutputsFromBlocks(blocks: DeepnoteBlock[]): DeepnoteBlock[];

@@ -129,14 +129,26 @@ suite('SnapshotFileService', () => {
             outputs.set('block-1', [{ output_type: 'stream', name: 'stdout', text: '1\n' }]);
             outputs.set('block-2', [{ output_type: 'stream', name: 'stdout', text: '2\n' }]);
 
-            service.mergeOutputsIntoBlocks(blocks, outputs);
+            const result = service.mergeOutputsIntoBlocks(blocks, outputs);
 
-            assert.deepEqual(blocks[0].outputs, [{ output_type: 'stream', name: 'stdout', text: '1\n' }]);
-            assert.deepEqual(blocks[1].outputs, [{ output_type: 'stream', name: 'stdout', text: '2\n' }]);
-            assert.isUndefined(blocks[2].outputs);
+            assert.deepEqual(result[0].outputs, [{ output_type: 'stream', name: 'stdout', text: '1\n' }]);
+            assert.deepEqual(result[1].outputs, [{ output_type: 'stream', name: 'stdout', text: '2\n' }]);
+            assert.isUndefined(result[2].outputs);
         });
 
-        test('should not modify blocks without matching outputs', () => {
+        test('should not modify original blocks', () => {
+            const blocks: DeepnoteBlock[] = [{ id: 'block-1', type: 'code', sortingKey: 'a0', content: 'print(1)' }];
+
+            const outputs = new Map<string, DeepnoteOutput[]>();
+
+            outputs.set('block-1', [{ output_type: 'stream', text: 'new' }]);
+
+            service.mergeOutputsIntoBlocks(blocks, outputs);
+
+            assert.isUndefined(blocks[0].outputs);
+        });
+
+        test('should preserve blocks without matching outputs', () => {
             const blocks: DeepnoteBlock[] = [
                 {
                     id: 'block-1',
@@ -151,9 +163,9 @@ suite('SnapshotFileService', () => {
 
             outputs.set('block-2', [{ output_type: 'stream', text: 'new' }]);
 
-            service.mergeOutputsIntoBlocks(blocks, outputs);
+            const result = service.mergeOutputsIntoBlocks(blocks, outputs);
 
-            assert.deepEqual(blocks[0].outputs, [{ output_type: 'stream', text: 'old' }]);
+            assert.deepEqual(result[0].outputs, [{ output_type: 'stream', text: 'old' }]);
         });
 
         test('should handle empty outputs map', () => {
@@ -161,9 +173,10 @@ suite('SnapshotFileService', () => {
 
             const outputs = new Map<string, DeepnoteOutput[]>();
 
-            service.mergeOutputsIntoBlocks(blocks, outputs);
+            const result = service.mergeOutputsIntoBlocks(blocks, outputs);
 
-            assert.isUndefined(blocks[0].outputs);
+            assert.lengthOf(result, 1);
+            assert.isUndefined(result[0].outputs);
         });
 
         test('should handle empty blocks array', () => {
@@ -172,9 +185,9 @@ suite('SnapshotFileService', () => {
 
             outputs.set('block-1', [{ output_type: 'stream', text: 'test' }]);
 
-            service.mergeOutputsIntoBlocks(blocks, outputs);
+            const result = service.mergeOutputsIntoBlocks(blocks, outputs);
 
-            assert.lengthOf(blocks, 0);
+            assert.lengthOf(result, 0);
         });
     });
 

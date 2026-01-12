@@ -131,8 +131,9 @@ export class SnapshotFileService implements ISnapshotFileService {
         }
 
         // Filter out 'latest' files (in case glob matched them) and sort by filename descending
+        // Use basename to avoid false matches when project slug contains '_latest'
         const sortedFiles = allTimestampedFiles
-            .filter((uri) => !uri.fsPath.includes('_latest.'))
+            .filter((uri) => !Utils.basename(uri).endsWith('_latest.snapshot.deepnote'))
             .sort((a, b) => {
                 // Sort by filename descending (timestamps sort lexicographically)
                 const nameA = Utils.basename(a);
@@ -301,7 +302,11 @@ export class SnapshotFileService implements ISnapshotFileService {
         // Prepare snapshot data with timestamp
         const snapshotData = structuredClone(projectData);
 
-        snapshotData.metadata = snapshotData.metadata || { createdAt: new Date().toISOString() };
+        // Preserve existing metadata, only set missing createdAt
+        snapshotData.metadata = snapshotData.metadata || {};
+        if (!snapshotData.metadata.createdAt) {
+            snapshotData.metadata.createdAt = new Date().toISOString();
+        }
         snapshotData.metadata.modifiedAt = new Date().toISOString();
 
         const yamlString = yaml.dump(snapshotData, {
@@ -453,25 +458,30 @@ export class SnapshotFileService implements ISnapshotFileService {
 
     /**
      * Merge outputs from a snapshot into notebook blocks.
-     * Updates blocks in place.
+     * Returns a new array with outputs merged.
      */
-    mergeOutputsIntoBlocks(blocks: DeepnoteBlock[], outputs: Map<string, DeepnoteOutput[]>): void {
+    mergeOutputsIntoBlocks(blocks: DeepnoteBlock[], outputs: Map<string, DeepnoteOutput[]>): DeepnoteBlock[] {
         let mergedCount = 0;
 
-        for (const block of blocks) {
+        const mergedBlocks = blocks.map((block) => {
             if (!block.id) {
-                continue;
+                return block;
             }
 
             const blockOutputs = outputs.get(block.id);
 
             if (blockOutputs !== undefined) {
-                block.outputs = blockOutputs;
                 mergedCount++;
+
+                return { ...block, outputs: blockOutputs };
             }
-        }
+
+            return block;
+        });
 
         logger.debug(`[SnapshotFileService] Merged outputs into ${mergedCount}/${blocks.length} blocks`);
+
+        return mergedBlocks;
     }
 
     /**

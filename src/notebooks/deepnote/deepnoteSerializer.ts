@@ -227,7 +227,9 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             // Handle snapshot mode: strip outputs from main file (snapshots are created on execution, not save)
             if (this.snapshotFileService?.isSnapshotsEnabled()) {
                 // Strip outputs from main file blocks - snapshots are created during cell execution
-                notebook.blocks = this.snapshotFileService.stripOutputsFromBlocks(blocks);
+                // Also clone to remove circular references that may cause yaml.dump to fail
+                const strippedBlocks = this.snapshotFileService.stripOutputsFromBlocks(blocks);
+                notebook.blocks = cloneWithoutCircularRefs<DeepnoteBlock[]>(strippedBlocks);
                 logger.debug('SerializeNotebook: Stripped outputs from main file (snapshot mode)');
             } else {
                 // Default behavior: outputs in main file

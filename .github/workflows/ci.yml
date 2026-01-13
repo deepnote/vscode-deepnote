@@ -234,4 +234,4 @@ jobs:
 
       - name: Run audit for all dependencies
         # Uses better-npm-audit with .nsprc exceptions file
-        run: better-npm-audit audit
+        run: npx better-npm-audit audit

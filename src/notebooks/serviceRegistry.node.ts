@@ -88,9 +88,8 @@ import { DeepnoteCellCopyHandler } from './deepnote/deepnoteCellCopyHandler';
 import { DeepnoteEnvironmentTreeDataProvider } from '../kernels/deepnote/environments/deepnoteEnvironmentTreeDataProvider.node';
 import { OpenInDeepnoteHandler } from './deepnote/openInDeepnoteHandler.node';
 import { IntegrationKernelRestartHandler } from './deepnote/integrations/integrationKernelRestartHandler';
-import { ISnapshotService, SnapshotService } from './deepnote/snapshotService';
-import { ISnapshotMetadataService } from '../platform/notebooks/deepnote/types';
-import { EnvironmentCapture, IEnvironmentCapture } from './deepnote/environmentCapture.node';
+import { ISnapshotMetadataService, SnapshotService } from './deepnote/snapshots/snapshotService';
+import { EnvironmentCapture, IEnvironmentCapture } from './deepnote/snapshots/environmentCapture.node';
 
 export function registerTypes(serviceManager: IServiceManager, isDevMode: boolean) {
     registerControllerTypes(serviceManager, isDevMode);
@@ -245,9 +244,9 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
 
     // Snapshot service
     serviceManager.addSingleton<IEnvironmentCapture>(IEnvironmentCapture, EnvironmentCapture);
-    serviceManager.addSingleton<ISnapshotService>(ISnapshotService, SnapshotService);
-    serviceManager.addBinding(ISnapshotService, IExtensionSyncActivationService);
-    serviceManager.addBinding(ISnapshotService, ISnapshotMetadataService);
+    serviceManager.addSingleton<SnapshotService>(SnapshotService, SnapshotService);
+    serviceManager.addBinding(SnapshotService, IExtensionSyncActivationService);
+    serviceManager.addBinding(SnapshotService, ISnapshotMetadataService);
 
     // File export/import
     serviceManager.addSingleton<IFileConverter>(IFileConverter, FileConverter);

@@ -9,7 +9,7 @@ import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
 import { DeepnoteExplorerView } from './deepnoteExplorerView';
 import { IIntegrationManager } from './integrations/types';
 import { DeepnoteInputBlockEditProtection } from './deepnoteInputBlockEditProtection';
-import { ISnapshotService } from './snapshotService';
+import { SnapshotService } from './snapshots/snapshotService';
 
 /**
  * Service responsible for activating and configuring Deepnote notebook support in VS Code.
@@ -30,7 +30,7 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
         @inject(IIntegrationManager) integrationManager: IIntegrationManager,
         @inject(ILogger) private readonly logger: ILogger,
-        @inject(ISnapshotService) @optional() private readonly snapshotService?: ISnapshotService
+        @inject(SnapshotService) @optional() private readonly snapshotService?: SnapshotService
     ) {
         this.integrationManager = integrationManager;
     }

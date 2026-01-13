@@ -2,22 +2,51 @@ import type { DeepnoteBlock, DeepnoteFile, Environment, Execution, ExecutionErro
 import fastDeepEqual from 'fast-deep-equal';
 import { inject, injectable, optional } from 'inversify';
 import * as yaml from 'js-yaml';
-import { FileType, NotebookCell, RelativePattern, Uri, workspace } from 'vscode';
+import { FileType, NotebookCell, RelativePattern, Uri, window, workspace } from 'vscode';
 import { Utils } from 'vscode-uri';
 
-import { IExtensionSyncActivationService } from '../../platform/activation/types';
-import { IDisposableRegistry } from '../../platform/common/types';
-import type { DeepnoteOutput } from '../../platform/deepnote/deepnoteTypes';
-import { InvalidProjectNameError } from '../../platform/errors/invalidProjectNameError';
-import { logger } from '../../platform/logging';
-import { notebookCellExecutions, NotebookCellExecutionState } from '../../platform/notebooks/cellExecutionStateService';
-import { ISnapshotMetadataService as IPlatformSnapshotMetadataService } from '../../platform/notebooks/deepnote/types';
-import { IDeepnoteNotebookManager } from '../types';
-import { DeepnoteDataConverter } from './deepnoteDataConverter';
+import { IExtensionSyncActivationService } from '../../../platform/activation/types';
+import { IDisposableRegistry } from '../../../platform/common/types';
+import type { DeepnoteOutput } from '../../../platform/deepnote/deepnoteTypes';
+import { InvalidProjectNameError } from '../../../platform/errors/invalidProjectNameError';
+import { logger } from '../../../platform/logging';
+import {
+    notebookCellExecutions,
+    NotebookCellExecutionState
+} from '../../../platform/notebooks/cellExecutionStateService';
+import { IDeepnoteNotebookManager } from '../../types';
+import { DeepnoteDataConverter } from '../deepnoteDataConverter';
 import { IEnvironmentCapture } from './environmentCapture.node';
 
-// Re-export platform interface for external consumers
-export { ISnapshotMetadataService } from '../../platform/notebooks/deepnote/types';
+/**
+ * Platform-layer interface for snapshot metadata service.
+ * Used by the kernel execution layer to capture environment before cell execution.
+ */
+export const ISnapshotMetadataService = Symbol('ISnapshotMetadataService');
+export interface ISnapshotMetadataService {
+    /**
+     * Capture environment before execution starts.
+     * Called at the start of a cell execution batch.
+     * This is blocking and should complete before cells execute.
+     */
+    captureEnvironmentBeforeExecution(notebookUri: string): Promise<void>;
+
+    /**
+     * Clear execution state for a notebook (e.g., when kernel restarts).
+     */
+    clearExecutionState(notebookUri: string): void;
+
+    /**
+     * Set "Run All" mode for a notebook.
+     * When execution completes, a full snapshot (timestamped + latest) will be created.
+     */
+    setRunAllMode(notebookUri: string): void;
+
+    /**
+     * Check if "Run All" mode is set for a notebook.
+     */
+    isRunAllMode(notebookUri: string): boolean;
+}
 
 /**
  * Block-level execution metadata.
@@ -110,45 +139,13 @@ function generateTimestamp(): string {
     return new Date().toISOString().replace(/:/g, '-').slice(0, 19);
 }
 
-export const ISnapshotService = Symbol('ISnapshotService');
-
-/**
- * Service interface for managing snapshots.
- * Combines file I/O operations and execution metadata tracking.
- */
-export interface ISnapshotService extends IPlatformSnapshotMetadataService {
-    // File operations
-    createSnapshot(
-        projectUri: Uri,
-        projectId: string,
-        projectName: string,
-        projectData: DeepnoteFile
-    ): Promise<Uri | undefined>;
-    extractOutputsFromBlocks(blocks: DeepnoteBlock[]): Map<string, DeepnoteOutput[]>;
-    isSnapshotsEnabled(): boolean;
-    mergeOutputsIntoBlocks(blocks: DeepnoteBlock[], outputs: Map<string, DeepnoteOutput[]>): DeepnoteBlock[];
-    readSnapshot(projectId: string): Promise<Map<string, DeepnoteOutput[]> | undefined>;
-    stripOutputsFromBlocks(blocks: DeepnoteBlock[]): DeepnoteBlock[];
-    updateLatestSnapshot(
-        projectUri: Uri,
-        projectId: string,
-        projectName: string,
-        projectData: DeepnoteFile
-    ): Promise<Uri | undefined>;
-
-    // Metadata operations (called by deepnoteSerializer)
-    getBlockExecutionMetadata(notebookUri: string, cellId: string): BlockExecutionMetadata | undefined;
-    getEnvironmentMetadata(notebookUri: string): Promise<Environment | undefined>;
-    getExecutionMetadata(notebookUri: string): Execution | undefined;
-}
-
 /**
  * Unified service for managing Deepnote notebook snapshots.
  * Handles both file I/O operations (reading/writing snapshot files) and
  * execution metadata tracking (timing, environment capture).
  */
 @injectable()
-export class SnapshotService implements ISnapshotService, IExtensionSyncActivationService {
+export class SnapshotService implements ISnapshotMetadataService, IExtensionSyncActivationService {
     private readonly converter = new DeepnoteDataConverter();
     private readonly executionStates = new Map<string, NotebookExecutionState>();
     private readonly runAllModeNotebooks = new Set<string>();
@@ -158,10 +155,6 @@ export class SnapshotService implements ISnapshotService, IExtensionSyncActivati
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
         @inject(IDeepnoteNotebookManager) @optional() private readonly notebookManager?: IDeepnoteNotebookManager
     ) {}
-
-    // ========================================================================
-    // Public methods (alphabetical)
-    // ========================================================================
 
     activate(): void {
         logger.info('[Snapshot] SnapshotService activated');
@@ -228,7 +221,7 @@ export class SnapshotService implements ISnapshotService, IExtensionSyncActivati
         if (!prepared) {
             logger.debug(`[Snapshot] No changes detected, skipping snapshot creation`);
 
-            return undefined;
+            return;
         }
 
         const { latestPath, content } = prepared;
@@ -242,12 +235,17 @@ export class SnapshotService implements ISnapshotService, IExtensionSyncActivati
         } catch (error) {
             logger.error(`[Snapshot] Failed to write timestamped snapshot: ${Utils.basename(timestampedPath)}`, error);
 
-            return undefined;
+            const message = error instanceof Error ? error.message : String(error);
+
+            await window.showErrorMessage(`Failed to create snapshot: ${message}`);
+
+            return;
         }
 
-        // Update 'latest' pointer (only after timestamped write succeeded)
+        // Copy timestamped file to 'latest' pointer
         try {
-            await workspace.fs.writeFile(latestPath, content);
+            await workspace.fs.copy(timestampedPath, latestPath, { overwrite: true });
+
             logger.debug(`[Snapshot] Updated latest snapshot: ${Utils.basename(latestPath)}`);
         } catch (error) {
             logger.warn(
@@ -256,6 +254,12 @@ export class SnapshotService implements ISnapshotService, IExtensionSyncActivati
                 )}. ` + `Timestamped snapshot available at: ${Utils.basename(timestampedPath)}`,
                 error
             );
+
+            const message = error instanceof Error ? error.message : String(error);
+
+            await window.showErrorMessage(`Failed to update latest snapshot pointer: ${message}`);
+
+            return;
         }
 
         return timestampedPath;
@@ -389,7 +393,9 @@ export class SnapshotService implements ISnapshotService, IExtensionSyncActivati
         if (!workspaceFolders || workspaceFolders.length === 0) {
             logger.debug(`[Snapshot] No workspace folders found`);
 
-            return undefined;
+            await window.showWarningMessage('Cannot read snapshot: No workspace folders found.');
+
+            return;
         }
 
         // 1. Try to find a 'latest' snapshot file
@@ -407,7 +413,9 @@ export class SnapshotService implements ISnapshotService, IExtensionSyncActivati
                 } catch (error) {
                     logger.error(`[Snapshot] Failed to parse snapshot: ${Utils.basename(latestFiles[0])}`, error);
 
-                    return undefined;
+                    await window.showErrorMessage(`Failed to read latest snapshot: ${Utils.basename(latestFiles[0])}`);
+
+                    return;
                 }
             }
         }
@@ -438,7 +446,7 @@ export class SnapshotService implements ISnapshotService, IExtensionSyncActivati
         if (sortedFiles.length === 0) {
             logger.debug(`[Snapshot] No timestamped snapshots found`);
 
-            return undefined;
+            return;
         }
 
         const newestFile = sortedFiles[0];
@@ -450,7 +458,7 @@ export class SnapshotService implements ISnapshotService, IExtensionSyncActivati
         } catch (error) {
             logger.error(`[Snapshot] Failed to parse snapshot: ${Utils.basename(newestFile)}`, error);
 
-            return undefined;
+            return;
         }
     }
 
@@ -468,38 +476,6 @@ export class SnapshotService implements ISnapshotService, IExtensionSyncActivati
             return strippedBlock as DeepnoteBlock;
         });
     }
-
-    async updateLatestSnapshot(
-        projectUri: Uri,
-        projectId: string,
-        projectName: string,
-        projectData: DeepnoteFile
-    ): Promise<Uri | undefined> {
-        const prepared = await this.prepareSnapshotData(projectUri, projectId, projectName, projectData);
-
-        if (!prepared) {
-            logger.debug(`[Snapshot] No changes detected, skipping latest snapshot update`);
-
-            return undefined;
-        }
-
-        const { latestPath, content } = prepared;
-
-        try {
-            await workspace.fs.writeFile(latestPath, content);
-            logger.debug(`[Snapshot] Updated latest snapshot: ${Utils.basename(latestPath)}`);
-
-            return latestPath;
-        } catch (error) {
-            logger.error(`[Snapshot] Failed to update latest snapshot: ${Utils.basename(latestPath)}`, error);
-
-            return undefined;
-        }
-    }
-
-    // ========================================================================
-    // Private methods (alphabetical)
-    // ========================================================================
 
     private buildSnapshotPath(
         projectUri: Uri,
@@ -850,7 +826,7 @@ export class SnapshotService implements ISnapshotService, IExtensionSyncActivati
             if (error instanceof InvalidProjectNameError) {
                 logger.warn('[Snapshot] Skipping snapshots due to invalid project name', error);
 
-                return undefined;
+                return;
             }
             throw error;
         }
@@ -859,13 +835,13 @@ export class SnapshotService implements ISnapshotService, IExtensionSyncActivati
         const dirExists = await this.ensureSnapshotsDirectory(snapshotsDir);
 
         if (!dirExists) {
-            return undefined;
+            return;
         }
 
         const hasChanges = await this.hasSnapshotChanges(latestPath, projectData);
 
         if (!hasChanges) {
-            return undefined;
+            return;
         }
 
         const snapshotData = structuredClone(projectData);
@@ -943,5 +919,33 @@ export class SnapshotService implements ISnapshotService, IExtensionSyncActivati
         state.cellMetadata.set(cellId, cellMetadata);
 
         logger.trace(`[Snapshot] Cell ${cellId} execution started at ${isoTimestamp}`);
+    }
+
+    private async updateLatestSnapshot(
+        projectUri: Uri,
+        projectId: string,
+        projectName: string,
+        projectData: DeepnoteFile
+    ): Promise<Uri | undefined> {
+        const prepared = await this.prepareSnapshotData(projectUri, projectId, projectName, projectData);
+
+        if (!prepared) {
+            logger.debug(`[Snapshot] No changes detected, skipping latest snapshot update`);
+
+            return;
+        }
+
+        const { latestPath, content } = prepared;
+
+        try {
+            await workspace.fs.writeFile(latestPath, content);
+            logger.debug(`[Snapshot] Updated latest snapshot: ${Utils.basename(latestPath)}`);
+
+            return latestPath;
+        } catch (error) {
+            logger.error(`[Snapshot] Failed to update latest snapshot: ${Utils.basename(latestPath)}`, error);
+
+            return;
+        }
     }
 }

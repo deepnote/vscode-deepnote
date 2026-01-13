@@ -117,33 +117,3 @@ export const IPlatformDeepnoteNotebookManager = Symbol('IPlatformDeepnoteNoteboo
 export interface IPlatformDeepnoteNotebookManager {
     getOriginalProject(projectId: string): DeepnoteProject | undefined;
 }
-
-/**
- * Platform-layer interface for snapshot metadata service.
- * Used by the kernel execution layer to capture environment before cell execution.
- */
-export const ISnapshotMetadataService = Symbol('ISnapshotMetadataService');
-export interface ISnapshotMetadataService {
-    /**
-     * Capture environment before execution starts.
-     * Called at the start of a cell execution batch.
-     * This is blocking and should complete before cells execute.
-     */
-    captureEnvironmentBeforeExecution(notebookUri: string): Promise<void>;
-
-    /**
-     * Clear execution state for a notebook (e.g., when kernel restarts).
-     */
-    clearExecutionState(notebookUri: string): void;
-
-    /**
-     * Set "Run All" mode for a notebook.
-     * When execution completes, a full snapshot (timestamped + latest) will be created.
-     */
-    setRunAllMode(notebookUri: string): void;
-
-    /**
-     * Check if "Run All" mode is set for a notebook.
-     */
-    isRunAllMode(notebookUri: string): boolean;
-}

@@ -6,9 +6,9 @@ import type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
 
 import { IEnvironmentCapture } from './environmentCapture.node';
 import { SnapshotService } from './snapshotService';
-import type { DeepnoteOutput } from '../../platform/deepnote/deepnoteTypes';
-import { IDisposableRegistry } from '../../platform/common/types';
-import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
+import type { DeepnoteOutput } from '../../../platform/deepnote/deepnoteTypes';
+import { IDisposableRegistry } from '../../../platform/common/types';
+import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 
 suite('SnapshotService', () => {
     let service: SnapshotService;
@@ -702,99 +702,6 @@ project:
             assert.isDefined(result);
             assert.include(result!.fsPath, 'snapshot.deepnote');
             assert.notInclude(result!.fsPath, 'latest');
-        });
-    });
-
-    suite('updateLatestSnapshot', () => {
-        const projectUri = Uri.file('/workspace/my-project.deepnote');
-        const projectId = 'test-project-id-123';
-        const projectName = 'My Project';
-
-        test('should update only latest snapshot file', async () => {
-            const projectData = createProjectData();
-
-            const mockFs = mock<typeof import('vscode').workspace.fs>();
-            when(mockFs.stat(anything())).thenResolve({ type: FileType.Directory } as any);
-            when(mockFs.readFile(anything())).thenReject(new Error('ENOENT'));
-            when(mockFs.writeFile(anything(), anything())).thenResolve();
-            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
-
-            const result = await service.updateLatestSnapshot(projectUri, projectId, projectName, projectData);
-
-            assert.isDefined(result);
-            assert.include(result!.fsPath, 'latest');
-            assert.include(result!.fsPath, 'snapshot.deepnote');
-        });
-
-        test('should return undefined when project name is invalid', async () => {
-            const projectData = createProjectData();
-
-            const result = await service.updateLatestSnapshot(projectUri, projectId, '', projectData);
-
-            assert.isUndefined(result);
-        });
-
-        test('should return undefined when no changes detected', async () => {
-            const projectData = createProjectData();
-
-            const mockFs = mock<typeof import('vscode').workspace.fs>();
-            when(mockFs.stat(anything())).thenResolve({ type: FileType.Directory } as any);
-
-            const existingYaml = `
-metadata:
-  createdAt: '2025-01-01T00:00:00Z'
-version: '1.0'
-project:
-  id: test-project-id-123
-  name: My Project
-  notebooks:
-    - id: notebook-1
-      name: Notebook 1
-      blocks:
-        - id: block-1
-          type: code
-          sortingKey: a0
-          content: print(1)
-          outputs:
-            - output_type: stream
-              text: '1'
-`;
-            when(mockFs.readFile(anything())).thenResolve(new TextEncoder().encode(existingYaml) as any);
-            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
-
-            const result = await service.updateLatestSnapshot(projectUri, projectId, projectName, projectData);
-
-            assert.isUndefined(result);
-        });
-
-        test('should return undefined when write fails', async () => {
-            const projectData = createProjectData();
-
-            const mockFs = mock<typeof import('vscode').workspace.fs>();
-            when(mockFs.stat(anything())).thenResolve({ type: FileType.Directory } as any);
-            when(mockFs.readFile(anything())).thenReject(new Error('ENOENT'));
-            when(mockFs.writeFile(anything(), anything())).thenReject(new Error('Write failed'));
-            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
-
-            const result = await service.updateLatestSnapshot(projectUri, projectId, projectName, projectData);
-
-            assert.isUndefined(result);
-        });
-
-        test('should create directory if it does not exist', async () => {
-            const projectData = createProjectData();
-
-            const mockFs = mock<typeof import('vscode').workspace.fs>();
-            when(mockFs.stat(anything())).thenReject(new Error('ENOENT'));
-            when(mockFs.createDirectory(anything())).thenResolve();
-            when(mockFs.readFile(anything())).thenReject(new Error('ENOENT'));
-            when(mockFs.writeFile(anything(), anything())).thenResolve();
-            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
-
-            const result = await service.updateLatestSnapshot(projectUri, projectId, projectName, projectData);
-
-            assert.isDefined(result);
-            assert.include(result!.fsPath, 'latest');
         });
     });
 

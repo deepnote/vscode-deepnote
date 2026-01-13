@@ -45,7 +45,7 @@ import {
 import { CodeExecution } from './execution/codeExecution';
 import type { ICodeExecution } from './execution/types';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../platform/notebooks/cellExecutionStateService';
-import { ISnapshotMetadataService } from '../platform/notebooks/deepnote/types';
+import { ISnapshotMetadataService } from '../notebooks/deepnote/snapshots/snapshotService';
 
 /**
  * Everything in this classes gets disposed via the `onWillCancel` hook.

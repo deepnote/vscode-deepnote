@@ -34,7 +34,7 @@ import { KernelConnector } from './controllers/kernelConnector';
 import { IControllerRegistration } from './controllers/types';
 import { IExtensionSyncActivationService } from '../platform/activation/types';
 import { IKernelStatusProvider } from '../kernels/kernelStatusProvider';
-import { ISnapshotMetadataService } from '../platform/notebooks/deepnote/types';
+import { ISnapshotMetadataService } from './deepnote/snapshots/snapshotService';
 
 export const INotebookCommandHandler = Symbol('INotebookCommandHandler');
 export interface INotebookCommandHandler {

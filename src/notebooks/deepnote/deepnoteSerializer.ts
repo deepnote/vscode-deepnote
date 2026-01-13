@@ -7,7 +7,7 @@ import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
 import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
-import { ISnapshotService } from './snapshotService';
+import { SnapshotService } from './snapshots/snapshotService';
 import { computeHash } from '../../platform/common/crypto';
 
 export type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
@@ -56,7 +56,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
     constructor(
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
-        @inject(ISnapshotService) @optional() private readonly snapshotService?: ISnapshotService
+        @inject(SnapshotService) @optional() private readonly snapshotService?: SnapshotService
     ) {}
 
     /**

@@ -1,6 +1,7 @@
 import { assert } from 'chai';
+import * as sinon from 'sinon';
 import { anything, instance, mock, when } from 'ts-mockito';
-import { FileType, Uri, WorkspaceConfiguration, WorkspaceFolder } from 'vscode';
+import { FileType, NotebookCellKind, Uri, WorkspaceConfiguration, WorkspaceFolder } from 'vscode';
 
 import type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
 
@@ -259,7 +260,6 @@ suite('SnapshotService', () => {
                     sortingKey: 'a0',
                     content: 'print(1)',
                     contentHash: 'sha256:abc123',
-                    executionStartedAt: '2025-01-01T00:00:00Z',
                     outputs: [{ output_type: 'stream', text: '1' }]
                 }
             ];
@@ -270,7 +270,29 @@ suite('SnapshotService', () => {
             assert.strictEqual(result[0].type, 'code');
             assert.strictEqual(result[0].content, 'print(1)');
             assert.strictEqual(result[0].contentHash, 'sha256:abc123');
-            assert.strictEqual(result[0].executionStartedAt, '2025-01-01T00:00:00Z');
+            assert.isUndefined(result[0].outputs);
+        });
+
+        test('should strip execution timestamps from blocks', () => {
+            const blocks: DeepnoteBlock[] = [
+                {
+                    id: 'block-1',
+                    type: 'code',
+                    sortingKey: 'a0',
+                    content: 'print(1)',
+                    contentHash: 'sha256:abc123',
+                    executionStartedAt: '2025-01-01T00:00:00Z',
+                    executionFinishedAt: '2025-01-01T00:00:01Z',
+                    outputs: [{ output_type: 'stream', text: '1' }]
+                }
+            ];
+
+            const result = service.stripOutputsFromBlocks(blocks);
+
+            assert.strictEqual(result[0].id, 'block-1');
+            assert.strictEqual(result[0].contentHash, 'sha256:abc123');
+            assert.isUndefined(result[0].executionStartedAt);
+            assert.isUndefined(result[0].executionFinishedAt);
             assert.isUndefined(result[0].outputs);
         });
 
@@ -948,25 +970,119 @@ project:
             });
         });
 
-        suite('setRunAllMode / isRunAllMode', () => {
-            test('should return false by default', () => {
-                assert.isFalse(service.isRunAllMode(notebookUri));
-            });
+        suite('Run All auto-detection', () => {
+            test('should detect Run All when all code cells are executed', async () => {
+                // Set up mocks
+                const mockConfig = mock<WorkspaceConfiguration>();
+                when(mockConfig.get<boolean>('snapshots.enabled', false)).thenReturn(true);
+                when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote')).thenReturn(instance(mockConfig));
 
-            test('should return true after setting run all mode', () => {
-                service.setRunAllMode(notebookUri);
+                const projectId = 'test-project-id';
+                const notebookId = 'test-notebook-id';
 
-                assert.isTrue(service.isRunAllMode(notebookUri));
-            });
+                // Create mock cells - 3 code cells and 1 markdown
+                const mockCodeCell1 = {
+                    kind: NotebookCellKind.Code,
+                    document: { getText: () => 'print(1)', languageId: 'python' },
+                    metadata: { id: 'cell-1' },
+                    outputs: [],
+                    executionSummary: { success: true }
+                };
+                const mockCodeCell2 = {
+                    kind: NotebookCellKind.Code,
+                    document: { getText: () => 'print(2)', languageId: 'python' },
+                    metadata: { id: 'cell-2' },
+                    outputs: [],
+                    executionSummary: { success: true }
+                };
+                const mockCodeCell3 = {
+                    kind: NotebookCellKind.Code,
+                    document: { getText: () => 'print(3)', languageId: 'python' },
+                    metadata: { id: 'cell-3' },
+                    outputs: [],
+                    executionSummary: { success: true }
+                };
+                const mockMarkdownCell = {
+                    kind: NotebookCellKind.Markup,
+                    document: { getText: () => '# Title', languageId: 'markdown' },
+                    metadata: { id: 'cell-md' },
+                    outputs: []
+                };
 
-            test('should track run all mode per notebook', () => {
-                const notebook1 = 'file:///notebook1.deepnote';
-                const notebook2 = 'file:///notebook2.deepnote';
+                const mockNotebook = {
+                    uri: Uri.parse(notebookUri),
+                    notebookType: 'deepnote',
+                    metadata: {
+                        deepnoteProjectId: projectId,
+                        deepnoteNotebookId: notebookId
+                    },
+                    getCells: () => [mockCodeCell1, mockCodeCell2, mockMarkdownCell, mockCodeCell3]
+                };
 
-                service.setRunAllMode(notebook1);
+                when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([mockNotebook as any]);
 
-                assert.isTrue(service.isRunAllMode(notebook1));
-                assert.isFalse(service.isRunAllMode(notebook2));
+                // Create mock notebook manager with original project
+                const originalProject: DeepnoteFile = {
+                    metadata: { createdAt: '2025-01-01T00:00:00Z' },
+                    version: '1.0',
+                    project: {
+                        id: projectId,
+                        name: 'Test Project',
+                        notebooks: [
+                            {
+                                id: notebookId,
+                                name: 'Test Notebook',
+                                blocks: []
+                            }
+                        ]
+                    }
+                };
+
+                const mockNotebookManager = {
+                    getOriginalProject: sinon.stub().returns(originalProject)
+                };
+
+                // Create a new service with the mock notebook manager
+                const testService = new SnapshotService(
+                    instance(mockEnvironmentCapture),
+                    mockDisposables,
+                    mockNotebookManager as any
+                );
+                const testServiceAny = testService as any;
+
+                // Record execution for all 3 code cells
+                const startTime = Date.now();
+                testServiceAny.recordCellExecutionStart(notebookUri, 'cell-1', startTime);
+                testServiceAny.recordCellExecutionEnd(notebookUri, 'cell-1', startTime + 100, true);
+                testServiceAny.recordCellExecutionStart(notebookUri, 'cell-2', startTime + 200);
+                testServiceAny.recordCellExecutionEnd(notebookUri, 'cell-2', startTime + 300, true);
+                testServiceAny.recordCellExecutionStart(notebookUri, 'cell-3', startTime + 400);
+                testServiceAny.recordCellExecutionEnd(notebookUri, 'cell-3', startTime + 500, true);
+
+                // Spy on createSnapshot and updateLatestSnapshot
+                const createSnapshotSpy = sinon.spy(testServiceAny, 'createSnapshot');
+                const updateLatestSnapshotSpy = sinon.spy(testServiceAny, 'updateLatestSnapshot');
+
+                // Mock file system operations for snapshot creation
+                const mockFs = mock<typeof import('vscode').workspace.fs>();
+                when(mockFs.stat(anything())).thenResolve({ type: FileType.Directory } as any);
+                when(mockFs.readFile(anything())).thenReject(new Error('ENOENT'));
+                when(mockFs.writeFile(anything(), anything())).thenResolve();
+                when(mockFs.copy(anything(), anything(), anything())).thenResolve();
+                when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
+
+                // Call onExecutionComplete (which should auto-detect Run All)
+                await testServiceAny.onExecutionComplete(notebookUri);
+
+                // ASSERT: createSnapshot should be called (full snapshot, not just latest)
+                assert.isTrue(
+                    createSnapshotSpy.calledOnce,
+                    'createSnapshot should be called when all code cells are executed'
+                );
+                assert.isFalse(
+                    updateLatestSnapshotSpy.called,
+                    'updateLatestSnapshot should NOT be called when all code cells are executed'
+                );
             });
         });
 

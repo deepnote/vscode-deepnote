@@ -222,24 +222,29 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             // Add snapshot metadata to blocks (contentHash and execution timing)
             await this.addSnapshotMetadataToBlocks(blocks, data);
 
-            // Handle snapshot mode: strip outputs from main file (snapshots are created on execution, not save)
+            // Handle snapshot mode: strip outputs and execution metadata from main file
             if (this.snapshotService?.isSnapshotsEnabled()) {
-                // Strip outputs from main file blocks - snapshots are created during cell execution
+                // Strip outputs and execution timestamps from main file blocks
                 // Also clone to remove circular references that may cause yaml.dump to fail
                 const strippedBlocks = this.snapshotService.stripOutputsFromBlocks(blocks);
                 notebook.blocks = cloneWithoutCircularRefs<DeepnoteBlock[]>(strippedBlocks);
-                logger.debug('SerializeNotebook: Stripped outputs from main file (snapshot mode)');
+
+                // Remove top-level execution and environment metadata from main file
+                delete originalProject.execution;
+                delete originalProject.environment;
+
+                logger.debug('SerializeNotebook: Stripped outputs and metadata (snapshot mode)');
             } else {
                 // Default behavior: outputs in main file
                 notebook.blocks = cloneWithoutCircularRefs<DeepnoteBlock[]>(blocks);
+
+                // Add environment and execution metadata from snapshot service
+                await this.addSnapshotMetadataToProject(originalProject, data);
             }
 
             logger.debug('SerializeNotebook: Cloned blocks, updating modifiedAt');
 
             originalProject.metadata.modifiedAt = new Date().toISOString();
-
-            // Add environment and execution metadata from snapshot service
-            await this.addSnapshotMetadataToProject(originalProject, data);
 
             logger.debug('SerializeNotebook: Starting yaml.dump');
 

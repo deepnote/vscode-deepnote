@@ -2,7 +2,7 @@ import type { DeepnoteBlock, DeepnoteFile, Environment, Execution, ExecutionErro
 import fastDeepEqual from 'fast-deep-equal';
 import { inject, injectable, optional } from 'inversify';
 import * as yaml from 'js-yaml';
-import { FileType, NotebookCell, RelativePattern, Uri, window, workspace } from 'vscode';
+import { FileType, NotebookCell, NotebookCellKind, RelativePattern, Uri, window, workspace } from 'vscode';
 import { Utils } from 'vscode-uri';
 
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
@@ -35,17 +35,6 @@ export interface ISnapshotMetadataService {
      * Clear execution state for a notebook (e.g., when kernel restarts).
      */
     clearExecutionState(notebookUri: string): void;
-
-    /**
-     * Set "Run All" mode for a notebook.
-     * When execution completes, a full snapshot (timestamped + latest) will be created.
-     */
-    setRunAllMode(notebookUri: string): void;
-
-    /**
-     * Check if "Run All" mode is set for a notebook.
-     */
-    isRunAllMode(notebookUri: string): boolean;
 }
 
 /**
@@ -148,7 +137,6 @@ function generateTimestamp(): string {
 export class SnapshotService implements ISnapshotMetadataService, IExtensionSyncActivationService {
     private readonly converter = new DeepnoteDataConverter();
     private readonly executionStates = new Map<string, NotebookExecutionState>();
-    private readonly runAllModeNotebooks = new Set<string>();
 
     constructor(
         @inject(IEnvironmentCapture) private readonly environmentCapture: IEnvironmentCapture,
@@ -205,7 +193,6 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
     clearExecutionState(notebookUri: string): void {
         this.executionStates.delete(notebookUri);
-        this.runAllModeNotebooks.delete(notebookUri);
 
         logger.trace(`[Snapshot] Cleared execution state for ${notebookUri}`);
     }
@@ -353,10 +340,6 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         return execution;
     }
 
-    isRunAllMode(notebookUri: string): boolean {
-        return this.runAllModeNotebooks.has(notebookUri);
-    }
-
     isSnapshotsEnabled(): boolean {
         const config = workspace.getConfiguration('deepnote');
 
@@ -462,16 +445,10 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         }
     }
 
-    setRunAllMode(notebookUri: string): void {
-        this.runAllModeNotebooks.add(notebookUri);
-
-        logger.debug(`[Snapshot] Set Run All mode for ${notebookUri}`);
-    }
-
     stripOutputsFromBlocks(blocks: DeepnoteBlock[]): DeepnoteBlock[] {
         return blocks.map((block) => {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { outputs, ...strippedBlock } = block;
+            const { outputs, executionFinishedAt, executionStartedAt, ...strippedBlock } = block;
 
             return strippedBlock as DeepnoteBlock;
         });
@@ -647,9 +624,13 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     private async onExecutionComplete(notebookUri: string): Promise<void> {
         logger.debug(`[Snapshot] onExecutionComplete called for ${notebookUri}`);
 
+        // Wait briefly for any pending cell state change events to be processed.
+        // This is needed because the queue completion event can fire before the
+        // last cell's Idle state change event has been processed (race condition).
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
         if (!this.isSnapshotsEnabled()) {
             logger.debug(`[Snapshot] Snapshots not enabled, skipping`);
-            this.runAllModeNotebooks.delete(notebookUri);
 
             return;
         }
@@ -658,7 +639,6 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
         if (!notebook) {
             logger.warn(`[Snapshot] Could not find notebook document for ${notebookUri}`);
-            this.runAllModeNotebooks.delete(notebookUri);
 
             return;
         }
@@ -667,7 +647,6 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
         if (!projectId) {
             logger.warn(`[Snapshot] No project ID in notebook metadata`);
-            this.runAllModeNotebooks.delete(notebookUri);
 
             return;
         }
@@ -676,7 +655,6 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
         if (!originalProject) {
             logger.warn(`[Snapshot] No original project found for ${projectId}`);
-            this.runAllModeNotebooks.delete(notebookUri);
 
             return;
         }
@@ -685,7 +663,6 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
         if (!projectUri) {
             logger.warn(`[Snapshot] Could not find project URI for ${projectId}`);
-            this.runAllModeNotebooks.delete(notebookUri);
 
             return;
         }
@@ -694,7 +671,6 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
         if (!notebookId) {
             logger.warn(`[Snapshot] No notebook ID in notebook metadata`);
-            this.runAllModeNotebooks.delete(notebookUri);
 
             return;
         }
@@ -703,7 +679,6 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
         if (!deepnoteNotebook) {
             logger.warn(`[Snapshot] Notebook ${notebookId} not found in project`);
-            this.runAllModeNotebooks.delete(notebookUri);
 
             return;
         }
@@ -724,7 +699,10 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             snapshotNotebook.blocks = blocks as DeepnoteBlock[];
         }
 
-        const isRunAll = this.runAllModeNotebooks.has(notebookUri);
+        // Detect "Run All" by checking if all code cells in the notebook were executed
+        const state = this.executionStates.get(notebookUri);
+        const totalCodeCells = notebook.getCells().filter((cell) => cell.kind === NotebookCellKind.Code).length;
+        const isRunAll = state && state.blocksExecuted === totalCodeCells;
 
         if (isRunAll) {
             logger.debug(`[Snapshot] Creating full snapshot (Run All mode)`);
@@ -753,8 +731,6 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
                 logger.info(`[Snapshot] Updated latest snapshot: ${snapshotUri.toString()}`);
             }
         }
-
-        this.runAllModeNotebooks.delete(notebookUri);
     }
 
     private async parseSnapshotFile(path: Uri): Promise<Map<string, DeepnoteOutput[]>> {

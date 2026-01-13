@@ -1,0 +1,6 @@
+{
+    "GHSA-848j-6mx2-7j84": {
+        "notes": "CVE-2025-14505: elliptic ECDSA signature corruption can lead to private key recovery if attacker obtains both faulty and correct signatures for identical inputs. Accepted risk: dev-only transitive dependency (node-stdlib-browser -> crypto-browserify -> browserify-sign), not used for signing in this project, no fix available.",
+        "expiry": "2026-04-08"
+    }
+}

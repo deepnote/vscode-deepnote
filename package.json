@@ -2858,6 +2858,7 @@
         },
         "d3-color": "3.1.0",
         "vega-embed": "^7.1.0",
-        "@mermaid-js/layout-elk": "npm:empty-pkg@1.0.0"
+        "@mermaid-js/layout-elk": "npm:empty-pkg@1.0.0",
+        "elliptic": "6.6.1"
     }
 }

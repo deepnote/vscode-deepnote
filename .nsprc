@@ -1,0 +1,3 @@
+{
+    "GHSA-848j-6mx2-7j84": "elliptic ECDSA issue - dev dependency only, no attack vector, no fix available"
+}

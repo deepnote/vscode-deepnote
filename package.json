@@ -2751,6 +2751,7 @@
         "acorn": "^8.9.0",
         "autoprefixer": "^10.4.21",
         "bare-events": "^2.8.1",
+        "better-npm-audit": "^3.11.0",
         "buffer": "^6.0.3",
         "bufferutil": "^4.0.6",
         "chai": "^4.3.10",

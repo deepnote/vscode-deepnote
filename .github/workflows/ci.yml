@@ -233,4 +233,5 @@ jobs:
         run: npm ci --prefer-offline --no-audit
 
       - name: Run audit for all dependencies
-        run: npm audit
+        # Uses better-npm-audit with .nsprc exceptions file
+        run: better-npm-audit audit

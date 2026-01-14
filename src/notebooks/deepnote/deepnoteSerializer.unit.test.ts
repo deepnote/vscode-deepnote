@@ -397,6 +397,231 @@ project:
         });
     });
 
+    suite('block ID preservation', () => {
+        test('should preserve block IDs when serializing cells with proper metadata', async () => {
+            const projectData: DeepnoteFile = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2023-01-01T00:00:00Z',
+                    modifiedAt: '2023-01-02T00:00:00Z'
+                },
+                project: {
+                    id: 'project-id-test',
+                    name: 'ID Test Project',
+                    notebooks: [
+                        {
+                            id: 'notebook-1',
+                            name: 'Test Notebook',
+                            blocks: [
+                                {
+                                    blockGroup: 'group-1',
+                                    id: 'original-block-id-1',
+                                    content: 'print("hello")',
+                                    sortingKey: 'a0',
+                                    type: 'code'
+                                },
+                                {
+                                    blockGroup: 'group-2',
+                                    id: 'original-block-id-2',
+                                    content: '# Markdown',
+                                    sortingKey: 'a1',
+                                    type: 'markdown'
+                                }
+                            ],
+                            executionMode: 'block',
+                            isModule: false
+                        }
+                    ],
+                    settings: {}
+                }
+            };
+
+            // Store the project
+            manager.storeOriginalProject('project-id-test', projectData, 'notebook-1');
+
+            // Create cells with the EXACT metadata structure that deserializeNotebook produces
+            // This simulates what VS Code should preserve from deserialization
+            const notebookData = {
+                cells: [
+                    {
+                        kind: 2, // NotebookCellKind.Code
+                        value: 'print("hello")',
+                        languageId: 'python',
+                        metadata: {
+                            id: 'original-block-id-1',
+                            __deepnoteBlockId: 'original-block-id-1',
+                            __deepnotePocket: {
+                                blockGroup: 'group-1',
+                                type: 'code',
+                                sortingKey: 'a0'
+                            }
+                        }
+                    },
+                    {
+                        kind: 1, // NotebookCellKind.Markup
+                        value: '# Markdown',
+                        languageId: 'markdown',
+                        metadata: {
+                            id: 'original-block-id-2',
+                            __deepnoteBlockId: 'original-block-id-2',
+                            __deepnotePocket: {
+                                blockGroup: 'group-2',
+                                type: 'markdown',
+                                sortingKey: 'a1'
+                            }
+                        }
+                    }
+                ],
+                metadata: {
+                    deepnoteProjectId: 'project-id-test',
+                    deepnoteNotebookId: 'notebook-1'
+                }
+            };
+
+            const result = await serializer.serializeNotebook(notebookData as any, {} as any);
+            const yamlString = new TextDecoder().decode(result);
+            const parsedResult = yaml.load(yamlString) as DeepnoteFile;
+
+            const notebook = parsedResult.project.notebooks.find((nb) => nb.id === 'notebook-1');
+            assert.isDefined(notebook);
+            assert.strictEqual(notebook!.blocks.length, 2);
+
+            // Verify block IDs are preserved
+            assert.strictEqual(notebook!.blocks[0].id, 'original-block-id-1', 'First block ID should be preserved');
+            assert.strictEqual(notebook!.blocks[1].id, 'original-block-id-2', 'Second block ID should be preserved');
+        });
+
+        test('should recover IDs via content matching when cells lack ID metadata', async () => {
+            const projectData: DeepnoteFile = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2023-01-01T00:00:00Z',
+                    modifiedAt: '2023-01-02T00:00:00Z'
+                },
+                project: {
+                    id: 'project-recover-ids',
+                    name: 'Recover ID Test',
+                    notebooks: [
+                        {
+                            id: 'notebook-1',
+                            name: 'Test Notebook',
+                            blocks: [
+                                {
+                                    blockGroup: 'group-1',
+                                    id: 'original-id',
+                                    content: 'test',
+                                    sortingKey: 'a0',
+                                    type: 'code'
+                                }
+                            ],
+                            executionMode: 'block',
+                            isModule: false
+                        }
+                    ],
+                    settings: {}
+                }
+            };
+
+            manager.storeOriginalProject('project-recover-ids', projectData, 'notebook-1');
+
+            // Cells WITHOUT id metadata (simulating what VS Code might provide if it strips metadata)
+            // But content matches the original block
+            const notebookData = {
+                cells: [
+                    {
+                        kind: 2,
+                        value: 'test', // Same content as original block
+                        languageId: 'python',
+                        metadata: {} // No ID - this is the problem case!
+                    }
+                ],
+                metadata: {
+                    deepnoteProjectId: 'project-recover-ids',
+                    deepnoteNotebookId: 'notebook-1'
+                }
+            };
+
+            const result = await serializer.serializeNotebook(notebookData as any, {} as any);
+            const yamlString = new TextDecoder().decode(result);
+            const parsedResult = yaml.load(yamlString) as DeepnoteFile;
+
+            const notebook = parsedResult.project.notebooks.find((nb) => nb.id === 'notebook-1');
+            assert.isDefined(notebook);
+
+            // Block ID should be recovered from original via content matching
+            assert.strictEqual(
+                notebook!.blocks[0].id,
+                'original-id',
+                'Block ID should be recovered via content matching'
+            );
+        });
+
+        test('should generate new IDs when content does not match any original block', async () => {
+            const projectData: DeepnoteFile = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2023-01-01T00:00:00Z',
+                    modifiedAt: '2023-01-02T00:00:00Z'
+                },
+                project: {
+                    id: 'project-new-content',
+                    name: 'New Content Test',
+                    notebooks: [
+                        {
+                            id: 'notebook-1',
+                            name: 'Test Notebook',
+                            blocks: [
+                                {
+                                    blockGroup: 'group-1',
+                                    id: 'original-id',
+                                    content: 'original content',
+                                    sortingKey: 'a0',
+                                    type: 'code'
+                                }
+                            ],
+                            executionMode: 'block',
+                            isModule: false
+                        }
+                    ],
+                    settings: {}
+                }
+            };
+
+            manager.storeOriginalProject('project-new-content', projectData, 'notebook-1');
+
+            // Cell with different content than any original block
+            const notebookData = {
+                cells: [
+                    {
+                        kind: 2,
+                        value: 'completely new content', // Different from original
+                        languageId: 'python',
+                        metadata: {}
+                    }
+                ],
+                metadata: {
+                    deepnoteProjectId: 'project-new-content',
+                    deepnoteNotebookId: 'notebook-1'
+                }
+            };
+
+            const result = await serializer.serializeNotebook(notebookData as any, {} as any);
+            const yamlString = new TextDecoder().decode(result);
+            const parsedResult = yaml.load(yamlString) as DeepnoteFile;
+
+            const notebook = parsedResult.project.notebooks.find((nb) => nb.id === 'notebook-1');
+            assert.isDefined(notebook);
+
+            // Block should have a newly generated ID since content doesn't match
+            assert.isDefined(notebook!.blocks[0].id);
+            assert.notStrictEqual(
+                notebook!.blocks[0].id,
+                'original-id',
+                'Block ID should be newly generated when content differs'
+            );
+        });
+    });
+
     suite('integration scenarios', () => {
         test('should maintain independence between serializer instances', () => {
             const manager1 = new DeepnoteNotebookManager();

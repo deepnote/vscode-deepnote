@@ -201,9 +201,10 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         projectUri: Uri,
         projectId: string,
         projectName: string,
-        projectData: DeepnoteFile
+        projectData: DeepnoteFile,
+        notebookUri?: string
     ): Promise<Uri | undefined> {
-        const prepared = await this.prepareSnapshotData(projectUri, projectId, projectName, projectData);
+        const prepared = await this.prepareSnapshotData(projectUri, projectId, projectName, projectData, notebookUri);
 
         if (!prepared) {
             logger.debug(`[Snapshot] No changes detected, skipping snapshot creation`);
@@ -711,7 +712,8 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
                 projectUri,
                 projectId,
                 originalProject.project.name,
-                snapshotProject
+                snapshotProject,
+                notebookUri
             );
 
             if (snapshotUri) {
@@ -724,7 +726,8 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
                 projectUri,
                 projectId,
                 originalProject.project.name,
-                snapshotProject
+                snapshotProject,
+                notebookUri
             );
 
             if (snapshotUri) {
@@ -792,7 +795,8 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         projectUri: Uri,
         projectId: string,
         projectName: string,
-        projectData: DeepnoteFile
+        projectData: DeepnoteFile,
+        notebookUri?: string
     ): Promise<{ latestPath: Uri; content: Uint8Array } | undefined> {
         let latestPath: Uri;
 
@@ -827,6 +831,21 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             snapshotData.metadata.createdAt = new Date().toISOString();
         }
         snapshotData.metadata.modifiedAt = new Date().toISOString();
+
+        // Add environment and execution metadata to snapshot
+        if (notebookUri) {
+            const executionMetadata = this.getExecutionMetadata(notebookUri);
+
+            if (executionMetadata) {
+                snapshotData.execution = executionMetadata;
+            }
+
+            const environmentMetadata = await this.getEnvironmentMetadata(notebookUri);
+
+            if (environmentMetadata) {
+                snapshotData.environment = environmentMetadata;
+            }
+        }
 
         const yamlString = yaml.dump(snapshotData, {
             indent: 2,
@@ -901,9 +920,10 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         projectUri: Uri,
         projectId: string,
         projectName: string,
-        projectData: DeepnoteFile
+        projectData: DeepnoteFile,
+        notebookUri?: string
     ): Promise<Uri | undefined> {
-        const prepared = await this.prepareSnapshotData(projectUri, projectId, projectName, projectData);
+        const prepared = await this.prepareSnapshotData(projectUri, projectId, projectName, projectData, notebookUri);
 
         if (!prepared) {
             logger.debug(`[Snapshot] No changes detected, skipping latest snapshot update`);

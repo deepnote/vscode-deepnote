@@ -61,7 +61,13 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
      * @param notebookId Initial notebook ID to set as current
      */
     storeOriginalProject(projectId: string, project: DeepnoteProject, notebookId: string): void {
-        this.originalProjects.set(projectId, project);
+        // Deep clone to prevent mutations from affecting stored state
+        // This is critical for multi-notebook projects where multiple notebooks
+        // share the same stored project reference
+        // Using structuredClone to handle circular references (e.g., in output metadata)
+        const clonedProject = structuredClone(project);
+
+        this.originalProjects.set(projectId, clonedProject);
         this.currentNotebookId.set(projectId, notebookId);
     }
 

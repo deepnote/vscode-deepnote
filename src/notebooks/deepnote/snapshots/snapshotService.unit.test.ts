@@ -470,6 +470,8 @@ suite('SnapshotService', () => {
 
             const snapshotYaml = `
 version: '1.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00Z'
 project:
   id: test-project-id-123
   name: Test Project
@@ -479,6 +481,7 @@ project:
       blocks:
         - id: block-1
           type: code
+          sortingKey: 'a0'
           content: print(1)
           outputs:
             - output_type: stream
@@ -486,6 +489,7 @@ project:
               text: '1'
         - id: block-2
           type: markdown
+          sortingKey: 'a1'
           content: '# Hello'
 `;
             const mockFs = mock<typeof import('vscode').workspace.fs>();
@@ -542,10 +546,18 @@ project:
 
             const snapshotYaml = `
 version: '1.0'
+metadata:
+  createdAt: '2025-01-02T00:00:00Z'
 project:
+  id: test-project-id-123
+  name: Test Project
   notebooks:
-    - blocks:
+    - id: notebook-1
+      name: Notebook 1
+      blocks:
         - id: block-1
+          type: code
+          sortingKey: 'a0'
           outputs:
             - output_type: stream
               text: 'from timestamped'

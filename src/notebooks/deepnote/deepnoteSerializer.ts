@@ -277,7 +277,12 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 await this.addSnapshotMetadataToProject(originalProject, data);
             }
 
-            logger.debug('SerializeNotebook: Cloned blocks, updating modifiedAt');
+            logger.debug('SerializeNotebook: Cloned blocks, computing snapshotHash');
+
+            // Compute snapshot hash from all execution-affecting factors
+            (originalProject.metadata as { snapshotHash?: string }).snapshotHash = await this.computeSnapshotHash(
+                originalProject
+            );
 
             originalProject.metadata.modifiedAt = new Date().toISOString();
 
@@ -305,9 +310,9 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
     }
 
     /**
-     * Attempts to recover block IDs when VS Code fails to preserve cell metadata.
-     * Uses content-based matching as a fallback strategy.
-     * @param blocks Blocks converted from cells (may have generated IDs if metadata was lost)
+     * Attempts to recover block metadata when VS Code fails to preserve cell metadata.
+     * Uses content-based matching as a fallback strategy to recover id, sortingKey, and blockGroup.
+     * @param blocks Blocks converted from cells (may have generated values if metadata was lost)
      * @param originalBlocks Original blocks from the stored project
      */
     private recoverBlockIdsFromOriginal(blocks: DeepnoteBlock[], originalBlocks: DeepnoteBlock[]): void {
@@ -335,7 +340,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             }
         }
 
-        // Second pass: try to recover IDs for blocks that got new generated IDs
+        // Second pass: try to recover metadata for blocks that got new generated values
         let recoveredCount = 0;
 
         for (const block of blocks) {
@@ -360,12 +365,16 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 if (!claimedIds.has(candidate.id)) {
                     const oldId = block.id;
 
+                    // Recover all key metadata from the original block
                     block.id = candidate.id;
+                    block.sortingKey = candidate.sortingKey;
+                    block.blockGroup = candidate.blockGroup;
+
                     claimedIds.add(candidate.id);
                     recoveredCount++;
 
                     logger.debug(
-                        `SerializeNotebook: Recovered block ID ${candidate.id} (was ${oldId}) via content match`
+                        `SerializeNotebook: Recovered block metadata for ${candidate.id} (was ${oldId}) via content match`
                     );
                     break;
                 }
@@ -374,7 +383,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
         if (recoveredCount > 0) {
             logger.info(
-                `SerializeNotebook: Recovered ${recoveredCount} block IDs via content matching ` +
+                `SerializeNotebook: Recovered ${recoveredCount} blocks via content matching ` +
                     `(VS Code metadata may have been lost)`
             );
         }
@@ -509,6 +518,41 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
         );
 
         return activeNotebook?.metadata?.deepnoteNotebookId;
+    }
+
+    /**
+     * Computes a deterministic hash of all factors that affect notebook execution and outputs.
+     * Includes contentHashes from all blocks, environment hash, version, and integrations.
+     * Excludes temporal fields to ensure identical snapshots produce identical hashes.
+     */
+    private async computeSnapshotHash(project: DeepnoteFile): Promise<string> {
+        // Collect all block contentHashes (sorted for determinism)
+        const contentHashes: string[] = [];
+
+        for (const notebook of project.project.notebooks) {
+            for (const block of notebook.blocks ?? []) {
+                if (block.contentHash) {
+                    contentHashes.push(block.contentHash);
+                }
+            }
+        }
+
+        contentHashes.sort();
+
+        // Build deterministic hash input
+        const hashInput = {
+            contentHashes,
+            environmentHash: project.environment?.hash ?? null,
+            integrations: (project.project.integrations ?? [])
+                .map((i) => ({ id: i.id, name: i.name, type: i.type }))
+                .sort((a, b) => a.id.localeCompare(b.id)),
+            version: project.version
+        };
+
+        const hashData = JSON.stringify(hashInput);
+        const hash = await computeHash(hashData, 'SHA-256');
+
+        return `sha256:${hash}`;
     }
 
     /**

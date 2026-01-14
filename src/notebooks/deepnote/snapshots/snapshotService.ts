@@ -1,4 +1,11 @@
-import type { DeepnoteBlock, DeepnoteFile, Environment, Execution, ExecutionError } from '@deepnote/blocks';
+import {
+    deepnoteFileSchema,
+    type DeepnoteBlock,
+    type DeepnoteFile,
+    type Environment,
+    type Execution,
+    type ExecutionError
+} from '@deepnote/blocks';
 import fastDeepEqual from 'fast-deep-equal';
 import { inject, injectable, optional } from 'inversify';
 import * as yaml from 'js-yaml';
@@ -734,6 +741,9 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
                 logger.info(`[Snapshot] Updated latest snapshot: ${snapshotUri.toString()}`);
             }
         }
+
+        // Clear execution state so the next run starts fresh
+        this.clearExecutionState(notebookUri);
     }
 
     private async parseSnapshotFile(path: Uri): Promise<Map<string, DeepnoteOutput[]>> {
@@ -752,35 +762,19 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             return outputsMap;
         }
 
-        if (typeof snapshotData !== 'object' || snapshotData === null) {
-            logger.error(`[Snapshot] Invalid snapshot structure (not an object): ${Utils.basename(path)}`);
+        const result = deepnoteFileSchema.safeParse(snapshotData);
+
+        if (!result.success) {
+            logger.warn(`[Snapshot] Invalid snapshot structure: ${Utils.basename(path)}`, result.error);
 
             return outputsMap;
         }
 
-        const data = snapshotData as DeepnoteFile;
-        const notebooks = data.project?.notebooks;
+        const data = result.data;
 
-        if (!Array.isArray(notebooks)) {
-            logger.debug(`[Snapshot] No notebooks array in snapshot: ${Utils.basename(path)}`);
-
-            return outputsMap;
-        }
-
-        for (const notebook of notebooks) {
-            const blocks = notebook?.blocks;
-
-            if (!Array.isArray(blocks)) {
-                continue;
-            }
-
-            for (const block of blocks) {
-                if (
-                    typeof block === 'object' &&
-                    block !== null &&
-                    typeof block.id === 'string' &&
-                    Array.isArray(block.outputs)
-                ) {
+        for (const notebook of data.project.notebooks) {
+            for (const block of notebook.blocks) {
+                if (block.outputs) {
                     outputsMap.set(block.id, block.outputs as DeepnoteOutput[]);
                 }
             }

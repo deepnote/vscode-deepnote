@@ -166,8 +166,8 @@ suite('SnapshotService', () => {
 
             const result = service.mergeOutputsIntoBlocks(blocks, outputs);
 
-            assert.deepEqual(result[0].outputs, [{ output_type: 'stream', name: 'stdout', text: '1\n' }]);
-            assert.deepEqual(result[1].outputs, [{ output_type: 'stream', name: 'stdout', text: '2\n' }]);
+            assert.deepStrictEqual(result[0].outputs, [{ output_type: 'stream', name: 'stdout', text: '1\n' }]);
+            assert.deepStrictEqual(result[1].outputs, [{ output_type: 'stream', name: 'stdout', text: '2\n' }]);
             assert.isUndefined(result[2].outputs);
         });
 
@@ -200,7 +200,7 @@ suite('SnapshotService', () => {
 
             const result = service.mergeOutputsIntoBlocks(blocks, outputs);
 
-            assert.deepEqual(result[0].outputs, [{ output_type: 'stream', text: 'old' }]);
+            assert.deepStrictEqual(result[0].outputs, [{ output_type: 'stream', text: 'old' }]);
         });
 
         test('should handle empty outputs map', () => {
@@ -352,8 +352,8 @@ suite('SnapshotService', () => {
             const result = service.extractOutputsFromBlocks(blocks);
 
             assert.strictEqual(result.size, 2);
-            assert.deepEqual(result.get('block-1'), [{ output_type: 'stream', text: '1' }]);
-            assert.deepEqual(result.get('block-2'), [{ output_type: 'stream', text: '2' }]);
+            assert.deepStrictEqual(result.get('block-1'), [{ output_type: 'stream', text: '1' }]);
+            assert.deepStrictEqual(result.get('block-2'), [{ output_type: 'stream', text: '2' }]);
         });
 
         test('should skip blocks without outputs', () => {
@@ -410,7 +410,7 @@ suite('SnapshotService', () => {
 
             const result = service.extractOutputsFromBlocks(blocks);
 
-            assert.deepEqual(result.get('block-1'), [complexOutput]);
+            assert.deepStrictEqual(result.get('block-1'), [complexOutput]);
         });
     });
 
@@ -500,7 +500,7 @@ project:
 
             assert.isDefined(result);
             assert.strictEqual(result!.size, 1);
-            assert.deepEqual(result!.get('block-1'), [{ output_type: 'stream', name: 'stdout', text: '1' }]);
+            assert.deepStrictEqual(result!.get('block-1'), [{ output_type: 'stream', name: 'stdout', text: '1' }]);
         });
 
         test('should return undefined when no snapshot files found', async () => {

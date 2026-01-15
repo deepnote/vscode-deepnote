@@ -629,13 +629,65 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         }
     }
 
+    /**
+     * Checks if there are any cells with pending execution state changes.
+     * Returns true if any tracked cell started execution but hasn't finished yet.
+     */
+    private hasPendingCellStateChanges(notebookUri: string): boolean {
+        const state = this.executionStates.get(notebookUri);
+
+        if (!state) {
+            return false;
+        }
+
+        for (const metadata of state.cellMetadata.values()) {
+            if (metadata.executionStartedAt && !metadata.executionFinishedAt) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Waits for pending cell state change events to be processed.
+     * Uses an event-driven approach with a fallback timeout.
+     */
+    private waitForPendingCellStateChanges(notebookUri: string, timeoutMs: number): Promise<void> {
+        return new Promise((resolve) => {
+            // If no pending changes, resolve immediately
+            if (!this.hasPendingCellStateChanges(notebookUri)) {
+                resolve();
+
+                return;
+            }
+
+            // Set up a one-time listener for cell state changes
+            const disposable = notebookCellExecutions.onDidChangeNotebookCellExecutionState((e) => {
+                if (e.cell.notebook.uri.toString() === notebookUri && e.state === NotebookCellExecutionState.Idle) {
+                    // Check if all pending cells are now complete
+                    if (!this.hasPendingCellStateChanges(notebookUri)) {
+                        disposable.dispose();
+                        resolve();
+                    }
+                }
+            });
+
+            // Fallback timeout to prevent hanging indefinitely
+            setTimeout(() => {
+                disposable.dispose();
+                resolve();
+            }, timeoutMs);
+        });
+    }
+
     private async onExecutionComplete(notebookUri: string): Promise<void> {
         logger.debug(`[Snapshot] onExecutionComplete called for ${notebookUri}`);
 
-        // Wait briefly for any pending cell state change events to be processed.
+        // Wait for any pending cell state change events to be processed.
         // This is needed because the queue completion event can fire before the
         // last cell's Idle state change event has been processed (race condition).
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        await this.waitForPendingCellStateChanges(notebookUri, 100);
 
         if (!this.isSnapshotsEnabled()) {
             logger.debug(`[Snapshot] Snapshots not enabled, skipping`);

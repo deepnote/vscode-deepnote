@@ -61,7 +61,7 @@ export function addPocketToCellMetadata(cell: NotebookCellData): void {
     };
 
     logger.debug(
-        `[Pocket] addPocketToCellMetadata: output id=${cell.metadata.id}, pocket keys=${Object.keys(pocket).join(',')}}`
+        `[Pocket] addPocketToCellMetadata: output id=${cell.metadata.id}, pocket keys=${Object.keys(pocket).join(',')}`
     );
 }
 

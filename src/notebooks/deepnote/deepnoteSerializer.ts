@@ -117,7 +117,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             // Log block IDs from source file
             for (let i = 0; i < (selectedNotebook.blocks ?? []).length; i++) {
                 const block = selectedNotebook.blocks![i];
-                logger.debug(`DeserializeNotebook: block[${i}] id=${block.id} from source file`);
+                logger.trace(`DeserializeNotebook: block[${i}] id=${block.id} from source file`);
             }
 
             let cells = this.converter.convertBlocksToCells(selectedNotebook.blocks ?? []);
@@ -126,7 +126,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
             // Log cell metadata.id after conversion
             for (let i = 0; i < cells.length; i++) {
-                logger.debug(`DeserializeNotebook: cell[${i}] metadata.id=${cells[i].metadata?.id} after conversion`);
+                logger.trace(`DeserializeNotebook: cell[${i}] metadata.id=${cells[i].metadata?.id} after conversion`);
             }
 
             // Merge outputs from snapshot if snapshots are enabled
@@ -232,7 +232,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             // Log cell metadata IDs before conversion
             for (let i = 0; i < data.cells.length; i++) {
                 const cell = data.cells[i];
-                logger.debug(
+                logger.trace(
                     `SerializeNotebook: cell[${i}] metadata.id=${cell.metadata?.id}, metadata keys=${
                         cell.metadata ? Object.keys(cell.metadata).join(',') : 'none'
                     }`
@@ -251,7 +251,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
             // Log block IDs after conversion and recovery
             for (let i = 0; i < blocks.length; i++) {
-                logger.debug(`SerializeNotebook: block[${i}] id=${blocks[i].id}`);
+                logger.trace(`SerializeNotebook: block[${i}] id=${blocks[i].id}`);
             }
 
             // Add snapshot metadata to blocks (contentHash and execution timing)

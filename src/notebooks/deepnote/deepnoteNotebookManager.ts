@@ -96,7 +96,7 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
             return false;
         }
 
-        const updatedProject = JSON.parse(JSON.stringify(project)) as DeepnoteProject;
+        const updatedProject = structuredClone(project);
         updatedProject.project.integrations = integrations;
 
         const currentNotebookId = this.currentNotebookId.get(projectId);

@@ -1,6 +1,14 @@
 {
+    "GHSA-73rr-hh4g-fpgx": {
+        "notes": "diff DoS via infinite loop when parsing patches with special line break characters. Accepted risk: dev-only dependency (mocha, sinon, tslint), only affects development/CI, not bundled in extension.",
+        "expiry": "2026-04-15"
+    },
     "GHSA-848j-6mx2-7j84": {
         "notes": "CVE-2025-14505: elliptic ECDSA signature corruption can lead to private key recovery if attacker obtains both faulty and correct signatures for identical inputs. Accepted risk: dev-only transitive dependency (node-stdlib-browser -> crypto-browserify -> browserify-sign), not used for signing in this project, no fix available.",
         "expiry": "2026-04-08"
+    },
+    "GHSA-g9mf-h72j-4rw9": {
+        "notes": "undici DoS via unbounded decompression chain. Accepted risk: dev-only transitive dependency (@actions/core, @actions/github), only affects CI/CD workflows, not bundled in extension.",
+        "expiry": "2026-04-15"
     }
 }

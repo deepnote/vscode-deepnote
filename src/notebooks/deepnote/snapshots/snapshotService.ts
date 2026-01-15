@@ -16,6 +16,7 @@ import { IExtensionSyncActivationService } from '../../../platform/activation/ty
 import { IDisposableRegistry } from '../../../platform/common/types';
 import type { DeepnoteOutput } from '../../../platform/deepnote/deepnoteTypes';
 import { InvalidProjectNameError } from '../../../platform/errors/invalidProjectNameError';
+import { slugifyProjectName } from './snapshotFiles';
 import { logger } from '../../../platform/logging';
 import {
     notebookCellExecutions,
@@ -101,30 +102,6 @@ class TimeoutError extends Error {
         super(message);
         this.name = 'TimeoutError';
     }
-}
-
-/**
- * Slugifies a project name for use in filenames.
- * Converts to lowercase, replaces spaces with hyphens, removes non-alphanumeric chars.
- * @throws Error if the result is empty after transformation
- */
-function slugifyProjectName(name: string): string {
-    if (typeof name !== 'string' || !name.trim()) {
-        throw new InvalidProjectNameError();
-    }
-
-    const slug = name
-        .toLowerCase()
-        .replace(/\s+/g, '-')
-        .replace(/[^a-z0-9-]/g, '')
-        .replace(/-+/g, '-')
-        .replace(/^-|-$/g, '');
-
-    if (!slug) {
-        throw new InvalidProjectNameError();
-    }
-
-    return slug;
 }
 
 /**

@@ -17,16 +17,7 @@ import { DeepnoteTreeItem, DeepnoteTreeItemType, DeepnoteTreeItemContext } from 
 import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { readDeepnoteProjectFile } from './deepnoteProjectUtils';
 import { ILogger } from '../../platform/logging/types';
-
-/** File suffix for snapshot files, used to filter them from the explorer */
-const SNAPSHOT_FILE_SUFFIX = '.snapshot.deepnote';
-
-/**
- * Checks if a URI represents a snapshot file
- */
-function isSnapshotFile(uri: Uri): boolean {
-    return uri.path.endsWith(SNAPSHOT_FILE_SUFFIX);
-}
+import { isSnapshotFile, SNAPSHOT_FILE_SUFFIX } from './snapshots/snapshotFiles';
 
 /**
  * Comparator function for sorting tree items alphabetically by label (case-insensitive)

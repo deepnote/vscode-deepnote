@@ -11,8 +11,8 @@ import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
     private readonly currentNotebookId = new Map<string, string>();
     private readonly originalProjects = new Map<string, DeepnoteProject>();
-    private readonly selectedNotebookByProject = new Map<string, string>();
     private readonly projectsWithInitNotebookRun = new Set<string>();
+    private readonly selectedNotebookByProject = new Map<string, string>();
 
     /**
      * Gets the currently selected notebook ID for a project.
@@ -61,7 +61,13 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
      * @param notebookId Initial notebook ID to set as current
      */
     storeOriginalProject(projectId: string, project: DeepnoteProject, notebookId: string): void {
-        this.originalProjects.set(projectId, project);
+        // Deep clone to prevent mutations from affecting stored state
+        // This is critical for multi-notebook projects where multiple notebooks
+        // share the same stored project reference
+        // Using structuredClone to handle circular references (e.g., in output metadata)
+        const clonedProject = structuredClone(project);
+
+        this.originalProjects.set(projectId, clonedProject);
         this.currentNotebookId.set(projectId, notebookId);
     }
 
@@ -90,7 +96,7 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
             return false;
         }
 
-        const updatedProject = JSON.parse(JSON.stringify(project)) as DeepnoteProject;
+        const updatedProject = structuredClone(project);
         updatedProject.project.integrations = integrations;
 
         const currentNotebookId = this.currentNotebookId.get(projectId);

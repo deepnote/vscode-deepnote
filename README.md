@@ -16,7 +16,6 @@ A powerful [Visual Studio Code](https://marketplace.visualstudio.com/items?itemN
 
 ![Deepnote Projects](./assets/deepnote-projects.png)
 
-
 Run Deepnote locally inside your IDE and unlock the next generation of data workflows:
 
 - **Rich block types:** Combine Python, Markdown, data visualizations, tables, and more — all in one place
@@ -66,6 +65,7 @@ Open the Command Palette (`Cmd+Shift+P` or `Ctrl+Shift+P`) and type `Deepnote` t
 | `Deepnote: Import Notebook`        | Import an existing notebook into your project      |
 | `Notebook: Select Notebook Kernel` | Select or switch kernels within your notebook      |
 | `Notebook: Change Cell Language`   | Change the language of the cell currently in focus |
+| `Deepnote: Enable Snapshots`       | Enable snapshot mode for the current workspace     |
 
 ### Database integrations
 
@@ -88,6 +88,24 @@ SELECT * FROM users WHERE created_at > '2024-01-01'
 ```
 
 Results are displayed as interactive tables that you can explore and export.
+
+### Snapshot mode
+
+Snapshot mode gives you a historical, portable record of all notebook executions without polluting your main project files. This makes it easier to work with Git since outputs are stored separately from your source code.
+
+**How it works:**
+
+- Execution outputs are saved to a `snapshots/` folder alongside your project
+- Your main `.deepnote` file stays clean (no outputs), making diffs readable
+- Each "Run All" execution creates a timestamped snapshot for historical tracking
+- Running individual cells updates only the latest snapshot
+
+**To enable:**
+
+1. Open Command Palette (`Cmd+Shift+P` or `Ctrl+Shift+P`)
+2. Run `Deepnote: Enable Snapshots`
+
+Once enabled, snapshots are automatically created when you execute notebooks. You can add the `snapshots/` folder to `.gitignore` to keep outputs local, or commit them to share execution history with your team.
 
 ## Need help?
 

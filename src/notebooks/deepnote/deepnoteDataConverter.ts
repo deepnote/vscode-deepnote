@@ -95,6 +95,8 @@ export class DeepnoteDataConverter {
             cell.metadata = {
                 ...block.metadata,
                 id: block.id,
+                // Store a backup of the ID under a different key in case VS Code modifies 'id'
+                __deepnoteBlockId: block.id,
                 type: block.type,
                 sortingKey: block.sortingKey,
                 ...(blockWithOptionalFields.blockGroup && { blockGroup: blockWithOptionalFields.blockGroup }),

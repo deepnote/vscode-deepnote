@@ -94,6 +94,16 @@
                 "icon": "$(reveal)"
             },
             {
+                "command": "deepnote.enableSnapshots",
+                "title": "%deepnote.commands.enableSnapshots.title%",
+                "category": "Deepnote"
+            },
+            {
+                "command": "deepnote.disableSnapshots",
+                "title": "%deepnote.commands.disableSnapshots.title%",
+                "category": "Deepnote"
+            },
+            {
                 "command": "deepnote.environments.create",
                 "title": "%deepnote.commands.environments.create.title%",
                 "category": "Deepnote",
@@ -1639,6 +1649,12 @@
                     "default": false,
                     "description": "Disable SSL certificate verification (for development only)",
                     "scope": "application"
+                },
+                "deepnote.snapshots.enabled": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "When enabled, outputs are saved to separate snapshot files in a 'snapshots' folder instead of the main .deepnote file.",
+                    "scope": "resource"
                 },
                 "deepnote.experiments.enabled": {
                     "type": "boolean",

@@ -7,7 +7,7 @@ import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
 import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
-import { ISnapshotMetadataService, ISnapshotMetadataServiceFull } from './snapshotMetadataService';
+import { SnapshotService } from './snapshots/snapshotService';
 import { computeHash } from '../../platform/common/crypto';
 
 export type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
@@ -56,7 +56,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
     constructor(
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
-        @inject(ISnapshotMetadataService) @optional() private readonly snapshotService?: ISnapshotMetadataServiceFull
+        @inject(SnapshotService) @optional() private readonly snapshotService?: SnapshotService
     ) {}
 
     /**
@@ -114,9 +114,43 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 throw new Error(l10n.t('No notebook selected or found'));
             }
 
-            const cells = this.converter.convertBlocksToCells(selectedNotebook.blocks ?? []);
+            // Log block IDs from source file
+            for (let i = 0; i < (selectedNotebook.blocks ?? []).length; i++) {
+                const block = selectedNotebook.blocks![i];
+                logger.trace(`DeserializeNotebook: block[${i}] id=${block.id} from source file`);
+            }
+
+            let cells = this.converter.convertBlocksToCells(selectedNotebook.blocks ?? []);
 
             logger.debug(`DeepnoteSerializer: Converted ${cells.length} cells from notebook blocks`);
+
+            // Log cell metadata.id after conversion
+            for (let i = 0; i < cells.length; i++) {
+                logger.trace(`DeserializeNotebook: cell[${i}] metadata.id=${cells[i].metadata?.id} after conversion`);
+            }
+
+            // Merge outputs from snapshot if snapshots are enabled
+            if (this.snapshotService?.isSnapshotsEnabled()) {
+                try {
+                    const snapshotOutputs = await this.snapshotService.readSnapshot(projectId);
+
+                    if (snapshotOutputs) {
+                        logger.debug(`DeepnoteSerializer: Merging ${snapshotOutputs.size} outputs from snapshot`);
+                        const blocksWithOutputs = this.snapshotService.mergeOutputsIntoBlocks(
+                            selectedNotebook.blocks ?? [],
+                            snapshotOutputs
+                        );
+
+                        cells = this.converter.convertBlocksToCells(blocksWithOutputs);
+                    }
+                } catch (error) {
+                    logger.warn(
+                        `DeepnoteSerializer: Failed to merge snapshot outputs for project ${projectId}, using baseline cells`,
+                        error
+                    );
+                    // Fall back to baseline cells (already set above)
+                }
+            }
 
             this.notebookManager.storeOriginalProject(deepnoteFile.project.id, deepnoteFile, selectedNotebook.id);
             logger.debug(`DeepnoteSerializer: Stored project ${projectId} in notebook manager`);
@@ -165,13 +199,18 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
             logger.debug(`SerializeNotebook: Project ID: ${projectId}`);
 
-            const originalProject = this.notebookManager.getOriginalProject(projectId) as DeepnoteFile | undefined;
+            // Clone the project before modifying to prevent state corruption
+            // This is critical for multi-notebook projects where the stored project
+            // is shared between notebook serialization calls
+            const storedProject = this.notebookManager.getOriginalProject(projectId) as DeepnoteFile | undefined;
 
-            if (!originalProject) {
+            if (!storedProject) {
                 throw new Error('Original Deepnote project not found. Cannot save changes.');
             }
 
-            logger.debug('SerializeNotebook: Got original project');
+            const originalProject = structuredClone(storedProject);
+
+            logger.debug('SerializeNotebook: Got and cloned original project');
 
             const notebookId =
                 data.metadata?.deepnoteNotebookId || this.notebookManager.getTheSelectedNotebookForAProject(projectId);
@@ -190,23 +229,65 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
             logger.debug(`SerializeNotebook: Found notebook, converting ${data.cells.length} cells to blocks`);
 
+            // Log cell metadata IDs before conversion
+            for (let i = 0; i < data.cells.length; i++) {
+                const cell = data.cells[i];
+                logger.trace(
+                    `SerializeNotebook: cell[${i}] metadata.id=${cell.metadata?.id}, metadata keys=${
+                        cell.metadata ? Object.keys(cell.metadata).join(',') : 'none'
+                    }`
+                );
+            }
+
             // Clone blocks while removing circular references that may have been
             // introduced by VS Code's notebook cell/output handling
             const blocks = this.converter.convertCellsToBlocks(data.cells);
 
-            logger.debug(`SerializeNotebook: Converted to ${blocks.length} blocks, now cloning without circular refs`);
+            logger.debug(`SerializeNotebook: Converted to ${blocks.length} blocks`);
+
+            // Try to recover block IDs from original blocks when VS Code fails to preserve metadata
+            // This uses content-based matching as a fallback when metadata.id is missing
+            this.recoverBlockIdsFromOriginal(blocks, notebook.blocks ?? []);
+
+            // Log block IDs after conversion and recovery
+            for (let i = 0; i < blocks.length; i++) {
+                logger.trace(`SerializeNotebook: block[${i}] id=${blocks[i].id}`);
+            }
 
             // Add snapshot metadata to blocks (contentHash and execution timing)
             await this.addSnapshotMetadataToBlocks(blocks, data);
 
-            notebook.blocks = cloneWithoutCircularRefs<DeepnoteBlock[]>(blocks);
+            // Handle snapshot mode: strip outputs and execution metadata from main file
+            if (this.snapshotService?.isSnapshotsEnabled()) {
+                // Strip outputs and execution timestamps from main file blocks
+                // Also clone to remove circular references that may cause yaml.dump to fail
+                const strippedBlocks = this.snapshotService.stripOutputsFromBlocks(blocks);
+                notebook.blocks = cloneWithoutCircularRefs<DeepnoteBlock[]>(strippedBlocks);
 
-            logger.debug('SerializeNotebook: Cloned blocks, updating modifiedAt');
+                // Remove top-level execution and environment metadata from main file
+                delete originalProject.execution;
+                delete originalProject.environment;
+
+                logger.debug('SerializeNotebook: Stripped outputs and metadata (snapshot mode)');
+            } else {
+                // Default behavior: outputs in main file
+                notebook.blocks = cloneWithoutCircularRefs<DeepnoteBlock[]>(blocks);
+
+                // Add environment and execution metadata from snapshot service
+                await this.addSnapshotMetadataToProject(originalProject, data);
+            }
+
+            logger.debug('SerializeNotebook: Cloned blocks, computing snapshotHash');
+
+            // Compute snapshot hash from all execution-affecting factors
+            (originalProject.metadata as { snapshotHash?: string }).snapshotHash = await this.computeSnapshotHash(
+                originalProject
+            );
 
             originalProject.metadata.modifiedAt = new Date().toISOString();
 
-            // Add environment and execution metadata from snapshot service
-            await this.addSnapshotMetadataToProject(originalProject, data);
+            // Store the updated project back so subsequent saves start from correct state
+            this.notebookManager.storeOriginalProject(projectId, originalProject, notebookId);
 
             logger.debug('SerializeNotebook: Starting yaml.dump');
 
@@ -224,6 +305,86 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             logger.error('DeepnoteSerializer: Error serializing Deepnote notebook', error);
             throw new Error(
                 `Failed to save Deepnote file: ${error instanceof Error ? error.message : 'Unknown error'}`
+            );
+        }
+    }
+
+    /**
+     * Attempts to recover block metadata when VS Code fails to preserve cell metadata.
+     * Uses content-based matching as a fallback strategy to recover id, sortingKey, and blockGroup.
+     * @param blocks Blocks converted from cells (may have generated values if metadata was lost)
+     * @param originalBlocks Original blocks from the stored project
+     */
+    private recoverBlockIdsFromOriginal(blocks: DeepnoteBlock[], originalBlocks: DeepnoteBlock[]): void {
+        // Build a map of original blocks by content for quick lookup
+        // Key: content (trimmed), Value: array of blocks with that content (in case of duplicates)
+        const contentToOriginalBlocks = new Map<string, DeepnoteBlock[]>();
+
+        for (const originalBlock of originalBlocks) {
+            const content = (originalBlock.content || '').trim();
+            const existing = contentToOriginalBlocks.get(content) || [];
+
+            existing.push(originalBlock);
+            contentToOriginalBlocks.set(content, existing);
+        }
+
+        // Track which original block IDs have been claimed to avoid duplicates
+        const claimedIds = new Set<string>();
+
+        // First pass: mark IDs that are already correctly set from metadata
+        for (const block of blocks) {
+            const hasOriginalId = originalBlocks.some((ob) => ob.id === block.id);
+
+            if (hasOriginalId) {
+                claimedIds.add(block.id);
+            }
+        }
+
+        // Second pass: try to recover metadata for blocks that got new generated values
+        let recoveredCount = 0;
+
+        for (const block of blocks) {
+            // Skip if this block already has an original ID
+            if (claimedIds.has(block.id)) {
+                continue;
+            }
+
+            // Check if this block's ID looks generated (not from original blocks)
+            const hasOriginalId = originalBlocks.some((ob) => ob.id === block.id);
+
+            if (hasOriginalId) {
+                continue;
+            }
+
+            // Try to find a matching original block by content
+            const content = (block.content || '').trim();
+            const candidates = contentToOriginalBlocks.get(content) || [];
+
+            // Find an unclaimed candidate
+            for (const candidate of candidates) {
+                if (!claimedIds.has(candidate.id)) {
+                    const oldId = block.id;
+
+                    // Recover all key metadata from the original block
+                    block.id = candidate.id;
+                    block.sortingKey = candidate.sortingKey;
+                    block.blockGroup = candidate.blockGroup;
+
+                    claimedIds.add(candidate.id);
+                    recoveredCount++;
+
+                    logger.debug(
+                        `SerializeNotebook: Recovered block metadata for ${candidate.id} (was ${oldId}) via content match`
+                    );
+                    break;
+                }
+            }
+        }
+
+        if (recoveredCount > 0) {
+            logger.info(
+                `SerializeNotebook: Recovered ${recoveredCount} blocks via content matching ` +
+                    `(VS Code metadata may have been lost)`
             );
         }
     }
@@ -357,6 +518,41 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
         );
 
         return activeNotebook?.metadata?.deepnoteNotebookId;
+    }
+
+    /**
+     * Computes a deterministic hash of all factors that affect notebook execution and outputs.
+     * Includes contentHashes from all blocks, environment hash, version, and integrations.
+     * Excludes temporal fields to ensure identical snapshots produce identical hashes.
+     */
+    private async computeSnapshotHash(project: DeepnoteFile): Promise<string> {
+        // Collect all block contentHashes (sorted for determinism)
+        const contentHashes: string[] = [];
+
+        for (const notebook of project.project.notebooks) {
+            for (const block of notebook.blocks ?? []) {
+                if (block.contentHash) {
+                    contentHashes.push(block.contentHash);
+                }
+            }
+        }
+
+        contentHashes.sort();
+
+        // Build deterministic hash input
+        const hashInput = {
+            contentHashes,
+            environmentHash: project.environment?.hash ?? null,
+            integrations: (project.project.integrations ?? [])
+                .map((i) => ({ id: i.id, name: i.name, type: i.type }))
+                .sort((a, b) => a.id.localeCompare(b.id)),
+            version: project.version
+        };
+
+        const hashData = JSON.stringify(hashInput);
+        const hash = await computeHash(hashData, 'SHA-256');
+
+        return `sha256:${hash}`;
     }
 
     /**

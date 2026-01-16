@@ -31,20 +31,9 @@ export class StaleOutputStatusBarProvider
 {
     private readonly _onDidChangeCellStatusBarItems = new EventEmitter<void>();
 
-    /**
-     * In-memory cache of content hashes at the time of execution.
-     * This provides immediate access to the hash without waiting for metadata persistence.
-     * Key format: "notebookUri:cellIndex"
-     */
-    private readonly executedContentHashes = new Map<string, string>();
-
     public readonly onDidChangeCellStatusBarItems = this._onDidChangeCellStatusBarItems.event;
 
     constructor(@inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry) {}
-
-    private getCellKey(cell: NotebookCell): string {
-        return `${cell.notebook.uri.toString()}:${cell.index}`;
-    }
 
     public activate(): void {
         this.disposables.push(notebooks.registerNotebookCellStatusBarItemProvider('deepnote', this));
@@ -68,47 +57,6 @@ export class StaleOutputStatusBarProvider
         );
 
         this.disposables.push(this._onDidChangeCellStatusBarItems);
-    }
-
-    /**
-     * Updates the cell's contentHash when execution completes successfully.
-     * This ensures the stale indicator is removed after re-running a cell.
-     */
-    private async handleCellExecutionComplete(cell: NotebookCell): Promise<void> {
-        if (cell.kind !== NotebookCellKind.Code) {
-            return;
-        }
-
-        if (cell.executionSummary?.success === false) {
-            return;
-        }
-
-        try {
-            const content = cell.document.getText();
-            const hash = await computeHash(content, 'SHA-256');
-            const newContentHash = `sha256:${hash}`;
-
-            const cellKey = this.getCellKey(cell);
-
-            this.executedContentHashes.set(cellKey, newContentHash);
-            this._onDidChangeCellStatusBarItems.fire();
-
-            // Also persist the hash to cell metadata for cross-session persistence
-            const existingPocket = (cell.metadata?.__deepnotePocket as Record<string, unknown>) || {};
-            const updatedPocket = { ...existingPocket, contentHash: newContentHash };
-
-            const edit = new WorkspaceEdit();
-            const updatedMetadata = {
-                ...cell.metadata,
-                __deepnotePocket: updatedPocket
-            };
-
-            edit.set(cell.notebook.uri, [NotebookEdit.updateCellMetadata(cell.index, updatedMetadata)]);
-
-            await workspace.applyEdit(edit);
-        } catch {
-            // Silently ignore errors - the stale indicator will just remain
-        }
     }
 
     public provideCellStatusBarItems(
@@ -169,5 +117,57 @@ export class StaleOutputStatusBarProvider
                 arguments: [{ ranges: [{ start: cell.index, end: cell.index + 1 }], document: cell.notebook.uri }]
             }
         };
+    }
+
+    /**
+     * In-memory cache of content hashes at the time of execution.
+     * This provides immediate access to the hash without waiting for metadata persistence.
+     * Key format: cell document URI string
+     */
+    private readonly executedContentHashes = new Map<string, string>();
+
+    private getCellKey(cell: NotebookCell): string {
+        return cell.document.uri.toString();
+    }
+
+    /**
+     * Updates the cell's contentHash when execution completes successfully.
+     * This ensures the stale indicator is removed after re-running a cell.
+     */
+    private async handleCellExecutionComplete(cell: NotebookCell): Promise<void> {
+        if (cell.kind !== NotebookCellKind.Code) {
+            return;
+        }
+
+        if (cell.executionSummary?.success === false) {
+            return;
+        }
+
+        try {
+            const content = cell.document.getText();
+            const hash = await computeHash(content, 'SHA-256');
+            const newContentHash = `sha256:${hash}`;
+
+            const cellKey = this.getCellKey(cell);
+
+            this.executedContentHashes.set(cellKey, newContentHash);
+            this._onDidChangeCellStatusBarItems.fire();
+
+            // Also persist the hash to cell metadata for cross-session persistence
+            const existingPocket = (cell.metadata?.__deepnotePocket as Record<string, unknown>) || {};
+            const updatedPocket = { ...existingPocket, contentHash: newContentHash };
+
+            const edit = new WorkspaceEdit();
+            const updatedMetadata = {
+                ...cell.metadata,
+                __deepnotePocket: updatedPocket
+            };
+
+            edit.set(cell.notebook.uri, [NotebookEdit.updateCellMetadata(cell.index, updatedMetadata)]);
+
+            await workspace.applyEdit(edit);
+        } catch {
+            // Silently ignore errors - the stale indicator will just remain
+        }
     }
 }

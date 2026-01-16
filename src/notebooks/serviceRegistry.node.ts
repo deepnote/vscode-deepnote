@@ -58,6 +58,7 @@ import {
     IPlatformDeepnoteNotebookManager
 } from '../platform/notebooks/deepnote/types';
 import { SqlCellStatusBarProvider } from './deepnote/sqlCellStatusBarProvider';
+import { StaleOutputStatusBarProvider } from './deepnote/staleOutputStatusBarProvider';
 import {
     IDeepnoteToolkitInstaller,
     IDeepnoteServerStarter,
@@ -178,6 +179,10 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
         SqlCellStatusBarProvider
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        StaleOutputStatusBarProvider
     );
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,

@@ -8,6 +8,7 @@ import {
     NotebookDocument,
     NotebookDocumentChangeEvent,
     ProviderResult,
+    Uri,
     l10n,
     notebooks,
     workspace
@@ -150,11 +151,19 @@ export class DirtyInputBlockStatusBarProvider
     }
 
     private cleanupHashes(notebook: NotebookDocument): void {
-        const notebookUriString = notebook.uri.toString();
+        const notebookPath = notebook.uri.path;
 
+        // Cell keys are vscode-notebook-cell URIs (e.g., vscode-notebook-cell:/path/to/notebook.deepnote#cell0)
+        // We need to parse each key and compare the path portion with the notebook's path
         for (const key of this.executedContentHashes.keys()) {
-            if (key.startsWith(notebookUriString)) {
-                this.executedContentHashes.delete(key);
+            try {
+                const cellUri = Uri.parse(key);
+
+                if (cellUri.path === notebookPath) {
+                    this.executedContentHashes.delete(key);
+                }
+            } catch {
+                // If we can't parse the key, skip it
             }
         }
     }

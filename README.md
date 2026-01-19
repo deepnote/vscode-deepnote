@@ -119,6 +119,12 @@ Once enabled, snapshots are automatically created when you execute notebooks. Yo
 
 Want to contribute? Check out our [Contributing guide](CONTRIBUTING.md) for detailed setup instructions.
 
+## Third-party licenses
+
+This project includes the following third-party packages with notable licenses:
+
+- **tar** - Licensed under the [Blue Oak Model License 1.0.0](https://blueoakcouncil.org/license/1.0.0)
+
 ---
 
 <div align="center">

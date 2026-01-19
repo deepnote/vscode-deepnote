@@ -76,17 +76,22 @@ export function createMockOutput(options?: CreateMockOutputOptions): NotebookCel
  * @returns A mock NotebookCell
  */
 export function createMockCell(options?: CreateMockCellOptions): NotebookCell {
+    const opts = options ?? {};
     const {
         kind = NotebookCellKind.Code,
         languageId = 'python',
         text = '',
-        metadata = {},
         outputs = [],
         notebookType = 'deepnote',
         notebookUri = Uri.file('/test/notebook.deepnote'),
-        notebookMetadata = {},
         index = 0
-    } = options ?? {};
+    } = opts;
+
+    // Preserve explicit undefined for metadata fields
+    const metadata = Object.prototype.hasOwnProperty.call(opts, 'metadata') ? opts.metadata : {};
+    const notebookMetadata = Object.prototype.hasOwnProperty.call(opts, 'notebookMetadata')
+        ? opts.notebookMetadata
+        : {};
 
     const notebook = createMockNotebook({
         notebookType,

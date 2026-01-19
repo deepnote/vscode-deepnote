@@ -1,5 +1,7 @@
 import { NotebookCell, NotebookCellKind, NotebookCellOutput, NotebookDocument, TextDocument, Uri } from 'vscode';
 
+import { generateUuid } from '../../platform/common/uuid';
+
 /**
  * Options for creating a mock notebook cell.
  */
@@ -59,6 +61,7 @@ export function createMockOutput(options?: CreateMockOutputOptions): NotebookCel
     const { mime = 'text/plain', data = new Uint8Array(), metadata = undefined } = options ?? {};
 
     return {
+        id: generateUuid(),
         items: [{ mime, data }],
         metadata
     } as NotebookCellOutput;

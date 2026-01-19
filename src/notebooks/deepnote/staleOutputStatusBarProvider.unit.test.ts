@@ -1,11 +1,12 @@
 import { expect } from 'chai';
 import { anything, verify, when } from 'ts-mockito';
 
-import { CancellationToken, NotebookCell, NotebookCellKind, NotebookCellOutput, NotebookDocument, Uri } from 'vscode';
+import { CancellationToken, NotebookCellKind } from 'vscode';
 
 import { computeHash } from '../../platform/common/crypto';
 import type { IDisposableRegistry } from '../../platform/common/types';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
+import { createMockCell, createMockOutput } from './deepnoteTestHelpers';
 import { StaleOutputStatusBarProvider } from './staleOutputStatusBarProvider';
 
 suite('StaleOutputStatusBarProvider', () => {
@@ -21,52 +22,6 @@ suite('StaleOutputStatusBarProvider', () => {
         } as any;
         provider = new StaleOutputStatusBarProvider(mockDisposables);
     });
-
-    function createMockCell(options: {
-        kind?: NotebookCellKind;
-        outputs?: NotebookCellOutput[];
-        metadata?: Record<string, unknown>;
-        text?: string;
-    }): NotebookCell {
-        const notebookUri = Uri.file('/test/notebook.deepnote');
-
-        return {
-            index: 0,
-            notebook: {
-                uri: notebookUri,
-                notebookType: 'deepnote'
-            } as NotebookDocument,
-            kind: options.kind ?? NotebookCellKind.Code,
-            document: {
-                uri: Uri.file('/test/notebook.deepnote#cell0'),
-                fileName: '/test/notebook.deepnote#cell0',
-                isUntitled: false,
-                languageId: 'python',
-                version: 1,
-                isDirty: false,
-                isClosed: false,
-                getText: () => options.text ?? 'print("hello")',
-                save: async () => true,
-                eol: 1,
-                lineCount: 1,
-                lineAt: () => ({ text: '' }) as any,
-                offsetAt: () => 0,
-                positionAt: () => ({}) as any,
-                validateRange: () => ({}) as any,
-                validatePosition: () => ({}) as any
-            } as any,
-            metadata: options.metadata || {},
-            outputs: options.outputs ?? [],
-            executionSummary: undefined
-        } as any;
-    }
-
-    function createMockOutput(): NotebookCellOutput {
-        return {
-            items: [{ mime: 'text/plain', data: new Uint8Array() }],
-            metadata: undefined
-        } as NotebookCellOutput;
-    }
 
     suite('provideCellStatusBarItems', () => {
         test('should return undefined when cancellation token is requested', () => {

@@ -18,22 +18,33 @@ import {
     InputBlockType
 } from './deepnoteNotebookCommandListener';
 import { formatInputBlockCellContent, getInputBlockLanguage } from './inputBlockContentFormatter';
-import { IDisposable } from '../../platform/common/types';
+import { IConfigurationService, IDisposable } from '../../platform/common/types';
 import * as notebookUpdater from '../../kernels/execution/notebookUpdater';
 import { createMockedNotebookDocument } from '../../test/datascience/editor-integration/helpers';
 import { WrappedError } from '../../platform/errors/types';
 import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
 import { mockedVSCodeNamespaces } from '../../test/vscode-mock';
+import { createMockCell } from './deepnoteTestHelpers';
 
 suite('DeepnoteNotebookCommandListener', () => {
     let commandListener: DeepnoteNotebookCommandListener;
     let disposables: IDisposable[];
     let sandbox: sinon.SinonSandbox;
+    let mockConfigService: IConfigurationService;
+
+    function createMockConfigService(): IConfigurationService {
+        return {
+            getSettings: sinon.stub().returns({}),
+            updateSetting: sinon.stub().resolves(),
+            updateSectionSetting: sinon.stub().resolves()
+        } as unknown as IConfigurationService;
+    }
 
     setup(() => {
         sandbox = sinon.createSandbox();
         disposables = [];
-        commandListener = new DeepnoteNotebookCommandListener(disposables);
+        mockConfigService = createMockConfigService();
+        commandListener = new DeepnoteNotebookCommandListener(mockConfigService, disposables);
     });
 
     teardown(() => {
@@ -78,7 +89,7 @@ suite('DeepnoteNotebookCommandListener', () => {
 
             // Create new instance and activate again
             const disposables2: IDisposable[] = [];
-            const commandListener2 = new DeepnoteNotebookCommandListener(disposables2);
+            const commandListener2 = new DeepnoteNotebookCommandListener(createMockConfigService(), disposables2);
             commandListener2.activate();
 
             // Both should register the same number of commands
@@ -93,18 +104,6 @@ suite('DeepnoteNotebookCommandListener', () => {
     });
 
     suite('getNextDeepnoteVariableName', () => {
-        /**
-         * Helper function to create a mock NotebookCell
-         */
-        function createMockCell(content: string, metadata?: Record<string, any>): NotebookCell {
-            return {
-                document: {
-                    getText: () => content
-                },
-                metadata: metadata || {}
-            } as NotebookCell;
-        }
-
         const TEST_INPUTS: Array<{
             description: string;
             cells: NotebookCell[];
@@ -120,21 +119,24 @@ suite('DeepnoteNotebookCommandListener', () => {
             },
             {
                 description: 'should return input_1 when no variable names exist',
-                cells: [createMockCell('{ "some_other_field": "value" }'), createMockCell('{ "data": "test" }')],
+                cells: [
+                    createMockCell({ text: '{ "some_other_field": "value" }' }),
+                    createMockCell({ text: '{ "data": "test" }' })
+                ],
                 prefix: 'input',
                 expected: 'input_1'
             },
             {
                 description: 'should return input_2 when input_1 exists in content JSON',
-                cells: [createMockCell('{ "deepnote_variable_name": "input_1" }')],
+                cells: [createMockCell({ text: '{ "deepnote_variable_name": "input_1" }' })],
                 prefix: 'input',
                 expected: 'input_2'
             },
             {
                 description: 'should return input_3 when input_1 and input_2 exist',
                 cells: [
-                    createMockCell('{ "deepnote_variable_name": "input_1" }'),
-                    createMockCell('{ "deepnote_variable_name": "input_2" }')
+                    createMockCell({ text: '{ "deepnote_variable_name": "input_1" }' }),
+                    createMockCell({ text: '{ "deepnote_variable_name": "input_2" }' })
                 ],
                 prefix: 'input',
                 expected: 'input_3'
@@ -142,9 +144,9 @@ suite('DeepnoteNotebookCommandListener', () => {
             {
                 description: 'should return input_6 when max suffix is input_5',
                 cells: [
-                    createMockCell('{ "deepnote_variable_name": "input_1" }'),
-                    createMockCell('{ "deepnote_variable_name": "input_5" }'),
-                    createMockCell('{ "deepnote_variable_name": "input_3" }')
+                    createMockCell({ text: '{ "deepnote_variable_name": "input_1" }' }),
+                    createMockCell({ text: '{ "deepnote_variable_name": "input_5" }' }),
+                    createMockCell({ text: '{ "deepnote_variable_name": "input_3" }' })
                 ],
                 prefix: 'input',
                 expected: 'input_6'
@@ -152,23 +154,24 @@ suite('DeepnoteNotebookCommandListener', () => {
             {
                 description: 'should return input_1 when variable names have no numeric suffix',
                 cells: [
-                    createMockCell('{ "deepnote_variable_name": "my_variable" }'),
-                    createMockCell('{ "deepnote_variable_name": "another_var" }')
+                    createMockCell({ text: '{ "deepnote_variable_name": "my_variable" }' }),
+                    createMockCell({ text: '{ "deepnote_variable_name": "another_var" }' })
                 ],
                 prefix: 'input',
                 expected: 'input_1'
             },
             {
                 description: 'should return input_11 when input_10 exists',
-                cells: [createMockCell('{ "deepnote_variable_name": "input_10" }')],
+                cells: [createMockCell({ text: '{ "deepnote_variable_name": "input_10" }' })],
                 prefix: 'input',
                 expected: 'input_11'
             },
             {
                 description: 'should extract variable name from metadata',
                 cells: [
-                    createMockCell('{}', {
-                        __deepnotePocket: { deepnote_variable_name: 'input_7' }
+                    createMockCell({
+                        text: '{}',
+                        metadata: { __deepnotePocket: { deepnote_variable_name: 'input_7' } }
                     })
                 ],
                 prefix: 'input',
@@ -177,11 +180,12 @@ suite('DeepnoteNotebookCommandListener', () => {
             {
                 description: 'should handle both content and metadata variable names',
                 cells: [
-                    createMockCell('{ "deepnote_variable_name": "input_2" }'),
-                    createMockCell('{}', {
-                        __deepnotePocket: { deepnote_variable_name: 'input_5' }
+                    createMockCell({ text: '{ "deepnote_variable_name": "input_2" }' }),
+                    createMockCell({
+                        text: '{}',
+                        metadata: { __deepnotePocket: { deepnote_variable_name: 'input_5' } }
                     }),
-                    createMockCell('{ "deepnote_variable_name": "input_3" }')
+                    createMockCell({ text: '{ "deepnote_variable_name": "input_3" }' })
                 ],
                 prefix: 'input',
                 expected: 'input_6'
@@ -189,24 +193,28 @@ suite('DeepnoteNotebookCommandListener', () => {
             {
                 description: 'should handle mixed variable names with and without numbers',
                 cells: [
-                    createMockCell('{ "deepnote_variable_name": "my_custom_input" }'),
-                    createMockCell('{ "deepnote_variable_name": "input_4" }'),
-                    createMockCell('{ "deepnote_variable_name": "another_variable" }')
+                    createMockCell({ text: '{ "deepnote_variable_name": "my_custom_input" }' }),
+                    createMockCell({ text: '{ "deepnote_variable_name": "input_4" }' }),
+                    createMockCell({ text: '{ "deepnote_variable_name": "another_variable" }' })
                 ],
                 prefix: 'input',
                 expected: 'input_5'
             },
             {
                 description: 'should handle invalid JSON gracefully',
-                cells: [createMockCell('not valid json'), createMockCell('{ "deepnote_variable_name": "input_3" }')],
+                cells: [
+                    createMockCell({ text: 'not valid json' }),
+                    createMockCell({ text: '{ "deepnote_variable_name": "input_3" }' })
+                ],
                 prefix: 'input',
                 expected: 'input_4'
             },
             {
                 description: 'should handle cells with both content and metadata, preferring the highest',
                 cells: [
-                    createMockCell('{ "deepnote_variable_name": "input_2" }', {
-                        __deepnotePocket: { deepnote_variable_name: 'input_8' }
+                    createMockCell({
+                        text: '{ "deepnote_variable_name": "input_2" }',
+                        metadata: { __deepnotePocket: { deepnote_variable_name: 'input_8' } }
                     })
                 ],
                 prefix: 'input',
@@ -215,21 +223,21 @@ suite('DeepnoteNotebookCommandListener', () => {
             {
                 description: 'should handle non-numeric suffixes in variable names',
                 cells: [
-                    createMockCell('{ "deepnote_variable_name": "input_abc" }'),
-                    createMockCell('{ "deepnote_variable_name": "input_5" }')
+                    createMockCell({ text: '{ "deepnote_variable_name": "input_abc" }' }),
+                    createMockCell({ text: '{ "deepnote_variable_name": "input_5" }' })
                 ],
                 prefix: 'input',
                 expected: 'input_6'
             },
             {
                 description: 'should return input_1 when only zero-suffixed names exist',
-                cells: [createMockCell('{ "deepnote_variable_name": "input_0" }')],
+                cells: [createMockCell({ text: '{ "deepnote_variable_name": "input_0" }' })],
                 prefix: 'input',
                 expected: 'input_1'
             },
             {
                 description: 'should handle large numbers correctly',
-                cells: [createMockCell('{ "deepnote_variable_name": "input_999" }')],
+                cells: [createMockCell({ text: '{ "deepnote_variable_name": "input_999" }' })],
                 prefix: 'input',
                 expected: 'input_1000'
             },
@@ -243,16 +251,16 @@ suite('DeepnoteNotebookCommandListener', () => {
             },
             {
                 description: 'should return df_2 when df_1 exists',
-                cells: [createMockCell('{ "deepnote_variable_name": "df_1" }')],
+                cells: [createMockCell({ text: '{ "deepnote_variable_name": "df_1" }' })],
                 prefix: 'df',
                 expected: 'df_2'
             },
             {
                 description: 'should return df_5 when df_4 exists and ignore input_ variables',
                 cells: [
-                    createMockCell('{ "deepnote_variable_name": "df_4" }'),
-                    createMockCell('{ "deepnote_variable_name": "input_10" }'),
-                    createMockCell('{ "deepnote_variable_name": "query_7" }')
+                    createMockCell({ text: '{ "deepnote_variable_name": "df_4" }' }),
+                    createMockCell({ text: '{ "deepnote_variable_name": "input_10" }' }),
+                    createMockCell({ text: '{ "deepnote_variable_name": "query_7" }' })
                 ],
                 prefix: 'df',
                 expected: 'df_5'
@@ -260,8 +268,8 @@ suite('DeepnoteNotebookCommandListener', () => {
             {
                 description: 'should return df_1 when only input_ variables exist',
                 cells: [
-                    createMockCell('{ "deepnote_variable_name": "input_5" }'),
-                    createMockCell('{ "deepnote_variable_name": "input_10" }')
+                    createMockCell({ text: '{ "deepnote_variable_name": "input_5" }' }),
+                    createMockCell({ text: '{ "deepnote_variable_name": "input_10" }' })
                 ],
                 prefix: 'df',
                 expected: 'df_1'
@@ -277,8 +285,8 @@ suite('DeepnoteNotebookCommandListener', () => {
             {
                 description: 'should return query_3 when query_1 and query_2 exist',
                 cells: [
-                    createMockCell('{ "deepnote_variable_name": "query_1" }'),
-                    createMockCell('{ "deepnote_variable_name": "query_2" }')
+                    createMockCell({ text: '{ "deepnote_variable_name": "query_1" }' }),
+                    createMockCell({ text: '{ "deepnote_variable_name": "query_2" }' })
                 ],
                 prefix: 'query',
                 expected: 'query_3'
@@ -286,9 +294,9 @@ suite('DeepnoteNotebookCommandListener', () => {
             {
                 description: 'should return query_8 when max suffix is query_7 and ignore other prefixes',
                 cells: [
-                    createMockCell('{ "deepnote_variable_name": "query_7" }'),
-                    createMockCell('{ "deepnote_variable_name": "df_100" }'),
-                    createMockCell('{ "deepnote_variable_name": "input_50" }')
+                    createMockCell({ text: '{ "deepnote_variable_name": "query_7" }' }),
+                    createMockCell({ text: '{ "deepnote_variable_name": "df_100" }' }),
+                    createMockCell({ text: '{ "deepnote_variable_name": "input_50" }' })
                 ],
                 prefix: 'query',
                 expected: 'query_8'
@@ -298,10 +306,10 @@ suite('DeepnoteNotebookCommandListener', () => {
             {
                 description: 'should only count matching prefix when multiple prefixes exist',
                 cells: [
-                    createMockCell('{ "deepnote_variable_name": "input_5" }'),
-                    createMockCell('{ "deepnote_variable_name": "df_3" }'),
-                    createMockCell('{ "deepnote_variable_name": "query_2" }'),
-                    createMockCell('{ "deepnote_variable_name": "input_8" }')
+                    createMockCell({ text: '{ "deepnote_variable_name": "input_5" }' }),
+                    createMockCell({ text: '{ "deepnote_variable_name": "df_3" }' }),
+                    createMockCell({ text: '{ "deepnote_variable_name": "query_2" }' }),
+                    createMockCell({ text: '{ "deepnote_variable_name": "input_8" }' })
                 ],
                 prefix: 'input',
                 expected: 'input_9'
@@ -309,10 +317,11 @@ suite('DeepnoteNotebookCommandListener', () => {
             {
                 description: 'should handle metadata with different prefix',
                 cells: [
-                    createMockCell('{}', {
-                        __deepnotePocket: { deepnote_variable_name: 'df_15' }
+                    createMockCell({
+                        text: '{}',
+                        metadata: { __deepnotePocket: { deepnote_variable_name: 'df_15' } }
                     }),
-                    createMockCell('{ "deepnote_variable_name": "df_20" }')
+                    createMockCell({ text: '{ "deepnote_variable_name": "df_20" }' })
                 ],
                 prefix: 'df',
                 expected: 'df_21'

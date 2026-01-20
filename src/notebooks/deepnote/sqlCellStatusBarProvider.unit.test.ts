@@ -1,15 +1,6 @@
 import { assert } from 'chai';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
-import {
-    CancellationToken,
-    CancellationTokenSource,
-    EventEmitter,
-    NotebookCell,
-    NotebookCellKind,
-    NotebookDocument,
-    TextDocument,
-    Uri
-} from 'vscode';
+import { CancellationToken, CancellationTokenSource, EventEmitter, NotebookCell } from 'vscode';
 
 import { IDisposableRegistry } from '../../platform/common/types';
 import { IIntegrationStorage } from './integrations/types';
@@ -19,6 +10,7 @@ import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock
 import { createEventHandler } from '../../test/common';
 import { Commands } from '../../platform/common/constants';
 import { IDeepnoteNotebookManager } from '../types';
+import { createMockCell } from './deepnoteTestHelpers';
 
 suite('SqlCellStatusBarProvider', () => {
     let provider: SqlCellStatusBarProvider;
@@ -38,7 +30,7 @@ suite('SqlCellStatusBarProvider', () => {
     });
 
     test('returns undefined when cancellation token is requested', async () => {
-        const cell = createMockCell('sql', {});
+        const cell = createMockCell({ languageId: 'sql' });
         const tokenSource = new CancellationTokenSource();
         tokenSource.cancel();
 
@@ -48,7 +40,7 @@ suite('SqlCellStatusBarProvider', () => {
     });
 
     test('returns undefined for non-SQL cells', async () => {
-        const cell = createMockCell('python', {});
+        const cell = createMockCell({ languageId: 'python' });
 
         const result = await provider.provideCellStatusBarItems(cell, cancellationToken);
 
@@ -56,7 +48,7 @@ suite('SqlCellStatusBarProvider', () => {
     });
 
     test('returns status bar items for SQL cells without integration ID', async () => {
-        const cell = createMockCell('sql', {});
+        const cell = createMockCell({ languageId: 'sql' });
 
         const result = await provider.provideCellStatusBarItems(cell, cancellationToken);
 
@@ -85,8 +77,9 @@ suite('SqlCellStatusBarProvider', () => {
     });
 
     test('returns status bar items for SQL cells with dataframe integration ID', async () => {
-        const cell = createMockCell('sql', {
-            sql_integration_id: DATAFRAME_SQL_INTEGRATION_ID
+        const cell = createMockCell({
+            languageId: 'sql',
+            metadata: { sql_integration_id: DATAFRAME_SQL_INTEGRATION_ID }
         });
 
         const result = await provider.provideCellStatusBarItems(cell, cancellationToken);
@@ -121,15 +114,11 @@ suite('SqlCellStatusBarProvider', () => {
 
     test('returns status bar items for SQL cell with integration ID', async () => {
         const integrationId = 'postgres-123';
-        const cell = createMockCell(
-            'sql',
-            {
-                sql_integration_id: integrationId
-            },
-            {
-                deepnoteProjectId: 'project-1'
-            }
-        );
+        const cell = createMockCell({
+            languageId: 'sql',
+            metadata: { sql_integration_id: integrationId },
+            notebookMetadata: { deepnoteProjectId: 'project-1' }
+        });
 
         when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve({
             id: integrationId,
@@ -173,15 +162,11 @@ suite('SqlCellStatusBarProvider', () => {
 
     test('shows "Unknown integration (configure)" when config not found and not in project list', async () => {
         const integrationId = 'postgres-123';
-        const cell = createMockCell(
-            'sql',
-            {
-                sql_integration_id: integrationId
-            },
-            {
-                deepnoteProjectId: 'project-1'
-            }
-        );
+        const cell = createMockCell({
+            languageId: 'sql',
+            metadata: { sql_integration_id: integrationId },
+            notebookMetadata: { deepnoteProjectId: 'project-1' }
+        });
 
         when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve(undefined);
         when(notebookManager.getOriginalProject('project-1')).thenReturn({
@@ -208,15 +193,11 @@ suite('SqlCellStatusBarProvider', () => {
 
     test('shows integration name from project list with (configure) suffix when config not found but integration is in project', async () => {
         const integrationId = 'postgres-123';
-        const cell = createMockCell(
-            'sql',
-            {
-                sql_integration_id: integrationId
-            },
-            {
-                deepnoteProjectId: 'project-1'
-            }
-        );
+        const cell = createMockCell({
+            languageId: 'sql',
+            metadata: { sql_integration_id: integrationId },
+            notebookMetadata: { deepnoteProjectId: 'project-1' }
+        });
 
         when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve(undefined);
         when(notebookManager.getOriginalProject('project-1')).thenReturn({
@@ -249,8 +230,9 @@ suite('SqlCellStatusBarProvider', () => {
 
     test('returns only variable item when notebook has no project ID', async () => {
         const integrationId = 'postgres-123';
-        const cell = createMockCell('sql', {
-            sql_integration_id: integrationId
+        const cell = createMockCell({
+            languageId: 'sql',
+            metadata: { sql_integration_id: integrationId }
         });
 
         const result = await provider.provideCellStatusBarItems(cell, cancellationToken);
@@ -271,16 +253,14 @@ suite('SqlCellStatusBarProvider', () => {
 
     test('shows custom variable name when set in metadata', async () => {
         const integrationId = 'postgres-123';
-        const cell = createMockCell(
-            'sql',
-            {
+        const cell = createMockCell({
+            languageId: 'sql',
+            metadata: {
                 sql_integration_id: integrationId,
                 deepnote_variable_name: 'my_results'
             },
-            {
-                deepnoteProjectId: 'project-1'
-            }
-        );
+            notebookMetadata: { deepnoteProjectId: 'project-1' }
+        });
 
         when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve({
             id: integrationId,
@@ -363,7 +343,7 @@ suite('SqlCellStatusBarProvider', () => {
                 return { dispose: () => undefined };
             });
 
-            const cell = createMockCell('sql', {});
+            const cell = createMockCell({ languageId: 'sql' });
             when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
                 notebook: {
                     cellAt: (_index: number) => cell
@@ -443,7 +423,7 @@ suite('SqlCellStatusBarProvider', () => {
             );
 
             const notebookMetadata = { deepnoteProjectId: 'project-1' };
-            const cell = createMockCell('sql', {}, notebookMetadata);
+            const cell = createMockCell({ languageId: 'sql', notebookMetadata });
             when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
                 notebook: {
                     cellAt: (_index: number) => cell
@@ -711,7 +691,7 @@ suite('SqlCellStatusBarProvider', () => {
         });
 
         test('updates cell metadata with new variable name', async () => {
-            const cell = createMockCell('sql', { deepnote_variable_name: 'old_name' });
+            const cell = createMockCell({ languageId: 'sql', metadata: { deepnote_variable_name: 'old_name' } });
             const newVariableName = 'new_name';
 
             when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(newVariableName));
@@ -724,7 +704,7 @@ suite('SqlCellStatusBarProvider', () => {
         });
 
         test('does not update if user cancels input box', async () => {
-            const cell = createMockCell('sql', { deepnote_variable_name: 'old_name' });
+            const cell = createMockCell({ languageId: 'sql', metadata: { deepnote_variable_name: 'old_name' } });
 
             when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(undefined));
 
@@ -735,7 +715,7 @@ suite('SqlCellStatusBarProvider', () => {
         });
 
         test('does not update if new name is same as current name', async () => {
-            const cell = createMockCell('sql', { deepnote_variable_name: 'same_name' });
+            const cell = createMockCell({ languageId: 'sql', metadata: { deepnote_variable_name: 'same_name' } });
 
             when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve('same_name'));
 
@@ -746,7 +726,7 @@ suite('SqlCellStatusBarProvider', () => {
         });
 
         test('shows error message if workspace edit fails', async () => {
-            const cell = createMockCell('sql', { deepnote_variable_name: 'old_name' });
+            const cell = createMockCell({ languageId: 'sql', metadata: { deepnote_variable_name: 'old_name' } });
             const newVariableName = 'new_name';
 
             when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(newVariableName));
@@ -758,7 +738,7 @@ suite('SqlCellStatusBarProvider', () => {
         });
 
         test('fires onDidChangeCellStatusBarItems after successful update', async () => {
-            const cell = createMockCell('sql', { deepnote_variable_name: 'old_name' });
+            const cell = createMockCell({ languageId: 'sql', metadata: { deepnote_variable_name: 'old_name' } });
             const newVariableName = 'new_name';
 
             when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(newVariableName));
@@ -776,7 +756,7 @@ suite('SqlCellStatusBarProvider', () => {
         });
 
         test('validates input - rejects empty variable name', async () => {
-            const cell = createMockCell('sql', {});
+            const cell = createMockCell({ languageId: 'sql' });
 
             when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenCall((options) => {
                 const validationResult = options.validateInput('');
@@ -788,7 +768,7 @@ suite('SqlCellStatusBarProvider', () => {
         });
 
         test('validates input - rejects invalid Python identifier', async () => {
-            const cell = createMockCell('sql', {});
+            const cell = createMockCell({ languageId: 'sql' });
 
             when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenCall((options) => {
                 const validationResult = options.validateInput('123invalid');
@@ -800,7 +780,7 @@ suite('SqlCellStatusBarProvider', () => {
         });
 
         test('validates input - accepts valid Python identifier', async () => {
-            const cell = createMockCell('sql', {});
+            const cell = createMockCell({ languageId: 'sql' });
 
             when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenCall((options) => {
                 const validationResult = options.validateInput('valid_name');
@@ -853,7 +833,11 @@ suite('SqlCellStatusBarProvider', () => {
 
         test('updates cell metadata with selected integration', async () => {
             const notebookMetadata = { deepnoteProjectId: 'project-1' };
-            const cell = createMockCell('sql', { sql_integration_id: 'old-integration' }, notebookMetadata);
+            const cell = createMockCell({
+                languageId: 'sql',
+                metadata: { sql_integration_id: 'old-integration' },
+                notebookMetadata
+            });
             const newIntegrationId = 'new-integration';
 
             when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
@@ -882,7 +866,11 @@ suite('SqlCellStatusBarProvider', () => {
 
         test('does not update if user cancels quick pick', async () => {
             const notebookMetadata = { deepnoteProjectId: 'project-1' };
-            const cell = createMockCell('sql', { sql_integration_id: 'old-integration' }, notebookMetadata);
+            const cell = createMockCell({
+                languageId: 'sql',
+                metadata: { sql_integration_id: 'old-integration' },
+                notebookMetadata
+            });
 
             when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
                 project: {
@@ -902,7 +890,11 @@ suite('SqlCellStatusBarProvider', () => {
 
         test('shows error message if workspace edit fails', async () => {
             const notebookMetadata = { deepnoteProjectId: 'project-1' };
-            const cell = createMockCell('sql', { sql_integration_id: 'old-integration' }, notebookMetadata);
+            const cell = createMockCell({
+                languageId: 'sql',
+                metadata: { sql_integration_id: 'old-integration' },
+                notebookMetadata
+            });
             const newIntegrationId = 'new-integration';
 
             when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
@@ -923,7 +915,11 @@ suite('SqlCellStatusBarProvider', () => {
 
         test('fires onDidChangeCellStatusBarItems after successful update', async () => {
             const notebookMetadata = { deepnoteProjectId: 'project-1' };
-            const cell = createMockCell('sql', { sql_integration_id: 'old-integration' }, notebookMetadata);
+            const cell = createMockCell({
+                languageId: 'sql',
+                metadata: { sql_integration_id: 'old-integration' },
+                notebookMetadata
+            });
             const newIntegrationId = 'new-integration';
 
             when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
@@ -950,7 +946,11 @@ suite('SqlCellStatusBarProvider', () => {
 
         test('executes manage integrations command when configure option is selected', async () => {
             const notebookMetadata = { deepnoteProjectId: 'project-1' };
-            const cell = createMockCell('sql', { sql_integration_id: 'current-integration' }, notebookMetadata);
+            const cell = createMockCell({
+                languageId: 'sql',
+                metadata: { sql_integration_id: 'current-integration' },
+                notebookMetadata
+            });
 
             when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
                 project: {
@@ -975,7 +975,7 @@ suite('SqlCellStatusBarProvider', () => {
 
         test('includes DuckDB integration in quick pick items', async () => {
             const notebookMetadata = { deepnoteProjectId: 'project-1' };
-            const cell = createMockCell('sql', {}, notebookMetadata);
+            const cell = createMockCell({ languageId: 'sql', notebookMetadata });
             let quickPickItems: any[] = [];
 
             when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
@@ -998,7 +998,7 @@ suite('SqlCellStatusBarProvider', () => {
 
         test('shows BigQuery type label for Google BigQuery integrations', async () => {
             const notebookMetadata = { deepnoteProjectId: 'project-1' };
-            const cell = createMockCell('sql', {}, notebookMetadata);
+            const cell = createMockCell({ languageId: 'sql', notebookMetadata });
             let quickPickItems: any[] = [];
 
             when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
@@ -1027,7 +1027,7 @@ suite('SqlCellStatusBarProvider', () => {
 
         test('shows raw type for unknown integration types', async () => {
             const notebookMetadata = { deepnoteProjectId: 'project-1' };
-            const cell = createMockCell('sql', {}, notebookMetadata);
+            const cell = createMockCell({ languageId: 'sql', notebookMetadata });
             let quickPickItems: any[] = [];
 
             when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
@@ -1057,7 +1057,11 @@ suite('SqlCellStatusBarProvider', () => {
         test('marks current integration as selected in quick pick', async () => {
             const currentIntegrationId = 'current-integration';
             const notebookMetadata = { deepnoteProjectId: 'project-1' };
-            const cell = createMockCell('sql', { sql_integration_id: currentIntegrationId }, notebookMetadata);
+            const cell = createMockCell({
+                languageId: 'sql',
+                metadata: { sql_integration_id: currentIntegrationId },
+                notebookMetadata
+            });
             let quickPickItems: any[] = [];
 
             when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
@@ -1085,7 +1089,7 @@ suite('SqlCellStatusBarProvider', () => {
         });
 
         test('shows error message when project ID is missing', async () => {
-            const cell = createMockCell('sql', {}, {}); // No notebook metadata
+            const cell = createMockCell({ languageId: 'sql' }); // No notebook metadata
 
             await switchIntegrationHandler(cell);
 
@@ -1095,7 +1099,7 @@ suite('SqlCellStatusBarProvider', () => {
 
         test('shows error message when project is not found', async () => {
             const notebookMetadata = { deepnoteProjectId: 'missing-project' };
-            const cell = createMockCell('sql', {}, notebookMetadata);
+            const cell = createMockCell({ languageId: 'sql', notebookMetadata });
 
             when(commandNotebookManager.getOriginalProject('missing-project')).thenReturn(undefined);
 
@@ -1107,7 +1111,7 @@ suite('SqlCellStatusBarProvider', () => {
 
         test('skips DATAFRAME_SQL_INTEGRATION_ID from project integrations list', async () => {
             const notebookMetadata = { deepnoteProjectId: 'project-1' };
-            const cell = createMockCell('sql', {}, notebookMetadata);
+            const cell = createMockCell({ languageId: 'sql', notebookMetadata });
             let quickPickItems: any[] = [];
 
             when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
@@ -1153,7 +1157,11 @@ suite('SqlCellStatusBarProvider', () => {
         test('does not update when selected integration is same as current', async () => {
             const currentIntegrationId = 'current-integration';
             const notebookMetadata = { deepnoteProjectId: 'project-1' };
-            const cell = createMockCell('sql', { sql_integration_id: currentIntegrationId }, notebookMetadata);
+            const cell = createMockCell({
+                languageId: 'sql',
+                metadata: { sql_integration_id: currentIntegrationId },
+                notebookMetadata
+            });
 
             when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
                 project: {
@@ -1179,7 +1187,11 @@ suite('SqlCellStatusBarProvider', () => {
 
         test('does not update when selected item has no id property', async () => {
             const notebookMetadata = { deepnoteProjectId: 'project-1' };
-            const cell = createMockCell('sql', { sql_integration_id: 'current-integration' }, notebookMetadata);
+            const cell = createMockCell({
+                languageId: 'sql',
+                metadata: { sql_integration_id: 'current-integration' },
+                notebookMetadata
+            });
 
             when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
                 project: {
@@ -1198,29 +1210,4 @@ suite('SqlCellStatusBarProvider', () => {
             verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
         });
     });
-
-    function createMockCell(
-        languageId: string,
-        cellMetadata: Record<string, unknown>,
-        notebookMetadata: Record<string, unknown> = {}
-    ): NotebookCell {
-        const document = {
-            languageId
-        } as TextDocument;
-
-        const notebook = {
-            metadata: notebookMetadata,
-            uri: Uri.file('/test/notebook.deepnote')
-        } as NotebookDocument;
-
-        const cell = {
-            document,
-            notebook,
-            kind: NotebookCellKind.Code,
-            metadata: cellMetadata,
-            index: 0
-        } as NotebookCell;
-
-        return cell;
-    }
 });

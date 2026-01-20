@@ -14,7 +14,8 @@ import { CodeExecution } from './codeExecution';
 import { once } from '../../platform/common/utils/events';
 import { getCellMetadata } from '../../platform/common/utils';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
-import { ISnapshotMetadataService } from '../../platform/notebooks/deepnote/types';
+// eslint-disable-next-line import/no-restricted-paths
+import { ISnapshotMetadataService } from '../../notebooks/deepnote/snapshots/snapshotService';
 
 /**
  * A queue responsible for execution of cells.
@@ -323,6 +324,11 @@ export class CellExecutionQueue implements Disposable {
                 await this.cancel();
                 break;
             }
+        }
+
+        // Notify listeners that execution queue is complete
+        if (this.notebook) {
+            notebookCellExecutions.notifyQueueComplete(this.notebook.uri.toString());
         }
     }
 }

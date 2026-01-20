@@ -1,45 +1,16 @@
 import { expect } from 'chai';
 import { anything, verify, when } from 'ts-mockito';
-import { Disposable, NotebookCell, NotebookCellKind, NotebookDocument, TextDocument, Uri } from 'vscode';
+import { Disposable, NotebookCellKind, TextDocument } from 'vscode';
 
 import { IDisposableRegistry } from '../../platform/common/types';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
+import { createMockCell, createMockNotebook } from './deepnoteTestHelpers';
 import { DeepnoteNewCellLanguageService } from './deepnoteNewCellLanguageService';
 
 suite('DeepnoteNewCellLanguageService', () => {
     let service: DeepnoteNewCellLanguageService;
     let disposables: Disposable[];
     let notebookChangeHandler: ((e: any) => void) | undefined;
-
-    function createMockNotebook(notebookType: string): NotebookDocument {
-        return {
-            uri: Uri.file('/test/notebook.deepnote'),
-            notebookType
-        } as NotebookDocument;
-    }
-
-    function createMockCell(options: {
-        kind?: NotebookCellKind;
-        languageId?: string;
-        content?: string;
-        metadata?: Record<string, unknown>;
-    }): NotebookCell {
-        const { kind = NotebookCellKind.Code, languageId = 'python', content = '', metadata = {} } = options;
-
-        return {
-            index: 0,
-            notebook: createMockNotebook('deepnote'),
-            kind,
-            document: {
-                uri: Uri.file('/test/notebook.deepnote#cell0'),
-                languageId,
-                getText: () => content
-            } as TextDocument,
-            metadata,
-            outputs: [],
-            executionSummary: undefined
-        } as unknown as NotebookCell;
-    }
 
     setup(() => {
         resetVSCodeMocks();
@@ -79,7 +50,7 @@ suite('DeepnoteNewCellLanguageService', () => {
 
     test('ignores non-deepnote notebooks', async () => {
         service.activate();
-        const jupyterNotebook = createMockNotebook('jupyter-notebook');
+        const jupyterNotebook = createMockNotebook({ notebookType: 'jupyter-notebook' });
         const cell = createMockCell({ languageId: 'sql' });
 
         notebookChangeHandler!({
@@ -93,7 +64,7 @@ suite('DeepnoteNewCellLanguageService', () => {
 
     test('ignores markdown cells', async () => {
         service.activate();
-        const notebook = createMockNotebook('deepnote');
+        const notebook = createMockNotebook({ notebookType: 'deepnote' });
         const cell = createMockCell({ kind: NotebookCellKind.Markup, languageId: 'markdown' });
 
         notebookChangeHandler!({
@@ -107,8 +78,8 @@ suite('DeepnoteNewCellLanguageService', () => {
 
     test('ignores cells with content', async () => {
         service.activate();
-        const notebook = createMockNotebook('deepnote');
-        const cell = createMockCell({ languageId: 'sql', content: 'SELECT * FROM table' });
+        const notebook = createMockNotebook({ notebookType: 'deepnote' });
+        const cell = createMockCell({ languageId: 'sql', text: 'SELECT * FROM table' });
 
         notebookChangeHandler!({
             notebook,
@@ -121,7 +92,7 @@ suite('DeepnoteNewCellLanguageService', () => {
 
     test('ignores cells that already have Python language', async () => {
         service.activate();
-        const notebook = createMockNotebook('deepnote');
+        const notebook = createMockNotebook({ notebookType: 'deepnote' });
         const cell = createMockCell({ languageId: 'python' });
 
         notebookChangeHandler!({
@@ -135,7 +106,7 @@ suite('DeepnoteNewCellLanguageService', () => {
 
     test('ignores intentional SQL blocks (with __deepnotePocket.type)', async () => {
         service.activate();
-        const notebook = createMockNotebook('deepnote');
+        const notebook = createMockNotebook({ notebookType: 'deepnote' });
         const cell = createMockCell({
             languageId: 'sql',
             metadata: { __deepnotePocket: { type: 'sql' } }
@@ -152,7 +123,7 @@ suite('DeepnoteNewCellLanguageService', () => {
 
     test('ignores intentional chart blocks (with __deepnotePocket.type)', async () => {
         service.activate();
-        const notebook = createMockNotebook('deepnote');
+        const notebook = createMockNotebook({ notebookType: 'deepnote' });
         const cell = createMockCell({
             languageId: 'json',
             metadata: { __deepnotePocket: { type: 'chart-vega' } }
@@ -169,7 +140,7 @@ suite('DeepnoteNewCellLanguageService', () => {
 
     test('ignores intentional input blocks (with __deepnotePocket.type)', async () => {
         service.activate();
-        const notebook = createMockNotebook('deepnote');
+        const notebook = createMockNotebook({ notebookType: 'deepnote' });
         const cell = createMockCell({
             languageId: 'plaintext',
             metadata: { __deepnotePocket: { type: 'input-text' } }
@@ -186,7 +157,7 @@ suite('DeepnoteNewCellLanguageService', () => {
 
     test('changes SQL cell to Python when no __deepnotePocket metadata', async () => {
         service.activate();
-        const notebook = createMockNotebook('deepnote');
+        const notebook = createMockNotebook({ notebookType: 'deepnote' });
         const cell = createMockCell({ languageId: 'sql' });
 
         notebookChangeHandler!({
@@ -200,7 +171,7 @@ suite('DeepnoteNewCellLanguageService', () => {
 
     test('changes JSON cell to Python when no __deepnotePocket metadata', async () => {
         service.activate();
-        const notebook = createMockNotebook('deepnote');
+        const notebook = createMockNotebook({ notebookType: 'deepnote' });
         const cell = createMockCell({ languageId: 'json' });
 
         notebookChangeHandler!({
@@ -214,7 +185,7 @@ suite('DeepnoteNewCellLanguageService', () => {
 
     test('handles multiple added cells', async () => {
         service.activate();
-        const notebook = createMockNotebook('deepnote');
+        const notebook = createMockNotebook({ notebookType: 'deepnote' });
         const sqlCell = createMockCell({ languageId: 'sql' });
         const pythonCell = createMockCell({ languageId: 'python' });
         const jsonCell = createMockCell({ languageId: 'json' });
@@ -232,7 +203,7 @@ suite('DeepnoteNewCellLanguageService', () => {
 
     test('handles multiple content changes', async () => {
         service.activate();
-        const notebook = createMockNotebook('deepnote');
+        const notebook = createMockNotebook({ notebookType: 'deepnote' });
         const cell1 = createMockCell({ languageId: 'sql' });
         const cell2 = createMockCell({ languageId: 'javascript' });
 
@@ -248,7 +219,7 @@ suite('DeepnoteNewCellLanguageService', () => {
 
     test('ignores content changes with no added cells', async () => {
         service.activate();
-        const notebook = createMockNotebook('deepnote');
+        const notebook = createMockNotebook({ notebookType: 'deepnote' });
 
         notebookChangeHandler!({
             notebook,
@@ -261,8 +232,8 @@ suite('DeepnoteNewCellLanguageService', () => {
 
     test('changes cells with whitespace-only content to Python', async () => {
         service.activate();
-        const notebook = createMockNotebook('deepnote');
-        const cell = createMockCell({ languageId: 'sql', content: '   \n\t  ' });
+        const notebook = createMockNotebook({ notebookType: 'deepnote' });
+        const cell = createMockCell({ languageId: 'sql', text: '   \n\t  ' });
 
         notebookChangeHandler!({
             notebook,

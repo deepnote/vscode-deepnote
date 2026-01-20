@@ -17,6 +17,7 @@ import { DeepnoteTreeItem, DeepnoteTreeItemType, DeepnoteTreeItemContext } from 
 import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { readDeepnoteProjectFile } from './deepnoteProjectUtils';
 import { ILogger } from '../../platform/logging/types';
+import { isSnapshotFile, SNAPSHOT_FILE_SUFFIX } from './snapshots/snapshotFiles';
 
 /**
  * Comparator function for sorting tree items alphabetically by label (case-insensitive)
@@ -203,8 +204,9 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         for (const workspaceFolder of workspace.workspaceFolders || []) {
             const pattern = new RelativePattern(workspaceFolder, '**/*.deepnote');
             const files = await workspace.findFiles(pattern);
+            const projectFiles = files.filter((file) => !file.path.endsWith(SNAPSHOT_FILE_SUFFIX));
 
-            for (const file of files) {
+            for (const file of projectFiles) {
                 try {
                     const project = await this.loadDeepnoteProject(file);
                     if (!project) {
@@ -316,16 +318,25 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         }
 
         this.fileWatcher.onDidChange((uri) => {
+            if (isSnapshotFile(uri)) {
+                return;
+            }
             // Use granular refresh for file changes
             void this.refreshProject(uri.path);
         });
 
-        this.fileWatcher.onDidCreate(() => {
+        this.fileWatcher.onDidCreate((uri) => {
+            if (isSnapshotFile(uri)) {
+                return;
+            }
             // New file created, do full refresh
             this._onDidChangeTreeData.fire();
         });
 
         this.fileWatcher.onDidDelete((uri) => {
+            if (isSnapshotFile(uri)) {
+                return;
+            }
             // File deleted, clear both caches and do full refresh
             this.cachedProjects.delete(uri.path);
             this.treeItemCache.delete(`project:${uri.path}`);

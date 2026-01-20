@@ -1,6 +1,8 @@
 import type { DeepnoteBlock } from '@deepnote/blocks';
 import { NotebookCellKind, type NotebookCellData } from 'vscode';
+
 import { generateBlockId, generateSortingKey } from '../../notebooks/deepnote/dataConversionUtils';
+import { logger } from '../logging';
 import { generateUuid } from '../common/uuid';
 
 // Note: 'id' is intentionally excluded from this list so it remains at the top level of cell.metadata
@@ -36,6 +38,8 @@ export function addPocketToCellMetadata(cell: NotebookCellData): void {
     const pocket: Pocket = {};
     let found = false;
 
+    logger.debug(`[Pocket] addPocketToCellMetadata: input id=${src.id}, keys=${Object.keys(src).join(',')}`);
+
     for (const field of deepnoteBlockSpecificFields) {
         if (Object.prototype.hasOwnProperty.call(src, field)) {
             const value = src[field];
@@ -46,6 +50,8 @@ export function addPocketToCellMetadata(cell: NotebookCellData): void {
     }
 
     if (!found) {
+        logger.debug(`[Pocket] addPocketToCellMetadata: no pocket fields found, preserving id=${src.id}`);
+
         return;
     }
 
@@ -53,6 +59,10 @@ export function addPocketToCellMetadata(cell: NotebookCellData): void {
         ...src,
         __deepnotePocket: pocket
     };
+
+    logger.debug(
+        `[Pocket] addPocketToCellMetadata: output id=${cell.metadata.id}, pocket keys=${Object.keys(pocket).join(',')}`
+    );
 }
 
 export function extractPocketFromCellMetadata(cell: NotebookCellData): Pocket | undefined {
@@ -64,13 +74,21 @@ export function createBlockFromPocket(cell: NotebookCellData, index: number): De
 
     const metadata = cell.metadata ? { ...cell.metadata } : undefined;
     // Get id from top-level metadata before cleaning it up
-    const cellId = metadata?.id as string | undefined;
+    // Check both 'id' and backup '__deepnoteBlockId' in case VS Code modifies 'id'
+    const cellId = (metadata?.id as string | undefined) || (metadata?.__deepnoteBlockId as string | undefined);
+
+    logger.debug(
+        `[Pocket] createBlockFromPocket index=${index}: cell.metadata.id=${metadata?.id}, __deepnoteBlockId=${metadata?.__deepnoteBlockId}, using cellId=${cellId}, metadata keys=${
+            metadata ? Object.keys(metadata).join(',') : 'none'
+        }`
+    );
 
     if (metadata) {
         // Remove pocket and all pocket fields from metadata
         delete metadata.__deepnotePocket;
-        // Also remove id from metadata as it goes into block.id
+        // Also remove id and backup id from metadata as it goes into block.id
         delete metadata.id;
+        delete metadata.__deepnoteBlockId;
 
         for (const field of deepnoteBlockSpecificFields) {
             delete metadata[field];

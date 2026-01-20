@@ -94,6 +94,16 @@
                 "icon": "$(reveal)"
             },
             {
+                "command": "deepnote.enableSnapshots",
+                "title": "%deepnote.commands.enableSnapshots.title%",
+                "category": "Deepnote"
+            },
+            {
+                "command": "deepnote.disableSnapshots",
+                "title": "%deepnote.commands.disableSnapshots.title%",
+                "category": "Deepnote"
+            },
+            {
                 "command": "deepnote.environments.create",
                 "title": "%deepnote.commands.environments.create.title%",
                 "category": "Deepnote",
@@ -1640,6 +1650,12 @@
                     "description": "Disable SSL certificate verification (for development only)",
                     "scope": "application"
                 },
+                "deepnote.snapshots.enabled": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "When enabled, outputs are saved to separate snapshot files in a 'snapshots' folder instead of the main .deepnote file.",
+                    "scope": "resource"
+                },
                 "deepnote.experiments.enabled": {
                     "type": "boolean",
                     "default": true,
@@ -2751,6 +2767,7 @@
         "acorn": "^8.9.0",
         "autoprefixer": "^10.4.21",
         "bare-events": "^2.8.1",
+        "better-npm-audit": "^3.11.0",
         "buffer": "^6.0.3",
         "bufferutil": "^4.0.6",
         "chai": "^4.3.10",
@@ -2858,6 +2875,7 @@
         },
         "d3-color": "3.1.0",
         "vega-embed": "^7.1.0",
-        "@mermaid-js/layout-elk": "npm:empty-pkg@1.0.0"
+        "@mermaid-js/layout-elk": "npm:empty-pkg@1.0.0",
+        "tar": "7.5.3"
     }
 }

@@ -5,15 +5,15 @@ import { promisify } from 'node:util';
 
 import type { Environment } from '@deepnote/blocks';
 
-import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
-import { computeHash } from '../../platform/common/crypto';
-import { raceTimeout } from '../../platform/common/utils/async';
-import { logger } from '../../platform/logging';
+import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
+import { computeHash } from '../../../platform/common/crypto';
+import { raceTimeout } from '../../../platform/common/utils/async';
+import { logger } from '../../../platform/logging';
 import { parsePipFreezeFile } from './pipFileParser';
-import { IDeepnoteEnvironmentManager, IDeepnoteNotebookEnvironmentMapper } from '../../kernels/deepnote/types';
+import { IDeepnoteEnvironmentManager, IDeepnoteNotebookEnvironmentMapper } from '../../../kernels/deepnote/types';
 import { Uri } from 'vscode';
-import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnoteEnvironment';
-import * as path from '../../platform/vscode-path/path';
+import { DeepnoteEnvironment } from '../../../kernels/deepnote/environments/deepnoteEnvironment';
+import * as path from '../../../platform/vscode-path/path';
 
 const captureTimeoutInMilliseconds = 5_000;
 

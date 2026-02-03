@@ -802,79 +802,52 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         const existingEnvironmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri);
 
-        if (existingEnvironmentId) {
-            const environment = this.environmentManager.getEnvironment(existingEnvironmentId);
-
-            if (environment) {
-                const existingController = this.notebookControllers.get(notebookKey);
-
-                if (existingController) {
-                    logger.info(
-                        `Environment "${environment.name}" already configured for ${getDisplayPath(notebook.uri)}`
-                    );
-
-                    return true;
-                }
-
-                logger.info(
-                    `Environment "${environment.name}" configured but controller missing for ${getDisplayPath(
-                        notebook.uri
-                    )}, triggering setup`
-                );
-
-                try {
-                    await window.withProgress(
-                        {
-                            location: ProgressLocation.Notification,
-                            title: l10n.t('Setting up Deepnote kernel...'),
-                            cancellable: true
-                        },
-                        async (progress, progressToken) => {
-                            await this.ensureKernelSelectedWithConfiguration(
-                                notebook,
-                                environment,
-                                baseFileUri,
-                                notebookKey,
-                                projectKey,
-                                progress,
-                                progressToken
-                            );
-                        }
-                    );
-                } catch (error) {
-                    if (token.isCancellationRequested || isCancellationError(error as Error)) {
-                        logger.info(`Kernel setup cancelled for ${getDisplayPath(notebook.uri)}`);
-
-                        return false;
-                    }
-                    throw error;
-                }
-
-                // Verify controller was actually created
-                const createdController = this.notebookControllers.get(notebookKey);
-
-                if (!createdController) {
-                    logger.warn(
-                        `Controller not created for "${environment.name}" on ${getDisplayPath(
-                            notebook.uri
-                        )} after setup`
-                    );
-
-                    return false;
-                }
-
-                return true;
-            }
-
-            // Environment no longer exists, remove the stale mapping
-            logger.info(`Removing stale environment mapping for ${getDisplayPath(notebook.uri)}`);
-
-            await this.notebookEnvironmentMapper.removeEnvironmentForNotebook(baseFileUri);
+        // No environment configured - need to pick one
+        if (!existingEnvironmentId) {
+            return this.pickAndSetupEnvironment(notebook, baseFileUri, notebookKey, projectKey, token);
         }
 
+        const environment = this.environmentManager.getEnvironment(existingEnvironmentId);
+
+        // Environment no longer exists - remove stale mapping and pick a new one
+        if (!environment) {
+            logger.info(`Removing stale environment mapping for ${getDisplayPath(notebook.uri)}`);
+            await this.notebookEnvironmentMapper.removeEnvironmentForNotebook(baseFileUri);
+
+            return this.pickAndSetupEnvironment(notebook, baseFileUri, notebookKey, projectKey, token);
+        }
+
+        const existingController = this.notebookControllers.get(notebookKey);
+
+        // Environment and controller already configured
+        if (existingController) {
+            logger.info(`Environment "${environment.name}" already configured for ${getDisplayPath(notebook.uri)}`);
+
+            return true;
+        }
+
+        // Environment exists but controller is missing - set it up
+        logger.info(
+            `Environment "${environment.name}" configured but controller missing for ${getDisplayPath(
+                notebook.uri
+            )}, triggering setup`
+        );
+
+        return this.setupKernelForEnvironment(notebook, environment, baseFileUri, notebookKey, projectKey, token);
+    }
+
+    /**
+     * Pick an environment and set up the kernel for a notebook.
+     */
+    private async pickAndSetupEnvironment(
+        notebook: NotebookDocument,
+        baseFileUri: Uri,
+        notebookKey: string,
+        projectKey: string,
+        token: CancellationToken
+    ): Promise<boolean> {
         Cancellation.throwIfCanceled(token);
 
-        // No environment configured, show the picker
         logger.info(`No environment configured for ${getDisplayPath(notebook.uri)}, showing picker`);
         const selectedEnvironment = await this.pickEnvironment(notebook.uri);
 
@@ -888,7 +861,33 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         await this.notebookEnvironmentMapper.setEnvironmentForNotebook(baseFileUri, selectedEnvironment.id);
 
-        // Set up the kernel with the selected environment
+        const result = await this.setupKernelForEnvironment(
+            notebook,
+            selectedEnvironment,
+            baseFileUri,
+            notebookKey,
+            projectKey,
+            token
+        );
+
+        if (result) {
+            logger.info(`Environment "${selectedEnvironment.name}" configured for ${getDisplayPath(notebook.uri)}`);
+        }
+
+        return result;
+    }
+
+    /**
+     * Set up the kernel for a given environment.
+     */
+    private async setupKernelForEnvironment(
+        notebook: NotebookDocument,
+        environment: DeepnoteEnvironment,
+        baseFileUri: Uri,
+        notebookKey: string,
+        projectKey: string,
+        token: CancellationToken
+    ): Promise<boolean> {
         try {
             await window.withProgress(
                 {
@@ -899,7 +898,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 async (progress, progressToken) => {
                     await this.ensureKernelSelectedWithConfiguration(
                         notebook,
-                        selectedEnvironment,
+                        environment,
                         baseFileUri,
                         notebookKey,
                         projectKey,
@@ -917,20 +916,15 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             throw error;
         }
 
-        // Verify controller was actually created
         const createdController = this.notebookControllers.get(notebookKey);
 
         if (!createdController) {
             logger.warn(
-                `Controller not created for "${selectedEnvironment.name}" on ${getDisplayPath(
-                    notebook.uri
-                )} after setup`
+                `Controller not created for "${environment.name}" on ${getDisplayPath(notebook.uri)} after setup`
             );
 
             return false;
         }
-
-        logger.info(`Environment "${selectedEnvironment.name}" configured for ${getDisplayPath(notebook.uri)}`);
 
         return true;
     }

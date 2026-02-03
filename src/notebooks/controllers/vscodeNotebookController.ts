@@ -444,15 +444,21 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
                 this.serviceContainer.tryGet<IDeepnoteKernelAutoSelector>(IDeepnoteKernelAutoSelector);
 
             if (kernelAutoSelector) {
-                const hasEnvironment = await kernelAutoSelector.ensureEnvironmentConfiguredBeforeExecution(
-                    notebook,
-                    new CancellationTokenSource().token
-                );
+                const cts = new CancellationTokenSource();
 
-                if (!hasEnvironment) {
-                    // User cancelled - do not execute
-                    logger.info(`Execution cancelled: no environment selected for ${getDisplayPath(notebook.uri)}`);
-                    return;
+                try {
+                    const hasEnvironment = await kernelAutoSelector.ensureEnvironmentConfiguredBeforeExecution(
+                        notebook,
+                        cts.token
+                    );
+
+                    if (!hasEnvironment) {
+                        // User cancelled - do not execute
+                        logger.info(`Execution cancelled: no environment selected for ${getDisplayPath(notebook.uri)}`);
+                        return;
+                    }
+                } finally {
+                    cts.dispose();
                 }
             }
         }

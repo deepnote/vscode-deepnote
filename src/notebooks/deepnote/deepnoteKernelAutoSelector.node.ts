@@ -45,7 +45,7 @@ import {
 import { IJupyterKernelSpec, IKernel, IKernelProvider } from '../../kernels/types';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IPythonExtensionChecker } from '../../platform/api/types';
-import { Cancellation } from '../../platform/common/cancellation';
+import { Cancellation, isCancellationError } from '../../platform/common/cancellation';
 import { JVSC_EXTENSION_ID, STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
 import { getDisplayPath } from '../../platform/common/platform/fs-paths.node';
 import { IConfigurationService, IDisposableRegistry, IOutputChannel } from '../../platform/common/types';
@@ -65,22 +65,21 @@ import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
  */
 @injectable()
 export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, IExtensionSyncActivationService {
-    // Track server handles per PROJECT (baseFileUri) - one server per project
-    private readonly projectServerHandles = new Map<string, string>();
+    // Track connection metadata per NOTEBOOK for reuse
+    private readonly notebookConnectionMetadata = new Map<string, DeepnoteKernelConnectionMetadata>();
     // Track registered controllers per NOTEBOOK (full URI with query) - one controller per notebook
     private readonly notebookControllers = new Map<string, IVSCodeNotebookController>();
     // Track environment for each notebook
     private readonly notebookEnvironmentsIds = new Map<string, string>();
-    // Track connection metadata per NOTEBOOK for reuse
-    private readonly notebookConnectionMetadata = new Map<string, DeepnoteKernelConnectionMetadata>();
+    // Track per-notebook placeholder controllers for notebooks without configured environments
+    private readonly placeholderControllers = new Map<string, NotebookController>();
+    // Track server handles per PROJECT (baseFileUri) - one server per project
+    private readonly projectServerHandles = new Map<string, string>();
     // Track projects where we need to run init notebook (set during controller setup)
     private readonly projectsPendingInitNotebook = new Map<
         string,
         { notebook: NotebookDocument; project: DeepnoteFile }
     >();
-
-    // Track per-notebook placeholder controllers for notebooks without configured environments
-    private readonly placeholderControllers = new Map<string, NotebookController>();
 
     constructor(
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
@@ -833,6 +832,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
             if (environment) {
                 logger.info(`Environment "${environment.name}" already configured for ${getDisplayPath(notebook.uri)}`);
+
                 return true;
             }
 
@@ -849,6 +849,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         if (!selectedEnvironment) {
             logger.info(`User cancelled environment selection for ${getDisplayPath(notebook.uri)}`);
+
             return false;
         }
 
@@ -858,26 +859,36 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         await this.notebookEnvironmentMapper.setEnvironmentForNotebook(baseFileUri, selectedEnvironment.id);
 
         // Set up the kernel with the selected environment
-        await window.withProgress(
-            {
-                location: ProgressLocation.Notification,
-                title: l10n.t('Setting up Deepnote kernel...'),
-                cancellable: true
-            },
-            async (progress, progressToken) => {
-                await this.ensureKernelSelectedWithConfiguration(
-                    notebook,
-                    selectedEnvironment,
-                    baseFileUri,
-                    notebookKey,
-                    projectKey,
-                    progress,
-                    progressToken
-                );
+        try {
+            await window.withProgress(
+                {
+                    location: ProgressLocation.Notification,
+                    title: l10n.t('Setting up Deepnote kernel...'),
+                    cancellable: true
+                },
+                async (progress, progressToken) => {
+                    await this.ensureKernelSelectedWithConfiguration(
+                        notebook,
+                        selectedEnvironment,
+                        baseFileUri,
+                        notebookKey,
+                        projectKey,
+                        progress,
+                        progressToken
+                    );
+                }
+            );
+        } catch (error) {
+            if (token.isCancellationRequested || isCancellationError(error as Error)) {
+                logger.info(`Kernel setup cancelled for ${getDisplayPath(notebook.uri)}`);
+
+                return false;
             }
-        );
+            throw error;
+        }
 
         logger.info(`Environment "${selectedEnvironment.name}" configured for ${getDisplayPath(notebook.uri)}`);
+
         return true;
     }
 

@@ -1113,10 +1113,15 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 } cells`
             );
 
-            const cts = new CancellationTokenSource();
+            // No external cancellation source for execute handler - use a never-cancelled token
+            const neverCancelledToken: CancellationToken = {
+                isCancellationRequested: false,
+                // eslint-disable-next-line @typescript-eslint/no-empty-function
+                onCancellationRequested: () => ({ dispose: () => {} })
+            };
 
             try {
-                const hasEnvironment = await this.ensureEnvironmentConfiguredBeforeExecution(doc, cts.token);
+                const hasEnvironment = await this.ensureEnvironmentConfiguredBeforeExecution(doc, neverCancelledToken);
 
                 if (!hasEnvironment) {
                     logger.info(`User cancelled environment selection, not executing cells`);
@@ -1156,8 +1161,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 logger.info(`Finished executing ${cells.length} cells`);
             } catch (error) {
                 logger.error(`Error in placeholder controller execute handler`, error);
-            } finally {
-                cts.dispose();
             }
         };
 

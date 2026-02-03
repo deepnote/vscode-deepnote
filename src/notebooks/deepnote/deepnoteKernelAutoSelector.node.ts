@@ -526,26 +526,21 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
             // Verify the controller's interpreter path matches the expected venv path
             // This handles cases where notebooks were used in VS Code and now opened in Cursor
-            const existingInterpreter = existingController.connection.interpreter;
-            if (existingInterpreter) {
-                const expectedInterpreter =
-                    process.platform === 'win32'
-                        ? Uri.joinPath(configuration.venvPath, 'Scripts', 'python.exe')
-                        : Uri.joinPath(configuration.venvPath, 'bin', 'python');
+            if (this.isControllerInterpreterValid(existingController, configuration.venvPath)) {
+                logger.info(`Controller verified, selecting it`);
+                await this.ensureControllerSelectedForNotebook(notebook, existingController, progressToken);
 
-                if (existingInterpreter.uri.fsPath !== expectedInterpreter.fsPath) {
-                    logger.warn(
-                        `Controller interpreter path mismatch! Expected: ${expectedInterpreter.fsPath}, Got: ${existingInterpreter.uri.fsPath}. Recreating controller.`
-                    );
-                    // Dispose old controller and recreate it
-                    existingController.dispose();
-                    this.notebookControllers.delete(notebookKey);
-                } else {
-                    logger.info(`Controller verified, selecting it`);
-                    await this.ensureControllerSelectedForNotebook(notebook, existingController, progressToken);
-                    return;
-                }
+                return;
             }
+
+            const expectedInterpreter = this.getVenvInterpreterUri(configuration.venvPath);
+            logger.warn(
+                `Controller interpreter path mismatch! Expected: ${expectedInterpreter.fsPath}, Got: ${existingController.connection.interpreter?.uri.fsPath}. Recreating controller.`
+            );
+
+            // Dispose old controller and recreate it
+            existingController.dispose();
+            this.notebookControllers.delete(notebookKey);
         }
 
         // Ensure server is running (startServer is idempotent - returns early if already running)
@@ -821,31 +816,23 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         // Environment and controller already configured - but verify interpreter path still matches
         if (existingController) {
-            const existingInterpreter = existingController.connection.interpreter;
+            if (!this.isControllerInterpreterValid(existingController, environment.venvPath)) {
+                const expectedInterpreter = this.getVenvInterpreterUri(environment.venvPath);
+                logger.warn(
+                    `Controller interpreter path mismatch! Expected: ${expectedInterpreter.fsPath}, Got: ${existingController.connection.interpreter?.uri.fsPath}. Recreating controller.`
+                );
 
-            if (existingInterpreter) {
-                const expectedInterpreter =
-                    process.platform === 'win32'
-                        ? Uri.joinPath(environment.venvPath, 'Scripts', 'python.exe')
-                        : Uri.joinPath(environment.venvPath, 'bin', 'python');
+                existingController.dispose();
+                this.notebookControllers.delete(notebookKey);
 
-                if (existingInterpreter.uri.fsPath !== expectedInterpreter.fsPath) {
-                    logger.warn(
-                        `Controller interpreter path mismatch! Expected: ${expectedInterpreter.fsPath}, Got: ${existingInterpreter.uri.fsPath}. Recreating controller.`
-                    );
-
-                    existingController.dispose();
-                    this.notebookControllers.delete(notebookKey);
-
-                    return this.setupKernelForEnvironment(
-                        notebook,
-                        environment,
-                        baseFileUri,
-                        notebookKey,
-                        projectKey,
-                        token
-                    );
-                }
+                return this.setupKernelForEnvironment(
+                    notebook,
+                    environment,
+                    baseFileUri,
+                    notebookKey,
+                    projectKey,
+                    token
+                );
             }
 
             logger.info(`Environment "${environment.name}" already configured for ${getDisplayPath(notebook.uri)}`);
@@ -981,6 +968,25 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         return process.platform === 'win32'
             ? Uri.joinPath(venvPath, 'Scripts', 'python.exe')
             : Uri.joinPath(venvPath, 'bin', 'python');
+    }
+
+    /**
+     * Check if a controller's interpreter path matches the expected venv path.
+     * Returns true when no interpreter is present (nothing to validate) or when paths match.
+     */
+    private isControllerInterpreterValid(
+        controller: { connection: { interpreter?: { uri: Uri } } },
+        venvPath: Uri
+    ): boolean {
+        const existingInterpreter = controller.connection.interpreter;
+
+        if (!existingInterpreter) {
+            return true;
+        }
+
+        const expectedInterpreter = this.getVenvInterpreterUri(venvPath);
+
+        return existingInterpreter.uri.fsPath === expectedInterpreter.fsPath;
     }
 
     /**

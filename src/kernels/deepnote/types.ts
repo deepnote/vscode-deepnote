@@ -222,6 +222,16 @@ export interface IDeepnoteKernelAutoSelector {
     ): Promise<boolean>;
 
     /**
+     * Ensure an environment is configured for the notebook before execution.
+     * If not configured, shows picker and sets up the kernel.
+     * @returns true if environment is ready, false if user cancelled
+     */
+    ensureEnvironmentConfiguredBeforeExecution(
+        notebook: vscode.NotebookDocument,
+        token: vscode.CancellationToken
+    ): Promise<boolean>;
+
+    /**
      * Force rebuild the controller for a notebook by clearing cached controller and metadata.
      * This is used when switching environments to ensure a new controller is created.
      * @param notebook The notebook document

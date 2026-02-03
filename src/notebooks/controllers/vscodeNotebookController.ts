@@ -6,6 +6,7 @@ import type { KernelMessage } from '@jupyterlab/services';
 import type { IAnyMessageArgs } from '@jupyterlab/services/lib/kernel/kernel';
 import {
     CancellationError,
+    CancellationTokenSource,
     commands,
     Disposable,
     EventEmitter,
@@ -88,6 +89,7 @@ import { KernelConnector } from './kernelConnector';
 import { RemoteKernelReconnectBusyIndicator } from './remoteKernelReconnectBusyIndicator';
 import { IConnectionDisplayData, IConnectionDisplayDataProvider, IVSCodeNotebookController } from './types';
 import { notebookPathToDeepnoteProjectFilePath } from '../../platform/deepnote/deepnoteProjectUtils';
+import { DEEPNOTE_NOTEBOOK_TYPE, IDeepnoteKernelAutoSelector } from '../../kernels/deepnote/types';
 
 /**
  * Our implementation of the VSCode Notebook Controller. Called by VS code to execute cells in a notebook. Also displayed
@@ -435,6 +437,26 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
         if (!workspace.isTrusted) {
             return;
         }
+
+        // For Deepnote notebooks, ensure environment is configured before execution
+        if (notebook.notebookType === DEEPNOTE_NOTEBOOK_TYPE) {
+            const kernelAutoSelector =
+                this.serviceContainer.tryGet<IDeepnoteKernelAutoSelector>(IDeepnoteKernelAutoSelector);
+
+            if (kernelAutoSelector) {
+                const hasEnvironment = await kernelAutoSelector.ensureEnvironmentConfiguredBeforeExecution(
+                    notebook,
+                    new CancellationTokenSource().token
+                );
+
+                if (!hasEnvironment) {
+                    // User cancelled - do not execute
+                    logger.info(`Execution cancelled: no environment selected for ${getDisplayPath(notebook.uri)}`);
+                    return;
+                }
+            }
+        }
+
         logger.debug(`Handle Execution of Cells ${cells.map((c) => c.index)} for ${getDisplayPath(notebook.uri)}`);
         await initializeInteractiveOrNotebookTelemetryBasedOnUserAction(notebook.uri, this.connection);
         telemetryTracker?.stop();

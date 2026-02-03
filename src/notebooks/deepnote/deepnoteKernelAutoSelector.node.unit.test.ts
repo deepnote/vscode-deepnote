@@ -107,9 +107,18 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         // Mock disposable registry - push returns the index
         when(mockDisposableRegistry.push(anything())).thenReturn(0);
 
-        sandbox
-            .stub(DeepnoteKernelAutoSelector, 'createDeepnoteLoadingKernelController')
-            .returns(mock<NotebookController>());
+        // Mock notebooks.createNotebookController to return a mock controller for the loading kernel
+        const mockLoadingController = {
+            id: 'deepnote-loading-kernel',
+            supportsExecutionOrder: false,
+            supportedLanguages: ['python'],
+            executeHandler: undefined as unknown,
+            updateNotebookAffinity: sandbox.stub(),
+            dispose: sandbox.stub()
+        } as unknown as NotebookController;
+        when(mockedVSCodeNamespaces.notebooks!.createNotebookController(anything(), anything(), anything())).thenReturn(
+            mockLoadingController
+        );
 
         // Create selector instance
         selector = new DeepnoteKernelAutoSelector(

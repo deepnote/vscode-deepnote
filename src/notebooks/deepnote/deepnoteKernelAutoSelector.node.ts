@@ -60,6 +60,10 @@ import { IDeepnoteInitNotebookRunner } from './deepnoteInitNotebookRunner.node';
 import { computeRequirementsHash } from './deepnoteProjectUtils';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
 
+// Constants for NotebookEditor retry logic
+const NOTEBOOK_EDITOR_RETRY_COUNT = 10;
+const NOTEBOOK_EDITOR_RETRY_DELAY_MS = 100;
+
 /**
  * Automatically selects and starts Deepnote kernel for .deepnote notebooks
  */
@@ -450,24 +454,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         const environmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri);
 
         if (environmentId == null) {
-            // No environment - create and select placeholder controller
-            const placeholder = this.createPlaceholderController(notebook);
-            placeholder.updateNotebookAffinity(notebook, NotebookControllerAffinity.Preferred);
-
-            // Find the NotebookEditor for this document to properly select the kernel
-            const notebookEditor = await this.findNotebookEditor(notebook);
-
-            if (notebookEditor) {
-                await commands.executeCommand('notebook.selectKernel', {
-                    notebookEditor: notebookEditor,
-                    id: placeholder.id,
-                    extension: JVSC_EXTENSION_ID
-                });
-            } else {
-                logger.warn(
-                    `Could not find NotebookEditor for ${getDisplayPath(notebook.uri)}, kernel may not be selected`
-                );
-            }
+            await this.selectPlaceholderController(notebook);
 
             return false;
         }
@@ -477,25 +464,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         if (environment == null) {
             logger.info(`No environment found for notebook ${getDisplayPath(notebook.uri)}`);
             await this.notebookEnvironmentMapper.removeEnvironmentForNotebook(baseFileUri);
-
-            // No environment - create and select placeholder controller
-            const placeholder = this.createPlaceholderController(notebook);
-            placeholder.updateNotebookAffinity(notebook, NotebookControllerAffinity.Preferred);
-
-            // Find the NotebookEditor for this document to properly select the kernel
-            const notebookEditor = await this.findNotebookEditor(notebook);
-
-            if (notebookEditor) {
-                await commands.executeCommand('notebook.selectKernel', {
-                    notebookEditor: notebookEditor,
-                    id: placeholder.id,
-                    extension: JVSC_EXTENSION_ID
-                });
-            } else {
-                logger.warn(
-                    `Could not find NotebookEditor for ${getDisplayPath(notebook.uri)}, kernel may not be selected`
-                );
-            }
+            await this.selectPlaceholderController(notebook);
 
             return false;
         }
@@ -933,8 +902,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         }
 
         // If not found, wait briefly and retry (editor might not be visible yet)
-        for (let i = 0; i < 10; i++) {
-            await new Promise((resolve) => setTimeout(resolve, 100));
+        for (let i = 0; i < NOTEBOOK_EDITOR_RETRY_COUNT; i++) {
+            await new Promise((resolve) => setTimeout(resolve, NOTEBOOK_EDITOR_RETRY_DELAY_MS));
 
             editor = window.visibleNotebookEditors.find((e) => e.notebook.uri.toString() === notebook.uri.toString());
 
@@ -944,6 +913,28 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         }
 
         return undefined;
+    }
+
+    /**
+     * Create and select a placeholder controller for a notebook without a configured environment.
+     */
+    private async selectPlaceholderController(notebook: NotebookDocument): Promise<void> {
+        const placeholder = this.createPlaceholderController(notebook);
+        placeholder.updateNotebookAffinity(notebook, NotebookControllerAffinity.Preferred);
+
+        const notebookEditor = await this.findNotebookEditor(notebook);
+
+        if (notebookEditor) {
+            await commands.executeCommand('notebook.selectKernel', {
+                notebookEditor: notebookEditor,
+                id: placeholder.id,
+                extension: JVSC_EXTENSION_ID
+            });
+        } else {
+            logger.warn(
+                `Could not find NotebookEditor for ${getDisplayPath(notebook.uri)}, kernel may not be selected`
+            );
+        }
     }
 
     /**
@@ -1154,7 +1145,12 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 const kernelExecution = this.kernelProvider.getKernelExecution(kernel);
 
                 for (const cell of cells) {
-                    await kernelExecution.executeCell(cell);
+                    try {
+                        await kernelExecution.executeCell(cell);
+                    } catch (cellError) {
+                        logger.error(`Error executing cell ${cell.index}`, cellError);
+                        // Continue with remaining cells
+                    }
                 }
 
                 logger.info(`Finished executing ${cells.length} cells`);

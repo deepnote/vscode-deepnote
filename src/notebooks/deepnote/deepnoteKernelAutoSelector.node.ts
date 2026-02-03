@@ -800,9 +800,54 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             const environment = this.environmentManager.getEnvironment(existingEnvironmentId);
 
             if (environment) {
-                logger.info(`Environment "${environment.name}" already configured for ${getDisplayPath(notebook.uri)}`);
+                // Also verify that a controller exists for this notebook
+                const existingController = this.notebookControllers.get(notebookKey);
 
-                return true;
+                if (existingController) {
+                    logger.info(
+                        `Environment "${environment.name}" already configured for ${getDisplayPath(notebook.uri)}`
+                    );
+
+                    return true;
+                }
+
+                // Controller is missing (e.g., after VS Code restart) - need to set up kernel
+                logger.info(
+                    `Environment "${environment.name}" configured but controller missing for ${getDisplayPath(
+                        notebook.uri
+                    )}, triggering setup`
+                );
+
+                // Set up the kernel with the existing environment
+                try {
+                    await window.withProgress(
+                        {
+                            location: ProgressLocation.Notification,
+                            title: l10n.t('Setting up Deepnote kernel...'),
+                            cancellable: true
+                        },
+                        async (progress, progressToken) => {
+                            await this.ensureKernelSelectedWithConfiguration(
+                                notebook,
+                                environment,
+                                baseFileUri,
+                                notebookKey,
+                                projectKey,
+                                progress,
+                                progressToken
+                            );
+                        }
+                    );
+
+                    return true;
+                } catch (error) {
+                    if (token.isCancellationRequested || isCancellationError(error as Error)) {
+                        logger.info(`Kernel setup cancelled for ${getDisplayPath(notebook.uri)}`);
+
+                        return false;
+                    }
+                    throw error;
+                }
             }
 
             // Environment no longer exists, remove the stale mapping

@@ -208,10 +208,11 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
     public async pickEnvironment(notebookUri: Uri): Promise<DeepnoteEnvironment | undefined> {
         logger.info(`Picking environment for notebook ${getDisplayPath(notebookUri)}`);
+
         // Wait for environment manager to finish loading environments from storage
         await this.environmentManager.waitForInitialization();
+
         const environments = this.environmentManager.listEnvironments();
-        // Build quick pick items
         const items: (QuickPickItem & { environment?: DeepnoteEnvironment })[] = environments.map((env) => {
             return {
                 label: env.name,
@@ -222,12 +223,13 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 environment: env
             };
         });
-        // Add "Create new" option at the end
+
         items.push({
             label: '$(add) Create New Environment',
             description: 'Set up a new kernel environment',
             alwaysShow: true
         });
+
         const selected = await window.showQuickPick(items, {
             placeHolder: `Select an environment for ${getDisplayPath(notebookUri)}`,
             matchOnDescription: true,
@@ -236,25 +238,29 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         if (!selected) {
             logger.info('User cancelled environment selection');
-            return undefined; // User cancelled
+            return; // User cancelled
         }
 
         if (!selected.environment) {
-            // User chose "Create new" - execute the create command and retry
             logger.info('User chose to create new environment - triggering create command');
+
             await commands.executeCommand('deepnote.environments.create');
-            // After creation, refresh the list and show picker again
+
             const newEnvironments = this.environmentManager.listEnvironments();
+
             if (newEnvironments.length > environments.length) {
-                // A new environment was created, show the picker again
                 logger.info('Environment created, showing picker again');
+
                 return this.pickEnvironment(notebookUri);
             }
-            // User cancelled creation
+
             logger.info('No new environment created');
-            return undefined;
+
+            return;
         }
+
         logger.info(`Selected environment "${selected.environment.name}" for notebook ${getDisplayPath(notebookUri)}`);
+
         return selected.environment;
     }
 
@@ -359,8 +365,10 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             // Check if this is a cancellation error - if so, just log and continue
             if (error instanceof Error && error.message === 'Cancelled') {
                 logger.info(`Init notebook cancelled for project ${projectId}`);
+
                 return;
             }
+
             logger.error('Error running init notebook', error);
             // Continue anyway - don't block user if init fails
         } finally {
@@ -838,8 +846,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                             );
                         }
                     );
-
-                    return true;
                 } catch (error) {
                     if (token.isCancellationRequested || isCancellationError(error as Error)) {
                         logger.info(`Kernel setup cancelled for ${getDisplayPath(notebook.uri)}`);
@@ -848,6 +854,21 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                     }
                     throw error;
                 }
+
+                // Verify controller was actually created
+                const createdController = this.notebookControllers.get(notebookKey);
+
+                if (!createdController) {
+                    logger.warn(
+                        `Controller not created for "${environment.name}" on ${getDisplayPath(
+                            notebook.uri
+                        )} after setup`
+                    );
+
+                    return false;
+                }
+
+                return true;
             }
 
             // Environment no longer exists, remove the stale mapping
@@ -899,6 +920,19 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 return false;
             }
             throw error;
+        }
+
+        // Verify controller was actually created
+        const createdController = this.notebookControllers.get(notebookKey);
+
+        if (!createdController) {
+            logger.warn(
+                `Controller not created for "${selectedEnvironment.name}" on ${getDisplayPath(
+                    notebook.uri
+                )} after setup`
+            );
+
+            return false;
         }
 
         logger.info(`Environment "${selectedEnvironment.name}" configured for ${getDisplayPath(notebook.uri)}`);
@@ -957,7 +991,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             }
         }
 
-        return undefined;
+        return;
     }
 
     /**

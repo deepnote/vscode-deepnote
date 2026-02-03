@@ -819,8 +819,35 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         const existingController = this.notebookControllers.get(notebookKey);
 
-        // Environment and controller already configured
+        // Environment and controller already configured - but verify interpreter path still matches
         if (existingController) {
+            const existingInterpreter = existingController.connection.interpreter;
+
+            if (existingInterpreter) {
+                const expectedInterpreter =
+                    process.platform === 'win32'
+                        ? Uri.joinPath(environment.venvPath, 'Scripts', 'python.exe')
+                        : Uri.joinPath(environment.venvPath, 'bin', 'python');
+
+                if (existingInterpreter.uri.fsPath !== expectedInterpreter.fsPath) {
+                    logger.warn(
+                        `Controller interpreter path mismatch! Expected: ${expectedInterpreter.fsPath}, Got: ${existingInterpreter.uri.fsPath}. Recreating controller.`
+                    );
+
+                    existingController.dispose();
+                    this.notebookControllers.delete(notebookKey);
+
+                    return this.setupKernelForEnvironment(
+                        notebook,
+                        environment,
+                        baseFileUri,
+                        notebookKey,
+                        projectKey,
+                        token
+                    );
+                }
+            }
+
             logger.info(`Environment "${environment.name}" already configured for ${getDisplayPath(notebook.uri)}`);
 
             return true;
@@ -1181,18 +1208,21 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 } cells`
             );
 
-            // No external cancellation source for execute handler - use a never-cancelled token
-            const neverCancelledToken: CancellationToken = {
-                isCancellationRequested: false,
-                // eslint-disable-next-line @typescript-eslint/no-empty-function
-                onCancellationRequested: () => ({ dispose: () => {} })
-            };
+            // Create a cancellation token that cancels when the notebook is closed
+            const cts = new CancellationTokenSource();
+            const closeListener = workspace.onDidCloseNotebookDocument((closedDoc) => {
+                if (closedDoc.uri.toString() === doc.uri.toString()) {
+                    logger.info(`Notebook closed during environment setup, cancelling operation`);
+                    cts.cancel();
+                }
+            });
 
             try {
-                const hasEnvironment = await this.ensureEnvironmentConfiguredBeforeExecution(doc, neverCancelledToken);
+                const hasEnvironment = await this.ensureEnvironmentConfiguredBeforeExecution(doc, cts.token);
 
                 if (!hasEnvironment) {
                     logger.info(`User cancelled environment selection, not executing cells`);
+
                     return;
                 }
 
@@ -1202,6 +1232,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
                 if (!realController) {
                     logger.error(`No controller found after environment configuration for ${docNotebookKey}`);
+
                     return;
                 }
 
@@ -1228,7 +1259,14 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
                 logger.info(`Finished executing ${cells.length} cells`);
             } catch (error) {
-                logger.error(`Error in placeholder controller execute handler`, error);
+                if (isCancellationError(error)) {
+                    logger.info(`Environment setup cancelled for ${getDisplayPath(doc.uri)}`);
+                } else {
+                    logger.error(`Error in placeholder controller execute handler`, error);
+                }
+            } finally {
+                closeListener.dispose();
+                cts.dispose();
             }
         };
 

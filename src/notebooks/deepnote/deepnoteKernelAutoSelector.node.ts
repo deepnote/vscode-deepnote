@@ -800,15 +800,12 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         const notebookKey = notebook.uri.toString();
         const projectKey = baseFileUri.fsPath;
 
-        // Check if environment is already configured
         const existingEnvironmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri);
 
         if (existingEnvironmentId) {
-            // Validate that the environment still exists
             const environment = this.environmentManager.getEnvironment(existingEnvironmentId);
 
             if (environment) {
-                // Also verify that a controller exists for this notebook
                 const existingController = this.notebookControllers.get(notebookKey);
 
                 if (existingController) {
@@ -819,14 +816,12 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                     return true;
                 }
 
-                // Controller is missing (e.g., after VS Code restart) - need to set up kernel
                 logger.info(
                     `Environment "${environment.name}" configured but controller missing for ${getDisplayPath(
                         notebook.uri
                     )}, triggering setup`
                 );
 
-                // Set up the kernel with the existing environment
                 try {
                     await window.withProgress(
                         {
@@ -873,6 +868,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
             // Environment no longer exists, remove the stale mapping
             logger.info(`Removing stale environment mapping for ${getDisplayPath(notebook.uri)}`);
+
             await this.notebookEnvironmentMapper.removeEnvironmentForNotebook(baseFileUri);
         }
 
@@ -890,7 +886,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         Cancellation.throwIfCanceled(token);
 
-        // Save the selection
         await this.notebookEnvironmentMapper.setEnvironmentForNotebook(baseFileUri, selectedEnvironment.id);
 
         // Set up the kernel with the selected environment

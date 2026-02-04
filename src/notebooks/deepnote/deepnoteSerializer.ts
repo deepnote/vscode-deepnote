@@ -284,7 +284,22 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 originalProject
             );
 
-            originalProject.metadata.modifiedAt = new Date().toISOString();
+            // Update modifiedAt conditionally based on snapshot mode
+            if (this.snapshotService?.isSnapshotsEnabled()) {
+                // In snapshot mode, only update modifiedAt if content actually changed
+                const hasContentChanges = this.detectContentChanges(originalProject, storedProject);
+
+                if (hasContentChanges) {
+                    originalProject.metadata.modifiedAt = new Date().toISOString();
+                } else {
+                    // Preserve the original modifiedAt
+                    originalProject.metadata.modifiedAt =
+                        storedProject.metadata?.modifiedAt || new Date().toISOString();
+                }
+            } else {
+                // Default behavior: always update modifiedAt
+                originalProject.metadata.modifiedAt = new Date().toISOString();
+            }
 
             // Store the updated project back so subsequent saves start from correct state
             this.notebookManager.storeOriginalProject(projectId, originalProject, notebookId);
@@ -553,6 +568,47 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
         const hash = await computeHash(hashData, 'SHA-256');
 
         return `sha256:${hash}`;
+    }
+
+    /**
+     * Detects whether actual content has changed between two project versions.
+     * Compares notebook content (block sources, types, and IDs) while ignoring
+     * outputs, execution metadata, and timestamps.
+     * @param newProject The project with potential changes
+     * @param originalProject The stored original project
+     * @returns true if content has changed, false otherwise
+     */
+    private detectContentChanges(newProject: DeepnoteFile, originalProject: DeepnoteFile): boolean {
+        for (const newNotebook of newProject.project.notebooks) {
+            const originalNotebook = originalProject.project.notebooks.find((nb) => nb.id === newNotebook.id);
+
+            if (!originalNotebook) {
+                return true; // New notebook added
+            }
+
+            const newBlocks = newNotebook.blocks ?? [];
+            const originalBlocks = originalNotebook.blocks ?? [];
+
+            if (newBlocks.length !== originalBlocks.length) {
+                return true;
+            }
+
+            for (let i = 0; i < newBlocks.length; i++) {
+                const newBlock = newBlocks[i];
+                const originalBlock = originalBlocks[i];
+
+                // Compare content and type (the things that matter for actual changes)
+                if (
+                    newBlock.content !== originalBlock.content ||
+                    newBlock.type !== originalBlock.type ||
+                    newBlock.id !== originalBlock.id
+                ) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**

@@ -296,6 +296,27 @@ suite('SnapshotService', () => {
             assert.isUndefined(result[0].outputs);
         });
 
+        test('should strip executionCount from blocks', () => {
+            const blocks: DeepnoteBlock[] = [
+                {
+                    id: 'block-1',
+                    type: 'code',
+                    sortingKey: 'a0',
+                    content: 'print(1)',
+                    contentHash: 'sha256:abc123',
+                    executionCount: 5,
+                    outputs: [{ output_type: 'stream', text: '1' }]
+                }
+            ];
+
+            const result = service.stripOutputsFromBlocks(blocks);
+
+            assert.strictEqual(result[0].id, 'block-1');
+            assert.strictEqual(result[0].contentHash, 'sha256:abc123');
+            assert.isUndefined(result[0].executionCount);
+            assert.isUndefined(result[0].outputs);
+        });
+
         test('should not modify original blocks', () => {
             const blocks: DeepnoteBlock[] = [
                 {

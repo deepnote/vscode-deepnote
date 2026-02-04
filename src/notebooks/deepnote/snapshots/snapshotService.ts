@@ -433,7 +433,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     stripOutputsFromBlocks(blocks: DeepnoteBlock[]): DeepnoteBlock[] {
         return blocks.map((block) => {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { outputs, executionFinishedAt, executionStartedAt, ...strippedBlock } = block;
+            const { outputs, executionCount, executionFinishedAt, executionStartedAt, ...strippedBlock } = block;
 
             return strippedBlock as DeepnoteBlock;
         });

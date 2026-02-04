@@ -13,13 +13,14 @@ import {
     notebooks,
     workspace
 } from 'vscode';
-import { inject, injectable } from 'inversify';
+import { inject, injectable, optional } from 'inversify';
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { computeHash } from '../../platform/common/crypto';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { Pocket } from '../../platform/deepnote/pocket';
 import { notebookCellExecutions, NotebookCellExecutionState } from '../../platform/notebooks/cellExecutionStateService';
+import { SnapshotService } from './snapshots/snapshotService';
 
 /**
  * Provides status bar items for cells with stale outputs.
@@ -33,7 +34,10 @@ export class StaleOutputStatusBarProvider
 
     public readonly onDidChangeCellStatusBarItems = this._onDidChangeCellStatusBarItems.event;
 
-    constructor(@inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry) {}
+    constructor(
+        @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
+        @inject(SnapshotService) @optional() private readonly snapshotService?: SnapshotService
+    ) {}
 
     public activate(): void {
         this.disposables.push(notebooks.registerNotebookCellStatusBarItemProvider('deepnote', this));
@@ -75,10 +79,9 @@ export class StaleOutputStatusBarProvider
             return;
         }
 
-        const pocket = cell.metadata?.__deepnotePocket as Pocket | undefined;
-        const storedHash = pocket?.contentHash;
+        const storedHash = this.getStoredExecutionHash(cell);
 
-        // If no contentHash exists, the cell was never executed (by us), don't show indicator
+        // If no hash exists, the cell was never executed (by us), don't show indicator
         if (!storedHash) {
             return;
         }
@@ -130,6 +133,18 @@ export class StaleOutputStatusBarProvider
         return cell.document.uri.toString();
     }
 
+    private getStoredExecutionHash(cell: NotebookCell): string | undefined {
+        const inMemoryHash = this.executedContentHashes.get(this.getCellKey(cell));
+
+        if (inMemoryHash) {
+            return inMemoryHash;
+        }
+
+        const pocket = cell.metadata?.__deepnotePocket as Pocket | undefined;
+
+        return pocket?.contentHash;
+    }
+
     /**
      * Updates the cell's contentHash when execution completes successfully.
      * This ensures the stale indicator is removed after re-running a cell.
@@ -153,8 +168,17 @@ export class StaleOutputStatusBarProvider
             this.executedContentHashes.set(cellKey, newContentHash);
             this._onDidChangeCellStatusBarItems.fire();
 
+            // In snapshot mode we avoid mutating cell metadata to prevent dirty state.
+            if (this.snapshotService?.isSnapshotsEnabled()) {
+                return;
+            }
+
             // Also persist the hash to cell metadata for cross-session persistence
             const existingPocket = (cell.metadata?.__deepnotePocket as Record<string, unknown>) || {};
+            if (existingPocket.contentHash === newContentHash) {
+                return;
+            }
+
             const updatedPocket = { ...existingPocket, contentHash: newContentHash };
 
             const edit = new WorkspaceEdit();

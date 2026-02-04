@@ -1,5 +1,5 @@
 import { injectable, inject, optional } from 'inversify';
-import { workspace } from 'vscode';
+import { workspace, type NotebookDocumentContentOptions } from 'vscode';
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IExtensionContext } from '../../platform/common/types';
@@ -44,7 +44,17 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
         this.explorerView = new DeepnoteExplorerView(this.extensionContext, this.notebookManager, this.logger);
         this.editProtection = new DeepnoteInputBlockEditProtection(this.logger);
 
-        this.extensionContext.subscriptions.push(workspace.registerNotebookSerializer('deepnote', this.serializer));
+        // When snapshots are enabled, treat outputs as transient so VS Code
+        // doesn't mark the document dirty when outputs change during execution
+        const contentOptions: NotebookDocumentContentOptions = {};
+
+        if (this.snapshotService?.isSnapshotsEnabled()) {
+            contentOptions.transientOutputs = true;
+        }
+
+        this.extensionContext.subscriptions.push(
+            workspace.registerNotebookSerializer('deepnote', this.serializer, contentOptions)
+        );
         this.extensionContext.subscriptions.push(this.editProtection);
 
         this.explorerView.activate();

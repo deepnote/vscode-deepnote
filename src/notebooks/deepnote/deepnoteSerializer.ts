@@ -579,6 +579,14 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
      * @returns true if content has changed, false otherwise
      */
     private detectContentChanges(newProject: DeepnoteFile, originalProject: DeepnoteFile): boolean {
+        for (const originalNotebook of originalProject.project.notebooks) {
+            const newNotebook = newProject.project.notebooks.find((nb) => nb.id === originalNotebook.id);
+
+            if (!newNotebook) {
+                return true; // Notebook removed
+            }
+        }
+
         for (const newNotebook of newProject.project.notebooks) {
             const originalNotebook = originalProject.project.notebooks.find((nb) => nb.id === newNotebook.id);
 

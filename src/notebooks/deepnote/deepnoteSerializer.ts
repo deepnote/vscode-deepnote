@@ -1,7 +1,7 @@
 import type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
 import { inject, injectable, optional } from 'inversify';
 import * as yaml from 'js-yaml';
-import { l10n, workspace, type CancellationToken, type NotebookData, type NotebookSerializer } from 'vscode';
+import { l10n, window, workspace, type CancellationToken, type NotebookData, type NotebookSerializer } from 'vscode';
 
 import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
@@ -175,6 +175,17 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
      * @returns The notebook ID to deserialize, or undefined if none found
      */
     findCurrentNotebookId(projectId: string): string | undefined {
+        // Prefer the active notebook editor when it matches the project
+        const activeEditorNotebook = window.activeNotebookEditor?.notebook;
+
+        if (
+            activeEditorNotebook?.notebookType === 'deepnote' &&
+            activeEditorNotebook.metadata?.deepnoteProjectId === projectId &&
+            activeEditorNotebook.metadata?.deepnoteNotebookId
+        ) {
+            return activeEditorNotebook.metadata.deepnoteNotebookId;
+        }
+
         // Check the manager's stored selection - this should be set when opening from explorer
         const storedNotebookId = this.notebookManager.getTheSelectedNotebookForAProject(projectId);
 
@@ -183,11 +194,11 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
         }
 
         // Fallback: Check if there's an active notebook document for this project
-        const activeNotebook = workspace.notebookDocuments.find(
+        const openNotebook = workspace.notebookDocuments.find(
             (doc) => doc.notebookType === 'deepnote' && doc.metadata?.deepnoteProjectId === projectId
         );
 
-        return activeNotebook?.metadata?.deepnoteNotebookId;
+        return openNotebook?.metadata?.deepnoteNotebookId;
     }
 
     /**
@@ -314,9 +325,8 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 if (hasContentChanges) {
                     originalProject.metadata.modifiedAt = new Date().toISOString();
                 } else {
-                    // Preserve the original modifiedAt
-                    originalProject.metadata.modifiedAt =
-                        storedProject.metadata?.modifiedAt || new Date().toISOString();
+                    // Preserve the original modifiedAt (may be undefined)
+                    originalProject.metadata.modifiedAt = storedProject.metadata?.modifiedAt;
                 }
             } else {
                 // Default behavior: always update modifiedAt
@@ -591,12 +601,11 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
         // Track which original block IDs have been claimed to avoid duplicates
         const claimedIds = new Set<string>();
+        const originalIds = new Set(originalBlocks.map((block) => block.id));
 
         // First pass: mark IDs that are already correctly set from metadata
         for (const block of blocks) {
-            const hasOriginalId = originalBlocks.some((ob) => ob.id === block.id);
-
-            if (hasOriginalId) {
+            if (originalIds.has(block.id)) {
                 claimedIds.add(block.id);
             }
         }

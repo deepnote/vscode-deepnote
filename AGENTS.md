@@ -1,4 +1,4 @@
-## Code Style & Organization
+# Code Style & Organization
 
 - Order method, fields and properties, first by accessibility and then by alphabetical order.
 - Don't add the Microsoft copyright header to new files.
@@ -47,6 +47,7 @@
 
 - Always dispose `CancellationTokenSource` - never create inline without storing/disposing
 - Use try/finally to ensure cleanup:
+
   ```typescript
   const cts = new CancellationTokenSource();
   try {
@@ -55,6 +56,7 @@
     cts.dispose();
   }
   ```
+
 
 ### DRY Principle
 

@@ -5,6 +5,7 @@ import {
     NotebookCellKind,
     NotebookCellStatusBarItem,
     NotebookCellStatusBarItemProvider,
+    NotebookDocument,
     NotebookDocumentChangeEvent,
     NotebookEdit,
     ProviderResult,
@@ -56,6 +57,15 @@ export class StaleOutputStatusBarProvider
             notebookCellExecutions.onDidChangeNotebookCellExecutionState((e) => {
                 if (e.cell.notebook.notebookType === 'deepnote' && e.state === NotebookCellExecutionState.Idle) {
                     void this.handleCellExecutionComplete(e.cell);
+                }
+            })
+        );
+
+        // Clean up cached hashes when notebooks close
+        this.disposables.push(
+            workspace.onDidCloseNotebookDocument((notebook: NotebookDocument) => {
+                if (notebook.notebookType === 'deepnote') {
+                    this.cleanupHashes(notebook);
                 }
             })
         );
@@ -131,6 +141,12 @@ export class StaleOutputStatusBarProvider
 
     private getCellKey(cell: NotebookCell): string {
         return cell.document.uri.toString();
+    }
+
+    private cleanupHashes(notebook: NotebookDocument): void {
+        for (const cell of notebook.getCells()) {
+            this.executedContentHashes.delete(this.getCellKey(cell));
+        }
     }
 
     private getStoredExecutionHash(cell: NotebookCell): string | undefined {

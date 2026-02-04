@@ -382,6 +382,6 @@ export interface IDeepnoteLspClientManager {
     stopAllClients(token?: vscode.CancellationToken): Promise<void>;
 }
 
-export const DEEPNOTE_TOOLKIT_VERSION = '1.1.0';
+export const DEEPNOTE_TOOLKIT_VERSION = '2.1.1';
 export const DEEPNOTE_DEFAULT_PORT = 8888;
 export const DEEPNOTE_NOTEBOOK_TYPE = 'deepnote';

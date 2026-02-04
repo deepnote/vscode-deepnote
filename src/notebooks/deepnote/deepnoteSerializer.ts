@@ -60,14 +60,6 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
     ) {}
 
     /**
-     * Gets the data converter instance for cell/block conversion.
-     * @returns DeepnoteDataConverter instance
-     */
-    getConverter(): DeepnoteDataConverter {
-        return this.converter;
-    }
-
-    /**
      * Deserializes a Deepnote YAML file into VS Code notebook format.
      * Parses YAML and converts the selected notebook's blocks to cells.
      * The notebook to deserialize must be pre-selected and stored in the manager.
@@ -174,6 +166,36 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 `Failed to parse Deepnote file: ${error instanceof Error ? error.message : 'Unknown error'}`
             );
         }
+    }
+
+    /**
+     * Finds the notebook ID to deserialize by checking the manager's stored selection.
+     * The notebook ID should be set via selectNotebookForProject before opening the document.
+     * @param projectId The project ID to find a notebook for
+     * @returns The notebook ID to deserialize, or undefined if none found
+     */
+    findCurrentNotebookId(projectId: string): string | undefined {
+        // Check the manager's stored selection - this should be set when opening from explorer
+        const storedNotebookId = this.notebookManager.getTheSelectedNotebookForAProject(projectId);
+
+        if (storedNotebookId) {
+            return storedNotebookId;
+        }
+
+        // Fallback: Check if there's an active notebook document for this project
+        const activeNotebook = workspace.notebookDocuments.find(
+            (doc) => doc.notebookType === 'deepnote' && doc.metadata?.deepnoteProjectId === projectId
+        );
+
+        return activeNotebook?.metadata?.deepnoteNotebookId;
+    }
+
+    /**
+     * Gets the data converter instance for cell/block conversion.
+     * @returns DeepnoteDataConverter instance
+     */
+    getConverter(): DeepnoteDataConverter {
+        return this.converter;
     }
 
     /**
@@ -325,86 +347,6 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
     }
 
     /**
-     * Attempts to recover block metadata when VS Code fails to preserve cell metadata.
-     * Uses content-based matching as a fallback strategy to recover id, sortingKey, and blockGroup.
-     * @param blocks Blocks converted from cells (may have generated values if metadata was lost)
-     * @param originalBlocks Original blocks from the stored project
-     */
-    private recoverBlockIdsFromOriginal(blocks: DeepnoteBlock[], originalBlocks: DeepnoteBlock[]): void {
-        // Build a map of original blocks by content for quick lookup
-        // Key: content (trimmed), Value: array of blocks with that content (in case of duplicates)
-        const contentToOriginalBlocks = new Map<string, DeepnoteBlock[]>();
-
-        for (const originalBlock of originalBlocks) {
-            const content = (originalBlock.content || '').trim();
-            const existing = contentToOriginalBlocks.get(content) || [];
-
-            existing.push(originalBlock);
-            contentToOriginalBlocks.set(content, existing);
-        }
-
-        // Track which original block IDs have been claimed to avoid duplicates
-        const claimedIds = new Set<string>();
-
-        // First pass: mark IDs that are already correctly set from metadata
-        for (const block of blocks) {
-            const hasOriginalId = originalBlocks.some((ob) => ob.id === block.id);
-
-            if (hasOriginalId) {
-                claimedIds.add(block.id);
-            }
-        }
-
-        // Second pass: try to recover metadata for blocks that got new generated values
-        let recoveredCount = 0;
-
-        for (const block of blocks) {
-            // Skip if this block already has an original ID
-            if (claimedIds.has(block.id)) {
-                continue;
-            }
-
-            // Check if this block's ID looks generated (not from original blocks)
-            const hasOriginalId = originalBlocks.some((ob) => ob.id === block.id);
-
-            if (hasOriginalId) {
-                continue;
-            }
-
-            // Try to find a matching original block by content
-            const content = (block.content || '').trim();
-            const candidates = contentToOriginalBlocks.get(content) || [];
-
-            // Find an unclaimed candidate
-            for (const candidate of candidates) {
-                if (!claimedIds.has(candidate.id)) {
-                    const oldId = block.id;
-
-                    // Recover all key metadata from the original block
-                    block.id = candidate.id;
-                    block.sortingKey = candidate.sortingKey;
-                    block.blockGroup = candidate.blockGroup;
-
-                    claimedIds.add(candidate.id);
-                    recoveredCount++;
-
-                    logger.debug(
-                        `SerializeNotebook: Recovered block metadata for ${candidate.id} (was ${oldId}) via content match`
-                    );
-                    break;
-                }
-            }
-        }
-
-        if (recoveredCount > 0) {
-            logger.info(
-                `SerializeNotebook: Recovered ${recoveredCount} blocks via content matching ` +
-                    `(VS Code metadata may have been lost)`
-            );
-        }
-    }
-
-    /**
      * Adds snapshot metadata (contentHash, execution timing) to blocks.
      */
     private async addSnapshotMetadataToBlocks(blocks: DeepnoteBlock[], data: NotebookData): Promise<void> {
@@ -493,49 +435,6 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
     }
 
     /**
-     * Finds the notebook URI from the metadata.
-     */
-    private findNotebookUri(data: NotebookData): string | undefined {
-        const projectId = data.metadata?.deepnoteProjectId;
-        const notebookId = data.metadata?.deepnoteNotebookId;
-
-        if (!projectId || !notebookId) {
-            return;
-        }
-
-        const notebookDoc = workspace.notebookDocuments.find(
-            (doc) =>
-                doc.notebookType === 'deepnote' &&
-                doc.metadata?.deepnoteProjectId === projectId &&
-                doc.metadata?.deepnoteNotebookId === notebookId
-        );
-
-        return notebookDoc?.uri.toString();
-    }
-
-    /**
-     * Finds the notebook ID to deserialize by checking the manager's stored selection.
-     * The notebook ID should be set via selectNotebookForProject before opening the document.
-     * @param projectId The project ID to find a notebook for
-     * @returns The notebook ID to deserialize, or undefined if none found
-     */
-    findCurrentNotebookId(projectId: string): string | undefined {
-        // Check the manager's stored selection - this should be set when opening from explorer
-        const storedNotebookId = this.notebookManager.getTheSelectedNotebookForAProject(projectId);
-
-        if (storedNotebookId) {
-            return storedNotebookId;
-        }
-
-        // Fallback: Check if there's an active notebook document for this project
-        const activeNotebook = workspace.notebookDocuments.find(
-            (doc) => doc.notebookType === 'deepnote' && doc.metadata?.deepnoteProjectId === projectId
-        );
-
-        return activeNotebook?.metadata?.deepnoteNotebookId;
-    }
-
-    /**
      * Computes a deterministic hash of all factors that affect notebook execution and outputs.
      * Includes contentHashes from all blocks, environment hash, version, and integrations.
      * Excludes temporal fields to ensure identical snapshots produce identical hashes.
@@ -594,6 +493,15 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 return true; // New notebook added
             }
 
+            if (
+                newNotebook.name !== originalNotebook.name ||
+                newNotebook.executionMode !== originalNotebook.executionMode ||
+                newNotebook.isModule !== originalNotebook.isModule ||
+                newNotebook.workingDirectory !== originalNotebook.workingDirectory
+            ) {
+                return true;
+            }
+
             const newBlocks = newNotebook.blocks ?? [];
             const originalBlocks = originalNotebook.blocks ?? [];
 
@@ -639,5 +547,106 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
         }
 
         return sortedNotebooks[0];
+    }
+
+    /**
+     * Finds the notebook URI from the metadata.
+     */
+    private findNotebookUri(data: NotebookData): string | undefined {
+        const projectId = data.metadata?.deepnoteProjectId;
+        const notebookId = data.metadata?.deepnoteNotebookId;
+
+        if (!projectId || !notebookId) {
+            return;
+        }
+
+        const notebookDoc = workspace.notebookDocuments.find(
+            (doc) =>
+                doc.notebookType === 'deepnote' &&
+                doc.metadata?.deepnoteProjectId === projectId &&
+                doc.metadata?.deepnoteNotebookId === notebookId
+        );
+
+        return notebookDoc?.uri.toString();
+    }
+
+    /**
+     * Attempts to recover block metadata when VS Code fails to preserve cell metadata.
+     * Uses content-based matching as a fallback strategy to recover id, sortingKey, and blockGroup.
+     * @param blocks Blocks converted from cells (may have generated values if metadata was lost)
+     * @param originalBlocks Original blocks from the stored project
+     */
+    private recoverBlockIdsFromOriginal(blocks: DeepnoteBlock[], originalBlocks: DeepnoteBlock[]): void {
+        // Build a map of original blocks by content for quick lookup
+        // Key: content (trimmed), Value: array of blocks with that content (in case of duplicates)
+        const contentToOriginalBlocks = new Map<string, DeepnoteBlock[]>();
+
+        for (const originalBlock of originalBlocks) {
+            const content = (originalBlock.content || '').trim();
+            const existing = contentToOriginalBlocks.get(content) || [];
+
+            existing.push(originalBlock);
+            contentToOriginalBlocks.set(content, existing);
+        }
+
+        // Track which original block IDs have been claimed to avoid duplicates
+        const claimedIds = new Set<string>();
+
+        // First pass: mark IDs that are already correctly set from metadata
+        for (const block of blocks) {
+            const hasOriginalId = originalBlocks.some((ob) => ob.id === block.id);
+
+            if (hasOriginalId) {
+                claimedIds.add(block.id);
+            }
+        }
+
+        // Second pass: try to recover metadata for blocks that got new generated values
+        let recoveredCount = 0;
+
+        for (const block of blocks) {
+            // Skip if this block already has an original ID
+            if (claimedIds.has(block.id)) {
+                continue;
+            }
+
+            // Check if this block's ID looks generated (not from original blocks)
+            const hasOriginalId = originalBlocks.some((ob) => ob.id === block.id);
+
+            if (hasOriginalId) {
+                continue;
+            }
+
+            // Try to find a matching original block by content
+            const content = (block.content || '').trim();
+            const candidates = contentToOriginalBlocks.get(content) || [];
+
+            // Find an unclaimed candidate
+            for (const candidate of candidates) {
+                if (!claimedIds.has(candidate.id)) {
+                    const oldId = block.id;
+
+                    // Recover all key metadata from the original block
+                    block.id = candidate.id;
+                    block.sortingKey = candidate.sortingKey;
+                    block.blockGroup = candidate.blockGroup;
+
+                    claimedIds.add(candidate.id);
+                    recoveredCount++;
+
+                    logger.debug(
+                        `SerializeNotebook: Recovered block metadata for ${candidate.id} (was ${oldId}) via content match`
+                    );
+                    break;
+                }
+            }
+        }
+
+        if (recoveredCount > 0) {
+            logger.info(
+                `SerializeNotebook: Recovered ${recoveredCount} blocks via content matching ` +
+                    `(VS Code metadata may have been lost)`
+            );
+        }
     }
 }

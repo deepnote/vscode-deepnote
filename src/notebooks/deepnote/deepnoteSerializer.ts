@@ -610,13 +610,6 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 continue;
             }
 
-            // Check if this block's ID looks generated (not from original blocks)
-            const hasOriginalId = originalBlocks.some((ob) => ob.id === block.id);
-
-            if (hasOriginalId) {
-                continue;
-            }
-
             // Try to find a matching original block by content
             const content = (block.content || '').trim();
             const candidates = contentToOriginalBlocks.get(content) || [];

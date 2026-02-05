@@ -328,7 +328,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     isSnapshotsEnabled(): boolean {
         const config = workspace.getConfiguration('deepnote');
 
-        return config.get<boolean>('snapshots.enabled', false);
+        return config.get<boolean>('snapshots.enabled', true);
     }
 
     mergeOutputsIntoBlocks(blocks: DeepnoteBlock[], outputs: Map<string, DeepnoteOutput[]>): DeepnoteBlock[] {

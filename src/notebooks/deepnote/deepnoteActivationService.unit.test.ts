@@ -124,6 +124,46 @@ suite('DeepnoteActivationService', () => {
                 mockedVSCodeNamespaces.workspace.registerNotebookSerializer(anything(), anything(), anything())
             ).twice();
         });
+
+        test('should prompt to reload when snapshots are enabled with open notebooks', () => {
+            resetVSCodeMocks();
+
+            let configHandler: ((event: { affectsConfiguration: (section: string) => boolean }) => void) | undefined;
+
+            when(
+                mockedVSCodeNamespaces.workspace.registerNotebookSerializer(anything(), anything(), anything())
+            ).thenReturn({ dispose: () => undefined } as any);
+            const onDidChangeConfiguration = (
+                handler: (event: { affectsConfiguration: (section: string) => boolean }) => void
+            ) => {
+                configHandler = handler;
+
+                return { dispose: () => undefined } as any;
+            };
+            when(mockedVSCodeNamespaces.workspace.onDidChangeConfiguration).thenReturn(onDidChangeConfiguration as any);
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([{ notebookType: 'deepnote' } as any]);
+
+            let snapshotsEnabled = false;
+            const mockSnapshotService = { isSnapshotsEnabled: () => snapshotsEnabled } as any;
+            activationService = new DeepnoteActivationService(
+                mockExtensionContext,
+                manager,
+                mockIntegrationManager,
+                mockLogger,
+                mockSnapshotService
+            );
+
+            try {
+                activationService.activate();
+            } catch {
+                // Activation may fail in the test environment, but prompts should still be attempted.
+            }
+
+            snapshotsEnabled = true;
+            configHandler?.({ affectsConfiguration: (section) => section === 'deepnote.snapshots.enabled' });
+
+            verify(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything(), anything())).once();
+        });
     });
 
     suite('component initialization', () => {

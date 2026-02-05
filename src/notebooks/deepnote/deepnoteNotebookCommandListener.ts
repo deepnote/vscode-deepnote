@@ -569,7 +569,6 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
                 undefined,
                 ConfigurationTarget.Workspace
             );
-            void window.showInformationMessage(l10n.t('Snapshots enabled for this workspace.'));
         } catch (error) {
             logger.error('Failed to enable snapshots', error);
             void window.showErrorMessage(l10n.t('Failed to enable snapshots.'));

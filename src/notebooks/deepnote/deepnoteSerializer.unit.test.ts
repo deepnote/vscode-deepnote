@@ -263,6 +263,95 @@ project:
             assert.strictEqual(result1, 'notebook-1');
             assert.strictEqual(result2, 'notebook-2');
         });
+
+        test('should prioritize active notebook editor over stored selection', () => {
+            // Store a selection for the project
+            manager.selectNotebookForProject('project-123', 'stored-notebook');
+
+            // Mock the active notebook editor to return a different notebook
+            const mockActiveNotebook = {
+                notebookType: 'deepnote',
+                metadata: {
+                    deepnoteProjectId: 'project-123',
+                    deepnoteNotebookId: 'active-editor-notebook'
+                }
+            };
+
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                notebook: mockActiveNotebook
+            } as any);
+
+            const result = serializer.findCurrentNotebookId('project-123');
+
+            // Should return the active editor's notebook, not the stored one
+            assert.strictEqual(result, 'active-editor-notebook');
+        });
+
+        test('should ignore active editor when project ID does not match', () => {
+            manager.selectNotebookForProject('project-123', 'stored-notebook');
+
+            // Mock active editor with a different project
+            const mockActiveNotebook = {
+                notebookType: 'deepnote',
+                metadata: {
+                    deepnoteProjectId: 'different-project',
+                    deepnoteNotebookId: 'active-editor-notebook'
+                }
+            };
+
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                notebook: mockActiveNotebook
+            } as any);
+
+            const result = serializer.findCurrentNotebookId('project-123');
+
+            // Should fall back to stored selection since active editor is for different project
+            assert.strictEqual(result, 'stored-notebook');
+        });
+
+        test('should ignore active editor when notebook type is not deepnote', () => {
+            manager.selectNotebookForProject('project-123', 'stored-notebook');
+
+            // Mock active editor with non-deepnote notebook type
+            const mockActiveNotebook = {
+                notebookType: 'jupyter-notebook',
+                metadata: {
+                    deepnoteProjectId: 'project-123',
+                    deepnoteNotebookId: 'active-editor-notebook'
+                }
+            };
+
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                notebook: mockActiveNotebook
+            } as any);
+
+            const result = serializer.findCurrentNotebookId('project-123');
+
+            // Should fall back to stored selection since active editor is not a deepnote notebook
+            assert.strictEqual(result, 'stored-notebook');
+        });
+
+        test('should ignore active editor when notebook ID is missing', () => {
+            manager.selectNotebookForProject('project-123', 'stored-notebook');
+
+            // Mock active editor without notebook ID in metadata
+            const mockActiveNotebook = {
+                notebookType: 'deepnote',
+                metadata: {
+                    deepnoteProjectId: 'project-123'
+                    // Missing deepnoteNotebookId
+                }
+            };
+
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                notebook: mockActiveNotebook
+            } as any);
+
+            const result = serializer.findCurrentNotebookId('project-123');
+
+            // Should fall back to stored selection since active editor has no notebook ID
+            assert.strictEqual(result, 'stored-notebook');
+        });
     });
 
     suite('component integration', () => {

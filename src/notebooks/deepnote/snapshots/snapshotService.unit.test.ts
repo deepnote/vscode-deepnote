@@ -438,7 +438,7 @@ suite('SnapshotService', () => {
     suite('isSnapshotsEnabled', () => {
         test('should return true when snapshots.enabled is true', () => {
             const mockConfig = mock<WorkspaceConfiguration>();
-            when(mockConfig.get<boolean>('snapshots.enabled', false)).thenReturn(true);
+            when(mockConfig.get<boolean>('snapshots.enabled', true)).thenReturn(true);
             when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote')).thenReturn(instance(mockConfig));
 
             const result = service.isSnapshotsEnabled();
@@ -448,7 +448,7 @@ suite('SnapshotService', () => {
 
         test('should return false when snapshots.enabled is false', () => {
             const mockConfig = mock<WorkspaceConfiguration>();
-            when(mockConfig.get<boolean>('snapshots.enabled', false)).thenReturn(false);
+            when(mockConfig.get<boolean>('snapshots.enabled', true)).thenReturn(false);
             when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote')).thenReturn(instance(mockConfig));
 
             const result = service.isSnapshotsEnabled();
@@ -1007,7 +1007,7 @@ project:
             test('should detect Run All when all code cells are executed', async () => {
                 // Set up mocks
                 const mockConfig = mock<WorkspaceConfiguration>();
-                when(mockConfig.get<boolean>('snapshots.enabled', false)).thenReturn(true);
+                when(mockConfig.get<boolean>('snapshots.enabled', true)).thenReturn(true);
                 when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote')).thenReturn(instance(mockConfig));
 
                 const projectId = 'test-project-id';

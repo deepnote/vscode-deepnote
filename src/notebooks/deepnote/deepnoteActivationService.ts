@@ -77,7 +77,7 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
 
         const config = workspace.getConfiguration('deepnote');
 
-        return config.get<boolean>('snapshots.enabled', false);
+        return config.get<boolean>('snapshots.enabled', true);
     }
 
     private promptReloadForSnapshots(): void {

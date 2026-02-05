@@ -1652,7 +1652,7 @@
                 },
                 "deepnote.snapshots.enabled": {
                     "type": "boolean",
-                    "default": false,
+                    "default": true,
                     "description": "When enabled, outputs are saved to separate snapshot files in a 'snapshots' folder instead of the main .deepnote file.",
                     "scope": "resource"
                 },

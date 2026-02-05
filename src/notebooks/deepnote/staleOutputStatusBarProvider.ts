@@ -139,14 +139,14 @@ export class StaleOutputStatusBarProvider
      */
     private readonly executedContentHashes = new Map<string, string>();
 
-    private getCellKey(cell: NotebookCell): string {
-        return cell.document.uri.toString();
-    }
-
     private cleanupHashes(notebook: NotebookDocument): void {
         for (const cell of notebook.getCells()) {
             this.executedContentHashes.delete(this.getCellKey(cell));
         }
+    }
+
+    private getCellKey(cell: NotebookCell): string {
+        return cell.document.uri.toString();
     }
 
     private getStoredExecutionHash(cell: NotebookCell): string | undefined {

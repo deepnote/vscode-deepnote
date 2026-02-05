@@ -203,6 +203,12 @@ project:
     });
 
     suite('findCurrentNotebookId', () => {
+        teardown(() => {
+            // Reset only the specific mocks used in this suite
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([]);
+        });
+
         test('should return stored notebook ID when available', () => {
             manager.selectNotebookForProject('project-123', 'notebook-456');
 
@@ -992,7 +998,8 @@ project:
             };
 
             const serializerAny = serializer as any;
-            const result = serializerAny.detectContentChanges(project, project);
+            const projectCopy = structuredClone(project);
+            const result = serializerAny.detectContentChanges(project, projectCopy);
 
             assert.isFalse(result);
         });
@@ -1150,6 +1157,50 @@ project:
                             id: 'nb-1',
                             name: 'Notebook',
                             blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                        }
+                    ]
+                }
+            };
+
+            const serializerAny = serializer as any;
+            const result = serializerAny.detectContentChanges(newProject, originalProject);
+
+            assert.isTrue(result);
+        });
+
+        test('should detect notebook removed', () => {
+            const newProject: DeepnoteFile = {
+                version: '1.0',
+                metadata: { createdAt: '2023-01-01T00:00:00Z' },
+                project: {
+                    id: 'project-1',
+                    name: 'Test',
+                    notebooks: [
+                        {
+                            id: 'nb-1',
+                            name: 'Notebook',
+                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                        }
+                    ]
+                }
+            };
+
+            const originalProject: DeepnoteFile = {
+                version: '1.0',
+                metadata: { createdAt: '2023-01-01T00:00:00Z' },
+                project: {
+                    id: 'project-1',
+                    name: 'Test',
+                    notebooks: [
+                        {
+                            id: 'nb-1',
+                            name: 'Notebook',
+                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                        },
+                        {
+                            id: 'nb-2',
+                            name: 'Second Notebook',
+                            blocks: []
                         }
                     ]
                 }

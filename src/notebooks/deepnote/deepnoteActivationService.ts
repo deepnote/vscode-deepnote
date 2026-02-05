@@ -92,7 +92,7 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
         }
 
         const reloadOption = l10n.t('Reload Window');
-        const laterOption = l10n.t('Later');
+        const laterOption = l10n.t('Later'); // Dismisses the dialog without action
 
         void window
             .showInformationMessage(
@@ -104,6 +104,7 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
                 if (selection === reloadOption) {
                     void commands.executeCommand('workbench.action.reloadWindow');
                 }
+                // "Later" or dialog dismissal: no action needed
             });
     }
 
@@ -116,7 +117,16 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
             contentOptions.transientOutputs = true;
         }
 
-        this.serializerRegistration?.dispose();
+        if (this.serializerRegistration) {
+            this.serializerRegistration.dispose();
+
+            const idx = this.extensionContext.subscriptions.indexOf(this.serializerRegistration);
+
+            if (idx >= 0) {
+                this.extensionContext.subscriptions.splice(idx, 1);
+            }
+        }
+
         this.serializerRegistration = workspace.registerNotebookSerializer('deepnote', this.serializer, contentOptions);
         this.extensionContext.subscriptions.push(this.serializerRegistration);
     }

@@ -1,5 +1,5 @@
 import { injectable, inject, optional } from 'inversify';
-import { workspace, type NotebookDocumentContentOptions } from 'vscode';
+import { workspace, type Disposable, type NotebookDocumentContentOptions } from 'vscode';
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IExtensionContext } from '../../platform/common/types';
@@ -17,13 +17,15 @@ import { SnapshotService } from './snapshots/snapshotService';
  */
 @injectable()
 export class DeepnoteActivationService implements IExtensionSyncActivationService {
+    private editProtection: DeepnoteInputBlockEditProtection;
+
     private explorerView: DeepnoteExplorerView;
 
     private integrationManager: IIntegrationManager;
 
     private serializer: DeepnoteNotebookSerializer;
 
-    private editProtection: DeepnoteInputBlockEditProtection;
+    private serializerRegistration?: Disposable;
 
     constructor(
         @inject(IExtensionContext) private extensionContext: IExtensionContext,
@@ -44,6 +46,21 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
         this.explorerView = new DeepnoteExplorerView(this.extensionContext, this.notebookManager, this.logger);
         this.editProtection = new DeepnoteInputBlockEditProtection(this.logger);
 
+        this.registerSerializer();
+        this.extensionContext.subscriptions.push(this.editProtection);
+        this.extensionContext.subscriptions.push(
+            workspace.onDidChangeConfiguration((event) => {
+                if (event.affectsConfiguration('deepnote.snapshots.enabled')) {
+                    this.registerSerializer();
+                }
+            })
+        );
+
+        this.explorerView.activate();
+        this.integrationManager.activate();
+    }
+
+    private registerSerializer(): void {
         // When snapshots are enabled, treat outputs as transient so VS Code
         // doesn't mark the document dirty when outputs change during execution
         const contentOptions: NotebookDocumentContentOptions = {};
@@ -52,12 +69,8 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
             contentOptions.transientOutputs = true;
         }
 
-        this.extensionContext.subscriptions.push(
-            workspace.registerNotebookSerializer('deepnote', this.serializer, contentOptions)
-        );
-        this.extensionContext.subscriptions.push(this.editProtection);
-
-        this.explorerView.activate();
-        this.integrationManager.activate();
+        this.serializerRegistration?.dispose();
+        this.serializerRegistration = workspace.registerNotebookSerializer('deepnote', this.serializer, contentOptions);
+        this.extensionContext.subscriptions.push(this.serializerRegistration);
     }
 }

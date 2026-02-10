@@ -47,6 +47,14 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
 
         this.disposables.push(watcher);
         this.disposables.push(watcher.onDidChange((uri) => this.handleFileChange(uri)));
+        this.disposables.push({ dispose: () => this.clearAllTimers() });
+    }
+
+    private clearAllTimers(): void {
+        for (const timer of this.debounceTimers.values()) {
+            clearTimeout(timer);
+        }
+        this.debounceTimers.clear();
     }
 
     private handleFileChange(uri: Uri): void {
@@ -99,14 +107,20 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             return;
         }
 
+        const tokenSource = new CancellationTokenSource();
+        let newData;
+        try {
+            newData = await this.serializer.deserializeNotebook(content, tokenSource.token);
+        } finally {
+            tokenSource.dispose();
+        }
+
         for (const notebook of affectedNotebooks) {
             try {
-                const tokenSource = new CancellationTokenSource();
-                const newData = await this.serializer.deserializeNotebook(content, tokenSource.token);
-                tokenSource.dispose();
+                const newCells = newData.cells.map((cell) => ({ ...cell }));
 
-                if (this.cellsMatchNotebook(notebook, newData.cells)) {
-                    return;
+                if (this.cellsMatchNotebook(notebook, newCells)) {
+                    continue;
                 }
 
                 // Preserve outputs from live cells that the deserialized data may lack.
@@ -123,7 +137,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
                     }
                 }
 
-                for (const cell of newData.cells) {
+                for (const cell of newCells) {
                     const blockId = (cell.metadata?.id ?? cell.metadata?.__deepnoteBlockId) as string | undefined;
                     if (blockId && (!cell.outputs || cell.outputs.length === 0)) {
                         const liveOutputs = liveOutputsByBlockId.get(blockId);
@@ -134,9 +148,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
                 }
 
                 const edit = new WorkspaceEdit();
-                edit.set(notebook.uri, [
-                    NotebookEdit.replaceCells(new NotebookRange(0, notebook.cellCount), newData.cells)
-                ]);
+                edit.set(notebook.uri, [NotebookEdit.replaceCells(new NotebookRange(0, notebook.cellCount), newCells)]);
                 await workspace.applyEdit(edit);
 
                 // Save immediately so VS Code updates its internal mtime for the file.

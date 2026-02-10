@@ -1,6 +1,6 @@
 import { assert } from 'chai';
 import * as sinon from 'sinon';
-import { anything, instance, mock, verify, when } from 'ts-mockito';
+import { anything, instance, mock, when } from 'ts-mockito';
 import { EventEmitter, FileSystemWatcher, NotebookCellKind, NotebookDocument, Uri } from 'vscode';
 
 import type { IDisposableRegistry } from '../../platform/common/types';
@@ -27,10 +27,14 @@ suite('DeepnoteFileChangeWatcher', () => {
     let mockNotebookManager: IDeepnoteNotebookManager;
     let onDidChangeFile: EventEmitter<Uri>;
     let readFileCalls: number;
+    let applyEditCount: number;
+    let saveCount: number;
 
     setup(() => {
         resetVSCodeMocks();
         readFileCalls = 0;
+        applyEditCount = 0;
+        saveCount = 0;
 
         mockDisposables = [];
         mockNotebookManager = instance(mock<IDeepnoteNotebookManager>());
@@ -43,9 +47,14 @@ suite('DeepnoteFileChangeWatcher', () => {
 
         when(mockedVSCodeNamespaces.workspace.createFileSystemWatcher(anything())).thenReturn(instance(fsWatcher));
 
-        when(mockedVSCodeNamespaces.workspace.save(anything())).thenReturn(
-            Promise.resolve(Uri.file('/workspace/test.deepnote'))
-        );
+        when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenCall(() => {
+            applyEditCount++;
+            return Promise.resolve(true);
+        });
+        when(mockedVSCodeNamespaces.workspace.save(anything())).thenCall(() => {
+            saveCount++;
+            return Promise.resolve(Uri.file('/workspace/test.deepnote'));
+        });
 
         watcher = new DeepnoteFileChangeWatcher(mockDisposables, mockNotebookManager);
         watcher.activate();
@@ -149,11 +158,10 @@ project:
 
         // Wait for debounce + deserialization
         await waitFor(() => readFileCalls > 0);
-        await new Promise((resolve) => setTimeout(resolve, 200));
 
         // File was read, but applyEdit should NOT be called because cells match
         assert.isAtLeast(readFileCalls, 1, 'readFile should be called');
-        verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+        assert.strictEqual(applyEditCount, 0, 'applyEdit should not be called when cells match');
     });
 
     test('should reload on external change', async () => {
@@ -166,15 +174,11 @@ project:
         // Fire file change without a preceding save
         onDidChangeFile.fire(uri);
 
-        // Wait for the debounce + async deserialization to complete
-        await waitFor(() => readFileCalls > 0);
+        // Wait for the full async chain: debounce + deserialize + applyEdit + save
+        await waitFor(() => saveCount > 0);
 
-        // Wait a bit more for the async chain to finish (deserialize + applyEdit + save)
-        await new Promise((resolve) => setTimeout(resolve, 200));
-
-        verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).atLeast(1);
-        // After applyEdit, the document should be saved to update VS Code's mtime
-        verify(mockedVSCodeNamespaces.workspace.save(anything())).atLeast(1);
+        assert.isAtLeast(applyEditCount, 1, 'applyEdit should be called');
+        assert.isAtLeast(saveCount, 1, 'save should be called after applyEdit');
     });
 
     test('should skip snapshot files', async () => {
@@ -201,14 +205,13 @@ project:
 
         onDidChangeFile.fire(uri);
 
-        // Wait for debounce + readFile to happen
-        await waitFor(() => readFileCalls > 0);
-        await new Promise((resolve) => setTimeout(resolve, 200));
+        // Wait for the full async chain to finish
+        await waitFor(() => saveCount > 0);
 
         // Dirty notebooks should now be reloaded and saved to prevent mtime conflicts
         assert.isAtLeast(readFileCalls, 1, 'readFile should be called');
-        verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).atLeast(1);
-        verify(mockedVSCodeNamespaces.workspace.save(anything())).atLeast(1);
+        assert.isAtLeast(applyEditCount, 1, 'applyEdit should be called');
+        assert.isAtLeast(saveCount, 1, 'save should be called');
     });
 
     test('should debounce rapid changes', async () => {
@@ -226,8 +229,7 @@ project:
         onDidChangeFile.fire(uri);
 
         // Wait for debounce from the last event + processing
-        await waitFor(() => readFileCalls > 0);
-        await new Promise((resolve) => setTimeout(resolve, 200));
+        await waitFor(() => applyEditCount > 0);
 
         // readFile should only be called once (debounced)
         assert.strictEqual(readFileCalls, 1, 'readFile should be called exactly once after debounce');
@@ -244,10 +246,9 @@ project:
 
         // Wait for debounce + processing
         await waitFor(() => readFileCalls > 0);
-        await new Promise((resolve) => setTimeout(resolve, 200));
 
         // Should not throw - errors are caught and logged
-        assert.ok(true, 'Parse error was handled gracefully');
+        assert.strictEqual(applyEditCount, 0, 'applyEdit should not be called on parse error');
     });
 
     test('should preserve live cell outputs during reload', async () => {
@@ -268,11 +269,10 @@ project:
 
         onDidChangeFile.fire(uri);
 
-        await waitFor(() => readFileCalls > 0);
-        await new Promise((resolve) => setTimeout(resolve, 200));
+        await waitFor(() => applyEditCount > 0);
 
         // applyEdit should be called — the output preservation runs before it
-        verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).atLeast(1);
+        assert.isAtLeast(applyEditCount, 1, 'applyEdit should be called');
     });
 
     test('should reload dirty notebooks and preserve outputs', async () => {
@@ -294,20 +294,14 @@ project:
 
         onDidChangeFile.fire(uri);
 
-        await waitFor(() => readFileCalls > 0);
-        await new Promise((resolve) => setTimeout(resolve, 200));
+        await waitFor(() => applyEditCount > 0);
 
         // Dirty notebook should still be reloaded with outputs preserved
-        verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).atLeast(1);
+        assert.isAtLeast(applyEditCount, 1, 'applyEdit should be called');
     });
 
     test('should not suppress real changes after auto-save', async () => {
         const uri = Uri.file('/workspace/test.deepnote');
-        let applyEditCount = 0;
-        when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenCall(() => {
-            applyEditCount++;
-            return Promise.resolve(true);
-        });
 
         // First change: notebook has no cells, YAML has one cell -> different -> reload
         const notebook = createMockNotebook({ uri, cellCount: 0, cells: [] });

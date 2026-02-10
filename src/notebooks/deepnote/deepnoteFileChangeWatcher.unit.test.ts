@@ -247,7 +247,7 @@ project:
         // Wait for debounce + processing
         await waitFor(() => readFileCalls > 0);
 
-        // Should not throw - errors are caught and logged
+        // Parse errors should be caught and logged without calling applyEdit
         assert.strictEqual(applyEditCount, 0, 'applyEdit should not be called on parse error');
     });
 

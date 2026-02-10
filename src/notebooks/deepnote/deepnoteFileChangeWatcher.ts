@@ -19,7 +19,7 @@ import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
 import { isSnapshotFile } from './snapshots/snapshotFiles';
 import { SnapshotService } from './snapshots/snapshotService';
 
-const DEBOUNCE_MS = 500;
+const debounceTimeInMilliseconds = 500;
 
 /**
  * Watches .deepnote files for external changes and reloads open notebook editors.
@@ -54,6 +54,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         for (const timer of this.debounceTimers.values()) {
             clearTimeout(timer);
         }
+
         this.debounceTimers.clear();
     }
 
@@ -65,6 +66,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         const key = uri.toString();
 
         const existing = this.debounceTimers.get(key);
+
         if (existing) {
             clearTimeout(existing);
         }
@@ -73,16 +75,19 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             key,
             setTimeout(() => {
                 this.debounceTimers.delete(key);
+
                 void this.reloadNotebooksForFile(uri);
-            }, DEBOUNCE_MS)
+            }, debounceTimeInMilliseconds)
         );
     }
 
     private cellsMatchNotebook(notebook: NotebookDocument, newCells: NotebookCellData[]): boolean {
         const liveCells = notebook.getCells();
+
         if (liveCells.length !== newCells.length) {
             return false;
         }
+
         return liveCells.every(
             (live, i) => live.document.getText() === newCells[i].value && live.kind === newCells[i].kind
         );
@@ -90,6 +95,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
 
     private async reloadNotebooksForFile(uri: Uri): Promise<void> {
         const uriString = uri.toString();
+
         const affectedNotebooks = workspace.notebookDocuments.filter(
             (doc) =>
                 doc.notebookType === 'deepnote' && doc.uri.with({ query: '', fragment: '' }).toString() === uriString
@@ -100,6 +106,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         }
 
         let content: Uint8Array;
+
         try {
             content = await workspace.fs.readFile(uri);
         } catch (error) {
@@ -111,6 +118,9 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         let newData;
         try {
             newData = await this.serializer.deserializeNotebook(content, tokenSource.token);
+        } catch (error) {
+            logger.warn(`[FileChangeWatcher] Failed to parse changed file: ${uri.path}`, error);
+            return;
         } finally {
             tokenSource.dispose();
         }
@@ -149,7 +159,11 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
 
                 const edit = new WorkspaceEdit();
                 edit.set(notebook.uri, [NotebookEdit.replaceCells(new NotebookRange(0, notebook.cellCount), newCells)]);
-                await workspace.applyEdit(edit);
+                const applied = await workspace.applyEdit(edit);
+                if (!applied) {
+                    logger.warn(`[FileChangeWatcher] Failed to apply edit: ${notebook.uri.path}`);
+                    continue;
+                }
 
                 // Save immediately so VS Code updates its internal mtime for the file.
                 // Without this, the user gets a "content is newer" conflict dialog on

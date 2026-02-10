@@ -219,7 +219,7 @@ project:
         const notebook = createMockNotebook({ uri, cellCount: 0 });
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        setupMockFs(emptyBlocksYaml);
+        setupMockFs(validYaml);
 
         // Fire multiple changes rapidly
         onDidChangeFile.fire(uri);

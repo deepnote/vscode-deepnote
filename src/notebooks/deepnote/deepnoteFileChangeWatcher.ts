@@ -50,6 +50,10 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         this.disposables.push({ dispose: () => this.clearAllTimers() });
     }
 
+    private getBlockIdFromMetadata(metadata: Record<string, unknown> | undefined): string | undefined {
+        return (metadata?.id ?? metadata?.__deepnoteBlockId) as string | undefined;
+    }
+
     private clearAllTimers(): void {
         for (const timer of this.debounceTimers.values()) {
             clearTimeout(timer);
@@ -139,16 +143,14 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
                 const liveCells = notebook.getCells();
                 const liveOutputsByBlockId = new Map<string, readonly NotebookCellOutput[]>();
                 for (const liveCell of liveCells) {
-                    const blockId = (liveCell.metadata?.id ?? liveCell.metadata?.__deepnoteBlockId) as
-                        | string
-                        | undefined;
+                    const blockId = this.getBlockIdFromMetadata(liveCell.metadata);
                     if (blockId && liveCell.outputs.length > 0) {
                         liveOutputsByBlockId.set(blockId, liveCell.outputs);
                     }
                 }
 
                 for (const cell of newCells) {
-                    const blockId = (cell.metadata?.id ?? cell.metadata?.__deepnoteBlockId) as string | undefined;
+                    const blockId = this.getBlockIdFromMetadata(cell.metadata);
                     if (blockId && (!cell.outputs || cell.outputs.length === 0)) {
                         const liveOutputs = liveOutputsByBlockId.get(blockId);
                         if (liveOutputs) {

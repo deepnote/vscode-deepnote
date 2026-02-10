@@ -62,6 +62,7 @@ suite('DeepnoteFileChangeWatcher', () => {
 
     teardown(() => {
         sinon.restore();
+        mockDisposables.forEach((d) => d.dispose());
         onDidChangeFile.dispose();
     });
 
@@ -121,19 +122,6 @@ project:
           type: code
           sortingKey: a0
           content: print("hello")
-`;
-
-    const emptyBlocksYaml = `
-version: '1.0'
-metadata:
-  createdAt: '2025-01-01T00:00:00Z'
-project:
-  id: project-1
-  name: Test Project
-  notebooks:
-    - id: notebook-1
-      name: Notebook 1
-      blocks: []
 `;
 
     test('should skip reload when content matches notebook cells', async () => {

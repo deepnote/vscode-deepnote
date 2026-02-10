@@ -203,6 +203,12 @@ project:
     });
 
     suite('findCurrentNotebookId', () => {
+        teardown(() => {
+            // Reset only the specific mocks used in this suite
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([]);
+        });
+
         test('should return stored notebook ID when available', () => {
             manager.selectNotebookForProject('project-123', 'notebook-456');
 
@@ -262,6 +268,95 @@ project:
 
             assert.strictEqual(result1, 'notebook-1');
             assert.strictEqual(result2, 'notebook-2');
+        });
+
+        test('should prioritize active notebook editor over stored selection', () => {
+            // Store a selection for the project
+            manager.selectNotebookForProject('project-123', 'stored-notebook');
+
+            // Mock the active notebook editor to return a different notebook
+            const mockActiveNotebook = {
+                notebookType: 'deepnote',
+                metadata: {
+                    deepnoteProjectId: 'project-123',
+                    deepnoteNotebookId: 'active-editor-notebook'
+                }
+            };
+
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                notebook: mockActiveNotebook
+            } as any);
+
+            const result = serializer.findCurrentNotebookId('project-123');
+
+            // Should return the active editor's notebook, not the stored one
+            assert.strictEqual(result, 'active-editor-notebook');
+        });
+
+        test('should ignore active editor when project ID does not match', () => {
+            manager.selectNotebookForProject('project-123', 'stored-notebook');
+
+            // Mock active editor with a different project
+            const mockActiveNotebook = {
+                notebookType: 'deepnote',
+                metadata: {
+                    deepnoteProjectId: 'different-project',
+                    deepnoteNotebookId: 'active-editor-notebook'
+                }
+            };
+
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                notebook: mockActiveNotebook
+            } as any);
+
+            const result = serializer.findCurrentNotebookId('project-123');
+
+            // Should fall back to stored selection since active editor is for different project
+            assert.strictEqual(result, 'stored-notebook');
+        });
+
+        test('should ignore active editor when notebook type is not deepnote', () => {
+            manager.selectNotebookForProject('project-123', 'stored-notebook');
+
+            // Mock active editor with non-deepnote notebook type
+            const mockActiveNotebook = {
+                notebookType: 'jupyter-notebook',
+                metadata: {
+                    deepnoteProjectId: 'project-123',
+                    deepnoteNotebookId: 'active-editor-notebook'
+                }
+            };
+
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                notebook: mockActiveNotebook
+            } as any);
+
+            const result = serializer.findCurrentNotebookId('project-123');
+
+            // Should fall back to stored selection since active editor is not a deepnote notebook
+            assert.strictEqual(result, 'stored-notebook');
+        });
+
+        test('should ignore active editor when notebook ID is missing', () => {
+            manager.selectNotebookForProject('project-123', 'stored-notebook');
+
+            // Mock active editor without notebook ID in metadata
+            const mockActiveNotebook = {
+                notebookType: 'deepnote',
+                metadata: {
+                    deepnoteProjectId: 'project-123'
+                    // Missing deepnoteNotebookId
+                }
+            };
+
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                notebook: mockActiveNotebook
+            } as any);
+
+            const result = serializer.findCurrentNotebookId('project-123');
+
+            // Should fall back to stored selection since active editor has no notebook ID
+            assert.strictEqual(result, 'stored-notebook');
         });
     });
 
@@ -881,6 +976,336 @@ project:
             // Should select Alpha, not Init even though "Init" comes before "Alpha" alphabetically when in upper case
             assert.strictEqual(result.metadata?.deepnoteNotebookId, 'alpha-notebook');
             assert.strictEqual(result.metadata?.deepnoteNotebookName, 'Alpha');
+        });
+    });
+
+    suite('detectContentChanges', () => {
+        test('should detect no changes when content is identical', () => {
+            const project: DeepnoteFile = {
+                version: '1.0',
+                metadata: { createdAt: '2023-01-01T00:00:00Z' },
+                project: {
+                    id: 'project-1',
+                    name: 'Test',
+                    notebooks: [
+                        {
+                            id: 'nb-1',
+                            name: 'Notebook',
+                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                        }
+                    ]
+                }
+            };
+
+            const serializerAny = serializer as any;
+            const projectCopy = structuredClone(project);
+            const result = serializerAny.detectContentChanges(project, projectCopy);
+
+            assert.isFalse(result);
+        });
+
+        test('should detect changes when block content differs', () => {
+            const newProject: DeepnoteFile = {
+                version: '1.0',
+                metadata: { createdAt: '2023-01-01T00:00:00Z' },
+                project: {
+                    id: 'project-1',
+                    name: 'Test',
+                    notebooks: [
+                        {
+                            id: 'nb-1',
+                            name: 'Notebook',
+                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(2)' }]
+                        }
+                    ]
+                }
+            };
+
+            const originalProject: DeepnoteFile = {
+                version: '1.0',
+                metadata: { createdAt: '2023-01-01T00:00:00Z' },
+                project: {
+                    id: 'project-1',
+                    name: 'Test',
+                    notebooks: [
+                        {
+                            id: 'nb-1',
+                            name: 'Notebook',
+                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                        }
+                    ]
+                }
+            };
+
+            const serializerAny = serializer as any;
+            const result = serializerAny.detectContentChanges(newProject, originalProject);
+
+            assert.isTrue(result);
+        });
+
+        test('should detect changes when block type differs', () => {
+            const newProject: DeepnoteFile = {
+                version: '1.0',
+                metadata: { createdAt: '2023-01-01T00:00:00Z' },
+                project: {
+                    id: 'project-1',
+                    name: 'Test',
+                    notebooks: [
+                        {
+                            id: 'nb-1',
+                            name: 'Notebook',
+                            blocks: [{ id: 'b1', type: 'markdown', sortingKey: 'a0', content: '# Hello' }]
+                        }
+                    ]
+                }
+            };
+
+            const originalProject: DeepnoteFile = {
+                version: '1.0',
+                metadata: { createdAt: '2023-01-01T00:00:00Z' },
+                project: {
+                    id: 'project-1',
+                    name: 'Test',
+                    notebooks: [
+                        {
+                            id: 'nb-1',
+                            name: 'Notebook',
+                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: '# Hello' }]
+                        }
+                    ]
+                }
+            };
+
+            const serializerAny = serializer as any;
+            const result = serializerAny.detectContentChanges(newProject, originalProject);
+
+            assert.isTrue(result);
+        });
+
+        test('should detect changes when block count differs', () => {
+            const newProject: DeepnoteFile = {
+                version: '1.0',
+                metadata: { createdAt: '2023-01-01T00:00:00Z' },
+                project: {
+                    id: 'project-1',
+                    name: 'Test',
+                    notebooks: [
+                        {
+                            id: 'nb-1',
+                            name: 'Notebook',
+                            blocks: [
+                                { id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' },
+                                { id: 'b2', type: 'code', sortingKey: 'a1', content: 'print(2)' }
+                            ]
+                        }
+                    ]
+                }
+            };
+
+            const originalProject: DeepnoteFile = {
+                version: '1.0',
+                metadata: { createdAt: '2023-01-01T00:00:00Z' },
+                project: {
+                    id: 'project-1',
+                    name: 'Test',
+                    notebooks: [
+                        {
+                            id: 'nb-1',
+                            name: 'Notebook',
+                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                        }
+                    ]
+                }
+            };
+
+            const serializerAny = serializer as any;
+            const result = serializerAny.detectContentChanges(newProject, originalProject);
+
+            assert.isTrue(result);
+        });
+
+        test('should detect new notebook added', () => {
+            const newProject: DeepnoteFile = {
+                version: '1.0',
+                metadata: { createdAt: '2023-01-01T00:00:00Z' },
+                project: {
+                    id: 'project-1',
+                    name: 'Test',
+                    notebooks: [
+                        {
+                            id: 'nb-1',
+                            name: 'Notebook',
+                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                        },
+                        {
+                            id: 'nb-2',
+                            name: 'New Notebook',
+                            blocks: []
+                        }
+                    ]
+                }
+            };
+
+            const originalProject: DeepnoteFile = {
+                version: '1.0',
+                metadata: { createdAt: '2023-01-01T00:00:00Z' },
+                project: {
+                    id: 'project-1',
+                    name: 'Test',
+                    notebooks: [
+                        {
+                            id: 'nb-1',
+                            name: 'Notebook',
+                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                        }
+                    ]
+                }
+            };
+
+            const serializerAny = serializer as any;
+            const result = serializerAny.detectContentChanges(newProject, originalProject);
+
+            assert.isTrue(result);
+        });
+
+        test('should detect notebook removed', () => {
+            const newProject: DeepnoteFile = {
+                version: '1.0',
+                metadata: { createdAt: '2023-01-01T00:00:00Z' },
+                project: {
+                    id: 'project-1',
+                    name: 'Test',
+                    notebooks: [
+                        {
+                            id: 'nb-1',
+                            name: 'Notebook',
+                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                        }
+                    ]
+                }
+            };
+
+            const originalProject: DeepnoteFile = {
+                version: '1.0',
+                metadata: { createdAt: '2023-01-01T00:00:00Z' },
+                project: {
+                    id: 'project-1',
+                    name: 'Test',
+                    notebooks: [
+                        {
+                            id: 'nb-1',
+                            name: 'Notebook',
+                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                        },
+                        {
+                            id: 'nb-2',
+                            name: 'Second Notebook',
+                            blocks: []
+                        }
+                    ]
+                }
+            };
+
+            const serializerAny = serializer as any;
+            const result = serializerAny.detectContentChanges(newProject, originalProject);
+
+            assert.isTrue(result);
+        });
+
+        test('should ignore output changes', () => {
+            const newProject: DeepnoteFile = {
+                version: '1.0',
+                metadata: { createdAt: '2023-01-01T00:00:00Z' },
+                project: {
+                    id: 'project-1',
+                    name: 'Test',
+                    notebooks: [
+                        {
+                            id: 'nb-1',
+                            name: 'Notebook',
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    content: 'print(1)',
+                                    outputs: [{ output_type: 'stream', text: '1\n' }]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            };
+
+            const originalProject: DeepnoteFile = {
+                version: '1.0',
+                metadata: { createdAt: '2023-01-01T00:00:00Z' },
+                project: {
+                    id: 'project-1',
+                    name: 'Test',
+                    notebooks: [
+                        {
+                            id: 'nb-1',
+                            name: 'Notebook',
+                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                        }
+                    ]
+                }
+            };
+
+            const serializerAny = serializer as any;
+            const result = serializerAny.detectContentChanges(newProject, originalProject);
+
+            assert.isFalse(result);
+        });
+
+        test('should ignore execution metadata changes', () => {
+            const newProject: DeepnoteFile = {
+                version: '1.0',
+                metadata: { createdAt: '2023-01-01T00:00:00Z' },
+                project: {
+                    id: 'project-1',
+                    name: 'Test',
+                    notebooks: [
+                        {
+                            id: 'nb-1',
+                            name: 'Notebook',
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    content: 'print(1)',
+                                    executionCount: 5,
+                                    executionStartedAt: '2025-01-01T00:00:00Z',
+                                    executionFinishedAt: '2025-01-01T00:00:01Z'
+                                }
+                            ]
+                        }
+                    ]
+                }
+            };
+
+            const originalProject: DeepnoteFile = {
+                version: '1.0',
+                metadata: { createdAt: '2023-01-01T00:00:00Z' },
+                project: {
+                    id: 'project-1',
+                    name: 'Test',
+                    notebooks: [
+                        {
+                            id: 'nb-1',
+                            name: 'Notebook',
+                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                        }
+                    ]
+                }
+            };
+
+            const serializerAny = serializer as any;
+            const result = serializerAny.detectContentChanges(newProject, originalProject);
+
+            assert.isFalse(result);
         });
     });
 

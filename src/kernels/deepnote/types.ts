@@ -211,6 +211,24 @@ export interface IDeepnoteServerProvider {
 export const IDeepnoteKernelAutoSelector = Symbol('IDeepnoteKernelAutoSelector');
 export interface IDeepnoteKernelAutoSelector {
     /**
+     * Clear the controller selection for a notebook using a specific environment.
+     * This is used when deleting an environment to unselect its controller from any open notebooks.
+     * @param notebook The notebook document
+     * @param environmentId The environment ID
+     */
+    clearControllerForEnvironment(notebook: vscode.NotebookDocument, environmentId: string): void;
+
+    /**
+     * Ensure an environment is configured for the notebook before execution.
+     * If not configured, shows picker and sets up the kernel.
+     * @returns true if environment is ready, false if user cancelled
+     */
+    ensureEnvironmentConfiguredBeforeExecution(
+        notebook: vscode.NotebookDocument,
+        token: vscode.CancellationToken
+    ): Promise<boolean>;
+
+    /**
      * Automatically selects and starts a Deepnote kernel for the given notebook.
      * @param notebook The notebook document
      * @param token Cancellation token to cancel the operation
@@ -220,6 +238,13 @@ export interface IDeepnoteKernelAutoSelector {
         progress: { report(value: { message?: string; increment?: number }): void },
         token: vscode.CancellationToken
     ): Promise<boolean>;
+
+    /**
+     * Handle kernel selection errors with user-friendly messages and actions
+     * @param error The error to handle
+     * @param notebook The notebook document associated with the error
+     */
+    handleKernelSelectionError(error: unknown, notebook: vscode.NotebookDocument): Promise<void>;
 
     /**
      * Force rebuild the controller for a notebook by clearing cached controller and metadata.
@@ -232,21 +257,6 @@ export interface IDeepnoteKernelAutoSelector {
         progress: { report(value: { message?: string; increment?: number }): void },
         token: vscode.CancellationToken
     ): Promise<void>;
-
-    /**
-     * Clear the controller selection for a notebook using a specific environment.
-     * This is used when deleting an environment to unselect its controller from any open notebooks.
-     * @param notebook The notebook document
-     * @param environmentId The environment ID
-     */
-    clearControllerForEnvironment(notebook: vscode.NotebookDocument, environmentId: string): void;
-
-    /**
-     * Handle kernel selection errors with user-friendly messages and actions
-     * @param error The error to handle
-     * @param notebook The notebook document associated with the error
-     */
-    handleKernelSelectionError(error: unknown, notebook: vscode.NotebookDocument): Promise<void>;
 }
 
 export const IDeepnoteEnvironmentManager = Symbol('IDeepnoteEnvironmentManager');
@@ -372,6 +382,6 @@ export interface IDeepnoteLspClientManager {
     stopAllClients(token?: vscode.CancellationToken): Promise<void>;
 }
 
-export const DEEPNOTE_TOOLKIT_VERSION = '1.1.0';
+export const DEEPNOTE_TOOLKIT_VERSION = '2.1.1';
 export const DEEPNOTE_DEFAULT_PORT = 8888;
 export const DEEPNOTE_NOTEBOOK_TYPE = 'deepnote';

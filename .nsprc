@@ -10,5 +10,9 @@
     "GHSA-g9mf-h72j-4rw9": {
         "notes": "undici DoS via unbounded decompression chain. Accepted risk: dev-only transitive dependency (@actions/core, @actions/github), only affects CI/CD workflows, not bundled in extension.",
         "expiry": "2026-04-15"
+    },
+    "GHSA-p5wg-g6qr-c7cg": {
+        "notes": "CVE-2025-50537: eslint Stack Overflow in RuleTester.run() when serializing objects with circular references. Accepted risk: dev-only dependency, requires local access and user interaction, only affects test authoring, not bundled in extension.",
+        "expiry": "2026-04-15"
     }
 }

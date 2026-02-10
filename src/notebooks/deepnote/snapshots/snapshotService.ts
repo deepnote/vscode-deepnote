@@ -328,7 +328,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     isSnapshotsEnabled(): boolean {
         const config = workspace.getConfiguration('deepnote');
 
-        return config.get<boolean>('snapshots.enabled', false);
+        return config.get<boolean>('snapshots.enabled', true);
     }
 
     mergeOutputsIntoBlocks(blocks: DeepnoteBlock[], outputs: Map<string, DeepnoteOutput[]>): DeepnoteBlock[] {
@@ -433,7 +433,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     stripOutputsFromBlocks(blocks: DeepnoteBlock[]): DeepnoteBlock[] {
         return blocks.map((block) => {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { outputs, executionFinishedAt, executionStartedAt, ...strippedBlock } = block;
+            const { outputs, executionCount, executionFinishedAt, executionStartedAt, ...strippedBlock } = block;
 
             return strippedBlock as DeepnoteBlock;
         });

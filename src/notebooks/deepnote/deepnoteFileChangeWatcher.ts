@@ -31,8 +31,8 @@ const debounceTimeInMilliseconds = 500;
  */
 @injectable()
 export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationService {
-    private readonly serializer: DeepnoteNotebookSerializer;
     private readonly debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    private readonly serializer: DeepnoteNotebookSerializer;
 
     constructor(
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
@@ -50,8 +50,16 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         this.disposables.push({ dispose: () => this.clearAllTimers() });
     }
 
-    private getBlockIdFromMetadata(metadata: Record<string, unknown> | undefined): string | undefined {
-        return (metadata?.id ?? metadata?.__deepnoteBlockId) as string | undefined;
+    private cellsMatchNotebook(notebook: NotebookDocument, newCells: NotebookCellData[]): boolean {
+        const liveCells = notebook.getCells();
+
+        if (liveCells.length !== newCells.length) {
+            return false;
+        }
+
+        return liveCells.every(
+            (live, i) => live.document.getText() === newCells[i].value && live.kind === newCells[i].kind
+        );
     }
 
     private clearAllTimers(): void {
@@ -62,13 +70,16 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         this.debounceTimers.clear();
     }
 
+    private getBlockIdFromMetadata(metadata: Record<string, unknown> | undefined): string | undefined {
+        return (metadata?.id ?? metadata?.__deepnoteBlockId) as string | undefined;
+    }
+
     private handleFileChange(uri: Uri): void {
         if (isSnapshotFile(uri)) {
             return;
         }
 
         const key = uri.toString();
-
         const existing = this.debounceTimers.get(key);
 
         if (existing) {
@@ -85,21 +96,8 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         );
     }
 
-    private cellsMatchNotebook(notebook: NotebookDocument, newCells: NotebookCellData[]): boolean {
-        const liveCells = notebook.getCells();
-
-        if (liveCells.length !== newCells.length) {
-            return false;
-        }
-
-        return liveCells.every(
-            (live, i) => live.document.getText() === newCells[i].value && live.kind === newCells[i].kind
-        );
-    }
-
     private async reloadNotebooksForFile(uri: Uri): Promise<void> {
         const uriString = uri.toString();
-
         const affectedNotebooks = workspace.notebookDocuments.filter(
             (doc) =>
                 doc.notebookType === 'deepnote' && doc.uri.with({ query: '', fragment: '' }).toString() === uriString
@@ -115,6 +113,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             content = await workspace.fs.readFile(uri);
         } catch (error) {
             logger.warn(`[FileChangeWatcher] Failed to read changed file: ${uri.path}`, error);
+
             return;
         }
 
@@ -124,6 +123,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             newData = await this.serializer.deserializeNotebook(content, tokenSource.token);
         } catch (error) {
             logger.warn(`[FileChangeWatcher] Failed to parse changed file: ${uri.path}`, error);
+
             return;
         } finally {
             tokenSource.dispose();

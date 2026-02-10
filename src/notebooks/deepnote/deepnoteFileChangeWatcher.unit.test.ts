@@ -8,10 +8,19 @@ import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteFileChangeWatcher } from './deepnoteFileChangeWatcher';
 
+const waitForTimeoutMs = 5000;
+const waitForIntervalMs = 50;
+const debounceWaitMs = 800;
+const rapidChangeIntervalMs = 100;
+
 /**
  * Polls until a condition is met or a timeout is reached.
  */
-async function waitFor(condition: () => boolean, timeoutMs = 5000, intervalMs = 50): Promise<void> {
+async function waitFor(
+    condition: () => boolean,
+    timeoutMs = waitForTimeoutMs,
+    intervalMs = waitForIntervalMs
+): Promise<void> {
     const start = Date.now();
     while (!condition()) {
         if (Date.now() - start > timeoutMs) {
@@ -62,7 +71,9 @@ suite('DeepnoteFileChangeWatcher', () => {
 
     teardown(() => {
         sinon.restore();
-        mockDisposables.forEach((d) => d.dispose());
+        for (const d of mockDisposables) {
+            d.dispose();
+        }
         onDidChangeFile.dispose();
     });
 
@@ -84,6 +95,7 @@ suite('DeepnoteFileChangeWatcher', () => {
             kind: c.kind ?? NotebookCellKind.Code,
             document: c.document ?? { getText: () => '' }
         }));
+
         return {
             uri: opts.uri,
             isDirty: opts.isDirty ?? false,
@@ -104,6 +116,7 @@ suite('DeepnoteFileChangeWatcher', () => {
             return Promise.resolve(new TextEncoder().encode(yamlContent));
         });
         when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
+
         return mockFs;
     }
 
@@ -178,7 +191,7 @@ project:
         onDidChangeFile.fire(snapshotUri);
 
         // Wait well past debounce
-        await new Promise((resolve) => setTimeout(resolve, 800));
+        await new Promise((resolve) => setTimeout(resolve, debounceWaitMs));
 
         // Should not attempt to read the file at all
         assert.strictEqual(readFileCalls, 0, 'readFile should not be called for snapshot files');
@@ -211,9 +224,9 @@ project:
 
         // Fire multiple changes rapidly
         onDidChangeFile.fire(uri);
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, rapidChangeIntervalMs));
         onDidChangeFile.fire(uri);
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, rapidChangeIntervalMs));
         onDidChangeFile.fire(uri);
 
         // Wait for debounce from the last event + processing
@@ -235,7 +248,7 @@ project:
         // Wait for debounce + processing
         await waitFor(() => readFileCalls > 0);
 
-        // Parse errors should be caught and logged without calling applyEdit
+        // Parse errors are caught and logged; applyEdit should not be called
         assert.strictEqual(applyEditCount, 0, 'applyEdit should not be called on parse error');
     });
 
@@ -318,7 +331,7 @@ project:
 `;
         setupMockFs(changedYaml);
         onDidChangeFile.fire(uri);
-        await waitFor(() => applyEditCount >= 2, 5000);
+        await waitFor(() => applyEditCount >= 2, waitForTimeoutMs);
 
         assert.isAtLeast(applyEditCount, 2, 'applyEdit should be called for both external changes');
     });

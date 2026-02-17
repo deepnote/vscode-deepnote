@@ -300,11 +300,11 @@
     "contributes.walkthroughs.deepnoteWelcome.description": "Your first steps to set up and explore Deepnote notebooks in VS Code.",
     "contributes.walkthroughs.deepnoteWelcome.steps.exploreProjects.title": "Explore Your Projects",
     "contributes.walkthroughs.deepnoteWelcome.steps.exploreProjects.description": {
-        "message": "Open the Deepnote sidebar to browse your projects and notebooks. Create new projects, import existing notebooks, and organize your work.\n[Open Deepnote Explorer](command:deepnoteExplorer.focus)",
+        "message": "Use the Deepnote sidebar to browse, create, import, and organize your projects and notebooks.\n[Open Deepnote Explorer](command:deepnoteExplorer.focus)",
         "comment": ["{Locked='command:deepnoteExplorer.focus'}"]
     },
     "contributes.walkthroughs.deepnoteWelcome.steps.exploreProjects.media.altText": "The Deepnote Explorer sidebar showing projects and notebooks",
-    "contributes.walkthroughs.deepnoteWelcome.steps.notebookBlocks.title": "Work with Notebook Blocks",
+    "contributes.walkthroughs.deepnoteWelcome.steps.notebookBlocks.title": "Create Your First Notebook",
     "contributes.walkthroughs.deepnoteWelcome.steps.notebookBlocks.description": "Deepnote notebooks support multiple block types beyond code — add SQL queries, charts, text, and input widgets to build interactive data apps. Use the cell toolbar or command palette to insert different block types.",
     "contributes.walkthroughs.deepnoteWelcome.steps.notebookBlocks.media.altText": "A Deepnote notebook showing different block types",
     "contributes.walkthroughs.deepnoteWelcome.steps.connectDataSources.title": "Connect to Your Data Sources",

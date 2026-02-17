@@ -301,9 +301,7 @@
     "contributes.walkthroughs.deepnoteWelcome.steps.exploreProjects.title": "Explore Your Projects",
     "contributes.walkthroughs.deepnoteWelcome.steps.exploreProjects.description": {
         "message": "Open the Deepnote sidebar to browse your projects and notebooks. Create new projects, import existing notebooks, and organize your work.\n[Open Deepnote Explorer](command:deepnoteExplorer.focus)",
-        "comment": [
-            "{Locked='command:deepnoteExplorer.focus'}"
-        ]
+        "comment": ["{Locked='command:deepnoteExplorer.focus'}"]
     },
     "contributes.walkthroughs.deepnoteWelcome.steps.exploreProjects.media.altText": "The Deepnote Explorer sidebar showing projects and notebooks",
     "contributes.walkthroughs.deepnoteWelcome.steps.notebookBlocks.title": "Work with Notebook Blocks",

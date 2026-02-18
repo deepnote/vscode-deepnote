@@ -244,7 +244,7 @@ suite('DeepnoteExtensionSidecarWriter', () => {
         const env = makeEnvironment({ id: 'env-1' });
         when(mockEnvironmentManager.getEnvironment('env-1')).thenReturn(env);
 
-        // readFile will reject (default behaviour when readFileContent is empty)
+        // readFile will reject (default behavior when readFileContent is empty)
         writer.activate();
 
         // Should not throw even though readFile fails

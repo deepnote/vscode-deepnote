@@ -2,8 +2,8 @@
 // Licensed under the MIT License.
 
 import { injectable, inject } from 'inversify';
-import { Uri, Memento } from 'vscode';
-import { IExtensionContext } from '../../../platform/common/types';
+import { EventEmitter, Uri, Memento } from 'vscode';
+import { IDisposableRegistry, IExtensionContext } from '../../../platform/common/types';
 import { logger } from '../../../platform/logging';
 
 /**
@@ -16,10 +16,20 @@ export class DeepnoteNotebookEnvironmentMapper {
     private readonly workspaceState: Memento;
     private mappings: Map<string, string>; // notebookUri.fsPath -> environmentId
 
-    constructor(@inject(IExtensionContext) context: IExtensionContext) {
+    private readonly _onDidSetEnvironment = new EventEmitter<{ notebookUri: Uri; environmentId: string }>();
+    public readonly onDidSetEnvironment = this._onDidSetEnvironment.event;
+
+    private readonly _onDidRemoveEnvironment = new EventEmitter<{ notebookUri: Uri }>();
+    public readonly onDidRemoveEnvironment = this._onDidRemoveEnvironment.event;
+
+    constructor(
+        @inject(IExtensionContext) context: IExtensionContext,
+        @inject(IDisposableRegistry) disposables: IDisposableRegistry
+    ) {
         this.workspaceState = context.workspaceState;
         this.mappings = new Map();
         this.loadMappings();
+        disposables.push(this._onDidSetEnvironment, this._onDidRemoveEnvironment);
     }
 
     /**
@@ -42,6 +52,7 @@ export class DeepnoteNotebookEnvironmentMapper {
         this.mappings.set(key, environmentId);
         await this.saveMappings();
         logger.info(`Mapped notebook ${notebookUri.fsPath} to environment ${environmentId}`);
+        this._onDidSetEnvironment.fire({ notebookUri, environmentId });
     }
 
     /**
@@ -53,6 +64,7 @@ export class DeepnoteNotebookEnvironmentMapper {
         this.mappings.delete(key);
         await this.saveMappings();
         logger.info(`Removed environment mapping for notebook ${notebookUri.fsPath}`);
+        this._onDidRemoveEnvironment.fire({ notebookUri });
     }
 
     /**
@@ -68,6 +80,13 @@ export class DeepnoteNotebookEnvironmentMapper {
             }
         }
         return notebooks;
+    }
+
+    /**
+     * Get all notebook-to-environment mappings
+     */
+    public getAllMappings(): ReadonlyMap<string, string> {
+        return this.mappings;
     }
 
     /**

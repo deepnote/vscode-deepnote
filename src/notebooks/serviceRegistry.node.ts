@@ -80,6 +80,7 @@ import { DeepnoteEnvironmentManager } from '../kernels/deepnote/environments/dee
 import { DeepnoteEnvironmentStorage } from '../kernels/deepnote/environments/deepnoteEnvironmentStorage.node';
 import { DeepnoteEnvironmentsView } from '../kernels/deepnote/environments/deepnoteEnvironmentsView.node';
 import { DeepnoteEnvironmentsActivationService } from '../kernels/deepnote/environments/deepnoteEnvironmentsActivationService';
+import { DeepnoteExtensionSidecarWriter } from '../kernels/deepnote/environments/deepnoteExtensionSidecarWriter.node';
 import { DeepnoteNotebookEnvironmentMapper } from '../kernels/deepnote/environments/deepnoteNotebookEnvironmentMapper.node';
 import { DeepnoteNotebookCommandListener } from './deepnote/deepnoteNotebookCommandListener';
 import { DeepnoteInputBlockCellStatusBarItemProvider } from './deepnote/deepnoteInputBlockCellStatusBarProvider';
@@ -251,6 +252,12 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IDeepnoteNotebookEnvironmentMapper>(
         IDeepnoteNotebookEnvironmentMapper,
         DeepnoteNotebookEnvironmentMapper
+    );
+
+    // Sidecar file writer (exposes env mappings for external tools)
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        DeepnoteExtensionSidecarWriter
     );
 
     // Snapshot service

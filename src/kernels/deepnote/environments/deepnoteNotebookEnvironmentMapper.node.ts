@@ -3,6 +3,7 @@
 
 import { injectable, inject } from 'inversify';
 import { EventEmitter, Uri, Memento } from 'vscode';
+
 import { IDisposableRegistry, IExtensionContext } from '../../../platform/common/types';
 import { logger } from '../../../platform/logging';
 
@@ -16,11 +17,10 @@ export class DeepnoteNotebookEnvironmentMapper {
     private readonly workspaceState: Memento;
     private mappings: Map<string, string>; // notebookUri.fsPath -> environmentId
 
-    private readonly _onDidSetEnvironment = new EventEmitter<{ notebookUri: Uri; environmentId: string }>();
-    public readonly onDidSetEnvironment = this._onDidSetEnvironment.event;
-
     private readonly _onDidRemoveEnvironment = new EventEmitter<{ notebookUri: Uri }>();
+    private readonly _onDidSetEnvironment = new EventEmitter<{ notebookUri: Uri; environmentId: string }>();
     public readonly onDidRemoveEnvironment = this._onDidRemoveEnvironment.event;
+    public readonly onDidSetEnvironment = this._onDidSetEnvironment.event;
 
     constructor(
         @inject(IExtensionContext) context: IExtensionContext,
@@ -86,7 +86,7 @@ export class DeepnoteNotebookEnvironmentMapper {
      * Get all notebook-to-environment mappings
      */
     public getAllMappings(): ReadonlyMap<string, string> {
-        return this.mappings;
+        return new Map(this.mappings);
     }
 
     /**

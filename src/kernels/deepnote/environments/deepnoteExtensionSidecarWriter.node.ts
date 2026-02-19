@@ -77,16 +77,20 @@ export class DeepnoteExtensionSidecarWriter implements IExtensionSyncActivationS
 
                 let changed = false;
                 for (const [projectId, entry] of Object.entries(sidecar.mappings)) {
-                    const environment = this.environmentManager.getEnvironment(entry.environmentId);
-                    if (!environment) {
-                        delete sidecar.mappings[projectId];
-                        changed = true;
-                    } else if (environment.venvPath.fsPath !== entry.venvPath) {
-                        sidecar.mappings[projectId] = {
-                            environmentId: entry.environmentId,
-                            venvPath: environment.venvPath.fsPath
-                        };
-                        changed = true;
+                    try {
+                        const environment = this.environmentManager.getEnvironment(entry.environmentId);
+                        if (!environment) {
+                            delete sidecar.mappings[projectId];
+                            changed = true;
+                        } else if (environment.venvPath.fsPath !== entry.venvPath) {
+                            sidecar.mappings[projectId] = {
+                                environmentId: entry.environmentId,
+                                venvPath: environment.venvPath.fsPath
+                            };
+                            changed = true;
+                        }
+                    } catch (entryError) {
+                        logger.warn(`[SidecarWriter] Failed to process mapping for project ${projectId}`, entryError);
                     }
                 }
 
@@ -211,18 +215,22 @@ export class DeepnoteExtensionSidecarWriter implements IExtensionSyncActivationS
             // Collect all project IDs outside the write queue to avoid holding the lock during I/O.
             const entries: Array<{ fsPath: string; projectId: string; environmentId: string; venvPath: string }> = [];
             for (const [fsPath, environmentId] of allMappings) {
-                const environment = this.environmentManager.getEnvironment(environmentId);
-                if (!environment) {
-                    continue;
-                }
+                try {
+                    const environment = this.environmentManager.getEnvironment(environmentId);
+                    if (!environment) {
+                        continue;
+                    }
 
-                const projectId = await this.readProjectIdFromFile(Uri.file(fsPath));
-                if (!projectId) {
-                    continue;
-                }
+                    const projectId = await this.readProjectIdFromFile(Uri.file(fsPath));
+                    if (!projectId) {
+                        continue;
+                    }
 
-                this.fsPathToProjectId.set(fsPath, projectId);
-                entries.push({ fsPath, projectId, environmentId, venvPath: environment.venvPath.fsPath });
+                    this.fsPathToProjectId.set(fsPath, projectId);
+                    entries.push({ fsPath, projectId, environmentId, venvPath: environment.venvPath.fsPath });
+                } catch (entryError) {
+                    logger.warn(`[SidecarWriter] Failed to process mapping for ${fsPath}`, entryError);
+                }
             }
 
             if (entries.length === 0) {
@@ -252,14 +260,16 @@ export class DeepnoteExtensionSidecarWriter implements IExtensionSyncActivationS
      * the object (i.e. should be written back).
      */
     private enqueueWrite(mutate: (sidecar: SidecarFile) => Promise<boolean>): Promise<void> {
-        this.writeQueue = this.writeQueue.then(async () => {
+        const op = this.writeQueue.then(async () => {
             const sidecar = await this.readSidecar();
             const changed = await mutate(sidecar);
             if (changed) {
                 await this.writeSidecar(sidecar);
             }
         });
-        return this.writeQueue;
+        // eslint-disable-next-line @typescript-eslint/no-empty-function -- keep queue chain alive after rejection
+        this.writeQueue = op.catch(() => {});
+        return op;
     }
 
     private getSidecarUri(): Uri | undefined {

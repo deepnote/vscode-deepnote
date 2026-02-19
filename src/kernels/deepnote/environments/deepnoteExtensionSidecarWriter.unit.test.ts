@@ -231,9 +231,10 @@ suite('DeepnoteExtensionSidecarWriter', () => {
         await waitFor(() => writeFileCallCount >= 2);
 
         const sidecar = parseSidecar();
-        assert.strictEqual(Object.keys(sidecar.mappings).length, 2);
-        assert.strictEqual(sidecar.mappings['proj-1'].environmentId, 'env-1');
-        assert.strictEqual(sidecar.mappings['proj-2'].environmentId, 'env-2');
+        assert.deepStrictEqual(sidecar.mappings, {
+            'proj-1': { environmentId: 'env-1', venvPath: '/venvs/env1' },
+            'proj-2': { environmentId: 'env-2', venvPath: '/venvs/env2' }
+        });
     });
 
     test('error reading sidecar does not throw', async () => {
@@ -394,9 +395,10 @@ suite('DeepnoteExtensionSidecarWriter', () => {
         await waitFor(() => writeFileCallCount >= 1);
 
         const sidecar = parseSidecar();
-        assert.strictEqual(Object.keys(sidecar.mappings).length, 2);
-        assert.strictEqual(sidecar.mappings['proj-1'].environmentId, 'env-1');
-        assert.strictEqual(sidecar.mappings['proj-2'].environmentId, 'env-2');
+        assert.deepStrictEqual(sidecar.mappings, {
+            'proj-1': { environmentId: 'env-1', venvPath: '/venvs/env1' },
+            'proj-2': { environmentId: 'env-2', venvPath: '/venvs/env2' }
+        });
     });
 
     test('activation skips entries whose .deepnote file cannot be read', async () => {

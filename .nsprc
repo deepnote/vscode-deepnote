@@ -1,18 +1,18 @@
 {
-    "GHSA-73rr-hh4g-fpgx": {
-        "notes": "diff DoS via infinite loop when parsing patches with special line break characters. Accepted risk: dev-only dependency (mocha, sinon, tslint), only affects development/CI, not bundled in extension.",
-        "expiry": "2026-04-15"
+    "GHSA-2g4f-4pwh-qvx6": {
+        "notes": "ajv ReDoS when using $data option. Accepted risk: dev-only transitive dependency (@jupyterlab/settingregistry, table), fix requires ajv@8.18.0 but consumers are on 6.x, not bundled in extension.",
+        "expiry": "2026-08-15"
+    },
+    "GHSA-3ppc-4f35-3m26": {
+        "notes": "minimatch ReDoS via repeated wildcards. Accepted risk: dev-only transitive dependency (mocha, glob, @vscode/test-cli), fix requires minimatch@10.2.1 but consumers are on 3.x-5.x, not bundled in extension.",
+        "expiry": "2026-08-15"
     },
     "GHSA-848j-6mx2-7j84": {
         "notes": "CVE-2025-14505: elliptic ECDSA signature corruption can lead to private key recovery if attacker obtains both faulty and correct signatures for identical inputs. Accepted risk: dev-only transitive dependency (node-stdlib-browser -> crypto-browserify -> browserify-sign), not used for signing in this project, no fix available.",
-        "expiry": "2026-04-08"
+        "expiry": "2026-08-15"
     },
     "GHSA-g9mf-h72j-4rw9": {
-        "notes": "undici DoS via unbounded decompression chain. Accepted risk: dev-only transitive dependency (@actions/core, @actions/github), only affects CI/CD workflows, not bundled in extension.",
-        "expiry": "2026-04-15"
-    },
-    "GHSA-p5wg-g6qr-c7cg": {
-        "notes": "CVE-2025-50537: eslint Stack Overflow in RuleTester.run() when serializing objects with circular references. Accepted risk: dev-only dependency, requires local access and user interaction, only affects test authoring, not bundled in extension.",
-        "expiry": "2026-04-15"
+        "notes": "undici DoS via unbounded decompression chain. Accepted risk: dev-only transitive dependency (@actions/core, @actions/github), only affects CI/CD workflows, not bundled in extension. Fix requires major version jump (5.x -> 6.x/7.x) breaking @actions/http-client constraint.",
+        "expiry": "2026-08-15"
     }
 }

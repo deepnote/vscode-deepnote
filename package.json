@@ -2933,7 +2933,16 @@
         "d3-color": "3.1.0",
         "vega-embed": "^7.1.0",
         "@mermaid-js/layout-elk": "npm:empty-pkg@1.0.0",
-        "tar": "7.5.7",
+        "tar": "7.5.8",
+        "mocha": {
+            "diff": "5.2.2"
+        },
+        "sinon": {
+            "diff": "5.2.2"
+        },
+        "tslint": {
+            "diff": "4.0.4"
+        },
         "lodash-es": "^4.17.23"
     }
 }

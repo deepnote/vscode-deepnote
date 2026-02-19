@@ -1,7 +1,6 @@
-import type { DeepnoteFile } from '@deepnote/blocks';
+import { deserializeDeepnoteFile, serializeDeepnoteFile, type DeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import { when } from 'ts-mockito';
-import * as yaml from 'js-yaml';
 import type { NotebookDocument } from 'vscode';
 
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
@@ -68,7 +67,7 @@ suite('DeepnoteNotebookSerializer', () => {
      * Helper function to convert a DeepnoteProject object with version to YAML format
      */
     function projectToYaml(projectData: DeepnoteFile): Uint8Array {
-        const yamlString = yaml.dump(projectData);
+        const yamlString = serializeDeepnoteFile(projectData);
         return new TextEncoder().encode(yamlString);
     }
 
@@ -575,7 +574,7 @@ project:
 
             const result = await serializer.serializeNotebook(notebookData as any, {} as any);
             const yamlString = new TextDecoder().decode(result);
-            const parsedResult = yaml.load(yamlString) as DeepnoteFile;
+            const parsedResult = deserializeDeepnoteFile(yamlString);
 
             const notebook = parsedResult.project.notebooks.find((nb) => nb.id === 'notebook-1');
             assert.isDefined(notebook);
@@ -638,7 +637,7 @@ project:
 
             const result = await serializer.serializeNotebook(notebookData as any, {} as any);
             const yamlString = new TextDecoder().decode(result);
-            const parsedResult = yaml.load(yamlString) as DeepnoteFile;
+            const parsedResult = deserializeDeepnoteFile(yamlString);
 
             const notebook = parsedResult.project.notebooks.find((nb) => nb.id === 'notebook-1');
             assert.isDefined(notebook);
@@ -708,7 +707,7 @@ project:
 
             const result = await serializer.serializeNotebook(notebookData as any, {} as any);
             const yamlString = new TextDecoder().decode(result);
-            const parsedResult = yaml.load(yamlString) as DeepnoteFile;
+            const parsedResult = deserializeDeepnoteFile(yamlString);
 
             const notebook = parsedResult.project.notebooks.find((nb) => nb.id === 'notebook-1');
             assert.isDefined(notebook);
@@ -1359,7 +1358,9 @@ project:
 
             const result = await serializer.serializeNotebook(notebookData as any, {} as any);
             const yamlString = new TextDecoder().decode(result);
-            const parsedResult = yaml.load(yamlString) as DeepnoteFile & { metadata: { snapshotHash?: string } };
+            const parsedResult = deserializeDeepnoteFile(yamlString) as DeepnoteFile & {
+                metadata: { snapshotHash?: string };
+            };
 
             assert.isDefined(parsedResult.metadata.snapshotHash);
             assert.match(parsedResult.metadata.snapshotHash!, /^sha256:[a-f0-9]+$/);
@@ -1413,13 +1414,13 @@ project:
             // Serialize twice
             manager.storeOriginalProject('project-deterministic', structuredClone(projectData), 'notebook-1');
             const result1 = await serializer.serializeNotebook(notebookData as any, {} as any);
-            const parsed1 = yaml.load(new TextDecoder().decode(result1)) as DeepnoteFile & {
+            const parsed1 = deserializeDeepnoteFile(new TextDecoder().decode(result1)) as DeepnoteFile & {
                 metadata: { snapshotHash?: string };
             };
 
             manager.storeOriginalProject('project-deterministic', structuredClone(projectData), 'notebook-1');
             const result2 = await serializer.serializeNotebook(notebookData as any, {} as any);
-            const parsed2 = yaml.load(new TextDecoder().decode(result2)) as DeepnoteFile & {
+            const parsed2 = deserializeDeepnoteFile(new TextDecoder().decode(result2)) as DeepnoteFile & {
                 metadata: { snapshotHash?: string };
             };
 
@@ -1508,7 +1509,7 @@ project:
             for (let i = 0; i < 5; i++) {
                 manager.storeOriginalProject('project-multi-serialize', structuredClone(projectData), 'notebook-1');
                 const result = await serializer.serializeNotebook(notebookData as any, {} as any);
-                const parsed = yaml.load(new TextDecoder().decode(result)) as DeepnoteFile & {
+                const parsed = deserializeDeepnoteFile(new TextDecoder().decode(result)) as DeepnoteFile & {
                     metadata: { snapshotHash?: string };
                 };
 
@@ -1571,7 +1572,7 @@ project:
             };
 
             const result1 = await serializer.serializeNotebook(notebookData1 as any, {} as any);
-            const parsed1 = yaml.load(new TextDecoder().decode(result1)) as DeepnoteFile & {
+            const parsed1 = deserializeDeepnoteFile(new TextDecoder().decode(result1)) as DeepnoteFile & {
                 metadata: { snapshotHash?: string };
             };
 
@@ -1592,7 +1593,7 @@ project:
             };
 
             const result2 = await serializer.serializeNotebook(notebookData2 as any, {} as any);
-            const parsed2 = yaml.load(new TextDecoder().decode(result2)) as DeepnoteFile & {
+            const parsed2 = deserializeDeepnoteFile(new TextDecoder().decode(result2)) as DeepnoteFile & {
                 metadata: { snapshotHash?: string };
             };
 
@@ -1647,7 +1648,7 @@ project:
             };
 
             const result1 = await serializer.serializeNotebook(notebookData as any, {} as any);
-            const parsed1 = yaml.load(new TextDecoder().decode(result1)) as DeepnoteFile & {
+            const parsed1 = deserializeDeepnoteFile(new TextDecoder().decode(result1)) as DeepnoteFile & {
                 metadata: { snapshotHash?: string };
             };
 
@@ -1656,7 +1657,7 @@ project:
             manager.storeOriginalProject('project-version-change', projectData2, 'notebook-1');
 
             const result2 = await serializer.serializeNotebook(notebookData as any, {} as any);
-            const parsed2 = yaml.load(new TextDecoder().decode(result2)) as DeepnoteFile & {
+            const parsed2 = deserializeDeepnoteFile(new TextDecoder().decode(result2)) as DeepnoteFile & {
                 metadata: { snapshotHash?: string };
             };
 
@@ -1711,7 +1712,7 @@ project:
             };
 
             const result1 = await serializer.serializeNotebook(notebookData as any, {} as any);
-            const parsed1 = yaml.load(new TextDecoder().decode(result1)) as DeepnoteFile & {
+            const parsed1 = deserializeDeepnoteFile(new TextDecoder().decode(result1)) as DeepnoteFile & {
                 metadata: { snapshotHash?: string };
             };
 
@@ -1721,7 +1722,7 @@ project:
             manager.storeOriginalProject('project-integrations-change', projectData2, 'notebook-1');
 
             const result2 = await serializer.serializeNotebook(notebookData as any, {} as any);
-            const parsed2 = yaml.load(new TextDecoder().decode(result2)) as DeepnoteFile & {
+            const parsed2 = deserializeDeepnoteFile(new TextDecoder().decode(result2)) as DeepnoteFile & {
                 metadata: { snapshotHash?: string };
             };
 
@@ -1776,7 +1777,7 @@ project:
             };
 
             const result1 = await serializer.serializeNotebook(notebookData as any, {} as any);
-            const parsed1 = yaml.load(new TextDecoder().decode(result1)) as DeepnoteFile & {
+            const parsed1 = deserializeDeepnoteFile(new TextDecoder().decode(result1)) as DeepnoteFile & {
                 metadata: { snapshotHash?: string };
             };
 
@@ -1786,7 +1787,7 @@ project:
             manager.storeOriginalProject('project-env-hash', projectData2, 'notebook-1');
 
             const result2 = await serializer.serializeNotebook(notebookData as any, {} as any);
-            const parsed2 = yaml.load(new TextDecoder().decode(result2)) as DeepnoteFile & {
+            const parsed2 = deserializeDeepnoteFile(new TextDecoder().decode(result2)) as DeepnoteFile & {
                 metadata: { snapshotHash?: string };
             };
 

@@ -1,9 +1,9 @@
-import type { DeepnoteFile } from '@deepnote/blocks';
+import { deserializeDeepnoteFile, serializeDeepnoteFile, type DeepnoteFile } from '@deepnote/blocks';
 import { assert, expect } from 'chai';
 import * as sinon from 'sinon';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { Uri, workspace } from 'vscode';
-import * as yaml from 'js-yaml';
+import { stringify as yamlStringify } from 'yaml';
 
 import { DeepnoteExplorerView } from './deepnoteExplorerView';
 import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
@@ -297,7 +297,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Verify YAML content
             const yamlContent = Buffer.from(capturedContent!).toString('utf8');
-            const projectData = yaml.load(yamlContent) as any;
+            const projectData = deserializeDeepnoteFile(yamlContent) as any;
 
             expect(projectData.version).to.equal('1.0.0');
             expect(projectData.metadata.createdAt).to.exist;
@@ -805,7 +805,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 }
             };
 
-            const yamlContent = yaml.dump(existingProjectData);
+            const yamlContent = serializeDeepnoteFile(existingProjectData);
 
             // Mock file system
             const mockFS = mock<typeof workspace.fs>();
@@ -847,7 +847,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Verify YAML content
             const updatedYamlContent = Buffer.from(capturedWriteContent!).toString('utf8');
-            const updatedProjectData = yaml.load(updatedYamlContent) as any;
+            const updatedProjectData = deserializeDeepnoteFile(updatedYamlContent) as any;
 
             expect(updatedProjectData.project.notebooks).to.have.lengthOf(2);
             expect(updatedProjectData.project.notebooks[1].id).to.equal(newNotebookId);
@@ -870,7 +870,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 }
             };
 
-            const yamlContent = yaml.dump(existingProjectData);
+            const yamlContent = serializeDeepnoteFile(existingProjectData);
 
             // Mock file system
             const mockFS = mock<typeof workspace.fs>();
@@ -906,7 +906,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 }
             };
 
-            const yamlContent = yaml.dump(existingProjectData);
+            const yamlContent = serializeDeepnoteFile(existingProjectData);
 
             // Mock file system
             const mockFS = mock<typeof workspace.fs>();
@@ -975,7 +975,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 }
             };
 
-            const yamlContent = yaml.dump(existingProjectData);
+            const yamlContent = serializeDeepnoteFile(existingProjectData);
 
             // Mock file system
             const mockFS = mock<typeof workspace.fs>();
@@ -1018,7 +1018,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Verify YAML content
             const updatedYamlContent = Buffer.from(capturedWriteContent!).toString('utf8');
-            const updatedProjectData = yaml.load(updatedYamlContent) as DeepnoteFile;
+            const updatedProjectData = deserializeDeepnoteFile(updatedYamlContent);
 
             // Find the renamed notebook
             const renamedNotebook = updatedProjectData.project.notebooks.find((nb) => nb.id === notebookId);
@@ -1080,7 +1080,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 }
             };
 
-            const yamlContent = yaml.dump(existingProjectData);
+            const yamlContent = serializeDeepnoteFile(existingProjectData);
 
             // Mock file system
             const mockFS = mock<typeof workspace.fs>();
@@ -1158,7 +1158,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 }
             };
 
-            const yamlContent = yaml.dump(existingProjectData);
+            const yamlContent = serializeDeepnoteFile(existingProjectData);
 
             // Mock file system
             const mockFS = mock<typeof workspace.fs>();
@@ -1203,7 +1203,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Verify YAML content
             const updatedYamlContent = Buffer.from(capturedWriteContent!).toString('utf8');
-            const updatedProjectData = yaml.load(updatedYamlContent) as DeepnoteFile;
+            const updatedProjectData = deserializeDeepnoteFile(updatedYamlContent);
 
             // Verify notebook was deleted
             expect(updatedProjectData.project.notebooks).to.have.lengthOf(1);
@@ -1326,7 +1326,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 }
             };
 
-            const yamlContent = yaml.dump(existingProjectData);
+            const yamlContent = serializeDeepnoteFile(existingProjectData);
 
             // Mock file system
             const mockFS = mock<typeof workspace.fs>();
@@ -1379,7 +1379,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Verify YAML content
             const updatedYamlContent = Buffer.from(capturedWriteContent!).toString('utf8');
-            const updatedProjectData = yaml.load(updatedYamlContent) as DeepnoteFile;
+            const updatedProjectData = deserializeDeepnoteFile(updatedYamlContent);
 
             // Verify both notebooks exist
             expect(updatedProjectData.project.notebooks).to.have.lengthOf(2);
@@ -1452,7 +1452,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 }
             };
 
-            const yamlContent = yaml.dump(existingProjectData);
+            const yamlContent = serializeDeepnoteFile(existingProjectData);
 
             // Mock file system
             const mockFS = mock<typeof workspace.fs>();
@@ -1535,7 +1535,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Mock file system
             const mockFS = mock<typeof workspace.fs>();
-            const yamlContent = yaml.dump(projectData);
+            const yamlContent = serializeDeepnoteFile(projectData);
             when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yamlContent, 'utf-8')));
 
             let capturedWriteContent: Uint8Array | undefined;
@@ -1556,7 +1556,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             // Parse the written data
             assert.isDefined(capturedWriteContent, 'File should have been written');
             const writtenYaml = Buffer.from(capturedWriteContent!).toString('utf-8');
-            const updatedProjectData = yaml.load(writtenYaml) as DeepnoteFile;
+            const updatedProjectData = deserializeDeepnoteFile(writtenYaml);
 
             // Find original and duplicated notebooks
             const originalNotebook = updatedProjectData.project.notebooks.find(
@@ -1643,7 +1643,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 }
             };
 
-            const yamlContent = yaml.dump(existingProjectData);
+            const yamlContent = serializeDeepnoteFile(existingProjectData);
 
             // Mock file system
             const mockFS = mock<typeof workspace.fs>();
@@ -1680,7 +1680,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Verify YAML content
             const updatedYamlContent = Buffer.from(capturedWriteContent!).toString('utf8');
-            const updatedProjectData = yaml.load(updatedYamlContent) as DeepnoteFile;
+            const updatedProjectData = deserializeDeepnoteFile(updatedYamlContent);
 
             // Verify project was renamed
             expect(updatedProjectData.project.name).to.equal(newProjectName);
@@ -1737,7 +1737,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 }
             };
 
-            const yamlContent = yaml.dump(existingProjectData);
+            const yamlContent = serializeDeepnoteFile(existingProjectData);
 
             const mockFS = mock<typeof workspace.fs>();
             when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yamlContent)));
@@ -1814,7 +1814,9 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             };
 
             const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(projectData))));
+            when(mockFS.readFile(anything())).thenReturn(
+                Promise.resolve(Buffer.from(serializeDeepnoteFile(projectData)))
+            );
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
 
             // User selects format but cancels folder selection
@@ -1847,7 +1849,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             };
 
             const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(invalidData))));
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yamlStringify(invalidData))));
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
 
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
@@ -1886,7 +1888,9 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             };
 
             const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(projectData))));
+            when(mockFS.readFile(anything())).thenReturn(
+                Promise.resolve(Buffer.from(serializeDeepnoteFile(projectData)))
+            );
             when(mockFS.stat(anything())).thenReject(new Error('File not found'));
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
 
@@ -1942,7 +1946,9 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             };
 
             const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(projectData))));
+            when(mockFS.readFile(anything())).thenReturn(
+                Promise.resolve(Buffer.from(serializeDeepnoteFile(projectData)))
+            );
             when(mockFS.stat(anything())).thenReject(new Error('File not found'));
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
 
@@ -1996,7 +2002,9 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             };
 
             const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(projectData))));
+            when(mockFS.readFile(anything())).thenReturn(
+                Promise.resolve(Buffer.from(serializeDeepnoteFile(projectData)))
+            );
             when(mockFS.stat(anything())).thenReject(new Error('File not found'));
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
 
@@ -2046,7 +2054,9 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             };
 
             const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(projectData))));
+            when(mockFS.readFile(anything())).thenReturn(
+                Promise.resolve(Buffer.from(serializeDeepnoteFile(projectData)))
+            );
             when(mockFS.stat(anything())).thenReject(new Error('File not found'));
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
 
@@ -2092,7 +2102,9 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             };
 
             const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(projectData))));
+            when(mockFS.readFile(anything())).thenReturn(
+                Promise.resolve(Buffer.from(serializeDeepnoteFile(projectData)))
+            );
             // Files exist - stat returns successfully
             when(mockFS.stat(anything())).thenReturn(Promise.resolve({} as any));
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
@@ -2138,7 +2150,9 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             };
 
             const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(projectData))));
+            when(mockFS.readFile(anything())).thenReturn(
+                Promise.resolve(Buffer.from(serializeDeepnoteFile(projectData)))
+            );
             // File exists - stat returns successfully
             when(mockFS.stat(anything())).thenReturn(Promise.resolve({} as any));
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
@@ -2220,7 +2234,9 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             };
 
             const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(projectData))));
+            when(mockFS.readFile(anything())).thenReturn(
+                Promise.resolve(Buffer.from(serializeDeepnoteFile(projectData)))
+            );
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
 
             // User selects format but cancels folder selection
@@ -2254,7 +2270,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             };
 
             const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(invalidData))));
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yamlStringify(invalidData))));
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
 
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
@@ -2295,7 +2311,9 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             };
 
             const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(projectData))));
+            when(mockFS.readFile(anything())).thenReturn(
+                Promise.resolve(Buffer.from(serializeDeepnoteFile(projectData)))
+            );
             when(mockFS.stat(anything())).thenReject(new Error('File not found'));
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
 
@@ -2351,7 +2369,9 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             };
 
             const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(projectData))));
+            when(mockFS.readFile(anything())).thenReturn(
+                Promise.resolve(Buffer.from(serializeDeepnoteFile(projectData)))
+            );
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
 
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
@@ -2394,7 +2414,9 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             };
 
             const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(projectData))));
+            when(mockFS.readFile(anything())).thenReturn(
+                Promise.resolve(Buffer.from(serializeDeepnoteFile(projectData)))
+            );
             when(mockFS.stat(anything())).thenReject(new Error('File not found'));
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
 
@@ -2438,7 +2460,9 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             };
 
             const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(projectData))));
+            when(mockFS.readFile(anything())).thenReturn(
+                Promise.resolve(Buffer.from(serializeDeepnoteFile(projectData)))
+            );
             // File exists - stat returns successfully
             when(mockFS.stat(anything())).thenReturn(Promise.resolve({} as any));
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
@@ -2485,7 +2509,9 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             };
 
             const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yaml.dump(projectData))));
+            when(mockFS.readFile(anything())).thenReturn(
+                Promise.resolve(Buffer.from(serializeDeepnoteFile(projectData)))
+            );
             // File exists - stat returns successfully
             when(mockFS.stat(anything())).thenReturn(Promise.resolve({} as any));
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));

@@ -1,5 +1,5 @@
-import type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
-import { deserializeDeepnoteFile, isExecutableBlock, serializeDeepnoteFile } from '@deepnote/blocks';
+import type { DeepnoteBlock, DeepnoteFile, DeepnoteSnapshot } from '@deepnote/blocks';
+import { deserializeDeepnoteFile, isExecutableBlock, serializeDeepnoteSnapshot } from '@deepnote/blocks';
 import { inject, injectable, optional } from 'inversify';
 import { l10n, window, workspace, type CancellationToken, type NotebookData, type NotebookSerializer } from 'vscode';
 
@@ -338,7 +338,12 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
             logger.debug('SerializeNotebook: Serializing to YAML');
 
-            const yamlString = serializeDeepnoteFile(originalProject);
+            const projectToSerialize = {
+                ...originalProject,
+                environment: originalProject.environment ?? {},
+                execution: originalProject.execution ?? {}
+            } as DeepnoteSnapshot;
+            const yamlString = serializeDeepnoteSnapshot(projectToSerialize);
 
             logger.debug(`SerializeNotebook: Serialization complete, ${yamlString.length} chars`);
 

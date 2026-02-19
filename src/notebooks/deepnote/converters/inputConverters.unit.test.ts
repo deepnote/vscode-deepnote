@@ -236,6 +236,10 @@ suite('InputTextareaBlockConverter', () => {
                 content: '',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {
+                    deepnote_variable_name: 'input_2',
+                    deepnote_variable_value: 'old value'
+                },
                 type: 'input-textarea'
             } as DeepnoteBlock;
             const cell = new NotebookCellData(NotebookCellKind.Code, 'new multiline\ntext value', 'plaintext');

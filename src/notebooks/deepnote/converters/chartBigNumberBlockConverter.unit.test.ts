@@ -398,18 +398,14 @@ suite('ChartBigNumberBlockConverter', () => {
         });
 
         test('applies defaults when metadata is missing', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: 'old content',
                 id: 'block-123',
-                metadata: {
-                    deepnote_big_number_title: '',
-                    deepnote_big_number_format: '',
-                    deepnote_big_number_value: ''
-                },
+                metadata: undefined,
                 sortingKey: 'a0',
                 type: 'big-number'
-            };
+            } as unknown as DeepnoteBlock;
             const cell = new NotebookCellData(NotebookCellKind.Code, 'my_value', 'python');
 
             converter.applyChangesToBlock(block, cell);

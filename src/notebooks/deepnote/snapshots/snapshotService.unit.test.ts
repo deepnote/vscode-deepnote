@@ -541,6 +541,7 @@ project:
       name: Notebook 1
       blocks:
         - id: block-1
+          blockGroup: group-1
           type: code
           sortingKey: 'a0'
           content: print(1)
@@ -549,6 +550,7 @@ project:
               name: stdout
               text: '1'
         - id: block-2
+          blockGroup: group-2
           type: markdown
           sortingKey: 'a1'
           content: '# Hello'
@@ -617,8 +619,10 @@ project:
       name: Notebook 1
       blocks:
         - id: block-1
+          blockGroup: group-1
           type: code
           sortingKey: 'a0'
+          content: ''
           outputs:
             - output_type: stream
               text: 'from timestamped'
@@ -744,6 +748,7 @@ project:
       name: Notebook 1
       blocks:
         - id: block-1
+          blockGroup: '1'
           type: code
           sortingKey: a0
           content: print(1)

@@ -134,6 +134,7 @@ project:
         - id: block-1
           type: code
           sortingKey: a0
+          blockGroup: '1'
           content: print("hello")
 `;
 
@@ -327,6 +328,7 @@ project:
         - id: block-1
           type: code
           sortingKey: a0
+          blockGroup: '1'
           content: print("world")
 `;
         setupMockFs(changedYaml);

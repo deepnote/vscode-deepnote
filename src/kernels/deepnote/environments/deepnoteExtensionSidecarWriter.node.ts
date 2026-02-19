@@ -30,6 +30,7 @@ function getEditorSettingsFolder(): string {
 interface SidecarEntry {
     environmentId: string;
     venvPath: string;
+    pythonInterpreter: string;
 }
 
 interface SidecarFile {
@@ -82,10 +83,14 @@ export class DeepnoteExtensionSidecarWriter implements IExtensionSyncActivationS
                         if (!environment) {
                             delete sidecar.mappings[projectId];
                             changed = true;
-                        } else if (environment.venvPath.fsPath !== entry.venvPath) {
+                        } else if (
+                            environment.venvPath.fsPath !== entry.venvPath ||
+                            environment.pythonInterpreter.uri.fsPath !== entry.pythonInterpreter
+                        ) {
                             sidecar.mappings[projectId] = {
                                 environmentId: entry.environmentId,
-                                venvPath: environment.venvPath.fsPath
+                                venvPath: environment.venvPath.fsPath,
+                                pythonInterpreter: environment.pythonInterpreter.uri.fsPath
                             };
                             changed = true;
                         }
@@ -131,12 +136,17 @@ export class DeepnoteExtensionSidecarWriter implements IExtensionSyncActivationS
 
             await this.enqueueWrite(async (sidecar) => {
                 const existing = sidecar.mappings[projectId];
-                if (existing?.environmentId === environmentId && existing?.venvPath === environment.venvPath.fsPath) {
+                if (
+                    existing?.environmentId === environmentId &&
+                    existing?.venvPath === environment.venvPath.fsPath &&
+                    existing?.pythonInterpreter === environment.pythonInterpreter.uri.fsPath
+                ) {
                     return false;
                 }
                 sidecar.mappings[projectId] = {
                     environmentId,
-                    venvPath: environment.venvPath.fsPath
+                    venvPath: environment.venvPath.fsPath,
+                    pythonInterpreter: environment.pythonInterpreter.uri.fsPath
                 };
                 return true;
             });
@@ -189,7 +199,8 @@ export class DeepnoteExtensionSidecarWriter implements IExtensionSyncActivationS
             await this.enqueueWrite(async (sidecar) => {
                 sidecar.mappings[projectId] = {
                     environmentId,
-                    venvPath: environment.venvPath.fsPath
+                    venvPath: environment.venvPath.fsPath,
+                    pythonInterpreter: environment.pythonInterpreter.uri.fsPath
                 };
                 return true;
             });
@@ -213,7 +224,13 @@ export class DeepnoteExtensionSidecarWriter implements IExtensionSyncActivationS
             }
 
             // Collect all project IDs outside the write queue to avoid holding the lock during I/O.
-            const entries: Array<{ fsPath: string; projectId: string; environmentId: string; venvPath: string }> = [];
+            const entries: Array<{
+                fsPath: string;
+                projectId: string;
+                environmentId: string;
+                venvPath: string;
+                pythonInterpreter: string;
+            }> = [];
             for (const [fsPath, environmentId] of allMappings) {
                 try {
                     const environment = this.environmentManager.getEnvironment(environmentId);
@@ -227,7 +244,13 @@ export class DeepnoteExtensionSidecarWriter implements IExtensionSyncActivationS
                     }
 
                     this.fsPathToProjectId.set(fsPath, projectId);
-                    entries.push({ fsPath, projectId, environmentId, venvPath: environment.venvPath.fsPath });
+                    entries.push({
+                        fsPath,
+                        projectId,
+                        environmentId,
+                        venvPath: environment.venvPath.fsPath,
+                        pythonInterpreter: environment.pythonInterpreter.uri.fsPath
+                    });
                 } catch (entryError) {
                     logger.warn(`[SidecarWriter] Failed to process mapping for ${fsPath}`, entryError);
                 }
@@ -241,7 +264,8 @@ export class DeepnoteExtensionSidecarWriter implements IExtensionSyncActivationS
                 for (const entry of entries) {
                     sidecar.mappings[entry.projectId] = {
                         environmentId: entry.environmentId,
-                        venvPath: entry.venvPath
+                        venvPath: entry.venvPath,
+                        pythonInterpreter: entry.pythonInterpreter
                     };
                 }
                 return true;

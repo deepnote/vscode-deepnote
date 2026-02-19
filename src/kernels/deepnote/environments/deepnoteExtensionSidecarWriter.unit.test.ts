@@ -155,7 +155,9 @@ suite('DeepnoteExtensionSidecarWriter', () => {
         when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
     }
 
-    function parseSidecar(): { mappings: Record<string, { environmentId: string; venvPath: string }> } {
+    function parseSidecar(): {
+        mappings: Record<string, { environmentId: string; venvPath: string; pythonInterpreter: string }>;
+    } {
         assert.isDefined(writtenContent, 'Expected sidecar to be written');
         return JSON.parse(writtenContent!);
     }
@@ -180,7 +182,8 @@ suite('DeepnoteExtensionSidecarWriter', () => {
         const sidecar = parseSidecar();
         assert.deepStrictEqual(sidecar.mappings['proj-abc'], {
             environmentId: 'env-1',
-            venvPath: '/home/user/.venvs/my-env'
+            venvPath: '/home/user/.venvs/my-env',
+            pythonInterpreter: '/usr/bin/python3'
         });
     });
 
@@ -232,8 +235,8 @@ suite('DeepnoteExtensionSidecarWriter', () => {
 
         const sidecar = parseSidecar();
         assert.deepStrictEqual(sidecar.mappings, {
-            'proj-1': { environmentId: 'env-1', venvPath: '/venvs/env1' },
-            'proj-2': { environmentId: 'env-2', venvPath: '/venvs/env2' }
+            'proj-1': { environmentId: 'env-1', venvPath: '/venvs/env1', pythonInterpreter: '/usr/bin/python3' },
+            'proj-2': { environmentId: 'env-2', venvPath: '/venvs/env2', pythonInterpreter: '/usr/bin/python3' }
         });
     });
 
@@ -368,7 +371,8 @@ suite('DeepnoteExtensionSidecarWriter', () => {
         const sidecar = parseSidecar();
         assert.deepStrictEqual(sidecar.mappings['proj-existing'], {
             environmentId: 'env-existing',
-            venvPath: '/venvs/existing'
+            venvPath: '/venvs/existing',
+            pythonInterpreter: '/usr/bin/python3'
         });
     });
 
@@ -396,8 +400,8 @@ suite('DeepnoteExtensionSidecarWriter', () => {
 
         const sidecar = parseSidecar();
         assert.deepStrictEqual(sidecar.mappings, {
-            'proj-1': { environmentId: 'env-1', venvPath: '/venvs/env1' },
-            'proj-2': { environmentId: 'env-2', venvPath: '/venvs/env2' }
+            'proj-1': { environmentId: 'env-1', venvPath: '/venvs/env1', pythonInterpreter: '/usr/bin/python3' },
+            'proj-2': { environmentId: 'env-2', venvPath: '/venvs/env2', pythonInterpreter: '/usr/bin/python3' }
         });
     });
 
@@ -451,7 +455,8 @@ suite('DeepnoteExtensionSidecarWriter', () => {
         const sidecar = parseSidecar();
         assert.deepStrictEqual(sidecar.mappings['proj-opened'], {
             environmentId: 'env-1',
-            venvPath: '/venvs/env1'
+            venvPath: '/venvs/env1',
+            pythonInterpreter: '/usr/bin/python3'
         });
     });
 

@@ -2933,7 +2933,7 @@
         "d3-color": "3.1.0",
         "vega-embed": "^7.1.0",
         "@mermaid-js/layout-elk": "npm:empty-pkg@1.0.0",
-        "tar": "7.5.7",
+        "tar": "7.5.8",
         "lodash-es": "^4.17.23"
     }
 }

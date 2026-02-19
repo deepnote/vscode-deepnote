@@ -26,6 +26,7 @@ suite('DeepnoteTreeDataProvider', () => {
                             id: 'block-1',
                             content: 'print("hello")',
                             sortingKey: 'a0',
+                            metadata: {},
                             type: 'code'
                         }
                     ],
@@ -41,6 +42,7 @@ suite('DeepnoteTreeDataProvider', () => {
                             id: 'block-2',
                             content: '# Title',
                             sortingKey: 'a0',
+                            metadata: {},
                             type: 'markdown'
                         }
                     ],

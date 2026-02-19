@@ -6,14 +6,13 @@ import type { NotebookDocument } from 'vscode';
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
 import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
-import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 import { mockedVSCodeNamespaces } from '../../test/vscode-mock';
 
 suite('DeepnoteNotebookSerializer', () => {
     let serializer: DeepnoteNotebookSerializer;
     let manager: DeepnoteNotebookManager;
 
-    const mockProject: DeepnoteProject = {
+    const mockProject: DeepnoteFile = {
         metadata: {
             createdAt: '2023-01-01T00:00:00Z',
             modifiedAt: '2023-01-02T00:00:00Z'
@@ -31,6 +30,7 @@ suite('DeepnoteNotebookSerializer', () => {
                             id: 'block-1',
                             content: 'print("hello")',
                             sortingKey: 'a0',
+                            metadata: {},
                             type: 'code'
                         }
                     ],
@@ -46,6 +46,7 @@ suite('DeepnoteNotebookSerializer', () => {
                             id: 'block-2',
                             content: '# Title',
                             sortingKey: 'a1',
+                            metadata: {},
                             type: 'markdown'
                         }
                     ],
@@ -453,6 +454,7 @@ project:
                                     id: 'block-1',
                                     content: 'test',
                                     sortingKey: 'a0',
+                                    metadata: {},
                                     type: 'code',
                                     outputs: [circularOutput]
                                 }
@@ -512,6 +514,7 @@ project:
                                     id: 'original-block-id-1',
                                     content: 'print("hello")',
                                     sortingKey: 'a0',
+                                    metadata: {},
                                     type: 'code'
                                 },
                                 {
@@ -519,6 +522,7 @@ project:
                                     id: 'original-block-id-2',
                                     content: '# Markdown',
                                     sortingKey: 'a1',
+                                    metadata: {},
                                     type: 'markdown'
                                 }
                             ],
@@ -605,6 +609,7 @@ project:
                                     id: 'original-id',
                                     content: 'test',
                                     sortingKey: 'original-sorting-key',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -676,6 +681,7 @@ project:
                                     id: 'original-id',
                                     content: 'original content',
                                     sortingKey: 'a0',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -772,6 +778,8 @@ project:
                                     id: 'block-init',
                                     content: 'print("init")',
                                     sortingKey: 'a0',
+                                    metadata: {},
+                                    blockGroup: '1',
                                     type: 'code'
                                 }
                             ],
@@ -786,6 +794,8 @@ project:
                                     id: 'block-main',
                                     content: 'print("main")',
                                     sortingKey: 'a0',
+                                    metadata: {},
+                                    blockGroup: '1',
                                     type: 'code'
                                 }
                             ],
@@ -825,6 +835,8 @@ project:
                                     id: 'block-init',
                                     content: 'print("init")',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -863,6 +875,8 @@ project:
                                     id: 'block-z',
                                     content: 'print("zebra")',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -877,6 +891,8 @@ project:
                                     id: 'block-a',
                                     content: 'print("alpha")',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -891,6 +907,8 @@ project:
                                     id: 'block-b',
                                     content: 'print("bravo")',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -930,6 +948,8 @@ project:
                                     id: 'block-c',
                                     content: 'print("charlie")',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -944,6 +964,8 @@ project:
                                     id: 'block-init',
                                     content: 'print("init")',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -958,6 +980,8 @@ project:
                                     id: 'block-a',
                                     content: 'print("alpha")',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -990,7 +1014,16 @@ project:
                         {
                             id: 'nb-1',
                             name: 'Notebook',
-                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: 'print(1)'
+                                }
+                            ]
                         }
                     ]
                 }
@@ -1014,7 +1047,16 @@ project:
                         {
                             id: 'nb-1',
                             name: 'Notebook',
-                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(2)' }]
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: 'print(2)'
+                                }
+                            ]
                         }
                     ]
                 }
@@ -1030,7 +1072,16 @@ project:
                         {
                             id: 'nb-1',
                             name: 'Notebook',
-                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: 'print(1)'
+                                }
+                            ]
                         }
                     ]
                 }
@@ -1053,7 +1104,16 @@ project:
                         {
                             id: 'nb-1',
                             name: 'Notebook',
-                            blocks: [{ id: 'b1', type: 'markdown', sortingKey: 'a0', content: '# Hello' }]
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'markdown',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: '# Hello'
+                                }
+                            ]
                         }
                     ]
                 }
@@ -1069,7 +1129,16 @@ project:
                         {
                             id: 'nb-1',
                             name: 'Notebook',
-                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: '# Hello' }]
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: '# Hello'
+                                }
+                            ]
                         }
                     ]
                 }
@@ -1093,8 +1162,22 @@ project:
                             id: 'nb-1',
                             name: 'Notebook',
                             blocks: [
-                                { id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' },
-                                { id: 'b2', type: 'code', sortingKey: 'a1', content: 'print(2)' }
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: 'print(1)'
+                                },
+                                {
+                                    id: 'b2',
+                                    type: 'code',
+                                    sortingKey: 'a1',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: 'print(2)'
+                                }
                             ]
                         }
                     ]
@@ -1111,7 +1194,16 @@ project:
                         {
                             id: 'nb-1',
                             name: 'Notebook',
-                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: 'print(1)'
+                                }
+                            ]
                         }
                     ]
                 }
@@ -1134,7 +1226,16 @@ project:
                         {
                             id: 'nb-1',
                             name: 'Notebook',
-                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: 'print(1)'
+                                }
+                            ]
                         },
                         {
                             id: 'nb-2',
@@ -1155,7 +1256,16 @@ project:
                         {
                             id: 'nb-1',
                             name: 'Notebook',
-                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: 'print(1)'
+                                }
+                            ]
                         }
                     ]
                 }
@@ -1178,7 +1288,16 @@ project:
                         {
                             id: 'nb-1',
                             name: 'Notebook',
-                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: 'print(1)'
+                                }
+                            ]
                         }
                     ]
                 }
@@ -1194,7 +1313,16 @@ project:
                         {
                             id: 'nb-1',
                             name: 'Notebook',
-                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: 'print(1)'
+                                }
+                            ]
                         },
                         {
                             id: 'nb-2',
@@ -1227,6 +1355,8 @@ project:
                                     id: 'b1',
                                     type: 'code',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     content: 'print(1)',
                                     outputs: [{ output_type: 'stream', text: '1\n' }]
                                 }
@@ -1246,7 +1376,16 @@ project:
                         {
                             id: 'nb-1',
                             name: 'Notebook',
-                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: 'print(1)'
+                                }
+                            ]
                         }
                     ]
                 }
@@ -1274,6 +1413,8 @@ project:
                                     id: 'b1',
                                     type: 'code',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     content: 'print(1)',
                                     executionCount: 5,
                                     executionStartedAt: '2025-01-01T00:00:00Z',
@@ -1295,7 +1436,16 @@ project:
                         {
                             id: 'nb-1',
                             name: 'Notebook',
-                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: 'print(1)'
+                                }
+                            ]
                         }
                     ]
                 }
@@ -1327,6 +1477,8 @@ project:
                                 {
                                     id: 'block-1',
                                     content: 'print("hello")',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     sortingKey: 'a0',
                                     type: 'code'
                                 }
@@ -1384,6 +1536,8 @@ project:
                                 {
                                     id: 'block-1',
                                     content: 'print("test")',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     sortingKey: 'a0',
                                     type: 'code'
                                 }
@@ -1450,12 +1604,16 @@ project:
                                     id: 'block-1',
                                     content: 'import pandas as pd',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'code'
                                 },
                                 {
                                     id: 'block-2',
                                     content: '# Analysis',
                                     sortingKey: 'a1',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'markdown'
                                 }
                             ],
@@ -1470,6 +1628,8 @@ project:
                                     id: 'block-3',
                                     content: 'print("hello")',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -1543,6 +1703,8 @@ project:
                                     id: 'block-1',
                                     content: 'print("original")',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -1619,6 +1781,8 @@ project:
                                     id: 'block-1',
                                     content: 'test',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -1683,6 +1847,8 @@ project:
                                     id: 'block-1',
                                     content: 'test',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -1748,6 +1914,8 @@ project:
                                     id: 'block-1',
                                     content: 'test',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],

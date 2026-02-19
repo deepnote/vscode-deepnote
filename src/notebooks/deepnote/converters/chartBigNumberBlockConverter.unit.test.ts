@@ -180,7 +180,7 @@ suite('ChartBigNumberBlockConverter', () => {
         });
 
         test('uses default value when metadata is invalid', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
@@ -189,7 +189,7 @@ suite('ChartBigNumberBlockConverter', () => {
                 },
                 sortingKey: 'a0',
                 type: 'big-number'
-            };
+            } as unknown as DeepnoteBlock;
 
             const cell = converter.convertToCell(block);
 
@@ -199,14 +199,14 @@ suite('ChartBigNumberBlockConverter', () => {
         });
 
         test('uses default value when metadata is empty', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
                 metadata: {},
                 sortingKey: 'a0',
                 type: 'big-number'
-            };
+            } as DeepnoteBlock;
 
             const cell = converter.convertToCell(block);
 
@@ -251,6 +251,8 @@ suite('ChartBigNumberBlockConverter', () => {
                 metadata: {
                     existing: 'value',
                     deepnote_big_number_value: 'old_value',
+                    deepnote_big_number_title: '',
+                    deepnote_big_number_format: '',
                     [DEEPNOTE_VSCODE_RAW_CONTENT_KEY]: 'old raw content'
                 },
                 sortingKey: 'a0',
@@ -379,7 +381,9 @@ suite('ChartBigNumberBlockConverter', () => {
                 id: 'block-123',
                 metadata: {
                     existing: 'value',
-                    deepnote_big_number_value: 'old_value'
+                    deepnote_big_number_value: 'old_value',
+                    deepnote_big_number_title: '',
+                    deepnote_big_number_format: ''
                 },
                 sortingKey: 'a0',
                 type: 'big-number'
@@ -398,7 +402,11 @@ suite('ChartBigNumberBlockConverter', () => {
                 blockGroup: 'test-group',
                 content: 'old content',
                 id: 'block-123',
-                metadata: {},
+                metadata: {
+                    deepnote_big_number_title: '',
+                    deepnote_big_number_format: '',
+                    deepnote_big_number_value: ''
+                },
                 sortingKey: 'a0',
                 type: 'big-number'
             };
@@ -428,7 +436,8 @@ suite('ChartBigNumberBlockConverter', () => {
                 metadata: {
                     custom: 'value',
                     deepnote_big_number_title: 'title',
-                    deepnote_big_number_value: 'old_value'
+                    deepnote_big_number_value: 'old_value',
+                    deepnote_big_number_format: ''
                 },
                 outputs: [],
                 sortingKey: 'a0',

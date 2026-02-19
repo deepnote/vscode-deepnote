@@ -1,4 +1,4 @@
-import { deserializeDeepnoteFile, serializeDeepnoteFile, type DeepnoteFile } from '@deepnote/blocks';
+import { deserializeDeepnoteFile, ExecutableBlock, serializeDeepnoteFile, type DeepnoteFile } from '@deepnote/blocks';
 import { assert, expect } from 'chai';
 import * as sinon from 'sinon';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
@@ -785,8 +785,8 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             const notebookName = 'New Notebook';
 
             // Mock existing project data
-            const existingProjectData = {
-                version: 1.0,
+            const existingProjectData: DeepnoteFile = {
+                version: '1.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -861,8 +861,12 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             const fileUri = Uri.file('/workspace/test-project.deepnote');
 
             // Mock existing project data
-            const existingProjectData = {
-                version: 1.0,
+            const existingProjectData: DeepnoteFile = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
+                },
                 project: {
                     id: projectId,
                     name: 'Test Project',
@@ -894,8 +898,12 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             const fileUri = Uri.file('/workspace/test-project.deepnote');
 
             // Mock existing project data with multiple notebooks
-            const existingProjectData = {
-                version: 1.0,
+            const existingProjectData: DeepnoteFile = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
+                },
                 project: {
                     id: projectId,
                     name: 'Test Project',
@@ -949,8 +957,8 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             const fileUri = Uri.file('/workspace/test-project.deepnote');
 
             // Mock existing project data
-            const existingProjectData = {
-                version: 1.0,
+            const existingProjectData: DeepnoteFile = {
+                version: '1.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -1064,8 +1072,12 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             const fileUri = Uri.file('/workspace/test-project.deepnote');
 
             // Mock existing project data
-            const existingProjectData = {
-                version: 1.0,
+            const existingProjectData: DeepnoteFile = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
+                },
                 project: {
                     id: projectId,
                     name: 'Test Project',
@@ -1132,8 +1144,8 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             const fileUri = Uri.file('/workspace/test-project.deepnote');
 
             // Mock existing project data
-            const existingProjectData = {
-                version: 1.0,
+            const existingProjectData: DeepnoteFile = {
+                version: '1.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -1294,8 +1306,8 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             const fileUri = Uri.file('/workspace/test-project.deepnote');
 
             // Mock existing project data
-            const existingProjectData = {
-                version: 1.0,
+            const existingProjectData: DeepnoteFile = {
+                version: '1.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -1397,7 +1409,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             expect(duplicatedNotebook!.name).to.equal(`${originalName} (Copy)`);
             expect(duplicatedNotebook!.blocks).to.have.lengthOf(1);
             expect(duplicatedNotebook!.blocks[0].content).to.equal('print("hello")');
-            expect(duplicatedNotebook!.blocks[0].executionCount).to.be.undefined;
+            expect((duplicatedNotebook!.blocks[0] as ExecutableBlock).executionCount).to.be.undefined;
 
             // Verify new IDs were generated
             expect(duplicatedNotebook!.blocks[0].id).to.equal(blockId);
@@ -1436,8 +1448,12 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             const fileUri = Uri.file('/workspace/test-project.deepnote');
 
             // Mock existing project data without the target notebook
-            const existingProjectData = {
-                version: 1.0,
+            const existingProjectData: DeepnoteFile = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
+                },
                 project: {
                     id: projectId,
                     name: 'Test Project',
@@ -1570,8 +1586,8 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             assert.isDefined(duplicateNotebook, 'Duplicate notebook should exist');
 
             // Verify the blocks are truly independent (deep clone)
-            const originalBlock = originalNotebook!.blocks[0];
-            const duplicateBlock = duplicateNotebook!.blocks[0];
+            const originalBlock = originalNotebook!.blocks[0] as ExecutableBlock;
+            const duplicateBlock = duplicateNotebook!.blocks[0] as ExecutableBlock;
 
             // Test 1: Verify outputs are not the same reference
             assert.notStrictEqual(
@@ -1623,8 +1639,8 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             const fileUri = Uri.file('/workspace/test-project.deepnote');
 
             // Mock existing project data
-            const existingProjectData = {
-                version: 1.0,
+            const existingProjectData: DeepnoteFile = {
+                version: '1.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -1725,10 +1741,11 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             const fileUri = Uri.file('/workspace/test-project.deepnote');
 
             // Mock existing project data
-            const existingProjectData = {
-                version: 1.0,
+            const existingProjectData: DeepnoteFile = {
+                version: '1.0',
                 metadata: {
-                    createdAt: '2024-01-01T00:00:00.000Z'
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
                 },
                 project: {
                     id: projectId,
@@ -1803,9 +1820,12 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         test('should return early if user cancels folder selection', async () => {
             resetVSCodeMocks();
 
-            const projectData = {
-                version: '1.0.0',
-                metadata: { createdAt: '2024-01-01T00:00:00.000Z' },
+            const projectData: DeepnoteFile = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
+                },
                 project: {
                     id: 'project-id',
                     name: 'Test Project',
@@ -1874,9 +1894,12 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         test('should export all notebooks when triggered from project', async () => {
             resetVSCodeMocks();
 
-            const projectData = {
-                version: '1.0.0',
-                metadata: { createdAt: '2024-01-01T00:00:00.000Z' },
+            const projectData: DeepnoteFile = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
+                },
                 project: {
                     id: 'project-id',
                     name: 'Test Project',
@@ -1928,9 +1951,12 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         test('should write correct Jupyter notebook JSON format', async () => {
             resetVSCodeMocks();
 
-            const projectData = {
-                version: '1.0.0',
-                metadata: { createdAt: '2024-01-01T00:00:00.000Z' },
+            const projectData: DeepnoteFile = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
+                },
                 project: {
                     id: 'project-id',
                     name: 'Test Project',
@@ -1938,7 +1964,16 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                         {
                             id: 'nb-1',
                             name: 'Test Notebook',
-                            blocks: [{ id: 'block-1', type: 'code', content: 'print("hello")', sortingKey: '0' }],
+                            blocks: [
+                                {
+                                    id: 'block-1',
+                                    type: 'code',
+                                    content: 'print("hello")',
+                                    sortingKey: '0',
+                                    blockGroup: '1',
+                                    metadata: {}
+                                }
+                            ],
                             executionMode: 'block'
                         }
                     ]
@@ -1991,9 +2026,12 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         test('should use correct output path with Uri.joinPath', async () => {
             resetVSCodeMocks();
 
-            const projectData = {
-                version: '1.0.0',
-                metadata: { createdAt: '2024-01-01T00:00:00.000Z' },
+            const projectData: DeepnoteFile = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
+                },
                 project: {
                     id: 'project-id',
                     name: 'Test Project',
@@ -2043,9 +2081,12 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         test('should handle export errors gracefully', async () => {
             resetVSCodeMocks();
 
-            const projectData = {
-                version: '1.0.0',
-                metadata: { createdAt: '2024-01-01T00:00:00.000Z' },
+            const projectData: DeepnoteFile = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
+                },
                 project: {
                     id: 'project-id',
                     name: 'Test Project',
@@ -2088,9 +2129,12 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         test('should prompt for overwrite when files already exist and cancel if declined', async () => {
             resetVSCodeMocks();
 
-            const projectData = {
-                version: '1.0.0',
-                metadata: { createdAt: '2024-01-01T00:00:00.000Z' },
+            const projectData: DeepnoteFile = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
+                },
                 project: {
                     id: 'project-id',
                     name: 'Test Project',
@@ -2139,9 +2183,12 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         test('should overwrite files when user confirms', async () => {
             resetVSCodeMocks();
 
-            const projectData = {
-                version: '1.0.0',
-                metadata: { createdAt: '2024-01-01T00:00:00.000Z' },
+            const projectData: DeepnoteFile = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
+                },
                 project: {
                     id: 'project-id',
                     name: 'Test Project',
@@ -2223,9 +2270,12 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         test('should return early if user cancels folder selection', async () => {
             resetVSCodeMocks();
 
-            const projectData = {
-                version: '1.0.0',
-                metadata: { createdAt: '2024-01-01T00:00:00.000Z' },
+            const projectData: DeepnoteFile = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
+                },
                 project: {
                     id: 'project-id',
                     name: 'Test Project',
@@ -2297,9 +2347,12 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             resetVSCodeMocks();
 
             const targetNotebookId = 'nb-2';
-            const projectData = {
-                version: '1.0.0',
-                metadata: { createdAt: '2024-01-01T00:00:00.000Z' },
+            const projectData: DeepnoteFile = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
+                },
                 project: {
                     id: 'project-id',
                     name: 'Test Project',
@@ -2358,9 +2411,12 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         test('should show error if notebook not found', async () => {
             resetVSCodeMocks();
 
-            const projectData = {
-                version: '1.0.0',
-                metadata: { createdAt: '2024-01-01T00:00:00.000Z' },
+            const projectData: DeepnoteFile = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
+                },
                 project: {
                     id: 'project-id',
                     name: 'Test Project',
@@ -2403,9 +2459,12 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         test('should handle export errors gracefully', async () => {
             resetVSCodeMocks();
 
-            const projectData = {
-                version: '1.0.0',
-                metadata: { createdAt: '2024-01-01T00:00:00.000Z' },
+            const projectData: DeepnoteFile = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
+                },
                 project: {
                     id: 'project-id',
                     name: 'Test Project',
@@ -2449,9 +2508,12 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         test('should prompt for overwrite when file already exists and cancel if declined', async () => {
             resetVSCodeMocks();
 
-            const projectData = {
-                version: '1.0.0',
-                metadata: { createdAt: '2024-01-01T00:00:00.000Z' },
+            const projectData: DeepnoteFile = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
+                },
                 project: {
                     id: 'project-id',
                     name: 'Test Project',
@@ -2498,9 +2560,12 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         test('should overwrite file when user confirms', async () => {
             resetVSCodeMocks();
 
-            const projectData = {
-                version: '1.0.0',
-                metadata: { createdAt: '2024-01-01T00:00:00.000Z' },
+            const projectData: DeepnoteFile = {
+                version: '1.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
+                },
                 project: {
                     id: 'project-id',
                     name: 'Test Project',

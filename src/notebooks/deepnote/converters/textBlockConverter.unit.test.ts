@@ -60,6 +60,7 @@ suite('TextBlockConverter', () => {
                 content: 'Main Title',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'text-cell-h1'
             };
 
@@ -76,6 +77,7 @@ suite('TextBlockConverter', () => {
                 content: 'Section Title',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'text-cell-h2'
             };
 
@@ -90,6 +92,7 @@ suite('TextBlockConverter', () => {
                 content: 'Subsection Title',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'text-cell-h3'
             };
 
@@ -104,6 +107,7 @@ suite('TextBlockConverter', () => {
                 content: 'Paragraph text',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'text-cell-p'
             };
 
@@ -118,6 +122,7 @@ suite('TextBlockConverter', () => {
                 content: 'Bullet item',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'text-cell-bullet'
             };
 
@@ -200,6 +205,7 @@ suite('TextBlockConverter', () => {
                 content: '',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'text-cell-h1'
             };
 
@@ -216,6 +222,7 @@ suite('TextBlockConverter', () => {
                 content: 'old content',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'text-cell-h1'
             };
             const cell = new NotebookCellData(NotebookCellKind.Markup, '# New Title', 'markdown');
@@ -231,6 +238,7 @@ suite('TextBlockConverter', () => {
                 content: 'old content',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'text-cell-h1'
             };
             const cell = new NotebookCellData(NotebookCellKind.Markup, '  # New Title', 'markdown');
@@ -247,6 +255,7 @@ suite('TextBlockConverter', () => {
                 content: 'old content',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'text-cell-h2'
             };
             const cell = new NotebookCellData(NotebookCellKind.Markup, '## New Section', 'markdown');
@@ -262,6 +271,7 @@ suite('TextBlockConverter', () => {
                 content: 'old content',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'text-cell-h2'
             };
             const cell = new NotebookCellData(NotebookCellKind.Markup, '   ## New Section', 'markdown');
@@ -278,6 +288,7 @@ suite('TextBlockConverter', () => {
                 content: 'old content',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'text-cell-h3'
             };
             const cell = new NotebookCellData(NotebookCellKind.Markup, '### New Subsection', 'markdown');
@@ -293,6 +304,7 @@ suite('TextBlockConverter', () => {
                 content: 'old content',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'text-cell-h3'
             };
             const cell = new NotebookCellData(NotebookCellKind.Markup, '\t### New Subsection', 'markdown');
@@ -309,6 +321,7 @@ suite('TextBlockConverter', () => {
                 content: 'old content',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'text-cell-p'
             };
             const cell = new NotebookCellData(NotebookCellKind.Markup, '# Not a heading', 'markdown');
@@ -324,6 +337,7 @@ suite('TextBlockConverter', () => {
                 content: 'old content',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'text-cell-h1'
             };
             const cell = new NotebookCellData(NotebookCellKind.Markup, 'No prefix', 'markdown');
@@ -339,6 +353,7 @@ suite('TextBlockConverter', () => {
                 content: 'old content',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'text-cell-h1'
             };
             const cell = new NotebookCellData(NotebookCellKind.Markup, '', 'markdown');
@@ -374,6 +389,7 @@ suite('TextBlockConverter', () => {
                 content: 'old content',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'text-cell-bullet'
             };
             const cell = new NotebookCellData(NotebookCellKind.Markup, '- New bullet item', 'markdown');

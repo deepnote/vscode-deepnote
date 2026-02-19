@@ -30,7 +30,16 @@ suite('DeepnoteTreeItem', () => {
     const mockNotebook: DeepnoteNotebook = {
         id: 'notebook-456',
         name: 'Analysis Notebook',
-        blocks: [{ blockGroup: 'group-123', id: 'block-1', content: 'print("hello")', sortingKey: 'a0', type: 'code' }],
+        blocks: [
+            {
+                blockGroup: 'group-123',
+                id: 'block-1',
+                content: 'print("hello")',
+                sortingKey: 'a0',
+                metadata: {},
+                type: 'code'
+            }
+        ],
         executionMode: 'block',
         isModule: false
     };
@@ -267,6 +276,7 @@ suite('DeepnoteTreeItem', () => {
                         id: 'block-1',
                         content: 'import pandas',
                         sortingKey: 'a0',
+                        metadata: {},
                         type: 'code' as const
                     },
                     {
@@ -274,6 +284,7 @@ suite('DeepnoteTreeItem', () => {
                         id: 'block-2',
                         content: '# Analysis',
                         sortingKey: 'a1',
+                        metadata: {},
                         type: 'markdown' as const
                     },
                     {
@@ -281,6 +292,7 @@ suite('DeepnoteTreeItem', () => {
                         id: 'block-3',
                         content: 'df = pd.read_csv("data.csv")',
                         sortingKey: 'a2',
+                        metadata: {},
                         type: 'code' as const
                     },
                     {
@@ -288,6 +300,7 @@ suite('DeepnoteTreeItem', () => {
                         id: 'block-4',
                         content: 'print(df.head())',
                         sortingKey: 'a3',
+                        metadata: {},
                         type: 'code' as const
                     }
                 ]

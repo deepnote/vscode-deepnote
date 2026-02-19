@@ -5,6 +5,7 @@ import {
     NotebookCellKind,
     NotebookCellStatusBarItem,
     NotebookCellStatusBarItemProvider,
+    NotebookDocument,
     NotebookDocumentChangeEvent,
     NotebookEdit,
     ProviderResult,
@@ -13,13 +14,14 @@ import {
     notebooks,
     workspace
 } from 'vscode';
-import { inject, injectable } from 'inversify';
+import { inject, injectable, optional } from 'inversify';
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { computeHash } from '../../platform/common/crypto';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { Pocket } from '../../platform/deepnote/pocket';
 import { notebookCellExecutions, NotebookCellExecutionState } from '../../platform/notebooks/cellExecutionStateService';
+import { SnapshotService } from './snapshots/snapshotService';
 
 /**
  * Provides status bar items for cells with stale outputs.
@@ -33,7 +35,10 @@ export class StaleOutputStatusBarProvider
 
     public readonly onDidChangeCellStatusBarItems = this._onDidChangeCellStatusBarItems.event;
 
-    constructor(@inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry) {}
+    constructor(
+        @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
+        @inject(SnapshotService) @optional() private readonly snapshotService?: SnapshotService
+    ) {}
 
     public activate(): void {
         this.disposables.push(notebooks.registerNotebookCellStatusBarItemProvider('deepnote', this));
@@ -52,6 +57,15 @@ export class StaleOutputStatusBarProvider
             notebookCellExecutions.onDidChangeNotebookCellExecutionState((e) => {
                 if (e.cell.notebook.notebookType === 'deepnote' && e.state === NotebookCellExecutionState.Idle) {
                     void this.handleCellExecutionComplete(e.cell);
+                }
+            })
+        );
+
+        // Clean up cached hashes when notebooks close
+        this.disposables.push(
+            workspace.onDidCloseNotebookDocument((notebook: NotebookDocument) => {
+                if (notebook.notebookType === 'deepnote') {
+                    this.cleanupHashes(notebook);
                 }
             })
         );
@@ -75,10 +89,9 @@ export class StaleOutputStatusBarProvider
             return;
         }
 
-        const pocket = cell.metadata?.__deepnotePocket as Pocket | undefined;
-        const storedHash = pocket?.contentHash;
+        const storedHash = this.getStoredExecutionHash(cell);
 
-        // If no contentHash exists, the cell was never executed (by us), don't show indicator
+        // If no hash exists, the cell was never executed (by us), don't show indicator
         if (!storedHash) {
             return;
         }
@@ -126,8 +139,26 @@ export class StaleOutputStatusBarProvider
      */
     private readonly executedContentHashes = new Map<string, string>();
 
+    private cleanupHashes(notebook: NotebookDocument): void {
+        for (const cell of notebook.getCells()) {
+            this.executedContentHashes.delete(this.getCellKey(cell));
+        }
+    }
+
     private getCellKey(cell: NotebookCell): string {
         return cell.document.uri.toString();
+    }
+
+    private getStoredExecutionHash(cell: NotebookCell): string | undefined {
+        const inMemoryHash = this.executedContentHashes.get(this.getCellKey(cell));
+
+        if (inMemoryHash) {
+            return inMemoryHash;
+        }
+
+        const pocket = cell.metadata?.__deepnotePocket as Pocket | undefined;
+
+        return pocket?.contentHash;
     }
 
     /**
@@ -153,8 +184,17 @@ export class StaleOutputStatusBarProvider
             this.executedContentHashes.set(cellKey, newContentHash);
             this._onDidChangeCellStatusBarItems.fire();
 
+            // In snapshot mode we avoid mutating cell metadata to prevent dirty state.
+            if (this.snapshotService?.isSnapshotsEnabled()) {
+                return;
+            }
+
             // Also persist the hash to cell metadata for cross-session persistence
             const existingPocket = (cell.metadata?.__deepnotePocket as Record<string, unknown>) || {};
+            if (existingPocket.contentHash === newContentHash) {
+                return;
+            }
+
             const updatedPocket = { ...existingPocket, contentHash: newContentHash };
 
             const edit = new WorkspaceEdit();

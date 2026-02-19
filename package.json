@@ -1,7 +1,7 @@
 {
     "name": "vscode-deepnote",
     "displayName": "Deepnote",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "description": "Deepnote notebook support.",
     "publisher": "Deepnote",
     "author": {
@@ -1652,7 +1652,7 @@
                 },
                 "deepnote.snapshots.enabled": {
                     "type": "boolean",
-                    "default": false,
+                    "default": true,
                     "description": "When enabled, outputs are saved to separate snapshot files in a 'snapshots' folder instead of the main .deepnote file.",
                     "scope": "resource"
                 },
@@ -2548,6 +2548,63 @@
                     ]
                 },
                 "when": "false"
+            }
+        ],
+        "walkthroughs": [
+            {
+                "id": "deepnoteWelcome",
+                "title": "%contributes.walkthroughs.deepnoteWelcome.title%",
+                "description": "%contributes.walkthroughs.deepnoteWelcome.description%",
+                "steps": [
+                    {
+                        "id": "deepnote.exploreProjects",
+                        "title": "%contributes.walkthroughs.deepnoteWelcome.steps.exploreProjects.title%",
+                        "description": "%contributes.walkthroughs.deepnoteWelcome.steps.exploreProjects.description%",
+                        "media": {
+                            "image": "resources/walkthroughs/explore-projects.png",
+                            "altText": "%contributes.walkthroughs.deepnoteWelcome.steps.exploreProjects.media.altText%"
+                        },
+                        "completionEvents": [
+                            "onView:deepnoteExplorer"
+                        ]
+                    },
+                    {
+                        "id": "deepnote.notebookBlocks",
+                        "title": "%contributes.walkthroughs.deepnoteWelcome.steps.notebookBlocks.title%",
+                        "description": "%contributes.walkthroughs.deepnoteWelcome.steps.notebookBlocks.description%",
+                        "media": {
+                            "image": "resources/walkthroughs/notebook-blocks.png",
+                            "altText": "%contributes.walkthroughs.deepnoteWelcome.steps.notebookBlocks.media.altText%"
+                        },
+                        "completionEvents": [
+                            "onStepSelected"
+                        ]
+                    },
+                    {
+                        "id": "deepnote.connectDataSources",
+                        "title": "%contributes.walkthroughs.deepnoteWelcome.steps.connectDataSources.title%",
+                        "description": "%contributes.walkthroughs.deepnoteWelcome.steps.connectDataSources.description%",
+                        "media": {
+                            "image": "resources/walkthroughs/integrations.png",
+                            "altText": "%contributes.walkthroughs.deepnoteWelcome.steps.connectDataSources.media.altText%"
+                        },
+                        "completionEvents": [
+                            "onCommand:deepnote.manageIntegrations"
+                        ]
+                    },
+                    {
+                        "id": "deepnote.setupEnvironment",
+                        "title": "%contributes.walkthroughs.deepnoteWelcome.steps.setupEnvironment.title%",
+                        "description": "%contributes.walkthroughs.deepnoteWelcome.steps.setupEnvironment.description%",
+                        "media": {
+                            "image": "resources/walkthroughs/environments.png",
+                            "altText": "%contributes.walkthroughs.deepnoteWelcome.steps.setupEnvironment.media.altText%"
+                        },
+                        "completionEvents": [
+                            "onView:deepnoteEnvironments"
+                        ]
+                    }
+                ]
             }
         ]
     },

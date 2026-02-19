@@ -92,6 +92,7 @@ import { OpenInDeepnoteHandler } from './deepnote/openInDeepnoteHandler.node';
 import { IntegrationKernelRestartHandler } from './deepnote/integrations/integrationKernelRestartHandler';
 import { ISnapshotMetadataService, SnapshotService } from './deepnote/snapshots/snapshotService';
 import { EnvironmentCapture, IEnvironmentCapture } from './deepnote/snapshots/environmentCapture.node';
+import { DeepnoteFileChangeWatcher } from './deepnote/deepnoteFileChangeWatcher';
 
 export function registerTypes(serviceManager: IServiceManager, isDevMode: boolean) {
     registerControllerTypes(serviceManager, isDevMode);
@@ -257,6 +258,12 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<SnapshotService>(SnapshotService, SnapshotService);
     serviceManager.addBinding(SnapshotService, IExtensionSyncActivationService);
     serviceManager.addBinding(SnapshotService, ISnapshotMetadataService);
+
+    // File change watcher for external edits
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        DeepnoteFileChangeWatcher
+    );
 
     // File export/import
     serviceManager.addSingleton<IFileConverter>(IFileConverter, FileConverter);

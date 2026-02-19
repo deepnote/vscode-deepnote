@@ -1,10 +1,12 @@
 import { assert } from 'chai';
+import { anything, verify, when } from 'ts-mockito';
 
 import { DeepnoteActivationService } from './deepnoteActivationService';
 import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
 import { IExtensionContext } from '../../platform/common/types';
 import { ILogger } from '../../platform/logging/types';
 import { IIntegrationManager } from './integrations/types';
+import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 
 function createMockLogger(): ILogger {
     return {
@@ -70,6 +72,97 @@ suite('DeepnoteActivationService', () => {
                 // The test verifies that the method can be called and attempts to create components
                 assert.isTrue(true, 'activate() method exists and attempts to initialize components');
             }
+        });
+
+        test('should re-register serializer when snapshots are enabled in-session', () => {
+            resetVSCodeMocks();
+
+            const registrations: Array<{ transientOutputs?: boolean }> = [];
+            let configHandler: ((event: { affectsConfiguration: (section: string) => boolean }) => void) | undefined;
+
+            when(
+                mockedVSCodeNamespaces.workspace.registerNotebookSerializer(anything(), anything(), anything())
+            ).thenCall((_type, _serializer, options) => {
+                registrations.push(options);
+
+                return { dispose: () => undefined } as any;
+            });
+            const onDidChangeConfiguration = (
+                handler: (event: { affectsConfiguration: (section: string) => boolean }) => void
+            ) => {
+                configHandler = handler;
+
+                return { dispose: () => undefined } as any;
+            };
+            when(mockedVSCodeNamespaces.workspace.onDidChangeConfiguration).thenReturn(onDidChangeConfiguration as any);
+
+            let snapshotsEnabled = false;
+            const mockSnapshotService = { isSnapshotsEnabled: () => snapshotsEnabled } as any;
+            activationService = new DeepnoteActivationService(
+                mockExtensionContext,
+                manager,
+                mockIntegrationManager,
+                mockLogger,
+                mockSnapshotService
+            );
+
+            try {
+                activationService.activate();
+            } catch {
+                // Activation may fail in the test environment, but registrations should still occur.
+            }
+
+            assert.strictEqual(registrations.length, 1);
+            assert.isUndefined(registrations[0].transientOutputs);
+
+            snapshotsEnabled = true;
+            configHandler?.({ affectsConfiguration: (section) => section === 'deepnote.snapshots.enabled' });
+
+            assert.strictEqual(registrations.length, 2);
+            assert.strictEqual(registrations[1].transientOutputs, true);
+            verify(
+                mockedVSCodeNamespaces.workspace.registerNotebookSerializer(anything(), anything(), anything())
+            ).twice();
+        });
+
+        test('should prompt to reload when snapshots are enabled with open notebooks', () => {
+            resetVSCodeMocks();
+
+            let configHandler: ((event: { affectsConfiguration: (section: string) => boolean }) => void) | undefined;
+
+            when(
+                mockedVSCodeNamespaces.workspace.registerNotebookSerializer(anything(), anything(), anything())
+            ).thenReturn({ dispose: () => undefined } as any);
+            const onDidChangeConfiguration = (
+                handler: (event: { affectsConfiguration: (section: string) => boolean }) => void
+            ) => {
+                configHandler = handler;
+
+                return { dispose: () => undefined } as any;
+            };
+            when(mockedVSCodeNamespaces.workspace.onDidChangeConfiguration).thenReturn(onDidChangeConfiguration as any);
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([{ notebookType: 'deepnote' } as any]);
+
+            let snapshotsEnabled = false;
+            const mockSnapshotService = { isSnapshotsEnabled: () => snapshotsEnabled } as any;
+            activationService = new DeepnoteActivationService(
+                mockExtensionContext,
+                manager,
+                mockIntegrationManager,
+                mockLogger,
+                mockSnapshotService
+            );
+
+            try {
+                activationService.activate();
+            } catch {
+                // Activation may fail in the test environment, but prompts should still be attempted.
+            }
+
+            snapshotsEnabled = true;
+            configHandler?.({ affectsConfiguration: (section) => section === 'deepnote.snapshots.enabled' });
+
+            verify(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything(), anything())).once();
         });
     });
 

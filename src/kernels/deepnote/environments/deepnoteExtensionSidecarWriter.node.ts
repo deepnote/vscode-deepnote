@@ -347,6 +347,10 @@ export class DeepnoteExtensionSidecarWriter implements IExtensionSyncActivationS
             return;
         }
 
+        // Ensure the editor settings folder exists (e.g. .vscode/).
+        const folderUri = Uri.joinPath(uri, '..');
+        await workspace.fs.createDirectory(folderUri);
+
         const content = JSON.stringify(sidecar, undefined, 2) + '\n';
         await workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
     }

@@ -73,6 +73,7 @@ suite('DeepnoteExtensionSidecarWriter', () => {
 
     let writtenContent: string | undefined;
     let writeFileCallCount: number;
+    let createDirectoryUris: Uri[];
     let readFileContent: string;
     /** Per-file read responses keyed by fsPath — used for .deepnote YAML files. */
     let fileContents: Map<string, string>;
@@ -83,6 +84,7 @@ suite('DeepnoteExtensionSidecarWriter', () => {
         resetVSCodeMocks();
         writtenContent = undefined;
         writeFileCallCount = 0;
+        createDirectoryUris = [];
         readFileContent = '';
         fileContents = new Map();
 
@@ -146,6 +148,10 @@ suite('DeepnoteExtensionSidecarWriter', () => {
                 return Promise.reject(new Error('File not found'));
             }
             return Promise.resolve(Buffer.from(readFileContent, 'utf-8'));
+        });
+        when(mockFs.createDirectory(anything())).thenCall((uri: Uri) => {
+            createDirectoryUris.push(uri);
+            return Promise.resolve();
         });
         when(mockFs.writeFile(anything(), anything())).thenCall((_uri: Uri, content: Uint8Array) => {
             writtenContent = Buffer.from(content).toString('utf-8');
@@ -491,5 +497,23 @@ suite('DeepnoteExtensionSidecarWriter', () => {
         await new Promise((resolve) => setTimeout(resolve, 200));
 
         assert.strictEqual(writeFileCallCount, 0, 'Should not write when no projectId');
+    });
+
+    test('creates the editor settings folder before writing', async () => {
+        const notebookUri = Uri.file('/workspace/project.deepnote');
+        const notebook = createMockNotebook({ uri: notebookUri, projectId: 'proj-abc' });
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+
+        const env = makeEnvironment({ id: 'env-1' });
+        when(mockEnvironmentManager.getEnvironment('env-1')).thenReturn(env);
+
+        writer.activate();
+
+        onDidSetEnvironment.fire({ notebookUri, environmentId: 'env-1' });
+
+        await waitFor(() => writeFileCallCount > 0);
+
+        assert.strictEqual(createDirectoryUris.length, 1);
+        assert.strictEqual(createDirectoryUris[0].fsPath, Uri.file('/workspace/.vscode').fsPath);
     });
 });

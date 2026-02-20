@@ -297,7 +297,7 @@ export class DeepnoteDataConverter {
         });
     }
 
-    private transformOutputsForVsCode(
+    public transformOutputsForVsCode(
         outputs: DeepnoteOutput[],
         cellIndex: number,
         cellId: string,

@@ -1,7 +1,12 @@
 import { assert } from 'chai';
 import { Uri } from 'vscode';
 
-import { isSnapshotFile, slugifyProjectName, SNAPSHOT_FILE_SUFFIX } from './snapshotFiles';
+import {
+    extractProjectIdFromSnapshotUri,
+    isSnapshotFile,
+    slugifyProjectName,
+    SNAPSHOT_FILE_SUFFIX
+} from './snapshotFiles';
 
 suite('snapshotFiles', () => {
     suite('SNAPSHOT_FILE_SUFFIX', () => {
@@ -39,6 +44,44 @@ suite('snapshotFiles', () => {
             const uri = Uri.file('/path/to/snapshot.json');
 
             assert.isFalse(isSnapshotFile(uri));
+        });
+    });
+
+    suite('extractProjectIdFromSnapshotUri', () => {
+        test('should extract project ID from latest snapshot URI', () => {
+            const uri = Uri.file('/path/to/snapshots/my-project_abc-123_latest.snapshot.deepnote');
+
+            assert.strictEqual(extractProjectIdFromSnapshotUri(uri), 'abc-123');
+        });
+
+        test('should extract project ID from timestamped snapshot URI', () => {
+            const uri = Uri.file('/path/to/snapshots/my-project_abc-123_2025-01-15T10-31-48.snapshot.deepnote');
+
+            assert.strictEqual(extractProjectIdFromSnapshotUri(uri), 'abc-123');
+        });
+
+        test('should return undefined for non-snapshot files', () => {
+            const uri = Uri.file('/path/to/my-project.deepnote');
+
+            assert.isUndefined(extractProjectIdFromSnapshotUri(uri));
+        });
+
+        test('should return undefined for filenames with no underscores', () => {
+            const uri = Uri.file('/path/to/nounderscore.snapshot.deepnote');
+
+            assert.isUndefined(extractProjectIdFromSnapshotUri(uri));
+        });
+
+        test('should return undefined for filenames with a single underscore', () => {
+            const uri = Uri.file('/path/to/slug_only.snapshot.deepnote');
+
+            assert.isUndefined(extractProjectIdFromSnapshotUri(uri));
+        });
+
+        test('should handle project IDs containing underscores', () => {
+            const uri = Uri.file('/path/to/snapshots/slug_proj_id_with_parts_latest.snapshot.deepnote');
+
+            assert.strictEqual(extractProjectIdFromSnapshotUri(uri), 'proj_id_with_parts');
         });
     });
 

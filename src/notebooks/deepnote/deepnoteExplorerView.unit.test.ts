@@ -4,6 +4,7 @@ import * as sinon from 'sinon';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { Uri, workspace } from 'vscode';
 import * as yaml from 'js-yaml';
+import * as YAML from 'yaml';
 
 import { DeepnoteExplorerView } from './deepnoteExplorerView';
 import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
@@ -297,7 +298,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Verify YAML content
             const yamlContent = Buffer.from(capturedContent!).toString('utf8');
-            const projectData = yaml.load(yamlContent) as any;
+            const projectData = YAML.parse(yamlContent) as any;
 
             expect(projectData.version).to.equal('1.0.0');
             expect(projectData.metadata.createdAt).to.exist;
@@ -847,7 +848,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Verify YAML content
             const updatedYamlContent = Buffer.from(capturedWriteContent!).toString('utf8');
-            const updatedProjectData = yaml.load(updatedYamlContent) as any;
+            const updatedProjectData = YAML.parse(updatedYamlContent) as any;
 
             expect(updatedProjectData.project.notebooks).to.have.lengthOf(2);
             expect(updatedProjectData.project.notebooks[1].id).to.equal(newNotebookId);
@@ -1018,7 +1019,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Verify YAML content
             const updatedYamlContent = Buffer.from(capturedWriteContent!).toString('utf8');
-            const updatedProjectData = yaml.load(updatedYamlContent) as DeepnoteFile;
+            const updatedProjectData = YAML.parse(updatedYamlContent) as DeepnoteFile;
 
             // Find the renamed notebook
             const renamedNotebook = updatedProjectData.project.notebooks.find((nb) => nb.id === notebookId);
@@ -1203,7 +1204,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Verify YAML content
             const updatedYamlContent = Buffer.from(capturedWriteContent!).toString('utf8');
-            const updatedProjectData = yaml.load(updatedYamlContent) as DeepnoteFile;
+            const updatedProjectData = YAML.parse(updatedYamlContent) as DeepnoteFile;
 
             // Verify notebook was deleted
             expect(updatedProjectData.project.notebooks).to.have.lengthOf(1);
@@ -1379,7 +1380,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Verify YAML content
             const updatedYamlContent = Buffer.from(capturedWriteContent!).toString('utf8');
-            const updatedProjectData = yaml.load(updatedYamlContent) as DeepnoteFile;
+            const updatedProjectData = YAML.parse(updatedYamlContent) as DeepnoteFile;
 
             // Verify both notebooks exist
             expect(updatedProjectData.project.notebooks).to.have.lengthOf(2);
@@ -1556,7 +1557,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             // Parse the written data
             assert.isDefined(capturedWriteContent, 'File should have been written');
             const writtenYaml = Buffer.from(capturedWriteContent!).toString('utf-8');
-            const updatedProjectData = yaml.load(writtenYaml) as DeepnoteFile;
+            const updatedProjectData = YAML.parse(writtenYaml) as DeepnoteFile;
 
             // Find original and duplicated notebooks
             const originalNotebook = updatedProjectData.project.notebooks.find(
@@ -1680,7 +1681,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Verify YAML content
             const updatedYamlContent = Buffer.from(capturedWriteContent!).toString('utf8');
-            const updatedProjectData = yaml.load(updatedYamlContent) as DeepnoteFile;
+            const updatedProjectData = YAML.parse(updatedYamlContent) as DeepnoteFile;
 
             // Verify project was renamed
             expect(updatedProjectData.project.name).to.equal(newProjectName);

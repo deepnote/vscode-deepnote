@@ -1,4 +1,5 @@
 import type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
+import { deserializeDeepnoteFile } from '@deepnote/blocks';
 import { inject, injectable, optional } from 'inversify';
 import * as yaml from 'js-yaml';
 import { l10n, window, workspace, type CancellationToken, type NotebookData, type NotebookSerializer } from 'vscode';
@@ -83,7 +84,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
         try {
             const contentString = new TextDecoder('utf-8').decode(content);
-            const deepnoteFile = yaml.load(contentString) as DeepnoteFile;
+            const deepnoteFile = deserializeDeepnoteFile(contentString);
 
             if (!deepnoteFile.project?.notebooks) {
                 throw new Error('Invalid Deepnote file: no notebooks found');
@@ -123,25 +124,38 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
             // Merge outputs from snapshot if snapshots are enabled
             if (this.snapshotService?.isSnapshotsEnabled()) {
+                logger.info(`[Snapshot] Snapshots enabled, reading snapshot for project ${projectId}`);
                 try {
                     const snapshotOutputs = await this.snapshotService.readSnapshot(projectId);
 
-                    if (snapshotOutputs) {
-                        logger.debug(`DeepnoteSerializer: Merging ${snapshotOutputs.size} outputs from snapshot`);
+                    if (snapshotOutputs && snapshotOutputs.size > 0) {
+                        logger.info(`[Snapshot] Merging ${snapshotOutputs.size} block outputs from snapshot`);
                         const blocksWithOutputs = this.snapshotService.mergeOutputsIntoBlocks(
                             selectedNotebook.blocks ?? [],
                             snapshotOutputs
                         );
 
                         cells = this.converter.convertBlocksToCells(blocksWithOutputs);
+                    } else {
+                        logger.info(
+                            `[Snapshot] No outputs found in snapshot (map was ${
+                                snapshotOutputs ? 'empty' : 'undefined'
+                            })`
+                        );
                     }
                 } catch (error) {
-                    logger.warn(
-                        `DeepnoteSerializer: Failed to merge snapshot outputs for project ${projectId}, using baseline cells`,
+                    logger.error(
+                        `[Snapshot] Failed to merge snapshot outputs for project ${projectId}, using baseline cells`,
                         error
                     );
                     // Fall back to baseline cells (already set above)
                 }
+            } else {
+                logger.info(
+                    `[Snapshot] Snapshots ${
+                        this.snapshotService ? 'disabled' : 'service not available'
+                    }, skipping snapshot merge`
+                );
             }
 
             this.notebookManager.storeOriginalProject(deepnoteFile.project.id, deepnoteFile, selectedNotebook.id);

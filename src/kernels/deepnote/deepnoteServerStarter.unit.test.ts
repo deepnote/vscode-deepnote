@@ -2,6 +2,7 @@ import { assert } from 'chai';
 import * as sinon from 'sinon';
 import tcpPortUsed from 'tcp-port-used';
 import { anything, instance, mock, when } from 'ts-mockito';
+import { DeepnoteAgentSkillsManager } from './deepnoteAgentSkillsManager.node';
 import { DeepnoteServerStarter } from './deepnoteServerStarter.node';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { IAsyncDisposableRegistry, IHttpClient, IOutputChannel } from '../../platform/common/types';
@@ -21,6 +22,7 @@ suite('DeepnoteServerStarter - Port Allocation Integration Tests', () => {
     let serverStarter: DeepnoteServerStarter;
     let mockProcessServiceFactory: IProcessServiceFactory;
     let mockToolkitInstaller: IDeepnoteToolkitInstaller;
+    let mockAgentSkillsManager: DeepnoteAgentSkillsManager;
     let mockOutputChannel: IOutputChannel;
     let mockHttpClient: IHttpClient;
     let mockAsyncRegistry: IAsyncDisposableRegistry;
@@ -36,6 +38,7 @@ suite('DeepnoteServerStarter - Port Allocation Integration Tests', () => {
         // Create mocks
         mockProcessServiceFactory = mock<IProcessServiceFactory>();
         mockToolkitInstaller = mock<IDeepnoteToolkitInstaller>();
+        mockAgentSkillsManager = mock<DeepnoteAgentSkillsManager>();
         mockOutputChannel = mock<IOutputChannel>();
         mockHttpClient = mock<IHttpClient>();
         mockAsyncRegistry = mock<IAsyncDisposableRegistry>();
@@ -47,6 +50,7 @@ suite('DeepnoteServerStarter - Port Allocation Integration Tests', () => {
         serverStarter = new DeepnoteServerStarter(
             instance(mockProcessServiceFactory),
             instance(mockToolkitInstaller),
+            instance(mockAgentSkillsManager),
             instance(mockOutputChannel),
             instance(mockHttpClient),
             instance(mockAsyncRegistry),

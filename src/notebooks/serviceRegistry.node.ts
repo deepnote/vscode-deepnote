@@ -69,6 +69,7 @@ import {
     IDeepnoteNotebookEnvironmentMapper,
     IDeepnoteLspClientManager
 } from '../kernels/deepnote/types';
+import { DeepnoteAgentSkillsManager } from '../kernels/deepnote/deepnoteAgentSkillsManager.node';
 import { DeepnoteToolkitInstaller } from '../kernels/deepnote/deepnoteToolkitInstaller.node';
 import { DeepnoteServerStarter } from '../kernels/deepnote/deepnoteServerStarter.node';
 import { DeepnoteKernelAutoSelector } from './deepnote/deepnoteKernelAutoSelector.node';
@@ -209,6 +210,7 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     );
 
     // Deepnote kernel services
+    serviceManager.addSingleton<DeepnoteAgentSkillsManager>(DeepnoteAgentSkillsManager, DeepnoteAgentSkillsManager);
     serviceManager.addSingleton<IDeepnoteToolkitInstaller>(IDeepnoteToolkitInstaller, DeepnoteToolkitInstaller);
     serviceManager.addSingleton<IDeepnoteServerStarter>(IDeepnoteServerStarter, DeepnoteServerStarter);
     serviceManager.addBinding(IDeepnoteServerStarter, IExtensionSyncActivationService);

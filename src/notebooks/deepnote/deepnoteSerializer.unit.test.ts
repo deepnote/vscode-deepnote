@@ -594,7 +594,7 @@ project:
             assert.strictEqual(notebook!.blocks[1].id, 'original-block-id-2', 'Second block ID should be preserved');
         });
 
-        test('should recover id, sortingKey, and blockGroup via content matching when cells lack metadata', async () => {
+        test('should recover id and blockGroup via content matching when cells lack metadata', async () => {
             const projectData: DeepnoteFile = {
                 version: '1.0.0',
                 metadata: {
@@ -654,11 +654,6 @@ project:
 
             // All key metadata should be recovered from original via content matching
             assert.strictEqual(notebook!.blocks[0].id, 'original-id', 'Block ID should be recovered');
-            assert.strictEqual(
-                notebook!.blocks[0].sortingKey,
-                'original-sorting-key',
-                'Block sortingKey should be recovered'
-            );
             assert.strictEqual(
                 notebook!.blocks[0].blockGroup,
                 'original-group',

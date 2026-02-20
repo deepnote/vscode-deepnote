@@ -6,10 +6,10 @@ import { logger } from '../../platform/logging';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 
 /**
- * Returns the Deepnote CLI `--agent` value for the current editor,
- * or `undefined` if the editor is not recognized.
+ * Returns the Deepnote CLI `--agent` value for the current editor.
+ * Defaults to 'github copilot' for unrecognized editors.
  */
-function getAgentName(): string | undefined {
+function getAgentName(): string {
     const appName = env.appName.toLowerCase();
 
     if (appName.includes('cursor')) {

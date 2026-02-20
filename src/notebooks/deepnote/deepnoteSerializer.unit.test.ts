@@ -79,7 +79,7 @@ suite('DeepnoteNotebookSerializer', () => {
             manager.selectNotebookForProject('project-123', 'notebook-1');
 
             const yamlContent = `
-version: 1.0
+version: '1.0'
 metadata:
   createdAt: '2023-01-01T00:00:00Z'
   modifiedAt: '2023-01-02T00:00:00Z'
@@ -131,16 +131,19 @@ project:
 
         test('should throw error when no notebooks found', async () => {
             const contentWithoutNotebooks = new TextEncoder().encode(`
-version: 1.0
+version: '1.0'
+metadata:
+  createdAt: '2023-01-01T00:00:00Z'
 project:
   id: 'project-123'
   name: 'Test Project'
+  notebooks: []
   settings: {}
 `);
 
             await assert.isRejected(
                 serializer.deserializeNotebook(contentWithoutNotebooks, {} as any),
-                /Invalid Deepnote file: no notebooks found/
+                /no notebooks/i
             );
         });
     });

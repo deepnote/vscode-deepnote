@@ -787,7 +787,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Mock existing project data
             const existingProjectData = {
-                version: 1.0,
+                version: '1.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -863,7 +863,10 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Mock existing project data
             const existingProjectData = {
-                version: 1.0,
+                version: '1.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z'
+                },
                 project: {
                     id: projectId,
                     name: 'Test Project',
@@ -896,7 +899,10 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Mock existing project data with multiple notebooks
             const existingProjectData = {
-                version: 1.0,
+                version: '1.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z'
+                },
                 project: {
                     id: projectId,
                     name: 'Test Project',
@@ -951,7 +957,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Mock existing project data
             const existingProjectData = {
-                version: 1.0,
+                version: '1.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -1066,7 +1072,10 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Mock existing project data
             const existingProjectData = {
-                version: 1.0,
+                version: '1.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z'
+                },
                 project: {
                     id: projectId,
                     name: 'Test Project',
@@ -1134,7 +1143,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Mock existing project data
             const existingProjectData = {
-                version: 1.0,
+                version: '1.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -1296,7 +1305,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Mock existing project data
             const existingProjectData = {
-                version: 1.0,
+                version: '1.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -1438,7 +1447,10 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Mock existing project data without the target notebook
             const existingProjectData = {
-                version: 1.0,
+                version: '1.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z'
+                },
                 project: {
                     id: projectId,
                     name: 'Test Project',
@@ -1625,7 +1637,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Mock existing project data
             const existingProjectData = {
-                version: 1.0,
+                version: '1.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -1727,7 +1739,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Mock existing project data
             const existingProjectData = {
-                version: 1.0,
+                version: '1.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z'
                 },

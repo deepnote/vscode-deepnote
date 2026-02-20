@@ -67,7 +67,7 @@ suite('snapshotFiles', () => {
         });
 
         test('should return undefined for filenames with no underscores', () => {
-            const uri = Uri.file('/path/to/nounderscore.snapshot.deepnote');
+            const uri = Uri.file('/path/to/plain-name.snapshot.deepnote');
 
             assert.isUndefined(extractProjectIdFromSnapshotUri(uri));
         });

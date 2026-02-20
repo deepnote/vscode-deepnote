@@ -438,8 +438,9 @@ project:
         });
 
         test('should skip when SnapshotService is not injected', async () => {
-            // Create a watcher without SnapshotService
-            const noSnapshotWatcher = new DeepnoteFileChangeWatcher(snapshotDisposables, mockNotebookManager);
+            // Create a watcher without SnapshotService, using its own disposables
+            const noSnapshotDisposables: IDisposableRegistry = [];
+            const noSnapshotWatcher = new DeepnoteFileChangeWatcher(noSnapshotDisposables, mockNotebookManager);
             noSnapshotWatcher.activate();
 
             const snapshotUri = Uri.file('/workspace/snapshots/my-project_project-1_latest.snapshot.deepnote');
@@ -452,6 +453,10 @@ project:
 
             assert.strictEqual(readSnapshotCallCount, 0, 'readSnapshot should not be called');
             assert.strictEqual(snapshotApplyEditCount, 0, 'applyEdit should not be called');
+
+            for (const d of noSnapshotDisposables) {
+                d.dispose();
+            }
         });
 
         test('should skip self-triggered snapshot writes', async () => {

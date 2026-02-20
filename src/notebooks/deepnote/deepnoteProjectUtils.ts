@@ -5,6 +5,7 @@ export async function readDeepnoteProjectFile(fileUri: Uri): Promise<DeepnoteFil
     const fileContent = await workspace.fs.readFile(fileUri);
     const yamlContent = new TextDecoder().decode(fileContent);
     const projectData = deserializeDeepnoteFile(yamlContent);
+
     return projectData;
 }
 

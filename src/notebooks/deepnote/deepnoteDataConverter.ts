@@ -170,133 +170,6 @@ export class DeepnoteDataConverter {
         return cells.map((cell, index) => this.convertCellToBlock(cell, index));
     }
 
-    private base64ToUint8Array(base64: string): Uint8Array {
-        const binaryString = atob(base64);
-        const bytes = new Uint8Array(binaryString.length);
-
-        for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-        }
-
-        return bytes;
-    }
-
-    private createFallbackBlock(cell: NotebookCellData, index: number): DeepnoteBlock {
-        return {
-            blockGroup: uuidUtils.generateUuid(),
-            id: generateBlockId(),
-            sortingKey: generateSortingKey(index),
-            type: cell.kind === NotebookCellKind.Code ? 'code' : 'markdown',
-            content: cell.value || ''
-        };
-    }
-
-    private createFallbackCell(block: DeepnoteBlock): NotebookCellData {
-        const cell = new NotebookCellData(NotebookCellKind.Markup, block.content || '', 'markdown');
-
-        cell.metadata = {
-            deepnoteBlockId: block.id,
-            deepnoteBlockType: block.type,
-            deepnoteSortingKey: block.sortingKey,
-            deepnoteMetadata: block.metadata
-        };
-
-        return cell;
-    }
-
-    private transformOutputsForDeepnote(outputs: NotebookCellOutput[]): DeepnoteOutput[] {
-        return outputs.map((output) => {
-            // Check if this is an error output
-            const errorItem = output.items.find((item) => item.mime === 'application/vnd.code.notebook.error');
-
-            if (errorItem) {
-                try {
-                    const errorData = JSON.parse(new TextDecoder().decode(errorItem.data));
-
-                    return {
-                        ename: errorData.name || 'Error',
-                        evalue: errorData.message || '',
-                        output_type: 'error',
-                        traceback: errorData.stack ? errorData.stack.split('\n') : []
-                    } as DeepnoteOutput;
-                } catch {
-                    return {
-                        ename: 'Error',
-                        evalue: '',
-                        output_type: 'error',
-                        traceback: []
-                    } as DeepnoteOutput;
-                }
-            }
-
-            // Check if this is a stream output
-            const stdoutItem = output.items.find((item) => item.mime === 'application/vnd.code.notebook.stdout');
-            const stderrItem = output.items.find((item) => item.mime === 'application/vnd.code.notebook.stderr');
-
-            if (stdoutItem || stderrItem) {
-                const item = stdoutItem || stderrItem;
-                const text = new TextDecoder().decode(item!.data);
-
-                return {
-                    name: stderrItem ? 'stderr' : 'stdout',
-                    output_type: 'stream',
-                    text
-                } as DeepnoteOutput;
-            }
-
-            // Rich output (execute_result or display_data)
-            const data: Record<string, unknown> = {};
-
-            for (const item of output.items) {
-                if (item.mime === 'text/plain') {
-                    data['text/plain'] = new TextDecoder().decode(item.data);
-                } else if (item.mime === 'text/markdown') {
-                    data['text/markdown'] = new TextDecoder().decode(item.data);
-                } else if (item.mime === 'text/html') {
-                    data['text/html'] = new TextDecoder().decode(item.data);
-                } else if (item.mime === 'application/json') {
-                    data['application/json'] = JSON.parse(new TextDecoder().decode(item.data));
-                } else if (item.mime === 'image/png') {
-                    data['image/png'] = this.uint8ArrayToBase64(item.data);
-                } else if (item.mime === 'image/jpeg') {
-                    data['image/jpeg'] = this.uint8ArrayToBase64(item.data);
-                } else if (item.mime === 'application/vnd.deepnote.dataframe.v3+json') {
-                    data['application/vnd.deepnote.dataframe.v3+json'] = JSON.parse(
-                        new TextDecoder().decode(item.data)
-                    );
-                } else if (item.mime === 'application/vnd.vega.v6+json') {
-                    data['application/vnd.vega.v6+json'] = JSON.parse(new TextDecoder().decode(item.data));
-                } else if (item.mime === 'application/vnd.vega.v5+json') {
-                    data['application/vnd.vega.v5+json'] = JSON.parse(new TextDecoder().decode(item.data));
-                } else if (item.mime === 'application/vnd.plotly.v1+json') {
-                    data['application/vnd.plotly.v1+json'] = JSON.parse(new TextDecoder().decode(item.data));
-                } else if (item.mime === 'application/vnd.deepnote.sql-output-metadata+json') {
-                    data['application/vnd.deepnote.sql-output-metadata+json'] = JSON.parse(
-                        new TextDecoder().decode(item.data)
-                    );
-                }
-            }
-
-            const deepnoteOutput: DeepnoteOutput = {
-                data,
-                execution_count: (output.metadata?.executionCount as number) || 0,
-                output_type: 'execute_result'
-            };
-
-            // Add metadata if present (excluding executionCount which we already handled)
-            if (output.metadata) {
-                // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                const { executionCount, ...restMetadata } = output.metadata;
-
-                if (Object.keys(restMetadata).length > 0) {
-                    (deepnoteOutput as DeepnoteOutput & { metadata?: Record<string, unknown> }).metadata = restMetadata;
-                }
-            }
-
-            return deepnoteOutput;
-        });
-    }
-
     public transformOutputsForVsCode(
         outputs: DeepnoteOutput[],
         cellIndex: number,
@@ -540,6 +413,133 @@ export class DeepnoteDataConverter {
             }
 
             return new NotebookCellOutput([]);
+        });
+    }
+
+    private base64ToUint8Array(base64: string): Uint8Array {
+        const binaryString = atob(base64);
+        const bytes = new Uint8Array(binaryString.length);
+
+        for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+
+        return bytes;
+    }
+
+    private createFallbackBlock(cell: NotebookCellData, index: number): DeepnoteBlock {
+        return {
+            blockGroup: uuidUtils.generateUuid(),
+            id: generateBlockId(),
+            sortingKey: generateSortingKey(index),
+            type: cell.kind === NotebookCellKind.Code ? 'code' : 'markdown',
+            content: cell.value || ''
+        };
+    }
+
+    private createFallbackCell(block: DeepnoteBlock): NotebookCellData {
+        const cell = new NotebookCellData(NotebookCellKind.Markup, block.content || '', 'markdown');
+
+        cell.metadata = {
+            deepnoteBlockId: block.id,
+            deepnoteBlockType: block.type,
+            deepnoteSortingKey: block.sortingKey,
+            deepnoteMetadata: block.metadata
+        };
+
+        return cell;
+    }
+
+    private transformOutputsForDeepnote(outputs: NotebookCellOutput[]): DeepnoteOutput[] {
+        return outputs.map((output) => {
+            // Check if this is an error output
+            const errorItem = output.items.find((item) => item.mime === 'application/vnd.code.notebook.error');
+
+            if (errorItem) {
+                try {
+                    const errorData = JSON.parse(new TextDecoder().decode(errorItem.data));
+
+                    return {
+                        ename: errorData.name || 'Error',
+                        evalue: errorData.message || '',
+                        output_type: 'error',
+                        traceback: errorData.stack ? errorData.stack.split('\n') : []
+                    } as DeepnoteOutput;
+                } catch {
+                    return {
+                        ename: 'Error',
+                        evalue: '',
+                        output_type: 'error',
+                        traceback: []
+                    } as DeepnoteOutput;
+                }
+            }
+
+            // Check if this is a stream output
+            const stdoutItem = output.items.find((item) => item.mime === 'application/vnd.code.notebook.stdout');
+            const stderrItem = output.items.find((item) => item.mime === 'application/vnd.code.notebook.stderr');
+
+            if (stdoutItem || stderrItem) {
+                const item = stdoutItem || stderrItem;
+                const text = new TextDecoder().decode(item!.data);
+
+                return {
+                    name: stderrItem ? 'stderr' : 'stdout',
+                    output_type: 'stream',
+                    text
+                } as DeepnoteOutput;
+            }
+
+            // Rich output (execute_result or display_data)
+            const data: Record<string, unknown> = {};
+
+            for (const item of output.items) {
+                if (item.mime === 'text/plain') {
+                    data['text/plain'] = new TextDecoder().decode(item.data);
+                } else if (item.mime === 'text/markdown') {
+                    data['text/markdown'] = new TextDecoder().decode(item.data);
+                } else if (item.mime === 'text/html') {
+                    data['text/html'] = new TextDecoder().decode(item.data);
+                } else if (item.mime === 'application/json') {
+                    data['application/json'] = JSON.parse(new TextDecoder().decode(item.data));
+                } else if (item.mime === 'image/png') {
+                    data['image/png'] = this.uint8ArrayToBase64(item.data);
+                } else if (item.mime === 'image/jpeg') {
+                    data['image/jpeg'] = this.uint8ArrayToBase64(item.data);
+                } else if (item.mime === 'application/vnd.deepnote.dataframe.v3+json') {
+                    data['application/vnd.deepnote.dataframe.v3+json'] = JSON.parse(
+                        new TextDecoder().decode(item.data)
+                    );
+                } else if (item.mime === 'application/vnd.vega.v6+json') {
+                    data['application/vnd.vega.v6+json'] = JSON.parse(new TextDecoder().decode(item.data));
+                } else if (item.mime === 'application/vnd.vega.v5+json') {
+                    data['application/vnd.vega.v5+json'] = JSON.parse(new TextDecoder().decode(item.data));
+                } else if (item.mime === 'application/vnd.plotly.v1+json') {
+                    data['application/vnd.plotly.v1+json'] = JSON.parse(new TextDecoder().decode(item.data));
+                } else if (item.mime === 'application/vnd.deepnote.sql-output-metadata+json') {
+                    data['application/vnd.deepnote.sql-output-metadata+json'] = JSON.parse(
+                        new TextDecoder().decode(item.data)
+                    );
+                }
+            }
+
+            const deepnoteOutput: DeepnoteOutput = {
+                data,
+                execution_count: (output.metadata?.executionCount as number) || 0,
+                output_type: 'execute_result'
+            };
+
+            // Add metadata if present (excluding executionCount which we already handled)
+            if (output.metadata) {
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                const { executionCount, ...restMetadata } = output.metadata;
+
+                if (Object.keys(restMetadata).length > 0) {
+                    (deepnoteOutput as DeepnoteOutput & { metadata?: Record<string, unknown> }).metadata = restMetadata;
+                }
+            }
+
+            return deepnoteOutput;
         });
     }
 

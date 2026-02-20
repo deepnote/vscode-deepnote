@@ -37,8 +37,8 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
     private readonly debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private readonly lastSnapshotFingerprints = new Map<string, string>();
     private readonly recentlySnapshotUpdatedUris = new Set<string>();
-    private readonly suppressionTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private readonly serializer: DeepnoteNotebookSerializer;
+    private readonly suppressionTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
     constructor(
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,

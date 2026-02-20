@@ -97,6 +97,9 @@ interface NotebookExecutionState {
     totalDurationMs: number;
 }
 
+/** How long a written URI is considered "recent" and suppressed from file-change processing. */
+const recentWriteExpirationMs = 2000;
+
 class TimeoutError extends Error {
     constructor(message: string) {
         super(message);
@@ -350,24 +353,6 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
      */
     wasRecentlyWritten(uri: Uri): boolean {
         return this.recentlyWrittenUris.has(uri.toString());
-    }
-
-    private trackWrittenUri(uri: Uri): void {
-        const key = uri.toString();
-        this.recentlyWrittenUris.add(key);
-
-        const existing = this.recentlyWrittenTimers.get(key);
-        if (existing) {
-            clearTimeout(existing);
-        }
-
-        this.recentlyWrittenTimers.set(
-            key,
-            setTimeout(() => {
-                this.recentlyWrittenUris.delete(key);
-                this.recentlyWrittenTimers.delete(key);
-            }, 2000)
-        );
     }
 
     mergeOutputsIntoBlocks(blocks: DeepnoteBlock[], outputs: Map<string, DeepnoteOutput[]>): DeepnoteBlock[] {
@@ -835,8 +820,12 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             for (const notebook of data.project.notebooks) {
                 for (const block of notebook.blocks) {
                     totalBlocks++;
-                    if (block.outputs) {
-                        outputsMap.set(block.id, block.outputs as DeepnoteOutput[]);
+                    try {
+                        if (block.outputs) {
+                            outputsMap.set(block.id, block.outputs as DeepnoteOutput[]);
+                        }
+                    } catch (blockError) {
+                        logger.warn(`[Snapshot] Failed to extract outputs for block ${block.id}`, blockError);
                     }
                 }
             }
@@ -972,6 +961,24 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         state.cellMetadata.set(cellId, cellMetadata);
 
         logger.trace(`[Snapshot] Cell ${cellId} execution started at ${isoTimestamp}`);
+    }
+
+    private trackWrittenUri(uri: Uri): void {
+        const key = uri.toString();
+        this.recentlyWrittenUris.add(key);
+
+        const existing = this.recentlyWrittenTimers.get(key);
+        if (existing) {
+            clearTimeout(existing);
+        }
+
+        this.recentlyWrittenTimers.set(
+            key,
+            setTimeout(() => {
+                this.recentlyWrittenUris.delete(key);
+                this.recentlyWrittenTimers.delete(key);
+            }, recentWriteExpirationMs)
+        );
     }
 
     private async updateLatestSnapshot(

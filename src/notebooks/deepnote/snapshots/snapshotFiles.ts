@@ -30,6 +30,7 @@ export function extractProjectIdFromSnapshotUri(uri: Uri): string | undefined {
     if (firstUnderscore === -1 || lastUnderscore === -1 || firstUnderscore === lastUnderscore) {
         return undefined;
     }
+
     return stem.slice(firstUnderscore + 1, lastUnderscore);
 }
 

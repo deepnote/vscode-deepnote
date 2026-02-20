@@ -1,10 +1,9 @@
 import { inject, injectable } from 'inversify';
-import { env, workspace } from 'vscode';
+import { env, Uri, workspace } from 'vscode';
 
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { logger } from '../../platform/logging';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
-import * as path from '../../platform/vscode-path/path';
 
 /**
  * Returns the Deepnote CLI `--agent` value for the current editor,
@@ -67,7 +66,7 @@ export class DeepnoteAgentSkillsManager {
         }
 
         const processService = await this.processServiceFactory.create(undefined);
-        const venvBinDir = path.dirname(venvInterpreter.uri.fsPath);
+        const venvBinDir = Uri.joinPath(venvInterpreter.uri, '..');
 
         // Upgrade deepnote-cli to latest (also installs it if missing in older venvs)
         logger.info('Upgrading deepnote-cli in venv...');
@@ -82,10 +81,10 @@ export class DeepnoteAgentSkillsManager {
         }
 
         // Run install-skills using the venv's deepnote entry point
-        const deepnoteBin = path.join(venvBinDir, 'deepnote');
+        const deepnoteBin = Uri.joinPath(venvBinDir, 'deepnote');
         logger.info(`Running deepnote install-skills --agent "${agentName}" in ${workspaceRoot.fsPath}`);
 
-        const installResult = await processService.exec(deepnoteBin, ['install-skills', '--agent', agentName], {
+        const installResult = await processService.exec(deepnoteBin.fsPath, ['install-skills', '--agent', agentName], {
             cwd: workspaceRoot.fsPath,
             throwOnStdErr: false
         });

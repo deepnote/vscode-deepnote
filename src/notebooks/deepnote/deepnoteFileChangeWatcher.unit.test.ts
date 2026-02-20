@@ -121,7 +121,7 @@ suite('DeepnoteFileChangeWatcher', () => {
     }
 
     const validYaml = `
-version: '1.0'
+version: '1.0.0'
 metadata:
   createdAt: '2025-01-01T00:00:00Z'
 project:
@@ -315,7 +315,7 @@ project:
 
         // Second change: use different YAML content
         const changedYaml = `
-version: '1.0'
+version: '1.0.0'
 metadata:
   createdAt: '2025-01-01T00:00:00Z'
 project:

@@ -52,7 +52,7 @@ suite('DeepnoteTreeDataProvider', () => {
             ],
             settings: {}
         },
-        version: '1.0'
+        version: '1.0.0'
     };
 
     setup(() => {
@@ -364,7 +364,7 @@ suite('DeepnoteTreeDataProvider', () => {
                     ],
                     settings: {}
                 },
-                version: '1.0'
+                version: '1.0.0'
             };
 
             const mockTreeItem = new DeepnoteTreeItem(
@@ -478,7 +478,7 @@ suite('DeepnoteTreeDataProvider', () => {
                         notebooks: [],
                         settings: {}
                     },
-                    version: '1.0'
+                    version: '1.0.0'
                 },
                 {
                     metadata: {
@@ -491,7 +491,7 @@ suite('DeepnoteTreeDataProvider', () => {
                         notebooks: [],
                         settings: {}
                     },
-                    version: '1.0'
+                    version: '1.0.0'
                 },
                 {
                     metadata: {
@@ -504,7 +504,7 @@ suite('DeepnoteTreeDataProvider', () => {
                         notebooks: [],
                         settings: {}
                     },
-                    version: '1.0'
+                    version: '1.0.0'
                 }
             ];
 
@@ -569,7 +569,7 @@ suite('DeepnoteTreeDataProvider', () => {
                     ],
                     settings: {}
                 },
-                version: '1.0'
+                version: '1.0.0'
             };
 
             const mockProjectItem = new DeepnoteTreeItem(
@@ -626,7 +626,7 @@ suite('DeepnoteTreeDataProvider', () => {
                     ],
                     settings: {}
                 },
-                version: '1.0'
+                version: '1.0.0'
             };
 
             const mockProjectItem = new DeepnoteTreeItem(

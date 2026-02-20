@@ -41,7 +41,7 @@ Extensions: Show Recommended Extensions
 
 Then install all the extensions listed under "Workspace Recommendations".
 
-On Apple Silicon, you will have to use system versions of `libsodium` and `libzmq` instead of the bundled ones:
+On Apple Silicon, you will have to use system versions of `libsodium` and `libzmq` instead of the bundled ones. Also, you'll need to use Python 3.11 or older.
 
 ```shell
 brew update

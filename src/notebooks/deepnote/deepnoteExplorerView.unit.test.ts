@@ -786,7 +786,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Mock existing project data
             const existingProjectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -862,7 +862,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Mock existing project data
             const existingProjectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -899,7 +899,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Mock existing project data with multiple notebooks
             const existingProjectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -958,7 +958,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Mock existing project data
             const existingProjectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -1073,7 +1073,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Mock existing project data
             const existingProjectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -1145,7 +1145,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Mock existing project data
             const existingProjectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -1307,7 +1307,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Mock existing project data
             const existingProjectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -1449,7 +1449,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Mock existing project data without the target notebook
             const existingProjectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -1508,7 +1508,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             // This test verifies that duplicating a notebook creates truly independent copies
             // of nested objects like outputs and metadata, not just shallow references
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00Z',
                     modifiedAt: '2024-01-01T00:00:00Z'
@@ -1640,7 +1640,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Mock existing project data
             const existingProjectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -1742,7 +1742,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Mock existing project data
             const existingProjectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -1821,7 +1821,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             resetVSCodeMocks();
 
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -1895,7 +1895,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             resetVSCodeMocks();
 
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -1952,7 +1952,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             resetVSCodeMocks();
 
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -2027,7 +2027,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             resetVSCodeMocks();
 
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -2082,7 +2082,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             resetVSCodeMocks();
 
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -2130,7 +2130,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             resetVSCodeMocks();
 
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -2184,7 +2184,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             resetVSCodeMocks();
 
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -2271,7 +2271,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             resetVSCodeMocks();
 
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -2348,7 +2348,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             const targetNotebookId = 'nb-2';
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -2412,7 +2412,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             resetVSCodeMocks();
 
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -2460,7 +2460,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             resetVSCodeMocks();
 
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -2509,7 +2509,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             resetVSCodeMocks();
 
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'
@@ -2561,7 +2561,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             resetVSCodeMocks();
 
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2024-01-01T00:00:00.000Z',
                     modifiedAt: '2024-01-01T00:00:00.000Z'

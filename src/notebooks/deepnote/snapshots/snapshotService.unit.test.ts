@@ -31,7 +31,7 @@ suite('SnapshotService', () => {
             metadata: {
                 createdAt: '2025-01-01T00:00:00Z'
             },
-            version: '1.0',
+            version: '1.0.0',
             project: {
                 id: projectId,
                 name: projectName,
@@ -530,7 +530,7 @@ suite('SnapshotService', () => {
             ] as any);
 
             const snapshotYaml = `
-version: '1.0'
+version: '1.0.0'
 metadata:
   createdAt: '2025-01-01T00:00:00Z'
 project:
@@ -608,7 +608,7 @@ project:
             });
 
             const snapshotYaml = `
-version: '1.0'
+version: '1.0.0'
 metadata:
   createdAt: '2025-01-02T00:00:00Z'
 project:
@@ -739,7 +739,7 @@ project:
             const existingYaml = `
 metadata:
   createdAt: '2025-01-01T00:00:00Z'
-version: '1.0'
+version: '1.0.0'
 project:
   id: test-project-id-123
   name: My Project
@@ -1102,7 +1102,7 @@ project:
                 // Create mock notebook manager with original project
                 const originalProject: DeepnoteFile = {
                     metadata: { createdAt: '2025-01-01T00:00:00Z' },
-                    version: '1.0',
+                    version: '1.0.0',
                     project: {
                         id: projectId,
                         name: 'Test Project',

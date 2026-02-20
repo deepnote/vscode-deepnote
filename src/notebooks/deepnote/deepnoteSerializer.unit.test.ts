@@ -57,7 +57,7 @@ suite('DeepnoteNotebookSerializer', () => {
             ],
             settings: {}
         },
-        version: '1.0'
+        version: '1.0.0'
     };
 
     setup(() => {
@@ -79,7 +79,7 @@ suite('DeepnoteNotebookSerializer', () => {
             manager.selectNotebookForProject('project-123', 'notebook-1');
 
             const yamlContent = `
-version: '1.0'
+version: '1.0.0'
 metadata:
   createdAt: '2023-01-01T00:00:00Z'
   modifiedAt: '2023-01-02T00:00:00Z'
@@ -132,7 +132,7 @@ project:
 
         test('should throw error when no notebooks found', async () => {
             const contentWithoutNotebooks = new TextEncoder().encode(`
-version: '1.0'
+version: '1.0.0'
 metadata:
   createdAt: '2023-01-01T00:00:00Z'
 project:
@@ -441,7 +441,7 @@ project:
             circularOutput.metadata.self = circularOutput;
 
             const projectWithCircularRef: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -501,7 +501,7 @@ project:
     suite('block ID preservation', () => {
         test('should preserve block IDs when serializing cells with proper metadata', async () => {
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -596,7 +596,7 @@ project:
 
         test('should recover id, sortingKey, and blockGroup via content matching when cells lack metadata', async () => {
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -668,7 +668,7 @@ project:
 
         test('should generate new IDs when content does not match any original block', async () => {
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -765,7 +765,7 @@ project:
     suite('default notebook selection', () => {
         test('should not select Init notebook when other notebooks are available', async () => {
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -822,7 +822,7 @@ project:
 
         test('should select Init notebook when it is the only notebook', async () => {
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -863,7 +863,7 @@ project:
 
         test('should select alphabetically first notebook when no initNotebookId', async () => {
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -935,7 +935,7 @@ project:
 
         test('should sort Init notebook last when multiple notebooks exist', async () => {
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -1010,7 +1010,7 @@ project:
     suite('detectContentChanges', () => {
         test('should detect no changes when content is identical', () => {
             const project: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1043,7 +1043,7 @@ project:
 
         test('should detect changes when block content differs', () => {
             const newProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1068,7 +1068,7 @@ project:
             };
 
             const originalProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1100,7 +1100,7 @@ project:
 
         test('should detect changes when block type differs', () => {
             const newProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1125,7 +1125,7 @@ project:
             };
 
             const originalProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1157,7 +1157,7 @@ project:
 
         test('should detect changes when block count differs', () => {
             const newProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1190,7 +1190,7 @@ project:
             };
 
             const originalProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1222,7 +1222,7 @@ project:
 
         test('should detect new notebook added', () => {
             const newProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1252,7 +1252,7 @@ project:
             };
 
             const originalProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1284,7 +1284,7 @@ project:
 
         test('should detect notebook removed', () => {
             const newProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1309,7 +1309,7 @@ project:
             };
 
             const originalProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1346,7 +1346,7 @@ project:
 
         test('should ignore output changes', () => {
             const newProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1372,7 +1372,7 @@ project:
             };
 
             const originalProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1404,7 +1404,7 @@ project:
 
         test('should ignore execution metadata changes', () => {
             const newProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1432,7 +1432,7 @@ project:
             };
 
             const originalProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1466,7 +1466,7 @@ project:
     suite('snapshotHash', () => {
         test('should add snapshotHash to metadata when serializing', async () => {
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -1525,7 +1525,7 @@ project:
 
         test('should produce deterministic hash for same content', async () => {
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -1588,7 +1588,7 @@ project:
 
         test('should generate identical hash across multiple serializations', async () => {
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -1691,7 +1691,7 @@ project:
 
         test('should change hash when block content changes', async () => {
             const projectData1: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -1769,7 +1769,7 @@ project:
 
         test('should change hash when version changes', async () => {
             const projectData1: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -1835,7 +1835,7 @@ project:
 
         test('should change hash when integrations change', async () => {
             const projectData1: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -1902,7 +1902,7 @@ project:
 
         test('should include environment hash when present', async () => {
             const projectData1: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'

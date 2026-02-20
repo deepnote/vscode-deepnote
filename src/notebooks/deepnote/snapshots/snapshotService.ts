@@ -2,7 +2,6 @@ import {
     deserializeDeepnoteFile,
     isExecutableBlock,
     serializeDeepnoteFile,
-    serializeDeepnoteSnapshot,
     type DeepnoteBlock,
     type DeepnoteFile,
     type Environment,

@@ -18,6 +18,7 @@ import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnot
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import * as path from '../../platform/vscode-path/path';
 import { DEEPNOTE_DEFAULT_PORT, DeepnoteServerInfo, IDeepnoteServerStarter, IDeepnoteToolkitInstaller } from './types';
+import { DeepnoteAgentSkillsManager } from './deepnoteAgentSkillsManager.node';
 import tcpPortUsed from 'tcp-port-used';
 
 /**
@@ -68,6 +69,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
     constructor(
         @inject(IProcessServiceFactory) private readonly processServiceFactory: IProcessServiceFactory,
         @inject(IDeepnoteToolkitInstaller) private readonly toolkitInstaller: IDeepnoteToolkitInstaller,
+        @inject(DeepnoteAgentSkillsManager) private readonly agentSkillsManager: DeepnoteAgentSkillsManager,
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel,
         @inject(IHttpClient) private readonly httpClient: IHttpClient,
         @inject(IAsyncDisposableRegistry) asyncRegistry: IAsyncDisposableRegistry,
@@ -257,6 +259,8 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             managedVenv,
             token
         );
+
+        this.agentSkillsManager.ensureSkillsUpdated(environmentId, venvInterpreter);
 
         Cancellation.throwIfCanceled(token);
 

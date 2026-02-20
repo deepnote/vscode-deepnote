@@ -350,6 +350,22 @@ export interface IDeepnoteNotebookEnvironmentMapper {
      * @returns Array of notebook URIs
      */
     getNotebooksUsingEnvironment(environmentId: string): vscode.Uri[];
+
+    /**
+     * Get all notebook-to-environment mappings
+     * @returns Map of notebookUri.fsPath → environmentId
+     */
+    getAllMappings(): ReadonlyMap<string, string>;
+
+    /**
+     * Event fired when an environment mapping is removed for a notebook
+     */
+    onDidRemoveEnvironment: vscode.Event<{ notebookUri: vscode.Uri }>;
+
+    /**
+     * Event fired when an environment is set for a notebook
+     */
+    onDidSetEnvironment: vscode.Event<{ notebookUri: vscode.Uri; environmentId: string }>;
 }
 
 export const IDeepnoteLspClientManager = Symbol('IDeepnoteLspClientManager');

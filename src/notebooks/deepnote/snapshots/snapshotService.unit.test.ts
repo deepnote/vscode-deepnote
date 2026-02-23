@@ -3,7 +3,7 @@ import * as sinon from 'sinon';
 import { anything, instance, mock, when } from 'ts-mockito';
 import { FileType, NotebookCellKind, Uri, WorkspaceConfiguration, WorkspaceFolder } from 'vscode';
 
-import type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
+import type { DeepnoteBlock, DeepnoteFile, ExecutableBlock } from '@deepnote/blocks';
 
 import { IEnvironmentCapture } from './environmentCapture.node';
 import { SnapshotService } from './snapshotService';
@@ -31,7 +31,7 @@ suite('SnapshotService', () => {
             metadata: {
                 createdAt: '2025-01-01T00:00:00Z'
             },
-            version: '1.0',
+            version: '1.0.0',
             project: {
                 id: projectId,
                 name: projectName,
@@ -43,6 +43,8 @@ suite('SnapshotService', () => {
                             {
                                 id: 'block-1',
                                 type: 'code',
+                                blockGroup: '1',
+                                metadata: {},
                                 sortingKey: 'a0',
                                 content: 'print(1)',
                                 outputs: [{ output_type: 'stream', text: '1' }]
@@ -154,9 +156,9 @@ suite('SnapshotService', () => {
     suite('mergeOutputsIntoBlocks', () => {
         test('should merge outputs into blocks by ID', () => {
             const blocks: DeepnoteBlock[] = [
-                { id: 'block-1', type: 'code', sortingKey: 'a0', content: 'print(1)' },
-                { id: 'block-2', type: 'code', sortingKey: 'a1', content: 'print(2)' },
-                { id: 'block-3', type: 'markdown', sortingKey: 'a2', content: '# Hello' }
+                { id: 'block-1', type: 'code', sortingKey: 'a0', content: 'print(1)', blockGroup: '1', metadata: {} },
+                { id: 'block-2', type: 'code', sortingKey: 'a1', content: 'print(2)', blockGroup: '1', metadata: {} },
+                { id: 'block-3', type: 'markdown', sortingKey: 'a2', content: '# Hello', blockGroup: '1', metadata: {} }
             ];
 
             const outputs = new Map<string, DeepnoteOutput[]>();
@@ -166,13 +168,19 @@ suite('SnapshotService', () => {
 
             const result = service.mergeOutputsIntoBlocks(blocks, outputs);
 
-            assert.deepStrictEqual(result[0].outputs, [{ output_type: 'stream', name: 'stdout', text: '1\n' }]);
-            assert.deepStrictEqual(result[1].outputs, [{ output_type: 'stream', name: 'stdout', text: '2\n' }]);
-            assert.isUndefined(result[2].outputs);
+            assert.deepStrictEqual((result[0] as ExecutableBlock).outputs, [
+                { output_type: 'stream', name: 'stdout', text: '1\n' }
+            ]);
+            assert.deepStrictEqual((result[1] as ExecutableBlock).outputs, [
+                { output_type: 'stream', name: 'stdout', text: '2\n' }
+            ]);
+            assert.isUndefined((result[2] as ExecutableBlock).outputs);
         });
 
         test('should not modify original blocks', () => {
-            const blocks: DeepnoteBlock[] = [{ id: 'block-1', type: 'code', sortingKey: 'a0', content: 'print(1)' }];
+            const blocks: DeepnoteBlock[] = [
+                { id: 'block-1', type: 'code', sortingKey: 'a0', content: 'print(1)', blockGroup: '1', metadata: {} }
+            ];
 
             const outputs = new Map<string, DeepnoteOutput[]>();
 
@@ -180,7 +188,7 @@ suite('SnapshotService', () => {
 
             service.mergeOutputsIntoBlocks(blocks, outputs);
 
-            assert.isUndefined(blocks[0].outputs);
+            assert.isUndefined((blocks[0] as ExecutableBlock).outputs);
         });
 
         test('should preserve blocks without matching outputs', () => {
@@ -190,6 +198,8 @@ suite('SnapshotService', () => {
                     type: 'code',
                     sortingKey: 'a0',
                     content: 'print(1)',
+                    blockGroup: '1',
+                    metadata: {},
                     outputs: [{ output_type: 'stream', text: 'old' }]
                 }
             ];
@@ -200,18 +210,20 @@ suite('SnapshotService', () => {
 
             const result = service.mergeOutputsIntoBlocks(blocks, outputs);
 
-            assert.deepStrictEqual(result[0].outputs, [{ output_type: 'stream', text: 'old' }]);
+            assert.deepStrictEqual((result[0] as ExecutableBlock).outputs, [{ output_type: 'stream', text: 'old' }]);
         });
 
         test('should handle empty outputs map', () => {
-            const blocks: DeepnoteBlock[] = [{ id: 'block-1', type: 'code', sortingKey: 'a0', content: 'print(1)' }];
+            const blocks: DeepnoteBlock[] = [
+                { id: 'block-1', type: 'code', sortingKey: 'a0', content: 'print(1)', blockGroup: '1', metadata: {} }
+            ];
 
             const outputs = new Map<string, DeepnoteOutput[]>();
 
             const result = service.mergeOutputsIntoBlocks(blocks, outputs);
 
             assert.lengthOf(result, 1);
-            assert.isUndefined(result[0].outputs);
+            assert.isUndefined((result[0] as ExecutableBlock).outputs);
         });
 
         test('should handle empty blocks array', () => {
@@ -233,6 +245,8 @@ suite('SnapshotService', () => {
                     id: 'block-1',
                     type: 'code',
                     sortingKey: 'a0',
+                    blockGroup: '1',
+                    metadata: {},
                     content: 'print(1)',
                     outputs: [{ output_type: 'stream', text: '1' }]
                 },
@@ -240,6 +254,8 @@ suite('SnapshotService', () => {
                     id: 'block-2',
                     type: 'code',
                     sortingKey: 'a1',
+                    blockGroup: '1',
+                    metadata: {},
                     content: 'print(2)',
                     outputs: [{ output_type: 'stream', text: '2' }]
                 }
@@ -248,8 +264,8 @@ suite('SnapshotService', () => {
             const result = service.stripOutputsFromBlocks(blocks);
 
             assert.lengthOf(result, 2);
-            assert.isUndefined(result[0].outputs);
-            assert.isUndefined(result[1].outputs);
+            assert.isUndefined((result[0] as ExecutableBlock).outputs);
+            assert.isUndefined((result[1] as ExecutableBlock).outputs);
         });
 
         test('should preserve other block properties', () => {
@@ -258,6 +274,8 @@ suite('SnapshotService', () => {
                     id: 'block-1',
                     type: 'code',
                     sortingKey: 'a0',
+                    blockGroup: '1',
+                    metadata: {},
                     content: 'print(1)',
                     contentHash: 'sha256:abc123',
                     outputs: [{ output_type: 'stream', text: '1' }]
@@ -270,7 +288,7 @@ suite('SnapshotService', () => {
             assert.strictEqual(result[0].type, 'code');
             assert.strictEqual(result[0].content, 'print(1)');
             assert.strictEqual(result[0].contentHash, 'sha256:abc123');
-            assert.isUndefined(result[0].outputs);
+            assert.isUndefined((result[0] as ExecutableBlock).outputs);
         });
 
         test('should strip execution timestamps from blocks', () => {
@@ -279,6 +297,8 @@ suite('SnapshotService', () => {
                     id: 'block-1',
                     type: 'code',
                     sortingKey: 'a0',
+                    blockGroup: '1',
+                    metadata: {},
                     content: 'print(1)',
                     contentHash: 'sha256:abc123',
                     executionStartedAt: '2025-01-01T00:00:00Z',
@@ -291,9 +311,9 @@ suite('SnapshotService', () => {
 
             assert.strictEqual(result[0].id, 'block-1');
             assert.strictEqual(result[0].contentHash, 'sha256:abc123');
-            assert.isUndefined(result[0].executionStartedAt);
-            assert.isUndefined(result[0].executionFinishedAt);
-            assert.isUndefined(result[0].outputs);
+            assert.isUndefined((result[0] as ExecutableBlock).executionStartedAt);
+            assert.isUndefined((result[0] as ExecutableBlock).executionFinishedAt);
+            assert.isUndefined((result[0] as ExecutableBlock).outputs);
         });
 
         test('should strip executionCount from blocks', () => {
@@ -302,6 +322,8 @@ suite('SnapshotService', () => {
                     id: 'block-1',
                     type: 'code',
                     sortingKey: 'a0',
+                    blockGroup: '1',
+                    metadata: {},
                     content: 'print(1)',
                     contentHash: 'sha256:abc123',
                     executionCount: 5,
@@ -313,8 +335,8 @@ suite('SnapshotService', () => {
 
             assert.strictEqual(result[0].id, 'block-1');
             assert.strictEqual(result[0].contentHash, 'sha256:abc123');
-            assert.isUndefined(result[0].executionCount);
-            assert.isUndefined(result[0].outputs);
+            assert.isUndefined((result[0] as ExecutableBlock).executionCount);
+            assert.isUndefined((result[0] as ExecutableBlock).outputs);
         });
 
         test('should not modify original blocks', () => {
@@ -323,6 +345,8 @@ suite('SnapshotService', () => {
                     id: 'block-1',
                     type: 'code',
                     sortingKey: 'a0',
+                    blockGroup: '1',
+                    metadata: {},
                     content: 'print(1)',
                     outputs: [{ output_type: 'stream', text: '1' }]
                 }
@@ -330,16 +354,18 @@ suite('SnapshotService', () => {
 
             service.stripOutputsFromBlocks(blocks);
 
-            assert.isDefined(blocks[0].outputs);
+            assert.isDefined((blocks[0] as ExecutableBlock).outputs);
         });
 
         test('should handle blocks without outputs', () => {
-            const blocks: DeepnoteBlock[] = [{ id: 'block-1', type: 'code', sortingKey: 'a0', content: 'print(1)' }];
+            const blocks: DeepnoteBlock[] = [
+                { id: 'block-1', type: 'code', sortingKey: 'a0', blockGroup: '1', metadata: {}, content: 'print(1)' }
+            ];
 
             const result = service.stripOutputsFromBlocks(blocks);
 
             assert.lengthOf(result, 1);
-            assert.isUndefined(result[0].outputs);
+            assert.isUndefined((result[0] as ExecutableBlock).outputs);
         });
 
         test('should handle empty array', () => {
@@ -358,6 +384,8 @@ suite('SnapshotService', () => {
                     id: 'block-1',
                     type: 'code',
                     sortingKey: 'a0',
+                    blockGroup: '1',
+                    metadata: {},
                     content: 'print(1)',
                     outputs: [{ output_type: 'stream', text: '1' }]
                 },
@@ -365,6 +393,8 @@ suite('SnapshotService', () => {
                     id: 'block-2',
                     type: 'code',
                     sortingKey: 'a1',
+                    blockGroup: '1',
+                    metadata: {},
                     content: 'print(2)',
                     outputs: [{ output_type: 'stream', text: '2' }]
                 }
@@ -383,10 +413,12 @@ suite('SnapshotService', () => {
                     id: 'block-1',
                     type: 'code',
                     sortingKey: 'a0',
+                    blockGroup: '1',
+                    metadata: {},
                     content: 'print(1)',
                     outputs: [{ output_type: 'stream', text: '1' }]
                 },
-                { id: 'block-2', type: 'code', sortingKey: 'a1', content: 'print(2)' }
+                { id: 'block-2', type: 'code', sortingKey: 'a1', blockGroup: '1', metadata: {}, content: 'print(2)' }
             ];
 
             const result = service.extractOutputsFromBlocks(blocks);
@@ -426,7 +458,15 @@ suite('SnapshotService', () => {
             };
 
             const blocks: DeepnoteBlock[] = [
-                { id: 'block-1', type: 'code', sortingKey: 'a0', content: 'df', outputs: [complexOutput] }
+                {
+                    id: 'block-1',
+                    type: 'code',
+                    sortingKey: 'a0',
+                    blockGroup: '1',
+                    metadata: {},
+                    content: 'df',
+                    outputs: [complexOutput]
+                }
             ];
 
             const result = service.extractOutputsFromBlocks(blocks);
@@ -490,7 +530,7 @@ suite('SnapshotService', () => {
             ] as any);
 
             const snapshotYaml = `
-version: '1.0'
+version: '1.0.0'
 metadata:
   createdAt: '2025-01-01T00:00:00Z'
 project:
@@ -501,6 +541,7 @@ project:
       name: Notebook 1
       blocks:
         - id: block-1
+          blockGroup: group-1
           type: code
           sortingKey: 'a0'
           content: print(1)
@@ -509,6 +550,7 @@ project:
               name: stdout
               text: '1'
         - id: block-2
+          blockGroup: group-2
           type: markdown
           sortingKey: 'a1'
           content: '# Hello'
@@ -566,7 +608,7 @@ project:
             });
 
             const snapshotYaml = `
-version: '1.0'
+version: '1.0.0'
 metadata:
   createdAt: '2025-01-02T00:00:00Z'
 project:
@@ -577,8 +619,10 @@ project:
       name: Notebook 1
       blocks:
         - id: block-1
+          blockGroup: group-1
           type: code
           sortingKey: 'a0'
+          content: ''
           outputs:
             - output_type: stream
               text: 'from timestamped'
@@ -695,7 +739,7 @@ project:
             const existingYaml = `
 metadata:
   createdAt: '2025-01-01T00:00:00Z'
-version: '1.0'
+version: '1.0.0'
 project:
   id: test-project-id-123
   name: My Project
@@ -704,6 +748,7 @@ project:
       name: Notebook 1
       blocks:
         - id: block-1
+          blockGroup: '1'
           type: code
           sortingKey: a0
           content: print(1)
@@ -1057,7 +1102,7 @@ project:
                 // Create mock notebook manager with original project
                 const originalProject: DeepnoteFile = {
                     metadata: { createdAt: '2025-01-01T00:00:00Z' },
-                    version: '1.0',
+                    version: '1.0.0',
                     project: {
                         id: projectId,
                         name: 'Test Project',

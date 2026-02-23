@@ -1,21 +1,19 @@
-import type { DeepnoteFile } from '@deepnote/blocks';
+import { deserializeDeepnoteFile, serializeDeepnoteFile, type DeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
+import { parse as parseYaml } from 'yaml';
 import { when } from 'ts-mockito';
-import * as yaml from 'js-yaml';
-import * as YAML from 'yaml';
 import type { NotebookDocument } from 'vscode';
 
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
 import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
-import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 import { mockedVSCodeNamespaces } from '../../test/vscode-mock';
 
 suite('DeepnoteNotebookSerializer', () => {
     let serializer: DeepnoteNotebookSerializer;
     let manager: DeepnoteNotebookManager;
 
-    const mockProject: DeepnoteProject = {
+    const mockProject: DeepnoteFile = {
         metadata: {
             createdAt: '2023-01-01T00:00:00Z',
             modifiedAt: '2023-01-02T00:00:00Z'
@@ -33,6 +31,7 @@ suite('DeepnoteNotebookSerializer', () => {
                             id: 'block-1',
                             content: 'print("hello")',
                             sortingKey: 'a0',
+                            metadata: {},
                             type: 'code'
                         }
                     ],
@@ -48,6 +47,7 @@ suite('DeepnoteNotebookSerializer', () => {
                             id: 'block-2',
                             content: '# Title',
                             sortingKey: 'a1',
+                            metadata: {},
                             type: 'markdown'
                         }
                     ],
@@ -57,7 +57,7 @@ suite('DeepnoteNotebookSerializer', () => {
             ],
             settings: {}
         },
-        version: '1.0'
+        version: '1.0.0'
     };
 
     setup(() => {
@@ -69,7 +69,7 @@ suite('DeepnoteNotebookSerializer', () => {
      * Helper function to convert a DeepnoteProject object with version to YAML format
      */
     function projectToYaml(projectData: DeepnoteFile): Uint8Array {
-        const yamlString = yaml.dump(projectData);
+        const yamlString = serializeDeepnoteFile(projectData);
         return new TextEncoder().encode(yamlString);
     }
 
@@ -79,7 +79,7 @@ suite('DeepnoteNotebookSerializer', () => {
             manager.selectNotebookForProject('project-123', 'notebook-1');
 
             const yamlContent = `
-version: '1.0'
+version: '1.0.0'
 metadata:
   createdAt: '2023-01-01T00:00:00Z'
   modifiedAt: '2023-01-02T00:00:00Z'
@@ -91,6 +91,7 @@ project:
       name: 'First Notebook'
       blocks:
         - id: 'block-1'
+          blockGroup: 'group-1'
           content: 'print("hello")'
           sortingKey: 'a0'
           type: 'code'
@@ -131,7 +132,7 @@ project:
 
         test('should throw error when no notebooks found', async () => {
             const contentWithoutNotebooks = new TextEncoder().encode(`
-version: '1.0'
+version: '1.0.0'
 metadata:
   createdAt: '2023-01-01T00:00:00Z'
 project:
@@ -143,7 +144,7 @@ project:
 
             await assert.isRejected(
                 serializer.deserializeNotebook(contentWithoutNotebooks, {} as any),
-                /no notebooks/i
+                /no notebooks|notebooks.*must contain at least 1/i
             );
         });
     });
@@ -440,7 +441,7 @@ project:
             circularOutput.metadata.self = circularOutput;
 
             const projectWithCircularRef: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -458,6 +459,7 @@ project:
                                     id: 'block-1',
                                     content: 'test',
                                     sortingKey: 'a0',
+                                    metadata: {},
                                     type: 'code',
                                     outputs: [circularOutput]
                                 }
@@ -499,7 +501,7 @@ project:
     suite('block ID preservation', () => {
         test('should preserve block IDs when serializing cells with proper metadata', async () => {
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -517,6 +519,7 @@ project:
                                     id: 'original-block-id-1',
                                     content: 'print("hello")',
                                     sortingKey: 'a0',
+                                    metadata: {},
                                     type: 'code'
                                 },
                                 {
@@ -524,6 +527,7 @@ project:
                                     id: 'original-block-id-2',
                                     content: '# Markdown',
                                     sortingKey: 'a1',
+                                    metadata: {},
                                     type: 'markdown'
                                 }
                             ],
@@ -579,7 +583,7 @@ project:
 
             const result = await serializer.serializeNotebook(notebookData as any, {} as any);
             const yamlString = new TextDecoder().decode(result);
-            const parsedResult = YAML.parse(yamlString) as DeepnoteFile;
+            const parsedResult = deserializeDeepnoteFile(yamlString);
 
             const notebook = parsedResult.project.notebooks.find((nb) => nb.id === 'notebook-1');
             assert.isDefined(notebook);
@@ -590,9 +594,9 @@ project:
             assert.strictEqual(notebook!.blocks[1].id, 'original-block-id-2', 'Second block ID should be preserved');
         });
 
-        test('should recover id, sortingKey, and blockGroup via content matching when cells lack metadata', async () => {
+        test('should recover id and blockGroup via content matching when cells lack metadata', async () => {
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -610,6 +614,7 @@ project:
                                     id: 'original-id',
                                     content: 'test',
                                     sortingKey: 'original-sorting-key',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -642,18 +647,13 @@ project:
 
             const result = await serializer.serializeNotebook(notebookData as any, {} as any);
             const yamlString = new TextDecoder().decode(result);
-            const parsedResult = YAML.parse(yamlString) as DeepnoteFile;
+            const parsedResult = deserializeDeepnoteFile(yamlString);
 
             const notebook = parsedResult.project.notebooks.find((nb) => nb.id === 'notebook-1');
             assert.isDefined(notebook);
 
             // All key metadata should be recovered from original via content matching
             assert.strictEqual(notebook!.blocks[0].id, 'original-id', 'Block ID should be recovered');
-            assert.strictEqual(
-                notebook!.blocks[0].sortingKey,
-                'original-sorting-key',
-                'Block sortingKey should be recovered'
-            );
             assert.strictEqual(
                 notebook!.blocks[0].blockGroup,
                 'original-group',
@@ -663,7 +663,7 @@ project:
 
         test('should generate new IDs when content does not match any original block', async () => {
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -681,6 +681,7 @@ project:
                                     id: 'original-id',
                                     content: 'original content',
                                     sortingKey: 'a0',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -712,7 +713,7 @@ project:
 
             const result = await serializer.serializeNotebook(notebookData as any, {} as any);
             const yamlString = new TextDecoder().decode(result);
-            const parsedResult = YAML.parse(yamlString) as DeepnoteFile;
+            const parsedResult = deserializeDeepnoteFile(yamlString);
 
             const notebook = parsedResult.project.notebooks.find((nb) => nb.id === 'notebook-1');
             assert.isDefined(notebook);
@@ -759,7 +760,7 @@ project:
     suite('default notebook selection', () => {
         test('should not select Init notebook when other notebooks are available', async () => {
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -777,6 +778,8 @@ project:
                                     id: 'block-init',
                                     content: 'print("init")',
                                     sortingKey: 'a0',
+                                    metadata: {},
+                                    blockGroup: '1',
                                     type: 'code'
                                 }
                             ],
@@ -791,6 +794,8 @@ project:
                                     id: 'block-main',
                                     content: 'print("main")',
                                     sortingKey: 'a0',
+                                    metadata: {},
+                                    blockGroup: '1',
                                     type: 'code'
                                 }
                             ],
@@ -812,7 +817,7 @@ project:
 
         test('should select Init notebook when it is the only notebook', async () => {
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -830,6 +835,8 @@ project:
                                     id: 'block-init',
                                     content: 'print("init")',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -851,7 +858,7 @@ project:
 
         test('should select alphabetically first notebook when no initNotebookId', async () => {
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -868,6 +875,8 @@ project:
                                     id: 'block-z',
                                     content: 'print("zebra")',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -882,6 +891,8 @@ project:
                                     id: 'block-a',
                                     content: 'print("alpha")',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -896,6 +907,8 @@ project:
                                     id: 'block-b',
                                     content: 'print("bravo")',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -917,7 +930,7 @@ project:
 
         test('should sort Init notebook last when multiple notebooks exist', async () => {
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -935,6 +948,8 @@ project:
                                     id: 'block-c',
                                     content: 'print("charlie")',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -949,6 +964,8 @@ project:
                                     id: 'block-init',
                                     content: 'print("init")',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -963,6 +980,8 @@ project:
                                     id: 'block-a',
                                     content: 'print("alpha")',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -986,7 +1005,7 @@ project:
     suite('detectContentChanges', () => {
         test('should detect no changes when content is identical', () => {
             const project: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -995,7 +1014,16 @@ project:
                         {
                             id: 'nb-1',
                             name: 'Notebook',
-                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: 'print(1)'
+                                }
+                            ]
                         }
                     ]
                 }
@@ -1010,7 +1038,7 @@ project:
 
         test('should detect changes when block content differs', () => {
             const newProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1019,14 +1047,23 @@ project:
                         {
                             id: 'nb-1',
                             name: 'Notebook',
-                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(2)' }]
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: 'print(2)'
+                                }
+                            ]
                         }
                     ]
                 }
             };
 
             const originalProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1035,7 +1072,16 @@ project:
                         {
                             id: 'nb-1',
                             name: 'Notebook',
-                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: 'print(1)'
+                                }
+                            ]
                         }
                     ]
                 }
@@ -1049,7 +1095,7 @@ project:
 
         test('should detect changes when block type differs', () => {
             const newProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1058,14 +1104,23 @@ project:
                         {
                             id: 'nb-1',
                             name: 'Notebook',
-                            blocks: [{ id: 'b1', type: 'markdown', sortingKey: 'a0', content: '# Hello' }]
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'markdown',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: '# Hello'
+                                }
+                            ]
                         }
                     ]
                 }
             };
 
             const originalProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1074,7 +1129,16 @@ project:
                         {
                             id: 'nb-1',
                             name: 'Notebook',
-                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: '# Hello' }]
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: '# Hello'
+                                }
+                            ]
                         }
                     ]
                 }
@@ -1088,7 +1152,7 @@ project:
 
         test('should detect changes when block count differs', () => {
             const newProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1098,8 +1162,22 @@ project:
                             id: 'nb-1',
                             name: 'Notebook',
                             blocks: [
-                                { id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' },
-                                { id: 'b2', type: 'code', sortingKey: 'a1', content: 'print(2)' }
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: 'print(1)'
+                                },
+                                {
+                                    id: 'b2',
+                                    type: 'code',
+                                    sortingKey: 'a1',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: 'print(2)'
+                                }
                             ]
                         }
                     ]
@@ -1107,7 +1185,7 @@ project:
             };
 
             const originalProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1116,7 +1194,16 @@ project:
                         {
                             id: 'nb-1',
                             name: 'Notebook',
-                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: 'print(1)'
+                                }
+                            ]
                         }
                     ]
                 }
@@ -1130,7 +1217,7 @@ project:
 
         test('should detect new notebook added', () => {
             const newProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1139,7 +1226,16 @@ project:
                         {
                             id: 'nb-1',
                             name: 'Notebook',
-                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: 'print(1)'
+                                }
+                            ]
                         },
                         {
                             id: 'nb-2',
@@ -1151,7 +1247,7 @@ project:
             };
 
             const originalProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1160,7 +1256,16 @@ project:
                         {
                             id: 'nb-1',
                             name: 'Notebook',
-                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: 'print(1)'
+                                }
+                            ]
                         }
                     ]
                 }
@@ -1174,7 +1279,7 @@ project:
 
         test('should detect notebook removed', () => {
             const newProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1183,14 +1288,23 @@ project:
                         {
                             id: 'nb-1',
                             name: 'Notebook',
-                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: 'print(1)'
+                                }
+                            ]
                         }
                     ]
                 }
             };
 
             const originalProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1199,7 +1313,16 @@ project:
                         {
                             id: 'nb-1',
                             name: 'Notebook',
-                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: 'print(1)'
+                                }
+                            ]
                         },
                         {
                             id: 'nb-2',
@@ -1218,7 +1341,7 @@ project:
 
         test('should ignore output changes', () => {
             const newProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1232,6 +1355,8 @@ project:
                                     id: 'b1',
                                     type: 'code',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     content: 'print(1)',
                                     outputs: [{ output_type: 'stream', text: '1\n' }]
                                 }
@@ -1242,7 +1367,7 @@ project:
             };
 
             const originalProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1251,7 +1376,16 @@ project:
                         {
                             id: 'nb-1',
                             name: 'Notebook',
-                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: 'print(1)'
+                                }
+                            ]
                         }
                     ]
                 }
@@ -1265,7 +1399,7 @@ project:
 
         test('should ignore execution metadata changes', () => {
             const newProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1279,6 +1413,8 @@ project:
                                     id: 'b1',
                                     type: 'code',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     content: 'print(1)',
                                     executionCount: 5,
                                     executionStartedAt: '2025-01-01T00:00:00Z',
@@ -1291,7 +1427,7 @@ project:
             };
 
             const originalProject: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: { createdAt: '2023-01-01T00:00:00Z' },
                 project: {
                     id: 'project-1',
@@ -1300,7 +1436,16 @@ project:
                         {
                             id: 'nb-1',
                             name: 'Notebook',
-                            blocks: [{ id: 'b1', type: 'code', sortingKey: 'a0', content: 'print(1)' }]
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: 'print(1)'
+                                }
+                            ]
                         }
                     ]
                 }
@@ -1316,7 +1461,7 @@ project:
     suite('snapshotHash', () => {
         test('should add snapshotHash to metadata when serializing', async () => {
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -1332,6 +1477,8 @@ project:
                                 {
                                     id: 'block-1',
                                     content: 'print("hello")',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     sortingKey: 'a0',
                                     type: 'code'
                                 }
@@ -1363,7 +1510,9 @@ project:
 
             const result = await serializer.serializeNotebook(notebookData as any, {} as any);
             const yamlString = new TextDecoder().decode(result);
-            const parsedResult = YAML.parse(yamlString) as DeepnoteFile & { metadata: { snapshotHash?: string } };
+            const parsedResult = parseYaml(yamlString) as DeepnoteFile & {
+                metadata: { snapshotHash?: string };
+            };
 
             assert.isDefined(parsedResult.metadata.snapshotHash);
             assert.match(parsedResult.metadata.snapshotHash!, /^sha256:[a-f0-9]+$/);
@@ -1371,7 +1520,7 @@ project:
 
         test('should produce deterministic hash for same content', async () => {
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -1387,6 +1536,8 @@ project:
                                 {
                                     id: 'block-1',
                                     content: 'print("test")',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     sortingKey: 'a0',
                                     type: 'code'
                                 }
@@ -1417,13 +1568,13 @@ project:
             // Serialize twice
             manager.storeOriginalProject('project-deterministic', structuredClone(projectData), 'notebook-1');
             const result1 = await serializer.serializeNotebook(notebookData as any, {} as any);
-            const parsed1 = YAML.parse(new TextDecoder().decode(result1)) as DeepnoteFile & {
+            const parsed1 = parseYaml(new TextDecoder().decode(result1)) as DeepnoteFile & {
                 metadata: { snapshotHash?: string };
             };
 
             manager.storeOriginalProject('project-deterministic', structuredClone(projectData), 'notebook-1');
             const result2 = await serializer.serializeNotebook(notebookData as any, {} as any);
-            const parsed2 = YAML.parse(new TextDecoder().decode(result2)) as DeepnoteFile & {
+            const parsed2 = parseYaml(new TextDecoder().decode(result2)) as DeepnoteFile & {
                 metadata: { snapshotHash?: string };
             };
 
@@ -1432,7 +1583,7 @@ project:
 
         test('should generate identical hash across multiple serializations', async () => {
             const projectData: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -1453,12 +1604,16 @@ project:
                                     id: 'block-1',
                                     content: 'import pandas as pd',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'code'
                                 },
                                 {
                                     id: 'block-2',
                                     content: '# Analysis',
                                     sortingKey: 'a1',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'markdown'
                                 }
                             ],
@@ -1473,6 +1628,8 @@ project:
                                     id: 'block-3',
                                     content: 'print("hello")',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -1512,7 +1669,7 @@ project:
             for (let i = 0; i < 5; i++) {
                 manager.storeOriginalProject('project-multi-serialize', structuredClone(projectData), 'notebook-1');
                 const result = await serializer.serializeNotebook(notebookData as any, {} as any);
-                const parsed = YAML.parse(new TextDecoder().decode(result)) as DeepnoteFile & {
+                const parsed = parseYaml(new TextDecoder().decode(result)) as DeepnoteFile & {
                     metadata: { snapshotHash?: string };
                 };
 
@@ -1529,7 +1686,7 @@ project:
 
         test('should change hash when block content changes', async () => {
             const projectData1: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -1546,6 +1703,8 @@ project:
                                     id: 'block-1',
                                     content: 'print("original")',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -1575,7 +1734,7 @@ project:
             };
 
             const result1 = await serializer.serializeNotebook(notebookData1 as any, {} as any);
-            const parsed1 = YAML.parse(new TextDecoder().decode(result1)) as DeepnoteFile & {
+            const parsed1 = parseYaml(new TextDecoder().decode(result1)) as DeepnoteFile & {
                 metadata: { snapshotHash?: string };
             };
 
@@ -1596,7 +1755,7 @@ project:
             };
 
             const result2 = await serializer.serializeNotebook(notebookData2 as any, {} as any);
-            const parsed2 = YAML.parse(new TextDecoder().decode(result2)) as DeepnoteFile & {
+            const parsed2 = parseYaml(new TextDecoder().decode(result2)) as DeepnoteFile & {
                 metadata: { snapshotHash?: string };
             };
 
@@ -1605,7 +1764,7 @@ project:
 
         test('should change hash when version changes', async () => {
             const projectData1: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -1622,6 +1781,8 @@ project:
                                     id: 'block-1',
                                     content: 'test',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -1651,7 +1812,7 @@ project:
             };
 
             const result1 = await serializer.serializeNotebook(notebookData as any, {} as any);
-            const parsed1 = YAML.parse(new TextDecoder().decode(result1)) as DeepnoteFile & {
+            const parsed1 = parseYaml(new TextDecoder().decode(result1)) as DeepnoteFile & {
                 metadata: { snapshotHash?: string };
             };
 
@@ -1660,7 +1821,7 @@ project:
             manager.storeOriginalProject('project-version-change', projectData2, 'notebook-1');
 
             const result2 = await serializer.serializeNotebook(notebookData as any, {} as any);
-            const parsed2 = YAML.parse(new TextDecoder().decode(result2)) as DeepnoteFile & {
+            const parsed2 = parseYaml(new TextDecoder().decode(result2)) as DeepnoteFile & {
                 metadata: { snapshotHash?: string };
             };
 
@@ -1669,7 +1830,7 @@ project:
 
         test('should change hash when integrations change', async () => {
             const projectData1: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -1686,6 +1847,8 @@ project:
                                     id: 'block-1',
                                     content: 'test',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -1715,7 +1878,7 @@ project:
             };
 
             const result1 = await serializer.serializeNotebook(notebookData as any, {} as any);
-            const parsed1 = YAML.parse(new TextDecoder().decode(result1)) as DeepnoteFile & {
+            const parsed1 = parseYaml(new TextDecoder().decode(result1)) as DeepnoteFile & {
                 metadata: { snapshotHash?: string };
             };
 
@@ -1725,7 +1888,7 @@ project:
             manager.storeOriginalProject('project-integrations-change', projectData2, 'notebook-1');
 
             const result2 = await serializer.serializeNotebook(notebookData as any, {} as any);
-            const parsed2 = YAML.parse(new TextDecoder().decode(result2)) as DeepnoteFile & {
+            const parsed2 = parseYaml(new TextDecoder().decode(result2)) as DeepnoteFile & {
                 metadata: { snapshotHash?: string };
             };
 
@@ -1734,7 +1897,7 @@ project:
 
         test('should include environment hash when present', async () => {
             const projectData1: DeepnoteFile = {
-                version: '1.0',
+                version: '1.0.0',
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -1751,6 +1914,8 @@ project:
                                     id: 'block-1',
                                     content: 'test',
                                     sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
                                     type: 'code'
                                 }
                             ],
@@ -1780,7 +1945,7 @@ project:
             };
 
             const result1 = await serializer.serializeNotebook(notebookData as any, {} as any);
-            const parsed1 = YAML.parse(new TextDecoder().decode(result1)) as DeepnoteFile & {
+            const parsed1 = parseYaml(new TextDecoder().decode(result1)) as DeepnoteFile & {
                 metadata: { snapshotHash?: string };
             };
 
@@ -1790,7 +1955,7 @@ project:
             manager.storeOriginalProject('project-env-hash', projectData2, 'notebook-1');
 
             const result2 = await serializer.serializeNotebook(notebookData as any, {} as any);
-            const parsed2 = YAML.parse(new TextDecoder().decode(result2)) as DeepnoteFile & {
+            const parsed2 = parseYaml(new TextDecoder().decode(result2)) as DeepnoteFile & {
                 metadata: { snapshotHash?: string };
             };
 

@@ -43,6 +43,7 @@ suite('MarkdownBlockConverter', () => {
                 content: '# Title\n\nParagraph text',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'markdown'
             };
 
@@ -59,6 +60,7 @@ suite('MarkdownBlockConverter', () => {
                 content: '',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'markdown'
             };
 
@@ -85,6 +87,7 @@ suite('MarkdownBlockConverter', () => {
                 content: '# Title\n\n## Subtitle\n\n- List item 1\n- List item 2\n\n```python\nprint("code")\n```',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'markdown'
             };
 
@@ -104,6 +107,7 @@ suite('MarkdownBlockConverter', () => {
                 content: 'old content',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'markdown'
             };
             const cell = new NotebookCellData(NotebookCellKind.Markup, '# New Content', 'markdown');
@@ -119,6 +123,7 @@ suite('MarkdownBlockConverter', () => {
                 content: 'old content',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'markdown'
             };
             const cell = new NotebookCellData(NotebookCellKind.Markup, '', 'markdown');
@@ -154,6 +159,7 @@ suite('MarkdownBlockConverter', () => {
                 content: 'old content',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'markdown'
             };
             const newContent = '# Title\n\n## Subtitle\n\n- Item 1\n- Item 2\n\n**Bold** and *italic*';

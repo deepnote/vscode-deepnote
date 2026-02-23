@@ -91,7 +91,8 @@ suite('VisualizationBlockConverter', () => {
                 id: 'viz3',
                 type: 'visualization',
                 content: '',
-                sortingKey: 'a0'
+                sortingKey: 'a0',
+                metadata: {}
             };
 
             const cell1 = converter.convertToCell(blockWithEmptyMetadata);
@@ -114,7 +115,7 @@ suite('VisualizationBlockConverter', () => {
                 blockGroup: 'test-group',
                 id: 'viz1',
                 type: 'visualization',
-                content: 'old content',
+                content: '',
                 sortingKey: 'a0',
                 metadata: {
                     other_field: 'should be preserved',
@@ -191,7 +192,8 @@ suite('VisualizationBlockConverter', () => {
                 id: 'viz3',
                 type: 'visualization',
                 content: '',
-                sortingKey: 'a0'
+                sortingKey: 'a0',
+                metadata: {}
             };
 
             const cell = new NotebookCellData(

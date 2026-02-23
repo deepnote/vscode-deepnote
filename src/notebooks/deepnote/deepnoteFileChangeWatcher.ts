@@ -12,6 +12,7 @@ import {
 } from 'vscode';
 import { inject, injectable, optional } from 'inversify';
 
+import type { DeepnoteBlock } from '@deepnote/blocks';
 import { IControllerRegistration } from '../controllers/types';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
@@ -470,7 +471,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
                         continue;
                     }
 
-                    const blockType = (cell.metadata?.type as string) ?? 'code';
+                    const blockType = ((cell.metadata?.type as string) ?? 'code') as DeepnoteBlock['type'];
                     const newOutputs = this.converter.transformOutputsForVsCode(
                         snapshotOutputs.get(blockId)!,
                         i,

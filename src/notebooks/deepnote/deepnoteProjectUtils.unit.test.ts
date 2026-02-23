@@ -27,7 +27,7 @@ suite('DeepnoteProjectUtils', () => {
             const validYaml = `
 version: '1'
 metadata:
-  createdAt: '2023-01-01T00:00:00Z'
+  createdAt: '2024-01-01T00:00:00.000Z'
 project:
   id: test-project-id
   name: Test Project
@@ -79,7 +79,7 @@ project:
             const yamlWithUnicode = `
 version: '1'
 metadata:
-  createdAt: '2023-01-01T00:00:00Z'
+  createdAt: '2024-01-01T00:00:00.000Z'
 project:
   id: test-id
   name: Test Project with emojis 🚀

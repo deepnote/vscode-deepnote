@@ -1,4 +1,4 @@
-import type { DeepnoteBlock } from '@deepnote/blocks';
+import { isExecutableBlock, type DeepnoteBlock } from '@deepnote/blocks';
 import { NotebookCellData, NotebookCellKind, NotebookCellOutput, NotebookCellOutputItem } from 'vscode';
 
 import { generateBlockId, generateSortingKey } from './dataConversionUtils';
@@ -92,6 +92,18 @@ export class DeepnoteDataConverter {
 
             const blockWithOptionalFields = block as DeepnoteBlock & { blockGroup?: string };
 
+            const executionMetadata = isExecutableBlock(block)
+                ? {
+                      ...(block.executionCount !== undefined && { executionCount: block.executionCount }),
+                      ...(block.executionFinishedAt !== undefined && {
+                          executionFinishedAt: block.executionFinishedAt
+                      }),
+                      ...(block.executionStartedAt !== undefined && { executionStartedAt: block.executionStartedAt }),
+                      // Track whether this block had outputs for round-trip fidelity
+                      __hadOutputs: block.outputs !== undefined
+                  }
+                : {};
+
             cell.metadata = {
                 ...block.metadata,
                 id: block.id,
@@ -101,11 +113,7 @@ export class DeepnoteDataConverter {
                 sortingKey: block.sortingKey,
                 ...(blockWithOptionalFields.blockGroup && { blockGroup: blockWithOptionalFields.blockGroup }),
                 ...(block.contentHash !== undefined && { contentHash: block.contentHash }),
-                ...(block.executionCount !== undefined && { executionCount: block.executionCount }),
-                ...(block.executionFinishedAt !== undefined && { executionFinishedAt: block.executionFinishedAt }),
-                ...(block.executionStartedAt !== undefined && { executionStartedAt: block.executionStartedAt }),
-                // Track whether this block had outputs for round-trip fidelity
-                __hadOutputs: block.outputs !== undefined
+                ...executionMetadata
             };
 
             // The pocket is a place to tuck away Deepnote-specific fields for later.
@@ -113,7 +121,7 @@ export class DeepnoteDataConverter {
 
             // Only set outputs if the block has them (including empty arrays)
             // This preserves round-trip fidelity
-            if (block.outputs !== undefined) {
+            if (isExecutableBlock(block) && block.outputs !== undefined) {
                 cell.outputs = this.transformOutputsForVsCode(
                     block.outputs,
                     index,
@@ -143,7 +151,7 @@ export class DeepnoteDataConverter {
         // Preserve outputs when they exist (including newly produced outputs)
         // Only set if not already set to avoid overwriting converter-managed outputs
         const hadOutputs = cell.metadata?.__hadOutputs;
-        if (!block.outputs) {
+        if (isExecutableBlock(block) && !block.outputs) {
             // Set outputs if:
             // 1. The cell has non-empty outputs, OR
             // 2. The block originally had outputs (even if empty)
@@ -433,7 +441,8 @@ export class DeepnoteDataConverter {
             id: generateBlockId(),
             sortingKey: generateSortingKey(index),
             type: cell.kind === NotebookCellKind.Code ? 'code' : 'markdown',
-            content: cell.value || ''
+            content: cell.value || '',
+            metadata: {}
         };
     }
 

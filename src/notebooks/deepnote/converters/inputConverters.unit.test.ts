@@ -45,13 +45,13 @@ suite('InputTextBlockConverter', () => {
         });
 
         test('handles missing metadata with default config', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
                 sortingKey: 'a0',
                 type: 'input-text'
-            };
+            } as DeepnoteBlock;
 
             const cell = converter.convertToCell(block);
 
@@ -61,7 +61,7 @@ suite('InputTextBlockConverter', () => {
         });
 
         test('handles missing variable value', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
@@ -70,7 +70,7 @@ suite('InputTextBlockConverter', () => {
                 },
                 sortingKey: 'a0',
                 type: 'input-text'
-            };
+            } as DeepnoteBlock;
 
             const cell = converter.convertToCell(block);
 
@@ -108,7 +108,7 @@ suite('InputTextBlockConverter', () => {
         });
 
         test('handles empty value', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: 'old content',
                 id: 'block-123',
@@ -117,7 +117,7 @@ suite('InputTextBlockConverter', () => {
                 },
                 sortingKey: 'a0',
                 type: 'input-text'
-            };
+            } as DeepnoteBlock;
             const cell = new NotebookCellData(NotebookCellKind.Code, '', 'plaintext');
 
             converter.applyChangesToBlock(block, cell);
@@ -127,13 +127,13 @@ suite('InputTextBlockConverter', () => {
         });
 
         test('preserves whitespace in value', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
                 sortingKey: 'a0',
                 type: 'input-text'
-            };
+            } as DeepnoteBlock;
             const cell = new NotebookCellData(NotebookCellKind.Code, '  text with spaces  \n', 'plaintext');
 
             converter.applyChangesToBlock(block, cell);
@@ -147,7 +147,9 @@ suite('InputTextBlockConverter', () => {
                 content: '',
                 id: 'block-123',
                 metadata: {
-                    [DEEPNOTE_VSCODE_RAW_CONTENT_KEY]: 'old raw content'
+                    [DEEPNOTE_VSCODE_RAW_CONTENT_KEY]: 'old raw content',
+                    deepnote_variable_name: 'x',
+                    deepnote_variable_value: 'x'
                 },
                 sortingKey: 'a0',
                 type: 'input-text'
@@ -166,6 +168,10 @@ suite('InputTextBlockConverter', () => {
                 id: 'block-123',
                 executionCount: 5,
                 sortingKey: 'a0',
+                metadata: {
+                    deepnote_variable_name: 'x',
+                    deepnote_variable_value: 'x'
+                },
                 type: 'input-text'
             };
             const cell = new NotebookCellData(NotebookCellKind.Code, 'var', 'plaintext');
@@ -209,13 +215,13 @@ suite('InputTextareaBlockConverter', () => {
         });
 
         test('handles missing metadata with default config', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
                 sortingKey: 'a0',
                 type: 'input-textarea'
-            };
+            } as DeepnoteBlock;
 
             const cell = converter.convertToCell(block);
 
@@ -225,16 +231,17 @@ suite('InputTextareaBlockConverter', () => {
 
     suite('applyChangesToBlock', () => {
         test('applies text value from cell to block metadata', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
-                metadata: {
-                    deepnote_variable_name: 'input_2'
-                },
                 sortingKey: 'a0',
+                metadata: {
+                    deepnote_variable_name: 'input_2',
+                    deepnote_variable_value: 'old value'
+                },
                 type: 'input-textarea'
-            };
+            } as DeepnoteBlock;
             const cell = new NotebookCellData(NotebookCellKind.Code, 'new multiline\ntext value', 'plaintext');
 
             converter.applyChangesToBlock(block, cell);
@@ -246,13 +253,13 @@ suite('InputTextareaBlockConverter', () => {
         });
 
         test('handles empty value', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
                 sortingKey: 'a0',
                 type: 'input-textarea'
-            };
+            } as DeepnoteBlock;
             const cell = new NotebookCellData(NotebookCellKind.Code, '', 'plaintext');
 
             converter.applyChangesToBlock(block, cell);
@@ -296,13 +303,13 @@ suite('InputSelectBlockConverter', () => {
         });
 
         test('handles missing metadata with default config', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
                 sortingKey: 'a0',
                 type: 'input-select'
-            };
+            } as DeepnoteBlock;
 
             const cell = converter.convertToCell(block);
 
@@ -310,7 +317,7 @@ suite('InputSelectBlockConverter', () => {
         });
 
         test('escapes quotes in single select value', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
@@ -319,7 +326,7 @@ suite('InputSelectBlockConverter', () => {
                 },
                 sortingKey: 'a0',
                 type: 'input-select'
-            };
+            } as DeepnoteBlock;
 
             const cell = converter.convertToCell(block);
 
@@ -327,7 +334,7 @@ suite('InputSelectBlockConverter', () => {
         });
 
         test('escapes backslashes in single select value', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
@@ -336,7 +343,7 @@ suite('InputSelectBlockConverter', () => {
                 },
                 sortingKey: 'a0',
                 type: 'input-select'
-            };
+            } as DeepnoteBlock;
 
             const cell = converter.convertToCell(block);
 
@@ -344,7 +351,7 @@ suite('InputSelectBlockConverter', () => {
         });
 
         test('escapes quotes in multi-select array values', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
@@ -353,7 +360,7 @@ suite('InputSelectBlockConverter', () => {
                 },
                 sortingKey: 'a0',
                 type: 'input-select'
-            };
+            } as DeepnoteBlock;
 
             const cell = converter.convertToCell(block);
 
@@ -361,7 +368,7 @@ suite('InputSelectBlockConverter', () => {
         });
 
         test('handles empty array for multi-select', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
@@ -370,7 +377,7 @@ suite('InputSelectBlockConverter', () => {
                 },
                 sortingKey: 'a0',
                 type: 'input-select'
-            };
+            } as unknown as DeepnoteBlock;
 
             const cell = converter.convertToCell(block);
 
@@ -387,7 +394,10 @@ suite('InputSelectBlockConverter', () => {
                 metadata: {
                     deepnote_variable_name: 'input_3',
                     deepnote_variable_options: ['Option A', 'Option B'],
-                    deepnote_variable_value: 'Option A'
+                    deepnote_variable_value: 'Option A',
+                    deepnote_variable_custom_options: [],
+                    deepnote_variable_selected_variable: 'x',
+                    deepnote_variable_select_type: 'from-options'
                 },
                 sortingKey: 'a0',
                 type: 'input-select'
@@ -423,10 +433,10 @@ suite('InputSliderBlockConverter', () => {
                     deepnote_input_label: 'slider input value',
                     deepnote_slider_step: 1,
                     deepnote_variable_name: 'input_6',
-                    deepnote_variable_value: 5,
+                    deepnote_variable_value: '5',
                     deepnote_slider_max_value: 10,
                     deepnote_slider_min_value: 0,
-                    deepnote_variable_default_value: 5
+                    deepnote_variable_default_value: '5'
                 },
                 sortingKey: 'yj',
                 type: 'input-slider'
@@ -448,7 +458,7 @@ suite('InputSliderBlockConverter', () => {
                     deepnote_input_label: 'step size 2',
                     deepnote_slider_step: 2,
                     deepnote_variable_name: 'input_7',
-                    deepnote_variable_value: 6,
+                    deepnote_variable_value: '6',
                     deepnote_slider_max_value: 10,
                     deepnote_slider_min_value: 4
                 },
@@ -462,13 +472,13 @@ suite('InputSliderBlockConverter', () => {
         });
 
         test('handles missing metadata with default config', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
                 sortingKey: 'a0',
                 type: 'input-slider'
-            };
+            } as DeepnoteBlock;
 
             const cell = converter.convertToCell(block);
 
@@ -478,7 +488,7 @@ suite('InputSliderBlockConverter', () => {
 
     suite('applyChangesToBlock', () => {
         test('applies numeric value from cell', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
@@ -490,7 +500,7 @@ suite('InputSliderBlockConverter', () => {
                 },
                 sortingKey: 'a0',
                 type: 'input-slider'
-            };
+            } as DeepnoteBlock;
             const cell = new NotebookCellData(NotebookCellKind.Code, '7', 'python');
 
             converter.applyChangesToBlock(block, cell);
@@ -505,7 +515,7 @@ suite('InputSliderBlockConverter', () => {
         });
 
         test('handles numeric value', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
@@ -514,7 +524,7 @@ suite('InputSliderBlockConverter', () => {
                 },
                 sortingKey: 'a0',
                 type: 'input-slider'
-            };
+            } as DeepnoteBlock;
             const cell = new NotebookCellData(NotebookCellKind.Code, '42', 'python');
 
             converter.applyChangesToBlock(block, cell);
@@ -523,7 +533,7 @@ suite('InputSliderBlockConverter', () => {
         });
 
         test('handles invalid numeric value', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
@@ -533,7 +543,7 @@ suite('InputSliderBlockConverter', () => {
                 },
                 sortingKey: 'a0',
                 type: 'input-slider'
-            };
+            } as DeepnoteBlock;
             const cell = new NotebookCellData(NotebookCellKind.Code, 'invalid', 'python');
 
             converter.applyChangesToBlock(block, cell);
@@ -592,13 +602,13 @@ suite('InputCheckboxBlockConverter', () => {
         });
 
         test('handles missing metadata with default config', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
                 sortingKey: 'a0',
                 type: 'input-checkbox'
-            };
+            } as DeepnoteBlock;
 
             const cell = converter.convertToCell(block);
 
@@ -684,13 +694,13 @@ suite('InputDateBlockConverter', () => {
         });
 
         test('handles missing metadata with default config', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
                 sortingKey: 'a0',
                 type: 'input-date'
-            };
+            } as DeepnoteBlock;
 
             const cell = converter.convertToCell(block);
 
@@ -834,13 +844,13 @@ suite('InputDateRangeBlockConverter', () => {
         });
 
         test('handles missing metadata with default config', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
                 sortingKey: 'a0',
                 type: 'input-date-range'
-            };
+            } as DeepnoteBlock;
 
             const cell = converter.convertToCell(block);
 
@@ -985,13 +995,13 @@ suite('InputFileBlockConverter', () => {
         });
 
         test('handles missing metadata with default config', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
                 sortingKey: 'a0',
                 type: 'input-file'
-            };
+            } as DeepnoteBlock;
 
             const cell = converter.convertToCell(block);
 
@@ -999,7 +1009,7 @@ suite('InputFileBlockConverter', () => {
         });
 
         test('escapes backslashes in Windows file paths', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
@@ -1008,7 +1018,7 @@ suite('InputFileBlockConverter', () => {
                 },
                 sortingKey: 'a0',
                 type: 'input-file'
-            };
+            } as DeepnoteBlock;
 
             const cell = converter.convertToCell(block);
 
@@ -1016,7 +1026,7 @@ suite('InputFileBlockConverter', () => {
         });
 
         test('escapes quotes in file paths', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
@@ -1025,7 +1035,7 @@ suite('InputFileBlockConverter', () => {
                 },
                 sortingKey: 'a0',
                 type: 'input-file'
-            };
+            } as DeepnoteBlock;
 
             const cell = converter.convertToCell(block);
 
@@ -1035,7 +1045,7 @@ suite('InputFileBlockConverter', () => {
 
     suite('applyChangesToBlock', () => {
         test('applies file path from cell', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
@@ -1045,7 +1055,7 @@ suite('InputFileBlockConverter', () => {
                 },
                 sortingKey: 'a0',
                 type: 'input-file'
-            };
+            } as DeepnoteBlock;
             const cell = new NotebookCellData(NotebookCellKind.Code, '"document.pdf"', 'python');
 
             converter.applyChangesToBlock(block, cell);
@@ -1058,7 +1068,7 @@ suite('InputFileBlockConverter', () => {
         });
 
         test('handles unquoted file path', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
@@ -1067,7 +1077,7 @@ suite('InputFileBlockConverter', () => {
                 },
                 sortingKey: 'a0',
                 type: 'input-file'
-            };
+            } as DeepnoteBlock;
             const cell = new NotebookCellData(NotebookCellKind.Code, 'file.txt', 'python');
 
             converter.applyChangesToBlock(block, cell);
@@ -1130,13 +1140,13 @@ suite('ButtonBlockConverter', () => {
         });
 
         test('handles missing metadata with default config', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
                 sortingKey: 'a0',
                 type: 'button'
-            };
+            } as DeepnoteBlock;
 
             const cell = converter.convertToCell(block);
 
@@ -1171,13 +1181,13 @@ suite('ButtonBlockConverter', () => {
         });
 
         test('applies default config when metadata is missing', () => {
-            const block: DeepnoteBlock = {
+            const block = {
                 blockGroup: 'test-group',
                 content: '',
                 id: 'block-123',
                 sortingKey: 'a0',
                 type: 'button'
-            };
+            } as DeepnoteBlock;
             const cell = new NotebookCellData(NotebookCellKind.Code, '# Buttons only work in Deepnote apps', 'python');
 
             converter.applyChangesToBlock(block, cell);

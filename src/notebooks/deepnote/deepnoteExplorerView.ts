@@ -1,7 +1,6 @@
 import { injectable, inject } from 'inversify';
 import { commands, window, workspace, type TreeView, Uri, l10n } from 'vscode';
-import * as yaml from 'js-yaml';
-import { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
+import { serializeDeepnoteFile, type DeepnoteBlock, type DeepnoteFile } from '@deepnote/blocks';
 import { convertDeepnoteToJupyterNotebooks, convertIpynbFilesToDeepnoteFile } from '@deepnote/convert';
 
 import { IExtensionContext } from '../../platform/common/types';
@@ -131,7 +130,7 @@ export class DeepnoteExplorerView {
             }
             projectData.metadata.modifiedAt = new Date().toISOString();
 
-            const updatedYaml = yaml.dump(projectData);
+            const updatedYaml = serializeDeepnoteFile(projectData);
             const encoder = new TextEncoder();
             await workspace.fs.writeFile(fileUri, encoder.encode(updatedYaml));
 
@@ -179,7 +178,7 @@ export class DeepnoteExplorerView {
             }
             projectData.metadata.modifiedAt = new Date().toISOString();
 
-            const updatedYaml = yaml.dump(projectData);
+            const updatedYaml = serializeDeepnoteFile(projectData);
             const encoder = new TextEncoder();
             await workspace.fs.writeFile(fileUri, encoder.encode(updatedYaml));
 
@@ -254,7 +253,7 @@ export class DeepnoteExplorerView {
             }
             projectData.metadata.modifiedAt = new Date().toISOString();
 
-            const updatedYaml = yaml.dump(projectData);
+            const updatedYaml = serializeDeepnoteFile(projectData);
             const encoder = new TextEncoder();
             await workspace.fs.writeFile(fileUri, encoder.encode(updatedYaml));
 
@@ -315,7 +314,7 @@ export class DeepnoteExplorerView {
             }
             projectData.metadata.modifiedAt = new Date().toISOString();
 
-            const updatedYaml = yaml.dump(projectData);
+            const updatedYaml = serializeDeepnoteFile(projectData);
             const encoder = new TextEncoder();
             await workspace.fs.writeFile(fileUri, encoder.encode(updatedYaml));
 
@@ -501,7 +500,7 @@ export class DeepnoteExplorerView {
         projectData.metadata.modifiedAt = new Date().toISOString();
 
         // Write the updated YAML
-        const updatedYaml = yaml.dump(projectData);
+        const updatedYaml = serializeDeepnoteFile(projectData);
         const encoder = new TextEncoder();
         await workspace.fs.writeFile(fileUri, encoder.encode(updatedYaml));
 
@@ -694,7 +693,7 @@ export class DeepnoteExplorerView {
                 }
             };
 
-            const yamlContent = yaml.dump(projectData);
+            const yamlContent = serializeDeepnoteFile(projectData);
             const encoder = new TextEncoder();
             const contentBuffer = encoder.encode(yamlContent);
 

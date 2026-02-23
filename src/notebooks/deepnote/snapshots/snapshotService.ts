@@ -1,5 +1,7 @@
 import {
     deserializeDeepnoteFile,
+    isExecutableBlock,
+    serializeDeepnoteFile,
     type DeepnoteBlock,
     type DeepnoteFile,
     type Environment,
@@ -8,7 +10,6 @@ import {
 } from '@deepnote/blocks';
 import fastDeepEqual from 'fast-deep-equal';
 import { inject, injectable, optional } from 'inversify';
-import * as yaml from 'js-yaml';
 import { Disposable, FileType, NotebookCell, NotebookCellKind, RelativePattern, Uri, window, workspace } from 'vscode';
 import { Utils } from 'vscode-uri';
 
@@ -258,7 +259,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         const outputsMap = new Map<string, DeepnoteOutput[]>();
 
         for (const block of blocks) {
-            if (block.id && block.outputs) {
+            if (block.id && isExecutableBlock(block) && block.outputs) {
                 outputsMap.set(block.id, block.outputs as DeepnoteOutput[]);
             }
         }
@@ -478,6 +479,10 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
     stripOutputsFromBlocks(blocks: DeepnoteBlock[]): DeepnoteBlock[] {
         return blocks.map((block) => {
+            if (!isExecutableBlock(block)) {
+                return { ...block };
+            }
+
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { outputs, executionCount, executionFinishedAt, executionStartedAt, ...strippedBlock } = block;
 
@@ -839,7 +844,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
                 for (const block of notebook.blocks) {
                     totalBlocks++;
                     try {
-                        if (block.outputs) {
+                        if (isExecutableBlock(block) && block.outputs) {
                             outputsMap.set(block.id, block.outputs as DeepnoteOutput[]);
                         }
                     } catch (blockError) {
@@ -912,13 +917,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             }
         }
 
-        const yamlString = yaml.dump(snapshotData, {
-            indent: 2,
-            lineWidth: -1,
-            noRefs: true,
-            sortKeys: false
-        });
-
+        const yamlString = serializeDeepnoteFile(snapshotData);
         const content = new TextEncoder().encode(yamlString);
 
         return { latestPath, content };

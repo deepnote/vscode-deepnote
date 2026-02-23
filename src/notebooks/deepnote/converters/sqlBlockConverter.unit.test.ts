@@ -42,6 +42,7 @@ suite('SqlBlockConverter', () => {
                 content: 'SELECT * FROM users WHERE age > 18',
                 id: 'sql-block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'sql'
             };
 
@@ -58,6 +59,7 @@ suite('SqlBlockConverter', () => {
                 content: '',
                 id: 'sql-block-456',
                 sortingKey: 'a1',
+                metadata: {},
                 type: 'sql'
             };
 
@@ -73,6 +75,7 @@ suite('SqlBlockConverter', () => {
                 blockGroup: 'test-group',
                 id: 'sql-block-789',
                 sortingKey: 'a2',
+                metadata: {},
                 type: 'sql'
             };
 
@@ -102,6 +105,7 @@ suite('SqlBlockConverter', () => {
                 content: sqlQuery,
                 id: 'sql-block-complex',
                 sortingKey: 'a3',
+                metadata: {},
                 type: 'sql'
             };
 
@@ -141,6 +145,7 @@ suite('SqlBlockConverter', () => {
                 content: 'SELECT * FROM old_table',
                 id: 'sql-block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'sql'
             };
             const cell = new NotebookCellData(
@@ -160,6 +165,7 @@ suite('SqlBlockConverter', () => {
                 content: 'SELECT * FROM users',
                 id: 'sql-block-456',
                 sortingKey: 'a1',
+                metadata: {},
                 type: 'sql'
             };
             const cell = new NotebookCellData(NotebookCellKind.Code, '', 'sql');

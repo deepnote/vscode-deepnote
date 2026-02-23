@@ -43,6 +43,7 @@ suite('CodeBlockConverter', () => {
                 content: 'print("hello")',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'code'
             };
 
@@ -59,6 +60,7 @@ suite('CodeBlockConverter', () => {
                 content: '',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'code'
             };
 
@@ -85,6 +87,7 @@ suite('CodeBlockConverter', () => {
                 content: 'import numpy as np\nimport pandas as pd\n\nprint("hello")',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'code'
             };
 
@@ -101,6 +104,7 @@ suite('CodeBlockConverter', () => {
                 content: 'old content',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'code'
             };
             const cell = new NotebookCellData(NotebookCellKind.Code, 'new content', 'python');
@@ -116,6 +120,7 @@ suite('CodeBlockConverter', () => {
                 content: 'old content',
                 id: 'block-123',
                 sortingKey: 'a0',
+                metadata: {},
                 type: 'code'
             };
             const cell = new NotebookCellData(NotebookCellKind.Code, '', 'python');

@@ -1,4 +1,4 @@
-import type { DeepnoteBlock } from '@deepnote/blocks';
+import type { DeepnoteBlock, ExecutableBlock } from '@deepnote/blocks';
 import { assert } from 'chai';
 import { NotebookCellKind, NotebookCellOutput, NotebookCellOutputItem, type NotebookCellData } from 'vscode';
 
@@ -45,7 +45,8 @@ suite('DeepnoteDataConverter', () => {
                     id: 'block2',
                     type: 'markdown',
                     content: '# Title',
-                    sortingKey: 'a1'
+                    sortingKey: 'a1',
+                    metadata: {}
                 }
             ];
 
@@ -95,7 +96,8 @@ suite('DeepnoteDataConverter', () => {
                     type: 'code',
                     content: 'x = 1',
                     sortingKey: 'a0',
-                    executionCount: 5
+                    executionCount: 5,
+                    metadata: {}
                 }
             ];
 
@@ -112,6 +114,7 @@ suite('DeepnoteDataConverter', () => {
                     type: 'code',
                     content: 'print("hello")',
                     sortingKey: 'a0',
+                    metadata: {},
                     outputs: [
                         {
                             output_type: 'stream',
@@ -244,8 +247,8 @@ suite('DeepnoteDataConverter', () => {
 
             const blocks = converter.convertCellsToBlocks(cells);
 
-            assert.strictEqual(blocks[0].executionCount, 10);
-            assert.strictEqual(blocks[1].executionCount, 20);
+            assert.strictEqual((blocks[0] as ExecutableBlock).executionCount, 10);
+            assert.strictEqual((blocks[1] as ExecutableBlock).executionCount, 20);
         });
     });
 
@@ -265,6 +268,7 @@ suite('DeepnoteDataConverter', () => {
                     type: 'code',
                     content: 'print("Hello world")',
                     sortingKey: 'a0',
+                    metadata: {},
                     outputs: deepnoteOutputs
                 }
             ];
@@ -293,6 +297,7 @@ suite('DeepnoteDataConverter', () => {
                     type: 'code',
                     content: 'print(x)',
                     sortingKey: 'a0',
+                    metadata: {},
                     outputs: deepnoteOutputs
                 }
             ];
@@ -326,6 +331,7 @@ suite('DeepnoteDataConverter', () => {
                     type: 'code',
                     content: 'x',
                     sortingKey: 'a0',
+                    metadata: {},
                     outputs: deepnoteOutputs
                 }
             ];
@@ -356,6 +362,7 @@ suite('DeepnoteDataConverter', () => {
                     type: 'code',
                     content: 'None',
                     sortingKey: 'a0',
+                    metadata: {},
                     outputs: deepnoteOutputs
                 }
             ];
@@ -382,6 +389,7 @@ suite('DeepnoteDataConverter', () => {
                     type: 'code',
                     content: 'something',
                     sortingKey: 'a0',
+                    metadata: {},
                     outputs: deepnoteOutputs
                 }
             ];
@@ -409,6 +417,7 @@ suite('DeepnoteDataConverter', () => {
                     type: 'code',
                     content: 'print()',
                     sortingKey: 'a0',
+                    metadata: {},
                     outputs: deepnoteOutputs
                 }
             ];
@@ -435,6 +444,7 @@ suite('DeepnoteDataConverter', () => {
                     type: 'code',
                     content: 'result',
                     sortingKey: 'a0',
+                    metadata: {},
                     outputs: deepnoteOutputs
                 }
             ];
@@ -475,6 +485,7 @@ suite('DeepnoteDataConverter', () => {
                     type: 'code',
                     content: 'SELECT * FROM users',
                     sortingKey: 'a0',
+                    metadata: {},
                     outputs: deepnoteOutputs
                 }
             ];
@@ -511,6 +522,7 @@ suite('DeepnoteDataConverter', () => {
                     type: 'code',
                     content: 'display_markdown()',
                     sortingKey: 'a0',
+                    metadata: {},
                     outputs: deepnoteOutputs
                 }
             ];
@@ -563,6 +575,7 @@ suite('DeepnoteDataConverter', () => {
                     type: 'code',
                     content: 'fig.show()',
                     sortingKey: 'a0',
+                    metadata: {},
                     outputs: deepnoteOutputs
                 }
             ];
@@ -651,9 +664,9 @@ suite('DeepnoteDataConverter', () => {
             // The round-trip should preserve the SQL metadata output
             assert.strictEqual(roundTripBlocks.length, 1);
             assert.strictEqual(roundTripBlocks[0].id, 'sql-block');
-            assert.strictEqual(roundTripBlocks[0].outputs?.length, 1);
+            assert.strictEqual((roundTripBlocks[0] as ExecutableBlock).outputs?.length, 1);
 
-            const output = roundTripBlocks[0].outputs![0] as {
+            const output = (roundTripBlocks[0] as ExecutableBlock).outputs![0] as {
                 output_type: string;
                 data?: Record<string, unknown>;
             };
@@ -711,9 +724,9 @@ suite('DeepnoteDataConverter', () => {
             // The round-trip should preserve the Plotly chart output
             assert.strictEqual(roundTripBlocks.length, 1);
             assert.strictEqual(roundTripBlocks[0].id, 'plotly-block');
-            assert.strictEqual(roundTripBlocks[0].outputs?.length, 1);
+            assert.strictEqual((roundTripBlocks[0] as ExecutableBlock).outputs?.length, 1);
 
-            const output = roundTripBlocks[0].outputs![0] as {
+            const output = (roundTripBlocks[0] as ExecutableBlock).outputs![0] as {
                 output_type: string;
                 data?: Record<string, unknown>;
             };
@@ -835,11 +848,11 @@ suite('DeepnoteDataConverter', () => {
 
             assert.strictEqual(blocks.length, 1);
             assert.strictEqual(blocks[0].type, 'code');
-            assert.isDefined(blocks[0].outputs);
-            assert.strictEqual(blocks[0].outputs!.length, 1);
+            assert.isDefined((blocks[0] as ExecutableBlock).outputs);
+            assert.strictEqual((blocks[0] as ExecutableBlock).outputs!.length, 1);
 
             // Verify the output data is properly base64 encoded
-            const output = blocks[0].outputs![0] as { data?: Record<string, unknown> };
+            const output = (blocks[0] as ExecutableBlock).outputs![0] as { data?: Record<string, unknown> };
             assert.isDefined(output.data);
             assert.isDefined(output.data!['image/png']);
             assert.isString(output.data!['image/png']);

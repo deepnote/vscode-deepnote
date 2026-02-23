@@ -1,6 +1,6 @@
-import type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
+import type { DeepnoteBlock, DeepnoteFile, DeepnoteSnapshot } from '@deepnote/blocks';
+import { deserializeDeepnoteFile, isExecutableBlock, serializeDeepnoteSnapshot } from '@deepnote/blocks';
 import { inject, injectable, optional } from 'inversify';
-import * as yaml from 'js-yaml';
 import { l10n, window, workspace, type CancellationToken, type NotebookData, type NotebookSerializer } from 'vscode';
 
 import { logger } from '../../platform/logging';
@@ -83,7 +83,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
         try {
             const contentString = new TextDecoder('utf-8').decode(content);
-            const deepnoteFile = yaml.load(contentString) as DeepnoteFile;
+            const deepnoteFile = deserializeDeepnoteFile(contentString);
 
             if (!deepnoteFile.project?.notebooks) {
                 throw new Error('Invalid Deepnote file: no notebooks found');
@@ -293,7 +293,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             // Handle snapshot mode: strip outputs and execution metadata from main file
             if (this.snapshotService?.isSnapshotsEnabled()) {
                 // Strip outputs and execution timestamps from main file blocks
-                // Also clone to remove circular references that may cause yaml.dump to fail
+                // Also clone to remove circular references that may cause serialization to fail
                 const strippedBlocks = this.snapshotService.stripOutputsFromBlocks(blocks);
                 notebook.blocks = cloneWithoutCircularRefs<DeepnoteBlock[]>(strippedBlocks);
 
@@ -336,16 +336,16 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             // Store the updated project back so subsequent saves start from correct state
             this.notebookManager.storeOriginalProject(projectId, originalProject, notebookId);
 
-            logger.debug('SerializeNotebook: Starting yaml.dump');
+            logger.debug('SerializeNotebook: Serializing to YAML');
 
-            const yamlString = yaml.dump(originalProject, {
-                indent: 2,
-                lineWidth: -1,
-                noRefs: true,
-                sortKeys: false
-            });
+            const projectToSerialize = {
+                ...originalProject,
+                environment: originalProject.environment ?? {},
+                execution: originalProject.execution ?? {}
+            } as DeepnoteSnapshot;
+            const yamlString = serializeDeepnoteSnapshot(projectToSerialize);
 
-            logger.debug(`SerializeNotebook: yaml.dump complete, ${yamlString.length} chars`);
+            logger.debug(`SerializeNotebook: Serialization complete, ${yamlString.length} chars`);
 
             return new TextEncoder().encode(yamlString);
         } catch (error) {
@@ -380,7 +380,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 }
             }
 
-            if (this.snapshotService && notebookUri && cell?.metadata?.id) {
+            if (this.snapshotService && notebookUri && cell?.metadata?.id && isExecutableBlock(block)) {
                 const cellId = cell.metadata.id as string;
                 const executionMetadata = this.snapshotService.getBlockExecutionMetadata(notebookUri, cellId);
 

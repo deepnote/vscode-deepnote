@@ -121,7 +121,7 @@ suite('DeepnoteFileChangeWatcher', () => {
     }
 
     const validYaml = `
-version: '1.0'
+version: '1.0.0'
 metadata:
   createdAt: '2025-01-01T00:00:00Z'
 project:
@@ -134,6 +134,7 @@ project:
         - id: block-1
           type: code
           sortingKey: a0
+          blockGroup: '1'
           content: print("hello")
 `;
 
@@ -314,7 +315,7 @@ project:
 
         // Second change: use different YAML content
         const changedYaml = `
-version: '1.0'
+version: '1.0.0'
 metadata:
   createdAt: '2025-01-01T00:00:00Z'
 project:
@@ -327,6 +328,7 @@ project:
         - id: block-1
           type: code
           sortingKey: a0
+          blockGroup: '1'
           content: print("world")
 `;
         setupMockFs(changedYaml);

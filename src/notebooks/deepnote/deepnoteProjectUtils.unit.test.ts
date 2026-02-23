@@ -26,6 +26,8 @@ suite('DeepnoteProjectUtils', () => {
 
             const validYaml = `
 version: '1'
+metadata:
+  createdAt: '2024-01-01T00:00:00.000Z'
 project:
   id: test-project-id
   name: Test Project
@@ -75,7 +77,9 @@ project:
             const testUri = Uri.file('/test/unicode.deepnote');
 
             const yamlWithUnicode = `
-version: 1
+version: '1'
+metadata:
+  createdAt: '2024-01-01T00:00:00.000Z'
 project:
   id: test-id
   name: Test Project with emojis 🚀

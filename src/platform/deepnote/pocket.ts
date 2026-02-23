@@ -1,4 +1,5 @@
-import type { DeepnoteBlock } from '@deepnote/blocks';
+import type { DeepnoteBlock, ExecutableBlock } from '@deepnote/blocks';
+import { isExecutableBlockType } from '@deepnote/blocks';
 import { NotebookCellKind, type NotebookCellData } from 'vscode';
 
 import { generateBlockId, generateSortingKey } from '../../notebooks/deepnote/dataConversionUtils';
@@ -99,30 +100,32 @@ export function createBlockFromPocket(cell: NotebookCellData, index: number): De
     // 1. Use the type from the pocket if available
     // 2. Otherwise, infer from the cell kind (Code -> 'code', Markup -> 'markdown')
     const defaultType = cell.kind === NotebookCellKind.Code ? 'code' : 'markdown';
+    const blockType = (pocket?.type || defaultType) as DeepnoteBlock['type'];
 
-    const block: DeepnoteBlock = {
+    const block = {
         blockGroup: pocket?.blockGroup || generateUuid(),
         content: cell.value,
         id: cellId || generateBlockId(),
-        metadata,
+        metadata: metadata as DeepnoteBlock['metadata'],
         sortingKey: pocket?.sortingKey || generateSortingKey(index),
-        type: pocket?.type || defaultType
-    };
+        type: blockType
+    } as DeepnoteBlock;
 
     if (pocket?.contentHash !== undefined) {
         block.contentHash = pocket.contentHash;
     }
 
-    if (pocket?.executionCount !== undefined) {
-        block.executionCount = pocket.executionCount;
-    }
-
-    if (pocket?.executionFinishedAt !== undefined) {
-        block.executionFinishedAt = pocket.executionFinishedAt;
-    }
-
-    if (pocket?.executionStartedAt !== undefined) {
-        block.executionStartedAt = pocket.executionStartedAt;
+    if (isExecutableBlockType(blockType)) {
+        const execBlock = block as ExecutableBlock;
+        if (pocket?.executionCount !== undefined) {
+            execBlock.executionCount = pocket.executionCount;
+        }
+        if (pocket?.executionFinishedAt !== undefined) {
+            execBlock.executionFinishedAt = pocket.executionFinishedAt;
+        }
+        if (pocket?.executionStartedAt !== undefined) {
+            execBlock.executionStartedAt = pocket.executionStartedAt;
+        }
     }
 
     return block;

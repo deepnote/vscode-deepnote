@@ -130,9 +130,9 @@ suite('Pocket', () => {
             assert.strictEqual(block.id, 'block-123');
             assert.strictEqual(block.type, 'code');
             assert.strictEqual(block.sortingKey, 'a0');
-            assert.strictEqual(block.executionCount, 5);
+            assert.strictEqual((block as any).executionCount, 5);
             assert.strictEqual(block.content, 'print("hello")');
-            assert.strictEqual(block.outputs, undefined);
+            assert.strictEqual((block as any).outputs, undefined);
         });
 
         test('creates block with generated ID and sortingKey when no pocket exists', () => {
@@ -143,7 +143,7 @@ suite('Pocket', () => {
             assert.match(block.id, /^[0-9a-f]{32}$/);
             assert.strictEqual(block.type, 'code');
             assert.strictEqual(block.sortingKey, 'a5');
-            assert.isUndefined(block.executionCount);
+            assert.isUndefined((block as any).executionCount);
         });
 
         test('removes __deepnotePocket from block metadata', () => {
@@ -228,7 +228,7 @@ suite('Pocket', () => {
             assert.strictEqual(block.id, 'block-123');
             assert.strictEqual(block.type, 'code');
             assert.strictEqual(block.sortingKey, 'a3');
-            assert.isUndefined(block.executionCount);
+            assert.isUndefined((block as any).executionCount);
         });
     });
 });

@@ -1,5 +1,7 @@
 import {
-    deepnoteFileSchema,
+    deserializeDeepnoteFile,
+    isExecutableBlock,
+    serializeDeepnoteFile,
     type DeepnoteBlock,
     type DeepnoteFile,
     type Environment,
@@ -8,7 +10,6 @@ import {
 } from '@deepnote/blocks';
 import fastDeepEqual from 'fast-deep-equal';
 import { inject, injectable, optional } from 'inversify';
-import * as yaml from 'js-yaml';
 import { FileType, NotebookCell, NotebookCellKind, RelativePattern, Uri, window, workspace } from 'vscode';
 import { Utils } from 'vscode-uri';
 
@@ -241,7 +242,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         const outputsMap = new Map<string, DeepnoteOutput[]>();
 
         for (const block of blocks) {
-            if (block.id && block.outputs) {
+            if (block.id && isExecutableBlock(block) && block.outputs) {
                 outputsMap.set(block.id, block.outputs as DeepnoteOutput[]);
             }
         }
@@ -432,6 +433,10 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
     stripOutputsFromBlocks(blocks: DeepnoteBlock[]): DeepnoteBlock[] {
         return blocks.map((block) => {
+            if (!isExecutableBlock(block)) {
+                return { ...block };
+            }
+
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { outputs, executionCount, executionFinishedAt, executionStartedAt, ...strippedBlock } = block;
 
@@ -593,7 +598,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         try {
             const existingContent = await workspace.fs.readFile(latestPath);
             const existingString = new TextDecoder('utf-8').decode(existingContent);
-            const existingData = yaml.load(existingString) as DeepnoteFile;
+            const existingData = deserializeDeepnoteFile(existingString);
 
             const existingProject = this.getComparableProjectContent(existingData);
             const newProject = this.getComparableProjectContent(projectData);
@@ -778,32 +783,22 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     private async parseSnapshotFile(path: Uri): Promise<Map<string, DeepnoteOutput[]>> {
         const outputsMap = new Map<string, DeepnoteOutput[]>();
 
-        let snapshotData: unknown;
+        let data: DeepnoteFile;
 
         try {
             const content = await workspace.fs.readFile(path);
             const contentString = new TextDecoder('utf-8').decode(content);
 
-            snapshotData = yaml.load(contentString);
+            data = deserializeDeepnoteFile(contentString);
         } catch (error) {
             logger.error(`[Snapshot] Failed to read or parse snapshot file: ${Utils.basename(path)}`, error);
 
             return outputsMap;
         }
 
-        const result = deepnoteFileSchema.safeParse(snapshotData);
-
-        if (!result.success) {
-            logger.warn(`[Snapshot] Invalid snapshot structure: ${Utils.basename(path)}`, result.error);
-
-            return outputsMap;
-        }
-
-        const data = result.data;
-
         for (const notebook of data.project.notebooks) {
             for (const block of notebook.blocks) {
-                if (block.outputs) {
+                if (isExecutableBlock(block) && block.outputs) {
                     outputsMap.set(block.id, block.outputs as DeepnoteOutput[]);
                 }
             }
@@ -870,13 +865,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             }
         }
 
-        const yamlString = yaml.dump(snapshotData, {
-            indent: 2,
-            lineWidth: -1,
-            noRefs: true,
-            sortKeys: false
-        });
-
+        const yamlString = serializeDeepnoteFile(snapshotData);
         const content = new TextEncoder().encode(yamlString);
 
         return { latestPath, content };

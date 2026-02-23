@@ -69,6 +69,7 @@ import {
     IDeepnoteNotebookEnvironmentMapper,
     IDeepnoteLspClientManager
 } from '../kernels/deepnote/types';
+import { DeepnoteAgentSkillsManager } from '../kernels/deepnote/deepnoteAgentSkillsManager.node';
 import { DeepnoteToolkitInstaller } from '../kernels/deepnote/deepnoteToolkitInstaller.node';
 import { DeepnoteServerStarter } from '../kernels/deepnote/deepnoteServerStarter.node';
 import { DeepnoteKernelAutoSelector } from './deepnote/deepnoteKernelAutoSelector.node';
@@ -80,6 +81,7 @@ import { DeepnoteEnvironmentManager } from '../kernels/deepnote/environments/dee
 import { DeepnoteEnvironmentStorage } from '../kernels/deepnote/environments/deepnoteEnvironmentStorage.node';
 import { DeepnoteEnvironmentsView } from '../kernels/deepnote/environments/deepnoteEnvironmentsView.node';
 import { DeepnoteEnvironmentsActivationService } from '../kernels/deepnote/environments/deepnoteEnvironmentsActivationService';
+import { DeepnoteExtensionSidecarWriter } from '../kernels/deepnote/environments/deepnoteExtensionSidecarWriter.node';
 import { DeepnoteNotebookEnvironmentMapper } from '../kernels/deepnote/environments/deepnoteNotebookEnvironmentMapper.node';
 import { DeepnoteNotebookCommandListener } from './deepnote/deepnoteNotebookCommandListener';
 import { DeepnoteInputBlockCellStatusBarItemProvider } from './deepnote/deepnoteInputBlockCellStatusBarProvider';
@@ -208,6 +210,7 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     );
 
     // Deepnote kernel services
+    serviceManager.addSingleton<DeepnoteAgentSkillsManager>(DeepnoteAgentSkillsManager, DeepnoteAgentSkillsManager);
     serviceManager.addSingleton<IDeepnoteToolkitInstaller>(IDeepnoteToolkitInstaller, DeepnoteToolkitInstaller);
     serviceManager.addSingleton<IDeepnoteServerStarter>(IDeepnoteServerStarter, DeepnoteServerStarter);
     serviceManager.addBinding(IDeepnoteServerStarter, IExtensionSyncActivationService);
@@ -251,6 +254,12 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IDeepnoteNotebookEnvironmentMapper>(
         IDeepnoteNotebookEnvironmentMapper,
         DeepnoteNotebookEnvironmentMapper
+    );
+
+    // Sidecar file writer (exposes env mappings for external tools)
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        DeepnoteExtensionSidecarWriter
     );
 
     // Snapshot service

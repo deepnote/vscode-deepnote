@@ -126,8 +126,8 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     private readonly converter = new DeepnoteDataConverter();
     private readonly executionStates = new Map<string, NotebookExecutionState>();
     private readonly fileWrittenCallbacks: ((uri: Uri) => void)[] = [];
-    private readonly recentlyWrittenUris = new Set<string>();
     private readonly recentlyWrittenTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    private readonly recentlyWrittenUris = new Set<string>();
 
     constructor(
         @inject(IEnvironmentCapture) private readonly environmentCapture: IEnvironmentCapture,
@@ -349,31 +349,6 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         return config.get<boolean>('snapshots.enabled', true);
     }
 
-    /**
-     * Registers a callback that is invoked whenever this service writes a file.
-     * Used by the file change watcher for deterministic self-write detection.
-     */
-    onFileWritten(callback: (uri: Uri) => void): Disposable {
-        this.fileWrittenCallbacks.push(callback);
-
-        return {
-            dispose: () => {
-                const idx = this.fileWrittenCallbacks.indexOf(callback);
-                if (idx >= 0) {
-                    this.fileWrittenCallbacks.splice(idx, 1);
-                }
-            }
-        };
-    }
-
-    /**
-     * Checks whether a URI was recently written by this extension.
-     * Used by the file change watcher to skip processing self-triggered changes.
-     */
-    wasRecentlyWritten(uri: Uri): boolean {
-        return this.recentlyWrittenUris.has(uri.toString());
-    }
-
     mergeOutputsIntoBlocks(blocks: DeepnoteBlock[], outputs: Map<string, DeepnoteOutput[]>): DeepnoteBlock[] {
         let mergedCount = 0;
 
@@ -396,6 +371,23 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         logger.debug(`[Snapshot] Merged outputs into ${mergedCount}/${blocks.length} blocks`);
 
         return mergedBlocks;
+    }
+
+    /**
+     * Registers a callback that is invoked whenever this service writes a file.
+     * Used by the file change watcher for deterministic self-write detection.
+     */
+    onFileWritten(callback: (uri: Uri) => void): Disposable {
+        this.fileWrittenCallbacks.push(callback);
+
+        return {
+            dispose: () => {
+                const idx = this.fileWrittenCallbacks.indexOf(callback);
+                if (idx >= 0) {
+                    this.fileWrittenCallbacks.splice(idx, 1);
+                }
+            }
+        };
     }
 
     async readSnapshot(projectId: string): Promise<Map<string, DeepnoteOutput[]> | undefined> {
@@ -488,6 +480,14 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
             return strippedBlock as DeepnoteBlock;
         });
+    }
+
+    /**
+     * Checks whether a URI was recently written by this extension.
+     * Used by the file change watcher to skip processing self-triggered changes.
+     */
+    wasRecentlyWritten(uri: Uri): boolean {
+        return this.recentlyWrittenUris.has(uri.toString());
     }
 
     private buildSnapshotPath(
@@ -998,7 +998,11 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         );
 
         for (const callback of this.fileWrittenCallbacks) {
-            callback(uri);
+            try {
+                callback(uri);
+            } catch (error) {
+                logger.warn('[Snapshot] File written callback failed', error);
+            }
         }
     }
 

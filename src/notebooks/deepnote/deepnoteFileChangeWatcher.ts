@@ -59,21 +59,6 @@ interface PendingOperation {
 export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationService {
     private readonly converter = new DeepnoteDataConverter();
     private readonly debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
-    private readonly serializer: DeepnoteNotebookSerializer;
-
-    /**
-     * Deterministic self-write tracking for workspace.save() calls.
-     * Incremented before save, decremented when the fs event arrives.
-     */
-    private readonly selfWriteCounts = new Map<string, number>();
-    private readonly selfWriteTimers = new Map<string, ReturnType<typeof setTimeout>>();
-
-    /**
-     * Deterministic self-write tracking for snapshot file writes.
-     * Populated via SnapshotService.onFileWritten callback.
-     */
-    private readonly snapshotSelfWriteUris = new Set<string>();
-    private readonly snapshotSelfWriteTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
     /**
      * Per-notebook operation queue. Only one operation runs at a time per notebook.
@@ -81,6 +66,21 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
      */
     private readonly pendingOperations = new Map<string, PendingOperation>();
     private readonly runningOperations = new Set<string>();
+
+    /**
+     * Deterministic self-write tracking for workspace.save() calls.
+     * Incremented before save, decremented when the fs event arrives.
+     */
+    private readonly selfWriteCounts = new Map<string, number>();
+    private readonly selfWriteTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    private readonly serializer: DeepnoteNotebookSerializer;
+
+    /**
+     * Deterministic self-write tracking for snapshot file writes.
+     * Populated via SnapshotService.onFileWritten callback.
+     */
+    private readonly snapshotSelfWriteTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    private readonly snapshotSelfWriteUris = new Set<string>();
 
     constructor(
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
@@ -587,11 +587,14 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         }
 
         try {
-            for (const update of cellUpdates) {
-                const execution = selectedController.controller.createNotebookCellExecution(update.cell);
-                execution.start();
-                await execution.replaceOutput(update.newOutputs);
-                execution.end(true);
+            const executions = cellUpdates.map((update) => ({
+                exec: selectedController.controller.createNotebookCellExecution(update.cell),
+                outputs: update.newOutputs
+            }));
+            for (const { exec, outputs } of executions) {
+                exec.start();
+                await exec.replaceOutput(outputs);
+                exec.end(true);
             }
             return true;
         } catch (error) {

@@ -9,7 +9,7 @@ import {
 import fastDeepEqual from 'fast-deep-equal';
 import { inject, injectable, optional } from 'inversify';
 import * as yaml from 'js-yaml';
-import { FileType, NotebookCell, NotebookCellKind, RelativePattern, Uri, window, workspace } from 'vscode';
+import { Disposable, FileType, NotebookCell, NotebookCellKind, RelativePattern, Uri, window, workspace } from 'vscode';
 import { Utils } from 'vscode-uri';
 
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
@@ -124,6 +124,7 @@ function generateTimestamp(): string {
 export class SnapshotService implements ISnapshotMetadataService, IExtensionSyncActivationService {
     private readonly converter = new DeepnoteDataConverter();
     private readonly executionStates = new Map<string, NotebookExecutionState>();
+    private readonly fileWrittenCallbacks: ((uri: Uri) => void)[] = [];
     private readonly recentlyWrittenUris = new Set<string>();
     private readonly recentlyWrittenTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -345,6 +346,23 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         const config = workspace.getConfiguration('deepnote');
 
         return config.get<boolean>('snapshots.enabled', true);
+    }
+
+    /**
+     * Registers a callback that is invoked whenever this service writes a file.
+     * Used by the file change watcher for deterministic self-write detection.
+     */
+    onFileWritten(callback: (uri: Uri) => void): Disposable {
+        this.fileWrittenCallbacks.push(callback);
+
+        return {
+            dispose: () => {
+                const idx = this.fileWrittenCallbacks.indexOf(callback);
+                if (idx >= 0) {
+                    this.fileWrittenCallbacks.splice(idx, 1);
+                }
+            }
+        };
     }
 
     /**
@@ -979,6 +997,10 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
                 this.recentlyWrittenTimers.delete(key);
             }, recentWriteExpirationMs)
         );
+
+        for (const callback of this.fileWrittenCallbacks) {
+            callback(uri);
+        }
     }
 
     private async updateLatestSnapshot(

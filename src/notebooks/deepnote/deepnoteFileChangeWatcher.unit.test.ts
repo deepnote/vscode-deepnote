@@ -626,10 +626,10 @@ project:
 
             when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
 
-            // First snapshot change — should apply
+            // First snapshot change — should apply (replaceCells + metadata restore = 2 applyEdit calls)
             snapshotOnDidChange.fire(snapshotUri);
-            await waitFor(() => snapshotApplyEditCount >= 1);
-            assert.strictEqual(snapshotApplyEditCount, 1, 'applyEdit should be called on first snapshot change');
+            await waitFor(() => snapshotApplyEditCount >= 2);
+            assert.strictEqual(snapshotApplyEditCount, 2, 'applyEdit should be called on first snapshot change');
 
             // Now simulate that the notebook's live outputs match the snapshot
             // (outputs were successfully applied). Recreate notebook with matching outputs.
@@ -653,7 +653,7 @@ project:
             // Second identical snapshot change — should be skipped (live state matches)
             snapshotOnDidChange.fire(snapshotUri);
             await new Promise((resolve) => setTimeout(resolve, debounceWaitMs));
-            assert.strictEqual(snapshotApplyEditCount, 1, 'applyEdit should NOT be called again for matching outputs');
+            assert.strictEqual(snapshotApplyEditCount, 2, 'applyEdit should NOT be called again for matching outputs');
         });
 
         test('should update outputs when content changed but count is the same', async () => {
@@ -705,10 +705,10 @@ project:
             });
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
 
-            // First: fire snapshot change → outputs applied (single atomic applyEdit)
+            // First: fire snapshot change → outputs applied (replaceCells + metadata restore = 2 applyEdit calls)
             snapshotOnDidChange.fire(snapshotUri);
-            await waitFor(() => snapshotApplyEditCount >= 1);
-            assert.strictEqual(snapshotApplyEditCount, 1, 'applyEdit should be called for snapshot');
+            await waitFor(() => snapshotApplyEditCount >= 2);
+            assert.strictEqual(snapshotApplyEditCount, 2, 'applyEdit should be called for snapshot');
 
             // The snapshot update marked the main file URI as self-write.
             // Fire a main-file change — content comparison (same source) should skip it
@@ -720,12 +720,12 @@ project:
             // applyEdit should NOT be called again
             assert.strictEqual(
                 snapshotApplyEditCount,
-                1,
+                2,
                 'applyEdit should NOT be called again for recently snapshot-updated notebook'
             );
         });
 
-        test('should use atomic edit for snapshot updates (single applyEdit)', async () => {
+        test('should use two-phase edit for snapshot updates (replaceCells + metadata restore)', async () => {
             const snapshotUri = Uri.file('/workspace/snapshots/my-project_project-1_latest.snapshot.deepnote');
             const notebook = createMockNotebook({
                 uri: Uri.file('/workspace/test.deepnote'),
@@ -743,13 +743,13 @@ project:
 
             snapshotOnDidChange.fire(snapshotUri);
 
-            await waitFor(() => snapshotApplyEditCount >= 1);
+            await waitFor(() => snapshotApplyEditCount >= 2);
 
-            // Single applyEdit call containing per-cell replaceCells + metadata
+            // Two applyEdit calls: replaceCells then metadata restore (separate to avoid VS Code ID clobbering)
             assert.strictEqual(
                 snapshotApplyEditCount,
-                1,
-                'applyEdit should be called exactly once (atomic edit with per-cell updates + metadata)'
+                2,
+                'applyEdit should be called exactly twice (replaceCells + metadata restore)'
             );
         });
 
@@ -803,10 +803,11 @@ project:
 
             snapshotOnDidChange.fire(snapshotUri);
 
-            await waitFor(() => snapshotApplyEditCount > 0);
+            await waitFor(() => snapshotApplyEditCount >= 2);
 
             // Only block-1 should be updated; block-2 is untouched (per-cell updates)
-            assert.strictEqual(snapshotApplyEditCount, 1, 'applyEdit should be called once');
+            // Two applyEdit calls: replaceCells + metadata restore
+            assert.strictEqual(snapshotApplyEditCount, 2, 'applyEdit should be called twice (replaceCells + metadata)');
         });
 
         test('should apply snapshot outputs using original blocks when metadata is lost', async () => {
@@ -956,10 +957,10 @@ project:
 
             snapshotOnDidChange.fire(snapshotUri);
 
-            await waitFor(() => snapshotApplyEditCount > 0);
+            await waitFor(() => snapshotApplyEditCount >= 2);
 
-            // Only one applyEdit call, and it should contain edits only for changed cells
-            assert.strictEqual(snapshotApplyEditCount, 1, 'applyEdit should be called exactly once');
+            // Two applyEdit calls (replaceCells + metadata restore), containing edits only for changed cells
+            assert.strictEqual(snapshotApplyEditCount, 2, 'applyEdit should be called exactly twice (replaceCells + metadata)');
         });
 
         test('should apply outputs via execution API when kernel is active', async () => {

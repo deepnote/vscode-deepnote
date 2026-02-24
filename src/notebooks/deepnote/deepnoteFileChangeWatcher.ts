@@ -461,8 +461,11 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             return;
         }
 
-        // Fallback: use replaceCells when no kernel is available
-        const edits: NotebookEdit[] = [];
+        // Fallback: use replaceCells when no kernel is available.
+        // replaceCells and updateCellMetadata must be in separate WorkspaceEdits
+        // because VS Code assigns its own internal ID to the cell's metadata.id
+        // when processing replaceCells, overwriting our block ID.
+        const replaceEdits: NotebookEdit[] = [];
         for (const update of cellUpdates) {
             const cellData = new NotebookCellData(
                 update.cell.kind,
@@ -474,26 +477,35 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             cellData.metadata.__deepnoteBlockId = update.blockId;
             cellData.outputs = update.newOutputs;
 
-            edits.push(
+            replaceEdits.push(
                 NotebookEdit.replaceCells(new NotebookRange(update.cellIndex, update.cellIndex + 1), [cellData])
-            );
-            edits.push(
-                NotebookEdit.updateCellMetadata(update.cellIndex, {
-                    ...cellData.metadata,
-                    id: update.blockId,
-                    __deepnoteBlockId: update.blockId
-                })
             );
         }
 
         const wsEdit = new WorkspaceEdit();
-        wsEdit.set(notebook.uri, edits);
+        wsEdit.set(notebook.uri, replaceEdits);
         const applied = await workspace.applyEdit(wsEdit);
 
         if (!applied) {
             logger.warn(`[FileChangeWatcher] Failed to apply snapshot outputs: ${notebook.uri.path}`);
             return;
         }
+
+        // Restore block IDs in a separate edit so VS Code's internal ID assignment
+        // from replaceCells doesn't overwrite our block IDs.
+        const metadataEdits: NotebookEdit[] = [];
+        for (const update of cellUpdates) {
+            metadataEdits.push(
+                NotebookEdit.updateCellMetadata(update.cellIndex, {
+                    ...update.cell.metadata,
+                    id: update.blockId,
+                    __deepnoteBlockId: update.blockId
+                })
+            );
+        }
+        const metaEdit = new WorkspaceEdit();
+        metaEdit.set(notebook.uri, metadataEdits);
+        await workspace.applyEdit(metaEdit);
 
         // Save to sync mtime — mark as self-write first
         this.markSelfWrite(notebook.uri);

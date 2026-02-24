@@ -960,7 +960,11 @@ project:
             await waitFor(() => snapshotApplyEditCount >= 2);
 
             // Two applyEdit calls (replaceCells + metadata restore), containing edits only for changed cells
-            assert.strictEqual(snapshotApplyEditCount, 2, 'applyEdit should be called exactly twice (replaceCells + metadata)');
+            assert.strictEqual(
+                snapshotApplyEditCount,
+                2,
+                'applyEdit should be called exactly twice (replaceCells + metadata)'
+            );
         });
 
         test('should apply outputs via execution API when kernel is active', async () => {

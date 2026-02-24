@@ -15,6 +15,7 @@ const waitForTimeoutMs = 5000;
 const waitForIntervalMs = 50;
 const debounceWaitMs = 800;
 const rapidChangeIntervalMs = 100;
+const autoSaveGraceMs = 200;
 
 /**
  * Polls until a condition is met or a timeout is reached.
@@ -392,7 +393,7 @@ project:
 
         await waitFor(() => readFileCalls > 0);
         // Give extra time to ensure no applyEdit
-        await new Promise((resolve) => setTimeout(resolve, 200));
+        await new Promise((resolve) => setTimeout(resolve, autoSaveGraceMs));
 
         assert.isAtLeast(readFileCalls, 1, 'readFile should be called');
         assert.strictEqual(applyEditCount, 0, 'applyEdit should NOT be called for auto-save (same source)');

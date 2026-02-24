@@ -557,7 +557,10 @@ export class DeepnoteDataConverter {
             // Add metadata if present (excluding executionCount which we already handled)
             if (output.metadata) {
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                const { executionCount, ...restMetadata } = output.metadata;
+                const { executionCount, cellId, cellIndex, ...restMetadata } = output.metadata as Record<
+                    string,
+                    unknown
+                >;
 
                 if (Object.keys(restMetadata).length > 0) {
                     (deepnoteOutput as DeepnoteOutput & { metadata?: Record<string, unknown> }).metadata = restMetadata;

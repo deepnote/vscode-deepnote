@@ -122,27 +122,23 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         }
     }
 
-    /**
-     * Marks a URI as about to be written by us (workspace.save).
-     * Call before workspace.save() to prevent the resulting fs event from triggering a reload.
-     */
-    private markSelfWrite(uri: Uri): void {
-        const key = uri.toString();
-        const count = this.selfWriteCounts.get(key) ?? 0;
-        this.selfWriteCounts.set(key, count + 1);
-
-        // Safety net: clean stale entries after 30s
-        const existing = this.selfWriteTimers.get(key);
-        if (existing) {
-            clearTimeout(existing);
+    private clearAllTimers(): void {
+        for (const timer of this.debounceTimers.values()) {
+            clearTimeout(timer);
         }
-        this.selfWriteTimers.set(
-            key,
-            setTimeout(() => {
-                this.selfWriteCounts.delete(key);
-                this.selfWriteTimers.delete(key);
-            }, selfWriteExpirationMs)
-        );
+        this.debounceTimers.clear();
+
+        for (const timer of this.selfWriteTimers.values()) {
+            clearTimeout(timer);
+        }
+        this.selfWriteTimers.clear();
+        this.selfWriteCounts.clear();
+
+        for (const timer of this.snapshotSelfWriteTimers.values()) {
+            clearTimeout(timer);
+        }
+        this.snapshotSelfWriteTimers.clear();
+        this.snapshotSelfWriteUris.clear();
     }
 
     /**
@@ -199,61 +195,32 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         );
     }
 
-    private getBlockIdFromMetadata(metadata: Record<string, unknown> | undefined): string | undefined {
-        return (metadata?.id ?? metadata?.__deepnoteBlockId) as string | undefined;
-    }
-
-    private handleFileChange(uri: Uri): void {
-        // Deterministic self-write check — no timers involved
-        if (this.consumeSelfWrite(uri)) {
-            logger.info(`[FileChangeWatcher] Skipping self-write: ${uri.path}`);
-            return;
+    /**
+     * Drains the operation queue for a given notebook URI.
+     * Only one operation runs at a time per notebook.
+     */
+    private async drainQueue(nbKey: string, notebook: NotebookDocument, fileUri?: Uri): Promise<void> {
+        if (this.runningOperations.has(nbKey)) {
+            return; // Another operation is running; it will pick up the pending one when done
         }
 
-        if (isSnapshotFile(uri)) {
-            this.handleSnapshotFileChange(uri);
-            return;
+        while (this.pendingOperations.has(nbKey)) {
+            const op = this.pendingOperations.get(nbKey)!;
+            this.pendingOperations.delete(nbKey);
+            this.runningOperations.add(nbKey);
+
+            try {
+                if (op.type === 'main-file-sync') {
+                    await this.executeMainFileSync(notebook, fileUri ?? notebook.uri.with({ query: '', fragment: '' }));
+                } else if (op.type === 'snapshot-output-update' && op.projectId) {
+                    await this.executeSnapshotOutputUpdate(notebook, op.projectId);
+                }
+            } catch (error) {
+                logger.error(`[FileChangeWatcher] Operation ${op.type} failed for ${nbKey}`, error);
+            } finally {
+                this.runningOperations.delete(nbKey);
+            }
         }
-
-        // Main file change — debounce and enqueue
-        const key = uri.toString();
-        const existing = this.debounceTimers.get(key);
-        if (existing) {
-            clearTimeout(existing);
-        }
-
-        this.debounceTimers.set(
-            key,
-            setTimeout(() => {
-                this.debounceTimers.delete(key);
-                this.enqueueMainFileSync(uri);
-            }, debounceTimeInMilliseconds)
-        );
-    }
-
-    private handleSnapshotFileChange(uri: Uri): void {
-        if (!this.snapshotService || !this.snapshotService.isSnapshotsEnabled()) {
-            return;
-        }
-
-        const projectId = extractProjectIdFromSnapshotUri(uri);
-        if (!projectId) {
-            return;
-        }
-
-        const key = `snapshot:${projectId}`;
-        const existing = this.debounceTimers.get(key);
-        if (existing) {
-            clearTimeout(existing);
-        }
-
-        this.debounceTimers.set(
-            key,
-            setTimeout(() => {
-                this.debounceTimers.delete(key);
-                this.enqueueSnapshotOutputUpdate(projectId);
-            }, debounceTimeInMilliseconds)
-        );
     }
 
     /**
@@ -293,34 +260,6 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             }
             this.pendingOperations.set(nbKey, { type: 'snapshot-output-update', projectId });
             void this.drainQueue(nbKey, notebook);
-        }
-    }
-
-    /**
-     * Drains the operation queue for a given notebook URI.
-     * Only one operation runs at a time per notebook.
-     */
-    private async drainQueue(nbKey: string, notebook: NotebookDocument, fileUri?: Uri): Promise<void> {
-        if (this.runningOperations.has(nbKey)) {
-            return; // Another operation is running; it will pick up the pending one when done
-        }
-
-        while (this.pendingOperations.has(nbKey)) {
-            const op = this.pendingOperations.get(nbKey)!;
-            this.pendingOperations.delete(nbKey);
-            this.runningOperations.add(nbKey);
-
-            try {
-                if (op.type === 'main-file-sync') {
-                    await this.executeMainFileSync(notebook, fileUri ?? notebook.uri.with({ query: '', fragment: '' }));
-                } else if (op.type === 'snapshot-output-update' && op.projectId) {
-                    await this.executeSnapshotOutputUpdate(notebook, op.projectId);
-                }
-            } catch (error) {
-                logger.error(`[FileChangeWatcher] Operation ${op.type} failed for ${nbKey}`, error);
-            } finally {
-                this.runningOperations.delete(nbKey);
-            }
         }
     }
 
@@ -452,36 +391,40 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         }> = [];
 
         for (let i = 0; i < liveCells.length; i++) {
-            const cell = liveCells[i];
-            let blockId = this.getBlockIdFromMetadata(cell.metadata);
-            let blockIdFromFallback = false;
+            try {
+                const cell = liveCells[i];
+                let blockId = this.getBlockIdFromMetadata(cell.metadata);
+                let blockIdFromFallback = false;
 
-            // Fallback to original project blocks when metadata was lost
-            if (!blockId && originalBlocks) {
-                blockId = originalBlocks[i]?.id;
-                blockIdFromFallback = true;
+                // Fallback to original project blocks when metadata was lost
+                if (!blockId && originalBlocks) {
+                    blockId = originalBlocks[i]?.id;
+                    blockIdFromFallback = true;
+                }
+
+                if (!blockId || !snapshotOutputs.has(blockId)) {
+                    continue;
+                }
+
+                const fallbackType = originalBlocks?.[i]?.type;
+                const blockType = ((cell.metadata?.type as string) ?? fallbackType ?? 'code') as DeepnoteBlock['type'];
+                const newOutputs = this.converter.transformOutputsForVsCode(
+                    snapshotOutputs.get(blockId)!,
+                    i,
+                    blockId,
+                    blockType,
+                    cell.metadata
+                );
+
+                // Live state comparison: skip if outputs already match
+                if (this.outputsMatch(cell.outputs, newOutputs)) {
+                    continue;
+                }
+
+                cellUpdates.push({ cellIndex: i, cell, newOutputs, blockId, blockIdFromFallback });
+            } catch (error) {
+                logger.warn(`[FileChangeWatcher] Failed to process snapshot cell ${i} for ${notebook.uri.path}`, error);
             }
-
-            if (!blockId || !snapshotOutputs.has(blockId)) {
-                continue;
-            }
-
-            const fallbackType = originalBlocks?.[i]?.type;
-            const blockType = ((cell.metadata?.type as string) ?? fallbackType ?? 'code') as DeepnoteBlock['type'];
-            const newOutputs = this.converter.transformOutputsForVsCode(
-                snapshotOutputs.get(blockId)!,
-                i,
-                blockId,
-                blockType,
-                cell.metadata
-            );
-
-            // Live state comparison: skip if outputs already match
-            if (this.outputsMatch(cell.outputs, newOutputs)) {
-                continue;
-            }
-
-            cellUpdates.push({ cellIndex: i, cell, newOutputs, blockId, blockIdFromFallback });
         }
 
         if (cellUpdates.length === 0) {
@@ -564,41 +507,84 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         logger.info(`[FileChangeWatcher] Updated notebook outputs from external snapshot: ${notebook.uri.path}`);
     }
 
-    /**
-     * Attempts to apply outputs via the notebook execution API.
-     * Outputs set this way respect transientOutputs and do not mark the notebook dirty.
-     * Uses the selected controller (available even without a running kernel).
-     * Returns true if successful, false if no controller is selected or the operation fails.
-     */
-    private async tryApplyOutputsViaExecution(
-        notebook: NotebookDocument,
-        cellUpdates: Array<{ cell: NotebookCell; newOutputs: NotebookCellOutput[] }>
-    ): Promise<boolean> {
-        const selectedController = this.controllerRegistration?.getSelected(notebook);
-        if (!selectedController) {
-            return false;
+    private getBlockIdFromMetadata(metadata: Record<string, unknown> | undefined): string | undefined {
+        return (metadata?.id ?? metadata?.__deepnoteBlockId) as string | undefined;
+    }
+
+    private handleFileChange(uri: Uri): void {
+        // Deterministic self-write check — no timers involved
+        if (this.consumeSelfWrite(uri)) {
+            logger.info(`[FileChangeWatcher] Skipping self-write: ${uri.path}`);
+            return;
         }
 
-        try {
-            const executions = cellUpdates.map((update) => ({
-                exec: selectedController.controller.createNotebookCellExecution(update.cell),
-                outputs: update.newOutputs
-            }));
-            for (const { exec, outputs } of executions) {
-                exec.start();
-                try {
-                    await exec.replaceOutput(outputs);
-                    exec.end(true);
-                } catch (error) {
-                    exec.end(false);
-                    throw error;
-                }
-            }
-            return true;
-        } catch (error) {
-            logger.warn(`[FileChangeWatcher] Execution API failed, falling back to replaceCells`, error);
-            return false;
+        if (isSnapshotFile(uri)) {
+            this.handleSnapshotFileChange(uri);
+            return;
         }
+
+        // Main file change — debounce and enqueue
+        const key = uri.toString();
+        const existing = this.debounceTimers.get(key);
+        if (existing) {
+            clearTimeout(existing);
+        }
+
+        this.debounceTimers.set(
+            key,
+            setTimeout(() => {
+                this.debounceTimers.delete(key);
+                this.enqueueMainFileSync(uri);
+            }, debounceTimeInMilliseconds)
+        );
+    }
+
+    private handleSnapshotFileChange(uri: Uri): void {
+        if (!this.snapshotService || !this.snapshotService.isSnapshotsEnabled()) {
+            return;
+        }
+
+        const projectId = extractProjectIdFromSnapshotUri(uri);
+        if (!projectId) {
+            return;
+        }
+
+        const key = `snapshot:${projectId}`;
+        const existing = this.debounceTimers.get(key);
+        if (existing) {
+            clearTimeout(existing);
+        }
+
+        this.debounceTimers.set(
+            key,
+            setTimeout(() => {
+                this.debounceTimers.delete(key);
+                this.enqueueSnapshotOutputUpdate(projectId);
+            }, debounceTimeInMilliseconds)
+        );
+    }
+
+    /**
+     * Marks a URI as about to be written by us (workspace.save).
+     * Call before workspace.save() to prevent the resulting fs event from triggering a reload.
+     */
+    private markSelfWrite(uri: Uri): void {
+        const key = uri.toString();
+        const count = this.selfWriteCounts.get(key) ?? 0;
+        this.selfWriteCounts.set(key, count + 1);
+
+        // Safety net: clean stale entries after 30s
+        const existing = this.selfWriteTimers.get(key);
+        if (existing) {
+            clearTimeout(existing);
+        }
+        this.selfWriteTimers.set(
+            key,
+            setTimeout(() => {
+                this.selfWriteCounts.delete(key);
+                this.selfWriteTimers.delete(key);
+            }, selfWriteExpirationMs)
+        );
     }
 
     /**
@@ -644,22 +630,40 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         return true;
     }
 
-    private clearAllTimers(): void {
-        for (const timer of this.debounceTimers.values()) {
-            clearTimeout(timer);
+    /**
+     * Attempts to apply outputs via the notebook execution API.
+     * Outputs set this way respect transientOutputs and do not mark the notebook dirty.
+     * Uses the selected controller (available even without a running kernel).
+     * Returns true if successful, false if no controller is selected or the operation fails.
+     */
+    private async tryApplyOutputsViaExecution(
+        notebook: NotebookDocument,
+        cellUpdates: Array<{ cell: NotebookCell; newOutputs: NotebookCellOutput[] }>
+    ): Promise<boolean> {
+        const selectedController = this.controllerRegistration?.getSelected(notebook);
+        if (!selectedController) {
+            return false;
         }
-        this.debounceTimers.clear();
 
-        for (const timer of this.selfWriteTimers.values()) {
-            clearTimeout(timer);
+        try {
+            const executions = cellUpdates.map((update) => ({
+                exec: selectedController.controller.createNotebookCellExecution(update.cell),
+                outputs: update.newOutputs
+            }));
+            for (const { exec, outputs } of executions) {
+                exec.start();
+                try {
+                    await exec.replaceOutput(outputs);
+                    exec.end(true);
+                } catch (error) {
+                    exec.end(false);
+                    throw error;
+                }
+            }
+            return true;
+        } catch (error) {
+            logger.warn(`[FileChangeWatcher] Execution API failed, falling back to replaceCells`, error);
+            return false;
         }
-        this.selfWriteTimers.clear();
-        this.selfWriteCounts.clear();
-
-        for (const timer of this.snapshotSelfWriteTimers.values()) {
-            clearTimeout(timer);
-        }
-        this.snapshotSelfWriteTimers.clear();
-        this.snapshotSelfWriteUris.clear();
     }
 }

@@ -5,6 +5,9 @@ import { InvalidProjectNameError } from '../../../platform/errors/invalidProject
 /** File suffix for snapshot files */
 export const SNAPSHOT_FILE_SUFFIX = '.snapshot.deepnote';
 
+/** Regex pattern for extracting project ID from snapshot filenames. */
+const SNAPSHOT_FILENAME_PATTERN = new RegExp(`^[a-z0-9-]+_(.+)_[^_]+${SNAPSHOT_FILE_SUFFIX.replace(/\./g, '\\.')}$`);
+
 /**
  * Checks if a URI represents a snapshot file
  */
@@ -19,7 +22,7 @@ export function isSnapshotFile(uri: Uri): boolean {
  */
 export function extractProjectIdFromSnapshotUri(uri: Uri): string | undefined {
     const basename = uri.path.split('/').pop() ?? '';
-    const match = basename.match(/^[a-z0-9-]+_(.+)_[^_]+\.snapshot\.deepnote$/);
+    const match = basename.match(SNAPSHOT_FILENAME_PATTERN);
 
     return match?.[1];
 }

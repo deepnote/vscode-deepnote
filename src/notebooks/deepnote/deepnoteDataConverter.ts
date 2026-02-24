@@ -436,10 +436,15 @@ export class DeepnoteDataConverter {
     }
 
     private createFallbackBlock(cell: NotebookCellData, index: number): DeepnoteBlock {
+        const meta = cell.metadata as Record<string, unknown> | undefined;
+        const preservedId = (meta?.id ?? meta?.__deepnoteBlockId ?? meta?.deepnoteBlockId) as string | undefined;
+        const preservedSortingKey = (meta?.sortingKey ?? meta?.deepnoteSortingKey) as string | undefined;
+        const preservedBlockGroup = meta?.blockGroup as string | undefined;
+
         return {
-            blockGroup: uuidUtils.generateUuid(),
-            id: generateBlockId(),
-            sortingKey: generateSortingKey(index),
+            blockGroup: preservedBlockGroup ?? uuidUtils.generateUuid(),
+            id: preservedId ?? generateBlockId(),
+            sortingKey: preservedSortingKey ?? generateSortingKey(index),
             type: cell.kind === NotebookCellKind.Code ? 'code' : 'markdown',
             content: cell.value || '',
             metadata: {}
@@ -450,6 +455,11 @@ export class DeepnoteDataConverter {
         const cell = new NotebookCellData(NotebookCellKind.Markup, block.content || '', 'markdown');
 
         cell.metadata = {
+            ...(block.metadata ?? {}),
+            id: block.id,
+            __deepnoteBlockId: block.id,
+            type: block.type,
+            sortingKey: block.sortingKey,
             deepnoteBlockId: block.id,
             deepnoteBlockType: block.type,
             deepnoteSortingKey: block.sortingKey,
@@ -503,32 +513,38 @@ export class DeepnoteDataConverter {
             const data: Record<string, unknown> = {};
 
             for (const item of output.items) {
-                if (item.mime === 'text/plain') {
-                    data['text/plain'] = new TextDecoder().decode(item.data);
-                } else if (item.mime === 'text/markdown') {
-                    data['text/markdown'] = new TextDecoder().decode(item.data);
-                } else if (item.mime === 'text/html') {
-                    data['text/html'] = new TextDecoder().decode(item.data);
-                } else if (item.mime === 'application/json') {
-                    data['application/json'] = JSON.parse(new TextDecoder().decode(item.data));
-                } else if (item.mime === 'image/png') {
-                    data['image/png'] = this.uint8ArrayToBase64(item.data);
-                } else if (item.mime === 'image/jpeg') {
-                    data['image/jpeg'] = this.uint8ArrayToBase64(item.data);
-                } else if (item.mime === 'application/vnd.deepnote.dataframe.v3+json') {
-                    data['application/vnd.deepnote.dataframe.v3+json'] = JSON.parse(
-                        new TextDecoder().decode(item.data)
-                    );
-                } else if (item.mime === 'application/vnd.vega.v6+json') {
-                    data['application/vnd.vega.v6+json'] = JSON.parse(new TextDecoder().decode(item.data));
-                } else if (item.mime === 'application/vnd.vega.v5+json') {
-                    data['application/vnd.vega.v5+json'] = JSON.parse(new TextDecoder().decode(item.data));
-                } else if (item.mime === 'application/vnd.plotly.v1+json') {
-                    data['application/vnd.plotly.v1+json'] = JSON.parse(new TextDecoder().decode(item.data));
-                } else if (item.mime === 'application/vnd.deepnote.sql-output-metadata+json') {
-                    data['application/vnd.deepnote.sql-output-metadata+json'] = JSON.parse(
-                        new TextDecoder().decode(item.data)
-                    );
+                try {
+                    if (item.mime === 'text/plain') {
+                        data['text/plain'] = new TextDecoder().decode(item.data);
+                    } else if (item.mime === 'text/markdown') {
+                        data['text/markdown'] = new TextDecoder().decode(item.data);
+                    } else if (item.mime === 'text/html') {
+                        data['text/html'] = new TextDecoder().decode(item.data);
+                    } else if (item.mime === CHART_BIG_NUMBER_MIME_TYPE) {
+                        data['text/plain'] = new TextDecoder().decode(item.data);
+                    } else if (item.mime === 'application/json') {
+                        data['application/json'] = JSON.parse(new TextDecoder().decode(item.data));
+                    } else if (item.mime === 'image/png') {
+                        data['image/png'] = this.uint8ArrayToBase64(item.data);
+                    } else if (item.mime === 'image/jpeg') {
+                        data['image/jpeg'] = this.uint8ArrayToBase64(item.data);
+                    } else if (item.mime === 'application/vnd.deepnote.dataframe.v3+json') {
+                        data['application/vnd.deepnote.dataframe.v3+json'] = JSON.parse(
+                            new TextDecoder().decode(item.data)
+                        );
+                    } else if (item.mime === 'application/vnd.vega.v6+json') {
+                        data['application/vnd.vega.v6+json'] = JSON.parse(new TextDecoder().decode(item.data));
+                    } else if (item.mime === 'application/vnd.vega.v5+json') {
+                        data['application/vnd.vega.v5+json'] = JSON.parse(new TextDecoder().decode(item.data));
+                    } else if (item.mime === 'application/vnd.plotly.v1+json') {
+                        data['application/vnd.plotly.v1+json'] = JSON.parse(new TextDecoder().decode(item.data));
+                    } else if (item.mime === 'application/vnd.deepnote.sql-output-metadata+json') {
+                        data['application/vnd.deepnote.sql-output-metadata+json'] = JSON.parse(
+                            new TextDecoder().decode(item.data)
+                        );
+                    }
+                } catch (e) {
+                    console.warn(`Failed to convert output item mime=${item.mime}`, e);
                 }
             }
 

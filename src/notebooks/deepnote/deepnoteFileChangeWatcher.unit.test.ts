@@ -752,7 +752,7 @@ project:
             );
         });
 
-        test('should NOT call workspace.save after snapshot output update', async () => {
+        test('should call workspace.save after snapshot fallback output update', async () => {
             const snapshotUri = Uri.file('/workspace/snapshots/my-project_project-1_latest.snapshot.deepnote');
             const notebook = createMockNotebook({
                 uri: Uri.file('/workspace/test.deepnote'),
@@ -771,11 +771,9 @@ project:
             snapshotOnDidChange.fire(snapshotUri);
 
             await waitFor(() => snapshotApplyEditCount > 0);
+            await waitFor(() => snapshotSaveCount > 0);
 
-            // Wait a bit more to ensure save is not called after applyEdit
-            await new Promise((resolve) => setTimeout(resolve, 200));
-
-            assert.strictEqual(snapshotSaveCount, 0, 'workspace.save should NOT be called for snapshot updates');
+            assert.strictEqual(snapshotSaveCount, 1, 'workspace.save should be called after snapshot fallback update');
         });
 
         test('should preserve outputs for cells not covered by snapshot', async () => {

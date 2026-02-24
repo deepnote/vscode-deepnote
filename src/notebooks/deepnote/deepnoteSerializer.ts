@@ -123,12 +123,12 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
             // Merge outputs from snapshot if snapshots are enabled
             if (this.snapshotService?.isSnapshotsEnabled()) {
-                logger.info(`[Snapshot] Snapshots enabled, reading snapshot for project ${projectId}`);
+                logger.debug(`[Snapshot] Snapshots enabled, reading snapshot for project ${projectId}`);
                 try {
                     const snapshotOutputs = await this.snapshotService.readSnapshot(projectId);
 
                     if (snapshotOutputs && snapshotOutputs.size > 0) {
-                        logger.info(`[Snapshot] Merging ${snapshotOutputs.size} block outputs from snapshot`);
+                        logger.debug(`[Snapshot] Merging ${snapshotOutputs.size} block outputs from snapshot`);
                         const blocksWithOutputs = this.snapshotService.mergeOutputsIntoBlocks(
                             selectedNotebook.blocks ?? [],
                             snapshotOutputs
@@ -136,7 +136,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
                         cells = this.converter.convertBlocksToCells(blocksWithOutputs);
                     } else {
-                        logger.info(
+                        logger.debug(
                             `[Snapshot] No outputs found in snapshot (map was ${
                                 snapshotOutputs ? 'empty' : 'undefined'
                             })`
@@ -150,7 +150,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                     // Fall back to baseline cells (already set above)
                 }
             } else {
-                logger.info(
+                logger.debug(
                     `[Snapshot] Snapshots ${
                         this.snapshotService ? 'disabled' : 'service not available'
                     }, skipping snapshot merge`

@@ -314,7 +314,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
                 if (op.type === 'main-file-sync') {
                     await this.executeMainFileSync(notebook, fileUri ?? notebook.uri.with({ query: '', fragment: '' }));
                 } else if (op.type === 'snapshot-output-update' && op.projectId) {
-                    await this.executeSnapshotOutputUpdate(op.projectId);
+                    await this.executeSnapshotOutputUpdate(notebook, op.projectId);
                 }
             } catch (error) {
                 logger.error(`[FileChangeWatcher] Operation ${op.type} failed for ${nbKey}`, error);
@@ -414,16 +414,8 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
      * Prefers the notebook execution API (outputs set this way respect transientOutputs
      * and do not mark the notebook dirty). Falls back to replaceCells when no kernel is active.
      */
-    private async executeSnapshotOutputUpdate(projectId: string): Promise<void> {
+    private async executeSnapshotOutputUpdate(notebook: NotebookDocument, projectId: string): Promise<void> {
         if (!this.snapshotService) {
-            return;
-        }
-
-        const affectedNotebooks = workspace.notebookDocuments.filter(
-            (doc) => doc.notebookType === 'deepnote' && doc.metadata?.deepnoteProjectId === projectId
-        );
-
-        if (affectedNotebooks.length === 0) {
             return;
         }
 
@@ -441,134 +433,124 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             }
         }
 
-        for (const notebook of affectedNotebooks) {
-            try {
-                const liveCells = notebook.getCells();
-                const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
-                const originalBlocks = notebookId ? notebookBlocksMap.get(notebookId) : undefined;
+        const liveCells = notebook.getCells();
+        const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
+        const originalBlocks = notebookId ? notebookBlocksMap.get(notebookId) : undefined;
 
-                // Collect cells that need output updates
-                const cellUpdates: Array<{
-                    cellIndex: number;
-                    cell: NotebookCell;
-                    newOutputs: NotebookCellOutput[];
-                    blockId: string;
-                    blockIdFromFallback: boolean;
-                }> = [];
+        // Collect cells that need output updates
+        const cellUpdates: Array<{
+            cellIndex: number;
+            cell: NotebookCell;
+            newOutputs: NotebookCellOutput[];
+            blockId: string;
+            blockIdFromFallback: boolean;
+        }> = [];
 
-                for (let i = 0; i < liveCells.length; i++) {
-                    const cell = liveCells[i];
-                    let blockId = this.getBlockIdFromMetadata(cell.metadata);
-                    let blockIdFromFallback = false;
+        for (let i = 0; i < liveCells.length; i++) {
+            const cell = liveCells[i];
+            let blockId = this.getBlockIdFromMetadata(cell.metadata);
+            let blockIdFromFallback = false;
 
-                    // Fallback to original project blocks when metadata was lost
-                    if (!blockId && originalBlocks) {
-                        blockId = originalBlocks[i]?.id;
-                        blockIdFromFallback = true;
-                    }
+            // Fallback to original project blocks when metadata was lost
+            if (!blockId && originalBlocks) {
+                blockId = originalBlocks[i]?.id;
+                blockIdFromFallback = true;
+            }
 
-                    if (!blockId || !snapshotOutputs.has(blockId)) {
-                        continue;
-                    }
+            if (!blockId || !snapshotOutputs.has(blockId)) {
+                continue;
+            }
 
-                    const blockType = ((cell.metadata?.type as string) ?? 'code') as DeepnoteBlock['type'];
-                    const newOutputs = this.converter.transformOutputsForVsCode(
-                        snapshotOutputs.get(blockId)!,
-                        i,
-                        blockId,
-                        blockType,
-                        cell.metadata
-                    );
+            const blockType = ((cell.metadata?.type as string) ?? 'code') as DeepnoteBlock['type'];
+            const newOutputs = this.converter.transformOutputsForVsCode(
+                snapshotOutputs.get(blockId)!,
+                i,
+                blockId,
+                blockType,
+                cell.metadata
+            );
 
-                    // Live state comparison: skip if outputs already match
-                    if (this.outputsMatch(cell.outputs, newOutputs)) {
-                        continue;
-                    }
+            // Live state comparison: skip if outputs already match
+            if (this.outputsMatch(cell.outputs, newOutputs)) {
+                continue;
+            }
 
-                    cellUpdates.push({ cellIndex: i, cell, newOutputs, blockId, blockIdFromFallback });
-                }
+            cellUpdates.push({ cellIndex: i, cell, newOutputs, blockId, blockIdFromFallback });
+        }
 
-                if (cellUpdates.length === 0) {
-                    logger.info(`[FileChangeWatcher] Snapshot outputs already match live state: ${notebook.uri.path}`);
-                    continue;
-                }
+        if (cellUpdates.length === 0) {
+            logger.info(`[FileChangeWatcher] Snapshot outputs already match live state: ${notebook.uri.path}`);
+            return;
+        }
 
-                logger.info(
-                    `[FileChangeWatcher] Applying snapshot: ${cellUpdates.length} cells updated out of ${liveCells.length}: ${notebook.uri.path}`
-                );
+        logger.info(
+            `[FileChangeWatcher] Applying snapshot: ${cellUpdates.length} cells updated out of ${liveCells.length}: ${notebook.uri.path}`
+        );
 
-                // Try execution API first (outputs set via execution API respect transientOutputs)
-                if (await this.tryApplyOutputsViaExecution(notebook, cellUpdates)) {
-                    // Restore metadata for cells that resolved blockId via fallback
-                    const metadataEdits: NotebookEdit[] = [];
-                    for (const update of cellUpdates) {
-                        if (update.blockIdFromFallback) {
-                            metadataEdits.push(
-                                NotebookEdit.updateCellMetadata(update.cellIndex, {
-                                    ...update.cell.metadata,
-                                    id: update.blockId,
-                                    __deepnoteBlockId: update.blockId
-                                })
-                            );
-                        }
-                    }
-                    if (metadataEdits.length > 0) {
-                        const wsEdit = new WorkspaceEdit();
-                        wsEdit.set(notebook.uri, metadataEdits);
-                        await workspace.applyEdit(wsEdit);
-                    }
-
-                    logger.info(`[FileChangeWatcher] Updated notebook outputs via execution API: ${notebook.uri.path}`);
-                    continue;
-                }
-
-                // Fallback: use replaceCells when no kernel is available
-                const edits: NotebookEdit[] = [];
-                for (const update of cellUpdates) {
-                    const cellData = new NotebookCellData(
-                        update.cell.kind,
-                        update.cell.document.getText(),
-                        update.cell.document.languageId
-                    );
-                    cellData.metadata = { ...update.cell.metadata };
-                    cellData.metadata.id = update.blockId;
-                    cellData.metadata.__deepnoteBlockId = update.blockId;
-                    cellData.outputs = update.newOutputs;
-
-                    edits.push(
-                        NotebookEdit.replaceCells(new NotebookRange(update.cellIndex, update.cellIndex + 1), [cellData])
-                    );
-                    edits.push(
+        // Try execution API first (outputs set via execution API respect transientOutputs)
+        if (await this.tryApplyOutputsViaExecution(notebook, cellUpdates)) {
+            // Restore metadata for cells that resolved blockId via fallback
+            const metadataEdits: NotebookEdit[] = [];
+            for (const update of cellUpdates) {
+                if (update.blockIdFromFallback) {
+                    metadataEdits.push(
                         NotebookEdit.updateCellMetadata(update.cellIndex, {
-                            ...cellData.metadata,
+                            ...update.cell.metadata,
                             id: update.blockId,
                             __deepnoteBlockId: update.blockId
                         })
                     );
                 }
-
-                const wsEdit = new WorkspaceEdit();
-                wsEdit.set(notebook.uri, edits);
-                const applied = await workspace.applyEdit(wsEdit);
-
-                if (!applied) {
-                    logger.warn(`[FileChangeWatcher] Failed to apply snapshot outputs: ${notebook.uri.path}`);
-                    continue;
-                }
-
-                // The auto-save will write a stripped main file; mark it as self-write
-                this.markSelfWrite(notebook.uri);
-
-                logger.info(
-                    `[FileChangeWatcher] Updated notebook outputs from external snapshot: ${notebook.uri.path}`
-                );
-            } catch (error) {
-                logger.error(
-                    `[FileChangeWatcher] Failed to update notebook from snapshot: ${notebook.uri.path}`,
-                    error
-                );
             }
+            if (metadataEdits.length > 0) {
+                const wsEdit = new WorkspaceEdit();
+                wsEdit.set(notebook.uri, metadataEdits);
+                await workspace.applyEdit(wsEdit);
+            }
+
+            logger.info(`[FileChangeWatcher] Updated notebook outputs via execution API: ${notebook.uri.path}`);
+            return;
         }
+
+        // Fallback: use replaceCells when no kernel is available
+        const edits: NotebookEdit[] = [];
+        for (const update of cellUpdates) {
+            const cellData = new NotebookCellData(
+                update.cell.kind,
+                update.cell.document.getText(),
+                update.cell.document.languageId
+            );
+            cellData.metadata = { ...update.cell.metadata };
+            cellData.metadata.id = update.blockId;
+            cellData.metadata.__deepnoteBlockId = update.blockId;
+            cellData.outputs = update.newOutputs;
+
+            edits.push(
+                NotebookEdit.replaceCells(new NotebookRange(update.cellIndex, update.cellIndex + 1), [cellData])
+            );
+            edits.push(
+                NotebookEdit.updateCellMetadata(update.cellIndex, {
+                    ...cellData.metadata,
+                    id: update.blockId,
+                    __deepnoteBlockId: update.blockId
+                })
+            );
+        }
+
+        const wsEdit = new WorkspaceEdit();
+        wsEdit.set(notebook.uri, edits);
+        const applied = await workspace.applyEdit(wsEdit);
+
+        if (!applied) {
+            logger.warn(`[FileChangeWatcher] Failed to apply snapshot outputs: ${notebook.uri.path}`);
+            return;
+        }
+
+        // Save to sync mtime — mark as self-write first
+        this.markSelfWrite(notebook.uri);
+        await workspace.save(notebook.uri);
+
+        logger.info(`[FileChangeWatcher] Updated notebook outputs from external snapshot: ${notebook.uri.path}`);
     }
 
     /**
@@ -593,8 +575,13 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             }));
             for (const { exec, outputs } of executions) {
                 exec.start();
-                await exec.replaceOutput(outputs);
-                exec.end(true);
+                try {
+                    await exec.replaceOutput(outputs);
+                    exec.end(true);
+                } catch (error) {
+                    exec.end(false);
+                    throw error;
+                }
             }
             return true;
         } catch (error) {
@@ -651,10 +638,12 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             clearTimeout(timer);
         }
         this.selfWriteTimers.clear();
+        this.selfWriteCounts.clear();
 
         for (const timer of this.snapshotSelfWriteTimers.values()) {
             clearTimeout(timer);
         }
         this.snapshotSelfWriteTimers.clear();
+        this.snapshotSelfWriteUris.clear();
     }
 }

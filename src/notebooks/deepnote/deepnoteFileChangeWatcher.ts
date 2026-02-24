@@ -11,8 +11,8 @@ import {
     workspace
 } from 'vscode';
 import { inject, injectable, optional } from 'inversify';
-
 import type { DeepnoteBlock } from '@deepnote/blocks';
+
 import { IControllerRegistration } from '../controllers/types';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
@@ -404,7 +404,12 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
 
         // Save to sync mtime — mark as self-write first
         this.markSelfWrite(notebook.uri);
-        await workspace.save(notebook.uri);
+        try {
+            await workspace.save(notebook.uri);
+        } catch (error) {
+            this.consumeSelfWrite(notebook.uri);
+            throw error;
+        }
 
         logger.info(`[FileChangeWatcher] Reloaded notebook from external change: ${notebook.uri.path}`);
     }
@@ -426,7 +431,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
 
         // Look up original project blocks for fallback block ID resolution
         const originalProject = this.notebookManager.getOriginalProject(projectId);
-        const notebookBlocksMap = new Map<string, { id: string }[]>();
+        const notebookBlocksMap = new Map<string, DeepnoteBlock[]>();
         if (originalProject) {
             for (const nb of originalProject.project.notebooks) {
                 notebookBlocksMap.set(nb.id, nb.blocks);
@@ -461,7 +466,8 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
                 continue;
             }
 
-            const blockType = ((cell.metadata?.type as string) ?? 'code') as DeepnoteBlock['type'];
+            const fallbackType = originalBlocks?.[i]?.type;
+            const blockType = ((cell.metadata?.type as string) ?? fallbackType ?? 'code') as DeepnoteBlock['type'];
             const newOutputs = this.converter.transformOutputsForVsCode(
                 snapshotOutputs.get(blockId)!,
                 i,
@@ -548,7 +554,12 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
 
         // Save to sync mtime — mark as self-write first
         this.markSelfWrite(notebook.uri);
-        await workspace.save(notebook.uri);
+        try {
+            await workspace.save(notebook.uri);
+        } catch (error) {
+            this.consumeSelfWrite(notebook.uri);
+            throw error;
+        }
 
         logger.info(`[FileChangeWatcher] Updated notebook outputs from external snapshot: ${notebook.uri.path}`);
     }
@@ -603,6 +614,11 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         }
         // Compare by checking each output's items
         for (let i = 0; i < liveOutputs.length; i++) {
+            const liveMeta = liveOutputs[i].metadata as Record<string, unknown> | undefined;
+            const newMeta = newOutputs[i].metadata as Record<string, unknown> | undefined;
+            if ((liveMeta?.executionCount as number | undefined) !== (newMeta?.executionCount as number | undefined)) {
+                return false;
+            }
             const liveItems = liveOutputs[i].items;
             const newItems = newOutputs[i].items;
             if (liveItems.length !== newItems.length) {

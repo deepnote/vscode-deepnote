@@ -56,23 +56,6 @@ export class DeepnoteDataConverter {
     }
 
     /**
-     * Initialize async dependencies like vega-lite.
-     * Must be called before using output conversion methods.
-     */
-    async initialize(): Promise<void> {
-        await ensureVegaLiteLoaded();
-    }
-
-    /**
-     * Finds a converter for the given block type.
-     * @param blockType The type of block to find a converter for
-     * @returns The converter if found, undefined otherwise
-     */
-    public findConverter(blockType: string): BlockConverter | undefined {
-        return this.registry.findConverter(blockType);
-    }
-
-    /**
      * Converts Deepnote blocks to VS Code notebook cells.
      * Sorts blocks by sortingKey before conversion to maintain proper order.
      * @param blocks Array of Deepnote blocks to convert
@@ -176,6 +159,23 @@ export class DeepnoteDataConverter {
      */
     convertCellsToBlocks(cells: NotebookCellData[]): DeepnoteBlock[] {
         return cells.map((cell, index) => this.convertCellToBlock(cell, index));
+    }
+
+    /**
+     * Finds a converter for the given block type.
+     * @param blockType The type of block to find a converter for
+     * @returns The converter if found, undefined otherwise
+     */
+    public findConverter(blockType: string): BlockConverter | undefined {
+        return this.registry.findConverter(blockType);
+    }
+
+    /**
+     * Initialize async dependencies like vega-lite.
+     * Must be called before using output conversion methods.
+     */
+    async initialize(): Promise<void> {
+        await ensureVegaLiteLoaded();
     }
 
     public transformOutputsForVsCode(

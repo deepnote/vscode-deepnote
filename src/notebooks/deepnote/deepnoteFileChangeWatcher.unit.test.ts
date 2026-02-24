@@ -641,7 +641,7 @@ project:
                 cells: [
                     {
                         metadata: { id: 'block-1', type: 'code' },
-                        outputs: [{ items: [outputItem] }],
+                        outputs: [{ items: [outputItem], metadata: { executionCount: 1 } }],
                         kind: NotebookCellKind.Code,
                         document: { getText: () => 'print("hello")' }
                     }

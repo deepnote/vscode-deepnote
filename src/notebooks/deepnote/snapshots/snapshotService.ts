@@ -10,7 +10,7 @@ import {
 } from '@deepnote/blocks';
 import fastDeepEqual from 'fast-deep-equal';
 import { inject, injectable, optional } from 'inversify';
-import { FileType, NotebookCell, NotebookCellKind, RelativePattern, Uri, window, workspace } from 'vscode';
+import { Disposable, FileType, NotebookCell, NotebookCellKind, RelativePattern, Uri, window, workspace } from 'vscode';
 import { Utils } from 'vscode-uri';
 
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
@@ -98,6 +98,9 @@ interface NotebookExecutionState {
     totalDurationMs: number;
 }
 
+/** How long a written URI is considered "recent" and suppressed from file-change processing. */
+const recentWriteExpirationMs = 2000;
+
 class TimeoutError extends Error {
     constructor(message: string) {
         super(message);
@@ -122,6 +125,9 @@ function generateTimestamp(): string {
 export class SnapshotService implements ISnapshotMetadataService, IExtensionSyncActivationService {
     private readonly converter = new DeepnoteDataConverter();
     private readonly executionStates = new Map<string, NotebookExecutionState>();
+    private readonly fileWrittenCallbacks: ((uri: Uri) => void)[] = [];
+    private readonly recentlyWrittenTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    private readonly recentlyWrittenUris = new Set<string>();
 
     constructor(
         @inject(IEnvironmentCapture) private readonly environmentCapture: IEnvironmentCapture,
@@ -131,6 +137,15 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
     activate(): void {
         logger.info('[Snapshot] SnapshotService activated');
+
+        this.disposables.push({
+            dispose: () => {
+                for (const timer of this.recentlyWrittenTimers.values()) {
+                    clearTimeout(timer);
+                }
+                this.recentlyWrittenTimers.clear();
+            }
+        });
 
         workspace.onDidCloseNotebookDocument(
             (notebook) => {
@@ -204,6 +219,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         // Write to timestamped file first (safe - doesn't touch existing files)
         try {
             await workspace.fs.writeFile(timestampedPath, content);
+            this.trackWrittenUri(timestampedPath);
             logger.debug(`[Snapshot] Wrote timestamped snapshot: ${Utils.basename(timestampedPath)}`);
         } catch (error) {
             logger.error(`[Snapshot] Failed to write timestamped snapshot: ${Utils.basename(timestampedPath)}`, error);
@@ -218,6 +234,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         // Copy timestamped file to 'latest' pointer
         try {
             await workspace.fs.copy(timestampedPath, latestPath, { overwrite: true });
+            this.trackWrittenUri(latestPath);
 
             logger.debug(`[Snapshot] Updated latest snapshot: ${Utils.basename(latestPath)}`);
         } catch (error) {
@@ -356,7 +373,25 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         return mergedBlocks;
     }
 
+    /**
+     * Registers a callback that is invoked whenever this service writes a file.
+     * Used by the file change watcher for deterministic self-write detection.
+     */
+    onFileWritten(callback: (uri: Uri) => void): Disposable {
+        this.fileWrittenCallbacks.push(callback);
+
+        return {
+            dispose: () => {
+                const idx = this.fileWrittenCallbacks.indexOf(callback);
+                if (idx >= 0) {
+                    this.fileWrittenCallbacks.splice(idx, 1);
+                }
+            }
+        };
+    }
+
     async readSnapshot(projectId: string): Promise<Map<string, DeepnoteOutput[]> | undefined> {
+        logger.debug(`[Snapshot] readSnapshot called for projectId=${projectId}`);
         const workspaceFolders = workspace.workspaceFolders;
 
         if (!workspaceFolders || workspaceFolders.length === 0) {
@@ -367,15 +402,18 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             return;
         }
 
+        logger.debug(`[Snapshot] Searching ${workspaceFolders.length} workspace folder(s) for snapshots`);
+
         // 1. Try to find a 'latest' snapshot file
         const latestGlob = `**/snapshots/*_${projectId}_latest.snapshot.deepnote`;
 
         for (const folder of workspaceFolders) {
+            logger.debug(`[Snapshot] Searching for latest snapshot with glob: ${latestGlob} in ${folder.uri.path}`);
             const latestPattern = new RelativePattern(folder, latestGlob);
             const latestFiles = await workspace.findFiles(latestPattern, null, 1);
 
             if (latestFiles.length > 0) {
-                logger.debug(`[Snapshot] Found latest snapshot: ${Utils.basename(latestFiles[0])}`);
+                logger.debug(`[Snapshot] Found latest snapshot: ${latestFiles[0].path}`);
 
                 try {
                     return await this.parseSnapshotFile(latestFiles[0]);
@@ -442,6 +480,14 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
             return strippedBlock as DeepnoteBlock;
         });
+    }
+
+    /**
+     * Checks whether a URI was recently written by this extension.
+     * Used by the file change watcher to skip processing self-triggered changes.
+     */
+    wasRecentlyWritten(uri: Uri): boolean {
+        return this.recentlyWrittenUris.has(uri.toString());
     }
 
     private buildSnapshotPath(
@@ -783,28 +829,34 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     private async parseSnapshotFile(path: Uri): Promise<Map<string, DeepnoteOutput[]>> {
         const outputsMap = new Map<string, DeepnoteOutput[]>();
 
-        let data: DeepnoteFile;
+        logger.debug(`[Snapshot] Parsing snapshot file: ${path.path}`);
 
         try {
             const content = await workspace.fs.readFile(path);
             const contentString = new TextDecoder('utf-8').decode(content);
 
-            data = deserializeDeepnoteFile(contentString);
-        } catch (error) {
-            logger.error(`[Snapshot] Failed to read or parse snapshot file: ${Utils.basename(path)}`, error);
+            logger.debug(`[Snapshot] Read ${content.byteLength} bytes from snapshot file`);
 
-            return outputsMap;
-        }
+            const data = deserializeDeepnoteFile(contentString);
+            let totalBlocks = 0;
 
-        for (const notebook of data.project.notebooks) {
-            for (const block of notebook.blocks) {
-                if (isExecutableBlock(block) && block.outputs) {
-                    outputsMap.set(block.id, block.outputs as DeepnoteOutput[]);
+            for (const notebook of data.project.notebooks) {
+                for (const block of notebook.blocks) {
+                    totalBlocks++;
+                    try {
+                        if (isExecutableBlock(block) && block.outputs) {
+                            outputsMap.set(block.id, block.outputs as DeepnoteOutput[]);
+                        }
+                    } catch (blockError) {
+                        logger.warn(`[Snapshot] Failed to extract outputs for block ${block.id}`, blockError);
+                    }
                 }
             }
-        }
 
-        logger.debug(`[Snapshot] Read ${outputsMap.size} block outputs from snapshot`);
+            logger.debug(`[Snapshot] Extracted ${outputsMap.size} block outputs from ${totalBlocks} total blocks`);
+        } catch (error) {
+            logger.error(`[Snapshot] Failed to parse snapshot file: ${Utils.basename(path)}`, error);
+        }
 
         return outputsMap;
     }
@@ -928,6 +980,32 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         logger.trace(`[Snapshot] Cell ${cellId} execution started at ${isoTimestamp}`);
     }
 
+    private trackWrittenUri(uri: Uri): void {
+        const key = uri.toString();
+        this.recentlyWrittenUris.add(key);
+
+        const existing = this.recentlyWrittenTimers.get(key);
+        if (existing) {
+            clearTimeout(existing);
+        }
+
+        this.recentlyWrittenTimers.set(
+            key,
+            setTimeout(() => {
+                this.recentlyWrittenUris.delete(key);
+                this.recentlyWrittenTimers.delete(key);
+            }, recentWriteExpirationMs)
+        );
+
+        for (const callback of this.fileWrittenCallbacks) {
+            try {
+                callback(uri);
+            } catch (error) {
+                logger.warn('[Snapshot] File written callback failed', error);
+            }
+        }
+    }
+
     private async updateLatestSnapshot(
         projectUri: Uri,
         projectId: string,
@@ -947,6 +1025,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
         try {
             await workspace.fs.writeFile(latestPath, content);
+            this.trackWrittenUri(latestPath);
             logger.debug(`[Snapshot] Updated latest snapshot: ${Utils.basename(latestPath)}`);
 
             return latestPath;

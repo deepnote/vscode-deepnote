@@ -1,5 +1,5 @@
 import { inject, injectable } from 'inversify';
-import * as yaml from 'js-yaml';
+import * as YAML from 'yaml';
 import { env, NotebookDocument, Uri, workspace } from 'vscode';
 
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
@@ -307,7 +307,7 @@ export class DeepnoteExtensionSidecarWriter implements IExtensionSyncActivationS
     private async readProjectIdFromFile(fileUri: Uri): Promise<string | undefined> {
         try {
             const raw = await workspace.fs.readFile(fileUri);
-            const parsed = yaml.load(Buffer.from(raw).toString('utf-8')) as { project?: { id?: string } } | undefined;
+            const parsed = YAML.parse(Buffer.from(raw).toString('utf-8')) as { project?: { id?: string } } | undefined;
             return parsed?.project?.id;
         } catch {
             return undefined;

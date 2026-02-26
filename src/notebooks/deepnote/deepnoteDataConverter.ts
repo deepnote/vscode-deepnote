@@ -437,7 +437,7 @@ export class DeepnoteDataConverter {
 
     private createFallbackBlock(cell: NotebookCellData, index: number): DeepnoteBlock {
         const meta = cell.metadata as Record<string, unknown> | undefined;
-        const preservedId = (meta?.id ?? meta?.__deepnoteBlockId ?? meta?.deepnoteBlockId) as string | undefined;
+        const preservedId = (meta?.__deepnoteBlockId ?? meta?.id ?? meta?.deepnoteBlockId) as string | undefined;
         const preservedSortingKey = (meta?.sortingKey ?? meta?.deepnoteSortingKey) as string | undefined;
         const preservedBlockGroup = meta?.blockGroup as string | undefined;
 

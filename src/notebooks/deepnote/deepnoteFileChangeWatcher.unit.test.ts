@@ -1069,7 +1069,8 @@ project:
             when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
 
             snapshotOnDidChange.fire(snapshotUri);
-            await new Promise((resolve) => setTimeout(resolve, debounceWaitMs));
+
+            await waitFor(() => readSnapshotCallCount >= 1);
 
             assert.isAtLeast(readSnapshotCallCount, 1, 'readSnapshot should be called');
             assert.strictEqual(

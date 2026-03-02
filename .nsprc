@@ -1,12 +1,4 @@
 {
-    "GHSA-2g4f-4pwh-qvx6": {
-        "notes": "ajv ReDoS when using $data option. Accepted risk: dev-only transitive dependency (@jupyterlab/settingregistry, table), fix requires ajv@8.18.0 but consumers are on 6.x, not bundled in extension.",
-        "expiry": "2026-08-15"
-    },
-    "GHSA-3ppc-4f35-3m26": {
-        "notes": "minimatch ReDoS via repeated wildcards. Accepted risk: dev-only transitive dependency (mocha, glob, @vscode/test-cli), fix requires minimatch@10.2.1 but consumers are on 3.x-5.x, not bundled in extension.",
-        "expiry": "2026-08-15"
-    },
     "GHSA-848j-6mx2-7j84": {
         "notes": "CVE-2025-14505: elliptic ECDSA signature corruption can lead to private key recovery if attacker obtains both faulty and correct signatures for identical inputs. Accepted risk: dev-only transitive dependency (node-stdlib-browser -> crypto-browserify -> browserify-sign), not used for signing in this project, no fix available.",
         "expiry": "2026-08-15"

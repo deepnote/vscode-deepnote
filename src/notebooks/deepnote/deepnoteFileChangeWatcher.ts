@@ -520,7 +520,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
     }
 
     private getBlockIdFromMetadata(metadata: Record<string, unknown> | undefined): string | undefined {
-        return (metadata?.id ?? metadata?.__deepnoteBlockId) as string | undefined;
+        return (metadata?.__deepnoteBlockId ?? metadata?.id) as string | undefined;
     }
 
     private handleFileChange(uri: Uri): void {

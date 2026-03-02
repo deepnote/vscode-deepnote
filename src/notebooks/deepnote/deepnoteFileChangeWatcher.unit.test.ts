@@ -1052,6 +1052,34 @@ project:
             execOnDidCreate.dispose();
         });
 
+        test('should not apply updates when cells have no block IDs and no fallback', async () => {
+            const snapshotUri = Uri.file('/workspace/snapshots/my-project_project-1_latest.snapshot.deepnote');
+            const notebook = createMockNotebook({
+                uri: Uri.file('/workspace/test.deepnote'),
+                cells: [
+                    {
+                        metadata: {},
+                        outputs: [],
+                        kind: NotebookCellKind.Code,
+                        document: { getText: () => 'print("hello")' }
+                    }
+                ]
+            });
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+
+            snapshotOnDidChange.fire(snapshotUri);
+
+            await waitFor(() => readSnapshotCallCount >= 1);
+
+            assert.isAtLeast(readSnapshotCallCount, 1, 'readSnapshot should be called');
+            assert.strictEqual(
+                snapshotApplyEditCount,
+                0,
+                'applyEdit should NOT be called when no block IDs can be resolved'
+            );
+        });
+
         test('should fall back to replaceCells when no kernel is active', async () => {
             const fbDisposables: IDisposableRegistry = [];
             const fbOnDidChange = new EventEmitter<Uri>();

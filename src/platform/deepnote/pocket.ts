@@ -76,7 +76,7 @@ export function createBlockFromPocket(cell: NotebookCellData, index: number): De
     const metadata = cell.metadata ? { ...cell.metadata } : undefined;
     // Get id from top-level metadata before cleaning it up
     // Check both 'id' and backup '__deepnoteBlockId' in case VS Code modifies 'id'
-    const cellId = (metadata?.id as string | undefined) || (metadata?.__deepnoteBlockId as string | undefined);
+    const cellId = (metadata?.__deepnoteBlockId as string | undefined) || (metadata?.id as string | undefined);
 
     logger.debug(
         `[Pocket] createBlockFromPocket index=${index}: cell.metadata.id=${metadata?.id}, __deepnoteBlockId=${metadata?.__deepnoteBlockId}, using cellId=${cellId}, metadata keys=${

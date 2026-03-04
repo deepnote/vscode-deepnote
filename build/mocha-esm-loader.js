@@ -10,6 +10,7 @@ let unittestsModule;
 // Get absolute paths for imports in the loader
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.join(__dirname, '..');
+const projectOutUrl = pathToFileURL(path.join(projectRoot, 'out')).href + '/';
 const vscodeMockPath = pathToFileURL(path.join(projectRoot, 'out/test/vscode-mock.js')).href;
 const telemetryMockPath = pathToFileURL(path.join(projectRoot, 'out/test/mocks/vsc/telemetryReporter.js')).href;
 
@@ -421,9 +422,9 @@ export async function load(url, context, nextLoad) {
         // If URL parsing fails, fall through to other handlers
     }
 
-    // For .js files in the out/ directory, inject CJS globals shims
+    // For .js files in the project's out/ directory, inject CJS globals shims
     // This is needed because source files use native __dirname, __filename, require which don't exist in ESM
-    if (url.startsWith('file://') && url.includes('/out/') && url.endsWith('.js')) {
+    if (url.startsWith(projectOutUrl) && url.endsWith('.js')) {
         const filePath = fileURLToPath(url);
         const fs = await import('node:fs/promises');
         const source = await fs.readFile(filePath, 'utf8');

@@ -22,10 +22,7 @@ export interface ITrinoFormProps {
     onCancel: () => void;
 }
 
-function createEmptyTrinoConfig(params: {
-    id: string;
-    name?: string;
-}): TrinoPasswordConfig {
+function createEmptyTrinoConfig(params: { id: string; name?: string }): TrinoPasswordConfig {
     return {
         id: params.id,
         name: (params.name || getDefaultIntegrationName('trino')).trim(),

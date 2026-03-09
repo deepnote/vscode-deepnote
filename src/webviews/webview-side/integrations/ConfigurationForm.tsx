@@ -157,7 +157,11 @@ export const ConfigurationForm: React.FC<IConfigurationFormProps> = ({
                                 return (
                                     <TrinoForm
                                         integrationId={integrationId}
-                                        existingConfig={existingConfig?.type === 'trino' && isTrinoPasswordConfig(existingConfig) ? existingConfig : null}
+                                        existingConfig={
+                                            existingConfig?.type === 'trino' && isTrinoPasswordConfig(existingConfig)
+                                                ? existingConfig
+                                                : null
+                                        }
                                         defaultName={defaultName}
                                         onSave={onSave}
                                         onCancel={onCancel}

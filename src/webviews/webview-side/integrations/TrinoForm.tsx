@@ -5,18 +5,27 @@ import { SshOptionsFields } from './SshOptionsFields';
 import { CaCertificateFields } from './CaCertificateFields';
 import { getDefaultIntegrationName } from './integrationUtils';
 
+type TrinoConfig = Extract<DatabaseIntegrationConfig, { type: 'trino' }>;
+export type TrinoPasswordConfig = TrinoConfig & {
+    metadata: Extract<TrinoConfig['metadata'], { authMethod?: 'password' | null | undefined }>;
+};
+
+export function isTrinoPasswordConfig(config: TrinoConfig): config is TrinoPasswordConfig {
+    return config.metadata.authMethod !== 'trino-oauth';
+}
+
 export interface ITrinoFormProps {
     integrationId: string;
-    existingConfig: Extract<DatabaseIntegrationConfig, { type: 'trino' }> | null;
+    existingConfig: TrinoPasswordConfig | null;
     defaultName?: string;
-    onSave: (config: Extract<DatabaseIntegrationConfig, { type: 'trino' }>) => void;
+    onSave: (config: TrinoPasswordConfig) => void;
     onCancel: () => void;
 }
 
 function createEmptyTrinoConfig(params: {
     id: string;
     name?: string;
-}): Extract<DatabaseIntegrationConfig, { type: 'trino' }> {
+}): TrinoPasswordConfig {
     return {
         id: params.id,
         name: (params.name || getDefaultIntegrationName('trino')).trim(),
@@ -38,7 +47,7 @@ export const TrinoForm: React.FC<ITrinoFormProps> = ({
     onSave,
     onCancel
 }) => {
-    const [pendingConfig, setPendingConfig] = React.useState<Extract<DatabaseIntegrationConfig, { type: 'trino' }>>(
+    const [pendingConfig, setPendingConfig] = React.useState<TrinoPasswordConfig>(
         existingConfig
             ? structuredClone(existingConfig)
             : createEmptyTrinoConfig({ id: integrationId, name: defaultName })

@@ -16,7 +16,7 @@ import { RedshiftForm } from './RedshiftForm';
 import { SnowflakeForm } from './SnowflakeForm';
 import { SpannerForm } from './SpannerForm';
 import { SQLServerForm } from './SQLServerForm';
-import { TrinoForm } from './TrinoForm';
+import { isTrinoPasswordConfig, TrinoForm } from './TrinoForm';
 import { ConfigurableDatabaseIntegrationConfig, ConfigurableDatabaseIntegrationType } from './types';
 import { integrationTypeLabels } from './integrationUtils';
 
@@ -157,7 +157,7 @@ export const ConfigurationForm: React.FC<IConfigurationFormProps> = ({
                                 return (
                                     <TrinoForm
                                         integrationId={integrationId}
-                                        existingConfig={existingConfig?.type === 'trino' ? existingConfig : null}
+                                        existingConfig={existingConfig?.type === 'trino' && isTrinoPasswordConfig(existingConfig) ? existingConfig : null}
                                         defaultName={defaultName}
                                         onSave={onSave}
                                         onCancel={onCancel}

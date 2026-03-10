@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+import type { ChildProcess } from 'node:child_process';
 import * as vscode from 'vscode';
 
 import { serializePythonEnvironment } from '../../platform/api/pythonApi';
@@ -190,6 +191,8 @@ export interface DeepnoteServerInfo {
     jupyterPort: number;
     lspPort: number;
     token?: string;
+    /** The underlying server process from @deepnote/runtime-core, used for lifecycle management */
+    process?: ChildProcess;
 }
 
 export const IDeepnoteServerProvider = Symbol('IDeepnoteServerProvider');

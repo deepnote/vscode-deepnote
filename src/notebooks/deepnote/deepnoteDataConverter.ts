@@ -11,6 +11,7 @@ import { MarkdownBlockConverter } from './converters/markdownBlockConverter';
 import { VisualizationBlockConverter } from './converters/visualizationBlockConverter';
 import { compile as convertVegaLiteSpecToVega, ensureVegaLiteLoaded } from './vegaLiteWrapper';
 import { produce } from 'immer';
+import { AgentBlockConverter } from './converters/agentBlockConverter';
 import { SqlBlockConverter } from './converters/sqlBlockConverter';
 import { TextBlockConverter } from './converters/textBlockConverter';
 // @ts-ignore - types_unstable subpath requires moduleResolution: "node16" which mandates module: "node16" and .js extensions on all imports
@@ -38,6 +39,7 @@ export class DeepnoteDataConverter {
     private readonly registry = new ConverterRegistry();
 
     constructor() {
+        this.registry.register(new AgentBlockConverter());
         this.registry.register(new CodeBlockConverter());
         this.registry.register(new MarkdownBlockConverter());
         this.registry.register(new ChartBigNumberBlockConverter());

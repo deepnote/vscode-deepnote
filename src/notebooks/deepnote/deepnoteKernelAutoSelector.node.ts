@@ -56,6 +56,7 @@ import { logger } from '../../platform/logging';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { IControllerRegistration, IVSCodeNotebookController } from '../controllers/types';
 import { IDeepnoteNotebookManager } from '../types';
+import { executeAgentCell, isAgentCell } from './agentCellExecutionHandler';
 import { IDeepnoteInitNotebookRunner } from './deepnoteInitNotebookRunner.node';
 import { computeRequirementsHash } from './deepnoteProjectUtils';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
@@ -1204,7 +1205,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         );
 
         controller.supportsExecutionOrder = true;
-        controller.supportedLanguages = ['python', 'sql', 'markdown'];
+        controller.supportedLanguages = ['python', 'sql', 'markdown', 'plaintext'];
 
         // Execution handler that shows environment picker when user tries to run without an environment
         controller.executeHandler = async (cells, doc) => {
@@ -1213,6 +1214,28 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                     cells.length
                 } cells`
             );
+
+            const agentCells = cells.filter((cell) => isAgentCell(cell));
+            const kernelCells = cells.filter((cell) => !isAgentCell(cell));
+
+            // Execute agent cells directly without kernel involvement
+            if (agentCells.length > 0) {
+                logger.info(
+                    `Executing ${agentCells.length} agent cell(s) for ${getDisplayPath(doc.uri)} without kernel`
+                );
+
+                for (const cell of agentCells) {
+                    try {
+                        await executeAgentCell(cell, controller);
+                    } catch (cellError) {
+                        logger.error(`Error executing agent cell ${cell.index}`, cellError);
+                    }
+                }
+            }
+
+            if (kernelCells.length === 0) {
+                return;
+            }
 
             // Create a cancellation token that cancels when the notebook is closed
             const cts = new CancellationTokenSource();
@@ -1242,7 +1265,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                     return;
                 }
 
-                logger.info(`Executing ${cells.length} cells through kernel after environment configuration`);
+                logger.info(`Executing ${kernelCells.length} cells through kernel after environment configuration`);
 
                 // Get or create a kernel for this notebook with the new connection
                 const kernel = this.kernelProvider.getOrCreate(doc, {
@@ -1254,16 +1277,15 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 // Execute cells through the kernel
                 const kernelExecution = this.kernelProvider.getKernelExecution(kernel);
 
-                for (const cell of cells) {
+                for (const cell of kernelCells) {
                     try {
                         await kernelExecution.executeCell(cell);
                     } catch (cellError) {
                         logger.error(`Error executing cell ${cell.index}`, cellError);
-                        // Continue with remaining cells
                     }
                 }
 
-                logger.info(`Finished executing ${cells.length} cells`);
+                logger.info(`Finished executing ${kernelCells.length} cells`);
             } catch (error) {
                 if (isCancellationError(error)) {
                     logger.info(`Environment setup cancelled for ${getDisplayPath(doc.uri)}`);

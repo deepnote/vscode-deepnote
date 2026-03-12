@@ -90,6 +90,7 @@ import { RemoteKernelReconnectBusyIndicator } from './remoteKernelReconnectBusyI
 import { IConnectionDisplayData, IConnectionDisplayDataProvider, IVSCodeNotebookController } from './types';
 import { notebookPathToDeepnoteProjectFilePath } from '../../platform/deepnote/deepnoteProjectUtils';
 import { DEEPNOTE_NOTEBOOK_TYPE, IDeepnoteKernelAutoSelector } from '../../kernels/deepnote/types';
+import { executeAgentCell, isAgentCell } from '../deepnote/agentCellExecutionHandler';
 
 /**
  * Our implementation of the VSCode Notebook Controller. Called by VS code to execute cells in a notebook. Also displayed
@@ -626,15 +627,28 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
         // Start execution now (from the user's point of view)
         // Creating these execution objects marks the cell as queued for execution (vscode will update cell UI).
         type CellExec = { cell: NotebookCell; exec: NotebookCellExecution };
-        const cellExecs: CellExec[] = (this.cellQueue.get(doc) || []).map((cell) => {
+        const allCells = this.cellQueue.get(doc) || [];
+        this.cellQueue.delete(doc);
+
+        const agentCells = allCells.filter((cell) => isAgentCell(cell));
+        const kernelCells = allCells.filter((cell) => !isAgentCell(cell));
+
+        // Execute agent cells directly without kernel involvement
+        if (agentCells.length > 0) {
+            logger.trace(`Executing ${agentCells.length} agent cell(s) for ${getDisplayPath(doc.uri)} without kernel`);
+            await Promise.all(agentCells.map((cell) => executeAgentCell(cell, this.controller))).catch(noop);
+        }
+
+        if (kernelCells.length === 0) {
+            return;
+        }
+
+        const cellExecs: CellExec[] = kernelCells.map((cell) => {
             const exec = this.createCellExecutionIfNecessary(cell, new KernelController(this.controller));
             return { cell, exec };
         });
-        this.cellQueue.delete(doc);
-        const firstCell = cellExecs.length ? cellExecs[0].cell : undefined;
-        if (!firstCell) {
-            return;
-        }
+
+        const firstCell = cellExecs[0].cell;
 
         logger.trace(`Execute Notebook ${getDisplayPath(doc.uri)}. Step 1`);
 

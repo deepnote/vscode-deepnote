@@ -6,9 +6,9 @@ import type { BlockConverter } from './blockConverter';
 /**
  * Converter for agent blocks.
  *
- * Agent blocks are rendered as code cells with markdown language so the natural-language
- * prompt gets reasonable syntax highlighting while remaining visually distinct from
- * Python code blocks. The prompt text is stored in `block.content`.
+ * Agent blocks are rendered as code cells with plaintext language so the
+ * natural-language prompt appears without syntax highlighting while remaining
+ * executable. The prompt text is stored in `block.content`.
  *
  * Agent-specific metadata (model, MCP servers, max iterations, etc.) is preserved
  * through the generic metadata pass-through in DeepnoteDataConverter.
@@ -23,7 +23,7 @@ export class AgentBlockConverter implements BlockConverter {
     }
 
     convertToCell(block: DeepnoteBlock): NotebookCellData {
-        const cell = new NotebookCellData(NotebookCellKind.Code, block.content || '', 'markdown');
+        const cell = new NotebookCellData(NotebookCellKind.Code, block.content || '', 'plaintext');
 
         return cell;
     }

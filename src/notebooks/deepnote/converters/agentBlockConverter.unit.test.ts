@@ -36,7 +36,7 @@ suite('AgentBlockConverter', () => {
     });
 
     suite('convertToCell', () => {
-        test('converts agent block to code cell with markdown language', () => {
+        test('converts agent block to code cell with plaintext language', () => {
             const block: DeepnoteBlock = {
                 blockGroup: 'test-group',
                 content: 'Analyze the dataset and create a summary report',
@@ -50,7 +50,7 @@ suite('AgentBlockConverter', () => {
 
             assert.strictEqual(cell.kind, NotebookCellKind.Code);
             assert.strictEqual(cell.value, 'Analyze the dataset and create a summary report');
-            assert.strictEqual(cell.languageId, 'markdown');
+            assert.strictEqual(cell.languageId, 'plaintext');
         });
 
         test('handles empty content', () => {
@@ -67,7 +67,7 @@ suite('AgentBlockConverter', () => {
 
             assert.strictEqual(cell.kind, NotebookCellKind.Code);
             assert.strictEqual(cell.value, '');
-            assert.strictEqual(cell.languageId, 'markdown');
+            assert.strictEqual(cell.languageId, 'plaintext');
         });
 
         test('handles undefined content', () => {
@@ -83,7 +83,7 @@ suite('AgentBlockConverter', () => {
 
             assert.strictEqual(cell.kind, NotebookCellKind.Code);
             assert.strictEqual(cell.value, '');
-            assert.strictEqual(cell.languageId, 'markdown');
+            assert.strictEqual(cell.languageId, 'plaintext');
         });
 
         test('preserves multiline prompt', () => {
@@ -109,7 +109,7 @@ suite('AgentBlockConverter', () => {
 
             assert.strictEqual(cell.kind, NotebookCellKind.Code);
             assert.strictEqual(cell.value, prompt);
-            assert.strictEqual(cell.languageId, 'markdown');
+            assert.strictEqual(cell.languageId, 'plaintext');
         });
 
         test('preserves agent block with metadata', () => {
@@ -128,7 +128,7 @@ suite('AgentBlockConverter', () => {
 
             assert.strictEqual(cell.kind, NotebookCellKind.Code);
             assert.strictEqual(cell.value, 'Analyze the data');
-            assert.strictEqual(cell.languageId, 'markdown');
+            assert.strictEqual(cell.languageId, 'plaintext');
         });
     });
 
@@ -145,7 +145,7 @@ suite('AgentBlockConverter', () => {
             const cell = new NotebookCellData(
                 NotebookCellKind.Code,
                 'New prompt with updated instructions',
-                'markdown'
+                'plaintext'
             );
 
             converter.applyChangesToBlock(block, cell);
@@ -162,7 +162,7 @@ suite('AgentBlockConverter', () => {
                 metadata: { deepnote_agent_model: 'auto' },
                 type: 'agent'
             };
-            const cell = new NotebookCellData(NotebookCellKind.Code, '', 'markdown');
+            const cell = new NotebookCellData(NotebookCellKind.Code, '', 'plaintext');
 
             converter.applyChangesToBlock(block, cell);
 
@@ -181,7 +181,7 @@ suite('AgentBlockConverter', () => {
                 sortingKey: 'a2',
                 type: 'agent'
             };
-            const cell = new NotebookCellData(NotebookCellKind.Code, 'New prompt', 'markdown');
+            const cell = new NotebookCellData(NotebookCellKind.Code, 'New prompt', 'plaintext');
 
             converter.applyChangesToBlock(block, cell);
 

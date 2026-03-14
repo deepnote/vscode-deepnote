@@ -59,7 +59,16 @@ export function serializeNotebookContext({ cells }: { cells: NotebookCell[] }): 
     return serializeNotebookContextFromBlocks({ blocks, notebookName: null });
 }
 
-export async function executeAgentCell(cell: NotebookCell, controller: NotebookController): Promise<void> {
+export interface ExecuteAgentCellOptions {
+    executeAgentBlockFn?: typeof executeAgentBlock;
+}
+
+export async function executeAgentCell(
+    cell: NotebookCell,
+    controller: NotebookController,
+    options?: ExecuteAgentCellOptions
+): Promise<void> {
+    const executeAgentBlockFn = options?.executeAgentBlockFn ?? executeAgentBlock;
     const execution = controller.createNotebookCellExecution(cell);
     execution.start(Date.now());
 
@@ -71,8 +80,6 @@ export async function executeAgentCell(cell: NotebookCell, controller: NotebookC
         let accumulated = `[Agent] Planning next steps...`;
         const output = new NotebookCellOutput([NotebookCellOutputItem.text(accumulated)]);
         await execution.replaceOutput([output]);
-
-        await removeEphemeralCellsForAgent(cell);
 
         const dataConverter = new DeepnoteDataConverter();
         const deepnoteBlock = dataConverter.convertCellToBlock(
@@ -91,6 +98,8 @@ export async function executeAgentCell(cell: NotebookCell, controller: NotebookC
             // TODO: better DX error handling
             throw new Error('Cell is not an agent cell');
         }
+
+        await removeEphemeralCellsForAgent(cell.notebook, agentBlock.id);
 
         let lastAgentEventType: AgentStreamEvent['type'] | undefined;
 
@@ -113,8 +122,9 @@ export async function executeAgentCell(cell: NotebookCell, controller: NotebookC
             },
             addAndExecuteCodeBlock: async ({ code }: { code: string }) => {
                 const cellIndex = await insertEphemeralCell(cell.notebook, cell.index, agentBlock.id, 'code', code);
+                const insertedCell = cell.notebook.cellAt(cellIndex);
 
-                const { success } = await executeEphemeralCell(cell.notebook, cellIndex);
+                const { success } = await executeEphemeralCell(insertedCell);
                 return success ? { success } : { success: false, error: new Error('Ephemeral cell execution failed') };
             },
             onLog: (message: string) => {
@@ -131,10 +141,10 @@ export async function executeAgentCell(cell: NotebookCell, controller: NotebookC
                 switch (event.type) {
                     case 'tool_called':
                         // Ignore calling tool_called events
-                        // accumulated += `[Agent] Tool called: ${event.toolName}`;
+                        accumulated += `[Agent] Tool called: ${event.toolName}`;
                         break;
                     case 'tool_output':
-                        accumulated += `[Agent] Tool output: ${event.toolName}`;
+                        accumulated += `[Agent] Tool output: ${event.toolName}\n`;
                         accumulated += `[Agent] Tool output length: ${event.output?.length}`;
                         break;
                     case 'text_delta':
@@ -161,7 +171,7 @@ export async function executeAgentCell(cell: NotebookCell, controller: NotebookC
         logger.info(
             `Agent cell: starting executeAgentBlock, model=${agentBlock.metadata.deepnote_agent_model}, prompt length=${prompt.length}`
         );
-        const result = await executeAgentBlock(agentBlock, context);
+        const result = await executeAgentBlockFn(agentBlock, context);
         logger.info(`Agent cell: executeAgentBlock completed, finalOutput length=${result.finalOutput.length}`);
 
         execution.end(true, Date.now());
@@ -236,11 +246,9 @@ async function insertEphemeralCell(
 
 const EPHEMERAL_CELL_EXECUTION_TIMEOUT_MS = 5 * 60 * 1000;
 
-async function executeEphemeralCell(
-    notebook: NotebookDocument,
-    cellIndex: number
+export async function executeEphemeralCell(
+    cell: NotebookCell
 ): Promise<{ success: boolean; outputs: unknown[]; executionCount: number | null }> {
-    const cell = notebook.cellAt(cellIndex);
     const completionDeferred = createDeferred<void>();
 
     const disposable = notebookCellExecutions.onDidChangeNotebookCellExecutionState((e) => {
@@ -254,9 +262,11 @@ async function executeEphemeralCell(
     }, EPHEMERAL_CELL_EXECUTION_TIMEOUT_MS);
 
     try {
+        const cellIndex = cell.index;
+
         await commands.executeCommand('notebook.cell.execute', {
             ranges: [{ start: cellIndex, end: cellIndex + 1 }],
-            document: notebook.uri
+            document: cell.notebook.uri
         });
 
         await completionDeferred.promise;
@@ -278,13 +288,7 @@ async function executeEphemeralCell(
     }
 }
 
-async function removeEphemeralCellsForAgent(agentCell: NotebookCell): Promise<void> {
-    const agentBlockId = (agentCell.metadata?.id ?? agentCell.metadata?.__deepnoteBlockId) as string | undefined;
-    if (!agentBlockId) {
-        return;
-    }
-
-    const notebook = agentCell.notebook;
+async function removeEphemeralCellsForAgent(notebook: NotebookDocument, agentBlockId: string): Promise<void> {
     const deletions: NotebookEdit[] = [];
 
     for (let i = notebook.cellCount - 1; i >= 0; i--) {
@@ -308,8 +312,4 @@ async function removeEphemeralCellsForAgent(agentCell: NotebookCell): Promise<vo
     } else {
         logger.warn(`Failed to remove ephemeral cells for agent block ${agentBlockId}`);
     }
-}
-
-function delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
 }

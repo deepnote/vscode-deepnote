@@ -1,8 +1,17 @@
 import { expect } from 'chai';
 import * as sinon from 'sinon';
+import { anything, capture, reset, when } from 'ts-mockito';
 import { NotebookCellOutput, NotebookCellOutputItem, NotebookController } from 'vscode';
 
-import { executeAgentCell, isAgentCell } from './agentCellExecutionHandler';
+import type { AgentBlock } from '@deepnote/blocks';
+import type { AgentBlockContext, AgentBlockResult } from '@deepnote/runtime-core';
+
+import {
+    NotebookCellExecutionState,
+    notebookCellExecutions
+} from '../../platform/notebooks/cellExecutionStateService';
+import { mockedVSCodeNamespaces } from '../../test/vscode-mock';
+import { executeAgentCell, executeEphemeralCell, isAgentCell } from './agentCellExecutionHandler';
 import { createMockCell } from './deepnoteTestHelpers';
 
 suite('AgentCellExecutionHandler', () => {
@@ -39,8 +48,8 @@ suite('AgentCellExecutionHandler', () => {
     });
 
     suite('executeAgentCell', () => {
-        let clock: sinon.SinonFakeTimers;
         let mockExecution: {
+            appendOutput: sinon.SinonStub;
             clearOutput: sinon.SinonStub;
             end: sinon.SinonStub;
             replaceOutput: sinon.SinonStub;
@@ -48,11 +57,15 @@ suite('AgentCellExecutionHandler', () => {
             start: sinon.SinonStub;
         };
         let mockController: NotebookController;
+        let executeAgentBlockStub: sinon.SinonStub;
+        let savedOpenAiKey: string | undefined;
 
         setup(() => {
-            clock = sinon.useFakeTimers();
+            savedOpenAiKey = process.env.OPENAI_API_KEY;
+            process.env.OPENAI_API_KEY = 'test-key';
 
             mockExecution = {
+                appendOutput: sinon.stub().resolves(),
                 clearOutput: sinon.stub().resolves(),
                 end: sinon.stub(),
                 replaceOutput: sinon.stub().resolves(),
@@ -63,52 +76,47 @@ suite('AgentCellExecutionHandler', () => {
             mockController = {
                 createNotebookCellExecution: sinon.stub().returns(mockExecution)
             } as unknown as NotebookController;
+
+            executeAgentBlockStub = sinon.stub().resolves({ finalOutput: 'done' } as AgentBlockResult);
         });
 
         teardown(() => {
-            clock.restore();
+            if (savedOpenAiKey !== undefined) {
+                process.env.OPENAI_API_KEY = savedOpenAiKey;
+            } else {
+                delete process.env.OPENAI_API_KEY;
+            }
         });
 
-        async function runToCompletion(promise: Promise<void>): Promise<void> {
-            // Total delay across all chunks: 500 + 1000 + 2000 + 3000 = 6500ms
-            await clock.tickAsync(7000);
-            await promise;
+        function createAgentCell(text: string = 'Test prompt') {
+            return createMockCell({
+                metadata: { __deepnotePocket: { type: 'agent' } },
+                text
+            });
         }
 
         test('creates execution and starts it', async () => {
-            const cell = createMockCell({
-                metadata: { __deepnotePocket: { type: 'agent' } },
-                text: 'Analyze data'
-            });
+            const cell = createAgentCell('Analyze data');
 
-            const promise = executeAgentCell(cell, mockController);
-            await runToCompletion(promise);
+            await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
 
             expect((mockController.createNotebookCellExecution as sinon.SinonStub).calledOnceWith(cell)).to.be.true;
             expect(mockExecution.start.calledOnce).to.be.true;
         });
 
         test('clears output before streaming', async () => {
-            const cell = createMockCell({
-                metadata: { __deepnotePocket: { type: 'agent' } },
-                text: 'Analyze data'
-            });
+            const cell = createAgentCell('Analyze data');
 
-            const promise = executeAgentCell(cell, mockController);
-            await runToCompletion(promise);
+            await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
 
             expect(mockExecution.clearOutput.calledOnce).to.be.true;
             expect(mockExecution.clearOutput.calledBefore(mockExecution.replaceOutput)).to.be.true;
         });
 
         test('sets initial output via replaceOutput', async () => {
-            const cell = createMockCell({
-                metadata: { __deepnotePocket: { type: 'agent' } },
-                text: 'Hello world'
-            });
+            const cell = createAgentCell('Hello world');
 
-            const promise = executeAgentCell(cell, mockController);
-            await runToCompletion(promise);
+            await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
 
             expect(mockExecution.replaceOutput.calledOnce).to.be.true;
 
@@ -117,29 +125,35 @@ suite('AgentCellExecutionHandler', () => {
             expect(outputs[0].items).to.have.lengthOf(1);
 
             const text = Buffer.from(outputs[0].items[0].data).toString('utf-8');
-            expect(text).to.include('[Agent] Received prompt (11 chars)');
+            expect(text).to.include('[Agent] Planning next steps...');
         });
 
-        test('streams 4 chunks via replaceOutputItems', async () => {
-            const cell = createMockCell({
-                metadata: { __deepnotePocket: { type: 'agent' } },
-                text: 'Test prompt'
+        test('streams events via replaceOutputItems using onAgentEvent callback', async () => {
+            executeAgentBlockStub.callsFake(async (_block: AgentBlock, context: AgentBlockContext) => {
+                await context.onAgentEvent?.({ type: 'text_delta', text: 'Hello ' });
+                await context.onAgentEvent?.({ type: 'text_delta', text: 'world' });
+
+                return { finalOutput: 'Hello world' } as AgentBlockResult;
             });
 
-            const promise = executeAgentCell(cell, mockController);
-            await runToCompletion(promise);
+            const cell = createAgentCell();
 
-            expect(mockExecution.replaceOutputItems.callCount).to.equal(4);
+            await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
+
+            expect(mockExecution.replaceOutputItems.callCount).to.equal(2);
         });
 
         test('streaming chunks accumulate text progressively', async () => {
-            const cell = createMockCell({
-                metadata: { __deepnotePocket: { type: 'agent' } },
-                text: 'Test'
+            executeAgentBlockStub.callsFake(async (_block: AgentBlock, context: AgentBlockContext) => {
+                await context.onAgentEvent?.({ type: 'text_delta', text: 'first' });
+                await context.onAgentEvent?.({ type: 'text_delta', text: ' second' });
+
+                return { finalOutput: 'first second' } as AgentBlockResult;
             });
 
-            const promise = executeAgentCell(cell, mockController);
-            await runToCompletion(promise);
+            const cell = createAgentCell();
+
+            await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
 
             const getChunkText = (callIndex: number): string => {
                 const item = mockExecution.replaceOutputItems.getCall(callIndex).args[0] as NotebookCellOutputItem;
@@ -149,51 +163,39 @@ suite('AgentCellExecutionHandler', () => {
 
             const chunk1 = getChunkText(0);
             const chunk2 = getChunkText(1);
-            const chunk3 = getChunkText(2);
-            const chunk4 = getChunkText(3);
 
-            expect(chunk1).to.include('Analyzing prompt');
-            expect(chunk2).to.include('Generating plan');
-            expect(chunk2).to.include('Analyzing prompt');
-            expect(chunk3).to.include('Executing steps');
-            expect(chunk3).to.include('Generating plan');
-            expect(chunk4).to.include('Done');
-            expect(chunk4).to.include('Prompt: Test');
+            expect(chunk1).to.include('[Agent] Text:');
+            expect(chunk1).to.include('first');
+            expect(chunk2).to.include('first second');
         });
 
-        test('streaming chunks fire at correct intervals', async () => {
-            const cell = createMockCell({
-                metadata: { __deepnotePocket: { type: 'agent' } },
-                text: 'Test'
+        test('separates different event types with blank lines', async () => {
+            executeAgentBlockStub.callsFake(async (_block: AgentBlock, context: AgentBlockContext) => {
+                await context.onAgentEvent?.({ type: 'text_delta', text: 'thinking...' });
+                await context.onAgentEvent?.({ type: 'tool_called', toolName: 'search' });
+
+                return { finalOutput: '' } as AgentBlockResult;
             });
 
-            const promise = executeAgentCell(cell, mockController);
+            const cell = createAgentCell();
 
-            expect(mockExecution.replaceOutputItems.callCount).to.equal(0);
+            await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
 
-            await clock.tickAsync(500);
-            expect(mockExecution.replaceOutputItems.callCount).to.equal(1);
+            const getChunkText = (callIndex: number): string => {
+                const item = mockExecution.replaceOutputItems.getCall(callIndex).args[0] as NotebookCellOutputItem;
 
-            await clock.tickAsync(1000);
-            expect(mockExecution.replaceOutputItems.callCount).to.equal(2);
+                return Buffer.from(item.data).toString('utf-8');
+            };
 
-            await clock.tickAsync(2000);
-            expect(mockExecution.replaceOutputItems.callCount).to.equal(3);
-
-            await clock.tickAsync(3000);
-            expect(mockExecution.replaceOutputItems.callCount).to.equal(4);
-
-            await promise;
+            const chunk2 = getChunkText(1);
+            expect(chunk2).to.include('\n\n');
+            expect(chunk2).to.include('[Agent] Tool called: search');
         });
 
         test('ends execution with success', async () => {
-            const cell = createMockCell({
-                metadata: { __deepnotePocket: { type: 'agent' } },
-                text: 'Test'
-            });
+            const cell = createAgentCell();
 
-            const promise = executeAgentCell(cell, mockController);
-            await runToCompletion(promise);
+            await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
 
             expect(mockExecution.end.calledOnce).to.be.true;
             expect(mockExecution.end.firstCall.args[0]).to.be.true;
@@ -202,13 +204,9 @@ suite('AgentCellExecutionHandler', () => {
         test('ends execution with failure when error occurs', async () => {
             mockExecution.clearOutput.rejects(new Error('Test error'));
 
-            const cell = createMockCell({
-                metadata: { __deepnotePocket: { type: 'agent' } },
-                text: 'Test'
-            });
+            const cell = createAgentCell();
 
-            const promise = executeAgentCell(cell, mockController);
-            await runToCompletion(promise);
+            await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
 
             expect(mockExecution.end.calledOnce).to.be.true;
             expect(mockExecution.end.firstCall.args[0]).to.be.false;
@@ -217,17 +215,13 @@ suite('AgentCellExecutionHandler', () => {
         test('writes error message to stderr output on failure', async () => {
             mockExecution.clearOutput.rejects(new Error('Something went wrong'));
 
-            const cell = createMockCell({
-                metadata: { __deepnotePocket: { type: 'agent' } },
-                text: 'Test'
-            });
+            const cell = createAgentCell();
 
-            const promise = executeAgentCell(cell, mockController);
-            await runToCompletion(promise);
+            await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
 
-            expect(mockExecution.replaceOutput.calledOnce).to.be.true;
+            expect(mockExecution.appendOutput.calledOnce).to.be.true;
 
-            const outputs = mockExecution.replaceOutput.firstCall.args[0] as NotebookCellOutput[];
+            const outputs = mockExecution.appendOutput.firstCall.args[0] as NotebookCellOutput[];
             expect(outputs).to.have.lengthOf(1);
 
             const item = outputs[0].items[0];
@@ -238,20 +232,48 @@ suite('AgentCellExecutionHandler', () => {
         });
 
         test('handles empty prompt', async () => {
-            const cell = createMockCell({
-                metadata: { __deepnotePocket: { type: 'agent' } },
-                text: ''
-            });
+            const cell = createAgentCell('');
 
-            const promise = executeAgentCell(cell, mockController);
-            await runToCompletion(promise);
+            await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
 
             expect(mockExecution.end.calledOnce).to.be.true;
             expect(mockExecution.end.firstCall.args[0]).to.be.true;
 
             const outputs = mockExecution.replaceOutput.firstCall.args[0] as NotebookCellOutput[];
             const text = Buffer.from(outputs[0].items[0].data).toString('utf-8');
-            expect(text).to.include('(0 chars)');
+            expect(text).to.include('[Agent] Planning next steps...');
+        });
+    });
+
+    suite('executeEphemeralCell', () => {
+        teardown(() => {
+            reset(mockedVSCodeNamespaces.commands);
+        });
+
+        test('uses current cell index, not stale index from insertion time', async () => {
+            const staleIndex = 5;
+            const currentIndex = 6;
+
+            const cell = createMockCell({ index: staleIndex });
+
+            // Simulate a concurrent insertion shifting the cell's index
+            (cell as { index: number }).index = currentIndex;
+
+            when(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything())).thenCall(async () => {
+                notebookCellExecutions.changeCellState(cell, NotebookCellExecutionState.Idle);
+            });
+
+            await executeEphemeralCell(cell);
+
+            const [commandName, commandArg] = capture(
+                mockedVSCodeNamespaces.commands.executeCommand as (cmd: string, arg: unknown) => Thenable<unknown>
+            ).last();
+
+            expect(commandName).to.equal('notebook.cell.execute');
+            expect(commandArg).to.deep.equal({
+                ranges: [{ start: currentIndex, end: currentIndex + 1 }],
+                document: cell.notebook.uri
+            });
         });
     });
 });

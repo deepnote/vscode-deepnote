@@ -1,5 +1,5 @@
 import { isExecutableBlock, type DeepnoteBlock } from '@deepnote/blocks';
-import { NotebookCell, NotebookCellData, NotebookCellKind, NotebookCellOutput, NotebookCellOutputItem } from 'vscode';
+import { NotebookCellData, NotebookCellKind, NotebookCellOutput, NotebookCellOutputItem } from 'vscode';
 
 import { generateBlockId, generateSortingKey } from './dataConversionUtils';
 import type { DeepnoteOutput } from '../../platform/deepnote/deepnoteTypes';

@@ -47,8 +47,16 @@ export function createMockNotebook(options?: CreateMockNotebookOptions): Noteboo
     return {
         uri,
         notebookType,
-        metadata
-    } as NotebookDocument;
+        metadata,
+        cellCount: 0,
+        cellAt: () => ({}) as NotebookCell,
+        getCells: () => [],
+        version: 1,
+        isDirty: false,
+        isUntitled: false,
+        isClosed: false,
+        save: async () => true
+    } satisfies NotebookDocument;
 }
 
 /**
@@ -121,7 +129,8 @@ export function createMockCell(options?: CreateMockCellOptions): NotebookCell {
         positionAt: () => ({}) as unknown,
         validateRange: () => ({}) as unknown,
         validatePosition: () => ({}) as unknown,
-        getWordRangeAtPosition: () => undefined
+        getWordRangeAtPosition: () => undefined,
+        encoding: 'utf-8'
     } as unknown as TextDocument;
 
     return {

@@ -11,7 +11,7 @@ import { inject, injectable, named, optional } from 'inversify';
 import * as os from 'os';
 import { CancellationToken, l10n, Uri } from 'vscode';
 
-import { startServer, stopServer, type ServerInfo as RuntimeCoreServerInfo } from '@deepnote/runtime-core';
+import { startServer, stopServer } from '@deepnote/runtime-core';
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { Cancellation } from '../../platform/common/cancellation';
@@ -49,7 +49,6 @@ type PendingOperation =
 
 interface ProjectContext {
     environmentId: string;
-    runtimeCoreServerInfo: RuntimeCoreServerInfo | null;
     serverInfo: DeepnoteServerInfo | null;
 }
 
@@ -143,7 +142,6 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         } else {
             const newContext: ProjectContext = {
                 environmentId,
-                runtimeCoreServerInfo: null,
                 serverInfo: null
             };
 
@@ -266,9 +264,9 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         // Gather SQL integration env vars to pass to the server
         const extraEnv = await this.gatherSqlIntegrationEnvVars(deepnoteFileUri, environmentId, token);
 
-        let runtimeCoreInfo: RuntimeCoreServerInfo;
+        let serverInfo: DeepnoteServerInfo;
         try {
-            runtimeCoreInfo = await startServer({
+            serverInfo = await startServer({
                 pythonEnv: venvPath.fsPath,
                 workingDirectory: path.dirname(deepnoteFileUri.fsPath),
                 port,
@@ -286,28 +284,21 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             );
         }
 
-        projectContext.runtimeCoreServerInfo = runtimeCoreInfo;
-
-        const serverInfo: DeepnoteServerInfo = {
-            url: runtimeCoreInfo.url,
-            jupyterPort: runtimeCoreInfo.jupyterPort,
-            lspPort: runtimeCoreInfo.lspPort,
-            process: runtimeCoreInfo.process
-        };
+        projectContext.serverInfo = serverInfo;
 
         // Set up output channel logging from the server process
-        this.monitorServerOutput(serverKey, runtimeCoreInfo);
+        this.monitorServerOutput(serverKey, serverInfo);
 
         // Write lock file for orphan-cleanup tracking
-        const serverPid = runtimeCoreInfo.process.pid;
+        const serverPid = serverInfo.process.pid;
         if (serverPid) {
             await this.writeLockFile(serverPid);
         } else {
             logger.warn(`Could not get PID for server process for ${serverKey}`);
         }
 
-        logger.info(`Deepnote server started successfully at ${runtimeCoreInfo.url} for ${serverKey}`);
-        this.outputChannel.appendLine(l10n.t('✓ Deepnote server running at {0}', runtimeCoreInfo.url));
+        logger.info(`Deepnote server started successfully at ${serverInfo.url} for ${serverKey}`);
+        this.outputChannel.appendLine(l10n.t('✓ Deepnote server running at {0}', serverInfo.url));
 
         return serverInfo;
     }
@@ -324,20 +315,19 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
         Cancellation.throwIfCanceled(token);
 
-        const runtimeCoreInfo = projectContext?.runtimeCoreServerInfo;
+        const serverInfo = projectContext?.serverInfo;
 
-        if (runtimeCoreInfo) {
-            const serverPid = runtimeCoreInfo.process.pid;
+        if (serverInfo) {
+            const serverPid = serverInfo.process.pid;
 
             try {
                 logger.info(`Stopping Deepnote server for ${fileKey}...`);
-                await stopServer(runtimeCoreInfo);
+                await stopServer(serverInfo);
                 this.outputChannel.appendLine(l10n.t('Deepnote server stopped for {0}', fileKey));
             } catch (ex) {
                 logger.error('Error stopping Deepnote server', ex);
             } finally {
                 if (projectContext) {
-                    projectContext.runtimeCoreServerInfo = null;
                     projectContext.serverInfo = null;
                 }
 
@@ -439,8 +429,8 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
     /**
      * Stream stdout/stderr from the server process to the VSCode output channel.
      */
-    private monitorServerOutput(serverKey: string, runtimeCoreInfo: RuntimeCoreServerInfo): void {
-        const proc = runtimeCoreInfo.process;
+    private monitorServerOutput(serverKey: string, serverInfo: DeepnoteServerInfo): void {
+        const proc = serverInfo.process;
         const disposables: IDisposable[] = [];
         this.disposablesByFile.set(serverKey, disposables);
 
@@ -488,15 +478,15 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         const pidsToCleanup: number[] = [];
 
         for (const [key, ctx] of this.projectContexts.entries()) {
-            if (ctx.runtimeCoreServerInfo) {
-                const pid = ctx.runtimeCoreServerInfo.process.pid;
+            if (ctx.serverInfo) {
+                const pid = ctx.serverInfo.process.pid;
                 if (pid) {
                     pidsToCleanup.push(pid);
                 }
 
                 logger.info(`Stopping Deepnote server for ${key}...`);
                 stopPromises.push(
-                    stopServer(ctx.runtimeCoreServerInfo).catch((ex) => {
+                    stopServer(ctx.serverInfo).catch((ex) => {
                         logger.error(`Error stopping Deepnote server for ${key}`, ex);
                     })
                 );

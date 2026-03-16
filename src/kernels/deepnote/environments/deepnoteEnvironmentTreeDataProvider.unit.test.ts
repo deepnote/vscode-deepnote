@@ -1,6 +1,7 @@
 import { assert } from 'chai';
 import { instance, mock, when } from 'ts-mockito';
 import { Uri, EventEmitter } from 'vscode';
+import { createMockChildProcess } from '../deepnoteTestHelpers';
 import { DeepnoteEnvironmentTreeDataProvider } from './deepnoteEnvironmentTreeDataProvider.node';
 import { IDeepnoteEnvironmentManager } from '../types';
 import { DeepnoteEnvironment } from './deepnoteEnvironment';
@@ -40,7 +41,8 @@ suite('DeepnoteEnvironmentTreeDataProvider', () => {
             url: 'http://localhost:8888',
             jupyterPort: 8888,
             lspPort: 8889,
-            token: 'test-token'
+            token: 'test-token',
+            process: createMockChildProcess()
         }
     };
 

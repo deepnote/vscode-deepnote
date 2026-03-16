@@ -3,6 +3,7 @@ import { anything, instance, mock, when } from 'ts-mockito';
 
 import { DeepnoteAgentSkillsManager } from './deepnoteAgentSkillsManager.node';
 import { DeepnoteServerStarter } from './deepnoteServerStarter.node';
+import { createMockChildProcess } from './deepnoteTestHelpers';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { IAsyncDisposableRegistry, IOutputChannel } from '../../platform/common/types';
 import { IDeepnoteToolkitInstaller } from './types';
@@ -73,8 +74,12 @@ suite('DeepnoteServerStarter', () => {
             const projectContexts = (serverStarter as any).projectContexts as Map<string, any>;
             projectContexts.set('existing-key', {
                 environmentId: 'env1',
-                runtimeCoreServerInfo: null,
-                serverInfo: { url: 'http://localhost:8888', jupyterPort: 8888, lspPort: 8889 }
+                serverInfo: {
+                    url: 'http://localhost:8888',
+                    jupyterPort: 8888,
+                    lspPort: 8889,
+                    process: createMockChildProcess()
+                }
             });
 
             const port = await reserveStartPort('test-key-2');

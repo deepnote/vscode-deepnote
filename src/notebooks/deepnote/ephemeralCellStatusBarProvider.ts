@@ -11,6 +11,7 @@ import {
 } from 'vscode';
 import { injectable } from 'inversify';
 
+import { isEphemeralCell } from './dataConversionUtils';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 
 const EPHEMERAL_INDICATOR_PRIORITY = 1000;
@@ -54,7 +55,7 @@ export class EphemeralCellStatusBarProvider
             return undefined;
         }
 
-        if (!this.isEphemeralCell(cell)) {
+        if (!isEphemeralCell(cell)) {
             return undefined;
         }
 
@@ -75,9 +76,5 @@ export class EphemeralCellStatusBarProvider
             priority: EPHEMERAL_INDICATOR_PRIORITY,
             tooltip: tooltipLines.join('\n')
         };
-    }
-
-    private isEphemeralCell(cell: NotebookCell): boolean {
-        return cell.metadata?.is_ephemeral === true;
     }
 }

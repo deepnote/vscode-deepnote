@@ -12,6 +12,7 @@ import {
 } from 'vscode';
 import { injectable } from 'inversify';
 
+import { isEphemeralCell } from './dataConversionUtils';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 
 const NOTEBOOK_CELL_SCHEME = 'vscode-notebook-cell';
@@ -106,7 +107,7 @@ export class EphemeralCellDecorationProvider implements IExtensionSyncActivation
             }
 
             const cell = this.findCellForEditor(editor);
-            if (!cell || cell.metadata?.is_ephemeral !== true) {
+            if (!cell || !isEphemeralCell(cell)) {
                 editor.setDecorations(this.ephemeralDecorationType, []);
                 continue;
             }

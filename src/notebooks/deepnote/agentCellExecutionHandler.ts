@@ -25,7 +25,7 @@ import { uuidUtils } from '../../platform/common/uuid';
 import type { Pocket } from '../../platform/deepnote/pocket';
 import { logger } from '../../platform/logging';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
-import { generateBlockId, generateSortingKey } from './dataConversionUtils';
+import { generateBlockId, generateSortingKey, isEphemeralCell } from './dataConversionUtils';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
 
 export function isAgentCell(cell: NotebookCell): boolean {
@@ -107,6 +107,7 @@ export async function executeAgentCell(
             cells: cell.notebook.getCells().filter((c) => c.index !== cell.index)
         });
 
+        // eslint-disable-next-line local-rules/dont-use-process
         const openAiToken = process.env.OPENAI_API_KEY;
         if (openAiToken == null) {
             throw new Error('OPENAI_API_KEY is not set');
@@ -203,7 +204,7 @@ function getInsertIndexAfterAgentCell(
 
     while (index < notebook.cellCount) {
         const cell = notebook.cellAt(index);
-        if (cell.metadata?.is_ephemeral === true && cell.metadata?.agent_source_block_id === agentBlockId) {
+        if (isEphemeralCell(cell) && cell.metadata?.agent_source_block_id === agentBlockId) {
             index++;
         } else {
             break;
@@ -294,7 +295,7 @@ async function removeEphemeralCellsForAgent(notebook: NotebookDocument, agentBlo
     for (let i = notebook.cellCount - 1; i >= 0; i--) {
         const cell = notebook.cellAt(i);
 
-        if (cell.metadata?.is_ephemeral === true && cell.metadata?.agent_source_block_id === agentBlockId) {
+        if (isEphemeralCell(cell) && cell.metadata?.agent_source_block_id === agentBlockId) {
             deletions.push(NotebookEdit.deleteCells(new NotebookRange(i, i + 1)));
         }
     }

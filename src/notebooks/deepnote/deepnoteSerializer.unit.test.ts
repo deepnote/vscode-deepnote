@@ -205,6 +205,71 @@ project:
             assert.include(yamlString, 'project-123');
             assert.include(yamlString, 'notebook-1');
         });
+
+        test('should exclude ephemeral cells from serialized output', async () => {
+            const projectData: DeepnoteFile = {
+                version: '1.0.0',
+                metadata: {
+                    createdAt: '2023-01-01T00:00:00Z',
+                    modifiedAt: '2023-01-02T00:00:00Z'
+                },
+                project: {
+                    id: 'project-ephemeral-exclude',
+                    name: 'Ephemeral Exclude Test',
+                    notebooks: [
+                        {
+                            id: 'notebook-1',
+                            name: 'Test Notebook',
+                            blocks: [
+                                {
+                                    id: 'block-1',
+                                    content: 'print("persisted")',
+                                    blockGroup: 'group-1',
+                                    metadata: {},
+                                    sortingKey: 'a0',
+                                    type: 'code'
+                                }
+                            ],
+                            executionMode: 'block',
+                            isModule: false
+                        }
+                    ],
+                    settings: {}
+                }
+            };
+
+            manager.storeOriginalProject('project-ephemeral-exclude', projectData, 'notebook-1');
+
+            const mockNotebookData = {
+                cells: [
+                    {
+                        kind: 2,
+                        value: 'print("persisted")',
+                        languageId: 'python',
+                        metadata: { id: 'block-1' }
+                    },
+                    {
+                        kind: 2,
+                        value: 'print("ephemeral - should not persist")',
+                        languageId: 'python',
+                        metadata: { id: 'ephemeral-block', is_ephemeral: true }
+                    }
+                ],
+                metadata: {
+                    deepnoteProjectId: 'project-ephemeral-exclude',
+                    deepnoteNotebookId: 'notebook-1'
+                }
+            };
+
+            const result = await serializer.serializeNotebook(mockNotebookData as any, {} as any);
+            const yamlString = new TextDecoder().decode(result);
+            const parsedResult = deserializeDeepnoteFile(yamlString);
+
+            const notebook = parsedResult.project.notebooks.find((nb) => nb.id === 'notebook-1');
+            assert.isDefined(notebook);
+            assert.strictEqual(notebook!.blocks.length, 1, 'Ephemeral cell should be excluded');
+            assert.strictEqual(notebook!.blocks[0].content, 'print("persisted")');
+        });
     });
 
     suite('findCurrentNotebookId', () => {

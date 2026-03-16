@@ -6,6 +6,7 @@ import { l10n, window, workspace, type CancellationToken, type NotebookData, typ
 import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
+import { isEphemeralCell } from './dataConversionUtils';
 import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { SnapshotService } from './snapshots/snapshotService';
 import { computeHash } from '../../platform/common/crypto';
@@ -273,11 +274,17 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 throw new Error(`Notebook with ID ${notebookId} not found in project`);
             }
 
-            logger.debug(`SerializeNotebook: Found notebook, converting ${data.cells.length} cells to blocks`);
+            // Exclude ephemeral cells (agent-generated) from persistence
+            const nonEphemeralCells = data.cells.filter((cell) => !isEphemeralCell(cell));
+
+            logger.debug(
+                `SerializeNotebook: Found notebook, converting ${nonEphemeralCells.length} cells to blocks ` +
+                    `(${data.cells.length - nonEphemeralCells.length} ephemeral excluded)`
+            );
 
             // Log cell metadata IDs before conversion
-            for (let i = 0; i < data.cells.length; i++) {
-                const cell = data.cells[i];
+            for (let i = 0; i < nonEphemeralCells.length; i++) {
+                const cell = nonEphemeralCells[i];
                 logger.trace(
                     `SerializeNotebook: cell[${i}] metadata.id=${cell.metadata?.id}, metadata keys=${
                         cell.metadata ? Object.keys(cell.metadata).join(',') : 'none'
@@ -287,7 +294,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
             // Clone blocks while removing circular references that may have been
             // introduced by VS Code's notebook cell/output handling
-            const blocks = this.converter.convertCellsToBlocks(data.cells);
+            const blocks = this.converter.convertCellsToBlocks(nonEphemeralCells);
 
             logger.debug(`SerializeNotebook: Converted to ${blocks.length} blocks`);
 
@@ -301,7 +308,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             }
 
             // Add snapshot metadata to blocks (contentHash and execution timing)
-            await this.addSnapshotMetadataToBlocks(blocks, data);
+            await this.addSnapshotMetadataToBlocks(blocks, { ...data, cells: nonEphemeralCells });
 
             // Handle snapshot mode: strip outputs and execution metadata from main file
             if (this.snapshotService?.isSnapshotsEnabled()) {

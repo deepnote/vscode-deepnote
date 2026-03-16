@@ -72,7 +72,8 @@ const commonExternals = [
 const webExternals = [
     ...commonExternals,
     'canvas', // Native module used by vega for server-side rendering, not needed in browser
-    'mathjax-electron' // Uses Node.js path module, MathJax rendering handled differently in browser
+    'mathjax-electron', // Uses Node.js path module, MathJax rendering handled differently in browser
+    '@deepnote/runtime-core' // Uses tcp-port-used → net, only needed in desktop for agent block execution
 ];
 const desktopExternals = [...commonExternals, ...deskTopNodeModulesToExternalize];
 const bundleConfig = getBundleConfiguration();

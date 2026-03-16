@@ -2,7 +2,7 @@ import { assert } from 'chai';
 import { Uri } from 'vscode';
 
 import { DeepnoteLspClientManager } from './deepnoteLspClientManager.node';
-import { createMockChildProcess } from './deepnoteTestHelpers';
+import { createMockChildProcess } from './deepnoteTestHelpers.node';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import * as path from '../../platform/vscode-path/path';

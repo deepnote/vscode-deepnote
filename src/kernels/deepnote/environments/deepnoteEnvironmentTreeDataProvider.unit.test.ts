@@ -1,7 +1,7 @@
 import { assert } from 'chai';
 import { instance, mock, when } from 'ts-mockito';
 import { Uri, EventEmitter } from 'vscode';
-import { createMockChildProcess } from '../deepnoteTestHelpers';
+import { createMockChildProcess } from '../deepnoteTestHelpers.node';
 import { DeepnoteEnvironmentTreeDataProvider } from './deepnoteEnvironmentTreeDataProvider.node';
 import { IDeepnoteEnvironmentManager } from '../types';
 import { DeepnoteEnvironment } from './deepnoteEnvironment';

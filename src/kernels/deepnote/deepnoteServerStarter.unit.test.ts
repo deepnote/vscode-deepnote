@@ -3,7 +3,7 @@ import { anything, instance, mock, when } from 'ts-mockito';
 
 import { DeepnoteAgentSkillsManager } from './deepnoteAgentSkillsManager.node';
 import { DeepnoteServerStarter } from './deepnoteServerStarter.node';
-import { createMockChildProcess } from './deepnoteTestHelpers';
+import { createMockChildProcess } from './deepnoteTestHelpers.node';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { IAsyncDisposableRegistry, IOutputChannel } from '../../platform/common/types';
 import { IDeepnoteToolkitInstaller } from './types';

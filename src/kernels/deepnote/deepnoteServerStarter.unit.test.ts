@@ -3,7 +3,6 @@ import { anything, instance, mock, when } from 'ts-mockito';
 
 import { DeepnoteAgentSkillsManager } from './deepnoteAgentSkillsManager.node';
 import { DeepnoteServerStarter } from './deepnoteServerStarter.node';
-import { createMockChildProcess } from './deepnoteTestHelpers.node';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { IAsyncDisposableRegistry, IOutputChannel } from '../../platform/common/types';
 import { IDeepnoteToolkitInstaller } from './types';
@@ -12,10 +11,9 @@ import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnot
 /**
  * Unit tests for DeepnoteServerStarter.
  *
- * Port allocation, server spawning, and health checks are now delegated to
+ * Port allocation, server spawning, and health checks are delegated to
  * @deepnote/runtime-core's startServer/stopServer. These tests focus on the
- * extension-specific layers: port reservation serialization, SQL env var
- * gathering, and lifecycle orchestration.
+ * extension-specific layers: SQL env var gathering and lifecycle orchestration.
  */
 suite('DeepnoteServerStarter', () => {
     let serverStarter: DeepnoteServerStarter;
@@ -56,52 +54,6 @@ suite('DeepnoteServerStarter', () => {
         if (serverStarter) {
             await serverStarter.dispose();
         }
-    });
-
-    suite('reserveStartPort - Port Serialization', () => {
-        test('should return default port when no servers are running', async () => {
-            const reserveStartPort = getPrivateMethod(serverStarter, 'reserveStartPort');
-            const port = await reserveStartPort('test-key');
-
-            assert.strictEqual(port, 8888);
-        });
-
-        test('should return ports beyond existing servers', async () => {
-            const reserveStartPort = getPrivateMethod(serverStarter, 'reserveStartPort');
-
-            // Simulate a running server context by directly setting projectContexts
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const projectContexts = (serverStarter as any).projectContexts as Map<string, any>;
-            projectContexts.set('existing-key', {
-                environmentId: 'env1',
-                serverInfo: {
-                    url: 'http://localhost:8888',
-                    jupyterPort: 8888,
-                    lspPort: 8889,
-                    process: createMockChildProcess()
-                }
-            });
-
-            const port = await reserveStartPort('test-key-2');
-
-            assert.isAtLeast(port, 8890, 'Should skip ports used by existing servers');
-        });
-
-        test('should serialize concurrent calls', async () => {
-            const reserveStartPort = getPrivateMethod(serverStarter, 'reserveStartPort');
-
-            // Launch concurrent port reservations
-            const [port1, port2, port3] = await Promise.all([
-                reserveStartPort('key-1'),
-                reserveStartPort('key-2'),
-                reserveStartPort('key-3')
-            ]);
-
-            // All should return valid numbers (even if same, since no server info is stored between calls)
-            assert.isNumber(port1);
-            assert.isNumber(port2);
-            assert.isNumber(port3);
-        });
     });
 
     suite('gatherSqlIntegrationEnvVars', () => {

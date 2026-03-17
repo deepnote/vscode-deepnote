@@ -1,6 +1,5 @@
 /**
  * @deepnote/runtime-core functions not currently exported that would be useful:
- * - findConsecutiveAvailablePorts(startPort) — duplicated logic for multi-server port reservation
  * - waitForServer(info, timeoutMs) — health-check polling on /api
  * - createJsonWebSocketFactory() — forces JSON-only Jupyter WS protocol, potential stability improvement
  * - ExecutionEngine.toPythonLiteral(value) — JS-to-Python literal conversion
@@ -65,7 +64,6 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
     private readonly disposablesByFile: Map<string, IDisposable[]> = new Map();
     private readonly projectContexts: Map<string, ProjectContext> = new Map();
     private readonly pendingOperations: Map<string, PendingOperation> = new Map();
-    private portAllocationLock: Promise<void> = Promise.resolve();
     private readonly sessionId: string = generateUuid();
     private readonly lockFileDir: string = path.join(os.tmpdir(), 'vscode-deepnote-locks');
 
@@ -227,7 +225,6 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
      * - SQL integration env var injection (via ServerOptions.env)
      * - Lock file creation (after start, using returned PID)
      * - Output channel logging (via process stdout/stderr streams)
-     * - Port allocation serialization across concurrent starts
      */
     private async startServerForEnvironment(
         projectContext: ProjectContext,
@@ -259,28 +256,23 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
         Cancellation.throwIfCanceled(token);
 
-        // Serialize port allocation across concurrent server starts
-        const port = await this.reserveStartPort(fileKey);
+        logger.info(`Starting deepnote-toolkit server for ${fileKey} (environmentId ${environmentId})`);
+        this.outputChannel.appendLine(l10n.t('Starting Deepnote server...'));
 
-        logger.info(`Starting deepnote-toolkit server on port ${port} for ${fileKey} (environmentId ${environmentId})`);
-        this.outputChannel.appendLine(l10n.t('Starting Deepnote server on port {0}...', port));
-
-        // Gather SQL integration env vars to pass to the server
         const extraEnv = await this.gatherSqlIntegrationEnvVars(deepnoteFileUri, environmentId, token);
 
-        let serverInfo: DeepnoteServerInfo;
+        let serverInfo: DeepnoteServerInfo | undefined;
         try {
             serverInfo = await startServer({
                 pythonEnv: venvPath.fsPath,
                 workingDirectory: path.dirname(deepnoteFileUri.fsPath),
-                port,
                 startupTimeoutMs: SERVER_STARTUP_TIMEOUT_MS,
                 env: extraEnv
             });
         } catch (error) {
             throw new DeepnoteServerStartupError(
                 interpreter.uri.fsPath,
-                port,
+                serverInfo?.jupyterPort ?? 0,
                 'unknown',
                 '',
                 error instanceof Error ? error.message : String(error),
@@ -357,39 +349,6 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             return response.ok;
         } catch {
             return false;
-        }
-    }
-
-    /**
-     * Serialize port reservation across concurrent server starts.
-     *
-     * runtime-core's `startServer` finds its own consecutive ports, but when multiple
-     * servers start concurrently in the extension, they can race. This lock serializes
-     * the starts so each `startServer` call sees the ports bound by previous calls.
-     */
-    private async reserveStartPort(fileKey: string): Promise<number> {
-        const previousLock = this.portAllocationLock;
-        let releaseLock: () => void;
-        const currentLock = new Promise<void>((resolve) => {
-            releaseLock = resolve;
-        });
-        this.portAllocationLock = previousLock.then(() => currentLock);
-
-        await previousLock;
-
-        try {
-            // Collect ports already in use by running servers to pick a non-conflicting start port
-            let maxPort = 8888;
-            for (const ctx of this.projectContexts.values()) {
-                if (ctx.serverInfo) {
-                    maxPort = Math.max(maxPort, ctx.serverInfo.jupyterPort + 2, ctx.serverInfo.lspPort + 1);
-                }
-            }
-
-            logger.info(`Reserved start port ${maxPort} for ${fileKey}`);
-            return maxPort;
-        } finally {
-            releaseLock!();
         }
     }
 

@@ -283,7 +283,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                 serverInfo?.jupyterPort ?? 0,
                 'unknown',
                 capturedOutput?.stdout || '',
-                capturedOutput?.stderr || (error instanceof Error ? error.message : String(error)),
+                capturedOutput?.stderr || '',
                 error instanceof Error ? error : new Error(`${error}`)
             );
         }

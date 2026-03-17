@@ -3,8 +3,8 @@
         "notes": "CVE-2025-14505: elliptic ECDSA signature corruption can lead to private key recovery if attacker obtains both faulty and correct signatures for identical inputs. Accepted risk: dev-only transitive dependency (node-stdlib-browser -> crypto-browserify -> browserify-sign), not used for signing in this project, no fix available.",
         "expiry": "2026-08-15"
     },
-    "GHSA-g9mf-h72j-4rw9": {
-        "notes": "undici DoS via unbounded decompression chain. Accepted risk: dev-only transitive dependency (@actions/core, @actions/github), only affects CI/CD workflows, not bundled in extension. Fix requires major version jump (5.x -> 6.x/7.x) breaking @actions/http-client constraint.",
-        "expiry": "2026-08-15"
+    "GHSA-vpq2-c234-7xj6": {
+        "notes": "CVE-2026-3449: @tootallnate/once promise hangs on AbortSignal abort (CVSS 1.9, availability only). Transitive dep via http-proxy-agent in dev-only packages (test-electron, jsdom) and BigQuery driver; worst case is a single stalled HTTP proxy request, no data leak or code execution.",
+        "expiry": "2026-09-17"
     }
 }

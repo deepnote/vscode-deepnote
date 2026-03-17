@@ -185,6 +185,11 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         const fileKey = deepnoteFileUri.fsPath;
         const projectContext = this.projectContexts.get(fileKey) ?? null;
 
+        if (projectContext == null) {
+            logger.warn(`No project context found for ${fileKey}, skipping stop server...`);
+            return;
+        }
+
         const pendingOp = this.pendingOperations.get(fileKey);
         if (pendingOp) {
             logger.info(`Waiting for pending operation on ${fileKey} before stopping...`);
@@ -307,7 +312,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
      * Stop the server using @deepnote/runtime-core's `stopServer` (SIGTERM -> wait -> SIGKILL).
      */
     private async stopServerForEnvironment(
-        projectContext: ProjectContext | null,
+        projectContext: ProjectContext,
         deepnoteFileUri: Uri,
         token?: CancellationToken
     ): Promise<void> {
@@ -315,7 +320,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
         Cancellation.throwIfCanceled(token);
 
-        const serverInfo = projectContext?.serverInfo;
+        const { serverInfo } = projectContext;
 
         if (serverInfo) {
             const serverPid = serverInfo.process.pid;

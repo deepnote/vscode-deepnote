@@ -27,6 +27,7 @@ import * as path from '../../platform/vscode-path/path';
 import { DeepnoteServerInfo, IDeepnoteServerStarter, IDeepnoteToolkitInstaller } from './types';
 import { DeepnoteAgentSkillsManager } from './deepnoteAgentSkillsManager.node';
 
+const MAX_OUTPUT_TRACKING_LENGTH = 5000;
 const SERVER_STARTUP_TIMEOUT_MS = 120_000;
 const GRACEFUL_SHUTDOWN_TIMEOUT_MS = 3000;
 
@@ -62,8 +63,9 @@ interface ProjectContext {
 @injectable()
 export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtensionSyncActivationService {
     private readonly disposablesByFile: Map<string, IDisposable[]> = new Map();
-    private readonly projectContexts: Map<string, ProjectContext> = new Map();
     private readonly pendingOperations: Map<string, PendingOperation> = new Map();
+    private readonly projectContexts: Map<string, ProjectContext> = new Map();
+    private readonly serverOutputByFile: Map<string, { stdout: string; stderr: string }> = new Map();
     private readonly sessionId: string = generateUuid();
     private readonly lockFileDir: string = path.join(os.tmpdir(), 'vscode-deepnote-locks');
 
@@ -261,6 +263,9 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
         const extraEnv = await this.gatherSqlIntegrationEnvVars(deepnoteFileUri, environmentId, token);
 
+        // Initialize output tracking for error reporting
+        this.serverOutputByFile.set(fileKey, { stdout: '', stderr: '' });
+
         let serverInfo: DeepnoteServerInfo | undefined;
         try {
             serverInfo = await startServer({
@@ -270,13 +275,16 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                 env: extraEnv
             });
         } catch (error) {
+            const capturedOutput = this.serverOutputByFile.get(fileKey);
+            this.serverOutputByFile.delete(fileKey);
+
             throw new DeepnoteServerStartupError(
                 interpreter.uri.fsPath,
                 serverInfo?.jupyterPort ?? 0,
                 'unknown',
-                '',
-                error instanceof Error ? error.message : String(error),
-                error instanceof Error ? error : undefined
+                capturedOutput?.stdout || '',
+                capturedOutput?.stderr || (error instanceof Error ? error.message : String(error)),
+                error instanceof Error ? error : new Error(`${error}`)
             );
         }
 
@@ -333,6 +341,8 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
         Cancellation.throwIfCanceled(token);
 
+        this.serverOutputByFile.delete(fileKey);
+
         const disposables = this.disposablesByFile.get(fileKey);
         if (disposables) {
             disposables.forEach((d) => d.dispose());
@@ -345,7 +355,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
      */
     private async isServerRunning(serverInfo: DeepnoteServerInfo): Promise<boolean> {
         try {
-            const response = await fetch(`${serverInfo.url}/api`);
+            const response = await fetch(`${serverInfo.url}/api`, { signal: AbortSignal.timeout(5000) });
             return response.ok;
         } catch {
             return false;
@@ -401,6 +411,11 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                 const text = data.toString();
                 logger.trace(`Deepnote server (${fileKey}): ${text}`);
                 this.outputChannel.appendLine(text);
+
+                const outputTracking = this.serverOutputByFile.get(fileKey);
+                if (outputTracking) {
+                    outputTracking.stdout = (outputTracking.stdout + text).slice(-MAX_OUTPUT_TRACKING_LENGTH);
+                }
             };
             stdout.on('data', onData);
             disposables.push({
@@ -416,6 +431,11 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                 const text = data.toString();
                 logger.warn(`Deepnote server stderr (${fileKey}): ${text}`);
                 this.outputChannel.appendLine(text);
+
+                const outputTracking = this.serverOutputByFile.get(fileKey);
+                if (outputTracking) {
+                    outputTracking.stderr = (outputTracking.stderr + text).slice(-MAX_OUTPUT_TRACKING_LENGTH);
+                }
             };
             stderr.on('data', onData);
             disposables.push({
@@ -432,7 +452,9 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         const pendingOps = Array.from(this.pendingOperations.values());
         if (pendingOps.length > 0) {
             logger.info(`Waiting for ${pendingOps.length} pending operations to complete...`);
-            await Promise.allSettled(pendingOps.map((op) => Promise.race([op, sleep(GRACEFUL_SHUTDOWN_TIMEOUT_MS)])));
+            await Promise.allSettled(
+                pendingOps.map((op) => Promise.race([op.promise, sleep(GRACEFUL_SHUTDOWN_TIMEOUT_MS)]))
+            );
         }
 
         const stopPromises: Promise<void>[] = [];
@@ -471,9 +493,10 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             }
         }
 
-        this.projectContexts.clear();
         this.disposablesByFile.clear();
         this.pendingOperations.clear();
+        this.projectContexts.clear();
+        this.serverOutputByFile.clear();
 
         logger.info('DeepnoteServerStarter disposed successfully');
     }

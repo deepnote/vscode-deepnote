@@ -1,4 +1,5 @@
 import { assert } from 'chai';
+import * as fakeTimers from '@sinonjs/fake-timers';
 import { anything, instance, mock, when } from 'ts-mockito';
 
 import { DeepnoteAgentSkillsManager } from './deepnoteAgentSkillsManager.node';
@@ -75,16 +76,90 @@ suite('DeepnoteServerStarter', () => {
 
             await starterWithoutSql.dispose();
         });
+
+        test('should return empty object when provider rejects with cancellation error', async () => {
+            const { CancellationError, Uri } = await import('vscode');
+
+            const cancelledProvider = mock<ISqlIntegrationEnvVarsProvider>();
+            when(cancelledProvider.getEnvironmentVariables(anything(), anything())).thenReject(
+                new CancellationError()
+            );
+
+            const starterWithCancelledSql = new DeepnoteServerStarter(
+                instance(mockProcessServiceFactory),
+                instance(mockToolkitInstaller),
+                instance(mockAgentSkillsManager),
+                instance(mockOutputChannel),
+                instance(mockAsyncRegistry),
+                instance(cancelledProvider)
+            );
+
+            const gatherEnvVars = getPrivateMethod(starterWithCancelledSql, 'gatherSqlIntegrationEnvVars');
+            const result = await gatherEnvVars(Uri.file('/test/file.deepnote'), 'env1');
+
+            assert.deepStrictEqual(result, {});
+
+            await starterWithCancelledSql.dispose();
+        });
     });
 
     suite('dispose', () => {
+        let clock: fakeTimers.InstalledClock;
+
+        setup(() => {
+            clock = fakeTimers.install();
+        });
+
+        teardown(() => {
+            clock.uninstall();
+        });
+
         test('should clear all internal state', async () => {
             await serverStarter.dispose();
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const starter = serverStarter as any;
-            assert.strictEqual(starter.projectContexts.size, 0);
             assert.strictEqual(starter.disposablesByFile.size, 0);
+            assert.strictEqual(starter.pendingOperations.size, 0);
+            assert.strictEqual(starter.projectContexts.size, 0);
+            assert.strictEqual(starter.serverOutputByFile.size, 0);
+        });
+
+        test('should wait for in-flight pending operations before completing', async () => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const starter = serverStarter as any;
+
+            let resolveDeferred!: () => void;
+            const deferred = new Promise<void>((resolve) => {
+                resolveDeferred = resolve;
+            });
+
+            starter.pendingOperations.set('/test/inflight.deepnote', {
+                type: 'stop',
+                promise: deferred
+            });
+
+            let disposeResolved = false;
+            const disposePromise = serverStarter.dispose().then(() => {
+                disposeResolved = true;
+            });
+
+            await clock.tickAsync(0);
+            assert.strictEqual(
+                disposeResolved,
+                false,
+                'dispose() should not resolve while a pending operation is in flight'
+            );
+
+            resolveDeferred();
+            await clock.tickAsync(0);
+            await disposePromise;
+
+            assert.strictEqual(
+                disposeResolved,
+                true,
+                'dispose() should resolve after pending operation completes'
+            );
             assert.strictEqual(starter.pendingOperations.size, 0);
         });
     });

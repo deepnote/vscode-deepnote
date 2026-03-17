@@ -81,9 +81,7 @@ suite('DeepnoteServerStarter', () => {
             const { CancellationError, Uri } = await import('vscode');
 
             const cancelledProvider = mock<ISqlIntegrationEnvVarsProvider>();
-            when(cancelledProvider.getEnvironmentVariables(anything(), anything())).thenReject(
-                new CancellationError()
-            );
+            when(cancelledProvider.getEnvironmentVariables(anything(), anything())).thenReject(new CancellationError());
 
             const starterWithCancelledSql = new DeepnoteServerStarter(
                 instance(mockProcessServiceFactory),
@@ -155,11 +153,7 @@ suite('DeepnoteServerStarter', () => {
             await clock.tickAsync(0);
             await disposePromise;
 
-            assert.strictEqual(
-                disposeResolved,
-                true,
-                'dispose() should resolve after pending operation completes'
-            );
+            assert.strictEqual(disposeResolved, true, 'dispose() should resolve after pending operation completes');
             assert.strictEqual(starter.pendingOperations.size, 0);
         });
     });

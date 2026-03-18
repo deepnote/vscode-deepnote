@@ -1638,6 +1638,12 @@
             "type": "object",
             "title": "Deepnote",
             "properties": {
+                "deepnote.agent.openAiApiKey": {
+                    "type": "string",
+                    "default": "",
+                    "description": "OpenAI API key for agent cell execution",
+                    "scope": "application"
+                },
                 "deepnote.domain": {
                     "type": "string",
                     "default": "deepnote.com",

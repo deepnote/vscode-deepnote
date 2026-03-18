@@ -188,7 +188,15 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
      * @returns The notebook ID to deserialize, or undefined if none found
      */
     findCurrentNotebookId(projectId: string): string | undefined {
-        // Prefer the active notebook editor when it matches the project
+        // Check the manager's stored selection first - this is set explicitly when the user
+        // picks a notebook from the explorer, and must take priority over the active editor
+        const storedNotebookId = this.notebookManager.getTheSelectedNotebookForAProject(projectId);
+
+        if (storedNotebookId) {
+            return storedNotebookId;
+        }
+
+        // Fallback: prefer the active notebook editor when it matches the project
         const activeEditorNotebook = window.activeNotebookEditor?.notebook;
 
         if (
@@ -199,14 +207,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             return activeEditorNotebook.metadata.deepnoteNotebookId;
         }
 
-        // Check the manager's stored selection - this should be set when opening from explorer
-        const storedNotebookId = this.notebookManager.getTheSelectedNotebookForAProject(projectId);
-
-        if (storedNotebookId) {
-            return storedNotebookId;
-        }
-
-        // Fallback: Check if there's an active notebook document for this project
+        // Last fallback: Check if there's an active notebook document for this project
         const openNotebook = workspace.notebookDocuments.find(
             (doc) => doc.notebookType === 'deepnote' && doc.metadata?.deepnoteProjectId === projectId
         );

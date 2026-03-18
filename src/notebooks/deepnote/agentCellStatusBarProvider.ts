@@ -19,12 +19,13 @@ import { z } from 'zod';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import type { Pocket } from '../../platform/deepnote/pocket';
 import { logger } from '../../platform/logging';
+import { clearOpenAiApiKey, promptForOpenAiApiKey } from './deepnoteSecretStore';
 
 const DEFAULT_MAX_ITERATIONS = 20;
 const MIN_ITERATIONS = 1;
 const MAX_ITERATIONS = 100;
 const AGENT_MODEL_OPTIONS = ['auto', 'gpt-4o', 'sonnet'];
-const MaxIterationsSchema = z.coerce.number().int().min(MIN_ITERATIONS);
+const MaxIterationsSchema = z.coerce.number().int().min(MIN_ITERATIONS).max(MAX_ITERATIONS);
 
 /**
  * Provides status bar items for agent cells showing the block type indicator,
@@ -63,6 +64,22 @@ export class AgentCellStatusBarProvider implements NotebookCellStatusBarItemProv
                 if (activeCell) {
                     await this.setMaxIterations(activeCell);
                 }
+            })
+        );
+
+        this.disposables.push(
+            commands.registerCommand('deepnote.setOpenAiApiKey', async () => {
+                const key = await promptForOpenAiApiKey();
+                if (key) {
+                    void window.showInformationMessage(l10n.t('OpenAI API key has been saved.'));
+                }
+            })
+        );
+
+        this.disposables.push(
+            commands.registerCommand('deepnote.clearOpenAiApiKey', async () => {
+                await clearOpenAiApiKey();
+                void window.showInformationMessage(l10n.t('OpenAI API key has been cleared.'));
             })
         );
 

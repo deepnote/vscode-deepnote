@@ -31,6 +31,11 @@ import { logger } from '../../platform/logging';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
 import { generateBlockId, generateSortingKey, isEphemeralCell } from './dataConversionUtils';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
+import { getOrPromptOpenAiApiKey } from './deepnoteSecretStore';
+
+export async function getOpenAiApiKey(): Promise<string> {
+    return getOrPromptOpenAiApiKey();
+}
 
 export function isAgentCell(cell: NotebookCell): boolean {
     const pocket = cell.metadata?.__deepnotePocket as Pocket | undefined;
@@ -61,17 +66,6 @@ export function serializeNotebookContext({ cells }: { cells: NotebookCell[] }): 
     }, []);
 
     return serializeNotebookContextFromBlocks({ blocks, notebookName: null });
-}
-
-export function getOpenAiApiKey(): string {
-    const config = workspace.getConfiguration('deepnote');
-    const key = config.get<string>('agent.openAiApiKey', '');
-
-    if (!key) {
-        throw new Error('deepnote.agent.openAiApiKey is not set. Configure it in VS Code settings.');
-    }
-
-    return key;
 }
 
 export interface ExecuteAgentCellOptions {
@@ -122,7 +116,7 @@ export async function executeAgentCell(
             cells: cell.notebook.getCells().filter((c) => c.index !== cell.index)
         });
 
-        const openAiToken = getOpenAiApiKey();
+        const openAiToken = await getOpenAiApiKey();
 
         const context: AgentBlockContext = {
             openAiToken,
@@ -138,12 +132,6 @@ export async function executeAgentCell(
 
                 const { success } = await executeEphemeralCell(insertedCell, execution.token);
                 return success ? { success } : { success: false, error: new Error('Ephemeral cell execution failed') };
-            },
-            onLog: (message: string) => {
-                logger.info('Agent log', message);
-                // accumulated += message;
-                // TODO: replaceOutputItems is Async function
-                // execution.replaceOutputItems(NotebookCellOutputItem.text(accumulated), output);
             },
             onAgentEvent: async (event: AgentStreamEvent) => {
                 logger.info('Agent event', JSON.stringify(event));

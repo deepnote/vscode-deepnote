@@ -342,6 +342,16 @@
                 "category": "Jupyter"
             },
             {
+                "command": "deepnote.setOpenAiApiKey",
+                "title": "%deepnote.command.setOpenAiApiKey%",
+                "category": "Deepnote"
+            },
+            {
+                "command": "deepnote.clearOpenAiApiKey",
+                "title": "%deepnote.command.clearOpenAiApiKey%",
+                "category": "Deepnote"
+            },
+            {
                 "command": "dataScience.ClearUserProviderJupyterServerCache",
                 "title": "%deepnote.command.dataScience.clearUserProviderJupyterServerCache.title%",
                 "category": "Jupyter (Dev)",
@@ -1638,12 +1648,6 @@
             "type": "object",
             "title": "Deepnote",
             "properties": {
-                "deepnote.agent.openAiApiKey": {
-                    "type": "string",
-                    "default": "",
-                    "description": "OpenAI API key for agent cell execution",
-                    "scope": "application"
-                },
                 "deepnote.domain": {
                     "type": "string",
                     "default": "deepnote.com",

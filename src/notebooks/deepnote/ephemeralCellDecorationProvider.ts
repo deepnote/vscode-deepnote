@@ -67,7 +67,9 @@ export class EphemeralCellDecorationProvider implements IExtensionSyncActivation
     }
 
     public dispose(): void {
-        this.disposables.forEach((d) => d.dispose());
+        for (const disposable of this.disposables) {
+            disposable.dispose();
+        }
     }
 
     private findCellForEditor(editor: TextEditor): NotebookCell | undefined {

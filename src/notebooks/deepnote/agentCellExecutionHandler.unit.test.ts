@@ -3,21 +3,32 @@ import * as sinon from 'sinon';
 import { anything, capture, instance, mock, reset, when } from 'ts-mockito';
 import {
     CancellationTokenSource,
+    Disposable,
+    EventEmitter,
+    ExtensionMode,
     NotebookCellOutput,
     NotebookCellOutputItem,
     NotebookController,
-    WorkspaceConfiguration
+    SecretStorage,
+    SecretStorageChangeEvent
 } from 'vscode';
 
 import type { AgentBlock } from '@deepnote/blocks';
 import type { AgentBlockContext, AgentBlockResult } from '@deepnote/runtime-core';
 
+import type { IDisposable } from '../../platform/common/types';
+import { IExtensionContext } from '../../platform/common/types';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
+import { dispose } from '../../platform/common/utils/lifecycle';
 import { mockedVSCodeNamespaces } from '../../test/vscode-mock';
+import { ServiceContainer } from '../../platform/ioc/container';
 import { executeAgentCell, executeEphemeralCell, getOpenAiApiKey, isAgentCell } from './agentCellExecutionHandler';
 import { createMockCell } from './deepnoteTestHelpers';
 
 suite('AgentCellExecutionHandler', () => {
+    const secretStorage = new Map<string, string>();
+    let disposables: IDisposable[] = [];
+
     suite('isAgentCell', () => {
         test('returns true for cell with agent pocket type', () => {
             const cell = createMockCell({ metadata: { __deepnotePocket: { type: 'agent' } } });
@@ -51,20 +62,47 @@ suite('AgentCellExecutionHandler', () => {
     });
 
     suite('getOpenAiApiKey', () => {
-        test('returns key when configured', () => {
-            const mockConfig = mock<WorkspaceConfiguration>();
-            when(mockConfig.get<string>('agent.openAiApiKey', '')).thenReturn('test-key');
-            when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote')).thenReturn(instance(mockConfig));
+        setup(() => {
+            secretStorage.clear();
+            const context = mock<IExtensionContext>();
+            const secrets = mock<SecretStorage>();
+            const onDidChangeSecrets = new EventEmitter<SecretStorageChangeEvent>();
+            const serviceContainer = mock<ServiceContainer>();
+            sinon.stub(ServiceContainer, 'instance').get(() => instance(serviceContainer));
+            when(serviceContainer.get<IExtensionContext>(IExtensionContext)).thenReturn(instance(context));
+            when(context.extensionMode).thenReturn(ExtensionMode.Production);
+            when(context.secrets).thenReturn(instance(secrets));
+            when(secrets.onDidChange).thenReturn(onDidChangeSecrets.event);
+            when(secrets.get(anything())).thenCall((key: string) => Promise.resolve(secretStorage.get(key)));
+            when(secrets.store(anything(), anything())).thenCall((key: string, value: string) => {
+                secretStorage.set(key, value);
 
-            expect(getOpenAiApiKey()).to.equal('test-key');
+                return Promise.resolve();
+            });
+            disposables.push(new Disposable(() => sinon.restore()));
         });
 
-        test('throws when key is not set', () => {
-            const mockConfig = mock<WorkspaceConfiguration>();
-            when(mockConfig.get<string>('agent.openAiApiKey', '')).thenReturn('');
-            when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote')).thenReturn(instance(mockConfig));
+        teardown(() => {
+            disposables = dispose(disposables);
+        });
 
-            expect(() => getOpenAiApiKey()).to.throw('deepnote.agent.openAiApiKey is not set');
+        test('returns key when configured', async () => {
+            secretStorage.set('openAiApiKey', 'test-key');
+
+            const key = await getOpenAiApiKey();
+
+            expect(key).to.equal('test-key');
+        });
+
+        test('throws when key is not set', async () => {
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(undefined));
+
+            try {
+                await getOpenAiApiKey();
+                expect.fail('Should have thrown');
+            } catch (e) {
+                expect((e as Error).message).to.include('OpenAI API key is not set');
+            }
         });
     });
 
@@ -81,9 +119,24 @@ suite('AgentCellExecutionHandler', () => {
         let executeAgentBlockStub: sinon.SinonStub;
 
         setup(() => {
-            const mockConfig = mock<WorkspaceConfiguration>();
-            when(mockConfig.get<string>('agent.openAiApiKey', '')).thenReturn('test-key');
-            when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote')).thenReturn(instance(mockConfig));
+            secretStorage.clear();
+            secretStorage.set('openAiApiKey', 'test-key');
+            const context = mock<IExtensionContext>();
+            const secrets = mock<SecretStorage>();
+            const onDidChangeSecrets = new EventEmitter<SecretStorageChangeEvent>();
+            const serviceContainer = mock<ServiceContainer>();
+            sinon.stub(ServiceContainer, 'instance').get(() => instance(serviceContainer));
+            when(serviceContainer.get<IExtensionContext>(IExtensionContext)).thenReturn(instance(context));
+            when(context.extensionMode).thenReturn(ExtensionMode.Production);
+            when(context.secrets).thenReturn(instance(secrets));
+            when(secrets.onDidChange).thenReturn(onDidChangeSecrets.event);
+            when(secrets.get(anything())).thenCall((key: string) => Promise.resolve(secretStorage.get(key)));
+            when(secrets.store(anything(), anything())).thenCall((key: string, value: string) => {
+                secretStorage.set(key, value);
+
+                return Promise.resolve();
+            });
+            disposables.push(new Disposable(() => sinon.restore()));
 
             mockExecution = {
                 appendOutput: sinon.stub().resolves(),
@@ -99,6 +152,10 @@ suite('AgentCellExecutionHandler', () => {
             } as unknown as NotebookController;
 
             executeAgentBlockStub = sinon.stub().resolves({ finalOutput: 'done' } as AgentBlockResult);
+        });
+
+        teardown(() => {
+            disposables = dispose(disposables);
         });
 
         function createAgentCell(text: string = 'Test prompt') {
@@ -258,9 +315,8 @@ suite('AgentCellExecutionHandler', () => {
         });
 
         test('ends with failure and writes error when API key is not set', async () => {
-            const mockConfig = mock<WorkspaceConfiguration>();
-            when(mockConfig.get<string>('agent.openAiApiKey', '')).thenReturn('');
-            when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote')).thenReturn(instance(mockConfig));
+            secretStorage.clear();
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(undefined));
 
             const cell = createAgentCell();
 
@@ -272,7 +328,7 @@ suite('AgentCellExecutionHandler', () => {
 
             const outputs = mockExecution.appendOutput.firstCall.args[0] as NotebookCellOutput[];
             const text = Buffer.from(outputs[0].items[0].data).toString('utf-8');
-            expect(text).to.include('deepnote.agent.openAiApiKey is not set');
+            expect(text).to.include('OpenAI API key is not set');
         });
     });
 
@@ -314,13 +370,17 @@ suite('AgentCellExecutionHandler', () => {
 
             when(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything())).thenResolve();
 
-            const result = await executeEphemeralCell(cell, tokenSource.token);
+            try {
+                const result = await executeEphemeralCell(cell, tokenSource.token);
 
-            expect(result).to.deep.equal({
-                success: false,
-                outputs: [],
-                executionCount: null
-            });
+                expect(result).to.deep.equal({
+                    success: false,
+                    outputs: [],
+                    executionCount: null
+                });
+            } finally {
+                tokenSource.dispose();
+            }
         });
     });
 });

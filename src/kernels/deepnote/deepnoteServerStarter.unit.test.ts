@@ -1,4 +1,5 @@
 import { assert } from 'chai';
+import * as fakeTimers from '@sinonjs/fake-timers';
 import { anything, instance, mock, when } from 'ts-mockito';
 
 import { DeepnoteAgentSkillsManager } from './deepnoteAgentSkillsManager.node';
@@ -11,10 +12,9 @@ import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnot
 /**
  * Unit tests for DeepnoteServerStarter.
  *
- * Port allocation, server spawning, and health checks are now delegated to
+ * Port allocation, server spawning, and health checks are delegated to
  * @deepnote/runtime-core's startServer/stopServer. These tests focus on the
- * extension-specific layers: port reservation serialization, SQL env var
- * gathering, and lifecycle orchestration.
+ * extension-specific layers: SQL env var gathering and lifecycle orchestration.
  */
 suite('DeepnoteServerStarter', () => {
     let serverStarter: DeepnoteServerStarter;
@@ -57,48 +57,6 @@ suite('DeepnoteServerStarter', () => {
         }
     });
 
-    suite('reserveStartPort - Port Serialization', () => {
-        test('should return default port when no servers are running', async () => {
-            const reserveStartPort = getPrivateMethod(serverStarter, 'reserveStartPort');
-            const port = await reserveStartPort('test-key');
-
-            assert.strictEqual(port, 8888);
-        });
-
-        test('should return ports beyond existing servers', async () => {
-            const reserveStartPort = getPrivateMethod(serverStarter, 'reserveStartPort');
-
-            // Simulate a running server context by directly setting projectContexts
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const projectContexts = (serverStarter as any).projectContexts as Map<string, any>;
-            projectContexts.set('existing-key', {
-                environmentId: 'env1',
-                runtimeCoreServerInfo: null,
-                serverInfo: { url: 'http://localhost:8888', jupyterPort: 8888, lspPort: 8889 }
-            });
-
-            const port = await reserveStartPort('test-key-2');
-
-            assert.isAtLeast(port, 8890, 'Should skip ports used by existing servers');
-        });
-
-        test('should serialize concurrent calls', async () => {
-            const reserveStartPort = getPrivateMethod(serverStarter, 'reserveStartPort');
-
-            // Launch concurrent port reservations
-            const [port1, port2, port3] = await Promise.all([
-                reserveStartPort('key-1'),
-                reserveStartPort('key-2'),
-                reserveStartPort('key-3')
-            ]);
-
-            // All should return valid numbers (even if same, since no server info is stored between calls)
-            assert.isNumber(port1);
-            assert.isNumber(port2);
-            assert.isNumber(port3);
-        });
-    });
-
     suite('gatherSqlIntegrationEnvVars', () => {
         test('should return empty object when no provider is available', async () => {
             // Create a starter without SQL provider
@@ -118,16 +76,84 @@ suite('DeepnoteServerStarter', () => {
 
             await starterWithoutSql.dispose();
         });
+
+        test('should return empty object when provider rejects with cancellation error', async () => {
+            const { CancellationError, Uri } = await import('vscode');
+
+            const cancelledProvider = mock<ISqlIntegrationEnvVarsProvider>();
+            when(cancelledProvider.getEnvironmentVariables(anything(), anything())).thenReject(new CancellationError());
+
+            const starterWithCancelledSql = new DeepnoteServerStarter(
+                instance(mockProcessServiceFactory),
+                instance(mockToolkitInstaller),
+                instance(mockAgentSkillsManager),
+                instance(mockOutputChannel),
+                instance(mockAsyncRegistry),
+                instance(cancelledProvider)
+            );
+
+            const gatherEnvVars = getPrivateMethod(starterWithCancelledSql, 'gatherSqlIntegrationEnvVars');
+            const result = await gatherEnvVars(Uri.file('/test/file.deepnote'), 'env1');
+
+            assert.deepStrictEqual(result, {});
+
+            await starterWithCancelledSql.dispose();
+        });
     });
 
     suite('dispose', () => {
+        let clock: fakeTimers.InstalledClock;
+
+        setup(() => {
+            clock = fakeTimers.install();
+        });
+
+        teardown(() => {
+            clock.uninstall();
+        });
+
         test('should clear all internal state', async () => {
             await serverStarter.dispose();
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const starter = serverStarter as any;
-            assert.strictEqual(starter.projectContexts.size, 0);
             assert.strictEqual(starter.disposablesByFile.size, 0);
+            assert.strictEqual(starter.pendingOperations.size, 0);
+            assert.strictEqual(starter.projectContexts.size, 0);
+            assert.strictEqual(starter.serverOutputByFile.size, 0);
+        });
+
+        test('should wait for in-flight pending operations before completing', async () => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const starter = serverStarter as any;
+
+            let resolveDeferred!: () => void;
+            const deferred = new Promise<void>((resolve) => {
+                resolveDeferred = resolve;
+            });
+
+            starter.pendingOperations.set('/test/inflight.deepnote', {
+                type: 'stop',
+                promise: deferred
+            });
+
+            let disposeResolved = false;
+            const disposePromise = serverStarter.dispose().then(() => {
+                disposeResolved = true;
+            });
+
+            await clock.tickAsync(0);
+            assert.strictEqual(
+                disposeResolved,
+                false,
+                'dispose() should not resolve while a pending operation is in flight'
+            );
+
+            resolveDeferred();
+            await clock.tickAsync(0);
+            await disposePromise;
+
+            assert.strictEqual(disposeResolved, true, 'dispose() should resolve after pending operation completes');
             assert.strictEqual(starter.pendingOperations.size, 0);
         });
     });

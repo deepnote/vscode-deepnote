@@ -214,6 +214,66 @@ suite('AgentCellStatusBarProvider', () => {
             expect(items[2].text).to.include('Max iterations: 20');
         });
 
+        test('Should display default when max iterations is negative', () => {
+            const cell = createMockCell({
+                metadata: {
+                    __deepnotePocket: { type: 'agent' },
+                    deepnote_max_iterations: -5
+                }
+            });
+            const items = provider.provideCellStatusBarItems(cell, mockToken)!;
+
+            expect(items[2].text).to.include('Max iterations: 20');
+        });
+
+        test('Should display 1 when max iterations is MIN_ITERATIONS boundary', () => {
+            const cell = createMockCell({
+                metadata: {
+                    __deepnotePocket: { type: 'agent' },
+                    deepnote_max_iterations: 1
+                }
+            });
+            const items = provider.provideCellStatusBarItems(cell, mockToken)!;
+
+            expect(items[2].text).to.include('Max iterations: 1');
+        });
+
+        test('Should display 100 when max iterations is at upper bound', () => {
+            const cell = createMockCell({
+                metadata: {
+                    __deepnotePocket: { type: 'agent' },
+                    deepnote_max_iterations: 100
+                }
+            });
+            const items = provider.provideCellStatusBarItems(cell, mockToken)!;
+
+            expect(items[2].text).to.include('Max iterations: 100');
+        });
+
+        test('Should display default when max iterations is null', () => {
+            const cell = createMockCell({
+                metadata: {
+                    __deepnotePocket: { type: 'agent' },
+                    deepnote_max_iterations: null
+                }
+            });
+            const items = provider.provideCellStatusBarItems(cell, mockToken)!;
+
+            expect(items[2].text).to.include('Max iterations: 20');
+        });
+
+        test('Should display default when max iterations is boolean', () => {
+            const cell = createMockCell({
+                metadata: {
+                    __deepnotePocket: { type: 'agent' },
+                    deepnote_max_iterations: true
+                }
+            });
+            const items = provider.provideCellStatusBarItems(cell, mockToken)!;
+
+            expect(items[2].text).to.include('Max iterations: 20');
+        });
+
         test('Should have set max iterations command', () => {
             const cell = createMockCell({ metadata: { __deepnotePocket: { type: 'agent' } } });
             const items = provider.provideCellStatusBarItems(cell, mockToken)!;

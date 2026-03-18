@@ -1,17 +1,20 @@
 import { expect } from 'chai';
 import * as sinon from 'sinon';
-import { anything, capture, reset, when } from 'ts-mockito';
-import { NotebookCellOutput, NotebookCellOutputItem, NotebookController } from 'vscode';
+import { anything, capture, instance, mock, reset, when } from 'ts-mockito';
+import {
+    CancellationTokenSource,
+    NotebookCellOutput,
+    NotebookCellOutputItem,
+    NotebookController,
+    WorkspaceConfiguration
+} from 'vscode';
 
 import type { AgentBlock } from '@deepnote/blocks';
 import type { AgentBlockContext, AgentBlockResult } from '@deepnote/runtime-core';
 
-import {
-    NotebookCellExecutionState,
-    notebookCellExecutions
-} from '../../platform/notebooks/cellExecutionStateService';
+import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
 import { mockedVSCodeNamespaces } from '../../test/vscode-mock';
-import { executeAgentCell, executeEphemeralCell, isAgentCell } from './agentCellExecutionHandler';
+import { executeAgentCell, executeEphemeralCell, getOpenAiApiKey, isAgentCell } from './agentCellExecutionHandler';
 import { createMockCell } from './deepnoteTestHelpers';
 
 suite('AgentCellExecutionHandler', () => {
@@ -47,6 +50,24 @@ suite('AgentCellExecutionHandler', () => {
         });
     });
 
+    suite('getOpenAiApiKey', () => {
+        test('returns key when configured', () => {
+            const mockConfig = mock<WorkspaceConfiguration>();
+            when(mockConfig.get<string>('agent.openAiApiKey', '')).thenReturn('test-key');
+            when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote')).thenReturn(instance(mockConfig));
+
+            expect(getOpenAiApiKey()).to.equal('test-key');
+        });
+
+        test('throws when key is not set', () => {
+            const mockConfig = mock<WorkspaceConfiguration>();
+            when(mockConfig.get<string>('agent.openAiApiKey', '')).thenReturn('');
+            when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote')).thenReturn(instance(mockConfig));
+
+            expect(() => getOpenAiApiKey()).to.throw('deepnote.agent.openAiApiKey is not set');
+        });
+    });
+
     suite('executeAgentCell', () => {
         let mockExecution: {
             appendOutput: sinon.SinonStub;
@@ -58,11 +79,11 @@ suite('AgentCellExecutionHandler', () => {
         };
         let mockController: NotebookController;
         let executeAgentBlockStub: sinon.SinonStub;
-        let savedOpenAiKey: string | undefined;
 
         setup(() => {
-            savedOpenAiKey = process.env.OPENAI_API_KEY;
-            process.env.OPENAI_API_KEY = 'test-key';
+            const mockConfig = mock<WorkspaceConfiguration>();
+            when(mockConfig.get<string>('agent.openAiApiKey', '')).thenReturn('test-key');
+            when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote')).thenReturn(instance(mockConfig));
 
             mockExecution = {
                 appendOutput: sinon.stub().resolves(),
@@ -78,14 +99,6 @@ suite('AgentCellExecutionHandler', () => {
             } as unknown as NotebookController;
 
             executeAgentBlockStub = sinon.stub().resolves({ finalOutput: 'done' } as AgentBlockResult);
-        });
-
-        teardown(() => {
-            if (savedOpenAiKey !== undefined) {
-                process.env.OPENAI_API_KEY = savedOpenAiKey;
-            } else {
-                delete process.env.OPENAI_API_KEY;
-            }
         });
 
         function createAgentCell(text: string = 'Test prompt') {
@@ -243,6 +256,24 @@ suite('AgentCellExecutionHandler', () => {
             const text = Buffer.from(outputs[0].items[0].data).toString('utf-8');
             expect(text).to.include('[Agent] Planning next steps...');
         });
+
+        test('ends with failure and writes error when API key is not set', async () => {
+            const mockConfig = mock<WorkspaceConfiguration>();
+            when(mockConfig.get<string>('agent.openAiApiKey', '')).thenReturn('');
+            when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote')).thenReturn(instance(mockConfig));
+
+            const cell = createAgentCell();
+
+            await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
+
+            expect(mockExecution.end.calledOnce).to.be.true;
+            expect(mockExecution.end.firstCall.args[0]).to.be.false;
+            expect(mockExecution.appendOutput.calledOnce).to.be.true;
+
+            const outputs = mockExecution.appendOutput.firstCall.args[0] as NotebookCellOutput[];
+            const text = Buffer.from(outputs[0].items[0].data).toString('utf-8');
+            expect(text).to.include('deepnote.agent.openAiApiKey is not set');
+        });
     });
 
     suite('executeEphemeralCell', () => {
@@ -273,6 +304,22 @@ suite('AgentCellExecutionHandler', () => {
             expect(commandArg).to.deep.equal({
                 ranges: [{ start: currentIndex, end: currentIndex + 1 }],
                 document: cell.notebook.uri
+            });
+        });
+
+        test('returns success false immediately when token is pre-cancelled', async () => {
+            const cell = createMockCell({ index: 0 });
+            const tokenSource = new CancellationTokenSource();
+            tokenSource.cancel();
+
+            when(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything())).thenResolve();
+
+            const result = await executeEphemeralCell(cell, tokenSource.token);
+
+            expect(result).to.deep.equal({
+                success: false,
+                outputs: [],
+                executionCount: null
             });
         });
     });

@@ -1,4 +1,6 @@
 import {
+    CancellationError,
+    CancellationToken,
     NotebookCell,
     NotebookCellOutput,
     NotebookCellOutputItem,
@@ -20,7 +22,9 @@ import {
 } from '@deepnote/runtime-core';
 
 import { translateCellDisplayOutput } from '../../kernels/execution/helpers';
+import type { IDisposable } from '../../platform/common/types';
 import { createDeferred } from '../../platform/common/utils/async';
+import { dispose } from '../../platform/common/utils/lifecycle';
 import { uuidUtils } from '../../platform/common/uuid';
 import type { Pocket } from '../../platform/deepnote/pocket';
 import { logger } from '../../platform/logging';
@@ -57,6 +61,17 @@ export function serializeNotebookContext({ cells }: { cells: NotebookCell[] }): 
     }, []);
 
     return serializeNotebookContextFromBlocks({ blocks, notebookName: null });
+}
+
+export function getOpenAiApiKey(): string {
+    const config = workspace.getConfiguration('deepnote');
+    const key = config.get<string>('agent.openAiApiKey', '');
+
+    if (!key) {
+        throw new Error('deepnote.agent.openAiApiKey is not set. Configure it in VS Code settings.');
+    }
+
+    return key;
 }
 
 export interface ExecuteAgentCellOptions {
@@ -107,11 +122,7 @@ export async function executeAgentCell(
             cells: cell.notebook.getCells().filter((c) => c.index !== cell.index)
         });
 
-        // eslint-disable-next-line local-rules/dont-use-process
-        const openAiToken = process.env.OPENAI_API_KEY;
-        if (openAiToken == null) {
-            throw new Error('OPENAI_API_KEY is not set');
-        }
+        const openAiToken = getOpenAiApiKey();
 
         const context: AgentBlockContext = {
             openAiToken,
@@ -125,7 +136,7 @@ export async function executeAgentCell(
                 const cellIndex = await insertEphemeralCell(cell.notebook, cell.index, agentBlock.id, 'code', code);
                 const insertedCell = cell.notebook.cellAt(cellIndex);
 
-                const { success } = await executeEphemeralCell(insertedCell);
+                const { success } = await executeEphemeralCell(insertedCell, execution.token);
                 return success ? { success } : { success: false, error: new Error('Ephemeral cell execution failed') };
             },
             onLog: (message: string) => {
@@ -248,15 +259,27 @@ async function insertEphemeralCell(
 const EPHEMERAL_CELL_EXECUTION_TIMEOUT_MS = 5 * 60 * 1000;
 
 export async function executeEphemeralCell(
-    cell: NotebookCell
+    cell: NotebookCell,
+    token?: CancellationToken
 ): Promise<{ success: boolean; outputs: unknown[]; executionCount: number | null }> {
     const completionDeferred = createDeferred<void>();
+    const disposables: IDisposable[] = [];
 
-    const disposable = notebookCellExecutions.onDidChangeNotebookCellExecutionState((e) => {
-        if (e.cell === cell && e.state === NotebookCellExecutionState.Idle) {
-            completionDeferred.resolve();
+    disposables.push(
+        notebookCellExecutions.onDidChangeNotebookCellExecutionState((e) => {
+            if (e.cell === cell && e.state === NotebookCellExecutionState.Idle) {
+                completionDeferred.resolve();
+            }
+        })
+    );
+
+    if (token) {
+        if (token.isCancellationRequested) {
+            completionDeferred.reject(new CancellationError());
+        } else {
+            disposables.push(token.onCancellationRequested(() => completionDeferred.reject(new CancellationError())));
         }
-    });
+    }
 
     const timeout = setTimeout(() => {
         completionDeferred.reject(new Error('Ephemeral cell execution timed out'));
@@ -273,7 +296,7 @@ export async function executeEphemeralCell(
         await completionDeferred.promise;
 
         return {
-            success: cell.executionSummary?.success !== false,
+            success: cell.executionSummary?.success === true,
             outputs: cell.outputs.map(translateCellDisplayOutput),
             executionCount: cell.executionSummary?.executionOrder ?? null
         };
@@ -284,7 +307,7 @@ export async function executeEphemeralCell(
             executionCount: null
         };
     } finally {
-        disposable.dispose();
+        dispose(disposables);
         clearTimeout(timeout);
     }
 }

@@ -14,14 +14,17 @@ import {
     workspace
 } from 'vscode';
 import { injectable } from 'inversify';
+import { z } from 'zod';
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import type { Pocket } from '../../platform/deepnote/pocket';
+import { logger } from '../../platform/logging';
 
 const DEFAULT_MAX_ITERATIONS = 20;
 const MIN_ITERATIONS = 1;
 const MAX_ITERATIONS = 100;
 const AGENT_MODEL_OPTIONS = ['auto', 'gpt-4o', 'sonnet'];
+const MaxIterationsSchema = z.coerce.number().int().min(MIN_ITERATIONS);
 
 /**
  * Provides status bar items for agent cells showing the block type indicator,
@@ -67,7 +70,9 @@ export class AgentCellStatusBarProvider implements NotebookCellStatusBarItemProv
     }
 
     public dispose(): void {
-        this.disposables.forEach((d) => d.dispose());
+        for (const disposable of this.disposables) {
+            disposable.dispose();
+        }
     }
 
     public provideCellStatusBarItems(
@@ -141,8 +146,16 @@ export class AgentCellStatusBarProvider implements NotebookCellStatusBarItemProv
 
     private getMaxIterations(metadata: Record<string, unknown> | undefined): number {
         const value = metadata?.deepnote_max_iterations;
-        if (typeof value === 'number' && Number.isInteger(value) && value >= MIN_ITERATIONS) {
-            return value;
+        const result = MaxIterationsSchema.safeParse(value);
+
+        if (result.success) {
+            return result.data;
+        }
+
+        if (value !== undefined) {
+            logger.debug(
+                `getMaxIterations: invalid value ${JSON.stringify(value)}, using default ${DEFAULT_MAX_ITERATIONS}`
+            );
         }
 
         return DEFAULT_MAX_ITERATIONS;

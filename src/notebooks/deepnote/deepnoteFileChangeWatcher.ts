@@ -145,7 +145,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
      * Consumes a self-write marker. Returns true if the fs event was self-triggered.
      */
     private consumeSelfWrite(uri: Uri): boolean {
-        const key = uri.toString();
+        const key = this.normalizeFileUri(uri);
 
         // Check snapshot self-writes first
         if (this.snapshotSelfWriteUris.has(key)) {
@@ -187,6 +187,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         if (liveCells.length !== newCells.length) {
             return true;
         }
+
         return liveCells.some(
             (live, i) =>
                 live.kind !== newCells[i].kind ||
@@ -332,6 +333,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             }
         }
 
+        // Apply the edit to update in-memory cells immediately (responsive UX).
         const wsEdit = new WorkspaceEdit();
         wsEdit.set(notebook.uri, edits);
         const applied = await workspace.applyEdit(wsEdit);
@@ -341,13 +343,38 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             return;
         }
 
-        // Save to sync mtime — mark as self-write first
-        this.markSelfWrite(notebook.uri);
+        // Serialize the notebook and write canonical bytes to disk. This ensures
+        // the file on disk matches what VS Code's serializer would produce.
+        // Then save via workspace.save() to clear dirty state and update VS Code's
+        // internal mtime tracker. Since WE just wrote the file, its mtime is from
+        // our write (not the external change), avoiding the "content is newer" conflict.
+        const serializeTokenSource = new CancellationTokenSource();
         try {
-            await workspace.save(notebook.uri);
-        } catch (error) {
-            this.consumeSelfWrite(notebook.uri);
-            throw error;
+            const serializedBytes = await this.serializer.serializeNotebook(newData, serializeTokenSource.token);
+
+            // Write to disk first — this updates the file mtime to "now"
+            this.markSelfWrite(fileUri);
+            try {
+                await workspace.fs.writeFile(fileUri, serializedBytes);
+            } catch (writeError) {
+                this.consumeSelfWrite(fileUri);
+                logger.warn(`[FileChangeWatcher] Failed to write synced file: ${fileUri.path}`, writeError);
+            }
+
+            // Now save — VS Code serializes (same bytes), sees the mtime is from our
+            // recent write (which its internal watcher has picked up), and writes
+            // successfully without a "content is newer" conflict.
+            this.markSelfWrite(fileUri);
+            try {
+                await workspace.save(notebook.uri);
+            } catch (saveError) {
+                this.consumeSelfWrite(fileUri);
+                logger.warn(`[FileChangeWatcher] Save after sync write failed: ${notebook.uri.path}`, saveError);
+            }
+        } catch (serializeError) {
+            logger.warn(`[FileChangeWatcher] Failed to serialize for sync write: ${fileUri.path}`, serializeError);
+        } finally {
+            serializeTokenSource.dispose();
         }
 
         logger.info(`[FileChangeWatcher] Reloaded notebook from external change: ${notebook.uri.path}`);
@@ -523,6 +550,15 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         return (metadata?.__deepnoteBlockId ?? metadata?.id) as string | undefined;
     }
 
+    /**
+     * Normalizes a URI to the underlying file path by stripping query and fragment.
+     * Notebook URIs include query params (e.g., ?notebook=id) but the filesystem
+     * watcher fires with the raw file URI — keys must match for self-write detection.
+     */
+    private normalizeFileUri(uri: Uri): string {
+        return uri.with({ query: '', fragment: '' }).toString();
+    }
+
     private handleFileChange(uri: Uri): void {
         // Deterministic self-write check — no timers involved
         if (this.consumeSelfWrite(uri)) {
@@ -581,7 +617,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
      * Call before workspace.save() to prevent the resulting fs event from triggering a reload.
      */
     private markSelfWrite(uri: Uri): void {
-        const key = uri.toString();
+        const key = this.normalizeFileUri(uri);
         const count = this.selfWriteCounts.get(key) ?? 0;
         this.selfWriteCounts.set(key, count + 1);
 

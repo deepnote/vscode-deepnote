@@ -11,6 +11,22 @@ import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteFileChangeWatcher } from './deepnoteFileChangeWatcher';
 import { SnapshotService } from './snapshots/snapshotService';
 
+const validProject = {
+    version: '1.0.0',
+    metadata: { createdAt: '2025-01-01T00:00:00Z' },
+    project: {
+        id: 'project-1',
+        name: 'Test Project',
+        notebooks: [
+            {
+                id: 'notebook-1',
+                name: 'Notebook 1',
+                blocks: [{ id: 'block-1', type: 'code', sortingKey: 'a0', blockGroup: '1', content: 'print("hello")' }]
+            }
+        ]
+    }
+} as DeepnoteProject;
+
 const waitForTimeoutMs = 5000;
 const waitForIntervalMs = 50;
 const debounceWaitMs = 800;
@@ -37,6 +53,7 @@ async function waitFor(
 suite('DeepnoteFileChangeWatcher', () => {
     let watcher: DeepnoteFileChangeWatcher;
     let mockDisposables: IDisposableRegistry;
+    let mockedNotebookManager: IDeepnoteNotebookManager;
     let mockNotebookManager: IDeepnoteNotebookManager;
     let onDidChangeFile: EventEmitter<Uri>;
     let onDidCreateFile: EventEmitter<Uri>;
@@ -51,7 +68,11 @@ suite('DeepnoteFileChangeWatcher', () => {
         saveCount = 0;
 
         mockDisposables = [];
-        mockNotebookManager = instance(mock<IDeepnoteNotebookManager>());
+
+        mockedNotebookManager = mock<IDeepnoteNotebookManager>();
+        when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(validProject);
+        when(mockedNotebookManager.getTheSelectedNotebookForAProject(anything())).thenReturn('notebook-1');
+        mockNotebookManager = instance(mockedNotebookManager);
 
         // Set up FileSystemWatcher mock
         onDidChangeFile = new EventEmitter<Uri>();
@@ -126,6 +147,7 @@ suite('DeepnoteFileChangeWatcher', () => {
             readFileCalls++;
             return Promise.resolve(new TextEncoder().encode(yamlContent));
         });
+        when(mockFs.writeFile(anything(), anything())).thenReturn(Promise.resolve());
         when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
 
         return mockFs;
@@ -325,8 +347,9 @@ project:
         onDidChangeFile.fire(uri);
         await waitFor(() => saveCount >= 1);
 
-        // The save from the first reload set a self-write marker.
-        // Simulate the auto-save fs event being consumed (as it would in real VS Code).
+        // The first reload sets 2 self-write markers (writeFile + save).
+        // Consume them both with simulated fs events.
+        onDidChangeFile.fire(uri);
         onDidChangeFile.fire(uri);
 
         // Second real external change: use different YAML content
@@ -1053,6 +1076,42 @@ project:
         });
 
         test('should not apply updates when cells have no block IDs and no fallback', async () => {
+            const noFallbackDisposables: IDisposableRegistry = [];
+            const noFallbackOnDidChange = new EventEmitter<Uri>();
+            const noFallbackOnDidCreate = new EventEmitter<Uri>();
+            const fsWatcherNf = mock<FileSystemWatcher>();
+            when(fsWatcherNf.onDidChange).thenReturn(noFallbackOnDidChange.event);
+            when(fsWatcherNf.onDidCreate).thenReturn(noFallbackOnDidCreate.event);
+            when(fsWatcherNf.dispose()).thenReturn();
+            when(mockedVSCodeNamespaces.workspace.createFileSystemWatcher(anything())).thenReturn(
+                instance(fsWatcherNf)
+            );
+
+            let nfApplyEditCount = 0;
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenCall(() => {
+                nfApplyEditCount++;
+                return Promise.resolve(true);
+            });
+
+            let nfReadSnapshotCount = 0;
+            const nfSnapshotService = mock<SnapshotService>();
+            when(nfSnapshotService.isSnapshotsEnabled()).thenReturn(true);
+            when(nfSnapshotService.readSnapshot(anything())).thenCall(() => {
+                nfReadSnapshotCount++;
+                return Promise.resolve(snapshotOutputs);
+            });
+            when(nfSnapshotService.onFileWritten(anything())).thenReturn({ dispose: () => {} } as Disposable);
+
+            const nfManager = mock<IDeepnoteNotebookManager>();
+            when(nfManager.getOriginalProject(anything())).thenReturn(undefined);
+
+            const nfWatcher = new DeepnoteFileChangeWatcher(
+                noFallbackDisposables,
+                instance(nfManager),
+                instance(nfSnapshotService)
+            );
+            nfWatcher.activate();
+
             const snapshotUri = Uri.file('/workspace/snapshots/my-project_project-1_latest.snapshot.deepnote');
             const notebook = createMockNotebook({
                 uri: Uri.file('/workspace/test.deepnote'),
@@ -1068,16 +1127,22 @@ project:
 
             when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
 
-            snapshotOnDidChange.fire(snapshotUri);
+            noFallbackOnDidChange.fire(snapshotUri);
 
-            await waitFor(() => readSnapshotCallCount >= 1);
+            await waitFor(() => nfReadSnapshotCount >= 1);
 
-            assert.isAtLeast(readSnapshotCallCount, 1, 'readSnapshot should be called');
+            assert.isAtLeast(nfReadSnapshotCount, 1, 'readSnapshot should be called');
             assert.strictEqual(
-                snapshotApplyEditCount,
+                nfApplyEditCount,
                 0,
                 'applyEdit should NOT be called when no block IDs can be resolved'
             );
+
+            for (const d of noFallbackDisposables) {
+                d.dispose();
+            }
+            noFallbackOnDidChange.dispose();
+            noFallbackOnDidCreate.dispose();
         });
 
         test('should fall back to replaceCells when no kernel is active', async () => {

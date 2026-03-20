@@ -359,11 +359,15 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             } catch (writeError) {
                 this.consumeSelfWrite(fileUri);
                 logger.warn(`[FileChangeWatcher] Failed to write synced file: ${fileUri.path}`, writeError);
+
+                // Bail out — without a successful write, workspace.save() would hit
+                // the stale mtime and show a "content is newer" conflict dialog.
+                // The notebook stays dirty but cells are already up-to-date from applyEdit.
+                return;
             }
 
-            // Now save — VS Code serializes (same bytes), sees the mtime is from our
-            // recent write (which its internal watcher has picked up), and writes
-            // successfully without a "content is newer" conflict.
+            // Save to clear dirty state. VS Code serializes (same bytes) and sees the
+            // mtime from our recent write, so no "content is newer" conflict.
             this.markSelfWrite(fileUri);
             try {
                 await workspace.save(notebook.uri);

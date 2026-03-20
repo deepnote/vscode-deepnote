@@ -1132,11 +1132,7 @@ project:
             await waitFor(() => nfReadSnapshotCount >= 1);
 
             assert.isAtLeast(nfReadSnapshotCount, 1, 'readSnapshot should be called');
-            assert.strictEqual(
-                nfApplyEditCount,
-                0,
-                'applyEdit should NOT be called when no block IDs can be resolved'
-            );
+            assert.strictEqual(nfApplyEditCount, 0, 'applyEdit should NOT be called when no block IDs can be resolved');
 
             for (const d of noFallbackDisposables) {
                 d.dispose();

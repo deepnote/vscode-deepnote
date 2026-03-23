@@ -32,6 +32,7 @@ const waitForIntervalMs = 50;
 const debounceWaitMs = 800;
 const rapidChangeIntervalMs = 100;
 const autoSaveGraceMs = 200;
+const postSnapshotReadGraceMs = 100;
 
 /**
  * Polls until a condition is met or a timeout is reached.
@@ -1130,6 +1131,7 @@ project:
             noFallbackOnDidChange.fire(snapshotUri);
 
             await waitFor(() => nfReadSnapshotCount >= 1);
+            await new Promise((resolve) => setTimeout(resolve, postSnapshotReadGraceMs));
 
             assert.isAtLeast(nfReadSnapshotCount, 1, 'readSnapshot should be called');
             assert.strictEqual(nfApplyEditCount, 0, 'applyEdit should NOT be called when no block IDs can be resolved');

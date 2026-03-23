@@ -370,7 +370,12 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             // mtime from our recent write, so no "content is newer" conflict.
             this.markSelfWrite(fileUri);
             try {
-                await workspace.save(notebook.uri);
+                const saved = await workspace.save(notebook.uri);
+                if (!saved) {
+                    this.consumeSelfWrite(fileUri);
+                    logger.warn(`[FileChangeWatcher] Save after sync write returned undefined: ${notebook.uri.path}`);
+                    return;
+                }
             } catch (saveError) {
                 this.consumeSelfWrite(fileUri);
                 logger.warn(`[FileChangeWatcher] Save after sync write failed: ${notebook.uri.path}`, saveError);

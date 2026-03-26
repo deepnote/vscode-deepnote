@@ -368,16 +368,13 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
 
             // Save to clear dirty state. VS Code serializes (same bytes) and sees the
             // mtime from our recent write, so no "content is newer" conflict.
-            this.markSelfWrite(fileUri);
             try {
                 const saved = await workspace.save(notebook.uri);
                 if (!saved) {
-                    this.consumeSelfWrite(fileUri);
                     logger.warn(`[FileChangeWatcher] Save after sync write returned undefined: ${notebook.uri.path}`);
                     return;
                 }
             } catch (saveError) {
-                this.consumeSelfWrite(fileUri);
                 logger.warn(`[FileChangeWatcher] Save after sync write failed: ${notebook.uri.path}`, saveError);
             }
         } catch (serializeError) {

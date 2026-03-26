@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+import type { ServerInfo as RuntimeCoreServerInfo } from '@deepnote/runtime-core';
 import * as vscode from 'vscode';
 
 import { serializePythonEnvironment } from '../../platform/api/pythonApi';
@@ -185,10 +186,7 @@ export interface IDeepnoteServerStarter {
     dispose(): Promise<void>;
 }
 
-export interface DeepnoteServerInfo {
-    url: string;
-    jupyterPort: number;
-    lspPort: number;
+export interface DeepnoteServerInfo extends RuntimeCoreServerInfo {
     token?: string;
 }
 

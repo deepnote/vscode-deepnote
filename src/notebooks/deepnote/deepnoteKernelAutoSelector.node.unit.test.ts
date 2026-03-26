@@ -2,6 +2,7 @@ import { assert } from 'chai';
 import * as sinon from 'sinon';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { DeepnoteKernelAutoSelector } from './deepnoteKernelAutoSelector.node';
+import { createMockChildProcess } from '../../kernels/deepnote/deepnoteTestHelpers.node';
 import {
     IDeepnoteEnvironmentManager,
     IDeepnoteLspClientManager,
@@ -1042,7 +1043,8 @@ function createMockEnvironment(id: string, name: string, hasServer: boolean = fa
                   url: `http://localhost:8888`,
                   jupyterPort: 8888,
                   lspPort: 8889,
-                  token: 'test-token'
+                  token: 'test-token',
+                  process: createMockChildProcess()
               }
             : undefined
     };

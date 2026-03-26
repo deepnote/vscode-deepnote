@@ -7,15 +7,16 @@
 
 ## Code conventions
 
-- Always run `npx prettier` before committing
+- Always run `npm run format-fix` after making changes to the code
 
 ## Testing
 
 - Unit tests use Mocha/Chai framework with `.unit.test.ts` extension
 - Test files should be placed alongside the source files they test
+- Tests run against compiled JavaScript files in `out/` directory — build first with `npm run compile-tsc`
 - Run all tests: `npm test` or `npm run test:unittests`
+- Run tests matching a pattern: `npm run test:unittests -- --grep "SuiteName"` (forwards `--grep` to mocha, matches suite and test names)
 - Run single test file: `npx mocha --config ./build/.mocha.unittests.js.json ./out/path/to/file.unit.test.js`
-- Tests run against compiled JavaScript files in `out/` directory
 - Use `assert.deepStrictEqual()` for object comparisons instead of checking individual properties
 
 ## Project Structure

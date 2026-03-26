@@ -1,30 +1,10 @@
 {
-    "GHSA-2mjp-6q6p-2qxm": {
-        "notes": "undici HTTP request/response smuggling (duplicate Content-Length). The current repo state already mitigates this path with the `undici@<6.24.0` override in `package.json`; `package-lock.json` resolves `undici` to 6.24.1 for the `@actions/http-client` and `@actions/github` dependency chain used by build/test scripts rather than extension runtime code.",
-        "expiry": "2026-08-15"
-    },
-    "GHSA-4992-7rv2-5pvq": {
-        "notes": "undici CRLF injection via upgrade option. Current project tree installs undici 5.29.0 only through devDependencies (@actions/core -> @actions/http-client and @actions/github), referenced from build/test scripts rather than extension runtime code. Newer @actions/* releases move to undici 6.x, and an undici 6.24.1 override installed and loaded in isolated smoke tests, but that remediation has not yet been adopted or validated in this repo.",
-        "expiry": "2026-08-15"
-    },
     "GHSA-848j-6mx2-7j84": {
         "notes": "CVE-2025-14505: elliptic ECDSA signature corruption can lead to private key recovery if attacker obtains both faulty and correct signatures for identical inputs. Accepted risk: dev-only transitive dependency (node-stdlib-browser -> crypto-browserify -> browserify-sign), not used for signing in this project, no fix available.",
         "expiry": "2026-08-15"
     },
-    "GHSA-g9mf-h72j-4rw9": {
-        "notes": "undici DoS via unbounded decompression chain. Current project tree installs undici 5.29.0 only through devDependencies (@actions/core -> @actions/http-client and @actions/github), referenced from build/test scripts rather than extension runtime code. Newer @actions/* releases move to undici 6.x, and an undici 6.24.1 override installed and loaded in isolated smoke tests, but that remediation has not yet been adopted or validated in this repo.",
-        "expiry": "2026-08-15"
-    },
-    "GHSA-v9p9-hfj2-hcw8": {
-        "notes": "undici WebSocket server_max_window_bits validation unhandled exception. Current project tree installs undici 5.29.0 only through devDependencies (@actions/core -> @actions/http-client and @actions/github), referenced from build/test scripts rather than extension runtime code. Newer @actions/* releases move to undici 6.x, and an undici 6.24.1 override installed and loaded in isolated smoke tests, but that remediation has not yet been adopted or validated in this repo.",
-        "expiry": "2026-08-15"
-    },
     "GHSA-vpq2-c234-7xj6": {
-        "notes": "@tootallnate/once AbortSignal control flow (promise may never settle). Current tree includes vulnerable copies through a bundled runtime dependency (@deepnote/sql-language-server -> @google-cloud/bigquery -> teeny-request -> http-proxy-agent) and through other transitive paths including @vscode/test-electron and jsdom-related packages under @jupyterlab/filebrowser, so this is not strictly dev-only. An override to @tootallnate/once 3.0.1 installed and loaded in isolated smoke tests, but that remediation has not yet been adopted or validated in this repo.",
-        "expiry": "2026-08-15"
-    },
-    "GHSA-vrm6-8vpv-qv8q": {
-        "notes": "undici WebSocket permessage-deflate unbounded memory consumption. Current project tree installs undici 5.29.0 only through devDependencies (@actions/core -> @actions/http-client and @actions/github), referenced from build/test scripts rather than extension runtime code. Newer @actions/* releases move to undici 6.x, and an undici 6.24.1 override installed and loaded in isolated smoke tests, but that remediation has not yet been adopted or validated in this repo.",
+        "notes": "@tootallnate/once AbortSignal control flow (promise may never settle). The current lockfile still resolves vulnerable transitive copies through @deepnote/sql-language-server -> @google-cloud/bigquery -> teeny-request -> http-proxy-agent@5 -> @tootallnate/once@2.0.0, @vscode/jupyter-ipywidgets8 -> @jupyterlab/filebrowser -> jest-environment-jsdom -> jsdom -> http-proxy-agent@5 -> @tootallnate/once@2.0.0, and @vscode/test-electron -> http-proxy-agent@4.0.1 -> @tootallnate/once@1.1.2. No @tootallnate/once override is currently applied in this repo because we are not forcing a major-version transitive override.",
         "expiry": "2026-08-15"
     }
 }

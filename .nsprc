@@ -1,6 +1,6 @@
 {
     "GHSA-2mjp-6q6p-2qxm": {
-        "notes": "undici HTTP request/response smuggling (duplicate Content-Length). Current project tree installs undici 5.29.0 only through devDependencies (@actions/core -> @actions/http-client and @actions/github), referenced from build/test scripts rather than extension runtime code. Newer @actions/* releases move to undici 6.x, and an undici 6.24.1 override installed and loaded in isolated smoke tests, but that remediation has not yet been adopted or validated in this repo.",
+        "notes": "undici HTTP request/response smuggling (duplicate Content-Length). The current repo state already mitigates this path with the `undici@<6.24.0` override in `package.json`; `package-lock.json` resolves `undici` to 6.24.1 for the `@actions/http-client` and `@actions/github` dependency chain used by build/test scripts rather than extension runtime code.",
         "expiry": "2026-08-15"
     },
     "GHSA-4992-7rv2-5pvq": {

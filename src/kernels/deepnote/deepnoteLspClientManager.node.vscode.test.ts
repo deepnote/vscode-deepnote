@@ -2,6 +2,7 @@ import { assert } from 'chai';
 import { Uri } from 'vscode';
 
 import { DeepnoteLspClientManager } from './deepnoteLspClientManager.node';
+import { createMockChildProcess } from './deepnoteTestHelpers.node';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import * as path from '../../platform/vscode-path/path';
@@ -84,7 +85,8 @@ suite('DeepnoteLspClientManager Integration Tests', () => {
             url: 'http://localhost:8888',
             jupyterPort: 8888,
             lspPort: 8889,
-            token: 'test-token'
+            token: 'test-token',
+            process: createMockChildProcess()
         };
 
         // This will attempt to start LSP clients but may fail if pylsp isn't installed
@@ -135,7 +137,8 @@ suite('DeepnoteLspClientManager Integration Tests', () => {
             url: 'http://localhost:8888',
             jupyterPort: 8888,
             lspPort: 8889,
-            token: 'test-token'
+            token: 'test-token',
+            process: createMockChildProcess()
         };
 
         try {
@@ -166,7 +169,8 @@ suite('DeepnoteLspClientManager Integration Tests', () => {
             url: 'http://localhost:8888',
             jupyterPort: 8888,
             lspPort: 8889,
-            token: 'test-token'
+            token: 'test-token',
+            process: createMockChildProcess()
         };
 
         try {

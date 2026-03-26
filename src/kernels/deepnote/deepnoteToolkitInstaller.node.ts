@@ -4,6 +4,8 @@
 import { inject, injectable, named } from 'inversify';
 import { CancellationToken, l10n, Uri, workspace } from 'vscode';
 
+import { resolvePythonExecutable } from '@deepnote/runtime-core';
+
 import { Cancellation } from '../../platform/common/cancellation';
 import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
 import { IFileSystem } from '../../platform/common/platform/types';
@@ -44,6 +46,8 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
 
     /**
      * Get the venv Python interpreter by direct venv path.
+     * Uses @deepnote/runtime-core's `resolvePythonExecutable` which handles
+     * venv root, bin dir, and bare command detection across all platforms.
      */
     private async getVenvInterpreterByPath(venvPath: Uri): Promise<PythonEnvironment | undefined> {
         const cacheKey = venvPath.fsPath;
@@ -52,18 +56,15 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             return { uri: this.venvPythonPaths.get(cacheKey)!, id: this.venvPythonPaths.get(cacheKey)!.fsPath };
         }
 
-        // Check if venv exists
-        const pythonInVenv =
-            process.platform === 'win32'
-                ? Uri.joinPath(venvPath, 'Scripts', 'python.exe')
-                : Uri.joinPath(venvPath, 'bin', 'python');
+        try {
+            const resolvedPath = await resolvePythonExecutable(venvPath.fsPath);
+            const pythonUri = Uri.file(resolvedPath);
 
-        if (await this.fs.exists(pythonInVenv)) {
-            this.venvPythonPaths.set(cacheKey, pythonInVenv);
-            return { uri: pythonInVenv, id: pythonInVenv.fsPath };
+            this.venvPythonPaths.set(cacheKey, pythonUri);
+            return { uri: pythonUri, id: pythonUri.fsPath };
+        } catch {
+            return undefined;
         }
-
-        return undefined;
     }
 
     public async getVenvInterpreter(deepnoteFileUri: Uri): Promise<PythonEnvironment | undefined> {

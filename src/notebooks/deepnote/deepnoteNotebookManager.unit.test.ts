@@ -123,6 +123,33 @@ suite('DeepnoteNotebookManager', () => {
         });
     });
 
+    suite('clearNotebookSelection', () => {
+        test('should clear selection for a project', () => {
+            manager.selectNotebookForProject('project-123', 'notebook-456');
+            manager.clearNotebookSelection('project-123');
+
+            const selectedNotebook = manager.getTheSelectedNotebookForAProject('project-123');
+
+            assert.strictEqual(selectedNotebook, undefined);
+        });
+
+        test('should not affect other projects', () => {
+            manager.selectNotebookForProject('project-1', 'notebook-1');
+            manager.selectNotebookForProject('project-2', 'notebook-2');
+            manager.clearNotebookSelection('project-1');
+
+            assert.strictEqual(manager.getTheSelectedNotebookForAProject('project-1'), undefined);
+            assert.strictEqual(manager.getTheSelectedNotebookForAProject('project-2'), 'notebook-2');
+        });
+
+        test('should be idempotent for unknown project', () => {
+            assert.doesNotThrow(() => {
+                manager.clearNotebookSelection('unknown-project');
+                manager.clearNotebookSelection('unknown-project');
+            });
+        });
+    });
+
     suite('storeOriginalProject', () => {
         test('should store both project and current notebook ID', () => {
             manager.storeOriginalProject('project-123', mockProject, 'notebook-456');

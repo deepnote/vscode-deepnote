@@ -37,6 +37,7 @@ export interface ProjectIntegration {
 
 export const IDeepnoteNotebookManager = Symbol('IDeepnoteNotebookManager');
 export interface IDeepnoteNotebookManager {
+    clearNotebookSelection(projectId: string): void;
     getCurrentNotebookId(projectId: string): string | undefined;
     getOriginalProject(projectId: string): DeepnoteProject | undefined;
     getTheSelectedNotebookForAProject(projectId: string): string | undefined;

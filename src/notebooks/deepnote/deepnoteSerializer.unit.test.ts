@@ -147,6 +147,34 @@ project:
                 /no notebooks|notebooks.*must contain at least 1/i
             );
         });
+
+        test('should deserialize the specified notebook when notebookId is passed', async () => {
+            const content = projectToYaml(mockProject);
+            const result = await serializer.deserializeNotebook(content, {} as any, 'notebook-2');
+
+            assert.strictEqual(result.metadata?.deepnoteNotebookId, 'notebook-2');
+            assert.strictEqual(result.metadata?.deepnoteNotebookName, 'Second Notebook');
+            assert.strictEqual(result.cells.length, 1);
+            assert.include(result.cells[0].value, 'Title');
+        });
+
+        test('should ignore stored selection when explicit notebookId is provided', async () => {
+            manager.selectNotebookForProject('project-123', 'notebook-1');
+            const content = projectToYaml(mockProject);
+            const result = await serializer.deserializeNotebook(content, {} as any, 'notebook-2');
+
+            assert.strictEqual(result.metadata?.deepnoteNotebookId, 'notebook-2');
+            assert.strictEqual(result.metadata?.deepnoteNotebookName, 'Second Notebook');
+        });
+
+        test('should fall back to findCurrentNotebookId when notebookId is undefined', async () => {
+            manager.selectNotebookForProject('project-123', 'notebook-1');
+            const content = projectToYaml(mockProject);
+            const result = await serializer.deserializeNotebook(content, {} as any);
+
+            assert.strictEqual(result.metadata?.deepnoteNotebookId, 'notebook-1');
+            assert.strictEqual(result.metadata?.deepnoteNotebookName, 'First Notebook');
+        });
     });
 
     suite('serializeNotebook', () => {
@@ -419,6 +447,36 @@ project:
 
             manager.selectNotebookForProject('project-123', 'notebook-3');
             assert.strictEqual(serializer.findCurrentNotebookId('project-123'), 'notebook-3');
+        });
+
+        test('should return undefined when selection is cleared and no active editor', () => {
+            manager.selectNotebookForProject('project-123', 'notebook-456');
+            manager.clearNotebookSelection('project-123');
+
+            const result = serializer.findCurrentNotebookId('project-123');
+
+            assert.strictEqual(result, undefined);
+        });
+
+        test('should fall back to active editor after selection is cleared', () => {
+            manager.selectNotebookForProject('project-123', 'stored-wrong');
+            manager.clearNotebookSelection('project-123');
+
+            const mockActiveNotebook = {
+                notebookType: 'deepnote',
+                metadata: {
+                    deepnoteProjectId: 'project-123',
+                    deepnoteNotebookId: 'active-editor-notebook'
+                }
+            };
+
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                notebook: mockActiveNotebook
+            } as any);
+
+            const result = serializer.findCurrentNotebookId('project-123');
+
+            assert.strictEqual(result, 'active-editor-notebook');
         });
     });
 

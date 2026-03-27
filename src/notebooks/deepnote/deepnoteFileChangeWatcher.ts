@@ -235,6 +235,17 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
                 doc.notebookType === 'deepnote' && doc.uri.with({ query: '', fragment: '' }).toString() === uriString
         );
 
+        // Clear the global notebook selection so that any VS Code-triggered
+        // re-deserialization (e.g. from workspace.save) falls back to the
+        // active editor rather than a stale global selection.
+        for (const notebook of affectedNotebooks) {
+            const projectId = notebook.metadata?.deepnoteProjectId as string | undefined;
+            if (projectId) {
+                this.notebookManager.clearNotebookSelection(projectId);
+                break;
+            }
+        }
+
         for (const notebook of affectedNotebooks) {
             const nbKey = notebook.uri.toString();
             // main-file-sync always replaces any pending operation
@@ -276,10 +287,15 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             return;
         }
 
+        // Pass the notebook ID explicitly to avoid mutating the global selection state.
+        // Multiple notebooks from the same project may be open simultaneously, and
+        // mutating selectedNotebookByProject would cause race conditions.
+        const notebookNotebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
+
         const tokenSource = new CancellationTokenSource();
         let newData;
         try {
-            newData = await this.serializer.deserializeNotebook(content, tokenSource.token);
+            newData = await this.serializer.deserializeNotebook(content, tokenSource.token, notebookNotebookId);
         } catch (error) {
             logger.warn(`[FileChangeWatcher] Failed to parse changed file: ${fileUri.path}`, error);
             return;

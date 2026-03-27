@@ -15,6 +15,14 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
     private readonly selectedNotebookByProject = new Map<string, string>();
 
     /**
+     * Clears the notebook selection for a project so that subsequent
+     * deserializations fall back to the active editor or open documents.
+     */
+    clearNotebookSelection(projectId: string): void {
+        this.selectedNotebookByProject.delete(projectId);
+    }
+
+    /**
      * Gets the currently selected notebook ID for a project.
      * @param projectId Project identifier
      * @returns Current notebook ID or undefined if not set

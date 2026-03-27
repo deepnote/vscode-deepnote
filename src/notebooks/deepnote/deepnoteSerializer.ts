@@ -67,7 +67,11 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
      * @param token Cancellation token (unused)
      * @returns Promise resolving to notebook data
      */
-    async deserializeNotebook(content: Uint8Array, token: CancellationToken): Promise<NotebookData> {
+    async deserializeNotebook(
+        content: Uint8Array,
+        token: CancellationToken,
+        notebookId?: string
+    ): Promise<NotebookData> {
         logger.debug('DeepnoteSerializer: Deserializing Deepnote notebook');
 
         if (token?.isCancellationRequested) {
@@ -90,16 +94,16 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             }
 
             const projectId = deepnoteFile.project.id;
-            const notebookId = this.findCurrentNotebookId(projectId);
+            const resolvedNotebookId = notebookId ?? this.findCurrentNotebookId(projectId);
 
-            logger.debug(`DeepnoteSerializer: Project ID: ${projectId}, Selected notebook ID: ${notebookId}`);
+            logger.debug(`DeepnoteSerializer: Project ID: ${projectId}, Selected notebook ID: ${resolvedNotebookId}`);
 
             if (deepnoteFile.project.notebooks.length === 0) {
                 throw new Error('Deepnote project contains no notebooks.');
             }
 
-            const selectedNotebook = notebookId
-                ? deepnoteFile.project.notebooks.find((nb) => nb.id === notebookId)
+            const selectedNotebook = resolvedNotebookId
+                ? deepnoteFile.project.notebooks.find((nb) => nb.id === resolvedNotebookId)
                 : this.findDefaultNotebook(deepnoteFile);
 
             if (!selectedNotebook) {

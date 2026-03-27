@@ -1,7 +1,17 @@
+import { DeepnoteFile, serializeDeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import * as sinon from 'sinon';
-import { anything, instance, mock, when } from 'ts-mockito';
-import { Disposable, EventEmitter, FileSystemWatcher, NotebookCellKind, NotebookDocument, Uri } from 'vscode';
+import { anything, instance, mock, reset, resetCalls, verify, when } from 'ts-mockito';
+import {
+    Disposable,
+    EventEmitter,
+    FileSystemWatcher,
+    NotebookCellKind,
+    NotebookDocument,
+    NotebookEdit,
+    Uri,
+    WorkspaceEdit
+} from 'vscode';
 
 import type { IControllerRegistration } from '../controllers/types';
 import type { IDisposableRegistry } from '../../platform/common/types';
@@ -11,7 +21,7 @@ import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteFileChangeWatcher } from './deepnoteFileChangeWatcher';
 import { SnapshotService } from './snapshots/snapshotService';
 
-const validProject = {
+const validProject: DeepnoteFile = {
     version: '1.0.0',
     metadata: { createdAt: '2025-01-01T00:00:00Z' },
     project: {
@@ -21,11 +31,61 @@ const validProject = {
             {
                 id: 'notebook-1',
                 name: 'Notebook 1',
-                blocks: [{ id: 'block-1', type: 'code', sortingKey: 'a0', blockGroup: '1', content: 'print("hello")' }]
+                blocks: [
+                    {
+                        id: 'block-1',
+                        type: 'code',
+                        sortingKey: 'a0',
+                        blockGroup: '1',
+                        content: 'print("hello")',
+                        metadata: {}
+                    }
+                ]
             }
         ]
     }
-} as DeepnoteProject;
+};
+
+const multiNotebookProject: DeepnoteFile = {
+    version: '1.0.0',
+    metadata: { createdAt: '2025-01-01T00:00:00Z' },
+    project: {
+        id: 'project-1',
+        name: 'Multi Notebook Project',
+        notebooks: [
+            {
+                id: 'notebook-1',
+                name: 'Notebook 1',
+                blocks: [
+                    {
+                        id: 'block-nb1',
+                        type: 'code',
+                        sortingKey: 'a0',
+                        blockGroup: '1',
+                        content: 'print("nb1-new")',
+                        metadata: {}
+                    }
+                ]
+            },
+            {
+                id: 'notebook-2',
+                name: 'Notebook 2',
+                blocks: [
+                    {
+                        id: 'block-nb2',
+                        type: 'code',
+                        sortingKey: 'a0',
+                        blockGroup: '1',
+                        content: 'print("nb2-new")',
+                        metadata: {}
+                    }
+                ]
+            }
+        ]
+    }
+};
+
+const multiNotebookYaml = serializeDeepnoteFile(multiNotebookProject);
 
 const waitForTimeoutMs = 5000;
 const waitForIntervalMs = 50;
@@ -73,6 +133,7 @@ suite('DeepnoteFileChangeWatcher', () => {
         mockedNotebookManager = mock<IDeepnoteNotebookManager>();
         when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(validProject);
         when(mockedNotebookManager.getTheSelectedNotebookForAProject(anything())).thenReturn('notebook-1');
+        when(mockedNotebookManager.clearNotebookSelection(anything())).thenReturn();
         mockNotebookManager = instance(mockedNotebookManager);
 
         // Set up FileSystemWatcher mock
@@ -1198,6 +1259,197 @@ project:
             }
             fbOnDidChange.dispose();
             fbOnDidCreate.dispose();
+        });
+    });
+
+    suite('multi-notebook file sync', () => {
+        let workspaceSetCaptures: { uriKey: string; cellSourceJoined: string }[] = [];
+        let workspaceEditSetStub: sinon.SinonStub | undefined;
+
+        setup(() => {
+            reset(mockedNotebookManager);
+            when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(multiNotebookProject);
+            when(mockedNotebookManager.getTheSelectedNotebookForAProject(anything())).thenReturn('notebook-1');
+            when(mockedNotebookManager.clearNotebookSelection(anything())).thenReturn();
+            resetCalls(mockedNotebookManager);
+            workspaceSetCaptures = [];
+            workspaceEditSetStub = sinon.stub(WorkspaceEdit.prototype, 'set').callsFake((uri: Uri, edits: unknown) => {
+                if (!Array.isArray(edits) || edits.length === 0) {
+                    return;
+                }
+
+                const firstEdit = edits[0] as NotebookEdit;
+                if (firstEdit?.newCells && firstEdit.newCells.length > 0) {
+                    workspaceSetCaptures.push({
+                        uriKey: uri.toString(),
+                        cellSourceJoined: firstEdit.newCells.map((c) => c.value).join('\n')
+                    });
+                }
+            });
+        });
+
+        teardown(() => {
+            workspaceEditSetStub?.restore();
+            workspaceEditSetStub = undefined;
+        });
+
+        test('should reload each notebook with its own content when multiple notebooks are open', async () => {
+            const basePath = Uri.file('/workspace/multi.deepnote');
+            const uriNb1 = basePath.with({ query: 'view=1' });
+            const uriNb2 = basePath.with({ query: 'view=2' });
+
+            const notebook1 = createMockNotebook({
+                uri: uriNb1,
+                metadata: {
+                    deepnoteProjectId: 'project-1',
+                    deepnoteNotebookId: 'notebook-1'
+                },
+                cells: [
+                    {
+                        metadata: { id: 'block-nb1', type: 'code' },
+                        outputs: [],
+                        kind: NotebookCellKind.Code,
+                        document: { getText: () => 'print("nb1-old")', languageId: 'python' }
+                    }
+                ]
+            });
+
+            const notebook2 = createMockNotebook({
+                uri: uriNb2,
+                metadata: {
+                    deepnoteProjectId: 'project-1',
+                    deepnoteNotebookId: 'notebook-2'
+                },
+                cells: [
+                    {
+                        metadata: { id: 'block-nb2', type: 'code' },
+                        outputs: [],
+                        kind: NotebookCellKind.Code,
+                        document: { getText: () => 'print("nb2-old")', languageId: 'python' }
+                    }
+                ]
+            });
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook1, notebook2]);
+            setupMockFs(multiNotebookYaml);
+
+            onDidChangeFile.fire(basePath);
+
+            await waitFor(() => applyEditCount >= 2);
+
+            assert.strictEqual(applyEditCount, 2, 'applyEdit should run once per open notebook');
+            assert.strictEqual(workspaceSetCaptures.length, 2, 'each notebook should get a replaceCells edit');
+
+            const byUri = new Map(workspaceSetCaptures.map((c) => [c.uriKey, c.cellSourceJoined]));
+
+            assert.include(byUri.get(uriNb1.toString()) ?? '', 'nb1-new');
+            assert.notInclude(byUri.get(uriNb1.toString()) ?? '', 'nb2-new');
+            assert.include(byUri.get(uriNb2.toString()) ?? '', 'nb2-new');
+            assert.notInclude(byUri.get(uriNb2.toString()) ?? '', 'nb1-new');
+        });
+
+        test('should clear notebook selection before processing file change', async () => {
+            const basePath = Uri.file('/workspace/multi.deepnote');
+            const uriNb1 = basePath.with({ query: 'a=1' });
+            const uriNb2 = basePath.with({ query: 'b=2' });
+
+            const notebook1 = createMockNotebook({
+                uri: uriNb1,
+                metadata: {
+                    deepnoteProjectId: 'project-1',
+                    deepnoteNotebookId: 'notebook-1'
+                },
+                cells: [
+                    {
+                        metadata: { id: 'block-nb1' },
+                        outputs: [],
+                        kind: NotebookCellKind.Code,
+                        document: { getText: () => 'print("nb1-old")' }
+                    }
+                ]
+            });
+
+            const notebook2 = createMockNotebook({
+                uri: uriNb2,
+                metadata: {
+                    deepnoteProjectId: 'project-1',
+                    deepnoteNotebookId: 'notebook-2'
+                },
+                cells: [
+                    {
+                        metadata: { id: 'block-nb2' },
+                        outputs: [],
+                        kind: NotebookCellKind.Code,
+                        document: { getText: () => 'print("nb2-old")' }
+                    }
+                ]
+            });
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook1, notebook2]);
+            setupMockFs(multiNotebookYaml);
+
+            onDidChangeFile.fire(basePath);
+
+            await waitFor(() => applyEditCount >= 2);
+
+            verify(mockedNotebookManager.clearNotebookSelection('project-1')).once();
+        });
+
+        test('should not corrupt other notebooks when one notebook triggers a file change', async () => {
+            const basePath = Uri.file('/workspace/multi.deepnote');
+            const uriNb1 = basePath.with({ query: 'n=1' });
+            const uriNb2 = basePath.with({ query: 'n=2' });
+
+            const notebook1 = createMockNotebook({
+                uri: uriNb1,
+                metadata: {
+                    deepnoteProjectId: 'project-1',
+                    deepnoteNotebookId: 'notebook-1'
+                },
+                cells: [
+                    {
+                        metadata: { id: 'block-nb1' },
+                        outputs: [],
+                        kind: NotebookCellKind.Code,
+                        document: { getText: () => 'print("nb1-old")' }
+                    }
+                ]
+            });
+
+            const notebook2 = createMockNotebook({
+                uri: uriNb2,
+                metadata: {
+                    deepnoteProjectId: 'project-1',
+                    deepnoteNotebookId: 'notebook-2'
+                },
+                cells: [
+                    {
+                        metadata: { id: 'block-nb2' },
+                        outputs: [],
+                        kind: NotebookCellKind.Code,
+                        document: { getText: () => 'print("nb2-old")' }
+                    }
+                ]
+            });
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook1, notebook2]);
+            setupMockFs(multiNotebookYaml);
+
+            onDidChangeFile.fire(basePath);
+
+            await waitFor(() => applyEditCount >= 2);
+
+            const nb1Cells = workspaceSetCaptures.find((c) => c.uriKey === uriNb1.toString())?.cellSourceJoined;
+            const nb2Cells = workspaceSetCaptures.find((c) => c.uriKey === uriNb2.toString())?.cellSourceJoined;
+
+            assert.isDefined(nb1Cells);
+            assert.isDefined(nb2Cells);
+            assert.notStrictEqual(nb1Cells, nb2Cells, 'each open notebook must receive distinct deserialized content');
+
+            assert.include(nb1Cells!, 'nb1-new');
+            assert.include(nb2Cells!, 'nb2-new');
+            assert.notInclude(nb1Cells!, 'nb2-new', 'notebook-1 must not receive notebook-2 block content');
+            assert.notInclude(nb2Cells!, 'nb1-new', 'notebook-2 must not receive notebook-1 block content');
         });
     });
 });

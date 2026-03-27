@@ -4,7 +4,7 @@
         "expiry": "2026-08-15"
     },
     "GHSA-vpq2-c234-7xj6": {
-        "notes": "CVE-2026-3449: @tootallnate/once promise hangs on AbortSignal abort (CVSS 1.9, availability only). Transitive dep via http-proxy-agent in dev-only packages (test-electron, jsdom) and BigQuery driver; worst case is a single stalled HTTP proxy request, no data leak or code execution.",
-        "expiry": "2026-09-17"
+        "notes": "@tootallnate/once AbortSignal control flow (promise may never settle). The current lockfile still resolves vulnerable transitive copies through @deepnote/sql-language-server -> @google-cloud/bigquery -> teeny-request -> http-proxy-agent@5 -> @tootallnate/once@2.0.0, @vscode/jupyter-ipywidgets8 -> @jupyterlab/filebrowser -> jest-environment-jsdom -> jsdom -> http-proxy-agent@5 -> @tootallnate/once@2.0.0, and @vscode/test-electron -> http-proxy-agent@4.0.1 -> @tootallnate/once@1.1.2. No @tootallnate/once override is currently applied in this repo because we are not forcing a major-version transitive override.",
+        "expiry": "2026-08-15"
     }
 }

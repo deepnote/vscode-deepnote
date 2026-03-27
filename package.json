@@ -2932,15 +2932,22 @@
             "ws": "7.5.10"
         },
         "d3-color": "3.1.0",
+        "flatted": "3.4.2",
         "vega-embed": "^7.1.0",
         "@mermaid-js/layout-elk": "npm:empty-pkg@1.0.0",
         "tar": "7.5.11",
         "mocha": {
             "diff": "5.2.2"
         },
+        "picomatch@2": "2.3.2",
+        "picomatch@4": "4.0.4",
+        "postcss-load-config": {
+            "yaml": "1.10.3"
+        },
         "sinon": {
             "diff": "5.2.2"
         },
+        "smol-toml": "1.6.1",
         "tslint": {
             "diff": "4.0.4"
         },
@@ -2949,6 +2956,7 @@
         "bn.js@<4.12.3": "4.12.3",
         "serialize-javascript@<=7.0.2": "7.0.3",
         "undici@<6.24.0": "6.24.1",
-        "flatted@<3.4.2": "3.4.2"
+        "flatted@<3.4.2": "3.4.2",
+        "yaml": "2.8.3"
     }
 }

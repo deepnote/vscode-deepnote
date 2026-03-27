@@ -9,8 +9,7 @@ import {
     NotebookCellKind,
     NotebookDocument,
     NotebookEdit,
-    Uri,
-    WorkspaceEdit
+    Uri
 } from 'vscode';
 
 import type { IControllerRegistration } from '../controllers/types';
@@ -93,6 +92,11 @@ const debounceWaitMs = 800;
 const rapidChangeIntervalMs = 100;
 const autoSaveGraceMs = 200;
 const postSnapshotReadGraceMs = 100;
+
+interface NotebookEditCapture {
+    uriKey: string;
+    cellSourceJoined: string;
+}
 
 /**
  * Polls until a condition is met or a timeout is reached.
@@ -1263,7 +1267,7 @@ project:
     });
 
     suite('multi-notebook file sync', () => {
-        let workspaceSetCaptures: { uriKey: string; cellSourceJoined: string }[] = [];
+        let workspaceSetCaptures: NotebookEditCapture[] = [];
 
         setup(() => {
             reset(mockedNotebookManager);
@@ -1272,26 +1276,21 @@ project:
             when(mockedNotebookManager.clearNotebookSelection(anything())).thenReturn();
             resetCalls(mockedNotebookManager);
             workspaceSetCaptures = [];
-            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenCall((wsEdit: WorkspaceEdit) => {
+            sinon.stub(watcher, 'applyNotebookEdits' as any).callsFake(async (...args: unknown[]) => {
+                const uri = args[0] as Uri;
+                const edits = args[1] as NotebookEdit[];
+
                 applyEditCount++;
 
-                const ext = wsEdit as WorkspaceEdit & { notebookEntries(): [Uri, NotebookEdit[]][] };
-
-                for (const [uri, edits] of ext.notebookEntries()) {
-                    if (!edits.length) {
-                        continue;
-                    }
-
-                    const firstEdit = edits[0];
-                    if (firstEdit?.newCells && firstEdit.newCells.length > 0) {
-                        workspaceSetCaptures.push({
-                            uriKey: uri.toString(),
-                            cellSourceJoined: firstEdit.newCells.map((c) => c.value).join('\n')
-                        });
-                    }
+                const replaceCellsEdit = edits.find((e) => e.newCells?.length > 0);
+                if (replaceCellsEdit) {
+                    workspaceSetCaptures.push({
+                        uriKey: uri.toString(),
+                        cellSourceJoined: replaceCellsEdit.newCells.map((c: any) => c.value).join('\n')
+                    });
                 }
 
-                return Promise.resolve(true);
+                return true;
             });
         });
 

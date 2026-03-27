@@ -122,6 +122,13 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         }
     }
 
+    protected async applyNotebookEdits(uri: Uri, edits: NotebookEdit[]): Promise<boolean> {
+        const wsEdit = new WorkspaceEdit();
+        wsEdit.set(uri, edits);
+
+        return workspace.applyEdit(wsEdit);
+    }
+
     private clearAllTimers(): void {
         for (const timer of this.debounceTimers.values()) {
             clearTimeout(timer);
@@ -350,9 +357,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         }
 
         // Apply the edit to update in-memory cells immediately (responsive UX).
-        const wsEdit = new WorkspaceEdit();
-        wsEdit.set(notebook.uri, edits);
-        const applied = await workspace.applyEdit(wsEdit);
+        const applied = await this.applyNotebookEdits(notebook.uri, edits);
 
         if (!applied) {
             logger.warn(`[FileChangeWatcher] Failed to apply edit: ${notebook.uri.path}`);
@@ -501,9 +506,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
                 }
             }
             if (metadataEdits.length > 0) {
-                const wsEdit = new WorkspaceEdit();
-                wsEdit.set(notebook.uri, metadataEdits);
-                await workspace.applyEdit(wsEdit);
+                await this.applyNotebookEdits(notebook.uri, metadataEdits);
             }
 
             logger.info(`[FileChangeWatcher] Updated notebook outputs via execution API: ${notebook.uri.path}`);
@@ -531,9 +534,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             );
         }
 
-        const wsEdit = new WorkspaceEdit();
-        wsEdit.set(notebook.uri, replaceEdits);
-        const applied = await workspace.applyEdit(wsEdit);
+        const applied = await this.applyNotebookEdits(notebook.uri, replaceEdits);
 
         if (!applied) {
             logger.warn(`[FileChangeWatcher] Failed to apply snapshot outputs: ${notebook.uri.path}`);
@@ -552,9 +553,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
                 })
             );
         }
-        const metaEdit = new WorkspaceEdit();
-        metaEdit.set(notebook.uri, metadataEdits);
-        await workspace.applyEdit(metaEdit);
+        await this.applyNotebookEdits(notebook.uri, metadataEdits);
 
         // Save to sync mtime — mark as self-write first
         this.markSelfWrite(notebook.uri);

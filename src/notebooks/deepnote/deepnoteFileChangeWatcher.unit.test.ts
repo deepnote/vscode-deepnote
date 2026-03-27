@@ -1264,7 +1264,6 @@ project:
 
     suite('multi-notebook file sync', () => {
         let workspaceSetCaptures: { uriKey: string; cellSourceJoined: string }[] = [];
-        let workspaceEditSetStub: sinon.SinonStub | undefined;
 
         setup(() => {
             reset(mockedNotebookManager);
@@ -1273,24 +1272,27 @@ project:
             when(mockedNotebookManager.clearNotebookSelection(anything())).thenReturn();
             resetCalls(mockedNotebookManager);
             workspaceSetCaptures = [];
-            workspaceEditSetStub = sinon.stub(WorkspaceEdit.prototype, 'set').callsFake((uri: Uri, edits: unknown) => {
-                if (!Array.isArray(edits) || edits.length === 0) {
-                    return;
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenCall((wsEdit: WorkspaceEdit) => {
+                applyEditCount++;
+
+                const ext = wsEdit as WorkspaceEdit & { notebookEntries(): [Uri, NotebookEdit[]][] };
+
+                for (const [uri, edits] of ext.notebookEntries()) {
+                    if (!edits.length) {
+                        continue;
+                    }
+
+                    const firstEdit = edits[0];
+                    if (firstEdit?.newCells && firstEdit.newCells.length > 0) {
+                        workspaceSetCaptures.push({
+                            uriKey: uri.toString(),
+                            cellSourceJoined: firstEdit.newCells.map((c) => c.value).join('\n')
+                        });
+                    }
                 }
 
-                const firstEdit = edits[0] as NotebookEdit;
-                if (firstEdit?.newCells && firstEdit.newCells.length > 0) {
-                    workspaceSetCaptures.push({
-                        uriKey: uri.toString(),
-                        cellSourceJoined: firstEdit.newCells.map((c) => c.value).join('\n')
-                    });
-                }
+                return Promise.resolve(true);
             });
-        });
-
-        teardown(() => {
-            workspaceEditSetStub?.restore();
-            workspaceEditSetStub = undefined;
         });
 
         test('should reload each notebook with its own content when multiple notebooks are open', async () => {

@@ -707,6 +707,7 @@ export namespace vscMockExtHostedTypes {
         private _seqPool: number = 0;
 
         private _resourceEdits: { seq: number; from: vscUri.URI; to: vscUri.URI }[] = [];
+        private _notebookEdits = new Map<string, { uri: vscUri.URI; edits: NotebookEdit[] }>();
         private _textEdits = new Map<string, { seq: number; uri: vscUri.URI; edits: TextEdit[] }>();
 
         // createResource(uri: vscode.Uri): void {
@@ -759,7 +760,20 @@ export namespace vscMockExtHostedTypes {
         }
 
         has(uri: vscUri.URI): boolean {
-            return this._textEdits.has(uri.toString());
+            return this._textEdits.has(uri.toString()) || this._notebookEdits.has(uri.toString());
+        }
+
+        /**
+         * Notebook edits passed to {@link set} (for tests that inspect edits via workspace.applyEdit).
+         */
+        notebookEntries(): [vscUri.URI, NotebookEdit[]][] {
+            const res: [vscUri.URI, NotebookEdit[]][] = [];
+
+            this._notebookEdits.forEach((value) => {
+                res.push([value.uri, value.edits.slice()]);
+            });
+
+            return res.slice();
         }
 
         set(uri: vscode.Uri, edits: NotebookEdit[]): void;
@@ -779,17 +793,54 @@ export namespace vscMockExtHostedTypes {
                       | [TextEdit | SnippetTextEdit, vscode.WorkspaceEditEntryMetadata]
                   )[]
         ): void {
-            let data = this._textEdits.get(uri.toString());
+            const uriKey = uri.toString();
+
+            if (!edits) {
+                const data = this._textEdits.get(uriKey);
+                if (data) {
+                    // @ts-ignore
+                    data.edits = undefined;
+                }
+                this._notebookEdits.delete(uriKey);
+
+                return;
+            }
+
+            if (edits.length === 0) {
+                let data = this._textEdits.get(uriKey);
+                if (!data) {
+                    data = { seq: this._seqPool++, uri, edits: [] };
+                    this._textEdits.set(uriKey, data);
+                }
+                data.edits = [];
+
+                return;
+            }
+
+            const first = edits[0];
+            const firstEdit = Array.isArray(first) ? first[0] : first;
+
+            if (firstEdit instanceof NotebookEdit) {
+                const normalized: NotebookEdit[] = edits.map((item) => {
+                    if (Array.isArray(item)) {
+                        return item[0] as NotebookEdit;
+                    }
+
+                    return item as NotebookEdit;
+                });
+
+                this._notebookEdits.set(uriKey, { uri, edits: normalized });
+
+                return;
+            }
+
+            let data = this._textEdits.get(uriKey);
             if (!data) {
                 data = { seq: this._seqPool++, uri, edits: [] };
-                this._textEdits.set(uri.toString(), data);
+                this._textEdits.set(uriKey, data);
             }
-            if (!edits) {
-                // @ts-ignore
-                data.edits = undefined;
-            } else {
-                //data.edits = edits.slice(0);
-            }
+
+            data.edits = edits.slice(0) as TextEdit[];
         }
 
         get(uri: vscUri.URI): TextEdit[] {
@@ -825,7 +876,7 @@ export namespace vscMockExtHostedTypes {
         }
 
         get size(): number {
-            return this._textEdits.size + this._resourceEdits.length;
+            return this._textEdits.size + this._notebookEdits.size + this._resourceEdits.length;
         }
 
         toJSON(): any {

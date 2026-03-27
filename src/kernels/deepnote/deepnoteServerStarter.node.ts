@@ -280,7 +280,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
             throw new DeepnoteServerStartupError(
                 interpreter.uri.fsPath,
-                serverInfo?.jupyterPort ?? 0,
+                0,
                 'unknown',
                 capturedOutput?.stdout || '',
                 capturedOutput?.stderr || '',
@@ -402,6 +402,12 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
      */
     private monitorServerOutput(fileKey: string, serverInfo: DeepnoteServerInfo): void {
         const proc = serverInfo.process;
+        const existing = this.disposablesByFile.get(fileKey);
+        if (existing) {
+            for (const d of existing) {
+                d.dispose();
+            }
+        }
         const disposables: IDisposable[] = [];
         this.disposablesByFile.set(fileKey, disposables);
 

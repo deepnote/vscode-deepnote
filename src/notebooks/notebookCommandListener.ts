@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { inject, injectable } from 'inversify';
+import { inject, injectable, optional } from 'inversify';
 
 import {
     ConfigurationTarget,
@@ -33,6 +33,7 @@ import { getNotebookMetadata } from '../platform/common/utils';
 import { KernelConnector } from './controllers/kernelConnector';
 import { IControllerRegistration } from './controllers/types';
 import { IExtensionSyncActivationService } from '../platform/activation/types';
+import { IPostHogAnalyticsService } from '../platform/analytics/types';
 import { IKernelStatusProvider } from '../kernels/kernelStatusProvider';
 
 export const INotebookCommandHandler = Symbol('INotebookCommandHandler');
@@ -54,7 +55,8 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
         @inject(IDataScienceErrorHandler) private errorHandler: IDataScienceErrorHandler,
         @inject(INotebookEditorProvider) private notebookEditorProvider: INotebookEditorProvider,
         @inject(IServiceContainer) private serviceContainer: IServiceContainer,
-        @inject(IKernelStatusProvider) private kernelStatusProvider: IKernelStatusProvider
+        @inject(IKernelStatusProvider) private kernelStatusProvider: IKernelStatusProvider,
+        @inject(IPostHogAnalyticsService) @optional() private readonly analytics: IPostHogAnalyticsService | undefined
     ) {}
 
     activate(): void {
@@ -114,6 +116,7 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
 
     private runAllCells() {
         if (window.activeNotebookEditor) {
+            this.analytics?.trackEvent('execute_notebook');
             commands.executeCommand('notebook.execute').then(noop, noop);
         }
     }
@@ -141,6 +144,7 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
 
     private addCellBelow() {
         if (window.activeNotebookEditor) {
+            this.analytics?.trackEvent('add_block', { blockType: 'code' });
             commands.executeCommand('notebook.cell.insertCodeCellBelow').then(noop, noop);
         }
     }

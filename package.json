@@ -1650,6 +1650,12 @@
                     "description": "Disable SSL certificate verification (for development only)",
                     "scope": "application"
                 },
+                "deepnote.telemetry.enabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable anonymous usage telemetry to help improve Deepnote for VS Code.",
+                    "scope": "application"
+                },
                 "deepnote.snapshots.enabled": {
                     "type": "boolean",
                     "default": true,
@@ -2725,6 +2731,7 @@
         "pidtree": "^0.6.0",
         "plotly.js-dist": "^3.0.1",
         "portfinder": "^1.0.25",
+        "posthog-node": "^4.18.0",
         "re-resizable": "^6.5.5",
         "react": "^16.5.2",
         "react-data-grid": "^6.0.2-0",

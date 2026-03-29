@@ -38,6 +38,7 @@ import './platform/logging';
 import { commands, env, ExtensionMode, UIKind, workspace, type OutputChannel } from 'vscode';
 import { buildApi, IExtensionApi } from './standalone/api';
 import { logger, setHomeDirectory } from './platform/logging';
+import { IPostHogAnalyticsService } from './platform/analytics/types';
 import { IAsyncDisposableRegistry, IExtensionContext, IsDevMode } from './platform/common/types';
 import { IServiceContainer, IServiceManager } from './platform/ioc/types';
 import { sendStartupTelemetry } from './platform/telemetry/startupTelemetry';
@@ -133,7 +134,14 @@ export function deactivate(): Thenable<void> {
     Exiting.isExiting = true;
     // Make sure to shutdown anybody who needs it.
     if (activatedServiceContainer) {
+        const analytics = activatedServiceContainer.tryGet<IPostHogAnalyticsService>(IPostHogAnalyticsService);
+
+        if (analytics) {
+            void analytics.shutdown();
+        }
+
         const registry = activatedServiceContainer.get<IAsyncDisposableRegistry>(IAsyncDisposableRegistry);
+
         if (registry) {
             return registry.dispose();
         }

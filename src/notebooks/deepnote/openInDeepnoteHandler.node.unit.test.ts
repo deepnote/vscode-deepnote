@@ -49,7 +49,7 @@ suite('OpenInDeepnoteHandler', () => {
             subscriptions: []
         } as any;
 
-        handler = new OpenInDeepnoteHandlerClass(mockExtensionContext);
+        handler = new OpenInDeepnoteHandlerClass(mockExtensionContext, undefined);
     });
 
     teardown(() => {

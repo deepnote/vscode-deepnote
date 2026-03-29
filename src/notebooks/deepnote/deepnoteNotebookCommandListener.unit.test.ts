@@ -44,7 +44,7 @@ suite('DeepnoteNotebookCommandListener', () => {
         sandbox = sinon.createSandbox();
         disposables = [];
         mockConfigService = createMockConfigService();
-        commandListener = new DeepnoteNotebookCommandListener(mockConfigService, disposables);
+        commandListener = new DeepnoteNotebookCommandListener(undefined, mockConfigService, disposables);
     });
 
     teardown(() => {
@@ -89,7 +89,11 @@ suite('DeepnoteNotebookCommandListener', () => {
 
             // Create new instance and activate again
             const disposables2: IDisposable[] = [];
-            const commandListener2 = new DeepnoteNotebookCommandListener(createMockConfigService(), disposables2);
+            const commandListener2 = new DeepnoteNotebookCommandListener(
+                undefined,
+                createMockConfigService(),
+                disposables2
+            );
             commandListener2.activate();
 
             // Both should register the same number of commands

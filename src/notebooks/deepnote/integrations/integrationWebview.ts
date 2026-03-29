@@ -1,6 +1,7 @@
-import { inject, injectable } from 'inversify';
+import { inject, injectable, optional } from 'inversify';
 import { Disposable, l10n, Uri, ViewColumn, WebviewPanel, window } from 'vscode';
 
+import { IPostHogAnalyticsService } from '../../../platform/analytics/types';
 import { IExtensionContext } from '../../../platform/common/types';
 import * as localize from '../../../platform/common/utils/localize';
 import { logger } from '../../../platform/logging';
@@ -29,7 +30,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     constructor(
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
-        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager
+        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
+        @inject(IPostHogAnalyticsService) @optional() private readonly analytics: IPostHogAnalyticsService | undefined
     ) {}
 
     /**
@@ -434,21 +436,27 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         switch (message.type) {
             case 'configure':
                 if (message.integrationId) {
+                    this.analytics?.trackEvent('configure_integration');
                     await this.showConfigurationForm(message.integrationId);
                 }
                 break;
             case 'save':
                 if (message.integrationId && message.config) {
+                    this.analytics?.trackEvent('save_integration', {
+                        integrationType: message.config.type ?? 'unknown'
+                    });
                     await this.saveConfiguration(message.integrationId, message.config);
                 }
                 break;
             case 'reset':
                 if (message.integrationId) {
+                    this.analytics?.trackEvent('reset_integration');
                     await this.resetConfiguration(message.integrationId);
                 }
                 break;
             case 'delete':
                 if (message.integrationId) {
+                    this.analytics?.trackEvent('delete_integration');
                     await this.deleteConfiguration(message.integrationId);
                 }
                 break;

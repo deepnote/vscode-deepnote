@@ -61,7 +61,8 @@ suite('DeepnoteEnvironmentsView', () => {
             instance(mockKernelAutoSelector),
             instance(mockNotebookEnvironmentMapper),
             instance(mockKernelProvider),
-            instance(mockOutputChannel)
+            instance(mockOutputChannel),
+            undefined
         );
     });
 

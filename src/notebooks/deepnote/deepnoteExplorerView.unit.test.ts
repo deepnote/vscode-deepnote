@@ -8,14 +8,14 @@ import { stringify as yamlStringify } from 'yaml';
 import { DeepnoteExplorerView } from './deepnoteExplorerView';
 import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
 import { DeepnoteTreeItem, DeepnoteTreeItemType, type DeepnoteTreeItemContext } from './deepnoteTreeItem';
-import { NoOpTelemetryService } from '../../platform/analytics/noOpTelemetryService';
+import { ITelemetryService } from '../../platform/analytics/types';
 import type { IExtensionContext } from '../../platform/common/types';
 import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { ILogger } from '../../platform/logging/types';
 import * as uuidModule from '../../platform/common/uuid';
 
-const mockAnalytics = new NoOpTelemetryService();
+const mockAnalytics = instance(mock<ITelemetryService>());
 
 function createMockLogger(): ILogger {
     return {

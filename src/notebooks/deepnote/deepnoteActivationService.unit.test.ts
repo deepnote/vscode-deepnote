@@ -1,7 +1,7 @@
 import { assert } from 'chai';
-import { anything, verify, when } from 'ts-mockito';
+import { anything, instance, mock, verify, when } from 'ts-mockito';
 
-import { NoOpTelemetryService } from '../../platform/analytics/noOpTelemetryService';
+import { ITelemetryService } from '../../platform/analytics/types';
 import { DeepnoteActivationService } from './deepnoteActivationService';
 import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
 import { IExtensionContext } from '../../platform/common/types';
@@ -26,7 +26,7 @@ suite('DeepnoteActivationService', () => {
     let manager: DeepnoteNotebookManager;
     let mockIntegrationManager: IIntegrationManager;
     let mockLogger: ILogger;
-    const mockAnalytics = new NoOpTelemetryService();
+    const mockAnalytics = instance(mock<ITelemetryService>());
 
     setup(() => {
         mockExtensionContext = {

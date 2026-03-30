@@ -1,6 +1,6 @@
 import { assert } from 'chai';
 import * as sinon from 'sinon';
-import { when, reset, anything } from 'ts-mockito';
+import { when, reset, anything, mock, instance } from 'ts-mockito';
 import {
     NotebookCell,
     NotebookDocument,
@@ -18,7 +18,7 @@ import {
     InputBlockType
 } from './deepnoteNotebookCommandListener';
 import { formatInputBlockCellContent, getInputBlockLanguage } from './inputBlockContentFormatter';
-import { NoOpTelemetryService } from '../../platform/analytics/noOpTelemetryService';
+import { ITelemetryService } from '../../platform/analytics/types';
 import { IConfigurationService, IDisposable } from '../../platform/common/types';
 import * as notebookUpdater from '../../kernels/execution/notebookUpdater';
 import { createMockedNotebookDocument } from '../../test/datascience/editor-integration/helpers';
@@ -32,6 +32,7 @@ suite('DeepnoteNotebookCommandListener', () => {
     let disposables: IDisposable[];
     let sandbox: sinon.SinonSandbox;
     let mockConfigService: IConfigurationService;
+    let mockTelemetryService: ITelemetryService;
 
     function createMockConfigService(): IConfigurationService {
         return {
@@ -45,8 +46,9 @@ suite('DeepnoteNotebookCommandListener', () => {
         sandbox = sinon.createSandbox();
         disposables = [];
         mockConfigService = createMockConfigService();
+        mockTelemetryService = mock<ITelemetryService>();
         commandListener = new DeepnoteNotebookCommandListener(
-            new NoOpTelemetryService(),
+            instance(mockTelemetryService),
             mockConfigService,
             disposables
         );
@@ -95,7 +97,7 @@ suite('DeepnoteNotebookCommandListener', () => {
             // Create new instance and activate again
             const disposables2: IDisposable[] = [];
             const commandListener2 = new DeepnoteNotebookCommandListener(
-                new NoOpTelemetryService(),
+                instance(mockTelemetryService),
                 createMockConfigService(),
                 disposables2
             );

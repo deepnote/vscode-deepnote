@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import esmock from 'esmock';
 
 import type { OpenInDeepnoteHandler } from './openInDeepnoteHandler.node';
-import { NoOpTelemetryService } from '../../platform/analytics/noOpTelemetryService';
+import { ITelemetryService } from '../../platform/analytics/types';
 import { IExtensionContext } from '../../platform/common/types';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { MAX_FILE_SIZE } from './importClient.node';
@@ -50,7 +50,7 @@ suite('OpenInDeepnoteHandler', () => {
             subscriptions: []
         } as any;
 
-        handler = new OpenInDeepnoteHandlerClass(mockExtensionContext, new NoOpTelemetryService());
+        handler = new OpenInDeepnoteHandlerClass(mockExtensionContext, instance(mock<ITelemetryService>()));
     });
 
     teardown(() => {

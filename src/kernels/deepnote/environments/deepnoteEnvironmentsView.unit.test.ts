@@ -5,7 +5,7 @@ import { CancellationToken, Disposable, NotebookDocument, ProgressOptions, Uri }
 import { DeepnoteEnvironmentsView } from './deepnoteEnvironmentsView.node';
 import { IDeepnoteEnvironmentManager, IDeepnoteKernelAutoSelector, IDeepnoteNotebookEnvironmentMapper } from '../types';
 import { IPythonApiProvider } from '../../../platform/api/types';
-import { NoOpTelemetryService } from '../../../platform/analytics/noOpTelemetryService';
+import { ITelemetryService } from '../../../platform/analytics/types';
 import { IDisposableRegistry, IOutputChannel } from '../../../platform/common/types';
 import { IKernelProvider } from '../../../kernels/types';
 import { DeepnoteEnvironment } from './deepnoteEnvironment';
@@ -26,6 +26,7 @@ suite('DeepnoteEnvironmentsView', () => {
     let mockNotebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper;
     let mockKernelProvider: IKernelProvider;
     let mockOutputChannel: IOutputChannel;
+    let mockTelemetryService: ITelemetryService;
     let disposables: Disposable[] = [];
     let pythonEnvironments: PythonExtension['environments'];
 
@@ -44,6 +45,7 @@ suite('DeepnoteEnvironmentsView', () => {
         mockNotebookEnvironmentMapper = mock<IDeepnoteNotebookEnvironmentMapper>();
         mockKernelProvider = mock<IKernelProvider>();
         mockOutputChannel = mock<IOutputChannel>();
+        mockTelemetryService = mock<ITelemetryService>();
 
         // Mock onDidChangeEnvironments to return a disposable event
         when(mockConfigManager.onDidChangeEnvironments).thenReturn((_listener: () => void) => {
@@ -63,7 +65,7 @@ suite('DeepnoteEnvironmentsView', () => {
             instance(mockNotebookEnvironmentMapper),
             instance(mockKernelProvider),
             instance(mockOutputChannel),
-            new NoOpTelemetryService()
+            instance(mockTelemetryService)
         );
     });
 

@@ -65,7 +65,7 @@ suite('TelemetryService', () => {
         analyticsService = new TelemetryService(mockStateFactory, mockAsyncDisposableRegistry);
 
         assert.doesNotThrow(() => {
-            analyticsService.trackEvent('test_event', { prop: 'value' });
+            analyticsService.trackEvent({ eventName: 'open_notebook', properties: { prop: 'value' } });
         });
 
         // Should not have initialized (no state access)
@@ -92,7 +92,7 @@ suite('TelemetryService', () => {
         analyticsService = new TelemetryService(mockStateFactory, mockAsyncDisposableRegistry);
 
         assert.doesNotThrow(() => {
-            analyticsService.trackEvent('test_event');
+            analyticsService.trackEvent({ eventName: 'open_notebook' });
         });
 
         assert.isFalse(
@@ -109,7 +109,7 @@ suite('TelemetryService', () => {
         }));
 
         analyticsService = new TelemetryService(mockStateFactory, mockAsyncDisposableRegistry);
-        analyticsService.trackEvent('test_event');
+        analyticsService.trackEvent({ eventName: 'open_notebook' });
 
         assert.isTrue(
             (mockStateFactory.createGlobalPersistentState as sinon.SinonStub).calledOnce,
@@ -137,7 +137,7 @@ suite('TelemetryService', () => {
         (mockStateFactory.createGlobalPersistentState as sinon.SinonStub).returns(mockUserIdState);
 
         analyticsService = new TelemetryService(mockStateFactory, mockAsyncDisposableRegistry);
-        analyticsService.trackEvent('test_event');
+        analyticsService.trackEvent({ eventName: 'open_notebook' });
 
         assert.isFalse(
             (mockUserIdState.updateValue as sinon.SinonStub).called,

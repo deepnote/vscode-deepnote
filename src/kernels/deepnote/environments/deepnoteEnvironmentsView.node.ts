@@ -195,9 +195,12 @@ export class DeepnoteEnvironmentsView implements Disposable {
                         const config = await this.environmentManager.createEnvironment(options, token);
                         logger.info(`Created environment: ${config.id} (${config.name})`);
 
-                        this.analytics?.trackEvent('create_environment', {
-                            hasDescription: !!options.description,
-                            hasPackages: !!options.packages?.length
+                        this.analytics?.trackEvent({
+                            eventName: 'create_environment',
+                            properties: {
+                                hasDescription: !!options.description,
+                                hasPackages: !!options.packages?.length
+                            }
                         });
 
                         void window.showInformationMessage(
@@ -321,7 +324,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 }
             );
 
-            this.analytics?.trackEvent('delete_environment');
+            this.analytics?.trackEvent({ eventName: 'delete_environment' });
             void window.showInformationMessage(l10n.t('Environment "{0}" deleted', config.name));
         } catch (error) {
             logger.error('Failed to delete environment', error);
@@ -491,7 +494,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 }
             );
 
-            this.analytics?.trackEvent('select_environment');
+            this.analytics?.trackEvent({ eventName: 'select_environment' });
             void window.showInformationMessage(l10n.t('Environment switched successfully'));
         } catch (error) {
             if (error instanceof DeepnoteToolkitMissingError) {

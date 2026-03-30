@@ -23,7 +23,7 @@ export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.OpenInDeepnote, async () => {
                 await this.handleOpenInDeepnote();
-                this.analytics?.trackEvent('open_in_deepnote');
+                this.analytics?.trackEvent({ eventName: 'open_in_deepnote' });
             })
         );
     }

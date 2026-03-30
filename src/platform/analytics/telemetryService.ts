@@ -6,9 +6,9 @@ import { IAsyncDisposableRegistry, IPersistentState, IPersistentStateFactory } f
 import { generateUuid } from '../common/uuid';
 import { logger } from '../logging';
 import { POSTHOG_API_KEY, POSTHOG_HOST } from './constants';
-import { ITelemetryService } from './types';
+import { ITelemetryService, TelemetryEvent } from './types';
 
-const USER_ID_STORAGE_KEY = 'posthog-anonymous-user-id';
+const USER_ID_STORAGE_KEY = 'deepnote-telemetry-anonymous-user-id';
 
 @injectable()
 export class TelemetryService implements ITelemetryService {
@@ -25,7 +25,7 @@ export class TelemetryService implements ITelemetryService {
         asyncDisposables.push(this);
     }
 
-    public trackEvent(eventName: string, properties?: Record<string, string | number | boolean>): void {
+    public trackEvent({ eventName, properties }: TelemetryEvent): void {
         try {
             if (!this.isTelemetryEnabled()) {
                 return;

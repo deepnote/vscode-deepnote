@@ -266,7 +266,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             throw new Error(l10n.t('Failed to insert SQL block'));
         }
 
-        this.analytics?.trackEvent('add_block', { blockType: 'sql' });
+        this.analytics?.trackEvent({ eventName: 'add_block', properties: { blockType: 'sql' } });
 
         const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
         editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
@@ -309,7 +309,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             throw new Error(l10n.t('Failed to insert big number chart block'));
         }
 
-        this.analytics?.trackEvent('add_block', { blockType: 'big-number' });
+        this.analytics?.trackEvent({ eventName: 'add_block', properties: { blockType: 'big-number' } });
 
         const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
         editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
@@ -365,7 +365,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             throw new WrappedError(l10n.t('Failed to insert chart block'));
         }
 
-        this.analytics?.trackEvent('add_block', { blockType: 'visualization' });
+        this.analytics?.trackEvent({ eventName: 'add_block', properties: { blockType: 'visualization' } });
 
         const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
 
@@ -414,7 +414,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             throw new Error(l10n.t('Failed to insert input block'));
         }
 
-        this.analytics?.trackEvent('add_block', { blockType });
+        this.analytics?.trackEvent({ eventName: 'add_block', properties: { blockType } });
 
         const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
         editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
@@ -549,7 +549,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             throw new Error(l10n.t('Failed to insert text block'));
         }
 
-        this.analytics?.trackEvent('add_block', { blockType: textBlockType });
+        this.analytics?.trackEvent({ eventName: 'add_block', properties: { blockType: textBlockType } });
 
         const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
         editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
@@ -566,7 +566,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
                 undefined,
                 ConfigurationTarget.Workspace
             );
-            this.analytics?.trackEvent('toggle_snapshots', { enabled: false });
+            this.analytics?.trackEvent({ eventName: 'toggle_snapshots', properties: { enabled: false } });
             void window.showInformationMessage(l10n.t('Snapshots disabled for this workspace.'));
         } catch (error) {
             logger.error('Failed to disable snapshots', error);
@@ -582,7 +582,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
                 undefined,
                 ConfigurationTarget.Workspace
             );
-            this.analytics?.trackEvent('toggle_snapshots', { enabled: true });
+            this.analytics?.trackEvent({ eventName: 'toggle_snapshots', properties: { enabled: true } });
         } catch (error) {
             logger.error('Failed to enable snapshots', error);
             void window.showErrorMessage(l10n.t('Failed to enable snapshots.'));

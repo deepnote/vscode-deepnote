@@ -336,7 +336,7 @@ export class DeepnoteExplorerView {
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.OpenDeepnoteNotebook, async (context: DeepnoteTreeItemContext) => {
                 await this.openNotebook(context);
-                this.analytics?.trackEvent('open_notebook');
+                this.analytics?.trackEvent({ eventName: 'open_notebook' });
             })
         );
 
@@ -351,28 +351,28 @@ export class DeepnoteExplorerView {
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.NewProject, async () => {
                 await this.newProject();
-                this.analytics?.trackEvent('create_project');
+                this.analytics?.trackEvent({ eventName: 'create_project' });
             })
         );
 
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.ImportNotebook, async () => {
                 await this.importNotebook();
-                this.analytics?.trackEvent('import_notebook');
+                this.analytics?.trackEvent({ eventName: 'import_notebook' });
             })
         );
 
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.ImportJupyterNotebook, async () => {
                 await this.importJupyterNotebook();
-                this.analytics?.trackEvent('import_notebook');
+                this.analytics?.trackEvent({ eventName: 'import_notebook' });
             })
         );
 
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.NewNotebook, async () => {
                 await this.newNotebook();
-                this.analytics?.trackEvent('create_notebook');
+                this.analytics?.trackEvent({ eventName: 'create_notebook' });
             })
         );
 
@@ -386,7 +386,7 @@ export class DeepnoteExplorerView {
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.DeleteProject, async (treeItem: DeepnoteTreeItem) => {
                 await this.deleteProject(treeItem);
-                this.analytics?.trackEvent('delete_project');
+                this.analytics?.trackEvent({ eventName: 'delete_project' });
             })
         );
 
@@ -399,14 +399,14 @@ export class DeepnoteExplorerView {
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.DeleteNotebook, async (treeItem: DeepnoteTreeItem) => {
                 await this.deleteNotebook(treeItem);
-                this.analytics?.trackEvent('delete_notebook');
+                this.analytics?.trackEvent({ eventName: 'delete_notebook' });
             })
         );
 
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.DuplicateNotebook, async (treeItem: DeepnoteTreeItem) => {
                 await this.duplicateNotebook(treeItem);
-                this.analytics?.trackEvent('duplicate_notebook');
+                this.analytics?.trackEvent({ eventName: 'duplicate_notebook' });
             })
         );
 
@@ -419,14 +419,14 @@ export class DeepnoteExplorerView {
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.ExportProject, async (treeItem: DeepnoteTreeItem) => {
                 await this.exportProject(treeItem);
-                this.analytics?.trackEvent('export_notebook', { format: 'project' });
+                this.analytics?.trackEvent({ eventName: 'export_notebook', properties: { format: 'project' } });
             })
         );
 
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.ExportNotebook, async (treeItem: DeepnoteTreeItem) => {
                 await this.exportNotebook(treeItem);
-                this.analytics?.trackEvent('export_notebook', { format: 'notebook' });
+                this.analytics?.trackEvent({ eventName: 'export_notebook', properties: { format: 'notebook' } });
             })
         );
     }

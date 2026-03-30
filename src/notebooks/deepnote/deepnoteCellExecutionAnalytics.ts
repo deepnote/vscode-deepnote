@@ -8,7 +8,7 @@ import { NotebookCellExecutionState, notebookCellExecutions } from '../../platfo
 import { IDeepnoteNotebookManager } from '../types';
 
 /**
- * Tracks cell execution events for PostHog analytics.
+ * Tracks cell execution events for telemetry.
  */
 @injectable()
 export class DeepnoteCellExecutionAnalytics implements IExtensionSyncActivationService {
@@ -56,7 +56,7 @@ export class DeepnoteCellExecutionAnalytics implements IExtensionSyncActivationS
                     }
                 }
 
-                this.analytics?.trackEvent('execute_cell', properties);
+                this.analytics?.trackEvent({ eventName: 'execute_cell', properties });
             })
         );
     }

@@ -116,7 +116,7 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
 
     private runAllCells() {
         if (window.activeNotebookEditor) {
-            this.analytics?.trackEvent('execute_notebook');
+            this.analytics?.trackEvent({ eventName: 'execute_notebook' });
             commands.executeCommand('notebook.execute').then(noop, noop);
         }
     }
@@ -144,7 +144,7 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
 
     private addCellBelow() {
         if (window.activeNotebookEditor) {
-            this.analytics?.trackEvent('add_block', { blockType: 'code' });
+            this.analytics?.trackEvent({ eventName: 'add_block', properties: { blockType: 'code' } });
             commands.executeCommand('notebook.cell.insertCodeCellBelow').then(noop, noop);
         }
     }

@@ -2,23 +2,28 @@ import { inject, injectable } from 'inversify';
 import { PostHog } from 'posthog-node';
 import { workspace } from 'vscode';
 
-import { IPersistentState, IPersistentStateFactory } from '../common/types';
+import { IAsyncDisposableRegistry, IPersistentState, IPersistentStateFactory } from '../common/types';
 import { generateUuid } from '../common/uuid';
 import { logger } from '../logging';
 import { POSTHOG_API_KEY, POSTHOG_HOST } from './constants';
-import { IPostHogAnalyticsService } from './types';
+import { ITelemetryService } from './types';
 
 const USER_ID_STORAGE_KEY = 'posthog-anonymous-user-id';
 
 @injectable()
-export class PostHogAnalyticsService implements IPostHogAnalyticsService {
+export class TelemetryService implements ITelemetryService {
     private client: PostHog | undefined;
 
     private initialized = false;
 
     private userIdState: IPersistentState<string> | undefined;
 
-    constructor(@inject(IPersistentStateFactory) private readonly stateFactory: IPersistentStateFactory) {}
+    constructor(
+        @inject(IPersistentStateFactory) private readonly stateFactory: IPersistentStateFactory,
+        @inject(IAsyncDisposableRegistry) asyncDisposables: IAsyncDisposableRegistry
+    ) {
+        asyncDisposables.push(this);
+    }
 
     public trackEvent(eventName: string, properties?: Record<string, string | number | boolean>): void {
         try {
@@ -44,7 +49,7 @@ export class PostHogAnalyticsService implements IPostHogAnalyticsService {
         }
     }
 
-    public async shutdown(): Promise<void> {
+    public async dispose(): Promise<void> {
         try {
             await this.client?.shutdown();
         } catch (ex) {

@@ -2,7 +2,7 @@ import { inject, injectable, optional } from 'inversify';
 import { Disposable } from 'vscode';
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
-import { IPostHogAnalyticsService } from '../../platform/analytics/types';
+import { ITelemetryService } from '../../platform/analytics/types';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
 import { IDeepnoteNotebookManager } from '../types';
@@ -13,7 +13,7 @@ import { IDeepnoteNotebookManager } from '../types';
 @injectable()
 export class DeepnoteCellExecutionAnalytics implements IExtensionSyncActivationService {
     constructor(
-        @inject(IPostHogAnalyticsService) @optional() private readonly analytics: IPostHogAnalyticsService | undefined,
+        @inject(ITelemetryService) @optional() private readonly analytics: ITelemetryService | undefined,
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
         @inject(IDisposableRegistry) private readonly disposables: Disposable[]
     ) {}

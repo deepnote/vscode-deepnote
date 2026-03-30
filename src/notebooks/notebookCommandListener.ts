@@ -33,7 +33,7 @@ import { getNotebookMetadata } from '../platform/common/utils';
 import { KernelConnector } from './controllers/kernelConnector';
 import { IControllerRegistration } from './controllers/types';
 import { IExtensionSyncActivationService } from '../platform/activation/types';
-import { IPostHogAnalyticsService } from '../platform/analytics/types';
+import { ITelemetryService } from '../platform/analytics/types';
 import { IKernelStatusProvider } from '../kernels/kernelStatusProvider';
 
 export const INotebookCommandHandler = Symbol('INotebookCommandHandler');
@@ -56,7 +56,7 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
         @inject(INotebookEditorProvider) private notebookEditorProvider: INotebookEditorProvider,
         @inject(IServiceContainer) private serviceContainer: IServiceContainer,
         @inject(IKernelStatusProvider) private kernelStatusProvider: IKernelStatusProvider,
-        @inject(IPostHogAnalyticsService) @optional() private readonly analytics: IPostHogAnalyticsService | undefined
+        @inject(ITelemetryService) @optional() private readonly analytics: ITelemetryService | undefined
     ) {}
 
     activate(): void {

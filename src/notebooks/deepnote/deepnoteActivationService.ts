@@ -2,7 +2,7 @@ import { inject, injectable, optional } from 'inversify';
 import { commands, l10n, workspace, window, type Disposable, type NotebookDocumentContentOptions } from 'vscode';
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
-import { IPostHogAnalyticsService } from '../../platform/analytics/types';
+import { ITelemetryService } from '../../platform/analytics/types';
 import { IExtensionContext } from '../../platform/common/types';
 import { ILogger } from '../../platform/logging/types';
 import { IDeepnoteNotebookManager } from '../types';
@@ -36,7 +36,7 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
         @inject(IIntegrationManager) integrationManager: IIntegrationManager,
         @inject(ILogger) private readonly logger: ILogger,
         @inject(SnapshotService) @optional() private readonly snapshotService?: SnapshotService,
-        @inject(IPostHogAnalyticsService) @optional() private readonly analytics?: IPostHogAnalyticsService
+        @inject(ITelemetryService) @optional() private readonly analytics?: ITelemetryService
     ) {
         this.integrationManager = integrationManager;
     }

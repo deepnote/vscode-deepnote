@@ -3,7 +3,7 @@ import { commands, window, workspace, type TreeView, Uri, l10n } from 'vscode';
 import { serializeDeepnoteFile, type DeepnoteBlock, type DeepnoteFile } from '@deepnote/blocks';
 import { convertDeepnoteToJupyterNotebooks, convertIpynbFilesToDeepnoteFile } from '@deepnote/convert';
 
-import { IPostHogAnalyticsService } from '../../platform/analytics/types';
+import { ITelemetryService } from '../../platform/analytics/types';
 import { IExtensionContext } from '../../platform/common/types';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteTreeDataProvider } from './deepnoteTreeDataProvider';
@@ -27,7 +27,7 @@ export class DeepnoteExplorerView {
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
         @inject(IDeepnoteNotebookManager) private readonly manager: IDeepnoteNotebookManager,
         @inject(ILogger) logger: ILogger,
-        private readonly analytics?: IPostHogAnalyticsService
+        private readonly analytics?: ITelemetryService
     ) {
         this.treeDataProvider = new DeepnoteTreeDataProvider(logger);
     }
@@ -334,9 +334,9 @@ export class DeepnoteExplorerView {
         );
 
         this.extensionContext.subscriptions.push(
-            commands.registerCommand(Commands.OpenDeepnoteNotebook, (context: DeepnoteTreeItemContext) => {
+            commands.registerCommand(Commands.OpenDeepnoteNotebook, async (context: DeepnoteTreeItemContext) => {
+                await this.openNotebook(context);
                 this.analytics?.trackEvent('open_notebook');
-                return this.openNotebook(context);
             })
         );
 
@@ -349,30 +349,30 @@ export class DeepnoteExplorerView {
         );
 
         this.extensionContext.subscriptions.push(
-            commands.registerCommand(Commands.NewProject, () => {
+            commands.registerCommand(Commands.NewProject, async () => {
+                await this.newProject();
                 this.analytics?.trackEvent('create_project');
-                return this.newProject();
             })
         );
 
         this.extensionContext.subscriptions.push(
-            commands.registerCommand(Commands.ImportNotebook, () => {
+            commands.registerCommand(Commands.ImportNotebook, async () => {
+                await this.importNotebook();
                 this.analytics?.trackEvent('import_notebook');
-                return this.importNotebook();
             })
         );
 
         this.extensionContext.subscriptions.push(
-            commands.registerCommand(Commands.ImportJupyterNotebook, () => {
+            commands.registerCommand(Commands.ImportJupyterNotebook, async () => {
+                await this.importJupyterNotebook();
                 this.analytics?.trackEvent('import_notebook');
-                return this.importJupyterNotebook();
             })
         );
 
         this.extensionContext.subscriptions.push(
-            commands.registerCommand(Commands.NewNotebook, () => {
+            commands.registerCommand(Commands.NewNotebook, async () => {
+                await this.newNotebook();
                 this.analytics?.trackEvent('create_notebook');
-                return this.newNotebook();
             })
         );
 
@@ -384,9 +384,9 @@ export class DeepnoteExplorerView {
         );
 
         this.extensionContext.subscriptions.push(
-            commands.registerCommand(Commands.DeleteProject, (treeItem: DeepnoteTreeItem) => {
+            commands.registerCommand(Commands.DeleteProject, async (treeItem: DeepnoteTreeItem) => {
+                await this.deleteProject(treeItem);
                 this.analytics?.trackEvent('delete_project');
-                return this.deleteProject(treeItem);
             })
         );
 
@@ -397,16 +397,16 @@ export class DeepnoteExplorerView {
         );
 
         this.extensionContext.subscriptions.push(
-            commands.registerCommand(Commands.DeleteNotebook, (treeItem: DeepnoteTreeItem) => {
+            commands.registerCommand(Commands.DeleteNotebook, async (treeItem: DeepnoteTreeItem) => {
+                await this.deleteNotebook(treeItem);
                 this.analytics?.trackEvent('delete_notebook');
-                return this.deleteNotebook(treeItem);
             })
         );
 
         this.extensionContext.subscriptions.push(
-            commands.registerCommand(Commands.DuplicateNotebook, (treeItem: DeepnoteTreeItem) => {
+            commands.registerCommand(Commands.DuplicateNotebook, async (treeItem: DeepnoteTreeItem) => {
+                await this.duplicateNotebook(treeItem);
                 this.analytics?.trackEvent('duplicate_notebook');
-                return this.duplicateNotebook(treeItem);
             })
         );
 
@@ -417,16 +417,16 @@ export class DeepnoteExplorerView {
         );
 
         this.extensionContext.subscriptions.push(
-            commands.registerCommand(Commands.ExportProject, (treeItem: DeepnoteTreeItem) => {
+            commands.registerCommand(Commands.ExportProject, async (treeItem: DeepnoteTreeItem) => {
+                await this.exportProject(treeItem);
                 this.analytics?.trackEvent('export_notebook', { format: 'project' });
-                return this.exportProject(treeItem);
             })
         );
 
         this.extensionContext.subscriptions.push(
-            commands.registerCommand(Commands.ExportNotebook, (treeItem: DeepnoteTreeItem) => {
+            commands.registerCommand(Commands.ExportNotebook, async (treeItem: DeepnoteTreeItem) => {
+                await this.exportNotebook(treeItem);
                 this.analytics?.trackEvent('export_notebook', { format: 'notebook' });
-                return this.exportNotebook(treeItem);
             })
         );
     }

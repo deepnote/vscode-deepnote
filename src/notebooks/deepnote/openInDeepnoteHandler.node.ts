@@ -4,7 +4,7 @@
 import { injectable, inject, optional } from 'inversify';
 import { commands, window, Uri, env, l10n } from 'vscode';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
-import { IPostHogAnalyticsService } from '../../platform/analytics/types';
+import { ITelemetryService } from '../../platform/analytics/types';
 import { IExtensionContext } from '../../platform/common/types';
 import { Commands } from '../../platform/common/constants';
 import { logger } from '../../platform/logging';
@@ -16,14 +16,14 @@ import { initImport, uploadFile, getErrorMessage, MAX_FILE_SIZE, getDeepnoteDoma
 export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
     constructor(
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
-        @inject(IPostHogAnalyticsService) @optional() private readonly analytics: IPostHogAnalyticsService | undefined
+        @inject(ITelemetryService) @optional() private readonly analytics: ITelemetryService | undefined
     ) {}
 
     public activate(): void {
         this.extensionContext.subscriptions.push(
-            commands.registerCommand(Commands.OpenInDeepnote, () => {
+            commands.registerCommand(Commands.OpenInDeepnote, async () => {
+                await this.handleOpenInDeepnote();
                 this.analytics?.trackEvent('open_in_deepnote');
-                return this.handleOpenInDeepnote();
             })
         );
     }

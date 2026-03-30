@@ -1,7 +1,7 @@
 import { inject, injectable, optional } from 'inversify';
 import { Disposable, l10n, Uri, ViewColumn, WebviewPanel, window } from 'vscode';
 
-import { IPostHogAnalyticsService } from '../../../platform/analytics/types';
+import { ITelemetryService } from '../../../platform/analytics/types';
 import { IExtensionContext } from '../../../platform/common/types';
 import * as localize from '../../../platform/common/utils/localize';
 import { logger } from '../../../platform/logging';
@@ -31,7 +31,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
-        @inject(IPostHogAnalyticsService) @optional() private readonly analytics: IPostHogAnalyticsService | undefined
+        @inject(ITelemetryService) @optional() private readonly analytics: ITelemetryService | undefined
     ) {}
 
     /**

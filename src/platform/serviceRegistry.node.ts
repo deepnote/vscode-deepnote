@@ -6,8 +6,8 @@ import { registerTypes as registerApiTypes } from './api/serviceRegistry.node';
 import { registerTypes as registerCommonTypes } from './common/serviceRegistry.node';
 import { registerTypes as registerTerminalTypes } from './terminals/serviceRegistry.node';
 import { registerTypes as registerInterpreterTypes } from './interpreter/serviceRegistry.node';
-import { IPostHogAnalyticsService } from './analytics/types';
-import { PostHogAnalyticsService } from './analytics/posthogAnalyticsService';
+import { ITelemetryService } from './analytics/types';
+import { TelemetryService } from './analytics/telemetryService';
 import { DataScienceStartupTime } from './common/constants';
 import { IExtensionSyncActivationService } from './activation/types';
 import { IConfigurationService, IDataScienceCommandListener } from './common/types';
@@ -28,7 +28,7 @@ export function registerTypes(serviceManager: IServiceManager) {
     serviceManager.addBinding(FileSystem, IFileSystemNode);
     serviceManager.addBinding(FileSystem, IFileSystem);
     serviceManager.addSingleton<IWorkspaceService>(IWorkspaceService, WorkspaceService);
-    serviceManager.addSingleton<IPostHogAnalyticsService>(IPostHogAnalyticsService, PostHogAnalyticsService);
+    serviceManager.addSingleton<ITelemetryService>(ITelemetryService, TelemetryService);
     serviceManager.addSingleton<IConfigurationService>(IConfigurationService, ConfigurationService);
 
     registerApiTypes(serviceManager);

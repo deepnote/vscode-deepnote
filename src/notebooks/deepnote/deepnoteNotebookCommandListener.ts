@@ -17,7 +17,7 @@ import z from 'zod';
 
 import { logger } from '../../platform/logging';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
-import { IPostHogAnalyticsService } from '../../platform/analytics/types';
+import { ITelemetryService } from '../../platform/analytics/types';
 import { IConfigurationService, IDisposableRegistry } from '../../platform/common/types';
 import { Commands } from '../../platform/common/constants';
 import { notebookUpdaterUtils } from '../../kernels/execution/notebookUpdater';
@@ -152,7 +152,7 @@ export function getNextDeepnoteVariableName(cells: NotebookCell[], prefix: 'df' 
 @injectable()
 export class DeepnoteNotebookCommandListener implements IExtensionSyncActivationService {
     constructor(
-        @inject(IPostHogAnalyticsService) @optional() private readonly analytics: IPostHogAnalyticsService | undefined,
+        @inject(ITelemetryService) @optional() private readonly analytics: ITelemetryService | undefined,
         @inject(IConfigurationService) private readonly configurationService: IConfigurationService,
         @inject(IDisposableRegistry) private readonly disposableRegistry: IDisposableRegistry
     ) {}

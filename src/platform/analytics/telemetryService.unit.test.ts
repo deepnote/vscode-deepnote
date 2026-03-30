@@ -1,12 +1,13 @@
 import { assert } from 'chai';
 import * as sinon from 'sinon';
 
-import { IPersistentState, IPersistentStateFactory } from '../common/types';
-import { PostHogAnalyticsService } from './posthogAnalyticsService';
+import { IAsyncDisposableRegistry, IPersistentState, IPersistentStateFactory } from '../common/types';
+import { TelemetryService } from './telemetryService';
 
-suite('PostHogAnalyticsService', () => {
-    let analyticsService: PostHogAnalyticsService;
+suite('TelemetryService', () => {
+    let analyticsService: TelemetryService;
     let mockStateFactory: IPersistentStateFactory;
+    let mockAsyncDisposableRegistry: IAsyncDisposableRegistry;
     let mockUserIdState: IPersistentState<string>;
     let sandbox: sinon.SinonSandbox;
 
@@ -30,6 +31,10 @@ suite('PostHogAnalyticsService', () => {
             createGlobalPersistentState: sinon.stub().returns(mockUserIdState),
             createWorkspacePersistentState: sinon.stub().returns(mockUserIdState)
         } as unknown as IPersistentStateFactory;
+        mockAsyncDisposableRegistry = {
+            push: sinon.stub(),
+            dispose: sinon.stub().resolves()
+        };
     });
 
     teardown(() => {
@@ -37,7 +42,7 @@ suite('PostHogAnalyticsService', () => {
     });
 
     test('should create instance without errors', () => {
-        analyticsService = new PostHogAnalyticsService(mockStateFactory);
+        analyticsService = new TelemetryService(mockStateFactory, mockAsyncDisposableRegistry);
 
         assert.isDefined(analyticsService);
     });
@@ -57,7 +62,7 @@ suite('PostHogAnalyticsService', () => {
             }
         }));
 
-        analyticsService = new PostHogAnalyticsService(mockStateFactory);
+        analyticsService = new TelemetryService(mockStateFactory, mockAsyncDisposableRegistry);
 
         assert.doesNotThrow(() => {
             analyticsService.trackEvent('test_event', { prop: 'value' });
@@ -84,7 +89,7 @@ suite('PostHogAnalyticsService', () => {
             }
         }));
 
-        analyticsService = new PostHogAnalyticsService(mockStateFactory);
+        analyticsService = new TelemetryService(mockStateFactory, mockAsyncDisposableRegistry);
 
         assert.doesNotThrow(() => {
             analyticsService.trackEvent('test_event');
@@ -103,7 +108,7 @@ suite('PostHogAnalyticsService', () => {
             get: (_key: string, defaultValue: unknown) => defaultValue
         }));
 
-        analyticsService = new PostHogAnalyticsService(mockStateFactory);
+        analyticsService = new TelemetryService(mockStateFactory, mockAsyncDisposableRegistry);
         analyticsService.trackEvent('test_event');
 
         assert.isTrue(
@@ -131,7 +136,7 @@ suite('PostHogAnalyticsService', () => {
         mockUserIdState = createMockPersistentState('existing-user-id');
         (mockStateFactory.createGlobalPersistentState as sinon.SinonStub).returns(mockUserIdState);
 
-        analyticsService = new PostHogAnalyticsService(mockStateFactory);
+        analyticsService = new TelemetryService(mockStateFactory, mockAsyncDisposableRegistry);
         analyticsService.trackEvent('test_event');
 
         assert.isFalse(
@@ -140,9 +145,9 @@ suite('PostHogAnalyticsService', () => {
         );
     });
 
-    test('shutdown should not throw even when client is not initialized', async () => {
-        analyticsService = new PostHogAnalyticsService(mockStateFactory);
+    test('dispose should not throw even when client is not initialized', async () => {
+        analyticsService = new TelemetryService(mockStateFactory, mockAsyncDisposableRegistry);
 
-        await assert.isFulfilled(analyticsService.shutdown());
+        await assert.isFulfilled(analyticsService.dispose());
     });
 });

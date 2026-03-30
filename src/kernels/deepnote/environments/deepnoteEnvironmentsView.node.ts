@@ -13,7 +13,7 @@ import {
 import { IPythonApiProvider } from '../../../platform/api/types';
 import { STANDARD_OUTPUT_CHANNEL } from '../../../platform/common/constants';
 import { getDisplayPath } from '../../../platform/common/platform/fs-paths.node';
-import { IPostHogAnalyticsService } from '../../../platform/analytics/types';
+import { ITelemetryService } from '../../../platform/analytics/types';
 import { IDisposableRegistry, IOutputChannel } from '../../../platform/common/types';
 import { createDeepnoteServerConfigHandle } from '../../../platform/deepnote/deepnoteServerUtils.node';
 import { DeepnoteToolkitMissingError } from '../../../platform/errors/deepnoteKernelErrors';
@@ -54,7 +54,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
         private readonly notebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper,
         @inject(IKernelProvider) private readonly kernelProvider: IKernelProvider,
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel,
-        @inject(IPostHogAnalyticsService) @optional() private readonly analytics: IPostHogAnalyticsService | undefined
+        @inject(ITelemetryService) @optional() private readonly analytics: ITelemetryService | undefined
     ) {
         // Create tree data provider
 

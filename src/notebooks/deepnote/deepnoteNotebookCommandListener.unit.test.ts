@@ -18,6 +18,7 @@ import {
     InputBlockType
 } from './deepnoteNotebookCommandListener';
 import { formatInputBlockCellContent, getInputBlockLanguage } from './inputBlockContentFormatter';
+import { ITelemetryService } from '../../platform/analytics/types';
 import { IConfigurationService, IDisposable } from '../../platform/common/types';
 import * as notebookUpdater from '../../kernels/execution/notebookUpdater';
 import { createMockedNotebookDocument } from '../../test/datascience/editor-integration/helpers';
@@ -31,6 +32,7 @@ suite('DeepnoteNotebookCommandListener', () => {
     let disposables: IDisposable[];
     let sandbox: sinon.SinonSandbox;
     let mockConfigService: IConfigurationService;
+    let mockAnalytics: ITelemetryService;
 
     function createMockConfigService(): IConfigurationService {
         return {
@@ -44,7 +46,8 @@ suite('DeepnoteNotebookCommandListener', () => {
         sandbox = sinon.createSandbox();
         disposables = [];
         mockConfigService = createMockConfigService();
-        commandListener = new DeepnoteNotebookCommandListener(undefined, mockConfigService, disposables);
+        mockAnalytics = { trackEvent: sinon.stub(), dispose: sinon.stub().resolves() } as unknown as ITelemetryService;
+        commandListener = new DeepnoteNotebookCommandListener(mockAnalytics, mockConfigService, disposables);
     });
 
     teardown(() => {
@@ -90,7 +93,7 @@ suite('DeepnoteNotebookCommandListener', () => {
             // Create new instance and activate again
             const disposables2: IDisposable[] = [];
             const commandListener2 = new DeepnoteNotebookCommandListener(
-                undefined,
+                mockAnalytics,
                 createMockConfigService(),
                 disposables2
             );

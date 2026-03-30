@@ -35,8 +35,8 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
         @inject(IIntegrationManager) integrationManager: IIntegrationManager,
         @inject(ILogger) private readonly logger: ILogger,
-        @inject(SnapshotService) @optional() private readonly snapshotService?: SnapshotService,
-        @inject(ITelemetryService) @optional() private readonly analytics?: ITelemetryService
+        @inject(ITelemetryService) private readonly analytics: ITelemetryService,
+        @inject(SnapshotService) @optional() private readonly snapshotService?: SnapshotService
     ) {
         this.integrationManager = integrationManager;
     }

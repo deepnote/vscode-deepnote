@@ -1,4 +1,4 @@
-import { inject, injectable, optional } from 'inversify';
+import { inject, injectable } from 'inversify';
 import { Disposable, l10n, Uri, ViewColumn, WebviewPanel, window } from 'vscode';
 
 import { ITelemetryService } from '../../../platform/analytics/types';
@@ -31,7 +31,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
-        @inject(ITelemetryService) @optional() private readonly analytics: ITelemetryService | undefined
+        @inject(ITelemetryService) private readonly analytics: ITelemetryService
     ) {}
 
     /**
@@ -436,13 +436,13 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         switch (message.type) {
             case 'configure':
                 if (message.integrationId) {
-                    this.analytics?.trackEvent({ eventName: 'configure_integration' });
+                    this.analytics.trackEvent({ eventName: 'configure_integration' });
                     await this.showConfigurationForm(message.integrationId);
                 }
                 break;
             case 'save':
                 if (message.integrationId && message.config) {
-                    this.analytics?.trackEvent({
+                    this.analytics.trackEvent({
                         eventName: 'save_integration',
                         properties: { integrationType: message.config.type ?? 'unknown' }
                     });
@@ -451,13 +451,13 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 break;
             case 'reset':
                 if (message.integrationId) {
-                    this.analytics?.trackEvent({ eventName: 'reset_integration' });
+                    this.analytics.trackEvent({ eventName: 'reset_integration' });
                     await this.resetConfiguration(message.integrationId);
                 }
                 break;
             case 'delete':
                 if (message.integrationId) {
-                    this.analytics?.trackEvent({ eventName: 'delete_integration' });
+                    this.analytics.trackEvent({ eventName: 'delete_integration' });
                     await this.deleteConfiguration(message.integrationId);
                 }
                 break;

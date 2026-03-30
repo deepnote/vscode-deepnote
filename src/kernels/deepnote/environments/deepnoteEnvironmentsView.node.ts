@@ -1,4 +1,4 @@
-import { inject, injectable, named, optional } from 'inversify';
+import { inject, injectable, named } from 'inversify';
 import {
     commands,
     Disposable,
@@ -54,7 +54,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
         private readonly notebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper,
         @inject(IKernelProvider) private readonly kernelProvider: IKernelProvider,
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel,
-        @inject(ITelemetryService) @optional() private readonly analytics: ITelemetryService | undefined
+        @inject(ITelemetryService) private readonly analytics: ITelemetryService
     ) {
         // Create tree data provider
 
@@ -195,7 +195,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
                         const config = await this.environmentManager.createEnvironment(options, token);
                         logger.info(`Created environment: ${config.id} (${config.name})`);
 
-                        this.analytics?.trackEvent({
+                        this.analytics.trackEvent({
                             eventName: 'create_environment',
                             properties: {
                                 hasDescription: !!options.description,
@@ -324,7 +324,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 }
             );
 
-            this.analytics?.trackEvent({ eventName: 'delete_environment' });
+            this.analytics.trackEvent({ eventName: 'delete_environment' });
             void window.showInformationMessage(l10n.t('Environment "{0}" deleted', config.name));
         } catch (error) {
             logger.error('Failed to delete environment', error);
@@ -494,7 +494,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 }
             );
 
-            this.analytics?.trackEvent({ eventName: 'select_environment' });
+            this.analytics.trackEvent({ eventName: 'select_environment' });
             void window.showInformationMessage(l10n.t('Environment switched successfully'));
         } catch (error) {
             if (error instanceof DeepnoteToolkitMissingError) {

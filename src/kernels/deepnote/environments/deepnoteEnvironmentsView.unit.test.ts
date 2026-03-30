@@ -5,6 +5,7 @@ import { CancellationToken, Disposable, NotebookDocument, ProgressOptions, Uri }
 import { DeepnoteEnvironmentsView } from './deepnoteEnvironmentsView.node';
 import { IDeepnoteEnvironmentManager, IDeepnoteKernelAutoSelector, IDeepnoteNotebookEnvironmentMapper } from '../types';
 import { IPythonApiProvider } from '../../../platform/api/types';
+import { ITelemetryService } from '../../../platform/analytics/types';
 import { IDisposableRegistry, IOutputChannel } from '../../../platform/common/types';
 import { IKernelProvider } from '../../../kernels/types';
 import { DeepnoteEnvironment } from './deepnoteEnvironment';
@@ -62,7 +63,7 @@ suite('DeepnoteEnvironmentsView', () => {
             instance(mockNotebookEnvironmentMapper),
             instance(mockKernelProvider),
             instance(mockOutputChannel),
-            undefined
+            { trackEvent: sinon.stub(), dispose: sinon.stub().resolves() } as unknown as ITelemetryService
         );
     });
 

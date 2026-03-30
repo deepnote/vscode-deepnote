@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { inject, injectable, optional } from 'inversify';
+import { inject, injectable } from 'inversify';
 
 import {
     ConfigurationTarget,
@@ -56,7 +56,7 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
         @inject(INotebookEditorProvider) private notebookEditorProvider: INotebookEditorProvider,
         @inject(IServiceContainer) private serviceContainer: IServiceContainer,
         @inject(IKernelStatusProvider) private kernelStatusProvider: IKernelStatusProvider,
-        @inject(ITelemetryService) @optional() private readonly analytics: ITelemetryService | undefined
+        @inject(ITelemetryService) private readonly analytics: ITelemetryService
     ) {}
 
     activate(): void {
@@ -116,7 +116,7 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
 
     private runAllCells() {
         if (window.activeNotebookEditor) {
-            this.analytics?.trackEvent({ eventName: 'execute_notebook' });
+            this.analytics.trackEvent({ eventName: 'execute_notebook' });
             commands.executeCommand('notebook.execute').then(noop, noop);
         }
     }
@@ -144,7 +144,7 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
 
     private addCellBelow() {
         if (window.activeNotebookEditor) {
-            this.analytics?.trackEvent({ eventName: 'add_block', properties: { blockType: 'code' } });
+            this.analytics.trackEvent({ eventName: 'add_block', properties: { blockType: 'code' } });
             commands.executeCommand('notebook.cell.insertCodeCellBelow').then(noop, noop);
         }
     }

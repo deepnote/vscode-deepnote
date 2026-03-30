@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { injectable, inject, optional } from 'inversify';
+import { injectable, inject } from 'inversify';
 import { commands, window, Uri, env, l10n } from 'vscode';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { ITelemetryService } from '../../platform/analytics/types';
@@ -16,14 +16,14 @@ import { initImport, uploadFile, getErrorMessage, MAX_FILE_SIZE, getDeepnoteDoma
 export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
     constructor(
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
-        @inject(ITelemetryService) @optional() private readonly analytics: ITelemetryService | undefined
+        @inject(ITelemetryService) private readonly analytics: ITelemetryService
     ) {}
 
     public activate(): void {
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.OpenInDeepnote, async () => {
                 await this.handleOpenInDeepnote();
-                this.analytics?.trackEvent({ eventName: 'open_in_deepnote' });
+                this.analytics.trackEvent({ eventName: 'open_in_deepnote' });
             })
         );
     }

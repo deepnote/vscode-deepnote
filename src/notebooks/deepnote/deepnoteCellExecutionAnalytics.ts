@@ -1,4 +1,4 @@
-import { inject, injectable, optional } from 'inversify';
+import { inject, injectable } from 'inversify';
 import { Disposable } from 'vscode';
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
@@ -13,16 +13,12 @@ import { IDeepnoteNotebookManager } from '../types';
 @injectable()
 export class DeepnoteCellExecutionAnalytics implements IExtensionSyncActivationService {
     constructor(
-        @inject(ITelemetryService) @optional() private readonly analytics: ITelemetryService | undefined,
+        @inject(ITelemetryService) private readonly analytics: ITelemetryService,
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
         @inject(IDisposableRegistry) private readonly disposables: Disposable[]
     ) {}
 
     public activate(): void {
-        if (!this.analytics) {
-            return;
-        }
-
         this.disposables.push(
             notebookCellExecutions.onDidChangeNotebookCellExecutionState((e) => {
                 if (e.state !== NotebookCellExecutionState.Executing) {
@@ -56,7 +52,7 @@ export class DeepnoteCellExecutionAnalytics implements IExtensionSyncActivationS
                     }
                 }
 
-                this.analytics?.trackEvent({ eventName: 'execute_cell', properties });
+                this.analytics.trackEvent({ eventName: 'execute_cell', properties });
             })
         );
     }

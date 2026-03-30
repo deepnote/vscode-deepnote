@@ -1,7 +1,7 @@
 import type { DeepnoteBlock, DeepnoteFile, DeepnoteSnapshot } from '@deepnote/blocks';
 import { deserializeDeepnoteFile, isExecutableBlock, serializeDeepnoteSnapshot } from '@deepnote/blocks';
 import { inject, injectable, optional } from 'inversify';
-import { l10n, window, workspace, type CancellationToken, type NotebookData, type NotebookSerializer } from 'vscode';
+import { l10n, workspace, type CancellationToken, type NotebookData, type NotebookSerializer } from 'vscode';
 
 import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
@@ -62,7 +62,8 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
     /**
      * Deserializes a Deepnote YAML file into VS Code notebook format.
      * Parses YAML and converts the selected notebook's blocks to cells.
-     * The notebook to deserialize must be pre-selected and stored in the manager.
+     * Notebook resolution prefers an explicit notebook ID, then transient
+     * resolver state, and finally a deterministic default notebook.
      * @param content Raw file content as bytes
      * @param token Cancellation token (unused)
      * @returns Promise resolving to notebook data
@@ -186,37 +187,29 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
     }
 
     /**
-     * Finds the notebook ID to deserialize by checking the manager's stored selection.
-     * The notebook ID should be set via selectNotebookForProject before opening the document.
+     * Finds the notebook ID to deserialize without relying on active-editor state.
+     * Prefers a pending resolution hint, then current/open-document state.
      * @param projectId The project ID to find a notebook for
      * @returns The notebook ID to deserialize, or undefined if none found
      */
     findCurrentNotebookId(projectId: string): string | undefined {
-        // Check the manager's stored selection first - this is set explicitly when the user
-        // picks a notebook from the explorer, and must take priority over the active editor
-        const storedNotebookId = this.notebookManager.getTheSelectedNotebookForAProject(projectId);
+        const pendingNotebookId = this.notebookManager.consumePendingNotebookResolution(projectId);
+        const openNotebookIds = this.findOpenNotebookIds(projectId);
+        const currentNotebookId = this.notebookManager.getCurrentNotebookId(projectId);
 
-        if (storedNotebookId) {
-            return storedNotebookId;
+        if (pendingNotebookId) {
+            return pendingNotebookId;
         }
 
-        // Fallback: prefer the active notebook editor when it matches the project
-        const activeEditorNotebook = window.activeNotebookEditor?.notebook;
-
-        if (
-            activeEditorNotebook?.notebookType === 'deepnote' &&
-            activeEditorNotebook.metadata?.deepnoteProjectId === projectId &&
-            activeEditorNotebook.metadata?.deepnoteNotebookId
-        ) {
-            return activeEditorNotebook.metadata.deepnoteNotebookId;
+        if (currentNotebookId && (openNotebookIds.length === 0 || openNotebookIds.includes(currentNotebookId))) {
+            return currentNotebookId;
         }
 
-        // Last fallback: Check if there's an active notebook document for this project
-        const openNotebook = workspace.notebookDocuments.find(
-            (doc) => doc.notebookType === 'deepnote' && doc.metadata?.deepnoteProjectId === projectId
-        );
+        if (openNotebookIds.length === 1) {
+            return openNotebookIds[0];
+        }
 
-        return openNotebook?.metadata?.deepnoteNotebookId;
+        return undefined;
     }
 
     /**
@@ -264,7 +257,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             logger.debug('SerializeNotebook: Got and cloned original project');
 
             const notebookId =
-                data.metadata?.deepnoteNotebookId || this.notebookManager.getTheSelectedNotebookForAProject(projectId);
+                data.metadata?.deepnoteNotebookId || this.notebookManager.getCurrentNotebookId(projectId);
 
             if (!notebookId) {
                 throw new Error('Cannot determine which notebook to save');
@@ -353,6 +346,11 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
             // Store the updated project back so subsequent saves start from correct state
             this.notebookManager.storeOriginalProject(projectId, originalProject, notebookId);
+            const openNotebookIdsAtSerialize = this.findOpenNotebookIds(projectId);
+
+            if (openNotebookIdsAtSerialize.length === 0) {
+                this.notebookManager.queueNotebookResolution(projectId, notebookId);
+            }
 
             logger.debug('SerializeNotebook: Serializing to YAML');
 
@@ -553,6 +551,21 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
         }
 
         return false;
+    }
+
+    private findOpenNotebookIds(projectId: string): string[] {
+        return [
+            ...new Set(
+                workspace.notebookDocuments
+                    .filter(
+                        (doc) =>
+                            doc.notebookType === 'deepnote' &&
+                            doc.metadata?.deepnoteProjectId === projectId &&
+                            typeof doc.metadata?.deepnoteNotebookId === 'string'
+                    )
+                    .map((doc) => doc.metadata.deepnoteNotebookId as string)
+            )
+        ];
     }
 
     /**

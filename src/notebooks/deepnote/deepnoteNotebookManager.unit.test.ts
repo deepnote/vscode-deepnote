@@ -93,6 +93,39 @@ suite('DeepnoteNotebookManager', () => {
         });
     });
 
+    suite('consumePendingNotebookResolution', () => {
+        test('should return undefined when no pending resolution exists', () => {
+            const result = manager.consumePendingNotebookResolution('unknown-project');
+
+            assert.strictEqual(result, undefined);
+        });
+
+        test('should consume queued notebook resolutions in order', () => {
+            manager.queueNotebookResolution('project-123', 'notebook-1');
+            manager.queueNotebookResolution('project-123', 'notebook-2');
+
+            assert.strictEqual(manager.consumePendingNotebookResolution('project-123'), 'notebook-1');
+            assert.strictEqual(manager.consumePendingNotebookResolution('project-123'), 'notebook-2');
+            assert.strictEqual(manager.consumePendingNotebookResolution('project-123'), undefined);
+        });
+
+        test('should keep pending resolutions isolated per project', () => {
+            manager.queueNotebookResolution('project-1', 'notebook-1');
+            manager.queueNotebookResolution('project-2', 'notebook-2');
+
+            assert.strictEqual(manager.consumePendingNotebookResolution('project-1'), 'notebook-1');
+            assert.strictEqual(manager.consumePendingNotebookResolution('project-2'), 'notebook-2');
+        });
+    });
+
+    suite('queueNotebookResolution', () => {
+        test('should queue a notebook resolution for later consumption', () => {
+            manager.queueNotebookResolution('project-123', 'notebook-456');
+
+            assert.strictEqual(manager.consumePendingNotebookResolution('project-123'), 'notebook-456');
+        });
+    });
+
     suite('selectNotebookForProject', () => {
         test('should store notebook selection for project', () => {
             manager.selectNotebookForProject('project-123', 'notebook-456');
@@ -147,6 +180,13 @@ suite('DeepnoteNotebookManager', () => {
                 manager.clearNotebookSelection('unknown-project');
                 manager.clearNotebookSelection('unknown-project');
             });
+        });
+
+        test('should clear pending notebook resolutions for a project', () => {
+            manager.queueNotebookResolution('project-123', 'notebook-456');
+            manager.clearNotebookSelection('project-123');
+
+            assert.strictEqual(manager.consumePendingNotebookResolution('project-123'), undefined);
         });
     });
 

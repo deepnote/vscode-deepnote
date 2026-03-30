@@ -38,9 +38,13 @@ export interface ProjectIntegration {
 export const IDeepnoteNotebookManager = Symbol('IDeepnoteNotebookManager');
 export interface IDeepnoteNotebookManager {
     clearNotebookSelection(projectId: string): void;
+    consumePendingNotebookResolution(projectId: string): string | undefined;
     getCurrentNotebookId(projectId: string): string | undefined;
     getOriginalProject(projectId: string): DeepnoteProject | undefined;
     getTheSelectedNotebookForAProject(projectId: string): string | undefined;
+    hasInitNotebookBeenRun(projectId: string): boolean;
+    markInitNotebookAsRun(projectId: string): void;
+    queueNotebookResolution(projectId: string, notebookId: string): void;
     selectNotebookForProject(projectId: string, notebookId: string): void;
     storeOriginalProject(projectId: string, project: DeepnoteProject, notebookId: string): void;
     updateCurrentNotebookId(projectId: string, notebookId: string): void;
@@ -54,7 +58,4 @@ export interface IDeepnoteNotebookManager {
      * @returns `true` if the project was found and updated successfully, `false` if the project does not exist
      */
     updateProjectIntegrations(projectId: string, integrations: ProjectIntegration[]): boolean;
-
-    hasInitNotebookBeenRun(projectId: string): boolean;
-    markInitNotebookAsRun(projectId: string): void;
 }

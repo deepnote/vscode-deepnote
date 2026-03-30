@@ -260,7 +260,7 @@ export class DeepnoteExplorerView {
             await this.treeDataProvider.refreshNotebook(treeItem.context.projectId);
 
             // Optionally open the duplicated notebook
-            this.manager.selectNotebookForProject(treeItem.context.projectId, newNotebook.id);
+            this.registerNotebookOpenIntent(treeItem.context.projectId, newNotebook.id);
             const notebookUri = fileUri.with({ query: `notebook=${newNotebook.id}` });
             const document = await workspace.openNotebookDocument(notebookUri);
             await window.showNotebookDocument(document, {
@@ -508,13 +508,18 @@ export class DeepnoteExplorerView {
         await this.treeDataProvider.refreshNotebook(projectData.project.id);
 
         // Open the new notebook
-        this.manager.selectNotebookForProject(projectData.project.id, notebookId);
+        this.registerNotebookOpenIntent(projectData.project.id, notebookId);
         const notebookUri = fileUri.with({ query: `notebook=${notebookId}` });
         const document = await workspace.openNotebookDocument(notebookUri);
         await window.showNotebookDocument(document, {
             preserveFocus: false,
             preview: false
         });
+    }
+
+    private registerNotebookOpenIntent(projectId: string, notebookId: string): void {
+        this.manager.queueNotebookResolution(projectId, notebookId);
+        this.manager.selectNotebookForProject(projectId, notebookId);
     }
 
     private refreshExplorer(): void {
@@ -537,7 +542,7 @@ export class DeepnoteExplorerView {
 
             console.log(`Selecting notebook in manager.`);
 
-            this.manager.selectNotebookForProject(context.projectId, context.notebookId);
+            this.registerNotebookOpenIntent(context.projectId, context.notebookId);
 
             console.log(`Opening notebook document.`, fileUri);
 
@@ -701,7 +706,7 @@ export class DeepnoteExplorerView {
 
             this.treeDataProvider.refresh();
 
-            this.manager.selectNotebookForProject(projectId, notebookId);
+            this.registerNotebookOpenIntent(projectId, notebookId);
 
             const notebookUri = fileUri.with({ query: `notebook=${notebookId}` });
             const document = await workspace.openNotebookDocument(notebookUri);

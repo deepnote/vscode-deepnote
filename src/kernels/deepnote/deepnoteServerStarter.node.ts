@@ -405,7 +405,11 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         const existing = this.disposablesByFile.get(fileKey);
         if (existing) {
             for (const d of existing) {
-                d.dispose();
+                try {
+                    d.dispose();
+                } catch (ex) {
+                    logger.warn(`Error disposing listener for ${fileKey}`, ex);
+                }
             }
         }
         const disposables: IDisposable[] = [];

@@ -135,9 +135,10 @@ suite('DeepnoteFileChangeWatcher', () => {
         mockDisposables = [];
 
         mockedNotebookManager = mock<IDeepnoteNotebookManager>();
+        when(mockedNotebookManager.consumePendingNotebookResolution(anything())).thenReturn(undefined);
         when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(validProject);
         when(mockedNotebookManager.getTheSelectedNotebookForAProject(anything())).thenReturn('notebook-1');
-        when(mockedNotebookManager.clearNotebookSelection(anything())).thenReturn();
+        when(mockedNotebookManager.queueNotebookResolution(anything(), anything())).thenReturn();
         mockNotebookManager = instance(mockedNotebookManager);
 
         // Set up FileSystemWatcher mock
@@ -452,7 +453,7 @@ project:
 
         onDidChangeFile.fire(uri);
 
-        await waitFor(() => saveCount > 0);
+        await waitFor(() => applyEditCount > 0);
 
         // Only ONE applyEdit call (atomic: replaceCells + metadata in single WorkspaceEdit)
         assert.strictEqual(applyEditCount, 1, 'applyEdit should be called exactly once (atomic edit)');
@@ -1271,9 +1272,10 @@ project:
 
         setup(() => {
             reset(mockedNotebookManager);
+            when(mockedNotebookManager.consumePendingNotebookResolution(anything())).thenReturn(undefined);
             when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(multiNotebookProject);
             when(mockedNotebookManager.getTheSelectedNotebookForAProject(anything())).thenReturn('notebook-1');
-            when(mockedNotebookManager.clearNotebookSelection(anything())).thenReturn();
+            when(mockedNotebookManager.queueNotebookResolution(anything(), anything())).thenReturn();
             resetCalls(mockedNotebookManager);
             workspaceSetCaptures = [];
             sinon.stub(watcher, 'applyNotebookEdits' as any).callsFake(async (...args: unknown[]) => {
@@ -1349,7 +1351,7 @@ project:
             assert.notInclude(byUri.get(uriNb2.toString()) ?? '', 'nb1-new');
         });
 
-        test('should clear notebook selection before processing file change', async () => {
+        test('should not clear notebook selection before processing file change', async () => {
             const basePath = Uri.file('/workspace/multi.deepnote');
             const uriNb1 = basePath.with({ query: 'a=1' });
             const uriNb2 = basePath.with({ query: 'b=2' });
@@ -1393,7 +1395,7 @@ project:
 
             await waitFor(() => applyEditCount >= 2);
 
-            verify(mockedNotebookManager.clearNotebookSelection('project-1')).once();
+            verify(mockedNotebookManager.clearNotebookSelection(anything())).never();
         });
 
         test('should not corrupt other notebooks when one notebook triggers a file change', async () => {

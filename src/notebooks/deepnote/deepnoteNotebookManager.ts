@@ -3,6 +3,13 @@ import { injectable } from 'inversify';
 import { IDeepnoteNotebookManager, ProjectIntegration } from '../types';
 import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 
+const pendingNotebookResolutionTtlMs = 2_000;
+
+interface PendingNotebookResolution {
+    notebookId: string;
+    queuedAt: number;
+}
+
 /**
  * Centralized manager for tracking Deepnote notebook selections and project state.
  * Manages per-project state including current selections and project data caching.
@@ -11,15 +18,34 @@ import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
     private readonly currentNotebookId = new Map<string, string>();
     private readonly originalProjects = new Map<string, DeepnoteProject>();
+    private readonly pendingNotebookResolutions = new Map<string, PendingNotebookResolution[]>();
     private readonly projectsWithInitNotebookRun = new Set<string>();
     private readonly selectedNotebookByProject = new Map<string, string>();
 
     /**
-     * Clears the notebook selection for a project so that subsequent
-     * deserializations fall back to the active editor or open documents.
+     * Clears the remembered notebook selection and any pending resolution hints for a project.
      */
     clearNotebookSelection(projectId: string): void {
+        this.pendingNotebookResolutions.delete(projectId);
         this.selectedNotebookByProject.delete(projectId);
+    }
+
+    /**
+     * Consumes the next short-lived notebook resolution hint for a project.
+     * These hints are queued immediately before operations that trigger a
+     * deserialize without explicit URI context.
+     */
+    consumePendingNotebookResolution(projectId: string): string | undefined {
+        const pendingResolutions = this.getValidPendingNotebookResolutions(projectId);
+        const nextResolution = pendingResolutions.shift();
+
+        if (pendingResolutions.length > 0) {
+            this.pendingNotebookResolutions.set(projectId, pendingResolutions);
+        } else {
+            this.pendingNotebookResolutions.delete(projectId);
+        }
+
+        return nextResolution?.notebookId;
     }
 
     /**
@@ -50,9 +76,24 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
     }
 
     /**
-     * Associates a notebook ID with a project to remember user's notebook selection.
-     * When a Deepnote project contains multiple notebooks, this mapping persists the user's
-     * choice so we can automatically open the same notebook on subsequent file opens.
+     * Queues a short-lived notebook resolution hint for the next deserialize.
+     *
+     * @param projectId - The project ID that identifies the Deepnote project
+     * @param notebookId - The notebook ID the next deserialize should resolve to
+     */
+    queueNotebookResolution(projectId: string, notebookId: string): void {
+        const pendingResolutions = this.getValidPendingNotebookResolutions(projectId);
+
+        pendingResolutions.push({
+            notebookId,
+            queuedAt: Date.now()
+        });
+
+        this.pendingNotebookResolutions.set(projectId, pendingResolutions);
+    }
+
+    /**
+     * Associates a notebook ID with a project to remember the user's last explicit selection.
      *
      * @param projectId - The project ID that identifies the Deepnote project
      * @param notebookId - The ID of the selected notebook within the project
@@ -133,5 +174,19 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
      */
     markInitNotebookAsRun(projectId: string): void {
         this.projectsWithInitNotebookRun.add(projectId);
+    }
+
+    private getValidPendingNotebookResolutions(projectId: string): PendingNotebookResolution[] {
+        const cutoffTime = Date.now() - pendingNotebookResolutionTtlMs;
+        const pendingResolutions = (this.pendingNotebookResolutions.get(projectId) ?? []).filter(
+            (resolution) => resolution.queuedAt >= cutoffTime
+        );
+
+        if (pendingResolutions.length === 0) {
+            this.pendingNotebookResolutions.delete(projectId);
+            return [];
+        }
+
+        return pendingResolutions;
     }
 }

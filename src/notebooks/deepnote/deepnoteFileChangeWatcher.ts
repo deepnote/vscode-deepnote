@@ -242,17 +242,6 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
                 doc.notebookType === 'deepnote' && doc.uri.with({ query: '', fragment: '' }).toString() === uriString
         );
 
-        // Clear the global notebook selection so that any VS Code-triggered
-        // re-deserialization (e.g. from workspace.save) falls back to the
-        // active editor rather than a stale global selection.
-        for (const notebook of affectedNotebooks) {
-            const projectId = notebook.metadata?.deepnoteProjectId as string | undefined;
-            if (projectId) {
-                this.notebookManager.clearNotebookSelection(projectId);
-                break;
-            }
-        }
-
         for (const notebook of affectedNotebooks) {
             const nbKey = notebook.uri.toString();
             // main-file-sync always replaces any pending operation

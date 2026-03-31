@@ -48,6 +48,7 @@ export interface IDeepnoteNotebookManager {
     selectNotebookForProject(projectId: string, notebookId: string): void;
     storeOriginalProject(projectId: string, project: DeepnoteProject, notebookId: string): void;
     updateCurrentNotebookId(projectId: string, notebookId: string): void;
+    updateOriginalProject(projectId: string, project: DeepnoteProject): void;
 
     /**
      * Updates the integrations list in the project data.

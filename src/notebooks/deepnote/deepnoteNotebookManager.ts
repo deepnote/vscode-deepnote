@@ -3,7 +3,7 @@ import { injectable } from 'inversify';
 import { IDeepnoteNotebookManager, ProjectIntegration } from '../types';
 import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 
-const pendingNotebookResolutionTtlMs = 2_000;
+const pendingNotebookResolutionTtlMs = 60_000;
 
 interface PendingNotebookResolution {
     notebookId: string;
@@ -118,6 +118,18 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
 
         this.originalProjects.set(projectId, clonedProject);
         this.currentNotebookId.set(projectId, notebookId);
+    }
+
+    /**
+     * Updates the stored project data without changing the current notebook selection.
+     * Used during serialization where we need to cache the updated project state
+     * but must not alter notebook routing for other open notebooks.
+     * @param projectId Project identifier
+     * @param project Updated project data to store
+     */
+    updateOriginalProject(projectId: string, project: DeepnoteProject): void {
+        const clonedProject = structuredClone(project);
+        this.originalProjects.set(projectId, clonedProject);
     }
 
     /**

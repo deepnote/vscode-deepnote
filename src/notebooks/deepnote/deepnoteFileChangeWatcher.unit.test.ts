@@ -122,6 +122,7 @@ suite('DeepnoteFileChangeWatcher', () => {
     let mockNotebookManager: IDeepnoteNotebookManager;
     let onDidChangeFile: EventEmitter<Uri>;
     let onDidCreateFile: EventEmitter<Uri>;
+    let onDidSaveNotebook: EventEmitter<NotebookDocument>;
     let readFileCalls: number;
     let applyEditCount: number;
     let saveCount: number;
@@ -139,6 +140,7 @@ suite('DeepnoteFileChangeWatcher', () => {
         when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(validProject);
         when(mockedNotebookManager.getTheSelectedNotebookForAProject(anything())).thenReturn('notebook-1');
         when(mockedNotebookManager.queueNotebookResolution(anything(), anything())).thenReturn();
+        when(mockedNotebookManager.updateOriginalProject(anything(), anything())).thenReturn();
         mockNotebookManager = instance(mockedNotebookManager);
 
         // Set up FileSystemWatcher mock
@@ -150,6 +152,9 @@ suite('DeepnoteFileChangeWatcher', () => {
         when(fsWatcher.dispose()).thenReturn();
 
         when(mockedVSCodeNamespaces.workspace.createFileSystemWatcher(anything())).thenReturn(instance(fsWatcher));
+
+        onDidSaveNotebook = new EventEmitter<NotebookDocument>();
+        when(mockedVSCodeNamespaces.workspace.onDidSaveNotebookDocument).thenReturn(onDidSaveNotebook.event);
 
         when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenCall(() => {
             applyEditCount++;
@@ -171,6 +176,7 @@ suite('DeepnoteFileChangeWatcher', () => {
         }
         onDidChangeFile.dispose();
         onDidCreateFile.dispose();
+        onDidSaveNotebook.dispose();
     });
 
     function createMockNotebook(opts: {
@@ -1276,6 +1282,7 @@ project:
             when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(multiNotebookProject);
             when(mockedNotebookManager.getTheSelectedNotebookForAProject(anything())).thenReturn('notebook-1');
             when(mockedNotebookManager.queueNotebookResolution(anything(), anything())).thenReturn();
+            when(mockedNotebookManager.updateOriginalProject(anything(), anything())).thenReturn();
             resetCalls(mockedNotebookManager);
             workspaceSetCaptures = [];
             sinon.stub(watcher, 'applyNotebookEdits' as any).callsFake(async (...args: unknown[]) => {

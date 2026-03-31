@@ -51,9 +51,20 @@ function cloneWithoutCircularRefs<T>(obj: T, seen = new WeakSet<object>()): T {
  * Serializer for converting between Deepnote YAML files and VS Code notebook format.
  * Handles reading/writing .deepnote files and manages project state persistence.
  */
+/** Window (ms) during which a post-serialize deserialize excludes the serialized notebook. */
+const recentSerializeTtlMs = 5_000;
+
 @injectable()
 export class DeepnoteNotebookSerializer implements NotebookSerializer {
     private converter = new DeepnoteDataConverter();
+
+    /**
+     * Tracks the most recently serialized notebook per project.
+     * When VS Code calls $dataToNotebook after a save, it's re-reading the
+     * file for a SIBLING tab (the saved notebook already has its content).
+     * This tracker lets findCurrentNotebookId pick a sibling instead.
+     */
+    private readonly recentSerializations = new Map<string, { notebookId: string; timestamp: number }>();
 
     constructor(
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
@@ -202,12 +213,33 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             return pendingNotebookId;
         }
 
-        if (currentNotebookId && (openNotebookIds.length === 0 || openNotebookIds.includes(currentNotebookId))) {
+        if (currentNotebookId && openNotebookIds.length === 0) {
             return currentNotebookId;
         }
 
         if (openNotebookIds.length === 1) {
             return openNotebookIds[0];
+        }
+
+        // Multiple notebooks open — VS Code may be re-reading the file for a
+        // sibling tab after a save. Pick a sibling (any open notebook that is
+        // NOT the one just serialized). If no recent serialization, fall back
+        // to currentNotebookId for backward compatibility.
+        if (openNotebookIds.length > 1) {
+            const recent = this.recentSerializations.get(projectId);
+
+            if (recent && Date.now() - recent.timestamp < recentSerializeTtlMs) {
+                this.recentSerializations.delete(projectId);
+                const sibling = openNotebookIds.find((id) => id !== recent.notebookId);
+
+                if (sibling) {
+                    return sibling;
+                }
+            }
+
+            if (currentNotebookId && openNotebookIds.includes(currentNotebookId)) {
+                return currentNotebookId;
+            }
         }
 
         return undefined;
@@ -345,8 +377,13 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 originalProject.metadata.modifiedAt = new Date().toISOString();
             }
 
-            // Store the updated project back so subsequent saves start from correct state
-            this.notebookManager.storeOriginalProject(projectId, originalProject, notebookId);
+            // Store the updated project back so subsequent saves start from correct state.
+            // Use updateOriginalProject (not storeOriginalProject) to avoid overwriting
+            // currentNotebookId — when multiple notebooks share the same file, changing
+            // currentNotebookId here would cause VS Code's follow-up deserialize calls
+            // for other open notebooks to resolve to the wrong notebook.
+            this.notebookManager.updateOriginalProject(projectId, originalProject);
+            this.recentSerializations.set(projectId, { notebookId, timestamp: Date.now() });
             const openNotebookIdsAtSerialize = this.findOpenNotebookIds(projectId);
 
             if (openNotebookIdsAtSerialize.length === 0) {

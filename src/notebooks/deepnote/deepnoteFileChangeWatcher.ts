@@ -99,6 +99,15 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         this.disposables.push(watcher.onDidCreate((uri) => this.handleFileChange(uri)));
         this.disposables.push({ dispose: () => this.clearAllTimers() });
 
+        this.disposables.push(
+            workspace.onDidSaveNotebookDocument((notebook) => {
+                if (notebook.notebookType === 'deepnote') {
+                    const fileUri = notebook.uri.with({ query: '', fragment: '' });
+                    this.markSelfWrite(fileUri);
+                }
+            })
+        );
+
         if (this.snapshotService) {
             this.disposables.push(
                 this.snapshotService.onFileWritten((uri) => {

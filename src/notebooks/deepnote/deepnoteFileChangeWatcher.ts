@@ -1,3 +1,5 @@
+import type { DeepnoteBlock } from '@deepnote/blocks';
+import { inject, injectable, optional } from 'inversify';
 import {
     CancellationTokenSource,
     NotebookCell,
@@ -10,13 +12,11 @@ import {
     WorkspaceEdit,
     workspace
 } from 'vscode';
-import { inject, injectable, optional } from 'inversify';
-import type { DeepnoteBlock } from '@deepnote/blocks';
 
-import { IControllerRegistration } from '../controllers/types';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { logger } from '../../platform/logging';
+import { IControllerRegistration } from '../controllers/types';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
@@ -286,12 +286,12 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         // Pass the notebook ID explicitly to avoid mutating the global selection state.
         // Multiple notebooks from the same project may be open simultaneously, and
         // mutating selectedNotebookByProject would cause race conditions.
-        const notebookNotebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
+        const targetNotebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
 
         const tokenSource = new CancellationTokenSource();
         let newData;
         try {
-            newData = await this.serializer.deserializeNotebook(content, tokenSource.token, notebookNotebookId);
+            newData = await this.serializer.deserializeNotebook(content, tokenSource.token, targetNotebookId);
         } catch (error) {
             logger.warn(`[FileChangeWatcher] Failed to parse changed file: ${fileUri.path}`, error);
             return;
@@ -378,13 +378,16 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
 
             // Save to clear dirty state. VS Code serializes (same bytes) and sees the
             // mtime from our recent write, so no "content is newer" conflict.
+            this.markSelfWrite(fileUri);
             try {
                 const saved = await workspace.save(notebook.uri);
                 if (!saved) {
+                    this.consumeSelfWrite(fileUri);
                     logger.warn(`[FileChangeWatcher] Save after sync write returned undefined: ${notebook.uri.path}`);
                     return;
                 }
             } catch (saveError) {
+                this.consumeSelfWrite(fileUri);
                 logger.warn(`[FileChangeWatcher] Save after sync write failed: ${notebook.uri.path}`, saveError);
             }
         } catch (serializeError) {

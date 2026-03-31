@@ -2,13 +2,14 @@ import type { DeepnoteBlock, DeepnoteFile, DeepnoteSnapshot } from '@deepnote/bl
 import { deserializeDeepnoteFile, isExecutableBlock, serializeDeepnoteSnapshot } from '@deepnote/blocks';
 import { inject, injectable, optional } from 'inversify';
 import { l10n, workspace, type CancellationToken, type NotebookData, type NotebookSerializer } from 'vscode';
+import { z } from 'zod';
 
+import { computeHash } from '../../platform/common/crypto';
+import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
-import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { SnapshotService } from './snapshots/snapshotService';
-import { computeHash } from '../../platform/common/crypto';
 
 export type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
 export { DeepnoteNotebook, DeepnoteOutput } from '../../platform/deepnote/deepnoteTypes';
@@ -555,16 +556,19 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
     private findOpenNotebookIds(projectId: string): string[] {
         return [
-            ...new Set(
-                workspace.notebookDocuments
-                    .filter(
-                        (doc) =>
-                            doc.notebookType === 'deepnote' &&
-                            doc.metadata?.deepnoteProjectId === projectId &&
-                            typeof doc.metadata?.deepnoteNotebookId === 'string'
-                    )
-                    .map((doc) => doc.metadata.deepnoteNotebookId as string)
-            )
+            ...workspace.notebookDocuments.reduce((ids, doc) => {
+                if (doc.notebookType !== 'deepnote' || doc.metadata.deepnoteProjectId !== projectId) {
+                    return ids;
+                }
+
+                const parsed = z.string().safeParse(doc.metadata.deepnoteNotebookId);
+
+                if (parsed.success) {
+                    ids.add(parsed.data);
+                }
+
+                return ids;
+            }, new Set<string>())
         ];
     }
 

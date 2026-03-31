@@ -221,6 +221,76 @@ suite('DeepnoteNotebookManager', () => {
         });
     });
 
+    suite('updateOriginalProject', () => {
+        test('should update project data without changing currentNotebookId', () => {
+            const updatedProject: DeepnoteProject = {
+                ...mockProject,
+                project: {
+                    ...mockProject.project,
+                    name: 'Updated Name Only'
+                }
+            };
+
+            manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
+            manager.updateOriginalProject('project-123', updatedProject);
+
+            const storedProject = manager.getOriginalProject('project-123');
+            const currentNotebookId = manager.getCurrentNotebookId('project-123');
+
+            assert.deepStrictEqual(storedProject, updatedProject);
+            assert.strictEqual(currentNotebookId, 'notebook-456');
+        });
+
+        test('should deep-clone project data so mutations to input do not affect stored state', () => {
+            const updatedProject: DeepnoteProject = {
+                ...mockProject,
+                project: {
+                    ...mockProject.project,
+                    name: 'Before Mutation'
+                }
+            };
+
+            manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
+            manager.updateOriginalProject('project-123', updatedProject);
+
+            updatedProject.project.name = 'After Mutation';
+
+            const storedProject = manager.getOriginalProject('project-123');
+
+            assert.strictEqual(storedProject?.project.name, 'Before Mutation');
+        });
+
+        test('should overwrite existing project data while preserving currentNotebookId', () => {
+            const firstUpdate: DeepnoteProject = {
+                ...mockProject,
+                project: { ...mockProject.project, name: 'First Update' }
+            };
+            const secondUpdate: DeepnoteProject = {
+                ...mockProject,
+                project: { ...mockProject.project, name: 'Second Update' }
+            };
+
+            manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
+            manager.updateOriginalProject('project-123', firstUpdate);
+            manager.updateOriginalProject('project-123', secondUpdate);
+
+            assert.strictEqual(manager.getCurrentNotebookId('project-123'), 'notebook-456');
+            assert.strictEqual(manager.getOriginalProject('project-123')?.project.name, 'Second Update');
+        });
+
+        test('should store project when no currentNotebookId has been set', () => {
+            const projectOnly: DeepnoteProject = {
+                ...mockProject,
+                project: { ...mockProject.project, name: 'No Notebook Id Yet' }
+            };
+
+            manager.updateOriginalProject('project-123', projectOnly);
+
+            assert.strictEqual(manager.getCurrentNotebookId('project-123'), undefined);
+            assert.deepStrictEqual(manager.getOriginalProject('project-123'), projectOnly);
+        });
+    });
+
     suite('updateCurrentNotebookId', () => {
         test('should update notebook ID for existing project', () => {
             manager.storeOriginalProject('project-123', mockProject, 'notebook-456');

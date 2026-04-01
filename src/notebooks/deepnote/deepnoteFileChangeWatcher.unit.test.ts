@@ -1581,7 +1581,7 @@ project:
 
             test('snapshot save self-write is consumed once then external main-file change applies', async function () {
                 this.timeout(10_000);
-                const baseUri = testFileUri('snap-selfwrite.deepnote');
+                const baseUri = testFileUri('snap-self-write.deepnote');
                 const notebook = createMockNotebook({
                     uri: baseUri,
                     cells: [

@@ -131,7 +131,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         }
     }
 
-    protected async applyNotebookEdits(uri: Uri, edits: NotebookEdit[]): Promise<boolean> {
+    public async applyNotebookEdits(uri: Uri, edits: NotebookEdit[]): Promise<boolean> {
         const wsEdit = new WorkspaceEdit();
         wsEdit.set(uri, edits);
 

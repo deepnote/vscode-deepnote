@@ -274,6 +274,8 @@ project:
             const result = await serializer.serializeNotebook(mockNotebookData as any, {} as any);
             const serializedProject = deserializeDeepnoteFile(new TextDecoder().decode(result));
 
+            assert.strictEqual(serializedProject.project.notebooks[0].id, 'notebook-1');
+            assert.strictEqual(serializedProject.project.notebooks[1].id, 'notebook-2');
             assert.strictEqual(serializedProject.project.notebooks[0].blocks?.[0].content, 'print("hello")');
             assert.strictEqual(serializedProject.project.notebooks[1].blocks?.[0].content, '# Updated second notebook');
         });

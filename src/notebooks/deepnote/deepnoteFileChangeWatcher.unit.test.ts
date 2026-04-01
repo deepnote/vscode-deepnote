@@ -1379,43 +1379,41 @@ project:
                 when(mockedNotebookManager.updateOriginalProject(anything(), anything())).thenReturn();
                 resetCalls(mockedNotebookManager);
 
-                snapshotApplyEditStub = sinon
-                    .stub(snapshotWatcher, 'applyNotebookEdits' as keyof DeepnoteFileChangeWatcher)
-                    .callsFake(async function (this: DeepnoteFileChangeWatcher, ...args: unknown[]) {
-                        const uri = args[0] as Uri;
-                        const edits = args[1] as NotebookEdit[];
+                snapshotApplyEditStub = sinon.stub(snapshotWatcher, 'applyNotebookEdits').callsFake(async function (
+                    this: DeepnoteFileChangeWatcher,
+                    ...args: unknown[]
+                ) {
+                    const uri = args[0] as Uri;
+                    const edits = args[1] as NotebookEdit[];
 
-                        const replaceCellsEdit = edits.find((e) => (e as { newCells?: unknown[] }).newCells?.length);
-                        if (replaceCellsEdit) {
-                            const newCells = (
-                                replaceCellsEdit as {
-                                    newCells: Array<{
-                                        outputs?: Array<{ items: Array<{ data?: Uint8Array }> }>;
-                                        value: string;
-                                    }>;
-                                }
-                            ).newCells;
-                            const outputPlainJoined = newCells
-                                .map((c) => {
-                                    const data = c.outputs?.[0]?.items?.[0]?.data;
+                    const replaceCellsEdit = edits.find((e) => (e as { newCells?: unknown[] }).newCells?.length);
+                    if (replaceCellsEdit) {
+                        const newCells = (
+                            replaceCellsEdit as {
+                                newCells: Array<{
+                                    outputs?: Array<{ items: Array<{ data?: Uint8Array }> }>;
+                                    value: string;
+                                }>;
+                            }
+                        ).newCells;
+                        const outputPlainJoined = newCells
+                            .map((c) => {
+                                const data = c.outputs?.[0]?.items?.[0]?.data;
 
-                                    return data ? new TextDecoder().decode(data) : '';
-                                })
-                                .filter(Boolean)
-                                .join(';');
+                                return data ? new TextDecoder().decode(data) : '';
+                            })
+                            .filter(Boolean)
+                            .join(';');
 
-                            interactionCaptures.push({
-                                uriKey: uri.toString(),
-                                cellSourcesJoined: newCells.map((c) => c.value).join('\n'),
-                                outputPlainJoined
-                            });
-                        }
+                        interactionCaptures.push({
+                            uriKey: uri.toString(),
+                            cellSourcesJoined: newCells.map((c) => c.value).join('\n'),
+                            outputPlainJoined
+                        });
+                    }
 
-                        return DeepnoteFileChangeWatcher.prototype.applyNotebookEdits.apply(this, [
-                            uri,
-                            edits
-                        ] as never);
-                    });
+                    return DeepnoteFileChangeWatcher.prototype.applyNotebookEdits.apply(this, [uri, edits]);
+                });
             });
 
             teardown(() => {

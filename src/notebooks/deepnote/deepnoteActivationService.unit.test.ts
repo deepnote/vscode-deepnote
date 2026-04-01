@@ -26,7 +26,7 @@ suite('DeepnoteActivationService', () => {
     let manager: DeepnoteNotebookManager;
     let mockIntegrationManager: IIntegrationManager;
     let mockLogger: ILogger;
-    const mockAnalytics = instance(mock<ITelemetryService>());
+    let mockAnalytics: ITelemetryService;
 
     setup(() => {
         mockExtensionContext = {
@@ -40,6 +40,7 @@ suite('DeepnoteActivationService', () => {
             }
         };
         mockLogger = createMockLogger();
+        mockAnalytics = instance(mock<ITelemetryService>());
         activationService = new DeepnoteActivationService(
             mockExtensionContext,
             manager,

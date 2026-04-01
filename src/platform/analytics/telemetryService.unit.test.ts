@@ -9,7 +9,6 @@ suite('TelemetryService', () => {
     let mockStateFactory: IPersistentStateFactory;
     let mockAsyncDisposableRegistry: IAsyncDisposableRegistry;
     let mockUserIdState: IPersistentState<string>;
-    let sandbox: sinon.SinonSandbox;
 
     function createMockPersistentState(initialValue: string): IPersistentState<string> {
         let storedValue = initialValue;
@@ -24,8 +23,18 @@ suite('TelemetryService', () => {
         };
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function getPostHogClient(service: TelemetryService): any {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return (service as any).client;
+    }
+
+    function stubTelemetryEnabled(service: TelemetryService, enabled: boolean): void {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (service as any).isTelemetryEnabled = () => enabled;
+    }
+
     setup(() => {
-        sandbox = sinon.createSandbox();
         mockUserIdState = createMockPersistentState('');
         mockStateFactory = {
             createGlobalPersistentState: sinon.stub().returns(mockUserIdState),
@@ -37,78 +46,40 @@ suite('TelemetryService', () => {
         };
     });
 
-    teardown(() => {
-        sandbox.restore();
-    });
-
     test('should create instance without errors', () => {
         analyticsService = new TelemetryService(mockStateFactory, mockAsyncDisposableRegistry);
 
         assert.isDefined(analyticsService);
     });
 
-    test('trackEvent should not throw when telemetry is disabled', () => {
-        // Stub workspace.getConfiguration to return telemetry disabled
-        const vscode = require('vscode');
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        sandbox.stub(vscode.workspace, 'getConfiguration').callsFake((section: any) => ({
-            get: (_key: string, defaultValue: unknown) => {
-                if (section === 'deepnote' && _key === 'telemetry.enabled') {
-                    return false;
-                }
-
-                return defaultValue;
-            }
-        }));
-
+    test('trackEvent should not initialize when telemetry is disabled', () => {
         analyticsService = new TelemetryService(mockStateFactory, mockAsyncDisposableRegistry);
+        stubTelemetryEnabled(analyticsService, false);
 
-        assert.doesNotThrow(() => {
-            analyticsService.trackEvent({ eventName: 'open_notebook', properties: { prop: 'value' } });
-        });
+        analyticsService.trackEvent({ eventName: 'open_notebook', properties: { prop: 'value' } });
 
-        // Should not have initialized (no state access)
+        assert.isUndefined(getPostHogClient(analyticsService), 'PostHog client should not be created');
         assert.isFalse(
             (mockStateFactory.createGlobalPersistentState as sinon.SinonStub).called,
             'Should not create persistent state when telemetry is disabled'
         );
     });
 
-    test('trackEvent should not throw when VSCode telemetry level is off', () => {
-        const vscode = require('vscode');
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        sandbox.stub(vscode.workspace, 'getConfiguration').callsFake((section: any) => ({
-            get: (_key: string, defaultValue: unknown) => {
-                if (section === 'telemetry' && _key === 'telemetryLevel') {
-                    return 'off';
-                }
-
-                return defaultValue;
-            }
-        }));
-
+    test('trackEvent should initialize and call capture when telemetry is enabled', () => {
         analyticsService = new TelemetryService(mockStateFactory, mockAsyncDisposableRegistry);
+        stubTelemetryEnabled(analyticsService, true);
 
-        assert.doesNotThrow(() => {
-            analyticsService.trackEvent({ eventName: 'open_notebook' });
-        });
+        analyticsService.trackEvent({ eventName: 'open_notebook' });
 
-        assert.isFalse(
-            (mockStateFactory.createGlobalPersistentState as sinon.SinonStub).called,
-            'Should not create persistent state when VSCode telemetry is off'
-        );
+        const client = getPostHogClient(analyticsService);
+
+        assert.isDefined(client, 'PostHog client should be initialized');
     });
 
-    test('should generate user ID on first trackEvent when telemetry enabled', () => {
-        const vscode = require('vscode');
-
-        sandbox.stub(vscode.workspace, 'getConfiguration').callsFake(() => ({
-            get: (_key: string, defaultValue: unknown) => defaultValue
-        }));
-
+    test('should generate user ID and call PostHog capture on first trackEvent', () => {
         analyticsService = new TelemetryService(mockStateFactory, mockAsyncDisposableRegistry);
+        stubTelemetryEnabled(analyticsService, true);
+
         analyticsService.trackEvent({ eventName: 'open_notebook' });
 
         assert.isTrue(
@@ -124,19 +95,32 @@ suite('TelemetryService', () => {
 
         assert.isString(generatedId);
         assert.isNotEmpty(generatedId, 'Generated user ID should not be empty');
+
+        // Stub capture on the initialized client and verify next event
+        const client = getPostHogClient(analyticsService);
+
+        assert.isDefined(client, 'PostHog client should be initialized');
+
+        const captureStub = sinon.stub();
+        client.capture = captureStub;
+
+        analyticsService.trackEvent({ eventName: 'execute_notebook' });
+
+        assert.isTrue(captureStub.calledOnce, 'PostHog capture should be called');
+        assert.deepStrictEqual(captureStub.firstCall.args[0], {
+            distinctId: generatedId,
+            event: 'execute_notebook',
+            properties: undefined
+        });
     });
 
     test('should reuse existing user ID', () => {
-        const vscode = require('vscode');
-
-        sandbox.stub(vscode.workspace, 'getConfiguration').callsFake(() => ({
-            get: (_key: string, defaultValue: unknown) => defaultValue
-        }));
-
         mockUserIdState = createMockPersistentState('existing-user-id');
         (mockStateFactory.createGlobalPersistentState as sinon.SinonStub).returns(mockUserIdState);
 
         analyticsService = new TelemetryService(mockStateFactory, mockAsyncDisposableRegistry);
+        stubTelemetryEnabled(analyticsService, true);
+
         analyticsService.trackEvent({ eventName: 'open_notebook' });
 
         assert.isFalse(

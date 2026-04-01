@@ -25,6 +25,34 @@ export class TelemetryService implements ITelemetryService {
         asyncDisposables.push(this);
     }
 
+    private initialize(): void {
+        try {
+            this.userIdState = this.stateFactory.createGlobalPersistentState<string>(USER_ID_STORAGE_KEY, '');
+
+            if (!this.userIdState.value) {
+                void this.userIdState.updateValue(generateUuid());
+            }
+
+            this.client = new PostHog(POSTHOG_API_KEY, {
+                flushAt: 20,
+                flushInterval: 30000,
+                host: POSTHOG_HOST
+            });
+        } catch (error) {
+            this.initialized = false;
+            throw error;
+        }
+        this.initialized = true;
+    }
+
+    public async dispose(): Promise<void> {
+        try {
+            await this.client?.shutdown();
+        } catch (ex) {
+            logger.debug(`PostHog shutdown error: ${ex}`);
+        }
+    }
+
     public trackEvent({ eventName, properties }: TelemetryEvent): void {
         try {
             if (!this.isTelemetryEnabled()) {
@@ -49,34 +77,10 @@ export class TelemetryService implements ITelemetryService {
         }
     }
 
-    public async dispose(): Promise<void> {
-        try {
-            await this.client?.shutdown();
-        } catch (ex) {
-            logger.debug(`PostHog shutdown error: ${ex}`);
-        }
-    }
-
-    private initialize(): void {
-        this.initialized = true;
-
-        this.userIdState = this.stateFactory.createGlobalPersistentState<string>(USER_ID_STORAGE_KEY, '');
-
-        if (!this.userIdState.value) {
-            void this.userIdState.updateValue(generateUuid());
-        }
-
-        this.client = new PostHog(POSTHOG_API_KEY, {
-            flushAt: 20,
-            flushInterval: 30000,
-            host: POSTHOG_HOST
-        });
-    }
-
     private isTelemetryEnabled(): boolean {
         const telemetryLevel = workspace.getConfiguration('telemetry').get<string>('telemetryLevel', 'all');
 
-        if (telemetryLevel === 'off') {
+        if (telemetryLevel !== 'off') {
             return false;
         }
 

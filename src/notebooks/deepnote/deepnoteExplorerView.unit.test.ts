@@ -15,8 +15,6 @@ import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock
 import { ILogger } from '../../platform/logging/types';
 import * as uuidModule from '../../platform/common/uuid';
 
-const mockAnalytics = instance(mock<ITelemetryService>());
-
 function createMockLogger(): ILogger {
     return {
         error: () => undefined,
@@ -47,6 +45,7 @@ suite('DeepnoteExplorerView', () => {
     let mockExtensionContext: IExtensionContext;
     let manager: DeepnoteNotebookManager;
     let mockLogger: ILogger;
+    let mockAnalytics: ITelemetryService;
 
     setup(() => {
         mockExtensionContext = {
@@ -55,6 +54,7 @@ suite('DeepnoteExplorerView', () => {
 
         manager = new DeepnoteNotebookManager();
         mockLogger = createMockLogger();
+        mockAnalytics = instance(mock<ITelemetryService>());
         explorerView = new DeepnoteExplorerView(mockExtensionContext, manager, mockLogger, mockAnalytics);
     });
 
@@ -225,6 +225,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
     let mockManager: DeepnoteNotebookManager;
     let sandbox: sinon.SinonSandbox;
     let uuidStubs: sinon.SinonStub[] = [];
+    let mockAnalytics: ITelemetryService;
 
     setup(() => {
         sandbox = sinon.createSandbox();
@@ -237,6 +238,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
         mockManager = new DeepnoteNotebookManager();
         const mockLogger = createMockLogger();
+        mockAnalytics = instance(mock<ITelemetryService>());
         explorerView = new DeepnoteExplorerView(mockContext, mockManager, mockLogger, mockAnalytics);
     });
 

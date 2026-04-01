@@ -2,7 +2,6 @@ import { DeepnoteFile, serializeDeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
-import { join } from 'path';
 import * as sinon from 'sinon';
 import { anything, instance, mock, reset, resetCalls, verify, when } from 'ts-mockito';
 import {
@@ -14,11 +13,12 @@ import {
     NotebookEdit,
     Uri
 } from 'vscode';
+import { join } from '../../platform/vscode-path/path';
 
-import type { IControllerRegistration } from '../controllers/types';
 import type { IDisposableRegistry } from '../../platform/common/types';
 import type { DeepnoteOutput, DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
+import type { IControllerRegistration } from '../controllers/types';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteFileChangeWatcher } from './deepnoteFileChangeWatcher';
 import { SnapshotService } from './snapshots/snapshotService';
@@ -99,6 +99,12 @@ const postSnapshotReadGraceMs = 100;
 interface NotebookEditCapture {
     uriKey: string;
     cellSourceJoined: string;
+}
+
+interface SnapshotInteractionCapture {
+    cellSourcesJoined: string;
+    outputPlainJoined: string;
+    uriKey: string;
 }
 
 /**
@@ -1355,6 +1361,556 @@ project:
             }
             fbOnDidChange.dispose();
             fbOnDidCreate.dispose();
+        });
+
+        suite('snapshot and deserialization interaction', () => {
+            let interactionCaptures: SnapshotInteractionCapture[];
+            let snapshotApplyEditStub: sinon.SinonStub;
+
+            setup(function () {
+                this.timeout(12_000);
+                interactionCaptures = [];
+
+                reset(mockedNotebookManager);
+                when(mockedNotebookManager.consumePendingNotebookResolution(anything())).thenReturn(undefined);
+                when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(validProject);
+                when(mockedNotebookManager.getTheSelectedNotebookForAProject(anything())).thenReturn('notebook-1');
+                when(mockedNotebookManager.queueNotebookResolution(anything(), anything())).thenReturn();
+                when(mockedNotebookManager.updateOriginalProject(anything(), anything())).thenReturn();
+                resetCalls(mockedNotebookManager);
+
+                snapshotApplyEditStub = sinon
+                    .stub(snapshotWatcher, 'applyNotebookEdits' as keyof DeepnoteFileChangeWatcher)
+                    .callsFake(async function (this: DeepnoteFileChangeWatcher, ...args: unknown[]) {
+                        const uri = args[0] as Uri;
+                        const edits = args[1] as NotebookEdit[];
+
+                        const replaceCellsEdit = edits.find((e) => (e as { newCells?: unknown[] }).newCells?.length);
+                        if (replaceCellsEdit) {
+                            const newCells = (
+                                replaceCellsEdit as {
+                                    newCells: Array<{
+                                        outputs?: Array<{ items: Array<{ data?: Uint8Array }> }>;
+                                        value: string;
+                                    }>;
+                                }
+                            ).newCells;
+                            const outputPlainJoined = newCells
+                                .map((c) => {
+                                    const data = c.outputs?.[0]?.items?.[0]?.data;
+
+                                    return data ? new TextDecoder().decode(data) : '';
+                                })
+                                .filter(Boolean)
+                                .join(';');
+
+                            interactionCaptures.push({
+                                uriKey: uri.toString(),
+                                cellSourcesJoined: newCells.map((c) => c.value).join('\n'),
+                                outputPlainJoined
+                            });
+                        }
+
+                        return DeepnoteFileChangeWatcher.prototype.applyNotebookEdits.apply(this, [
+                            uri,
+                            edits
+                        ] as never);
+                    });
+            });
+
+            teardown(() => {
+                snapshotApplyEditStub.restore();
+            });
+
+            test('snapshot change with multi-notebook project applies only matching block outputs per notebook', async () => {
+                when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(multiNotebookProject);
+
+                const multiOutputs = new Map<string, DeepnoteOutput[]>([
+                    [
+                        'block-nb1',
+                        [
+                            {
+                                output_type: 'execute_result',
+                                data: { 'text/plain': 'OutputForNb1Only' },
+                                execution_count: 1
+                            } as DeepnoteOutput
+                        ]
+                    ],
+                    [
+                        'block-nb2',
+                        [
+                            {
+                                output_type: 'execute_result',
+                                data: { 'text/plain': 'OutputForNb2Only' },
+                                execution_count: 1
+                            } as DeepnoteOutput
+                        ]
+                    ]
+                ]);
+                when(mockSnapshotService.readSnapshot(anything())).thenCall(() => {
+                    readSnapshotCallCount++;
+
+                    return Promise.resolve(multiOutputs);
+                });
+
+                const basePath = testFileUri('multi-snap.deepnote');
+                const uriNb1 = basePath.with({ query: 'view=1' });
+                const uriNb2 = basePath.with({ query: 'view=2' });
+
+                const notebook1 = createMockNotebook({
+                    uri: uriNb1,
+                    metadata: {
+                        deepnoteProjectId: 'project-1',
+                        deepnoteNotebookId: 'notebook-1'
+                    },
+                    cells: [
+                        {
+                            metadata: { id: 'block-nb1', type: 'code' },
+                            outputs: [],
+                            kind: NotebookCellKind.Code,
+                            document: { getText: () => 'print("nb1-old")', languageId: 'python' }
+                        }
+                    ]
+                });
+
+                const notebook2 = createMockNotebook({
+                    uri: uriNb2,
+                    metadata: {
+                        deepnoteProjectId: 'project-1',
+                        deepnoteNotebookId: 'notebook-2'
+                    },
+                    cells: [
+                        {
+                            metadata: { id: 'block-nb2', type: 'code' },
+                            outputs: [],
+                            kind: NotebookCellKind.Code,
+                            document: { getText: () => 'print("nb2-old")', languageId: 'python' }
+                        }
+                    ]
+                });
+
+                when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook1, notebook2]);
+
+                const snapshotUri = testFileUri('snapshots', 'my-project_project-1_latest.snapshot.deepnote');
+                snapshotOnDidChange.fire(snapshotUri);
+
+                await waitFor(() => snapshotApplyEditCount >= 4);
+
+                const byUri = new Map(interactionCaptures.map((c) => [c.uriKey, c]));
+
+                assert.include(byUri.get(uriNb1.toString())?.outputPlainJoined ?? '', 'OutputForNb1Only');
+                assert.notInclude(byUri.get(uriNb1.toString())?.outputPlainJoined ?? '', 'OutputForNb2Only');
+
+                assert.include(byUri.get(uriNb2.toString())?.outputPlainJoined ?? '', 'OutputForNb2Only');
+                assert.notInclude(byUri.get(uriNb2.toString())?.outputPlainJoined ?? '', 'OutputForNb1Only');
+            });
+
+            test('main file change after snapshot update deserializes updated cell source', async function () {
+                this.timeout(10_000);
+                const notebookUri = testFileUri('after-snap.deepnote');
+                const notebook = createMockNotebook({
+                    uri: notebookUri,
+                    cells: [
+                        {
+                            metadata: { id: 'block-1', type: 'code' },
+                            outputs: [],
+                            kind: NotebookCellKind.Code,
+                            document: { getText: () => 'print("hello")', languageId: 'python' }
+                        }
+                    ]
+                });
+
+                when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+
+                const snapshotUri = testFileUri('snapshots', 'my-project_project-1_latest.snapshot.deepnote');
+                when(mockSnapshotService.readSnapshot(anything())).thenCall(() => {
+                    readSnapshotCallCount++;
+
+                    return Promise.resolve(snapshotOutputs);
+                });
+
+                snapshotOnDidChange.fire(snapshotUri);
+                await waitFor(() => snapshotApplyEditCount >= 2);
+
+                const changedYaml = `
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00Z'
+project:
+  id: project-1
+  name: Test Project
+  notebooks:
+    - id: notebook-1
+      name: Notebook 1
+      blocks:
+        - id: block-1
+          type: code
+          sortingKey: a0
+          blockGroup: '1'
+          content: print("after-snapshot-main-sync")
+`;
+
+                const mockFs = mock<typeof import('vscode').workspace.fs>();
+                when(mockFs.readFile(anything())).thenCall(() => {
+                    return Promise.resolve(new TextEncoder().encode(changedYaml));
+                });
+                when(mockFs.writeFile(anything(), anything())).thenReturn(Promise.resolve());
+                when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
+
+                // Snapshot save marks self-write; first FS event consumes it without reloading.
+                snapshotOnDidChange.fire(notebookUri);
+                await new Promise((resolve) => setTimeout(resolve, debounceWaitMs));
+
+                snapshotOnDidChange.fire(notebookUri);
+
+                await waitFor(() =>
+                    interactionCaptures.some((c) => c.cellSourcesJoined.includes('after-snapshot-main-sync'))
+                );
+
+                const mainSyncCapture = interactionCaptures.find((c) =>
+                    c.cellSourcesJoined.includes('after-snapshot-main-sync')
+                );
+
+                assert.isDefined(mainSyncCapture);
+                assert.include(
+                    mainSyncCapture!.cellSourcesJoined,
+                    'after-snapshot-main-sync',
+                    'main-file sync should deserialize new source after snapshot outputs were applied'
+                );
+            });
+
+            test('snapshot save self-write is consumed once then external main-file change applies', async function () {
+                this.timeout(10_000);
+                const baseUri = testFileUri('snap-selfwrite.deepnote');
+                const notebook = createMockNotebook({
+                    uri: baseUri,
+                    cells: [
+                        {
+                            metadata: { id: 'block-1', type: 'code' },
+                            outputs: [],
+                            kind: NotebookCellKind.Code,
+                            document: { getText: () => 'print("hello")', languageId: 'python' }
+                        }
+                    ]
+                });
+
+                when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+
+                const snapshotUri = testFileUri('snapshots', 'my-project_project-1_latest.snapshot.deepnote');
+                snapshotOnDidChange.fire(snapshotUri);
+                await waitFor(() => snapshotSaveCount >= 1);
+
+                const editsBefore = snapshotApplyEditCount;
+
+                snapshotOnDidChange.fire(baseUri);
+                await new Promise((resolve) => setTimeout(resolve, debounceWaitMs));
+
+                assert.strictEqual(
+                    snapshotApplyEditCount,
+                    editsBefore,
+                    'first main-file FS event after snapshot save should be consumed as self-write'
+                );
+
+                const externalYaml = `
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00Z'
+project:
+  id: project-1
+  name: Test Project
+  notebooks:
+    - id: notebook-1
+      name: Notebook 1
+      blocks:
+        - id: block-1
+          type: code
+          sortingKey: a0
+          blockGroup: '1'
+          content: print("external-after-self-write")
+`;
+
+                const mockFs = mock<typeof import('vscode').workspace.fs>();
+                when(mockFs.readFile(anything())).thenCall(() => {
+                    return Promise.resolve(new TextEncoder().encode(externalYaml));
+                });
+                when(mockFs.writeFile(anything(), anything())).thenReturn(Promise.resolve());
+                when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
+
+                snapshotOnDidChange.fire(baseUri);
+
+                await waitFor(() =>
+                    interactionCaptures.some((c) => c.cellSourcesJoined.includes('external-after-self-write'))
+                );
+
+                assert.isTrue(
+                    interactionCaptures.some((c) => c.cellSourcesJoined.includes('external-after-self-write')),
+                    'second main-file change should deserialize external content'
+                );
+            });
+
+            test('main-file sync runs after in-flight snapshot when both are triggered close together', async function () {
+                this.timeout(12_000);
+                let releaseSnapshot!: () => void;
+                const snapshotGate = new Promise<void>((resolve) => {
+                    releaseSnapshot = resolve;
+                });
+
+                when(mockSnapshotService.readSnapshot(anything())).thenCall(() => {
+                    readSnapshotCallCount++;
+
+                    return snapshotGate.then(() => snapshotOutputs);
+                });
+
+                const baseUri = testFileUri('coalesce.deepnote');
+                const notebook = createMockNotebook({
+                    uri: baseUri,
+                    cells: [
+                        {
+                            metadata: { id: 'block-1', type: 'code' },
+                            outputs: [],
+                            kind: NotebookCellKind.Code,
+                            document: { getText: () => 'print("hello")', languageId: 'python' }
+                        }
+                    ]
+                });
+
+                when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+
+                const snapshotUri = testFileUri('snapshots', 'my-project_project-1_latest.snapshot.deepnote');
+                snapshotOnDidChange.fire(snapshotUri);
+
+                await waitFor(() => readSnapshotCallCount >= 1);
+
+                const coalescedYaml = `
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00Z'
+project:
+  id: project-1
+  name: Test Project
+  notebooks:
+    - id: notebook-1
+      name: Notebook 1
+      blocks:
+        - id: block-1
+          type: code
+          sortingKey: a0
+          blockGroup: '1'
+          content: print("main-wins-after-snapshot")
+`;
+
+                const mockFs = mock<typeof import('vscode').workspace.fs>();
+                when(mockFs.readFile(anything())).thenCall(() => {
+                    return Promise.resolve(new TextEncoder().encode(coalescedYaml));
+                });
+                when(mockFs.writeFile(anything(), anything())).thenReturn(Promise.resolve());
+                when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
+
+                snapshotOnDidChange.fire(baseUri);
+                await new Promise((resolve) => setTimeout(resolve, debounceWaitMs));
+
+                releaseSnapshot();
+
+                await waitFor(() =>
+                    interactionCaptures.some((c) => c.cellSourcesJoined.includes('main-wins-after-snapshot'))
+                );
+
+                assert.isTrue(
+                    interactionCaptures.some((c) => c.cellSourcesJoined.includes('main-wins-after-snapshot')),
+                    'main-file sync should deserialize disk YAML after snapshot operation completes'
+                );
+            });
+
+            test('multi-notebook: snapshot outputs then external YAML update keeps per-notebook sources', async function () {
+                this.timeout(12_000);
+                when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(multiNotebookProject);
+
+                const multiOutputs = new Map<string, DeepnoteOutput[]>([
+                    [
+                        'block-nb1',
+                        [
+                            {
+                                output_type: 'execute_result',
+                                data: { 'text/plain': 'SnapNb1' },
+                                execution_count: 1
+                            } as DeepnoteOutput
+                        ]
+                    ],
+                    [
+                        'block-nb2',
+                        [
+                            {
+                                output_type: 'execute_result',
+                                data: { 'text/plain': 'SnapNb2' },
+                                execution_count: 1
+                            } as DeepnoteOutput
+                        ]
+                    ]
+                ]);
+                when(mockSnapshotService.readSnapshot(anything())).thenCall(() => {
+                    readSnapshotCallCount++;
+
+                    return Promise.resolve(multiOutputs);
+                });
+
+                const basePath = testFileUri('multi-snap-then-yaml.deepnote');
+                const uriNb1 = basePath.with({ query: 'view=1' });
+                const uriNb2 = basePath.with({ query: 'view=2' });
+
+                const notebook1 = createMockNotebook({
+                    uri: uriNb1,
+                    metadata: {
+                        deepnoteProjectId: 'project-1',
+                        deepnoteNotebookId: 'notebook-1'
+                    },
+                    cells: [
+                        {
+                            metadata: { id: 'block-nb1', type: 'code' },
+                            outputs: [],
+                            kind: NotebookCellKind.Code,
+                            document: { getText: () => 'print("nb1-old")', languageId: 'python' }
+                        }
+                    ]
+                });
+
+                const notebook2 = createMockNotebook({
+                    uri: uriNb2,
+                    metadata: {
+                        deepnoteProjectId: 'project-1',
+                        deepnoteNotebookId: 'notebook-2'
+                    },
+                    cells: [
+                        {
+                            metadata: { id: 'block-nb2', type: 'code' },
+                            outputs: [],
+                            kind: NotebookCellKind.Code,
+                            document: { getText: () => 'print("nb2-old")', languageId: 'python' }
+                        }
+                    ]
+                });
+
+                when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook1, notebook2]);
+
+                const snapshotUri = testFileUri('snapshots', 'my-project_project-1_latest.snapshot.deepnote');
+                snapshotOnDidChange.fire(snapshotUri);
+                await waitFor(() => snapshotApplyEditCount >= 4);
+
+                const round2Project = structuredClone(multiNotebookProject);
+                round2Project.project.notebooks[0].blocks![0].content = 'print("nb1-round2")';
+                round2Project.project.notebooks[1].blocks![0].content = 'print("nb2-round2")';
+                const yamlRound2 = serializeDeepnoteFile(round2Project);
+
+                const mockFs = mock<typeof import('vscode').workspace.fs>();
+                when(mockFs.readFile(anything())).thenCall(() => {
+                    return Promise.resolve(new TextEncoder().encode(yamlRound2));
+                });
+                when(mockFs.writeFile(anything(), anything())).thenReturn(Promise.resolve());
+                when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
+
+                // Two snapshot saves increment self-write count to 2 for the shared base file URI.
+                snapshotOnDidChange.fire(basePath);
+                await new Promise((resolve) => setTimeout(resolve, debounceWaitMs));
+                snapshotOnDidChange.fire(basePath);
+                await new Promise((resolve) => setTimeout(resolve, debounceWaitMs));
+
+                snapshotOnDidChange.fire(basePath);
+
+                await waitFor(() =>
+                    interactionCaptures.some(
+                        (c) => c.uriKey === uriNb1.toString() && c.cellSourcesJoined.includes('nb1-round2')
+                    )
+                );
+
+                assert.isTrue(
+                    interactionCaptures.some(
+                        (c) => c.uriKey === uriNb1.toString() && c.outputPlainJoined.includes('SnapNb1')
+                    ),
+                    'snapshot phase should apply SnapNb1 output to notebook-1'
+                );
+                assert.isTrue(
+                    interactionCaptures.some(
+                        (c) => c.uriKey === uriNb2.toString() && c.outputPlainJoined.includes('SnapNb2')
+                    ),
+                    'snapshot phase should apply SnapNb2 output to notebook-2'
+                );
+
+                const nb1Main = interactionCaptures.find(
+                    (c) => c.uriKey === uriNb1.toString() && c.cellSourcesJoined.includes('nb1-round2')
+                );
+                const nb2Main = interactionCaptures.find(
+                    (c) => c.uriKey === uriNb2.toString() && c.cellSourcesJoined.includes('nb2-round2')
+                );
+
+                assert.isDefined(nb1Main);
+                assert.include(nb1Main!.cellSourcesJoined, 'nb1-round2');
+                assert.notInclude(nb1Main!.cellSourcesJoined, 'nb2-round2');
+
+                assert.isDefined(nb2Main);
+                assert.include(nb2Main!.cellSourcesJoined, 'nb2-round2');
+                assert.notInclude(nb2Main!.cellSourcesJoined, 'nb1-round2');
+            });
+
+            test('snapshot outputs for sibling notebook blocks do not leak into a single open notebook', async () => {
+                when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(multiNotebookProject);
+
+                const multiOutputs = new Map<string, DeepnoteOutput[]>([
+                    [
+                        'block-nb1',
+                        [
+                            {
+                                output_type: 'execute_result',
+                                data: { 'text/plain': 'OnlyNb1' },
+                                execution_count: 1
+                            } as DeepnoteOutput
+                        ]
+                    ],
+                    [
+                        'block-nb2',
+                        [
+                            {
+                                output_type: 'execute_result',
+                                data: { 'text/plain': 'LeakIfApplied' },
+                                execution_count: 1
+                            } as DeepnoteOutput
+                        ]
+                    ]
+                ]);
+                when(mockSnapshotService.readSnapshot(anything())).thenCall(() => {
+                    readSnapshotCallCount++;
+
+                    return Promise.resolve(multiOutputs);
+                });
+
+                const uriNb1 = testFileUri('only-nb1.deepnote');
+                const notebook1Only = createMockNotebook({
+                    uri: uriNb1,
+                    metadata: {
+                        deepnoteProjectId: 'project-1',
+                        deepnoteNotebookId: 'notebook-1'
+                    },
+                    cells: [
+                        {
+                            metadata: { id: 'block-nb1', type: 'code' },
+                            outputs: [],
+                            kind: NotebookCellKind.Code,
+                            document: { getText: () => 'print("nb1-only")', languageId: 'python' }
+                        }
+                    ]
+                });
+
+                when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook1Only]);
+
+                const snapshotUri = testFileUri('snapshots', 'my-project_project-1_latest.snapshot.deepnote');
+                snapshotOnDidChange.fire(snapshotUri);
+
+                await waitFor(() => snapshotApplyEditCount >= 2);
+
+                const cap = interactionCaptures.find((c) => c.uriKey === uriNb1.toString());
+
+                assert.isDefined(cap);
+                assert.include(cap!.outputPlainJoined, 'OnlyNb1');
+                assert.notInclude(cap!.outputPlainJoined, 'LeakIfApplied');
+            });
         });
     });
 

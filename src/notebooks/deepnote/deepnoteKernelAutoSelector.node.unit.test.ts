@@ -2,14 +2,10 @@ import { assert } from 'chai';
 import * as sinon from 'sinon';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { DeepnoteKernelAutoSelector } from './deepnoteKernelAutoSelector.node';
-import { createMockChildProcess } from '../../kernels/deepnote/deepnoteTestHelpers.node';
 import {
-    IDeepnoteEnvironmentManager,
     IDeepnoteLspClientManager,
-    IDeepnoteNotebookEnvironmentMapper,
     IDeepnoteServerProvider,
-    IDeepnoteServerStarter,
-    IDeepnoteToolkitInstaller
+    IDeepnoteServerStarter
 } from '../../kernels/deepnote/types';
 import { IControllerRegistration, IVSCodeNotebookController } from '../controllers/types';
 import { IDisposableRegistry, IOutputChannel } from '../../platform/common/types';
@@ -21,8 +17,8 @@ import { IDeepnoteNotebookManager } from '../types';
 import { IKernelProvider, IKernel, IJupyterKernelSpec } from '../../kernels/types';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
 import { NotebookDocument, Uri, NotebookController, CancellationToken } from 'vscode';
-import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnoteEnvironment';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
+import { IInterpreterService } from '../../platform/interpreter/contracts';
 import { computeRequirementsHash } from './deepnoteProjectUtils';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 
@@ -39,11 +35,9 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
     let mockNotebookManager: IDeepnoteNotebookManager;
     let mockKernelProvider: IKernelProvider;
     let mockRequirementsHelper: IDeepnoteRequirementsHelper;
-    let mockEnvironmentManager: IDeepnoteEnvironmentManager;
     let mockServerStarter: IDeepnoteServerStarter;
-    let mockNotebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper;
     let mockOutputChannel: IOutputChannel;
-    let mockToolkitInstaller: IDeepnoteToolkitInstaller;
+    let mockInterpreterService: IInterpreterService;
 
     let mockProgress: { report(value: { message?: string; increment?: number }): void };
     let mockCancellationToken: CancellationToken;
@@ -69,11 +63,9 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         mockNotebookManager = mock<IDeepnoteNotebookManager>();
         mockKernelProvider = mock<IKernelProvider>();
         mockRequirementsHelper = mock<IDeepnoteRequirementsHelper>();
-        mockEnvironmentManager = mock<IDeepnoteEnvironmentManager>();
         mockServerStarter = mock<IDeepnoteServerStarter>();
-        mockToolkitInstaller = mock<IDeepnoteToolkitInstaller>();
-        mockNotebookEnvironmentMapper = mock<IDeepnoteNotebookEnvironmentMapper>();
         mockOutputChannel = mock<IOutputChannel>();
+        mockInterpreterService = mock<IInterpreterService>();
 
         mockProgress = { report: sandbox.stub() };
         mockCancellationToken = mock<CancellationToken>();
@@ -135,11 +127,9 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             instance(mockNotebookManager),
             instance(mockKernelProvider),
             instance(mockRequirementsHelper),
-            instance(mockEnvironmentManager),
             instance(mockServerStarter),
-            instance(mockNotebookEnvironmentMapper),
             instance(mockOutputChannel),
-            instance(mockToolkitInstaller)
+            instance(mockInterpreterService)
         );
     });
 
@@ -158,31 +148,31 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 pendingCells: [{ index: 0 }, { index: 1 }] // 2 cells pending
             };
 
-            // Create mock environment
-            const mockEnvironment = createMockEnvironment('test-env-id', 'Test Environment');
-
-            // Mock environment mapper and manager
-            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).thenReturn('test-env-id');
-            when(mockEnvironmentManager.getEnvironment('test-env-id')).thenReturn(mockEnvironment);
+            // Mock interpreter service to return an active interpreter
+            const mockInterpreter: PythonEnvironment = {
+                id: '/usr/bin/python3',
+                uri: Uri.parse('/usr/bin/python3')
+            };
+            when(mockInterpreterService.getActiveInterpreter(anything())).thenResolve(mockInterpreter);
 
             when(mockKernelProvider.get(mockNotebook)).thenReturn(instance(mockKernel));
             when(mockKernelProvider.getKernelExecution(instance(mockKernel))).thenReturn(mockExecution as any);
 
-            // Stub ensureKernelSelectedWithConfiguration to verify it's still called despite pending cells
-            const ensureKernelSelectedWithConfigurationStub = sandbox
-                .stub(selector, 'ensureKernelSelectedWithConfiguration')
+            // Stub ensureKernelSelectedWithInterpreter to verify it's still called despite pending cells
+            const ensureKernelSelectedWithInterpreterStub = sandbox
+                .stub(selector, 'ensureKernelSelectedWithInterpreter')
                 .resolves();
             // Act
             await selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken));
 
             // Assert - should proceed despite pending cells
             assert.strictEqual(
-                ensureKernelSelectedWithConfigurationStub.calledOnce,
+                ensureKernelSelectedWithInterpreterStub.calledOnce,
                 true,
                 'ensureKernelSelected should be called even with pending cells'
             );
             assert.strictEqual(
-                ensureKernelSelectedWithConfigurationStub.firstCall.args[0],
+                ensureKernelSelectedWithInterpreterStub.firstCall.args[0],
                 mockNotebook,
                 'ensureKernelSelected should be called with the notebook'
             );
@@ -195,16 +185,16 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             // Arrange
             when(mockKernelProvider.get(mockNotebook)).thenReturn(undefined);
 
-            // Create mock environment
-            const mockEnvironment = createMockEnvironment('test-env-id', 'Test Environment');
+            // Mock interpreter service to return an active interpreter
+            const mockInterpreter: PythonEnvironment = {
+                id: '/usr/bin/python3',
+                uri: Uri.parse('/usr/bin/python3')
+            };
+            when(mockInterpreterService.getActiveInterpreter(anything())).thenResolve(mockInterpreter);
 
-            // Mock environment mapper and manager
-            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).thenReturn('test-env-id');
-            when(mockEnvironmentManager.getEnvironment('test-env-id')).thenReturn(mockEnvironment);
-
-            // Stub ensureKernelSelectedWithConfiguration to verify it's called
-            const ensureKernelSelectedWithConfigurationStub = sandbox
-                .stub(selector, 'ensureKernelSelectedWithConfiguration')
+            // Stub ensureKernelSelectedWithInterpreter to verify it's called
+            const ensureKernelSelectedWithInterpreterStub = sandbox
+                .stub(selector, 'ensureKernelSelectedWithInterpreter')
                 .resolves();
 
             // Act
@@ -212,34 +202,34 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
             // Assert - should proceed normally without a kernel
             assert.strictEqual(
-                ensureKernelSelectedWithConfigurationStub.calledOnce,
+                ensureKernelSelectedWithInterpreterStub.calledOnce,
                 true,
                 'ensureKernelSelected should be called even when no kernel exists'
             );
             assert.strictEqual(
-                ensureKernelSelectedWithConfigurationStub.firstCall.args[0],
+                ensureKernelSelectedWithInterpreterStub.firstCall.args[0],
                 mockNotebook,
                 'ensureKernelSelected should be called with the notebook'
             );
         });
 
-        test('should complete successfully and delegate to ensureKernelSelectedWithConfiguration', async () => {
-            // This test verifies that ensureKernelSelectedWithConfiguration completes successfully
+        test('should complete successfully and delegate to ensureKernelSelectedWithInterpreter', async () => {
+            // This test verifies that ensureKernelSelectedWithInterpreter completes successfully
             // and delegates kernel setup to ensureKernelSelected
 
             // Arrange
             when(mockKernelProvider.get(mockNotebook)).thenReturn(undefined);
 
-            // Create mock environment
-            const mockEnvironment = createMockEnvironment('test-env-id', 'Test Environment');
+            // Mock interpreter service to return an active interpreter
+            const mockInterpreter: PythonEnvironment = {
+                id: '/usr/bin/python3',
+                uri: Uri.parse('/usr/bin/python3')
+            };
+            when(mockInterpreterService.getActiveInterpreter(anything())).thenResolve(mockInterpreter);
 
-            // Mock environment mapper and manager
-            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).thenReturn('test-env-id');
-            when(mockEnvironmentManager.getEnvironment('test-env-id')).thenReturn(mockEnvironment);
-
-            // Stub ensureKernelSelectedWithConfiguration to verify delegation
-            const ensureKernelSelectedWithConfigurationStub = sandbox
-                .stub(selector, 'ensureKernelSelectedWithConfiguration')
+            // Stub ensureKernelSelectedWithInterpreter to verify delegation
+            const ensureKernelSelectedWithInterpreterStub = sandbox
+                .stub(selector, 'ensureKernelSelectedWithInterpreter')
                 .resolves();
 
             // Act
@@ -247,30 +237,30 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
             // Assert - method should complete without errors
             assert.strictEqual(
-                ensureKernelSelectedWithConfigurationStub.calledOnce,
+                ensureKernelSelectedWithInterpreterStub.calledOnce,
                 true,
-                'ensureKernelSelectedWithConfiguration should be called to set up the new environment'
+                'ensureKernelSelectedWithInterpreter should be called to set up the new environment'
             );
         });
 
-        test('should pass cancellation token to ensureKernelSelectedWithConfiguration', async () => {
+        test('should pass cancellation token to ensureKernelSelectedWithInterpreter', async () => {
             // This test verifies that rebuildController correctly passes the cancellation token
-            // to ensureKernelSelectedWithConfiguration, allowing the operation to be cancelled during execution
+            // to ensureKernelSelectedWithInterpreter, allowing the operation to be cancelled during execution
 
             // Arrange
             when(mockCancellationToken.isCancellationRequested).thenReturn(true);
             when(mockKernelProvider.get(mockNotebook)).thenReturn(undefined);
 
-            // Create mock environment
-            const mockEnvironment = createMockEnvironment('test-env-id', 'Test Environment');
+            // Mock interpreter service to return an active interpreter
+            const mockInterpreter: PythonEnvironment = {
+                id: '/usr/bin/python3',
+                uri: Uri.parse('/usr/bin/python3')
+            };
+            when(mockInterpreterService.getActiveInterpreter(anything())).thenResolve(mockInterpreter);
 
-            // Mock environment mapper and manager
-            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).thenReturn('test-env-id');
-            when(mockEnvironmentManager.getEnvironment('test-env-id')).thenReturn(mockEnvironment);
-
-            // Stub ensureKernelSelectedWithConfiguration to verify it receives the token
-            const ensureKernelSelectedWithConfigurationStub = sandbox
-                .stub(selector, 'ensureKernelSelectedWithConfiguration')
+            // Stub ensureKernelSelectedWithInterpreter to verify it receives the token
+            const ensureKernelSelectedWithInterpreterStub = sandbox
+                .stub(selector, 'ensureKernelSelectedWithInterpreter')
                 .resolves();
 
             // Act
@@ -278,47 +268,20 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
             // Assert
             assert.strictEqual(
-                ensureKernelSelectedWithConfigurationStub.calledOnce,
+                ensureKernelSelectedWithInterpreterStub.calledOnce,
                 true,
-                'ensureKernelSelectedWithConfiguration should be called once'
+                'ensureKernelSelectedWithInterpreter should be called once'
             );
             assert.strictEqual(
-                ensureKernelSelectedWithConfigurationStub.firstCall.args[0],
+                ensureKernelSelectedWithInterpreterStub.firstCall.args[0],
                 mockNotebook,
                 'ensureKernelSelected should be called with the notebook'
             );
             assert.strictEqual(
-                ensureKernelSelectedWithConfigurationStub.firstCall.args[6],
+                ensureKernelSelectedWithInterpreterStub.firstCall.args[6],
                 instance(mockCancellationToken),
                 'ensureKernelSelected should be called with the cancellation token'
             );
-        });
-    });
-
-    suite('pickEnvironment', () => {
-        test('should return selected environment when user picks one', async () => {
-            // Arrange
-            const notebookUri = Uri.parse('file:///test/notebook.deepnote');
-            const mockEnv1 = createMockEnvironment('env-1', 'Environment 1');
-            const mockEnv2 = createMockEnvironment('env-2', 'Environment 2');
-            const environments = [mockEnv1, mockEnv2];
-
-            // Mock environment manager
-            when(mockEnvironmentManager.waitForInitialization()).thenResolve();
-            when(mockEnvironmentManager.listEnvironments()).thenReturn(environments);
-
-            // Mock window.showQuickPick to simulate user selecting the first environment
-            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenResolve({
-                label: mockEnv1.name,
-                description: mockEnv1.pythonInterpreter.uri.fsPath,
-                environment: mockEnv1
-            } as any);
-
-            // Act
-            const result = await selector.pickEnvironment(notebookUri);
-
-            // Assert
-            assert.strictEqual(result, mockEnv1, 'Should return the selected environment');
         });
     });
 
@@ -343,15 +306,12 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
     });
 
     suite('ensureKernelSelected', () => {
-        test('should return false when no environment ID is assigned to the notebook', async () => {
-            // Mock environment mapper to return null (no environment assigned)
-            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).thenReturn(undefined);
+        test('should return false when no active interpreter is found', async () => {
+            // Mock interpreter service to return undefined (no active interpreter)
+            when(mockInterpreterService.getActiveInterpreter(anything())).thenResolve(undefined);
 
-            // Stub ensureKernelSelectedWithConfiguration to track if it gets called
-            const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelectedWithConfiguration').resolves();
-
-            // Mock commands.executeCommand
-            when(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything())).thenResolve();
+            // Stub ensureKernelSelectedWithInterpreter to track if it gets called
+            const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelectedWithInterpreter').resolves();
 
             // Act
             const result = await selector.ensureKernelSelected(
@@ -361,72 +321,29 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             );
 
             // Assert
-            assert.strictEqual(result, false, 'Should return false when no environment is assigned');
+            assert.strictEqual(result, false, 'Should return false when no active interpreter is found');
             assert.strictEqual(
                 ensureKernelSelectedStub.called,
                 false,
-                'ensureKernelSelectedWithConfiguration should not be called'
+                'ensureKernelSelectedWithInterpreter should not be called'
             );
-            verify(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).once();
         });
 
-        test('should return false and remove mapping when environment is not found', async () => {
-            // Arrange
-            const environmentId = 'missing-env-id';
-
-            // Mock environment mapper to return an ID
-            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).thenReturn(environmentId);
-
-            // Mock environment manager to return null (environment not found)
-            when(mockEnvironmentManager.getEnvironment(environmentId)).thenReturn(undefined);
-
-            // Mock remove environment mapping
-            when(mockNotebookEnvironmentMapper.removeEnvironmentForNotebook(anything())).thenResolve();
-
-            // Stub ensureKernelSelectedWithConfiguration to track if it gets called
-            const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelectedWithConfiguration').resolves();
-
-            // Mock commands.executeCommand
-            when(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything())).thenResolve();
-
-            // Act
-            const result = await selector.ensureKernelSelected(
-                mockNotebook,
-                mockProgress,
-                instance(mockCancellationToken)
-            );
-
-            // Assert
-            assert.strictEqual(result, false, 'Should return false when environment is not found');
-            assert.strictEqual(
-                ensureKernelSelectedStub.called,
-                false,
-                'ensureKernelSelectedWithConfiguration should not be called'
-            );
-            verify(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).once();
-            verify(mockEnvironmentManager.getEnvironment(environmentId)).once();
-            verify(mockNotebookEnvironmentMapper.removeEnvironmentForNotebook(anything())).once();
-        });
-
-        test('should return true and call ensureKernelSelectedWithConfiguration when environment is found', async () => {
+        test('should return true and call ensureKernelSelectedWithInterpreter when interpreter is found', async () => {
             // Arrange
             const baseFileUri = mockNotebook.uri.with({ query: '', fragment: '' });
             const notebookKey = mockNotebook.uri.toString();
             const projectKey = baseFileUri.fsPath;
-            const environmentId = 'test-env-id';
-            const mockEnvironment = createMockEnvironment(environmentId, 'Test Environment');
+            const mockInterpreter: PythonEnvironment = {
+                id: '/usr/bin/python3',
+                uri: Uri.parse('/usr/bin/python3')
+            };
 
-            // Mock environment mapper to return an ID
-            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).thenReturn(environmentId);
+            // Mock interpreter service to return an active interpreter
+            when(mockInterpreterService.getActiveInterpreter(anything())).thenResolve(mockInterpreter);
 
-            // Mock environment manager to return the environment
-            when(mockEnvironmentManager.getEnvironment(environmentId)).thenReturn(mockEnvironment);
-
-            // Stub ensureKernelSelectedWithConfiguration to track calls
-            const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelectedWithConfiguration').resolves();
-
-            // Mock commands.executeCommand
-            when(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything())).thenResolve();
+            // Stub ensureKernelSelectedWithInterpreter to track calls
+            const ensureKernelSelectedStub = sandbox.stub(selector, 'ensureKernelSelectedWithInterpreter').resolves();
 
             // Act
             const result = await selector.ensureKernelSelected(
@@ -436,25 +353,22 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             );
 
             // Assert
-            assert.strictEqual(result, true, 'Should return true when environment is found');
+            assert.strictEqual(result, true, 'Should return true when interpreter is found');
             assert.strictEqual(
                 ensureKernelSelectedStub.calledOnce,
                 true,
-                'ensureKernelSelectedWithConfiguration should be called once'
+                'ensureKernelSelectedWithInterpreter should be called once'
             );
 
             // Verify it was called with correct arguments
             const callArgs = ensureKernelSelectedStub.firstCall.args;
             assert.strictEqual(callArgs[0], mockNotebook, 'First arg should be notebook');
-            assert.strictEqual(callArgs[1], mockEnvironment, 'Second arg should be environment');
+            assert.deepStrictEqual(callArgs[1], mockInterpreter, 'Second arg should be interpreter');
             assert.strictEqual(callArgs[2].toString(), baseFileUri.toString(), 'Third arg should be baseFileUri');
             assert.strictEqual(callArgs[3], notebookKey, 'Fourth arg should be notebookKey');
             assert.strictEqual(callArgs[4], projectKey, 'Fifth arg should be projectKey');
             assert.strictEqual(callArgs[5], mockProgress, 'Sixth arg should be progress');
             assert.strictEqual(callArgs[6], instance(mockCancellationToken), 'Seventh arg should be token');
-
-            verify(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).once();
-            verify(mockEnvironmentManager.getEnvironment(environmentId)).once();
         });
     });
 
@@ -702,7 +616,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             //
             // CURRENT IMPLEMENTATION BEHAVIOR:
             //
-            // 1. If startServer() fails, the error propagates from ensureKernelSelectedWithConfiguration()
+            // 1. If startServer() fails, the error propagates from ensureKernelSelectedWithInterpreter()
             //    (deepnoteKernelAutoSelector.node.ts:450-467)
             //
             // 2. The error is caught and shown to user in the UI layer
@@ -738,72 +652,53 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
     // REAL TDD Tests - These should FAIL if bugs exist
     suite('Bug Detection: Kernel Selection', () => {
-        test('BUG-1: Should prefer environment-specific kernel over .env kernel', () => {
-            // REAL TEST: This will FAIL if the wrong kernel is selected
-            //
-            // The selectKernelSpec method is now extracted and testable!
+        test('Should select the first Python kernel from available specs', () => {
+            // The selectKernelSpec method selects the first Python kernel available
 
-            const envId = 'env123';
             const kernelSpecs: IJupyterKernelSpec[] = [
                 createMockKernelSpec('.env', '.env Python', 'python'),
-                createMockKernelSpec(`deepnote-${envId}`, 'Deepnote Environment', 'python'),
                 createMockKernelSpec('python3', 'Python 3', 'python')
             ];
 
-            const selected = selector.selectKernelSpec(kernelSpecs, envId);
+            const selected = selector.selectKernelSpec(kernelSpecs);
 
-            // CRITICAL ASSERTION: Should select environment-specific kernel, NOT .env
-            assert.strictEqual(
-                selected?.name,
-                `deepnote-${envId}`,
-                `BUG DETECTED: Selected "${selected?.name}" instead of "deepnote-${envId}"! This would use wrong environment.`
+            // Should select the first Python kernel
+            assert.strictEqual(selected.language, 'python', 'Should select a Python kernel');
+            assert.strictEqual(selected.name, '.env', 'Should select the first Python kernel');
+        });
+
+        test('Should fall back to python3 named kernel when no python language kernel exists first', () => {
+            // Documents fallback behavior - finds python3 by name if no python language match
+
+            const kernelSpecs: IJupyterKernelSpec[] = [
+                createMockKernelSpec('javascript', 'JavaScript', 'javascript'),
+                createMockKernelSpec('python3', 'Python 3', 'python')
+            ];
+
+            const selected = selector.selectKernelSpec(kernelSpecs);
+
+            assert.strictEqual(selected.name, 'python3', 'Should find python3 kernel');
+        });
+
+        test('Kernel selection: Should fall back to first available kernel when no Python kernel exists', () => {
+            const kernelSpecs: IJupyterKernelSpec[] = [
+                createMockKernelSpec('javascript', 'JavaScript', 'javascript'),
+                createMockKernelSpec('r', 'R', 'r')
+            ];
+
+            const selected = selector.selectKernelSpec(kernelSpecs);
+
+            assert.strictEqual(selected.name, 'javascript', 'Should fall back to first available kernel');
+        });
+
+        test('Kernel selection: Should throw when no kernel specs are available', () => {
+            const kernelSpecs: IJupyterKernelSpec[] = [];
+
+            assert.throws(
+                () => selector.selectKernelSpec(kernelSpecs),
+                /No kernel specs available/,
+                'Should throw when no kernel specs are available'
             );
-        });
-
-        test('BUG-1b: Current implementation falls back to Python kernel (documents expected behavior)', () => {
-            // This test documents that the current implementation DOES have fallback logic
-            //
-            // EXPECTED BEHAVIOR (current): Fall back to generic Python kernel when env-specific kernel not found
-            // This is a design decision - we don't want to block users if the environment-specific kernel isn't ready yet
-
-            const envId = 'env123';
-            const kernelSpecs: IJupyterKernelSpec[] = [
-                createMockKernelSpec('.env', '.env Python', 'python'),
-                createMockKernelSpec('python3', 'Python 3', 'python')
-            ];
-
-            // Should fall back to a Python kernel (this is the current behavior)
-            const selected = selector.selectKernelSpec(kernelSpecs, envId);
-
-            // Should have selected a fallback kernel (either .env or python3)
-            assert.ok(selected, 'Should select a fallback kernel');
-            assert.strictEqual(selected.language, 'python', 'Fallback should be a Python kernel');
-        });
-
-        test('Kernel selection: Should find environment-specific kernel when it exists', () => {
-            const envId = 'my-env';
-            const kernelSpecs: IJupyterKernelSpec[] = [
-                createMockKernelSpec('python3', 'Python 3', 'python'),
-                createMockKernelSpec(`deepnote-${envId}`, 'My Environment', 'python')
-            ];
-
-            const selected = selector.selectKernelSpec(kernelSpecs, envId);
-
-            assert.strictEqual(selected?.name, `deepnote-${envId}`);
-        });
-
-        test('Kernel selection: Should fall back to python3 when env kernel missing', () => {
-            // Documents current fallback behavior - falls back to python3 when env kernel missing
-            const envId = 'my-env';
-            const kernelSpecs: IJupyterKernelSpec[] = [
-                createMockKernelSpec('python3', 'Python 3', 'python'),
-                createMockKernelSpec('javascript', 'JavaScript', 'javascript')
-            ];
-
-            // Should fall back to python3 (current behavior)
-            const selected = selector.selectKernelSpec(kernelSpecs, envId);
-
-            assert.strictEqual(selected.name, 'python3', 'Should fall back to python3');
         });
     });
 
@@ -834,9 +729,14 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             // REAL TEST: This will FAIL if disposal happens too early
             //
             // Setup: Create a scenario where we have an old controller and create a new one
-            const baseFileUri = mockNotebook.uri.with({ query: '', fragment: '' });
+            // const baseFileUri = mockNotebook.uri.with({ query: '', fragment: '' });
             // const notebookKey = baseFileUri.fsPath;
-            const newEnv = createMockEnvironment('env-new', 'New Environment', true);
+            // Mock interpreter service to return an active interpreter
+            const mockInterpreter: PythonEnvironment = {
+                id: '/usr/bin/python3',
+                uri: Uri.parse('/usr/bin/python3')
+            };
+            when(mockInterpreterService.getActiveInterpreter(anything())).thenResolve(mockInterpreter);
 
             // Track call order
             const callOrder: string[] = [];
@@ -860,8 +760,6 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             when(newController.controller).thenReturn({} as any);
 
             // Setup mocks
-            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri)).thenReturn('env-new');
-            when(mockEnvironmentManager.getEnvironment('env-new')).thenReturn(newEnv);
             when(mockPythonExtensionChecker.isPythonExtensionInstalled).thenReturn(true);
 
             // Mock controller registration to track when new controller is added
@@ -1018,37 +916,6 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         });
     });
 });
-
-/**
- * Helper function to create mock environments
- */
-function createMockEnvironment(id: string, name: string, hasServer: boolean = false): DeepnoteEnvironment {
-    const mockPythonInterpreter: PythonEnvironment = {
-        id: `/usr/bin/python3`,
-        uri: Uri.parse(`/usr/bin/python3`)
-    };
-
-    return {
-        id,
-        name,
-        description: `Test environment ${name}`,
-        pythonInterpreter: mockPythonInterpreter,
-        venvPath: Uri.file(`/test/venvs/${id}`),
-        managedVenv: true,
-        packages: [],
-        createdAt: new Date(),
-        lastUsedAt: new Date(),
-        serverInfo: hasServer
-            ? {
-                  url: `http://localhost:8888`,
-                  jupyterPort: 8888,
-                  lspPort: 8889,
-                  token: 'test-token',
-                  process: createMockChildProcess()
-              }
-            : undefined
-    };
-}
 
 /**
  * Helper function to create mock kernel specs

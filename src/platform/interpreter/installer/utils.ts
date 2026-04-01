@@ -23,6 +23,8 @@ export function translateProductToModule(product: Product): string {
             return 'pip';
         case Product.ensurepip:
             return 'ensurepip';
+        case Product.deepnoteToolkit:
+            return 'deepnote_toolkit';
         default: {
             throw new WrappedError(
                 `Product ${product} cannot be installed as a Python Module.`,

@@ -151,32 +151,24 @@ export interface IDeepnoteToolkitInstaller {
 export const IDeepnoteServerStarter = Symbol('IDeepnoteServerStarter');
 export interface IDeepnoteServerStarter {
     /**
-     * Starts a deepnote-toolkit Jupyter server for a kernel environment.
-     * Environment-based method.
+     * Starts a deepnote-toolkit Jupyter server using the active Python interpreter.
+     * Handles checking/installing deepnote-toolkit via the IInstaller infrastructure.
      * @param interpreter The Python interpreter to use
-     * @param venvPath The path to the venv
-     * @param managedVenv Whether the venv is managed by this extension (created by us)
-     * @param environmentId The environment ID (for server management)
      * @param deepnoteFileUri The URI of the .deepnote file
      * @param token Cancellation token to cancel the operation
      * @returns Connection information (URL, port, etc.)
      */
     startServer(
         interpreter: PythonEnvironment,
-        venvPath: vscode.Uri,
-        managedVenv: boolean,
-        additionalPackages: string[],
-        environmentId: string,
         deepnoteFileUri: vscode.Uri,
         token?: vscode.CancellationToken
     ): Promise<DeepnoteServerInfo>;
 
     /**
-     * Stops the deepnote-toolkit server for a kernel environment.
-     * @param environmentId The environment ID
+     * Stops the deepnote-toolkit server for a .deepnote file.
+     * @param deepnoteFileUri The URI of the .deepnote file
      * @param token Cancellation token to cancel the operation
      */
-    // stopServer(environmentId: string, token?: vscode.CancellationToken): Promise<void>;
     stopServer(deepnoteFileUri: vscode.Uri, token?: vscode.CancellationToken): Promise<void>;
 
     /**

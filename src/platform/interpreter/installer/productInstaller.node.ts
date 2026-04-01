@@ -7,10 +7,12 @@ import { ProductNames } from './productNames';
 import {
     IInstallationChannelManager,
     IInstaller,
+    IModuleInstaller,
     InstallerResponse,
     IProductPathService,
     IProductService,
     ModuleInstallFlags,
+    ModuleInstallerType,
     Product,
     ProductType
 } from './types';
@@ -93,8 +95,19 @@ export class DataScienceInstaller {
         installPipIfRequired?: boolean,
         silent?: boolean
     ): Promise<InstallerResponse> {
-        const channels = this.serviceContainer.get<IInstallationChannelManager>(IInstallationChannelManager);
-        const installer = await channels.getInstallationChannel(product, interpreter);
+        let installer: IModuleInstaller | undefined;
+
+        // deepnote-toolkit is PyPI-only with pip-specific [server] extras syntax,
+        // so always use PipInstaller regardless of environment type.
+        if (product === Product.deepnoteToolkit) {
+            const channels = this.serviceContainer.get<IInstallationChannelManager>(IInstallationChannelManager);
+            const allInstallers = await channels.getInstallationChannels(interpreter);
+            installer = allInstallers.find((i) => i.type === ModuleInstallerType.Pip);
+        } else {
+            const channels = this.serviceContainer.get<IInstallationChannelManager>(IInstallationChannelManager);
+            installer = await channels.getInstallationChannel(product, interpreter);
+        }
+
         if (!installer) {
             return InstallerResponse.Ignore;
         }

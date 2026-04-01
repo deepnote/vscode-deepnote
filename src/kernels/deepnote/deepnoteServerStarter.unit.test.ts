@@ -1,12 +1,13 @@
 import { assert } from 'chai';
 import * as fakeTimers from '@sinonjs/fake-timers';
 import { anything, instance, mock, when } from 'ts-mockito';
+import { EventEmitter } from 'vscode';
 
 import { DeepnoteAgentSkillsManager } from './deepnoteAgentSkillsManager.node';
 import { DeepnoteServerStarter } from './deepnoteServerStarter.node';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { IAsyncDisposableRegistry, IOutputChannel } from '../../platform/common/types';
-import { IDeepnoteToolkitInstaller } from './types';
+import { IInstaller, InstallerResponse } from '../../platform/interpreter/installer/types';
 import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
 
 /**
@@ -19,7 +20,7 @@ import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnot
 suite('DeepnoteServerStarter', () => {
     let serverStarter: DeepnoteServerStarter;
     let mockProcessServiceFactory: IProcessServiceFactory;
-    let mockToolkitInstaller: IDeepnoteToolkitInstaller;
+    let mockInstaller: IInstaller;
     let mockAgentSkillsManager: DeepnoteAgentSkillsManager;
     let mockOutputChannel: IOutputChannel;
     let mockAsyncRegistry: IAsyncDisposableRegistry;
@@ -32,7 +33,7 @@ suite('DeepnoteServerStarter', () => {
 
     setup(() => {
         mockProcessServiceFactory = mock<IProcessServiceFactory>();
-        mockToolkitInstaller = mock<IDeepnoteToolkitInstaller>();
+        mockInstaller = mock<IInstaller>();
         mockAgentSkillsManager = mock<DeepnoteAgentSkillsManager>();
         mockOutputChannel = mock<IOutputChannel>();
         mockAsyncRegistry = mock<IAsyncDisposableRegistry>();
@@ -40,10 +41,13 @@ suite('DeepnoteServerStarter', () => {
 
         when(mockAsyncRegistry.push(anything())).thenReturn();
         when(mockOutputChannel.appendLine(anything())).thenReturn();
+        when(mockInstaller.isInstalled(anything(), anything())).thenResolve(true);
+        when(mockInstaller.install(anything(), anything(), anything())).thenResolve(InstallerResponse.Installed);
+        when(mockInstaller.onInstalled).thenReturn(new EventEmitter<any>().event);
 
         serverStarter = new DeepnoteServerStarter(
             instance(mockProcessServiceFactory),
-            instance(mockToolkitInstaller),
+            instance(mockInstaller),
             instance(mockAgentSkillsManager),
             instance(mockOutputChannel),
             instance(mockAsyncRegistry),
@@ -62,7 +66,7 @@ suite('DeepnoteServerStarter', () => {
             // Create a starter without SQL provider
             const starterWithoutSql = new DeepnoteServerStarter(
                 instance(mockProcessServiceFactory),
-                instance(mockToolkitInstaller),
+                instance(mockInstaller),
                 instance(mockAgentSkillsManager),
                 instance(mockOutputChannel),
                 instance(mockAsyncRegistry)
@@ -85,7 +89,7 @@ suite('DeepnoteServerStarter', () => {
 
             const starterWithCancelledSql = new DeepnoteServerStarter(
                 instance(mockProcessServiceFactory),
-                instance(mockToolkitInstaller),
+                instance(mockInstaller),
                 instance(mockAgentSkillsManager),
                 instance(mockOutputChannel),
                 instance(mockAsyncRegistry),

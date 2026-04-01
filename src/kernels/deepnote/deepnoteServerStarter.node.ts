@@ -24,8 +24,10 @@ import { logger } from '../../platform/logging';
 import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import * as path from '../../platform/vscode-path/path';
-import { DeepnoteServerInfo, IDeepnoteServerStarter, IDeepnoteToolkitInstaller } from './types';
+import { DeepnoteServerInfo, IDeepnoteServerStarter } from './types';
 import { DeepnoteAgentSkillsManager } from './deepnoteAgentSkillsManager.node';
+import { getCachedEnvironment } from '../../platform/interpreter/helpers';
+import { IInstaller, InstallerResponse, Product } from '../../platform/interpreter/installer/types';
 
 const MAX_OUTPUT_TRACKING_LENGTH = 5000;
 const SERVER_STARTUP_TIMEOUT_MS = 120_000;
@@ -48,7 +50,7 @@ type PendingOperation =
       };
 
 interface ProjectContext {
-    environmentId: string;
+    interpreterId: string;
     serverInfo: DeepnoteServerInfo | null;
 }
 
@@ -71,7 +73,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
     constructor(
         @inject(IProcessServiceFactory) private readonly processServiceFactory: IProcessServiceFactory,
-        @inject(IDeepnoteToolkitInstaller) private readonly toolkitInstaller: IDeepnoteToolkitInstaller,
+        @inject(IInstaller) private readonly installer: IInstaller,
         @inject(DeepnoteAgentSkillsManager) private readonly agentSkillsManager: DeepnoteAgentSkillsManager,
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel,
         @inject(IAsyncDisposableRegistry) asyncRegistry: IAsyncDisposableRegistry,
@@ -98,14 +100,11 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
      */
     public async startServer(
         interpreter: PythonEnvironment,
-        venvPath: Uri,
-        managedVenv: boolean,
-        additionalPackages: string[],
-        environmentId: string,
         deepnoteFileUri: Uri,
         token?: CancellationToken
     ): Promise<DeepnoteServerInfo> {
         const fileKey = deepnoteFileUri.fsPath;
+        const interpreterId = interpreter.id;
 
         let pendingOp = this.pendingOperations.get(fileKey);
         if (pendingOp) {
@@ -119,12 +118,12 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
         let existingContext = this.projectContexts.get(fileKey);
         if (existingContext != null) {
-            const { environmentId: existingEnvironmentId, serverInfo: existingServerInfo } = existingContext;
+            const { interpreterId: existingInterpreterId, serverInfo: existingServerInfo } = existingContext;
 
-            if (existingEnvironmentId === environmentId) {
+            if (existingInterpreterId === interpreterId) {
                 if (existingServerInfo != null && (await this.isServerRunning(existingServerInfo))) {
                     logger.info(
-                        `Deepnote server already running at ${existingServerInfo.url} for ${fileKey} (environmentId ${environmentId})`
+                        `Deepnote server already running at ${existingServerInfo.url} for ${fileKey} (interpreter ${interpreterId})`
                     );
                     return existingServerInfo;
                 }
@@ -136,14 +135,14 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                 }
             } else {
                 logger.info(
-                    `Stopping existing server for ${fileKey} with environmentId ${existingEnvironmentId} to start new one with environmentId ${environmentId}...`
+                    `Stopping existing server for ${fileKey} with interpreter ${existingInterpreterId} to start new one with interpreter ${interpreterId}...`
                 );
                 await this.stopServerForEnvironment(existingContext, deepnoteFileUri, token);
-                existingContext.environmentId = environmentId;
+                existingContext.interpreterId = interpreterId;
             }
         } else {
             const newContext: ProjectContext = {
-                environmentId,
+                interpreterId,
                 serverInfo: null
             };
 
@@ -153,16 +152,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
         const operation = {
             type: 'start' as const,
-            promise: this.startServerForEnvironment(
-                existingContext,
-                interpreter,
-                venvPath,
-                managedVenv,
-                additionalPackages,
-                environmentId,
-                deepnoteFileUri,
-                token
-            )
+            promise: this.startServerForEnvironment(existingContext, interpreter, deepnoteFileUri, token)
         };
         this.pendingOperations.set(fileKey, operation);
 
@@ -223,7 +213,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
      * Core server start using @deepnote/runtime-core's `startServer`.
      *
      * Extension-specific layers:
-     * - Toolkit/venv installation (before start)
+     * - Toolkit check/install via IInstaller (before start)
      * - SQL integration env var injection (via ServerOptions.env)
      * - Lock file creation (after start, using returned PID)
      * - Output channel logging (via process stdout/stderr streams)
@@ -231,37 +221,49 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
     private async startServerForEnvironment(
         projectContext: ProjectContext,
         interpreter: PythonEnvironment,
-        venvPath: Uri,
-        managedVenv: boolean,
-        additionalPackages: string[],
-        environmentId: string,
         deepnoteFileUri: Uri,
         token?: CancellationToken
     ): Promise<DeepnoteServerInfo> {
         const fileKey = deepnoteFileUri.fsPath;
+        const interpreterId = interpreter.id;
 
         Cancellation.throwIfCanceled(token);
 
-        logger.info(`Ensuring deepnote-toolkit is installed in venv for environment ${environmentId}...`);
-        const { pythonInterpreter: venvInterpreter } = await this.toolkitInstaller.ensureVenvAndToolkit(
-            interpreter,
-            venvPath,
-            managedVenv,
-            token
-        );
+        // Check if deepnote-toolkit is installed, and install if needed
+        logger.info(`Checking deepnote-toolkit installation for interpreter ${interpreterId}...`);
+        const isInstalled = await this.installer.isInstalled(Product.deepnoteToolkit, interpreter);
 
-        this.agentSkillsManager.ensureSkillsUpdated(environmentId, venvInterpreter);
+        if (!isInstalled) {
+            logger.info(`deepnote-toolkit not installed, installing via IInstaller...`);
+            const { CancellationTokenSource } = await import('vscode');
+            const cts = new CancellationTokenSource();
+
+            try {
+                if (token) {
+                    token.onCancellationRequested(() => cts.cancel());
+                }
+
+                const result = await this.installer.install(Product.deepnoteToolkit, interpreter, cts);
+
+                if (result !== InstallerResponse.Installed) {
+                    throw new Error('deepnote-toolkit installation was cancelled or failed');
+                }
+            } finally {
+                cts.dispose();
+            }
+        }
+
+        this.agentSkillsManager.ensureSkillsUpdated(interpreterId, interpreter);
 
         Cancellation.throwIfCanceled(token);
 
-        await this.toolkitInstaller.installAdditionalPackages(venvPath, additionalPackages, token);
+        // Derive the environment path from the interpreter
+        const envPath = this.deriveEnvPath(interpreter);
 
-        Cancellation.throwIfCanceled(token);
-
-        logger.info(`Starting deepnote-toolkit server for ${fileKey} (environmentId ${environmentId})`);
+        logger.info(`Starting deepnote-toolkit server for ${fileKey} (interpreter ${interpreterId})`);
         this.outputChannel.appendLine(l10n.t('Starting Deepnote server...'));
 
-        const extraEnv = await this.gatherSqlIntegrationEnvVars(deepnoteFileUri, environmentId, token);
+        const extraEnv = await this.gatherSqlIntegrationEnvVars(deepnoteFileUri, interpreterId, token);
 
         // Initialize output tracking for error reporting
         this.serverOutputByFile.set(fileKey, { stdout: '', stderr: '' });
@@ -269,7 +271,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         let serverInfo: DeepnoteServerInfo | undefined;
         try {
             serverInfo = await startServer({
-                pythonEnv: venvPath.fsPath,
+                pythonEnv: envPath,
                 workingDirectory: path.dirname(deepnoteFileUri.fsPath),
                 startupTimeoutMs: SERVER_STARTUP_TIMEOUT_MS,
                 env: extraEnv
@@ -305,6 +307,29 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         this.outputChannel.appendLine(l10n.t('✓ Deepnote server running at {0}', serverInfo.url));
 
         return serverInfo;
+    }
+
+    /**
+     * Derive the environment path from a Python interpreter.
+     * Uses the cached environment info, or falls back to navigating up from the executable.
+     */
+    private deriveEnvPath(interpreter: PythonEnvironment): string {
+        const cachedEnv = getCachedEnvironment(interpreter);
+        // eslint-disable-next-line local-rules/dont-use-fspath
+        const folderPath = cachedEnv?.environment?.folderUri?.fsPath;
+
+        if (folderPath) {
+            return folderPath;
+        }
+
+        const sysPrefix = cachedEnv?.executable?.sysPrefix;
+
+        if (sysPrefix) {
+            return sysPrefix;
+        }
+
+        // Fallback: go up from bin/python (or Scripts/python.exe on Windows)
+        return path.dirname(path.dirname(interpreter.uri.fsPath));
     }
 
     /**

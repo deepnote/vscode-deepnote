@@ -507,7 +507,13 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
                 }
             }
             if (metadataEdits.length > 0) {
-                await this.applyNotebookEdits(notebook.uri, metadataEdits);
+                const metadataApplied = await this.applyNotebookEdits(notebook.uri, metadataEdits);
+                if (!metadataApplied) {
+                    logger.warn(
+                        `[FileChangeWatcher] Failed to restore block IDs via execution path: ${notebook.uri.path}`
+                    );
+                    return;
+                }
             }
 
             logger.info(`[FileChangeWatcher] Updated notebook outputs via execution API: ${notebook.uri.path}`);
@@ -554,7 +560,11 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
                 })
             );
         }
-        await this.applyNotebookEdits(notebook.uri, metadataEdits);
+        const metadataApplied = await this.applyNotebookEdits(notebook.uri, metadataEdits);
+        if (!metadataApplied) {
+            logger.warn(`[FileChangeWatcher] Failed to restore block IDs after replaceCells: ${notebook.uri.path}`);
+            return;
+        }
 
         // Save to sync mtime — mark as self-write first
         this.markSelfWrite(notebook.uri);

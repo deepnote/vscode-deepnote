@@ -14,6 +14,7 @@ import {
     Uri
 } from 'vscode';
 import { join } from '../../platform/vscode-path/path';
+import { logger } from '../../platform/logging';
 
 import type { IDisposableRegistry } from '../../platform/common/types';
 import type { DeepnoteOutput, DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
@@ -1361,6 +1362,166 @@ project:
             }
             fbOnDidChange.dispose();
             fbOnDidCreate.dispose();
+        });
+
+        test('should not save when metadata restore fails after replaceCells fallback', async () => {
+            const mdDisposables: IDisposableRegistry = [];
+            const mdOnDidChange = new EventEmitter<Uri>();
+            const mdOnDidCreate = new EventEmitter<Uri>();
+            const fsWatcherMd = mock<FileSystemWatcher>();
+            when(fsWatcherMd.onDidChange).thenReturn(mdOnDidChange.event);
+            when(fsWatcherMd.onDidCreate).thenReturn(mdOnDidCreate.event);
+            when(fsWatcherMd.dispose()).thenReturn();
+            when(mockedVSCodeNamespaces.workspace.createFileSystemWatcher(anything())).thenReturn(
+                instance(fsWatcherMd)
+            );
+
+            let mdApplyEditInvocation = 0;
+            let mdSaveCount = 0;
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenCall(() => {
+                mdApplyEditInvocation++;
+                return Promise.resolve(mdApplyEditInvocation === 1);
+            });
+            when(mockedVSCodeNamespaces.workspace.save(anything())).thenCall((uri: Uri) => {
+                mdSaveCount++;
+                return Promise.resolve(uri);
+            });
+
+            const mockedControllerRegistration = mock<IControllerRegistration>();
+            when(mockedControllerRegistration.getSelected(anything())).thenReturn(undefined);
+
+            const mdWatcher = new DeepnoteFileChangeWatcher(
+                mdDisposables,
+                mockNotebookManager,
+                instance(mockSnapshotService),
+                instance(mockedControllerRegistration)
+            );
+            mdWatcher.activate();
+
+            const snapshotUri = testFileUri('snapshots', 'my-project_project-1_latest.snapshot.deepnote');
+            const notebook = createMockNotebook({
+                uri: testFileUri('metadata-fail-replace.deepnote'),
+                cells: [
+                    {
+                        metadata: { id: 'block-1', type: 'code' },
+                        outputs: [],
+                        kind: NotebookCellKind.Code,
+                        document: { getText: () => 'print("hello")' }
+                    }
+                ]
+            });
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+
+            mdOnDidChange.fire(snapshotUri);
+
+            await waitFor(() => mdApplyEditInvocation >= 2);
+
+            assert.strictEqual(
+                mdApplyEditInvocation,
+                2,
+                'replaceCells and metadata restore should each invoke applyEdit once'
+            );
+            assert.strictEqual(
+                mdSaveCount,
+                0,
+                'workspace.save must not run when metadata restore fails (would persist wrong cell IDs)'
+            );
+
+            for (const d of mdDisposables) {
+                d.dispose();
+            }
+            mdOnDidChange.dispose();
+            mdOnDidCreate.dispose();
+        });
+
+        test('should warn and return when metadata restore fails after execution API with block ID fallback', async () => {
+            const warnStub = sinon.stub(logger, 'warn');
+
+            try {
+                const exMdDisposables: IDisposableRegistry = [];
+                const exMdOnDidChange = new EventEmitter<Uri>();
+                const exMdOnDidCreate = new EventEmitter<Uri>();
+                const fsWatcherExMd = mock<FileSystemWatcher>();
+                when(fsWatcherExMd.onDidChange).thenReturn(exMdOnDidChange.event);
+                when(fsWatcherExMd.onDidCreate).thenReturn(exMdOnDidCreate.event);
+                when(fsWatcherExMd.dispose()).thenReturn();
+                when(mockedVSCodeNamespaces.workspace.createFileSystemWatcher(anything())).thenReturn(
+                    instance(fsWatcherExMd)
+                );
+
+                let exMdSaveCount = 0;
+                when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenCall(() => Promise.resolve(false));
+                when(mockedVSCodeNamespaces.workspace.save(anything())).thenCall((uri: Uri) => {
+                    exMdSaveCount++;
+                    return Promise.resolve(uri);
+                });
+
+                const mockVSCodeController = {
+                    createNotebookCellExecution: () => ({
+                        start: () => {},
+                        replaceOutput: () => Promise.resolve(),
+                        end: () => {}
+                    })
+                };
+                const mockedControllerRegistration = mock<IControllerRegistration>();
+                when(mockedControllerRegistration.getSelected(anything())).thenReturn({
+                    controller: mockVSCodeController
+                } as any);
+
+                const mockedManagerEx = mock<IDeepnoteNotebookManager>();
+                when(mockedManagerEx.consumePendingNotebookResolution(anything())).thenReturn(undefined);
+                when(mockedManagerEx.getOriginalProject(anything())).thenReturn(validProject);
+                when(mockedManagerEx.getTheSelectedNotebookForAProject(anything())).thenReturn('notebook-1');
+                when(mockedManagerEx.queueNotebookResolution(anything(), anything())).thenReturn();
+                when(mockedManagerEx.updateOriginalProject(anything(), anything())).thenReturn();
+
+                const exMdWatcher = new DeepnoteFileChangeWatcher(
+                    exMdDisposables,
+                    instance(mockedManagerEx),
+                    instance(mockSnapshotService),
+                    instance(mockedControllerRegistration)
+                );
+                exMdWatcher.activate();
+
+                const snapshotUri = testFileUri('snapshots', 'my-project_project-1_latest.snapshot.deepnote');
+                const notebook = createMockNotebook({
+                    uri: testFileUri('metadata-fail-exec.deepnote'),
+                    cells: [
+                        {
+                            metadata: { type: 'code' },
+                            outputs: [],
+                            kind: NotebookCellKind.Code,
+                            document: { getText: () => 'print("hello")' }
+                        }
+                    ]
+                });
+
+                when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+
+                exMdOnDidChange.fire(snapshotUri);
+
+                await waitFor(() => warnStub.called);
+
+                assert.include(
+                    warnStub.firstCall.args[0] as string,
+                    'Failed to restore block IDs via execution path',
+                    'should log when metadata restore fails after execution API'
+                );
+                assert.strictEqual(
+                    exMdSaveCount,
+                    0,
+                    'execution API path should not save after failed metadata restore'
+                );
+
+                for (const d of exMdDisposables) {
+                    d.dispose();
+                }
+                exMdOnDidChange.dispose();
+                exMdOnDidCreate.dispose();
+            } finally {
+                warnStub.restore();
+            }
         });
 
         suite('snapshot and deserialization interaction', () => {

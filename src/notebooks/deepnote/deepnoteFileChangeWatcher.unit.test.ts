@@ -136,7 +136,7 @@ suite('DeepnoteFileChangeWatcher', () => {
     });
 
     function testFileUri(...pathSegments: string[]): Uri {
-        return Uri.file(join(testFixturesDir, ...pathSegments));
+        return Uri.joinPath(Uri.file(testFixturesDir), ...pathSegments);
     }
 
     let watcher: DeepnoteFileChangeWatcher;
@@ -1367,8 +1367,7 @@ project:
             let interactionCaptures: SnapshotInteractionCapture[];
             let snapshotApplyEditStub: sinon.SinonStub;
 
-            setup(function () {
-                this.timeout(12_000);
+            setup(() => {
                 interactionCaptures = [];
 
                 reset(mockedNotebookManager);

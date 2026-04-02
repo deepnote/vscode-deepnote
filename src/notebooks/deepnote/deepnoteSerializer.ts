@@ -1,7 +1,7 @@
 import type { DeepnoteBlock, DeepnoteFile, DeepnoteSnapshot } from '@deepnote/blocks';
 import { deserializeDeepnoteFile, isExecutableBlock, serializeDeepnoteSnapshot } from '@deepnote/blocks';
 import { inject, injectable, optional } from 'inversify';
-import { l10n, workspace, type CancellationToken, type NotebookData, type NotebookSerializer } from 'vscode';
+import { l10n, window, workspace, type CancellationToken, type NotebookData, type NotebookSerializer } from 'vscode';
 import { z } from 'zod';
 
 import { computeHash } from '../../platform/common/crypto';
@@ -56,6 +56,8 @@ const recentSerializeTtlMs = 5_000;
 
 @injectable()
 export class DeepnoteNotebookSerializer implements NotebookSerializer {
+    private readonly consumedTabResolutions = new Map<string, Set<string>>();
+
     private converter = new DeepnoteDataConverter();
 
     /**
@@ -107,7 +109,8 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             }
 
             const projectId = deepnoteFile.project.id;
-            const resolvedNotebookId = notebookId ?? this.findCurrentNotebookId(projectId);
+            const projectNotebookIds = deepnoteFile.project.notebooks.map((nb) => nb.id);
+            const resolvedNotebookId = notebookId ?? this.findCurrentNotebookId(projectId, projectNotebookIds);
 
             logger.debug(`DeepnoteSerializer: Project ID: ${projectId}, Selected notebook ID: ${resolvedNotebookId}`);
 
@@ -200,17 +203,34 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
     /**
      * Finds the notebook ID to deserialize without relying on active-editor state.
-     * Prefers a pending resolution hint, then current/open-document state.
+     * Prefers a pending resolution hint, then tab-based resolution (for reload),
+     * then current/open-document state.
      * @param projectId The project ID to find a notebook for
+     * @param projectNotebookIds Optional list of notebook IDs in the project, enables tab-based resolution
      * @returns The notebook ID to deserialize, or undefined if none found
      */
-    findCurrentNotebookId(projectId: string): string | undefined {
+    findCurrentNotebookId(projectId: string, projectNotebookIds?: string[]): string | undefined {
         const pendingNotebookId = this.notebookManager.consumePendingNotebookResolution(projectId);
         const openNotebookIds = this.findOpenNotebookIds(projectId);
         const currentNotebookId = this.notebookManager.getCurrentNotebookId(projectId);
 
         if (pendingNotebookId) {
             return pendingNotebookId;
+        }
+
+        if (projectNotebookIds && projectNotebookIds.length > 0) {
+            const tabNotebookIds = this.findNotebookIdsFromTabs(projectNotebookIds);
+            const consumedIds = this.consumedTabResolutions.get(projectId) ?? new Set<string>();
+            const remaining = tabNotebookIds.filter((id) => !consumedIds.has(id) && !openNotebookIds.includes(id));
+
+            if (remaining.length > 0) {
+                const consumed = this.consumedTabResolutions.get(projectId) ?? new Set<string>();
+
+                consumed.add(remaining[0]);
+                this.consumedTabResolutions.set(projectId, consumed);
+
+                return remaining[0];
+            }
         }
 
         if (currentNotebookId && openNotebookIds.length === 0) {
@@ -589,6 +609,29 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
         }
 
         return false;
+    }
+
+    private findNotebookIdsFromTabs(projectNotebookIds: string[]): string[] {
+        const projectIdSet = new Set(projectNotebookIds);
+        const notebookIds = new Set<string>();
+
+        for (const group of window.tabGroups.all) {
+            for (const tab of group.tabs) {
+                const input = tab.input as { uri?: { query?: string }; notebookType?: string } | undefined;
+
+                if (!input || !('uri' in input) || !('notebookType' in input) || input.notebookType !== 'deepnote') {
+                    continue;
+                }
+
+                const notebookId = new URLSearchParams(input.uri?.query ?? '').get('notebook');
+
+                if (notebookId && projectIdSet.has(notebookId)) {
+                    notebookIds.add(notebookId);
+                }
+            }
+        }
+
+        return [...notebookIds];
     }
 
     private findOpenNotebookIds(projectId: string): string[] {

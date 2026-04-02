@@ -2,7 +2,7 @@ import { deserializeDeepnoteFile, serializeDeepnoteFile, type DeepnoteFile } fro
 import { assert } from 'chai';
 import { parse as parseYaml } from 'yaml';
 import { when } from 'ts-mockito';
-import type { NotebookDocument } from 'vscode';
+import { Uri, type NotebookDocument } from 'vscode';
 
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
 import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
@@ -430,6 +430,7 @@ project:
             // Reset only the specific mocks used in this suite
             when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
             when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([]);
+            when(mockedVSCodeNamespaces.window.tabGroups).thenReturn({ all: [] } as any);
         });
 
         test('should return queued notebook resolution when available', () => {
@@ -704,6 +705,78 @@ project:
             const result = serializer.findCurrentNotebookId('unknown-project');
 
             assert.strictEqual(result, undefined);
+        });
+
+        suite('tab-based resolution', () => {
+            function createTabGroups(...notebookIds: string[]) {
+                const tabs = notebookIds.map((id) => ({
+                    input: {
+                        uri: Uri.parse(`file:///test/project.deepnote?notebook=${id}`),
+                        notebookType: 'deepnote'
+                    }
+                }));
+
+                return { all: [{ tabs }] } as any;
+            }
+
+            teardown(() => {
+                when(mockedVSCodeNamespaces.window.tabGroups).thenReturn({ all: [] } as any);
+            });
+
+            test('should resolve different notebook IDs from tabs on sequential reload calls', () => {
+                when(mockedVSCodeNamespaces.window.tabGroups).thenReturn(createTabGroups('notebook-1', 'notebook-2'));
+
+                const projectNotebookIds = ['notebook-1', 'notebook-2'];
+
+                const first = serializer.findCurrentNotebookId('project-123', projectNotebookIds);
+                const second = serializer.findCurrentNotebookId('project-123', projectNotebookIds);
+
+                assert.strictEqual(first, 'notebook-1');
+                assert.strictEqual(second, 'notebook-2');
+            });
+
+            test('should skip tab resolution when all tab notebook IDs are already open', () => {
+                when(mockedVSCodeNamespaces.window.tabGroups).thenReturn(createTabGroups('notebook-1', 'notebook-2'));
+                when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([
+                    createNotebookDoc('notebook-1'),
+                    createNotebookDoc('notebook-2')
+                ]);
+
+                const projectNotebookIds = ['notebook-1', 'notebook-2'];
+                const result = serializer.findCurrentNotebookId('project-123', projectNotebookIds);
+
+                assert.strictEqual(result, undefined);
+            });
+
+            test('should filter tab notebook IDs by projectNotebookIds', () => {
+                when(mockedVSCodeNamespaces.window.tabGroups).thenReturn(
+                    createTabGroups('notebook-1', 'other-project-notebook')
+                );
+
+                const projectNotebookIds = ['notebook-1', 'notebook-2'];
+                const result = serializer.findCurrentNotebookId('project-123', projectNotebookIds);
+
+                assert.strictEqual(result, 'notebook-1');
+            });
+
+            test('should prioritize pending resolution over tab resolution', () => {
+                when(mockedVSCodeNamespaces.window.tabGroups).thenReturn(createTabGroups('notebook-1', 'notebook-2'));
+
+                manager.queueNotebookResolution('project-123', 'queued-notebook');
+
+                const projectNotebookIds = ['notebook-1', 'notebook-2'];
+                const result = serializer.findCurrentNotebookId('project-123', projectNotebookIds);
+
+                assert.strictEqual(result, 'queued-notebook');
+            });
+
+            test('should skip tab resolution when projectNotebookIds is not provided', () => {
+                when(mockedVSCodeNamespaces.window.tabGroups).thenReturn(createTabGroups('notebook-1', 'notebook-2'));
+
+                const result = serializer.findCurrentNotebookId('project-123');
+
+                assert.strictEqual(result, undefined);
+            });
         });
     });
 

@@ -83,6 +83,7 @@ export function resetVSCodeMocks() {
     when(mockedVSCodeNamespaces.window.visibleNotebookEditors).thenReturn([]);
     when(mockedVSCodeNamespaces.window.activeTextEditor).thenReturn(undefined);
     when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
+    when(mockedVSCodeNamespaces.window.tabGroups).thenReturn({ all: [] } as any);
 
     // Window dialog methods with overloads (1-5 parameters)
     // showInformationMessage

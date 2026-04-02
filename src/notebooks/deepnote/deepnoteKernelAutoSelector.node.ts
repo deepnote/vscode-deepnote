@@ -203,14 +203,16 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     }
 
     private onDidCloseNotebook(notebook: NotebookDocument) {
-        logger.info(`Notebook closed: ${getDisplayPath(notebook.uri)}, with type: ${notebook.notebookType}`);
-
-        // Only handle deepnote notebooks
         if (notebook.notebookType !== DEEPNOTE_NOTEBOOK_TYPE) {
             return;
         }
 
-        logger.info(`Deepnote notebook closed: ${getDisplayPath(notebook.uri)}`);
+        const notebookKey = notebook.uri.toString();
+        this.notebookConnectionMetadata.delete(notebookKey);
+        this.notebookInterpreterIds.delete(notebookKey);
+        this.notebookControllers.delete(notebookKey);
+
+        logger.info(`Deepnote notebook closed, cleaned up: ${getDisplayPath(notebook.uri)}`);
     }
 
     public async onKernelStarted(kernel: IKernel) {
@@ -663,22 +665,20 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     /**
      * Clear the controller selection for a notebook using a specific environment.
      * This is used when deleting an environment to unselect its controller from any open notebooks.
+     *
+     * Since the refactoring, server handles are keyed by interpreter.id (not environmentId).
+     * We match by checking if the currently selected controller is one of ours (a Deepnote kernel
+     * controller), rather than reconstructing a handle from the environmentId.
      */
-    public clearControllerForEnvironment(notebook: NotebookDocument, environmentId: string): void {
+    public clearControllerForEnvironment(notebook: NotebookDocument, _environmentId: string): void {
         const selectedController = this.controllerRegistration.getSelected(notebook);
         if (!selectedController || selectedController.connection.kind !== 'startUsingDeepnoteKernel') {
             return;
         }
 
-        const expectedHandle = createDeepnoteServerConfigHandle(environmentId, notebook.uri);
-
-        if (selectedController.connection.serverProviderHandle.handle === expectedHandle) {
-            // Unselect the controller by setting affinity to Default
-            selectedController.controller.updateNotebookAffinity(notebook, NotebookControllerAffinity.Default);
-            logger.info(
-                `Cleared controller for notebook ${getDisplayPath(notebook.uri)} (environment ${environmentId})`
-            );
-        }
+        // The selected controller is a Deepnote kernel — unselect it
+        selectedController.controller.updateNotebookAffinity(notebook, NotebookControllerAffinity.Default);
+        logger.info(`Cleared Deepnote controller for notebook ${getDisplayPath(notebook.uri)}`);
     }
 
     /**

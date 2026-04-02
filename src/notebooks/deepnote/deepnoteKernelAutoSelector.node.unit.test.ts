@@ -915,6 +915,58 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             });
         });
     });
+
+    suite('clearControllerForEnvironment', () => {
+        test('should unselect controller when a Deepnote kernel is selected', () => {
+            const mockSelectedController = mock<IVSCodeNotebookController>();
+            when(mockSelectedController.connection).thenReturn({
+                kind: 'startUsingDeepnoteKernel',
+                serverProviderHandle: { handle: 'some-handle' }
+            } as any);
+
+            const mockNativeController = {
+                updateNotebookAffinity: sandbox.stub()
+            } as unknown as NotebookController;
+            when(mockSelectedController.controller).thenReturn(mockNativeController);
+
+            when(mockControllerRegistration.getSelected(mockNotebook)).thenReturn(instance(mockSelectedController));
+
+            selector.clearControllerForEnvironment(mockNotebook, 'any-environment-id');
+
+            assert.isTrue(
+                (mockNativeController.updateNotebookAffinity as sinon.SinonStub).calledOnce,
+                'Should have called updateNotebookAffinity'
+            );
+        });
+
+        test('should not unselect controller when no controller is selected', () => {
+            when(mockControllerRegistration.getSelected(mockNotebook)).thenReturn(undefined);
+
+            // Should not throw
+            selector.clearControllerForEnvironment(mockNotebook, 'any-environment-id');
+        });
+
+        test('should not unselect controller when selected controller is not a Deepnote kernel', () => {
+            const mockSelectedController = mock<IVSCodeNotebookController>();
+            when(mockSelectedController.connection).thenReturn({
+                kind: 'startUsingLocalKernelSpec'
+            } as any);
+
+            const mockNativeController = {
+                updateNotebookAffinity: sandbox.stub()
+            } as unknown as NotebookController;
+            when(mockSelectedController.controller).thenReturn(mockNativeController);
+
+            when(mockControllerRegistration.getSelected(mockNotebook)).thenReturn(instance(mockSelectedController));
+
+            selector.clearControllerForEnvironment(mockNotebook, 'any-environment-id');
+
+            assert.isFalse(
+                (mockNativeController.updateNotebookAffinity as sinon.SinonStub).called,
+                'Should NOT have called updateNotebookAffinity for non-Deepnote kernel'
+            );
+        });
+    });
 });
 
 /**

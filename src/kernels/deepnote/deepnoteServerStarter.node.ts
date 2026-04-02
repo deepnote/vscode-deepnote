@@ -8,7 +8,7 @@
 import * as fs from 'fs-extra';
 import { inject, injectable, named, optional } from 'inversify';
 import * as os from 'os';
-import { CancellationToken, l10n, Uri } from 'vscode';
+import { CancellationToken, CancellationTokenSource, l10n, Uri } from 'vscode';
 
 import { startServer, stopServer } from '@deepnote/runtime-core';
 
@@ -138,7 +138,8 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                     `Stopping existing server for ${fileKey} with interpreter ${existingInterpreterId} to start new one with interpreter ${interpreterId}...`
                 );
                 await this.stopServerForEnvironment(existingContext, deepnoteFileUri, token);
-                existingContext.interpreterId = interpreterId;
+                existingContext = { interpreterId, serverInfo: null };
+                this.projectContexts.set(fileKey, existingContext);
             }
         } else {
             const newContext: ProjectContext = {
@@ -235,20 +236,23 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
         if (!isInstalled) {
             logger.info(`deepnote-toolkit not installed, installing via IInstaller...`);
-            const { CancellationTokenSource } = await import('vscode');
             const cts = new CancellationTokenSource();
+            let cancellationListener: IDisposable | undefined;
 
             try {
                 if (token) {
-                    token.onCancellationRequested(() => cts.cancel());
+                    cancellationListener = token.onCancellationRequested(() => cts.cancel());
                 }
 
                 const result = await this.installer.install(Product.deepnoteToolkit, interpreter, cts);
 
-                if (result !== InstallerResponse.Installed) {
-                    throw new Error('deepnote-toolkit installation was cancelled or failed');
+                if (result === InstallerResponse.Cancelled) {
+                    throw new Error('deepnote-toolkit installation was cancelled by the user');
+                } else if (result !== InstallerResponse.Installed) {
+                    throw new Error('Failed to install deepnote-toolkit. Check the Output panel for details.');
                 }
             } finally {
+                cancellationListener?.dispose();
                 cts.dispose();
             }
         }
@@ -282,7 +286,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
             throw new DeepnoteServerStartupError(
                 interpreter.uri.fsPath,
-                serverInfo?.jupyterPort ?? 0,
+                0,
                 'unknown',
                 capturedOutput?.stdout || '',
                 capturedOutput?.stderr || '',

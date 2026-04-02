@@ -387,16 +387,14 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
 
             // Save to clear dirty state. VS Code serializes (same bytes) and sees the
             // mtime from our recent write, so no "content is newer" conflict.
-            this.markSelfWrite(fileUri);
+            // NOTE: onDidSaveNotebookDocument handles the self-write mark for this save.
             try {
                 const saved = await workspace.save(notebook.uri);
                 if (!saved) {
-                    this.consumeSelfWrite(fileUri);
                     logger.warn(`[FileChangeWatcher] Save after sync write returned undefined: ${notebook.uri.path}`);
                     return;
                 }
             } catch (saveError) {
-                this.consumeSelfWrite(fileUri);
                 logger.warn(`[FileChangeWatcher] Save after sync write failed: ${notebook.uri.path}`, saveError);
             }
         } catch (serializeError) {
@@ -566,14 +564,9 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             return;
         }
 
-        // Save to sync mtime — mark as self-write first
-        this.markSelfWrite(notebook.uri);
-        try {
-            await workspace.save(notebook.uri);
-        } catch (error) {
-            this.consumeSelfWrite(notebook.uri);
-            throw error;
-        }
+        // Save to sync mtime.
+        // NOTE: onDidSaveNotebookDocument handles the self-write mark for this save.
+        await workspace.save(notebook.uri);
 
         logger.info(`[FileChangeWatcher] Updated notebook outputs from external snapshot: ${notebook.uri.path}`);
     }
@@ -645,8 +638,9 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
     }
 
     /**
-     * Marks a URI as about to be written by us (workspace.save).
-     * Call before workspace.save() to prevent the resulting fs event from triggering a reload.
+     * Marks a URI as about to be written by us.
+     * For workspace.fs.writeFile(): call this before the write.
+     * For workspace.save(): do NOT call this — onDidSaveNotebookDocument handles it.
      */
     private markSelfWrite(uri: Uri): void {
         const key = this.normalizeFileUri(uri);

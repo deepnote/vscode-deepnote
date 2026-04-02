@@ -372,6 +372,82 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         });
     });
 
+    suite('ensureEnvironmentConfiguredBeforeExecution', () => {
+        const nonCancelledToken: CancellationToken = {
+            isCancellationRequested: false,
+            onCancellationRequested: () => ({ dispose: () => {} }) as any
+        };
+
+        test('should reconfigure when active interpreter differs from cached interpreter', async () => {
+            const notebookKey = mockNotebook.uri.toString();
+            const interpreterA: PythonEnvironment = {
+                id: '/usr/bin/python3.10',
+                uri: Uri.parse('/usr/bin/python3.10')
+            };
+            const interpreterB: PythonEnvironment = {
+                id: '/usr/bin/python3.12',
+                uri: Uri.parse('/usr/bin/python3.12')
+            };
+
+            // Prime the internal maps: controller exists for interpreter A
+            const selectorAny = selector as any;
+            selectorAny.notebookControllers.set(notebookKey, instance(mockController));
+            selectorAny.notebookInterpreterIds.set(notebookKey, interpreterA.id);
+
+            // Active interpreter is now B
+            when(mockInterpreterService.getActiveInterpreter(anything())).thenResolve(interpreterB);
+
+            // Stub ensureKernelSelectedWithInterpreter to track calls
+            const ensureStub = sandbox.stub(selector, 'ensureKernelSelectedWithInterpreter').resolves();
+
+            // withProgress must call through to the task callback
+            when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall(
+                (_opts: any, task: any) => {
+                    return task({ report: sandbox.stub() }, nonCancelledToken);
+                }
+            );
+
+            // Put a controller in the map so the final check returns true
+            ensureStub.callsFake(async () => {
+                selectorAny.notebookControllers.set(notebookKey, instance(mockNewController));
+            });
+
+            const result = await selector.ensureEnvironmentConfiguredBeforeExecution(mockNotebook, nonCancelledToken);
+
+            assert.strictEqual(result, true, 'Should return true after reconfiguring');
+            assert.strictEqual(ensureStub.calledOnce, true, 'Should call ensureKernelSelectedWithInterpreter');
+            assert.deepStrictEqual(
+                ensureStub.firstCall.args[1],
+                interpreterB,
+                'Should reconfigure with the new interpreter'
+            );
+        });
+
+        test('should return true immediately when controller exists for the same interpreter', async () => {
+            const notebookKey = mockNotebook.uri.toString();
+            const interpreterA: PythonEnvironment = {
+                id: '/usr/bin/python3.10',
+                uri: Uri.parse('/usr/bin/python3.10')
+            };
+
+            // Prime the internal maps: controller exists for interpreter A
+            const selectorAny = selector as any;
+            selectorAny.notebookControllers.set(notebookKey, instance(mockController));
+            selectorAny.notebookInterpreterIds.set(notebookKey, interpreterA.id);
+
+            // Active interpreter is still A
+            when(mockInterpreterService.getActiveInterpreter(anything())).thenResolve(interpreterA);
+
+            // Stub ensureKernelSelectedWithInterpreter — should NOT be called
+            const ensureStub = sandbox.stub(selector, 'ensureKernelSelectedWithInterpreter').resolves();
+
+            const result = await selector.ensureEnvironmentConfiguredBeforeExecution(mockNotebook, nonCancelledToken);
+
+            assert.strictEqual(result, true, 'Should return true (fast path)');
+            assert.strictEqual(ensureStub.called, false, 'Should NOT call ensureKernelSelectedWithInterpreter');
+        });
+    });
+
     // Priority 1 Tests - Critical for environment switching
     // UT-4: Configuration Refresh After startServer
     suite('Priority 1: Configuration Refresh (UT-4)', () => {
@@ -917,53 +993,113 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
     });
 
     suite('clearControllerForEnvironment', () => {
-        test('should unselect controller when a Deepnote kernel is selected', () => {
-            const mockSelectedController = mock<IVSCodeNotebookController>();
-            when(mockSelectedController.connection).thenReturn({
-                kind: 'startUsingDeepnoteKernel',
-                serverProviderHandle: { handle: 'some-handle' }
-            } as any);
+        test('should unselect and clean up when tracked controller matches selected controller', () => {
+            const notebookKey = mockNotebook.uri.toString();
 
+            // Set up a tracked controller in the internal map
+            const trackedController = mock<IVSCodeNotebookController>();
+            when(trackedController.id).thenReturn('deepnote-notebook-123');
+            when(trackedController.connection).thenReturn({
+                kind: 'startUsingDeepnoteKernel'
+            } as any);
             const mockNativeController = {
                 updateNotebookAffinity: sandbox.stub()
             } as unknown as NotebookController;
-            when(mockSelectedController.controller).thenReturn(mockNativeController);
+            when(trackedController.controller).thenReturn(mockNativeController);
 
-            when(mockControllerRegistration.getSelected(mockNotebook)).thenReturn(instance(mockSelectedController));
+            const selectorAny = selector as any;
+            selectorAny.notebookControllers.set(notebookKey, instance(trackedController));
+            selectorAny.notebookInterpreterIds.set(notebookKey, '/usr/bin/python3');
+            selectorAny.notebookConnectionMetadata.set(notebookKey, {} as any);
 
-            selector.clearControllerForEnvironment(mockNotebook, 'any-environment-id');
+            // Selected controller is the same one we tracked
+            when(mockControllerRegistration.getSelected(mockNotebook)).thenReturn(instance(trackedController));
+
+            selector.clearControllerForEnvironment(mockNotebook, 'env-uuid-123');
 
             assert.isTrue(
                 (mockNativeController.updateNotebookAffinity as sinon.SinonStub).calledOnce,
                 'Should have called updateNotebookAffinity'
             );
+            // Verify tracking state is cleaned up
+            assert.isFalse(selectorAny.notebookControllers.has(notebookKey), 'Should remove from notebookControllers');
+            assert.isFalse(
+                selectorAny.notebookInterpreterIds.has(notebookKey),
+                'Should remove from notebookInterpreterIds'
+            );
+            assert.isFalse(
+                selectorAny.notebookConnectionMetadata.has(notebookKey),
+                'Should remove from notebookConnectionMetadata'
+            );
         });
 
-        test('should not unselect controller when no controller is selected', () => {
-            when(mockControllerRegistration.getSelected(mockNotebook)).thenReturn(undefined);
-
-            // Should not throw
-            selector.clearControllerForEnvironment(mockNotebook, 'any-environment-id');
-        });
-
-        test('should not unselect controller when selected controller is not a Deepnote kernel', () => {
-            const mockSelectedController = mock<IVSCodeNotebookController>();
-            when(mockSelectedController.connection).thenReturn({
-                kind: 'startUsingLocalKernelSpec'
-            } as any);
-
+        test('should NOT unselect when notebook has no tracked controller', () => {
+            // notebookControllers map is empty — we didn't set up this notebook
+            const trackedController = mock<IVSCodeNotebookController>();
             const mockNativeController = {
                 updateNotebookAffinity: sandbox.stub()
             } as unknown as NotebookController;
-            when(mockSelectedController.controller).thenReturn(mockNativeController);
+            when(trackedController.controller).thenReturn(mockNativeController);
+            when(mockControllerRegistration.getSelected(mockNotebook)).thenReturn(instance(trackedController));
 
-            when(mockControllerRegistration.getSelected(mockNotebook)).thenReturn(instance(mockSelectedController));
-
-            selector.clearControllerForEnvironment(mockNotebook, 'any-environment-id');
+            selector.clearControllerForEnvironment(mockNotebook, 'env-uuid-123');
 
             assert.isFalse(
                 (mockNativeController.updateNotebookAffinity as sinon.SinonStub).called,
-                'Should NOT have called updateNotebookAffinity for non-Deepnote kernel'
+                'Should NOT have called updateNotebookAffinity when we have no tracked controller'
+            );
+        });
+
+        test('should NOT unselect when selected controller differs from tracked controller', () => {
+            const notebookKey = mockNotebook.uri.toString();
+
+            // Track controller A
+            const controllerA = mock<IVSCodeNotebookController>();
+            when(controllerA.id).thenReturn('deepnote-notebook-A');
+            const selectorAny = selector as any;
+            selectorAny.notebookControllers.set(notebookKey, instance(controllerA));
+
+            // But VS Code has controller B selected (different id)
+            const controllerB = mock<IVSCodeNotebookController>();
+            when(controllerB.id).thenReturn('deepnote-notebook-B');
+            const mockNativeController = {
+                updateNotebookAffinity: sandbox.stub()
+            } as unknown as NotebookController;
+            when(controllerB.controller).thenReturn(mockNativeController);
+            when(mockControllerRegistration.getSelected(mockNotebook)).thenReturn(instance(controllerB));
+
+            selector.clearControllerForEnvironment(mockNotebook, 'env-uuid-123');
+
+            assert.isFalse(
+                (mockNativeController.updateNotebookAffinity as sinon.SinonStub).called,
+                'Should NOT unselect a controller we do not own'
+            );
+        });
+
+        test('should NOT unselect when selected controller is not a Deepnote kernel', () => {
+            const notebookKey = mockNotebook.uri.toString();
+
+            // Track a controller
+            const trackedController = mock<IVSCodeNotebookController>();
+            when(trackedController.id).thenReturn('deepnote-notebook-123');
+            when(trackedController.connection).thenReturn({
+                kind: 'startUsingLocalKernelSpec'
+            } as any);
+            const mockNativeController = {
+                updateNotebookAffinity: sandbox.stub()
+            } as unknown as NotebookController;
+            when(trackedController.controller).thenReturn(mockNativeController);
+
+            const selectorAny = selector as any;
+            selectorAny.notebookControllers.set(notebookKey, instance(trackedController));
+
+            when(mockControllerRegistration.getSelected(mockNotebook)).thenReturn(instance(trackedController));
+
+            selector.clearControllerForEnvironment(mockNotebook, 'env-uuid-123');
+
+            assert.isFalse(
+                (mockNativeController.updateNotebookAffinity as sinon.SinonStub).called,
+                'Should NOT unselect a non-Deepnote kernel'
             );
         });
     });

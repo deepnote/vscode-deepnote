@@ -626,8 +626,9 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         }
 
         const existingController = this.notebookControllers.get(notebookKey);
+        const existingInterpreterId = this.notebookInterpreterIds.get(notebookKey);
 
-        if (existingController) {
+        if (existingController && existingInterpreterId === interpreter.id) {
             logger.info(`Controller already configured for ${getDisplayPath(notebook.uri)}`);
             return true;
         }
@@ -663,22 +664,41 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     }
 
     /**
-     * Clear the controller selection for a notebook using a specific environment.
-     * This is used when deleting an environment to unselect its controller from any open notebooks.
+     * Clear the controller selection for a notebook if it was set up by this selector
+     * for the given environment.
      *
-     * Since the refactoring, server handles are keyed by interpreter.id (not environmentId).
-     * We match by checking if the currently selected controller is one of ours (a Deepnote kernel
-     * controller), rather than reconstructing a handle from the environmentId.
+     * The caller passes an `environmentId` (UUID), but the auto-selector now tracks
+     * notebooks by interpreter.id. We match by comparing the notebook's tracked
+     * controller instance against the currently selected controller, so we only
+     * clear controllers we own — never an unrelated Deepnote kernel.
      */
-    public clearControllerForEnvironment(notebook: NotebookDocument, _environmentId: string): void {
+    public clearControllerForEnvironment(notebook: NotebookDocument, environmentId: string): void {
+        const notebookKey = notebook.uri.toString();
+        const trackedController = this.notebookControllers.get(notebookKey);
+
+        if (!trackedController) {
+            return; // We didn't set up a controller for this notebook
+        }
+
         const selectedController = this.controllerRegistration.getSelected(notebook);
-        if (!selectedController || selectedController.connection.kind !== 'startUsingDeepnoteKernel') {
+        if (!selectedController || selectedController.id !== trackedController.id) {
+            return; // Selected controller isn't the one we own
+        }
+
+        if (selectedController.connection.kind !== 'startUsingDeepnoteKernel') {
             return;
         }
 
-        // The selected controller is a Deepnote kernel — unselect it
         selectedController.controller.updateNotebookAffinity(notebook, NotebookControllerAffinity.Default);
-        logger.info(`Cleared Deepnote controller for notebook ${getDisplayPath(notebook.uri)}`);
+
+        // Clean up our tracking state for this notebook
+        this.notebookControllers.delete(notebookKey);
+        this.notebookConnectionMetadata.delete(notebookKey);
+        this.notebookInterpreterIds.delete(notebookKey);
+
+        logger.info(
+            `Cleared Deepnote controller for notebook ${getDisplayPath(notebook.uri)} (environment ${environmentId})`
+        );
     }
 
     /**

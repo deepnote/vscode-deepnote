@@ -206,4 +206,63 @@ suite('DataScienceInstaller install', async () => {
         const result = await dataScienceInstaller.install(Product.ipykernel, testEnvironment, tokenSource);
         expect(result).to.equal(InstallerResponse.Installed, 'Should be Installed');
     });
+
+    test('Will use pip for deepnoteToolkit even on Conda interpreter (bypasses isSupported filter)', async () => {
+        const testEnvironment: PythonEnvironment = {
+            id: interpreterPath.fsPath,
+            uri: interpreterPath
+        };
+
+        // Create a pip installer mock
+        const pipInstaller = TypeMoq.Mock.ofType<IModuleInstaller>();
+        pipInstaller.setup((c) => c.type).returns(() => ModuleInstallerType.Pip);
+        pipInstaller
+            .setup((c) =>
+                c.installModule(
+                    TypeMoq.It.isValue(Product.deepnoteToolkit),
+                    TypeMoq.It.isValue(testEnvironment),
+                    TypeMoq.It.isAny(),
+                    TypeMoq.It.isAny(),
+                    TypeMoq.It.isAny()
+                )
+            )
+            .returns(() => Promise.resolve());
+        pipInstaller.setup((p) => (p as any).then).returns(() => undefined);
+
+        // Create a conda installer mock (would normally be selected for Conda envs)
+        const condaInstaller = TypeMoq.Mock.ofType<IModuleInstaller>();
+        condaInstaller.setup((c) => c.type).returns(() => ModuleInstallerType.Conda);
+
+        // serviceContainer.getAll returns both installers — the code must pick pip
+        serviceContainer
+            .setup((c) => c.getAll(TypeMoq.It.isValue(IModuleInstaller)))
+            .returns(() => [condaInstaller.object, pipInstaller.object]);
+
+        const result = await dataScienceInstaller.install(Product.deepnoteToolkit, testEnvironment, tokenSource);
+        expect(result).to.equal(InstallerResponse.Installed, 'Should be Installed via pip');
+
+        // Verify pip was called, not conda
+        pipInstaller.verify(
+            (c) =>
+                c.installModule(
+                    TypeMoq.It.isValue(Product.deepnoteToolkit),
+                    TypeMoq.It.isValue(testEnvironment),
+                    TypeMoq.It.isAny(),
+                    TypeMoq.It.isAny(),
+                    TypeMoq.It.isAny()
+                ),
+            TypeMoq.Times.once()
+        );
+        condaInstaller.verify(
+            (c) =>
+                c.installModule(
+                    TypeMoq.It.isAny(),
+                    TypeMoq.It.isAny(),
+                    TypeMoq.It.isAny(),
+                    TypeMoq.It.isAny(),
+                    TypeMoq.It.isAny()
+                ),
+            TypeMoq.Times.never()
+        );
+    });
 });

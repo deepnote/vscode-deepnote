@@ -99,9 +99,10 @@ export class DataScienceInstaller {
 
         // deepnote-toolkit is PyPI-only with pip-specific [server] extras syntax,
         // so always use PipInstaller regardless of environment type.
+        // We bypass getInstallationChannels() because it filters by isSupported(),
+        // and PipInstaller.isSupported() rejects Conda/Pipenv/Poetry interpreters.
         if (product === Product.deepnoteToolkit) {
-            const channels = this.serviceContainer.get<IInstallationChannelManager>(IInstallationChannelManager);
-            const allInstallers = await channels.getInstallationChannels(interpreter);
+            const allInstallers = this.serviceContainer.getAll<IModuleInstaller>(IModuleInstaller);
             installer = allInstallers.find((i) => i.type === ModuleInstallerType.Pip);
         } else {
             const channels = this.serviceContainer.get<IInstallationChannelManager>(IInstallationChannelManager);

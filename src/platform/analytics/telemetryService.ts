@@ -2,67 +2,59 @@ import { inject, injectable } from 'inversify';
 import { PostHog } from 'posthog-node';
 import { workspace } from 'vscode';
 
-import { IAsyncDisposableRegistry, IPersistentState, IPersistentStateFactory } from '../common/types';
+import { IExtensionSyncActivationService } from '../activation/types';
+import {
+    IAsyncDisposableRegistry,
+    IDisposableRegistry,
+    IPersistentState,
+    IPersistentStateFactory
+} from '../common/types';
 import { generateUuid } from '../common/uuid';
 import { logger } from '../logging';
 import { POSTHOG_API_KEY, POSTHOG_HOST } from './constants';
 import { ITelemetryService, TelemetryEvent } from './types';
 
 const USER_ID_STORAGE_KEY = 'deepnote-telemetry-anonymous-user-id';
+const POSTHOG_SHUTDOWN_TIMEOUT = 5000;
 
 @injectable()
-export class TelemetryService implements ITelemetryService {
-    private client: PostHog | undefined;
+export class TelemetryService implements ITelemetryService, IExtensionSyncActivationService {
+    private client: PostHog | null;
 
-    private initialized = false;
-
-    private userIdState: IPersistentState<string> | undefined;
+    private userIdState: IPersistentState<string>;
 
     constructor(
+        @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
         @inject(IPersistentStateFactory) private readonly stateFactory: IPersistentStateFactory,
         @inject(IAsyncDisposableRegistry) asyncDisposables: IAsyncDisposableRegistry
     ) {
         asyncDisposables.push(this);
+        this.client = null;
+        this.userIdState = this.stateFactory.createGlobalPersistentState<string>(USER_ID_STORAGE_KEY, generateUuid());
     }
 
-    private initialize(): void {
+    public async activate(): Promise<void> {
         try {
-            this.userIdState = this.stateFactory.createGlobalPersistentState<string>(USER_ID_STORAGE_KEY, '');
-
-            if (!this.userIdState.value) {
-                void this.userIdState.updateValue(generateUuid());
-            }
-
-            this.client = new PostHog(POSTHOG_API_KEY, {
-                flushAt: 20,
-                flushInterval: 30000,
-                host: POSTHOG_HOST
-            });
+            this.createClient();
         } catch (error) {
-            this.initialized = false;
-            throw error;
+            logger.debug(`TelemetryService activation error: ${error}`);
         }
-        this.initialized = true;
+
+        this.disposables.push(
+            workspace.onDidChangeConfiguration((e) => {
+                if (e.affectsConfiguration('telemetry') || e.affectsConfiguration('deepnote.telemetry')) {
+                    this.handleConfigChanged();
+                }
+            })
+        );
     }
 
     public async dispose(): Promise<void> {
-        try {
-            await this.client?.shutdown();
-        } catch (ex) {
-            logger.debug(`PostHog shutdown error: ${ex}`);
-        }
+        await this.destroyClient();
     }
 
     public trackEvent({ eventName, properties }: TelemetryEvent): void {
         try {
-            if (!this.isTelemetryEnabled()) {
-                return;
-            }
-
-            if (!this.initialized) {
-                this.initialize();
-            }
-
             if (!this.client || !this.userIdState) {
                 return;
             }
@@ -77,13 +69,51 @@ export class TelemetryService implements ITelemetryService {
         }
     }
 
+    private createClient(): void {
+        if (this.client || !this.isTelemetryEnabled()) {
+            return;
+        }
+
+        this.client = new PostHog(POSTHOG_API_KEY, {
+            flushAt: 20,
+            flushInterval: 30000,
+            host: POSTHOG_HOST
+        });
+    }
+
+    private async destroyClient(): Promise<void> {
+        const client = this.client;
+        this.client = null;
+
+        if (!client) {
+            return;
+        }
+
+        try {
+            await client.shutdown(POSTHOG_SHUTDOWN_TIMEOUT);
+        } catch (ex) {
+            logger.debug(`PostHog shutdown error: ${ex}`);
+        }
+    }
+
     private isTelemetryEnabled(): boolean {
         const telemetryLevel = workspace.getConfiguration('telemetry').get<string>('telemetryLevel', 'all');
 
-        if (telemetryLevel !== 'off') {
+        if (telemetryLevel !== 'all') {
             return false;
         }
 
         return workspace.getConfiguration('deepnote').get<boolean>('telemetry.enabled', true);
+    }
+
+    private handleConfigChanged(): void {
+        if (this.isTelemetryEnabled()) {
+            this.createClient();
+        } else {
+            this.destroyClient().catch((error) => {
+                logger.error(`Failed to destroy PostHog client: ${error}`);
+                this.client = null;
+            });
+        }
     }
 }

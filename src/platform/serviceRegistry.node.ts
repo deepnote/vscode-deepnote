@@ -29,6 +29,7 @@ export function registerTypes(serviceManager: IServiceManager) {
     serviceManager.addBinding(FileSystem, IFileSystem);
     serviceManager.addSingleton<IWorkspaceService>(IWorkspaceService, WorkspaceService);
     serviceManager.addSingleton<ITelemetryService>(ITelemetryService, TelemetryService);
+    serviceManager.addBinding(ITelemetryService, IExtensionSyncActivationService);
     serviceManager.addSingleton<IConfigurationService>(IConfigurationService, ConfigurationService);
 
     registerApiTypes(serviceManager);

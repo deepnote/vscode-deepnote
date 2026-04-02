@@ -8,6 +8,7 @@ import {
     Disposable,
     EventEmitter,
     FileSystemWatcher,
+    NotebookCellData,
     NotebookCellKind,
     NotebookDocument,
     NotebookEdit,
@@ -21,6 +22,7 @@ import type { DeepnoteOutput, DeepnoteProject } from '../../platform/deepnote/de
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import type { IControllerRegistration } from '../controllers/types';
 import { IDeepnoteNotebookManager } from '../types';
+import { DeepnoteDataConverter } from './deepnoteDataConverter';
 import { DeepnoteFileChangeWatcher } from './deepnoteFileChangeWatcher';
 import { SnapshotService } from './snapshots/snapshotService';
 
@@ -209,20 +211,26 @@ suite('DeepnoteFileChangeWatcher', () => {
         notebookType?: string;
         cellCount?: number;
         metadata?: Record<string, unknown>;
-        cells?: Array<{
-            metadata?: Record<string, unknown>;
-            outputs: any[];
-            kind?: number;
-            document?: { getText: () => string; languageId?: string };
-        }>;
+        cells?: Array<
+            | {
+                  metadata?: Record<string, unknown>;
+                  outputs: any[];
+                  kind?: number;
+                  document?: { getText: () => string; languageId?: string };
+              }
+            | NotebookCellData
+        >;
     }): NotebookDocument {
         const cells = (opts.cells ?? []).map((c) => ({
             ...c,
             kind: c.kind ?? NotebookCellKind.Code,
-            document: {
-                getText: c.document?.getText ?? (() => ''),
-                languageId: c.document?.languageId ?? 'python'
-            }
+            document:
+                'document' in c && c.document
+                    ? { getText: c.document.getText ?? (() => ''), languageId: c.document.languageId ?? 'python' }
+                    : {
+                          getText: () => ('value' in c ? (c.value as string) : ''),
+                          languageId: 'languageId' in c ? (c.languageId as string) : 'python'
+                      }
         }));
 
         return {
@@ -542,6 +550,76 @@ project:
         await waitFor(() => applyEditCount >= 2, waitForTimeoutMs);
 
         assert.isAtLeast(applyEditCount, 2, 'applyEdit should be called for both external changes');
+    });
+
+    test('editor→external→editor→external: second external edit must reload (self-write leak regression)', async function () {
+        this.timeout(15_000);
+        const uri = testFileUri('self-write-leak.deepnote');
+
+        when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(multiNotebookProject);
+
+        // Initial state: editor content matches disk — use the real converter
+        const converter = new DeepnoteDataConverter();
+        const nb1 = multiNotebookProject.project.notebooks[0];
+        const notebook = createMockNotebook({
+            uri,
+            metadata: { deepnoteProjectId: multiNotebookProject.project.id, deepnoteNotebookId: nb1.id },
+            cells: converter.convertBlocksToCells(nb1.blocks)
+        });
+
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+        setupMockFs(multiNotebookYaml);
+
+        // Real VS Code behavior: workspace.save() fires onDidSaveNotebookDocument.
+        // executeMainFileSync calls markSelfWrite before workspace.save, AND the
+        // onDidSaveNotebookDocument handler also calls markSelfWrite — two marks
+        // for one FS event. This leaks a phantom self-write count.
+        when(mockedVSCodeNamespaces.workspace.save(anything())).thenCall((saveUri: Uri) => {
+            saveCount++;
+            onDidSaveNotebook.fire(notebook);
+            return Promise.resolve(saveUri);
+        });
+
+        // Step 1: editor edit → user saves notebook 1
+        onDidSaveNotebook.fire(notebook);
+        onDidChangeFile.fire(uri);
+        await new Promise((resolve) => setTimeout(resolve, debounceWaitMs));
+        assert.strictEqual(applyEditCount, 0, 'Step 1: editor save FS event should be suppressed');
+
+        // Step 2: first external edit → triggers executeMainFileSync (reload works)
+        const externalProject1 = structuredClone(multiNotebookProject);
+        externalProject1.project.notebooks[0].blocks![0].content = 'print("external-1")';
+        setupMockFs(serializeDeepnoteFile(externalProject1));
+
+        onDidChangeFile.fire(uri);
+        await waitFor(() => saveCount >= 1);
+        assert.isAtLeast(applyEditCount, 1, 'Step 2: first external edit should reload');
+
+        const applyCountAfterFirstReload = applyEditCount;
+
+        // Consume FS events from executeMainFileSync's writeFile + save
+        onDidChangeFile.fire(uri);
+        onDidChangeFile.fire(uri);
+        await new Promise((resolve) => setTimeout(resolve, debounceWaitMs));
+
+        // Step 3: editor edit → user saves again
+        onDidSaveNotebook.fire(notebook);
+        onDidChangeFile.fire(uri);
+        await new Promise((resolve) => setTimeout(resolve, debounceWaitMs));
+
+        // Step 4: second external edit → should reload but phantom self-write blocks it
+        const externalProject2 = structuredClone(multiNotebookProject);
+        externalProject2.project.notebooks[0].blocks![0].content = 'print("external-2")';
+        setupMockFs(serializeDeepnoteFile(externalProject2));
+
+        onDidChangeFile.fire(uri);
+        await new Promise((resolve) => setTimeout(resolve, debounceWaitMs + 500));
+
+        assert.isAbove(
+            applyEditCount,
+            applyCountAfterFirstReload,
+            'Step 4: second external edit should reload, but phantom self-write from executeMainFileSync leaks and suppresses it'
+        );
     });
 
     test('should use atomic edit (single applyEdit for replaceCells + metadata)', async () => {

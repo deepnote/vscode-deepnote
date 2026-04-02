@@ -94,6 +94,12 @@
                 "icon": "$(reveal)"
             },
             {
+                "command": "deepnote.copyNotebookDetails",
+                "title": "%deepnote.commands.copyNotebookDetails.title%",
+                "category": "Deepnote",
+                "icon": "$(copy)"
+            },
+            {
                 "command": "deepnote.enableSnapshots",
                 "title": "%deepnote.commands.enableSnapshots.title%",
                 "category": "Deepnote"

@@ -2935,7 +2935,7 @@
         "flatted": "3.4.2",
         "vega-embed": "^7.1.0",
         "@mermaid-js/layout-elk": "npm:empty-pkg@1.0.0",
-        "tar": "7.5.11",
+        "tar": "7.5.13",
         "mocha": {
             "diff": "5.2.2"
         },

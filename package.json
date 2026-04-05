@@ -2715,7 +2715,7 @@
         "jquery": "^3.6.0",
         "js-yaml": "^4.1.1",
         "jsonc-parser": "3.3.1",
-        "lodash": "^4.17.23",
+        "lodash": "^4.18.1",
         "marked": "^4.0.10",
         "node-fetch": "^2.6.7",
         "node-gyp-build": "^4.6.0",
@@ -2951,7 +2951,8 @@
         "tslint": {
             "diff": "4.0.4"
         },
-        "lodash-es": "^4.17.23",
+        "lodash": "^4.18.1",
+        "lodash-es": "^4.18.1",
         "minimatch@>=8.0.0 <8.0.6": "8.0.7",
         "bn.js@<4.12.3": "4.12.3",
         "serialize-javascript@<7.0.5": "7.0.5",

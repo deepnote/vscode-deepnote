@@ -10,7 +10,6 @@ import {
     type NotebookData,
     type NotebookSerializer
 } from 'vscode';
-import { z } from 'zod';
 
 import { computeHash } from '../../platform/common/crypto';
 import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
@@ -59,20 +58,9 @@ function cloneWithoutCircularRefs<T>(obj: T, seen = new WeakSet<object>()): T {
  * Serializer for converting between Deepnote YAML files and VS Code notebook format.
  * Handles reading/writing .deepnote files and manages project state persistence.
  */
-/** Window (ms) during which a post-serialize deserialize excludes the serialized notebook. */
-const recentSerializeTtlMs = 5_000;
-
 @injectable()
 export class DeepnoteNotebookSerializer implements NotebookSerializer {
     private converter = new DeepnoteDataConverter();
-
-    /**
-     * Tracks the most recently serialized notebook per project.
-     * When VS Code calls $dataToNotebook after a save, it's re-reading the
-     * file for a SIBLING tab (the saved notebook already has its content).
-     * This tracker lets findCurrentNotebookId pick a sibling instead.
-     */
-    private readonly recentSerializations = new Map<string, { notebookId: string; timestamp: number }>();
 
     constructor(
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
@@ -211,7 +199,6 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
      * Priority:
      *  1. Pending resolution hint (explicit intent from explorer view)
      *  2. Active tab URI query param (VS Code's ground truth for which tab is loading)
-     *  3. Sibling detection (post-save re-read for other open tabs)
      * @param projectId The project ID to find a notebook for
      * @returns The notebook ID to deserialize, or undefined if none found
      */
@@ -219,7 +206,6 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
         const pendingNotebookId = this.notebookManager.consumePendingNotebookResolution(projectId);
 
         if (pendingNotebookId) {
-            logger.debug(`DeepnoteSerializer: Resolved notebook ID from pending resolution: ${pendingNotebookId}`);
             return pendingNotebookId;
         }
 
@@ -229,24 +215,6 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             logger.debug(`DeepnoteSerializer: Resolved notebook ID from active tab URI: ${activeTabNotebookId}`);
 
             return activeTabNotebookId;
-        }
-
-        // Multiple notebooks open — VS Code may be re-reading the file for a
-        // sibling tab after a save. Pick a sibling (any open notebook that is
-        // NOT the one just serialized).
-        const openNotebookIds = this.findOpenNotebookIds(projectId);
-
-        if (openNotebookIds.length > 1) {
-            const recent = this.recentSerializations.get(projectId);
-
-            if (recent && Date.now() - recent.timestamp < recentSerializeTtlMs) {
-                this.recentSerializations.delete(projectId);
-                const sibling = openNotebookIds.find((id) => id !== recent.notebookId);
-
-                if (sibling) {
-                    return sibling;
-                }
-            }
         }
 
         return undefined;
@@ -390,7 +358,6 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             // currentNotebookId here would cause VS Code's follow-up deserialize calls
             // for other open notebooks to resolve to the wrong notebook.
             this.notebookManager.updateOriginalProject(projectId, originalProject);
-            this.recentSerializations.set(projectId, { notebookId, timestamp: Date.now() });
 
             logger.debug('SerializeNotebook: Serializing to YAML');
 
@@ -615,24 +582,6 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
         const notebookId = new URLSearchParams(tabInput.uri.query).get('notebook');
 
         return notebookId ?? undefined;
-    }
-
-    private findOpenNotebookIds(projectId: string): string[] {
-        return [
-            ...workspace.notebookDocuments.reduce((ids, doc) => {
-                if (doc.notebookType !== 'deepnote' || doc.metadata.deepnoteProjectId !== projectId) {
-                    return ids;
-                }
-
-                const parsed = z.string().safeParse(doc.metadata.deepnoteNotebookId);
-
-                if (parsed.success) {
-                    ids.add(parsed.data);
-                }
-
-                return ids;
-            }, new Set<string>())
-        ];
     }
 
     /**

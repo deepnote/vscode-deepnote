@@ -2544,6 +2544,16 @@ export namespace vscMockExtHostedTypes {
          */
         Default = 0
     }
+    export class TabInputNotebook {
+        readonly uri: vscUri.URI;
+        readonly notebookType: string;
+
+        constructor(uri: vscUri.URI, notebookType: string) {
+            this.uri = uri;
+            this.notebookType = notebookType;
+        }
+    }
+
     export class NotebookCellData {
         kind: NotebookCellKind;
         value: string;

@@ -301,6 +301,7 @@ export function resetVSCodeMocks() {
     (mockedVSCode as any).NotebookCellExecutionState = vscodeMocks.vscMockExtHostedTypes.NotebookCellExecutionState;
     (mockedVSCode as any).NotebookEditorRevealType = vscodeMocks.vscMockExtHostedTypes.NotebookEditorRevealType;
     // Mock ColorThemeKind enum
+    (mockedVSCode as any).TabInputNotebook = vscodeMocks.vscMockExtHostedTypes.TabInputNotebook;
     (mockedVSCode as any).ColorThemeKind = { Light: 1, Dark: 2, HighContrast: 3, HighContrastLight: 4 };
     mockedVSCode.EndOfLine = vscodeMocks.vscMockExtHostedTypes.EndOfLine;
 }

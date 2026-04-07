@@ -292,9 +292,6 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             return;
         }
 
-        // Pass the notebook ID explicitly to avoid mutating the global selection state.
-        // Multiple notebooks from the same project may be open simultaneously, and
-        // mutating selectedNotebookByProject would cause race conditions.
         const targetNotebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
 
         const tokenSource = new CancellationTokenSource();

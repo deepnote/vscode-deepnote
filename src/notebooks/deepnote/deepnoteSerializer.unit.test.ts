@@ -2,7 +2,7 @@ import { deserializeDeepnoteFile, serializeDeepnoteFile, type DeepnoteFile } fro
 import { assert } from 'chai';
 import { parse as parseYaml } from 'yaml';
 import { when } from 'ts-mockito';
-import { Uri, type NotebookDocument } from 'vscode';
+import type { NotebookDocument } from 'vscode';
 
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
 import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
@@ -177,8 +177,8 @@ project:
             assert.include(result.cells[0].value, 'Title');
         });
 
-        test('should ignore stored selection when explicit notebookId is provided', async () => {
-            manager.selectNotebookForProject('project-123', 'notebook-1');
+        test('should ignore queued resolution when explicit notebookId is provided', async () => {
+            manager.queueNotebookResolution('project-123', 'notebook-1');
             const content = projectToYaml(mockProject);
             const result = await serializer.deserializeNotebook(content, {} as any, 'notebook-2');
 
@@ -253,9 +253,8 @@ project:
             assert.include(yamlString, 'notebook-1');
         });
 
-        test('should use current notebook ID instead of stale selected notebook when metadata notebook ID is missing', async () => {
+        test('should use current notebook ID when metadata notebook ID is missing', async () => {
             manager.storeOriginalProject('project-123', mockProject, 'notebook-2');
-            manager.selectNotebookForProject('project-123', 'notebook-1');
 
             const mockNotebookData = {
                 cells: [
@@ -278,31 +277,6 @@ project:
             assert.strictEqual(serializedProject.project.notebooks[1].id, 'notebook-2');
             assert.strictEqual(serializedProject.project.notebooks[0].blocks?.[0].content, 'print("hello")');
             assert.strictEqual(serializedProject.project.notebooks[1].blocks?.[0].content, '# Updated second notebook');
-        });
-
-        test('should queue the serialized notebook for the next resolution hint', async () => {
-            manager.storeOriginalProject('project-123', mockProject, 'notebook-1');
-
-            const mockNotebookData = {
-                cells: [
-                    {
-                        kind: 1, // NotebookCellKind.Markup
-                        value: '# Updated second notebook',
-                        languageId: 'markdown',
-                        metadata: {}
-                    }
-                ],
-                metadata: {
-                    deepnoteProjectId: 'project-123',
-                    deepnoteNotebookId: 'notebook-2'
-                }
-            };
-
-            await serializer.serializeNotebook(mockNotebookData as any, {} as any);
-
-            manager.updateCurrentNotebookId('project-123', 'notebook-1');
-
-            assert.strictEqual(serializer.findCurrentNotebookId('project-123'), 'notebook-2');
         });
 
         suite('multi-notebook save scenarios', () => {
@@ -450,7 +424,7 @@ project:
 
         test('should prioritize queued notebook resolution over current notebook and open documents', () => {
             manager.queueNotebookResolution('project-123', 'queued-notebook');
-            manager.updateCurrentNotebookId('project-123', 'current-notebook');
+            manager.storeOriginalProject('project-123', mockProject, 'current-notebook');
 
             const mockNotebookDoc = {
                 then: undefined,
@@ -478,7 +452,7 @@ project:
         });
 
         test('should return current notebook ID when no pending resolution exists', () => {
-            manager.updateCurrentNotebookId('project-123', 'current-notebook');
+            manager.storeOriginalProject('project-123', mockProject, 'current-notebook');
 
             const result = serializer.findCurrentNotebookId('project-123');
 
@@ -512,7 +486,7 @@ project:
         });
 
         test('should prefer current notebook ID when multiple notebooks are open for a project', () => {
-            manager.updateCurrentNotebookId('project-123', 'notebook-b');
+            manager.storeOriginalProject('project-123', mockProject, 'notebook-b');
 
             const notebookA = {
                 then: undefined,
@@ -593,14 +567,6 @@ project:
             } as NotebookDocument;
 
             when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebookA, notebookB]);
-
-            const result = serializer.findCurrentNotebookId('project-123');
-
-            assert.strictEqual(result, undefined);
-        });
-
-        test('should ignore stale selected notebook state when no other resolver state exists', () => {
-            manager.selectNotebookForProject('project-123', 'stored-notebook');
 
             const result = serializer.findCurrentNotebookId('project-123');
 
@@ -706,78 +672,6 @@ project:
 
             assert.strictEqual(result, undefined);
         });
-
-        suite('tab-based resolution', () => {
-            function createTabGroups(...notebookIds: string[]) {
-                const tabs = notebookIds.map((id) => ({
-                    input: {
-                        uri: Uri.parse(`file:///test/project.deepnote?notebook=${id}`),
-                        notebookType: 'deepnote'
-                    }
-                }));
-
-                return { all: [{ tabs }] } as any;
-            }
-
-            teardown(() => {
-                when(mockedVSCodeNamespaces.window.tabGroups).thenReturn({ all: [] } as any);
-            });
-
-            test('should resolve different notebook IDs from tabs on sequential reload calls', () => {
-                when(mockedVSCodeNamespaces.window.tabGroups).thenReturn(createTabGroups('notebook-1', 'notebook-2'));
-
-                const projectNotebookIds = ['notebook-1', 'notebook-2'];
-
-                const first = serializer.findCurrentNotebookId('project-123', projectNotebookIds);
-                const second = serializer.findCurrentNotebookId('project-123', projectNotebookIds);
-
-                assert.strictEqual(first, 'notebook-1');
-                assert.strictEqual(second, 'notebook-2');
-            });
-
-            test('should skip tab resolution when all tab notebook IDs are already open', () => {
-                when(mockedVSCodeNamespaces.window.tabGroups).thenReturn(createTabGroups('notebook-1', 'notebook-2'));
-                when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([
-                    createNotebookDoc('notebook-1'),
-                    createNotebookDoc('notebook-2')
-                ]);
-
-                const projectNotebookIds = ['notebook-1', 'notebook-2'];
-                const result = serializer.findCurrentNotebookId('project-123', projectNotebookIds);
-
-                assert.strictEqual(result, undefined);
-            });
-
-            test('should filter tab notebook IDs by projectNotebookIds', () => {
-                when(mockedVSCodeNamespaces.window.tabGroups).thenReturn(
-                    createTabGroups('notebook-1', 'other-project-notebook')
-                );
-
-                const projectNotebookIds = ['notebook-1', 'notebook-2'];
-                const result = serializer.findCurrentNotebookId('project-123', projectNotebookIds);
-
-                assert.strictEqual(result, 'notebook-1');
-            });
-
-            test('should prioritize pending resolution over tab resolution', () => {
-                when(mockedVSCodeNamespaces.window.tabGroups).thenReturn(createTabGroups('notebook-1', 'notebook-2'));
-
-                manager.queueNotebookResolution('project-123', 'queued-notebook');
-
-                const projectNotebookIds = ['notebook-1', 'notebook-2'];
-                const result = serializer.findCurrentNotebookId('project-123', projectNotebookIds);
-
-                assert.strictEqual(result, 'queued-notebook');
-            });
-
-            test('should skip tab resolution when projectNotebookIds is not provided', () => {
-                when(mockedVSCodeNamespaces.window.tabGroups).thenReturn(createTabGroups('notebook-1', 'notebook-2'));
-
-                const result = serializer.findCurrentNotebookId('project-123');
-
-                assert.strictEqual(result, undefined);
-            });
-        });
     });
 
     suite('component integration', () => {
@@ -806,12 +700,7 @@ project:
             assert.isFunction(manager.consumePendingNotebookResolution, 'has consumePendingNotebookResolution method');
             assert.isFunction(manager.getCurrentNotebookId, 'has getCurrentNotebookId method');
             assert.isFunction(manager.getOriginalProject, 'has getOriginalProject method');
-            assert.isFunction(
-                manager.getTheSelectedNotebookForAProject,
-                'has getTheSelectedNotebookForAProject method'
-            );
             assert.isFunction(manager.queueNotebookResolution, 'has queueNotebookResolution method');
-            assert.isFunction(manager.selectNotebookForProject, 'has selectNotebookForProject method');
             assert.isFunction(manager.storeOriginalProject, 'has storeOriginalProject method');
         });
 

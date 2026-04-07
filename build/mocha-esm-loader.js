@@ -335,6 +335,7 @@ export async function load(url, context, nextLoad) {
                 export const EndOfLine = createClassProxy('EndOfLine');
                 export const PortAutoForwardAction = createClassProxy('PortAutoForwardAction');
                 export const PortAttributes = createClassProxy('PortAttributes');
+                export const TabInputNotebook = createClassProxy('TabInputNotebook');
             `,
                 shortCircuit: true
             };

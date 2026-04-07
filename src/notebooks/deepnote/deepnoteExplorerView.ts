@@ -519,7 +519,6 @@ export class DeepnoteExplorerView {
 
     private registerNotebookOpenIntent(projectId: string, notebookId: string): void {
         this.manager.queueNotebookResolution(projectId, notebookId);
-        this.manager.selectNotebookForProject(projectId, notebookId);
     }
 
     private refreshExplorer(): void {

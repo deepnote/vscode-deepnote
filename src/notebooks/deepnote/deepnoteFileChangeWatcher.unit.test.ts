@@ -3,7 +3,7 @@ import { assert } from 'chai';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import * as sinon from 'sinon';
-import { anything, instance, mock, reset, resetCalls, verify, when } from 'ts-mockito';
+import { anything, instance, mock, reset, resetCalls, when } from 'ts-mockito';
 import {
     Disposable,
     EventEmitter,
@@ -164,7 +164,6 @@ suite('DeepnoteFileChangeWatcher', () => {
         mockedNotebookManager = mock<IDeepnoteNotebookManager>();
         when(mockedNotebookManager.consumePendingNotebookResolution(anything())).thenReturn(undefined);
         when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(validProject);
-        when(mockedNotebookManager.getTheSelectedNotebookForAProject(anything())).thenReturn('notebook-1');
         when(mockedNotebookManager.queueNotebookResolution(anything(), anything())).thenReturn();
         when(mockedNotebookManager.updateOriginalProject(anything(), anything())).thenReturn();
         mockNotebookManager = instance(mockedNotebookManager);
@@ -1550,7 +1549,6 @@ project:
                 const mockedManagerEx = mock<IDeepnoteNotebookManager>();
                 when(mockedManagerEx.consumePendingNotebookResolution(anything())).thenReturn(undefined);
                 when(mockedManagerEx.getOriginalProject(anything())).thenReturn(validProject);
-                when(mockedManagerEx.getTheSelectedNotebookForAProject(anything())).thenReturn('notebook-1');
                 when(mockedManagerEx.queueNotebookResolution(anything(), anything())).thenReturn();
                 when(mockedManagerEx.updateOriginalProject(anything(), anything())).thenReturn();
 
@@ -1612,7 +1610,6 @@ project:
                 reset(mockedNotebookManager);
                 when(mockedNotebookManager.consumePendingNotebookResolution(anything())).thenReturn(undefined);
                 when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(validProject);
-                when(mockedNotebookManager.getTheSelectedNotebookForAProject(anything())).thenReturn('notebook-1');
                 when(mockedNotebookManager.queueNotebookResolution(anything(), anything())).thenReturn();
                 when(mockedNotebookManager.updateOriginalProject(anything(), anything())).thenReturn();
                 resetCalls(mockedNotebookManager);
@@ -2157,7 +2154,6 @@ project:
             reset(mockedNotebookManager);
             when(mockedNotebookManager.consumePendingNotebookResolution(anything())).thenReturn(undefined);
             when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(multiNotebookProject);
-            when(mockedNotebookManager.getTheSelectedNotebookForAProject(anything())).thenReturn('notebook-1');
             when(mockedNotebookManager.queueNotebookResolution(anything(), anything())).thenReturn();
             when(mockedNotebookManager.updateOriginalProject(anything(), anything())).thenReturn();
             resetCalls(mockedNotebookManager);
@@ -2278,8 +2274,6 @@ project:
             onDidChangeFile.fire(basePath);
 
             await waitFor(() => applyEditCount >= 2);
-
-            verify(mockedNotebookManager.clearNotebookSelection(anything())).never();
         });
 
         test('should not corrupt other notebooks when one notebook triggers a file change', async () => {

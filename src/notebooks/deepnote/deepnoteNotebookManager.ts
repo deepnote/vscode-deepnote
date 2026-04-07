@@ -20,15 +20,6 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
     private readonly originalProjects = new Map<string, DeepnoteProject>();
     private readonly pendingNotebookResolutions = new Map<string, PendingNotebookResolution[]>();
     private readonly projectsWithInitNotebookRun = new Set<string>();
-    private readonly selectedNotebookByProject = new Map<string, string>();
-
-    /**
-     * Clears the remembered notebook selection and any pending resolution hints for a project.
-     */
-    clearNotebookSelection(projectId: string): void {
-        this.pendingNotebookResolutions.delete(projectId);
-        this.selectedNotebookByProject.delete(projectId);
-    }
 
     /**
      * Consumes the next short-lived notebook resolution hint for a project.
@@ -67,15 +58,6 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
     }
 
     /**
-     * Gets the selected notebook ID for a specific project.
-     * @param projectId Project identifier
-     * @returns Selected notebook ID or undefined if not set
-     */
-    getTheSelectedNotebookForAProject(projectId: string): string | undefined {
-        return this.selectedNotebookByProject.get(projectId);
-    }
-
-    /**
      * Queues a short-lived notebook resolution hint for the next deserialize.
      *
      * @param projectId - The project ID that identifies the Deepnote project
@@ -90,16 +72,6 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
         });
 
         this.pendingNotebookResolutions.set(projectId, pendingResolutions);
-    }
-
-    /**
-     * Associates a notebook ID with a project to remember the user's last explicit selection.
-     *
-     * @param projectId - The project ID that identifies the Deepnote project
-     * @param notebookId - The ID of the selected notebook within the project
-     */
-    selectNotebookForProject(projectId: string, notebookId: string): void {
-        this.selectedNotebookByProject.set(projectId, notebookId);
     }
 
     /**
@@ -130,16 +102,6 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
     updateOriginalProject(projectId: string, project: DeepnoteProject): void {
         const clonedProject = structuredClone(project);
         this.originalProjects.set(projectId, clonedProject);
-    }
-
-    /**
-     * Updates the current notebook ID for a project.
-     * Used when switching notebooks within the same project.
-     * @param projectId Project identifier
-     * @param notebookId New current notebook ID
-     */
-    updateCurrentNotebookId(projectId: string, notebookId: string): void {
-        this.currentNotebookId.set(projectId, notebookId);
     }
 
     /**

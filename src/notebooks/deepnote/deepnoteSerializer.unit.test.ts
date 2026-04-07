@@ -451,83 +451,12 @@ project:
             assert.strictEqual(result, 'queued-notebook');
         });
 
-        test('should return current notebook ID when no pending resolution exists', () => {
+        test('should return undefined when no pending resolution or active tab exists', () => {
             manager.storeOriginalProject('project-123', mockProject, 'current-notebook');
 
             const result = serializer.findCurrentNotebookId('project-123');
 
-            assert.strictEqual(result, 'current-notebook');
-        });
-
-        test('should return the only open notebook when current notebook ID is unavailable', () => {
-            const mockNotebookDoc = {
-                then: undefined,
-                notebookType: 'deepnote',
-                metadata: {
-                    deepnoteProjectId: 'project-123',
-                    deepnoteNotebookId: 'notebook-from-workspace'
-                },
-                uri: {} as any,
-                version: 1,
-                isDirty: false,
-                isUntitled: false,
-                isClosed: false,
-                cellCount: 0,
-                cellAt: () => ({}) as any,
-                getCells: () => [],
-                save: async () => true
-            } as NotebookDocument;
-
-            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([mockNotebookDoc]);
-
-            const result = serializer.findCurrentNotebookId('project-123');
-
-            assert.strictEqual(result, 'notebook-from-workspace');
-        });
-
-        test('should prefer current notebook ID when multiple notebooks are open for a project', () => {
-            manager.storeOriginalProject('project-123', mockProject, 'notebook-b');
-
-            const notebookA = {
-                then: undefined,
-                notebookType: 'deepnote',
-                metadata: {
-                    deepnoteProjectId: 'project-123',
-                    deepnoteNotebookId: 'notebook-a'
-                },
-                uri: {} as any,
-                version: 1,
-                isDirty: false,
-                isUntitled: false,
-                isClosed: false,
-                cellCount: 0,
-                cellAt: () => ({}) as any,
-                getCells: () => [],
-                save: async () => true
-            } as NotebookDocument;
-            const notebookB = {
-                then: undefined,
-                notebookType: 'deepnote',
-                metadata: {
-                    deepnoteProjectId: 'project-123',
-                    deepnoteNotebookId: 'notebook-b'
-                },
-                uri: {} as any,
-                version: 1,
-                isDirty: false,
-                isUntitled: false,
-                isClosed: false,
-                cellCount: 0,
-                cellAt: () => ({}) as any,
-                getCells: () => [],
-                save: async () => true
-            } as NotebookDocument;
-
-            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebookA, notebookB]);
-
-            const result = serializer.findCurrentNotebookId('project-123');
-
-            assert.strictEqual(result, 'notebook-b');
+            assert.strictEqual(result, undefined);
         });
 
         test('should return undefined when multiple notebooks are open and no stronger signal exists', () => {
@@ -629,7 +558,7 @@ project:
             await serializer.serializeNotebook(mockNotebookData as any, {} as any);
 
             assert.strictEqual(serializer.findCurrentNotebookId('project-123'), 'notebook-2');
-            assert.strictEqual(serializer.findCurrentNotebookId('project-123'), 'notebook-1');
+            assert.strictEqual(serializer.findCurrentNotebookId('project-123'), undefined);
         });
 
         test('recent serialization hint expires after TTL', async () => {
@@ -664,7 +593,7 @@ project:
 
             const result = serializer.findCurrentNotebookId('project-123');
 
-            assert.strictEqual(result, 'notebook-1');
+            assert.strictEqual(result, undefined);
         });
 
         test('should return undefined for unknown project', () => {

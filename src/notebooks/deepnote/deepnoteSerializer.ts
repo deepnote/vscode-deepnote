@@ -207,33 +207,35 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
     }
 
     /**
-     * Finds the notebook ID to deserialize without relying on active-editor state.
-     * Prefers a pending resolution hint, then current/open-document state,
-     * and falls back to the active tab's URI query param for session restore.
+     * Finds the notebook ID to deserialize for VS Code-initiated deserialization.
+     * Priority:
+     *  1. Pending resolution hint (explicit intent from explorer view)
+     *  2. Active tab URI query param (VS Code's ground truth for which tab is loading)
+     *  3. Sibling detection (post-save re-read for other open tabs)
      * @param projectId The project ID to find a notebook for
      * @returns The notebook ID to deserialize, or undefined if none found
      */
     findCurrentNotebookId(projectId: string): string | undefined {
         const pendingNotebookId = this.notebookManager.consumePendingNotebookResolution(projectId);
-        const openNotebookIds = this.findOpenNotebookIds(projectId);
-        const currentNotebookId = this.notebookManager.getCurrentNotebookId(projectId);
 
         if (pendingNotebookId) {
+            logger.debug(`DeepnoteSerializer: Resolved notebook ID from pending resolution: ${pendingNotebookId}`);
             return pendingNotebookId;
         }
 
-        if (currentNotebookId && openNotebookIds.length === 0) {
-            return currentNotebookId;
-        }
+        const activeTabNotebookId = this.findNotebookIdFromActiveTab();
 
-        if (openNotebookIds.length === 1) {
-            return openNotebookIds[0];
+        if (activeTabNotebookId) {
+            logger.debug(`DeepnoteSerializer: Resolved notebook ID from active tab URI: ${activeTabNotebookId}`);
+
+            return activeTabNotebookId;
         }
 
         // Multiple notebooks open — VS Code may be re-reading the file for a
         // sibling tab after a save. Pick a sibling (any open notebook that is
-        // NOT the one just serialized). If no recent serialization, fall back
-        // to currentNotebookId for backward compatibility.
+        // NOT the one just serialized).
+        const openNotebookIds = this.findOpenNotebookIds(projectId);
+
         if (openNotebookIds.length > 1) {
             const recent = this.recentSerializations.get(projectId);
 
@@ -245,18 +247,6 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                     return sibling;
                 }
             }
-
-            if (currentNotebookId && openNotebookIds.includes(currentNotebookId)) {
-                return currentNotebookId;
-            }
-        }
-
-        const activeTabNotebookId = this.findNotebookIdFromActiveTab();
-
-        if (activeTabNotebookId) {
-            logger.debug(`DeepnoteSerializer: Resolved notebook ID from active tab URI: ${activeTabNotebookId}`);
-
-            return activeTabNotebookId;
         }
 
         return undefined;

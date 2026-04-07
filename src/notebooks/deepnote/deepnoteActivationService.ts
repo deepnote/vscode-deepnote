@@ -1,17 +1,5 @@
 import { inject, injectable, optional } from 'inversify';
-import {
-    CancellationTokenSource,
-    commands,
-    l10n,
-    NotebookEdit,
-    NotebookRange,
-    workspace,
-    window,
-    WorkspaceEdit,
-    type Disposable,
-    type NotebookDocument,
-    type NotebookDocumentContentOptions
-} from 'vscode';
+import { commands, l10n, workspace, window, type Disposable, type NotebookDocumentContentOptions } from 'vscode';
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IExtensionContext } from '../../platform/common/types';
@@ -27,9 +15,6 @@ import { SnapshotService } from './snapshots/snapshotService';
  * Service responsible for activating and configuring Deepnote notebook support in VS Code.
  * Registers serializers, command handlers, and manages the notebook selection workflow.
  */
-const MISMATCH_CHECK_DELAY_MS = 200;
-const MAX_MISMATCH_RETRIES = 10;
-
 @injectable()
 export class DeepnoteActivationService implements IExtensionSyncActivationService {
     private editProtection: DeepnoteInputBlockEditProtection;
@@ -37,10 +22,6 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
     private explorerView: DeepnoteExplorerView;
 
     private integrationManager: IIntegrationManager;
-
-    private mismatchCheckTimer: ReturnType<typeof setTimeout> | undefined;
-
-    private mismatchRetryCount = 0;
 
     private serializer: DeepnoteNotebookSerializer;
 
@@ -68,18 +49,6 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
         this.editProtection = new DeepnoteInputBlockEditProtection(this.logger);
         this.snapshotsEnabled = this.isSnapshotsEnabled();
 
-        this.extensionContext.subscriptions.push(
-            workspace.onDidOpenNotebookDocument((doc) => {
-                if (doc.notebookType !== 'deepnote') {
-                    return;
-                }
-
-                if (new URLSearchParams(doc.uri.query).has('notebook')) {
-                    this.scheduleMismatchCheck();
-                }
-            })
-        );
-
         this.registerSerializer();
         this.extensionContext.subscriptions.push(this.editProtection);
         this.extensionContext.subscriptions.push(
@@ -99,80 +68,6 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
 
         this.explorerView.activate();
         this.integrationManager.activate();
-    }
-
-    /**
-     * Checks all open deepnote documents for URI/metadata notebook ID mismatches
-     * and fixes them by re-deserializing with the correct notebook ID.
-     * This handles the case where VS Code's deserializeNotebook API does not
-     * pass the document URI, causing the wrong notebook to be loaded on reload.
-     */
-    private async checkAndFixMismatches(): Promise<void> {
-        const hasLoadingDocs = workspace.notebookDocuments.some(
-            (doc) =>
-                doc.notebookType === 'deepnote' &&
-                !doc.metadata?.deepnoteNotebookId &&
-                new URLSearchParams(doc.uri.query).has('notebook')
-        );
-
-        if (hasLoadingDocs && this.mismatchRetryCount < MAX_MISMATCH_RETRIES) {
-            this.mismatchRetryCount++;
-            this.scheduleMismatchCheck();
-
-            return;
-        }
-
-        this.mismatchRetryCount = 0;
-
-        for (const doc of workspace.notebookDocuments) {
-            if (doc.notebookType !== 'deepnote' || doc.isClosed) {
-                continue;
-            }
-
-            const uriNotebookId = new URLSearchParams(doc.uri.query).get('notebook');
-            const metadataNotebookId = doc.metadata?.deepnoteNotebookId as string | undefined;
-
-            if (!uriNotebookId || uriNotebookId === metadataNotebookId) {
-                continue;
-            }
-
-            await this.fixDocumentNotebook(doc, uriNotebookId);
-        }
-    }
-
-    private async fixDocumentNotebook(doc: NotebookDocument, correctNotebookId: string): Promise<void> {
-        const fileUri = doc.uri.with({ query: '', fragment: '' });
-
-        let content: Uint8Array;
-        try {
-            content = await workspace.fs.readFile(fileUri);
-        } catch {
-            this.logger.warn(`[DeepnoteActivation] Cannot read file for mismatch fix: ${fileUri.path}`);
-
-            return;
-        }
-
-        const cts = new CancellationTokenSource();
-        try {
-            const data = await this.serializer.deserializeNotebook(content, cts.token, correctNotebookId);
-
-            const wsEdit = new WorkspaceEdit();
-            wsEdit.set(doc.uri, [
-                NotebookEdit.replaceCells(new NotebookRange(0, doc.cellCount), data.cells),
-                NotebookEdit.updateNotebookMetadata(data.metadata!)
-            ]);
-            await workspace.applyEdit(wsEdit);
-            await doc.save();
-
-            this.logger.info(
-                `[DeepnoteActivation] Fixed notebook mismatch for ${doc.uri.path}: ` +
-                    `loaded ${correctNotebookId} (was ${doc.metadata?.deepnoteNotebookId})`
-            );
-        } catch (error) {
-            this.logger.error(`[DeepnoteActivation] Failed to fix notebook mismatch: ${doc.uri.path}`, error);
-        } finally {
-            cts.dispose();
-        }
     }
 
     private isSnapshotsEnabled(): boolean {
@@ -234,16 +129,5 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
 
         this.serializerRegistration = workspace.registerNotebookSerializer('deepnote', this.serializer, contentOptions);
         this.extensionContext.subscriptions.push(this.serializerRegistration);
-    }
-
-    private scheduleMismatchCheck(): void {
-        if (this.mismatchCheckTimer !== undefined) {
-            clearTimeout(this.mismatchCheckTimer);
-        }
-
-        this.mismatchCheckTimer = setTimeout(() => {
-            this.mismatchCheckTimer = undefined;
-            void this.checkAndFixMismatches();
-        }, MISMATCH_CHECK_DELAY_MS);
     }
 }

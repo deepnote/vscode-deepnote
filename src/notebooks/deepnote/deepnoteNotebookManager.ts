@@ -2,6 +2,7 @@ import { injectable } from 'inversify';
 
 import { IDeepnoteNotebookManager, ProjectIntegration } from '../types';
 import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
+import { logger } from '../../platform/logging';
 
 const pendingNotebookResolutionTtlMs = 60_000;
 
@@ -152,6 +153,11 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
 
     private getValidPendingNotebookResolutions(projectId: string): PendingNotebookResolution[] {
         const cutoffTime = Date.now() - pendingNotebookResolutionTtlMs;
+        const allPendingResolutions = this.pendingNotebookResolutions.get(projectId) ?? [];
+        logger.debug(
+            `DeepnoteNotebookManager: getValidPendingNotebookResolutions: projectId=${projectId}, allPendingResolutions=${allPendingResolutions.length}`
+        );
+        logger.debug(JSON.stringify(allPendingResolutions, null, 2));
         const pendingResolutions = (this.pendingNotebookResolutions.get(projectId) ?? []).filter(
             (resolution) => resolution.queuedAt >= cutoffTime
         );

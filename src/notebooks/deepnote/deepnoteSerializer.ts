@@ -120,12 +120,12 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             }
 
             // Log block IDs from source file
-            for (let i = 0; i < (selectedNotebook.blocks ?? []).length; i++) {
-                const block = selectedNotebook.blocks![i];
+            for (let i = 0; i < selectedNotebook.blocks.length; i++) {
+                const block = selectedNotebook.blocks[i];
                 logger.trace(`DeserializeNotebook: block[${i}] id=${block.id} from source file`);
             }
 
-            let cells = this.converter.convertBlocksToCells(selectedNotebook.blocks ?? []);
+            let cells = this.converter.convertBlocksToCells(selectedNotebook.blocks);
 
             logger.debug(`DeepnoteSerializer: Converted ${cells.length} cells from notebook blocks`);
 

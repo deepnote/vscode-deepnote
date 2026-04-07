@@ -290,7 +290,6 @@ project:
 
                 assert.strictEqual(manager.getCurrentNotebookId('project-123'), 'notebook-2');
             });
-
         });
     });
 

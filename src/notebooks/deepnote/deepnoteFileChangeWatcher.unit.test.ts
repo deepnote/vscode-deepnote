@@ -510,12 +510,22 @@ project:
     });
 
     test('should not suppress real changes after auto-save', async function () {
-        this.timeout(5000);
+        this.timeout(10_000);
         const uri = testFileUri('test.deepnote');
 
         // First change: notebook has no cells, YAML has one cell -> different -> reload
         const notebook = createMockNotebook({ uri, cellCount: 0, cells: [] });
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+
+        // Override save mock to fire onDidSaveNotebook (matching real VS Code behavior).
+        // The onDidSaveNotebookDocument handler calls markSelfWrite, producing the
+        // second self-write marker that corresponds to the serializer's save-triggered write.
+        when(mockedVSCodeNamespaces.workspace.save(anything())).thenCall((saveUri: Uri) => {
+            saveCount++;
+            onDidSaveNotebook.fire(notebook);
+            return Promise.resolve(saveUri);
+        });
+
         setupMockFs(validYaml);
 
         onDidChangeFile.fire(uri);

@@ -129,7 +129,7 @@ project:
             );
         });
 
-        test('should throw error when no notebooks found', async () => {
+        test('should return empty state when no notebooks found and no ID resolved', async () => {
             const contentWithoutNotebooks = new TextEncoder().encode(`
 version: '1.0.0'
 metadata:
@@ -141,10 +141,11 @@ project:
   settings: {}
 `);
 
-            await assert.isRejected(
-                serializer.deserializeNotebook(contentWithoutNotebooks, {} as any),
-                /no notebooks|notebooks.*must contain at least 1/i
-            );
+            const result = await serializer.deserializeNotebook(contentWithoutNotebooks, {} as any);
+
+            assert.deepStrictEqual(result.cells, []);
+            assert.strictEqual(result.metadata?.deepnoteProjectId, 'project-123');
+            assert.strictEqual(result.metadata?.deepnoteNotebookId, undefined);
         });
 
         test('should deserialize the specified notebook when notebookId is passed', async () => {
@@ -750,7 +751,7 @@ project:
     });
 
     suite('default notebook selection', () => {
-        test('should not select Init notebook when other notebooks are available', async () => {
+        test('should not select Init notebook when other notebooks are available', () => {
             const projectData: DeepnoteFile = {
                 version: '1.0.0',
                 metadata: {
@@ -800,14 +801,12 @@ project:
             };
 
             const content = projectToYaml(projectData);
-            const result = await serializer.deserializeNotebook(content, {} as any);
+            const result = serializer.resolveDefaultNotebookId(content);
 
-            // Should select the Main notebook, not the Init notebook
-            assert.strictEqual(result.metadata?.deepnoteNotebookId, 'main-notebook');
-            assert.strictEqual(result.metadata?.deepnoteNotebookName, 'Main');
+            assert.strictEqual(result, 'main-notebook');
         });
 
-        test('should select Init notebook when it is the only notebook', async () => {
+        test('should select Init notebook when it is the only notebook', () => {
             const projectData: DeepnoteFile = {
                 version: '1.0.0',
                 metadata: {
@@ -841,14 +840,12 @@ project:
             };
 
             const content = projectToYaml(projectData);
-            const result = await serializer.deserializeNotebook(content, {} as any);
+            const result = serializer.resolveDefaultNotebookId(content);
 
-            // Should select the Init notebook since it's the only one
-            assert.strictEqual(result.metadata?.deepnoteNotebookId, 'init-notebook');
-            assert.strictEqual(result.metadata?.deepnoteNotebookName, 'Init');
+            assert.strictEqual(result, 'init-notebook');
         });
 
-        test('should select alphabetically first notebook when no initNotebookId', async () => {
+        test('should select alphabetically first notebook when no initNotebookId', () => {
             const projectData: DeepnoteFile = {
                 version: '1.0.0',
                 metadata: {
@@ -913,14 +910,12 @@ project:
             };
 
             const content = projectToYaml(projectData);
-            const result = await serializer.deserializeNotebook(content, {} as any);
+            const result = serializer.resolveDefaultNotebookId(content);
 
-            // Should select the alphabetically first notebook
-            assert.strictEqual(result.metadata?.deepnoteNotebookId, 'alpha-notebook');
-            assert.strictEqual(result.metadata?.deepnoteNotebookName, 'Alpha Notebook');
+            assert.strictEqual(result, 'alpha-notebook');
         });
 
-        test('should sort Init notebook last when multiple notebooks exist', async () => {
+        test('should sort Init notebook last when multiple notebooks exist', () => {
             const projectData: DeepnoteFile = {
                 version: '1.0.0',
                 metadata: {
@@ -986,11 +981,19 @@ project:
             };
 
             const content = projectToYaml(projectData);
-            const result = await serializer.deserializeNotebook(content, {} as any);
+            const result = serializer.resolveDefaultNotebookId(content);
 
             // Should select Alpha, not Init even though "Init" comes before "Alpha" alphabetically when in upper case
-            assert.strictEqual(result.metadata?.deepnoteNotebookId, 'alpha-notebook');
-            assert.strictEqual(result.metadata?.deepnoteNotebookName, 'Alpha');
+            assert.strictEqual(result, 'alpha-notebook');
+        });
+
+        test('should return empty state from deserializeNotebook when no notebook ID is resolved', async () => {
+            const content = projectToYaml(mockProject);
+            const result = await serializer.deserializeNotebook(content, {} as any);
+
+            assert.deepStrictEqual(result.cells, []);
+            assert.strictEqual(result.metadata?.deepnoteProjectId, 'project-123');
+            assert.strictEqual(result.metadata?.deepnoteNotebookId, undefined);
         });
     });
 

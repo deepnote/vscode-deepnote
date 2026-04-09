@@ -2,12 +2,15 @@ import type { DeepnoteBlock, DeepnoteFile, DeepnoteSnapshot } from '@deepnote/bl
 import { deserializeDeepnoteFile, isExecutableBlock, serializeDeepnoteSnapshot } from '@deepnote/blocks';
 import { inject, injectable, optional } from 'inversify';
 import {
-    TabInputNotebook,
+    CancellationTokenSource,
     l10n,
-    window,
+    NotebookEdit,
+    NotebookRange,
     workspace,
+    WorkspaceEdit,
     type CancellationToken,
     type NotebookData,
+    type NotebookDocument,
     type NotebookSerializer
 } from 'vscode';
 
@@ -54,6 +57,8 @@ function cloneWithoutCircularRefs<T>(obj: T, seen = new WeakSet<object>()): T {
     }
 }
 
+const LAST_SERIALIZED_TTL_MS = 10_000;
+
 /**
  * Serializer for converting between Deepnote YAML files and VS Code notebook format.
  * Handles reading/writing .deepnote files and manages project state persistence.
@@ -61,6 +66,8 @@ function cloneWithoutCircularRefs<T>(obj: T, seen = new WeakSet<object>()): T {
 @injectable()
 export class DeepnoteNotebookSerializer implements NotebookSerializer {
     private converter = new DeepnoteDataConverter();
+    private lastSerializedNotebookId: string | undefined;
+    private lastSerializedTimestamp = 0;
 
     constructor(
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
@@ -87,13 +94,6 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             throw new Error('Serialization cancelled');
         }
 
-        // Initialize vega-lite for output conversion (lazy-loaded ESM module)
-        await this.converter.initialize();
-
-        if (token?.isCancellationRequested) {
-            throw new Error('Serialization cancelled');
-        }
-
         try {
             const contentString = new TextDecoder('utf-8').decode(content);
             const deepnoteFile = deserializeDeepnoteFile(contentString);
@@ -107,16 +107,36 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
             logger.debug(`DeepnoteSerializer: Project ID: ${projectId}, Selected notebook ID: ${resolvedNotebookId}`);
 
+            if (!resolvedNotebookId) {
+                logger.debug(
+                    'DeepnoteSerializer: No notebook ID resolved, returning empty state for post-open verification'
+                );
+
+                return {
+                    cells: [],
+                    metadata: {
+                        deepnoteProjectId: projectId,
+                        deepnoteProjectName: deepnoteFile.project.name,
+                        deepnoteVersion: deepnoteFile.version
+                    }
+                };
+            }
+
             if (deepnoteFile.project.notebooks.length === 0) {
                 throw new Error('Deepnote project contains no notebooks.');
             }
 
-            const selectedNotebook = resolvedNotebookId
-                ? deepnoteFile.project.notebooks.find((nb) => nb.id === resolvedNotebookId)
-                : this.findDefaultNotebook(deepnoteFile);
+            const selectedNotebook = deepnoteFile.project.notebooks.find((nb) => nb.id === resolvedNotebookId);
 
             if (!selectedNotebook) {
                 throw new Error(l10n.t('No notebook selected or found'));
+            }
+
+            // Initialize vega-lite for output conversion (lazy-loaded ESM module)
+            await this.converter.initialize();
+
+            if (token?.isCancellationRequested) {
+                throw new Error('Serialization cancelled');
             }
 
             // Log block IDs from source file
@@ -195,12 +215,15 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
     }
 
     /**
-     * Finds the notebook ID to deserialize for VS Code-initiated deserialization.
+     * Resolves the notebook ID for a deserialization call.
+     *
      * Priority:
      *  1. Pending resolution hint (explicit intent from explorer view)
-     *  2. Active tab URI query param (VS Code's ground truth for which tab is loading)
-     * @param projectId The project ID to find a notebook for
-     * @returns The notebook ID to deserialize, or undefined if none found
+     *  2. Already-open document metadata (re-deserialization after file change)
+     *     — skips the notebook that was just serialized, since that's the one
+     *     that triggered the file change, not the one being re-deserialized.
+     *  3. undefined — initial open; verifyDeserializedNotebook will resolve
+     *     from the document URI after open.
      */
     findCurrentNotebookId(projectId: string): string | undefined {
         const pendingNotebookId = this.notebookManager.consumePendingNotebookResolution(projectId);
@@ -209,15 +232,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             return pendingNotebookId;
         }
 
-        const activeTabNotebookId = this.findNotebookIdFromActiveTab();
-
-        if (activeTabNotebookId) {
-            logger.debug(`DeepnoteSerializer: Resolved notebook ID from active tab URI: ${activeTabNotebookId}`);
-
-            return activeTabNotebookId;
-        }
-
-        return undefined;
+        return this.findNotebookIdFromOpenDocuments(projectId);
     }
 
     /**
@@ -226,6 +241,81 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
      */
     getConverter(): DeepnoteDataConverter {
         return this.converter;
+    }
+
+    /**
+     * Parses the file content and returns the ID of the default notebook
+     * (alphabetically first, excluding Init when other notebooks exist).
+     * Used by the post-open verification handler for direct file opens
+     * that have no `?notebook=` query param.
+     */
+    resolveDefaultNotebookId(content: Uint8Array): string | undefined {
+        try {
+            const contentString = new TextDecoder('utf-8').decode(content);
+            const deepnoteFile = deserializeDeepnoteFile(contentString);
+
+            return this.findDefaultNotebook(deepnoteFile)?.id;
+        } catch {
+            return undefined;
+        }
+    }
+
+    /**
+     * Ensures an opened notebook document shows the correct notebook.
+     *
+     * The serializer returns an empty state when it cannot determine which
+     * notebook to display (no pending resolution). This method is called
+     * after the document is created, reads the real notebook ID from
+     * the URI `?notebook=` query param (or picks the default notebook
+     * for direct file opens), and patches the document in place.
+     */
+    async verifyDeserializedNotebook(doc: NotebookDocument): Promise<void> {
+        if (doc.notebookType !== 'deepnote') {
+            return;
+        }
+
+        const expectedNotebookId = new URLSearchParams(doc.uri.query).get('notebook');
+        const actualNotebookId = doc.metadata?.deepnoteNotebookId as string | undefined;
+
+        if (actualNotebookId && (!expectedNotebookId || expectedNotebookId === actualNotebookId)) {
+            return;
+        }
+
+        const cts = new CancellationTokenSource();
+
+        try {
+            const fileUri = doc.uri.with({ query: '', fragment: '' });
+            const content = await workspace.fs.readFile(fileUri);
+
+            const targetNotebookId = expectedNotebookId ?? this.resolveDefaultNotebookId(content);
+
+            if (!targetNotebookId || targetNotebookId === actualNotebookId) {
+                return;
+            }
+
+            logger.info(
+                `Notebook verification: resolving notebook ${targetNotebookId} (was ${actualNotebookId ?? 'empty'}).`
+            );
+
+            const correctData = await this.deserializeNotebook(content, cts.token, targetNotebookId);
+
+            const edit = new WorkspaceEdit();
+
+            edit.set(doc.uri, [
+                NotebookEdit.replaceCells(new NotebookRange(0, doc.cellCount), correctData.cells),
+                NotebookEdit.updateNotebookMetadata(correctData.metadata ?? {})
+            ]);
+
+            const applied = await workspace.applyEdit(edit);
+
+            if (applied) {
+                await doc.save();
+            }
+        } catch (error) {
+            logger.error('Failed to verify/correct notebook content', error);
+        } finally {
+            cts.dispose();
+        }
     }
 
     /**
@@ -270,6 +360,9 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             if (!notebookId) {
                 throw new Error('Cannot determine which notebook to save');
             }
+
+            this.lastSerializedNotebookId = notebookId;
+            this.lastSerializedTimestamp = Date.now();
 
             logger.debug(`SerializeNotebook: Notebook ID: ${notebookId}`);
 
@@ -561,27 +654,39 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
     }
 
     /**
-     * Extracts the notebook ID from the active tab's URI query params.
-     * During session restore or tab open, VS Code may set the active tab
-     * before calling deserializeNotebook. The URI retains the
-     * `?notebook=<id>` query param set when the tab was originally opened.
+     * Returns a notebook ID from an already-open document for re-deserialization.
+     *
+     * When VS Code re-reads a file (e.g. after save or external change), it
+     * calls deserializeNotebook again for each open document backed by that
+     * file.  The document already exists in workspace.notebookDocuments with
+     * the correct deepnoteNotebookId in its metadata.
+     *
+     * Skips the notebook that was most recently serialized — that document
+     * triggered the file change and is not the one being re-deserialized.
      */
-    private findNotebookIdFromActiveTab(): string | undefined {
-        const activeTab = window.tabGroups.activeTabGroup?.activeTab;
+    private findNotebookIdFromOpenDocuments(projectId: string): string | undefined {
+        const recentSerialize =
+            this.lastSerializedNotebookId && Date.now() - this.lastSerializedTimestamp < LAST_SERIALIZED_TTL_MS;
 
-        if (!activeTab || !(activeTab.input instanceof TabInputNotebook)) {
-            return undefined;
+        for (const doc of workspace.notebookDocuments) {
+            if (doc.notebookType !== 'deepnote' || doc.metadata?.deepnoteProjectId !== projectId) {
+                continue;
+            }
+
+            const notebookId = doc.metadata?.deepnoteNotebookId as string | undefined;
+
+            if (!notebookId) {
+                continue;
+            }
+
+            if (recentSerialize && notebookId === this.lastSerializedNotebookId) {
+                continue;
+            }
+
+            return notebookId;
         }
 
-        const tabInput = activeTab.input;
-
-        if (tabInput.notebookType !== 'deepnote') {
-            return undefined;
-        }
-
-        const notebookId = new URLSearchParams(tabInput.uri.query).get('notebook');
-
-        return notebookId ?? undefined;
+        return undefined;
     }
 
     /**

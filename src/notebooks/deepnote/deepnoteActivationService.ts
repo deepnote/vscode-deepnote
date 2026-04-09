@@ -1,5 +1,5 @@
 import { inject, injectable, optional } from 'inversify';
-import { commands, l10n, workspace, window, type Disposable, type NotebookDocumentContentOptions } from 'vscode';
+import { commands, l10n, window, workspace, type Disposable, type NotebookDocumentContentOptions } from 'vscode';
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IExtensionContext } from '../../platform/common/types';
@@ -51,6 +51,11 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
 
         this.registerSerializer();
         this.extensionContext.subscriptions.push(this.editProtection);
+        this.extensionContext.subscriptions.push(
+            workspace.onDidOpenNotebookDocument((doc) => {
+                void this.serializer.verifyDeserializedNotebook(doc);
+            })
+        );
         this.extensionContext.subscriptions.push(
             workspace.onDidChangeConfiguration((event) => {
                 if (event.affectsConfiguration('deepnote.snapshots.enabled')) {

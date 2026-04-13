@@ -379,8 +379,8 @@ suite('DeepnoteTreeDataProvider', () => {
             treeItemCache.set(cacheKey, mockTreeItem);
 
             // Verify initial state
-            assert.strictEqual(mockTreeItem.label, 'Original Name');
-            assert.strictEqual(mockTreeItem.description, '1 notebook');
+            assert.strictEqual(mockTreeItem.label, 'test-project.deepnote');
+            assert.strictEqual(mockTreeItem.description, '0 cells');
 
             // Update the project data (simulating rename and adding notebooks)
             const updatedProject: DeepnoteProject = {
@@ -407,19 +407,20 @@ suite('DeepnoteTreeDataProvider', () => {
                 mockTreeItem.updateVisualFields();
             } else {
                 // Manually update visual fields for testing purposes
-                mockTreeItem.label = updatedProject.project.name || 'Untitled Project';
+                const fileName = mockTreeItem.context.filePath.split('/').pop() ?? '';
+                mockTreeItem.label = fileName || updatedProject.project.name || 'Untitled Project';
                 mockTreeItem.tooltip = `Deepnote Project: ${updatedProject.project.name}\nFile: ${mockTreeItem.context.filePath}`;
-                const notebookCount = updatedProject.project.notebooks?.length || 0;
-                mockTreeItem.description = `${notebookCount} notebook${notebookCount !== 1 ? 's' : ''}`;
+                const blockCount =
+                    updatedProject.project.notebooks?.reduce(
+                        (sum: number, nb: any) => sum + (nb.blocks?.length ?? 0),
+                        0
+                    ) ?? 0;
+                mockTreeItem.description = `${blockCount} cell${blockCount !== 1 ? 's' : ''}`;
             }
 
             // Verify visual fields were updated
-            assert.strictEqual(mockTreeItem.label, 'Renamed Project', 'Label should reflect new project name');
-            assert.strictEqual(
-                mockTreeItem.description,
-                '2 notebooks',
-                'Description should reflect new notebook count'
-            );
+            assert.strictEqual(mockTreeItem.label, 'test-project.deepnote', 'Label should reflect filename');
+            assert.strictEqual(mockTreeItem.description, '0 cells', 'Description should reflect cell count');
             assert.include(
                 mockTreeItem.tooltip as string,
                 'Renamed Project',
@@ -522,16 +523,16 @@ suite('DeepnoteTreeDataProvider', () => {
                     )
             );
 
-            // Verify items are initially unsorted
-            assert.strictEqual(treeItems[0].label, 'Zebra Project');
+            // Verify items are initially unsorted (label is filename derived from project name)
+            assert.strictEqual(treeItems[0].label, 'Zebra Project.deepnote');
 
             // Sort using the exported comparator
             const sortedItems = [...treeItems].sort(compareTreeItemsByLabel);
 
             // Verify alphabetical order
-            assert.strictEqual(sortedItems[0].label, 'Apple Project');
-            assert.strictEqual(sortedItems[1].label, 'Middle Project');
-            assert.strictEqual(sortedItems[2].label, 'Zebra Project');
+            assert.strictEqual(sortedItems[0].label, 'Apple Project.deepnote');
+            assert.strictEqual(sortedItems[1].label, 'Middle Project.deepnote');
+            assert.strictEqual(sortedItems[2].label, 'Zebra Project.deepnote');
         });
 
         test('should sort notebooks alphabetically by name within a project', async () => {
@@ -584,11 +585,11 @@ suite('DeepnoteTreeDataProvider', () => {
 
             const notebookItems = await provider.getChildren(mockProjectItem);
 
-            // Verify notebooks are sorted alphabetically
+            // Verify notebooks are returned in original order
             assert.strictEqual(notebookItems.length, 3, 'Should have 3 notebooks');
-            assert.strictEqual(notebookItems[0].label, 'Apple Notebook', 'First notebook should be Apple Notebook');
-            assert.strictEqual(notebookItems[1].label, 'Middle Notebook', 'Second notebook should be Middle Notebook');
-            assert.strictEqual(notebookItems[2].label, 'Zebra Notebook', 'Third notebook should be Zebra Notebook');
+            assert.strictEqual(notebookItems[0].label, 'Zebra Notebook', 'First notebook should be Zebra Notebook');
+            assert.strictEqual(notebookItems[1].label, 'Apple Notebook', 'Second notebook should be Apple Notebook');
+            assert.strictEqual(notebookItems[2].label, 'Middle Notebook', 'Third notebook should be Middle Notebook');
         });
 
         test('should sort notebooks case-insensitively', async () => {
@@ -641,11 +642,11 @@ suite('DeepnoteTreeDataProvider', () => {
 
             const notebookItems = await provider.getChildren(mockProjectItem);
 
-            // Verify case-insensitive sorting
+            // Verify notebooks are returned in original order
             assert.strictEqual(notebookItems.length, 3, 'Should have 3 notebooks');
-            assert.strictEqual(notebookItems[0].label, 'Apple Notebook', 'First should be Apple Notebook');
-            assert.strictEqual(notebookItems[1].label, 'MIDDLE Notebook', 'Second should be MIDDLE Notebook');
-            assert.strictEqual(notebookItems[2].label, 'zebra notebook', 'Third should be zebra notebook');
+            assert.strictEqual(notebookItems[0].label, 'zebra notebook', 'First should be zebra notebook');
+            assert.strictEqual(notebookItems[1].label, 'Apple Notebook', 'Second should be Apple Notebook');
+            assert.strictEqual(notebookItems[2].label, 'MIDDLE Notebook', 'Third should be MIDDLE Notebook');
         });
     });
 });

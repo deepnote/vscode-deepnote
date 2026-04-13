@@ -25,22 +25,6 @@ suite('DeepnoteNotebookManager', () => {
         manager = new DeepnoteNotebookManager();
     });
 
-    suite('getCurrentNotebookId', () => {
-        test('should return undefined for unknown project', () => {
-            const result = manager.getCurrentNotebookId('unknown-project');
-
-            assert.strictEqual(result, undefined);
-        });
-
-        test('should return notebook ID after storing project', () => {
-            manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
-
-            const result = manager.getCurrentNotebookId('project-123');
-
-            assert.strictEqual(result, 'notebook-456');
-        });
-    });
-
     suite('getOriginalProject', () => {
         test('should return undefined for unknown project', () => {
             const result = manager.getOriginalProject('unknown-project');
@@ -49,7 +33,7 @@ suite('DeepnoteNotebookManager', () => {
         });
 
         test('should return original project after storing', () => {
-            manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
+            manager.storeOriginalProject('project-123', mockProject);
 
             const result = manager.getOriginalProject('project-123');
 
@@ -57,48 +41,13 @@ suite('DeepnoteNotebookManager', () => {
         });
     });
 
-    suite('consumePendingNotebookResolution', () => {
-        test('should return undefined when no pending resolution exists', () => {
-            const result = manager.consumePendingNotebookResolution('unknown-project');
-
-            assert.strictEqual(result, undefined);
-        });
-
-        test('should consume queued notebook resolutions in order', () => {
-            manager.queueNotebookResolution('project-123', 'notebook-1');
-            manager.queueNotebookResolution('project-123', 'notebook-2');
-
-            assert.strictEqual(manager.consumePendingNotebookResolution('project-123'), 'notebook-1');
-            assert.strictEqual(manager.consumePendingNotebookResolution('project-123'), 'notebook-2');
-            assert.strictEqual(manager.consumePendingNotebookResolution('project-123'), undefined);
-        });
-
-        test('should keep pending resolutions isolated per project', () => {
-            manager.queueNotebookResolution('project-1', 'notebook-1');
-            manager.queueNotebookResolution('project-2', 'notebook-2');
-
-            assert.strictEqual(manager.consumePendingNotebookResolution('project-1'), 'notebook-1');
-            assert.strictEqual(manager.consumePendingNotebookResolution('project-2'), 'notebook-2');
-        });
-    });
-
-    suite('queueNotebookResolution', () => {
-        test('should queue a notebook resolution for later consumption', () => {
-            manager.queueNotebookResolution('project-123', 'notebook-456');
-
-            assert.strictEqual(manager.consumePendingNotebookResolution('project-123'), 'notebook-456');
-        });
-    });
-
     suite('storeOriginalProject', () => {
-        test('should store both project and current notebook ID', () => {
-            manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
+        test('should store project data', () => {
+            manager.storeOriginalProject('project-123', mockProject);
 
             const storedProject = manager.getOriginalProject('project-123');
-            const currentNotebookId = manager.getCurrentNotebookId('project-123');
 
             assert.deepStrictEqual(storedProject, mockProject);
-            assert.strictEqual(currentNotebookId, 'notebook-456');
         });
 
         test('should overwrite existing project data', () => {
@@ -110,19 +59,17 @@ suite('DeepnoteNotebookManager', () => {
                 }
             };
 
-            manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
-            manager.storeOriginalProject('project-123', updatedProject, 'notebook-789');
+            manager.storeOriginalProject('project-123', mockProject);
+            manager.storeOriginalProject('project-123', updatedProject);
 
             const storedProject = manager.getOriginalProject('project-123');
-            const currentNotebookId = manager.getCurrentNotebookId('project-123');
 
             assert.deepStrictEqual(storedProject, updatedProject);
-            assert.strictEqual(currentNotebookId, 'notebook-789');
         });
     });
 
     suite('updateOriginalProject', () => {
-        test('should update project data without changing currentNotebookId', () => {
+        test('should update project data', () => {
             const updatedProject: DeepnoteProject = {
                 ...mockProject,
                 project: {
@@ -131,14 +78,12 @@ suite('DeepnoteNotebookManager', () => {
                 }
             };
 
-            manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
+            manager.storeOriginalProject('project-123', mockProject);
             manager.updateOriginalProject('project-123', updatedProject);
 
             const storedProject = manager.getOriginalProject('project-123');
-            const currentNotebookId = manager.getCurrentNotebookId('project-123');
 
             assert.deepStrictEqual(storedProject, updatedProject);
-            assert.strictEqual(currentNotebookId, 'notebook-456');
         });
 
         test('should deep-clone project data so mutations to input do not affect stored state', () => {
@@ -150,7 +95,7 @@ suite('DeepnoteNotebookManager', () => {
                 }
             };
 
-            manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
+            manager.storeOriginalProject('project-123', mockProject);
             manager.updateOriginalProject('project-123', updatedProject);
 
             updatedProject.project.name = 'After Mutation';
@@ -160,7 +105,7 @@ suite('DeepnoteNotebookManager', () => {
             assert.strictEqual(storedProject?.project.name, 'Before Mutation');
         });
 
-        test('should overwrite existing project data while preserving currentNotebookId', () => {
+        test('should overwrite existing project data on successive updates', () => {
             const firstUpdate: DeepnoteProject = {
                 ...mockProject,
                 project: { ...mockProject.project, name: 'First Update' }
@@ -170,15 +115,14 @@ suite('DeepnoteNotebookManager', () => {
                 project: { ...mockProject.project, name: 'Second Update' }
             };
 
-            manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
+            manager.storeOriginalProject('project-123', mockProject);
             manager.updateOriginalProject('project-123', firstUpdate);
             manager.updateOriginalProject('project-123', secondUpdate);
 
-            assert.strictEqual(manager.getCurrentNotebookId('project-123'), 'notebook-456');
             assert.strictEqual(manager.getOriginalProject('project-123')?.project.name, 'Second Update');
         });
 
-        test('should store project when no currentNotebookId has been set', () => {
+        test('should store project when no prior data exists', () => {
             const projectOnly: DeepnoteProject = {
                 ...mockProject,
                 project: { ...mockProject.project, name: 'No Notebook Id Yet' }
@@ -186,14 +130,13 @@ suite('DeepnoteNotebookManager', () => {
 
             manager.updateOriginalProject('project-123', projectOnly);
 
-            assert.strictEqual(manager.getCurrentNotebookId('project-123'), undefined);
             assert.deepStrictEqual(manager.getOriginalProject('project-123'), projectOnly);
         });
     });
 
     suite('updateProjectIntegrations', () => {
         test('should update integrations list for existing project and return true', () => {
-            manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
+            manager.storeOriginalProject('project-123', mockProject);
 
             const integrations: ProjectIntegration[] = [
                 { id: 'int-1', name: 'PostgreSQL', type: 'pgsql' },
@@ -217,7 +160,7 @@ suite('DeepnoteNotebookManager', () => {
                 }
             };
 
-            manager.storeOriginalProject('project-123', projectWithIntegrations, 'notebook-456');
+            manager.storeOriginalProject('project-123', projectWithIntegrations);
 
             const newIntegrations: ProjectIntegration[] = [
                 { id: 'new-int-1', name: 'New Integration 1', type: 'pgsql' },
@@ -241,7 +184,7 @@ suite('DeepnoteNotebookManager', () => {
                 }
             };
 
-            manager.storeOriginalProject('project-123', projectWithIntegrations, 'notebook-456');
+            manager.storeOriginalProject('project-123', projectWithIntegrations);
 
             const result = manager.updateProjectIntegrations('project-123', []);
 
@@ -263,7 +206,7 @@ suite('DeepnoteNotebookManager', () => {
         });
 
         test('should preserve other project properties and return true', () => {
-            manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
+            manager.storeOriginalProject('project-123', mockProject);
 
             const integrations: ProjectIntegration[] = [{ id: 'int-1', name: 'PostgreSQL', type: 'pgsql' }];
 
@@ -278,7 +221,7 @@ suite('DeepnoteNotebookManager', () => {
             assert.deepStrictEqual(updatedProject?.metadata, mockProject.metadata);
         });
 
-        test('should update integrations when currentNotebookId is undefined and return true', () => {
+        test('should update integrations when project was stored via updateOriginalProject and return true', () => {
             // Use updateOriginalProject which doesn't set currentNotebookId
             manager.updateOriginalProject('project-123', mockProject);
 
@@ -301,20 +244,33 @@ suite('DeepnoteNotebookManager', () => {
         });
     });
 
-    suite('integration scenarios', () => {
-        test('should handle complete workflow for multiple projects', () => {
-            manager.storeOriginalProject('project-1', mockProject, 'notebook-1');
-            manager.storeOriginalProject('project-2', mockProject, 'notebook-2');
-
-            assert.strictEqual(manager.getCurrentNotebookId('project-1'), 'notebook-1');
-            assert.strictEqual(manager.getCurrentNotebookId('project-2'), 'notebook-2');
+    suite('hasInitNotebookBeenRun', () => {
+        test('should return false for unknown project', () => {
+            assert.strictEqual(manager.hasInitNotebookBeenRun('unknown-project'), false);
         });
 
-        test('should handle notebook switching within same project via storeOriginalProject', () => {
-            manager.storeOriginalProject('project-123', mockProject, 'notebook-1');
-            manager.storeOriginalProject('project-123', mockProject, 'notebook-2');
+        test('should return true after marking init notebook as run', () => {
+            manager.markInitNotebookAsRun('project-123');
 
-            assert.strictEqual(manager.getCurrentNotebookId('project-123'), 'notebook-2');
+            assert.strictEqual(manager.hasInitNotebookBeenRun('project-123'), true);
+        });
+    });
+
+    suite('markInitNotebookAsRun', () => {
+        test('should mark init notebook as run for a project', () => {
+            manager.markInitNotebookAsRun('project-123');
+
+            assert.strictEqual(manager.hasInitNotebookBeenRun('project-123'), true);
+        });
+    });
+
+    suite('integration scenarios', () => {
+        test('should handle complete workflow for multiple projects', () => {
+            manager.storeOriginalProject('project-1', mockProject);
+            manager.storeOriginalProject('project-2', mockProject);
+
+            assert.deepStrictEqual(manager.getOriginalProject('project-1'), mockProject);
+            assert.deepStrictEqual(manager.getOriginalProject('project-2'), mockProject);
         });
     });
 });

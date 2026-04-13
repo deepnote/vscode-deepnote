@@ -37,13 +37,10 @@ export interface ProjectIntegration {
 
 export const IDeepnoteNotebookManager = Symbol('IDeepnoteNotebookManager');
 export interface IDeepnoteNotebookManager {
-    consumePendingNotebookResolution(projectId: string): string | undefined;
-    getCurrentNotebookId(projectId: string): string | undefined;
     getOriginalProject(projectId: string): DeepnoteProject | undefined;
     hasInitNotebookBeenRun(projectId: string): boolean;
     markInitNotebookAsRun(projectId: string): void;
-    queueNotebookResolution(projectId: string, notebookId: string): void;
-    storeOriginalProject(projectId: string, project: DeepnoteProject, notebookId: string): void;
+    storeOriginalProject(projectId: string, project: DeepnoteProject): void;
     updateOriginalProject(projectId: string, project: DeepnoteProject): void;
 
     /**

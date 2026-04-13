@@ -1,3 +1,4 @@
+import { deserializeDeepnoteFile } from '@deepnote/blocks';
 import { inject, injectable, optional } from 'inversify';
 import { commands, l10n, window, workspace, type Disposable, type NotebookDocumentContentOptions } from 'vscode';
 
@@ -5,10 +6,11 @@ import { IExtensionSyncActivationService } from '../../platform/activation/types
 import { IExtensionContext } from '../../platform/common/types';
 import { ILogger } from '../../platform/logging/types';
 import { IDeepnoteNotebookManager } from '../types';
-import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
+import { DeepnoteAutoSplitter } from './deepnoteAutoSplitter';
 import { DeepnoteExplorerView } from './deepnoteExplorerView';
-import { IIntegrationManager } from './integrations/types';
 import { DeepnoteInputBlockEditProtection } from './deepnoteInputBlockEditProtection';
+import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
+import { IIntegrationManager } from './integrations/types';
 import { SnapshotService } from './snapshots/snapshotService';
 
 /**
@@ -17,6 +19,8 @@ import { SnapshotService } from './snapshots/snapshotService';
  */
 @injectable()
 export class DeepnoteActivationService implements IExtensionSyncActivationService {
+    private autoSplitter: DeepnoteAutoSplitter;
+
     private editProtection: DeepnoteInputBlockEditProtection;
 
     private explorerView: DeepnoteExplorerView;
@@ -44,8 +48,9 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
      * Called during extension activation to set up Deepnote integration.
      */
     public activate() {
+        this.autoSplitter = new DeepnoteAutoSplitter();
         this.serializer = new DeepnoteNotebookSerializer(this.notebookManager, this.snapshotService);
-        this.explorerView = new DeepnoteExplorerView(this.extensionContext, this.notebookManager, this.logger);
+        this.explorerView = new DeepnoteExplorerView(this.extensionContext, this.logger);
         this.editProtection = new DeepnoteInputBlockEditProtection(this.logger);
         this.snapshotsEnabled = this.isSnapshotsEnabled();
 
@@ -53,7 +58,7 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
         this.extensionContext.subscriptions.push(this.editProtection);
         this.extensionContext.subscriptions.push(
             workspace.onDidOpenNotebookDocument((doc) => {
-                void this.serializer.verifyDeserializedNotebook(doc);
+                void this.checkAndSplitIfNeeded(doc);
             })
         );
         this.extensionContext.subscriptions.push(
@@ -73,6 +78,25 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
 
         this.explorerView.activate();
         this.integrationManager.activate();
+    }
+
+    private async checkAndSplitIfNeeded(doc: import('vscode').NotebookDocument): Promise<void> {
+        if (doc.notebookType !== 'deepnote') {
+            return;
+        }
+
+        try {
+            const fileUri = doc.uri;
+            const content = await workspace.fs.readFile(fileUri);
+            const deepnoteFile = deserializeDeepnoteFile(new TextDecoder().decode(content));
+            const result = await this.autoSplitter.splitIfNeeded(fileUri, deepnoteFile);
+
+            if (result.wasSplit) {
+                this.explorerView.refreshTree();
+            }
+        } catch (error) {
+            this.logger.error('Failed to check/split notebook file', error);
+        }
     }
 
     private isSnapshotsEnabled(): boolean {

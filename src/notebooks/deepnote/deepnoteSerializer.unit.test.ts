@@ -1,13 +1,10 @@
 import { deserializeDeepnoteFile, serializeDeepnoteFile, type DeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import { parse as parseYaml } from 'yaml';
-import { when } from 'ts-mockito';
-import type { NotebookDocument } from 'vscode';
 
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
 import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
-import { mockedVSCodeNamespaces } from '../../test/vscode-mock';
 
 suite('DeepnoteNotebookSerializer', () => {
     let serializer: DeepnoteNotebookSerializer;
@@ -74,9 +71,7 @@ suite('DeepnoteNotebookSerializer', () => {
     }
 
     suite('deserializeNotebook', () => {
-        test('should deserialize valid project with queued notebook resolution', async () => {
-            manager.queueNotebookResolution('project-123', 'notebook-1');
-
+        test('should deserialize valid project', async () => {
             const yamlContent = `
 version: '1.0.0'
 metadata:
@@ -106,9 +101,6 @@ project:
             assert.isDefined(result);
             assert.isDefined(result.cells);
             assert.isArray(result.cells);
-            assert.strictEqual(result.cells.length, 1);
-            assert.strictEqual(result.metadata?.deepnoteProjectId, 'project-123');
-            assert.strictEqual(result.metadata?.deepnoteNotebookId, 'notebook-1');
         });
 
         test('should throw error for empty content', async () => {
@@ -129,7 +121,7 @@ project:
             );
         });
 
-        test('should return empty state when no notebooks found and no ID resolved', async () => {
+        test('should throw error when no notebooks found', async () => {
             const contentWithoutNotebooks = new TextEncoder().encode(`
 version: '1.0.0'
 metadata:
@@ -141,39 +133,20 @@ project:
   settings: {}
 `);
 
-            const result = await serializer.deserializeNotebook(contentWithoutNotebooks, {} as any);
-
-            assert.deepStrictEqual(result.cells, []);
-            assert.strictEqual(result.metadata?.deepnoteProjectId, 'project-123');
-            assert.strictEqual(result.metadata?.deepnoteNotebookId, undefined);
+            await assert.isRejected(
+                serializer.deserializeNotebook(contentWithoutNotebooks, {} as any),
+                /Failed to parse Deepnote file/
+            );
         });
 
-        test('should deserialize the specified notebook when notebookId is passed', async () => {
-            const content = projectToYaml(mockProject);
-            const result = await serializer.deserializeNotebook(content, {} as any, 'notebook-2');
-
-            assert.strictEqual(result.metadata?.deepnoteNotebookId, 'notebook-2');
-            assert.strictEqual(result.metadata?.deepnoteNotebookName, 'Second Notebook');
-            assert.strictEqual(result.cells.length, 1);
-            assert.include(result.cells[0].value, 'Title');
-        });
-
-        test('should ignore queued resolution when explicit notebookId is provided', async () => {
-            manager.queueNotebookResolution('project-123', 'notebook-1');
-            const content = projectToYaml(mockProject);
-            const result = await serializer.deserializeNotebook(content, {} as any, 'notebook-2');
-
-            assert.strictEqual(result.metadata?.deepnoteNotebookId, 'notebook-2');
-            assert.strictEqual(result.metadata?.deepnoteNotebookName, 'Second Notebook');
-        });
-
-        test('should fall back to findCurrentNotebookId when notebookId is undefined', async () => {
-            manager.queueNotebookResolution('project-123', 'notebook-1');
+        test('should deserialize default notebook when no explicit notebook ID is provided', async () => {
             const content = projectToYaml(mockProject);
             const result = await serializer.deserializeNotebook(content, {} as any);
 
+            assert.strictEqual(result.metadata?.deepnoteProjectId, 'project-123');
             assert.strictEqual(result.metadata?.deepnoteNotebookId, 'notebook-1');
             assert.strictEqual(result.metadata?.deepnoteNotebookName, 'First Notebook');
+            assert.isAbove(result.cells.length, 0);
         });
     });
 
@@ -207,7 +180,7 @@ project:
 
         test('should serialize notebook when original project exists', async () => {
             // First store the original project
-            manager.storeOriginalProject('project-123', mockProject, 'notebook-1');
+            manager.storeOriginalProject('project-123', mockProject);
 
             const mockNotebookData = {
                 cells: [
@@ -234,8 +207,8 @@ project:
             assert.include(yamlString, 'notebook-1');
         });
 
-        test('should use current notebook ID when metadata notebook ID is missing', async () => {
-            manager.storeOriginalProject('project-123', mockProject, 'notebook-2');
+        test('should throw error when metadata notebook ID is missing', async () => {
+            manager.storeOriginalProject('project-123', mockProject);
 
             const mockNotebookData = {
                 cells: [
@@ -251,113 +224,10 @@ project:
                 }
             };
 
-            const result = await serializer.serializeNotebook(mockNotebookData as any, {} as any);
-            const serializedProject = deserializeDeepnoteFile(new TextDecoder().decode(result));
-
-            assert.strictEqual(serializedProject.project.notebooks[0].id, 'notebook-1');
-            assert.strictEqual(serializedProject.project.notebooks[1].id, 'notebook-2');
-            assert.strictEqual(serializedProject.project.notebooks[0].blocks?.[0].content, 'print("hello")');
-            assert.strictEqual(serializedProject.project.notebooks[1].blocks?.[0].content, '# Updated second notebook');
-        });
-
-        suite('multi-notebook save scenarios', () => {
-            teardown(() => {
-                when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
-                when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([]);
-            });
-
-            test('serializing notebook-1 should not change currentNotebookId', async () => {
-                manager.queueNotebookResolution('project-123', 'notebook-2');
-                await serializer.deserializeNotebook(projectToYaml(mockProject), {} as any);
-
-                assert.strictEqual(manager.getCurrentNotebookId('project-123'), 'notebook-2');
-
-                const mockNotebookData = {
-                    cells: [
-                        {
-                            kind: 2,
-                            languageId: 'python',
-                            metadata: {},
-                            value: 'print("edited nb1")'
-                        }
-                    ],
-                    metadata: {
-                        deepnoteNotebookId: 'notebook-1',
-                        deepnoteProjectId: 'project-123'
-                    }
-                };
-
-                await serializer.serializeNotebook(mockNotebookData as any, {} as any);
-
-                assert.strictEqual(manager.getCurrentNotebookId('project-123'), 'notebook-2');
-            });
-        });
-    });
-
-    suite('findCurrentNotebookId', () => {
-        teardown(() => {
-            // Reset only the specific mocks used in this suite
-            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
-            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([]);
-            when(mockedVSCodeNamespaces.window.tabGroups).thenReturn({ all: [] } as any);
-        });
-
-        test('should return queued notebook resolution when available', () => {
-            manager.queueNotebookResolution('project-123', 'queued-notebook');
-
-            const result = serializer.findCurrentNotebookId('project-123');
-
-            assert.strictEqual(result, 'queued-notebook');
-        });
-
-        test('should consume queued notebook resolution only once', () => {
-            manager.queueNotebookResolution('project-123', 'queued-notebook');
-
-            assert.strictEqual(serializer.findCurrentNotebookId('project-123'), 'queued-notebook');
-            assert.strictEqual(serializer.findCurrentNotebookId('project-123'), undefined);
-        });
-
-        test('should prioritize queued notebook resolution over current notebook and open documents', () => {
-            manager.queueNotebookResolution('project-123', 'queued-notebook');
-            manager.storeOriginalProject('project-123', mockProject, 'current-notebook');
-
-            const mockNotebookDoc = {
-                then: undefined,
-                notebookType: 'deepnote',
-                metadata: {
-                    deepnoteProjectId: 'project-123',
-                    deepnoteNotebookId: 'open-notebook'
-                },
-                uri: {} as any,
-                version: 1,
-                isDirty: false,
-                isUntitled: false,
-                isClosed: false,
-                cellCount: 0,
-                cellAt: () => ({}) as any,
-                getCells: () => [],
-                save: async () => true
-            } as NotebookDocument;
-
-            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([mockNotebookDoc]);
-
-            const result = serializer.findCurrentNotebookId('project-123');
-
-            assert.strictEqual(result, 'queued-notebook');
-        });
-
-        test('should return undefined when no pending resolution or active tab exists', () => {
-            manager.storeOriginalProject('project-123', mockProject, 'current-notebook');
-
-            const result = serializer.findCurrentNotebookId('project-123');
-
-            assert.strictEqual(result, undefined);
-        });
-
-        test('should return undefined for unknown project', () => {
-            const result = serializer.findCurrentNotebookId('unknown-project');
-
-            assert.strictEqual(result, undefined);
+            await assert.isRejected(
+                serializer.serializeNotebook(mockNotebookData as any, {} as any),
+                /Cannot determine which notebook to save/
+            );
         });
     });
 
@@ -384,15 +254,8 @@ project:
         });
 
         test('should handle manager state operations', () => {
-            assert.isFunction(manager.consumePendingNotebookResolution, 'has consumePendingNotebookResolution method');
-            assert.isFunction(manager.getCurrentNotebookId, 'has getCurrentNotebookId method');
             assert.isFunction(manager.getOriginalProject, 'has getOriginalProject method');
-            assert.isFunction(manager.queueNotebookResolution, 'has queueNotebookResolution method');
             assert.isFunction(manager.storeOriginalProject, 'has storeOriginalProject method');
-        });
-
-        test('should have findCurrentNotebookId method', () => {
-            assert.isFunction(serializer.findCurrentNotebookId, 'has findCurrentNotebookId method');
         });
     });
 
@@ -465,7 +328,7 @@ project:
                 }
             };
 
-            manager.storeOriginalProject('project-circular', projectWithCircularRef, 'notebook-1');
+            manager.storeOriginalProject('project-circular', projectWithCircularRef);
 
             const notebookData = {
                 cells: [
@@ -533,7 +396,7 @@ project:
             };
 
             // Store the project
-            manager.storeOriginalProject('project-id-test', projectData, 'notebook-1');
+            manager.storeOriginalProject('project-id-test', projectData);
 
             // Create cells with the EXACT metadata structure that deserializeNotebook produces
             // This simulates what VS Code should preserve from deserialization
@@ -619,7 +482,7 @@ project:
                 }
             };
 
-            manager.storeOriginalProject('project-recover-ids', projectData, 'notebook-1');
+            manager.storeOriginalProject('project-recover-ids', projectData);
 
             // Cells WITHOUT id metadata (simulating what VS Code might provide if it strips metadata)
             // But content matches the original block
@@ -686,7 +549,7 @@ project:
                 }
             };
 
-            manager.storeOriginalProject('project-new-content', projectData, 'notebook-1');
+            manager.storeOriginalProject('project-new-content', projectData);
 
             // Cell with different content than any original block
             const notebookData = {
@@ -747,253 +610,6 @@ project:
 
             // Verify manager is accessible
             assert.instanceOf(testManager, DeepnoteNotebookManager);
-        });
-    });
-
-    suite('default notebook selection', () => {
-        test('should not select Init notebook when other notebooks are available', () => {
-            const projectData: DeepnoteFile = {
-                version: '1.0.0',
-                metadata: {
-                    createdAt: '2023-01-01T00:00:00Z',
-                    modifiedAt: '2023-01-02T00:00:00Z'
-                },
-                project: {
-                    id: 'project-with-init',
-                    name: 'Project with Init',
-                    initNotebookId: 'init-notebook',
-                    notebooks: [
-                        {
-                            id: 'init-notebook',
-                            name: 'Init',
-                            blocks: [
-                                {
-                                    id: 'block-init',
-                                    content: 'print("init")',
-                                    sortingKey: 'a0',
-                                    metadata: {},
-                                    blockGroup: '1',
-                                    type: 'code'
-                                }
-                            ],
-                            executionMode: 'block',
-                            isModule: false
-                        },
-                        {
-                            id: 'main-notebook',
-                            name: 'Main',
-                            blocks: [
-                                {
-                                    id: 'block-main',
-                                    content: 'print("main")',
-                                    sortingKey: 'a0',
-                                    metadata: {},
-                                    blockGroup: '1',
-                                    type: 'code'
-                                }
-                            ],
-                            executionMode: 'block',
-                            isModule: false
-                        }
-                    ],
-                    settings: {}
-                }
-            };
-
-            const content = projectToYaml(projectData);
-            const result = serializer.resolveDefaultNotebookId(content);
-
-            assert.strictEqual(result, 'main-notebook');
-        });
-
-        test('should select Init notebook when it is the only notebook', () => {
-            const projectData: DeepnoteFile = {
-                version: '1.0.0',
-                metadata: {
-                    createdAt: '2023-01-01T00:00:00Z',
-                    modifiedAt: '2023-01-02T00:00:00Z'
-                },
-                project: {
-                    id: 'project-only-init',
-                    name: 'Project with only Init',
-                    initNotebookId: 'init-notebook',
-                    notebooks: [
-                        {
-                            id: 'init-notebook',
-                            name: 'Init',
-                            blocks: [
-                                {
-                                    id: 'block-init',
-                                    content: 'print("init")',
-                                    sortingKey: 'a0',
-                                    blockGroup: '1',
-                                    metadata: {},
-                                    type: 'code'
-                                }
-                            ],
-                            executionMode: 'block',
-                            isModule: false
-                        }
-                    ],
-                    settings: {}
-                }
-            };
-
-            const content = projectToYaml(projectData);
-            const result = serializer.resolveDefaultNotebookId(content);
-
-            assert.strictEqual(result, 'init-notebook');
-        });
-
-        test('should select alphabetically first notebook when no initNotebookId', () => {
-            const projectData: DeepnoteFile = {
-                version: '1.0.0',
-                metadata: {
-                    createdAt: '2023-01-01T00:00:00Z',
-                    modifiedAt: '2023-01-02T00:00:00Z'
-                },
-                project: {
-                    id: 'project-alphabetical',
-                    name: 'Project Alphabetical',
-                    notebooks: [
-                        {
-                            id: 'zebra-notebook',
-                            name: 'Zebra Notebook',
-                            blocks: [
-                                {
-                                    id: 'block-z',
-                                    content: 'print("zebra")',
-                                    sortingKey: 'a0',
-                                    blockGroup: '1',
-                                    metadata: {},
-                                    type: 'code'
-                                }
-                            ],
-                            executionMode: 'block',
-                            isModule: false
-                        },
-                        {
-                            id: 'alpha-notebook',
-                            name: 'Alpha Notebook',
-                            blocks: [
-                                {
-                                    id: 'block-a',
-                                    content: 'print("alpha")',
-                                    sortingKey: 'a0',
-                                    blockGroup: '1',
-                                    metadata: {},
-                                    type: 'code'
-                                }
-                            ],
-                            executionMode: 'block',
-                            isModule: false
-                        },
-                        {
-                            id: 'bravo-notebook',
-                            name: 'Bravo Notebook',
-                            blocks: [
-                                {
-                                    id: 'block-b',
-                                    content: 'print("bravo")',
-                                    sortingKey: 'a0',
-                                    blockGroup: '1',
-                                    metadata: {},
-                                    type: 'code'
-                                }
-                            ],
-                            executionMode: 'block',
-                            isModule: false
-                        }
-                    ],
-                    settings: {}
-                }
-            };
-
-            const content = projectToYaml(projectData);
-            const result = serializer.resolveDefaultNotebookId(content);
-
-            assert.strictEqual(result, 'alpha-notebook');
-        });
-
-        test('should sort Init notebook last when multiple notebooks exist', () => {
-            const projectData: DeepnoteFile = {
-                version: '1.0.0',
-                metadata: {
-                    createdAt: '2023-01-01T00:00:00Z',
-                    modifiedAt: '2023-01-02T00:00:00Z'
-                },
-                project: {
-                    id: 'project-multiple',
-                    name: 'Project with Multiple',
-                    initNotebookId: 'init-notebook',
-                    notebooks: [
-                        {
-                            id: 'charlie-notebook',
-                            name: 'Charlie',
-                            blocks: [
-                                {
-                                    id: 'block-c',
-                                    content: 'print("charlie")',
-                                    sortingKey: 'a0',
-                                    blockGroup: '1',
-                                    metadata: {},
-                                    type: 'code'
-                                }
-                            ],
-                            executionMode: 'block',
-                            isModule: false
-                        },
-                        {
-                            id: 'init-notebook',
-                            name: 'Init',
-                            blocks: [
-                                {
-                                    id: 'block-init',
-                                    content: 'print("init")',
-                                    sortingKey: 'a0',
-                                    blockGroup: '1',
-                                    metadata: {},
-                                    type: 'code'
-                                }
-                            ],
-                            executionMode: 'block',
-                            isModule: false
-                        },
-                        {
-                            id: 'alpha-notebook',
-                            name: 'Alpha',
-                            blocks: [
-                                {
-                                    id: 'block-a',
-                                    content: 'print("alpha")',
-                                    sortingKey: 'a0',
-                                    blockGroup: '1',
-                                    metadata: {},
-                                    type: 'code'
-                                }
-                            ],
-                            executionMode: 'block',
-                            isModule: false
-                        }
-                    ],
-                    settings: {}
-                }
-            };
-
-            const content = projectToYaml(projectData);
-            const result = serializer.resolveDefaultNotebookId(content);
-
-            // Should select Alpha, not Init even though "Init" comes before "Alpha" alphabetically when in upper case
-            assert.strictEqual(result, 'alpha-notebook');
-        });
-
-        test('should return empty state from deserializeNotebook when no notebook ID is resolved', async () => {
-            const content = projectToYaml(mockProject);
-            const result = await serializer.deserializeNotebook(content, {} as any);
-
-            assert.deepStrictEqual(result.cells, []);
-            assert.strictEqual(result.metadata?.deepnoteProjectId, 'project-123');
-            assert.strictEqual(result.metadata?.deepnoteNotebookId, undefined);
         });
     });
 
@@ -1486,7 +1102,7 @@ project:
                 }
             };
 
-            manager.storeOriginalProject('project-snapshot-hash', projectData, 'notebook-1');
+            manager.storeOriginalProject('project-snapshot-hash', projectData);
 
             const notebookData = {
                 cells: [
@@ -1561,13 +1177,13 @@ project:
             };
 
             // Serialize twice
-            manager.storeOriginalProject('project-deterministic', structuredClone(projectData), 'notebook-1');
+            manager.storeOriginalProject('project-deterministic', structuredClone(projectData));
             const result1 = await serializer.serializeNotebook(notebookData as any, {} as any);
             const parsed1 = parseYaml(new TextDecoder().decode(result1)) as DeepnoteFile & {
                 metadata: { snapshotHash?: string };
             };
 
-            manager.storeOriginalProject('project-deterministic', structuredClone(projectData), 'notebook-1');
+            manager.storeOriginalProject('project-deterministic', structuredClone(projectData));
             const result2 = await serializer.serializeNotebook(notebookData as any, {} as any);
             const parsed2 = parseYaml(new TextDecoder().decode(result2)) as DeepnoteFile & {
                 metadata: { snapshotHash?: string };
@@ -1662,7 +1278,7 @@ project:
 
             // Serialize 5 times and collect all hashes
             for (let i = 0; i < 5; i++) {
-                manager.storeOriginalProject('project-multi-serialize', structuredClone(projectData), 'notebook-1');
+                manager.storeOriginalProject('project-multi-serialize', structuredClone(projectData));
                 const result = await serializer.serializeNotebook(notebookData as any, {} as any);
                 const parsed = parseYaml(new TextDecoder().decode(result)) as DeepnoteFile & {
                     metadata: { snapshotHash?: string };
@@ -1711,7 +1327,7 @@ project:
                 }
             };
 
-            manager.storeOriginalProject('project-content-change', projectData1, 'notebook-1');
+            manager.storeOriginalProject('project-content-change', projectData1);
 
             const notebookData1 = {
                 cells: [
@@ -1789,7 +1405,7 @@ project:
                 }
             };
 
-            manager.storeOriginalProject('project-version-change', projectData1, 'notebook-1');
+            manager.storeOriginalProject('project-version-change', projectData1);
 
             const notebookData = {
                 cells: [
@@ -1813,7 +1429,7 @@ project:
 
             // Change version
             const projectData2: DeepnoteFile = { ...structuredClone(projectData1), version: '2.0' };
-            manager.storeOriginalProject('project-version-change', projectData2, 'notebook-1');
+            manager.storeOriginalProject('project-version-change', projectData2);
 
             const result2 = await serializer.serializeNotebook(notebookData as any, {} as any);
             const parsed2 = parseYaml(new TextDecoder().decode(result2)) as DeepnoteFile & {
@@ -1855,7 +1471,7 @@ project:
                 }
             };
 
-            manager.storeOriginalProject('project-integrations-change', projectData1, 'notebook-1');
+            manager.storeOriginalProject('project-integrations-change', projectData1);
 
             const notebookData = {
                 cells: [
@@ -1880,7 +1496,7 @@ project:
             // Add integrations
             const projectData2 = structuredClone(projectData1);
             projectData2.project.integrations = [{ id: 'int-1', name: 'PostgreSQL', type: 'postgres' }];
-            manager.storeOriginalProject('project-integrations-change', projectData2, 'notebook-1');
+            manager.storeOriginalProject('project-integrations-change', projectData2);
 
             const result2 = await serializer.serializeNotebook(notebookData as any, {} as any);
             const parsed2 = parseYaml(new TextDecoder().decode(result2)) as DeepnoteFile & {
@@ -1922,7 +1538,7 @@ project:
                 }
             };
 
-            manager.storeOriginalProject('project-env-hash', projectData1, 'notebook-1');
+            manager.storeOriginalProject('project-env-hash', projectData1);
 
             const notebookData = {
                 cells: [
@@ -1947,7 +1563,7 @@ project:
             // Add environment hash
             const projectData2 = structuredClone(projectData1);
             projectData2.environment = { hash: 'env-hash-123' };
-            manager.storeOriginalProject('project-env-hash', projectData2, 'notebook-1');
+            manager.storeOriginalProject('project-env-hash', projectData2);
 
             const result2 = await serializer.serializeNotebook(notebookData as any, {} as any);
             const parsed2 = parseYaml(new TextDecoder().decode(result2)) as DeepnoteFile & {

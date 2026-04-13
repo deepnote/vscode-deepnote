@@ -202,9 +202,17 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         projectId: string,
         projectName: string,
         projectData: DeepnoteFile,
-        notebookUri?: string
+        notebookUri?: string,
+        notebookId?: string
     ): Promise<Uri | undefined> {
-        const prepared = await this.prepareSnapshotData(projectUri, projectId, projectName, projectData, notebookUri);
+        const prepared = await this.prepareSnapshotData(
+            projectUri,
+            projectId,
+            projectName,
+            projectData,
+            notebookUri,
+            notebookId
+        );
 
         if (!prepared) {
             logger.debug(`[Snapshot] No changes detected, skipping snapshot creation`);
@@ -214,7 +222,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
         const { latestPath, content } = prepared;
         const timestamp = generateTimestamp();
-        const timestampedPath = this.buildSnapshotPath(projectUri, projectId, projectName, timestamp);
+        const timestampedPath = this.buildSnapshotPath(projectUri, projectId, projectName, timestamp, notebookId);
 
         // Write to timestamped file first (safe - doesn't touch existing files)
         try {
@@ -390,8 +398,8 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         };
     }
 
-    async readSnapshot(projectId: string): Promise<Map<string, DeepnoteOutput[]> | undefined> {
-        logger.debug(`[Snapshot] readSnapshot called for projectId=${projectId}`);
+    async readSnapshot(projectId: string, notebookId?: string): Promise<Map<string, DeepnoteOutput[]> | undefined> {
+        logger.debug(`[Snapshot] readSnapshot called for projectId=${projectId}, notebookId=${notebookId}`);
         const workspaceFolders = workspace.workspaceFolders;
 
         if (!workspaceFolders || workspaceFolders.length === 0) {
@@ -404,8 +412,10 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
         logger.debug(`[Snapshot] Searching ${workspaceFolders.length} workspace folder(s) for snapshots`);
 
-        // 1. Try to find a 'latest' snapshot file
-        const latestGlob = `**/snapshots/*_${projectId}_latest.snapshot.deepnote`;
+        // 1. Try to find a 'latest' snapshot file (new format with notebookId first, then legacy)
+        const latestGlob = notebookId
+            ? `**/snapshots/*_${projectId}_${notebookId}_latest.snapshot.deepnote`
+            : `**/snapshots/*_${projectId}_latest.snapshot.deepnote`;
 
         for (const folder of workspaceFolders) {
             logger.debug(`[Snapshot] Searching for latest snapshot with glob: ${latestGlob} in ${folder.uri.path}`);
@@ -430,7 +440,9 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         logger.debug(`[Snapshot] No latest snapshot found, looking for timestamped files`);
 
         // 2. Find timestamped snapshots across all workspace folders
-        const timestampedGlob = `**/snapshots/*_${projectId}_*.snapshot.deepnote`;
+        const timestampedGlob = notebookId
+            ? `**/snapshots/*_${projectId}_${notebookId}_*.snapshot.deepnote`
+            : `**/snapshots/*_${projectId}_*.snapshot.deepnote`;
         let allTimestampedFiles: Uri[] = [];
 
         for (const folder of workspaceFolders) {
@@ -494,11 +506,14 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         projectUri: Uri,
         projectId: string,
         projectName: string,
-        variant: 'latest' | string
+        variant: 'latest' | string,
+        notebookId?: string
     ): Uri {
         const parentDir = Uri.joinPath(projectUri, '..');
         const slug = slugifyProjectName(projectName);
-        const filename = `${slug}_${projectId}_${variant}.snapshot.deepnote`;
+        const filename = notebookId
+            ? `${slug}_${projectId}_${notebookId}_${variant}.snapshot.deepnote`
+            : `${slug}_${projectId}_${variant}.snapshot.deepnote`;
 
         return Uri.joinPath(parentDir, 'snapshots', filename);
     }
@@ -800,7 +815,8 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
                 projectId,
                 originalProject.project.name,
                 snapshotProject,
-                notebookUri
+                notebookUri,
+                notebookId
             );
 
             if (snapshotUri) {
@@ -814,7 +830,8 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
                 projectId,
                 originalProject.project.name,
                 snapshotProject,
-                notebookUri
+                notebookUri,
+                notebookId
             );
 
             if (snapshotUri) {
@@ -866,12 +883,13 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         projectId: string,
         projectName: string,
         projectData: DeepnoteFile,
-        notebookUri?: string
+        notebookUri?: string,
+        notebookId?: string
     ): Promise<{ latestPath: Uri; content: Uint8Array } | undefined> {
         let latestPath: Uri;
 
         try {
-            latestPath = this.buildSnapshotPath(projectUri, projectId, projectName, 'latest');
+            latestPath = this.buildSnapshotPath(projectUri, projectId, projectName, 'latest', notebookId);
         } catch (error) {
             if (error instanceof InvalidProjectNameError) {
                 logger.warn('[Snapshot] Skipping snapshots due to invalid project name', error);
@@ -1011,9 +1029,17 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         projectId: string,
         projectName: string,
         projectData: DeepnoteFile,
-        notebookUri?: string
+        notebookUri?: string,
+        notebookId?: string
     ): Promise<Uri | undefined> {
-        const prepared = await this.prepareSnapshotData(projectUri, projectId, projectName, projectData, notebookUri);
+        const prepared = await this.prepareSnapshotData(
+            projectUri,
+            projectId,
+            projectName,
+            projectData,
+            notebookUri,
+            notebookId
+        );
 
         if (!prepared) {
             logger.debug(`[Snapshot] No changes detected, skipping latest snapshot update`);

@@ -20,7 +20,11 @@ import { IControllerRegistration } from '../controllers/types';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
-import { extractProjectIdFromSnapshotUri, isSnapshotFile } from './snapshots/snapshotFiles';
+import {
+    extractNotebookIdFromSnapshotUri,
+    extractProjectIdFromSnapshotUri,
+    isSnapshotFile
+} from './snapshots/snapshotFiles';
 import { SnapshotService } from './snapshots/snapshotService';
 
 const debounceTimeInMilliseconds = 500;
@@ -260,12 +264,15 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
     }
 
     /**
-     * Enqueue a snapshot-output-update for all notebooks matching this project.
+     * Enqueue a snapshot-output-update for all notebooks matching this project (and notebook if specified).
      * Does NOT replace a pending main-file-sync.
      */
-    private enqueueSnapshotOutputUpdate(projectId: string): void {
+    private enqueueSnapshotOutputUpdate(projectId: string, notebookId?: string): void {
         const affectedNotebooks = workspace.notebookDocuments.filter(
-            (doc) => doc.notebookType === 'deepnote' && doc.metadata?.deepnoteProjectId === projectId
+            (doc) =>
+                doc.notebookType === 'deepnote' &&
+                doc.metadata?.deepnoteProjectId === projectId &&
+                (!notebookId || doc.metadata?.deepnoteNotebookId === notebookId)
         );
 
         for (const notebook of affectedNotebooks) {
@@ -292,12 +299,10 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             return;
         }
 
-        const targetNotebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
-
         const tokenSource = new CancellationTokenSource();
         let newData;
         try {
-            newData = await this.serializer.deserializeNotebook(content, tokenSource.token, targetNotebookId);
+            newData = await this.serializer.deserializeNotebook(content, tokenSource.token);
         } catch (error) {
             logger.warn(`[FileChangeWatcher] Failed to parse changed file: ${fileUri.path}`, error);
             return;
@@ -619,7 +624,9 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             return;
         }
 
-        const key = `snapshot:${projectId}`;
+        const notebookId = extractNotebookIdFromSnapshotUri(uri);
+
+        const key = notebookId ? `snapshot:${projectId}:${notebookId}` : `snapshot:${projectId}`;
         const existing = this.debounceTimers.get(key);
         if (existing) {
             clearTimeout(existing);
@@ -629,7 +636,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             key,
             setTimeout(() => {
                 this.debounceTimers.delete(key);
-                this.enqueueSnapshotOutputUpdate(projectId);
+                this.enqueueSnapshotOutputUpdate(projectId, notebookId);
             }, debounceTimeInMilliseconds)
         );
     }

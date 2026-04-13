@@ -1,18 +1,7 @@
 import type { DeepnoteBlock, DeepnoteFile, DeepnoteSnapshot } from '@deepnote/blocks';
 import { deserializeDeepnoteFile, isExecutableBlock, serializeDeepnoteSnapshot } from '@deepnote/blocks';
 import { inject, injectable, optional } from 'inversify';
-import {
-    CancellationTokenSource,
-    l10n,
-    NotebookEdit,
-    NotebookRange,
-    workspace,
-    WorkspaceEdit,
-    type CancellationToken,
-    type NotebookData,
-    type NotebookDocument,
-    type NotebookSerializer
-} from 'vscode';
+import { workspace, type CancellationToken, type NotebookData, type NotebookSerializer } from 'vscode';
 
 import { computeHash } from '../../platform/common/crypto';
 import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
@@ -57,8 +46,6 @@ function cloneWithoutCircularRefs<T>(obj: T, seen = new WeakSet<object>()): T {
     }
 }
 
-const LAST_SERIALIZED_TTL_MS = 10_000;
-
 /**
  * Serializer for converting between Deepnote YAML files and VS Code notebook format.
  * Handles reading/writing .deepnote files and manages project state persistence.
@@ -66,8 +53,6 @@ const LAST_SERIALIZED_TTL_MS = 10_000;
 @injectable()
 export class DeepnoteNotebookSerializer implements NotebookSerializer {
     private converter = new DeepnoteDataConverter();
-    private lastSerializedNotebookId: string | undefined;
-    private lastSerializedTimestamp = 0;
 
     constructor(
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
@@ -83,11 +68,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
      * @param token Cancellation token (unused)
      * @returns Promise resolving to notebook data
      */
-    async deserializeNotebook(
-        content: Uint8Array,
-        token: CancellationToken,
-        notebookId?: string
-    ): Promise<NotebookData> {
+    async deserializeNotebook(content: Uint8Array, token: CancellationToken): Promise<NotebookData> {
         logger.debug('DeepnoteSerializer: Deserializing Deepnote notebook');
 
         if (token?.isCancellationRequested) {
@@ -103,33 +84,12 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             }
 
             const projectId = deepnoteFile.project.id;
-            const resolvedNotebookId = notebookId ?? this.findCurrentNotebookId(projectId);
+            const selectedNotebook = this.findDefaultNotebook(deepnoteFile);
 
-            logger.debug(`DeepnoteSerializer: Project ID: ${projectId}, Selected notebook ID: ${resolvedNotebookId}`);
-
-            if (!resolvedNotebookId) {
-                logger.debug(
-                    'DeepnoteSerializer: No notebook ID resolved, returning empty state for post-open verification'
-                );
-
-                return {
-                    cells: [],
-                    metadata: {
-                        deepnoteProjectId: projectId,
-                        deepnoteProjectName: deepnoteFile.project.name,
-                        deepnoteVersion: deepnoteFile.version
-                    }
-                };
-            }
-
-            if (deepnoteFile.project.notebooks.length === 0) {
-                throw new Error('Deepnote project contains no notebooks.');
-            }
-
-            const selectedNotebook = deepnoteFile.project.notebooks.find((nb) => nb.id === resolvedNotebookId);
+            logger.debug(`DeepnoteSerializer: Project ID: ${projectId}, Selected notebook ID: ${selectedNotebook?.id}`);
 
             if (!selectedNotebook) {
-                throw new Error(l10n.t('No notebook selected or found'));
+                throw new Error('Deepnote project contains no notebooks.');
             }
 
             // Initialize vega-lite for output conversion (lazy-loaded ESM module)
@@ -158,7 +118,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             if (this.snapshotService?.isSnapshotsEnabled()) {
                 logger.debug(`[Snapshot] Snapshots enabled, reading snapshot for project ${projectId}`);
                 try {
-                    const snapshotOutputs = await this.snapshotService.readSnapshot(projectId);
+                    const snapshotOutputs = await this.snapshotService.readSnapshot(projectId, selectedNotebook.id);
 
                     if (snapshotOutputs && snapshotOutputs.size > 0) {
                         logger.debug(`[Snapshot] Merging ${snapshotOutputs.size} block outputs from snapshot`);
@@ -190,7 +150,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 );
             }
 
-            this.notebookManager.storeOriginalProject(deepnoteFile.project.id, deepnoteFile, selectedNotebook.id);
+            this.notebookManager.storeOriginalProject(deepnoteFile.project.id, deepnoteFile);
             logger.debug(`DeepnoteSerializer: Stored project ${projectId} in notebook manager`);
 
             return {
@@ -215,107 +175,11 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
     }
 
     /**
-     * Resolves the notebook ID for a deserialization call.
-     *
-     * Priority:
-     *  1. Pending resolution hint (explicit intent from explorer view)
-     *  2. Already-open document metadata (re-deserialization after file change)
-     *     — skips the notebook that was just serialized, since that's the one
-     *     that triggered the file change, not the one being re-deserialized.
-     *  3. undefined — initial open; verifyDeserializedNotebook will resolve
-     *     from the document URI after open.
-     */
-    findCurrentNotebookId(projectId: string): string | undefined {
-        const pendingNotebookId = this.notebookManager.consumePendingNotebookResolution(projectId);
-
-        if (pendingNotebookId) {
-            return pendingNotebookId;
-        }
-
-        return this.findNotebookIdFromOpenDocuments(projectId);
-    }
-
-    /**
      * Gets the data converter instance for cell/block conversion.
      * @returns DeepnoteDataConverter instance
      */
     getConverter(): DeepnoteDataConverter {
         return this.converter;
-    }
-
-    /**
-     * Parses the file content and returns the ID of the default notebook
-     * (alphabetically first, excluding Init when other notebooks exist).
-     * Used by the post-open verification handler for direct file opens
-     * that have no `?notebook=` query param.
-     */
-    resolveDefaultNotebookId(content: Uint8Array): string | undefined {
-        try {
-            const contentString = new TextDecoder('utf-8').decode(content);
-            const deepnoteFile = deserializeDeepnoteFile(contentString);
-
-            return this.findDefaultNotebook(deepnoteFile)?.id;
-        } catch {
-            return undefined;
-        }
-    }
-
-    /**
-     * Ensures an opened notebook document shows the correct notebook.
-     *
-     * The serializer returns an empty state when it cannot determine which
-     * notebook to display (no pending resolution). This method is called
-     * after the document is created, reads the real notebook ID from
-     * the URI `?notebook=` query param (or picks the default notebook
-     * for direct file opens), and patches the document in place.
-     */
-    async verifyDeserializedNotebook(doc: NotebookDocument): Promise<void> {
-        if (doc.notebookType !== 'deepnote') {
-            return;
-        }
-
-        const expectedNotebookId = new URLSearchParams(doc.uri.query).get('notebook');
-        const actualNotebookId = doc.metadata?.deepnoteNotebookId as string | undefined;
-
-        if (actualNotebookId && (!expectedNotebookId || expectedNotebookId === actualNotebookId)) {
-            return;
-        }
-
-        const cts = new CancellationTokenSource();
-
-        try {
-            const fileUri = doc.uri.with({ query: '', fragment: '' });
-            const content = await workspace.fs.readFile(fileUri);
-
-            const targetNotebookId = expectedNotebookId ?? this.resolveDefaultNotebookId(content);
-
-            if (!targetNotebookId || targetNotebookId === actualNotebookId) {
-                return;
-            }
-
-            logger.info(
-                `Notebook verification: resolving notebook ${targetNotebookId} (was ${actualNotebookId ?? 'empty'}).`
-            );
-
-            const correctData = await this.deserializeNotebook(content, cts.token, targetNotebookId);
-
-            const edit = new WorkspaceEdit();
-
-            edit.set(doc.uri, [
-                NotebookEdit.replaceCells(new NotebookRange(0, doc.cellCount), correctData.cells),
-                NotebookEdit.updateNotebookMetadata(correctData.metadata ?? {})
-            ]);
-
-            const applied = await workspace.applyEdit(edit);
-
-            if (applied) {
-                await doc.save();
-            }
-        } catch (error) {
-            logger.error('Failed to verify/correct notebook content', error);
-        } finally {
-            cts.dispose();
-        }
     }
 
     /**
@@ -354,15 +218,11 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
             logger.debug('SerializeNotebook: Got and cloned original project');
 
-            const notebookId =
-                data.metadata?.deepnoteNotebookId || this.notebookManager.getCurrentNotebookId(projectId);
+            const notebookId = data.metadata?.deepnoteNotebookId;
 
             if (!notebookId) {
                 throw new Error('Cannot determine which notebook to save');
             }
-
-            this.lastSerializedNotebookId = notebookId;
-            this.lastSerializedTimestamp = Date.now();
 
             logger.debug(`SerializeNotebook: Notebook ID: ${notebookId}`);
 
@@ -654,61 +514,23 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
     }
 
     /**
-     * Returns a notebook ID from an already-open document for re-deserialization.
-     *
-     * When VS Code re-reads a file (e.g. after save or external change), it
-     * calls deserializeNotebook again for each open document backed by that
-     * file.  The document already exists in workspace.notebookDocuments with
-     * the correct deepnoteNotebookId in its metadata.
-     *
-     * Skips the notebook that was most recently serialized — that document
-     * triggered the file change and is not the one being re-deserialized.
-     */
-    private findNotebookIdFromOpenDocuments(projectId: string): string | undefined {
-        const recentSerialize =
-            this.lastSerializedNotebookId && Date.now() - this.lastSerializedTimestamp < LAST_SERIALIZED_TTL_MS;
-
-        for (const doc of workspace.notebookDocuments) {
-            if (doc.notebookType !== 'deepnote' || doc.metadata?.deepnoteProjectId !== projectId) {
-                continue;
-            }
-
-            const notebookId = doc.metadata?.deepnoteNotebookId as string | undefined;
-
-            if (!notebookId) {
-                continue;
-            }
-
-            if (recentSerialize && notebookId === this.lastSerializedNotebookId) {
-                continue;
-            }
-
-            return notebookId;
-        }
-
-        return undefined;
-    }
-
-    /**
-     * Finds the default notebook to open when no selection is made.
-     * @param file
-     * @returns
+     * Finds the default notebook — the first non-init notebook in array order.
+     * Falls back to the first notebook if only init exists.
      */
     private findDefaultNotebook(file: DeepnoteFile): DeepnoteNotebook | undefined {
         if (file.project.notebooks.length === 0) {
             return undefined;
         }
 
-        const sortedNotebooks = file.project.notebooks.slice().sort((a, b) => a.name.localeCompare(b.name));
-        const sortedNotebooksWithoutInit = file.project.initNotebookId
-            ? sortedNotebooks.filter((nb) => nb.id !== file.project.initNotebookId)
-            : sortedNotebooks;
+        const notebooksWithoutInit = file.project.initNotebookId
+            ? file.project.notebooks.filter((nb) => nb.id !== file.project.initNotebookId)
+            : file.project.notebooks;
 
-        if (sortedNotebooksWithoutInit.length > 0) {
-            return sortedNotebooksWithoutInit[0];
+        if (notebooksWithoutInit.length > 0) {
+            return notebooksWithoutInit[0];
         }
 
-        return sortedNotebooks[0];
+        return file.project.notebooks[0];
     }
 
     /**

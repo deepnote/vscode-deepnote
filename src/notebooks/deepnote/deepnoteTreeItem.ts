@@ -1,10 +1,12 @@
-import { TreeItem, TreeItemCollapsibleState, Uri, ThemeIcon } from 'vscode';
+import { TreeItem, TreeItemCollapsibleState, ThemeIcon } from 'vscode';
+
 import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 
 /**
  * Represents different types of items in the Deepnote tree view
  */
 export enum DeepnoteTreeItemType {
+    ProjectGroup = 'projectGroup',
     ProjectFile = 'projectFile',
     Notebook = 'notebook',
     Loading = 'loading'
@@ -20,25 +22,39 @@ export interface DeepnoteTreeItemContext {
 }
 
 /**
- * Tree item representing a Deepnote project file or notebook in the explorer view
+ * Data associated with a ProjectGroup tree item
+ */
+export interface ProjectGroupData {
+    readonly projectId: string;
+    readonly projectName: string;
+    readonly files: Array<{ filePath: string; project: DeepnoteProject }>;
+}
+
+/**
+ * Tree item representing a Deepnote project group, file, or notebook in the explorer view
  */
 export class DeepnoteTreeItem extends TreeItem {
     constructor(
         public readonly type: DeepnoteTreeItemType,
         public readonly context: DeepnoteTreeItemContext,
-        public data: DeepnoteProject | DeepnoteNotebook | null,
+        public data: DeepnoteProject | DeepnoteNotebook | ProjectGroupData | null,
         collapsibleState: TreeItemCollapsibleState
     ) {
         super('', collapsibleState);
 
         this.contextValue = this.type;
 
-        // Inline method calls to avoid ES module TreeItem extension issues
         if (this.type === DeepnoteTreeItemType.Loading) {
             this.label = 'Loading…';
             this.tooltip = 'Loading…';
             this.description = '';
             this.iconPath = new ThemeIcon('loading~spin');
+        } else if (this.type === DeepnoteTreeItemType.ProjectGroup) {
+            const groupData = this.data as ProjectGroupData;
+            this.label = groupData.projectName || 'Untitled Project';
+            this.tooltip = `Deepnote Project: ${groupData.projectName}\n${groupData.files.length} file(s)`;
+            this.description = `${groupData.files.length} file${groupData.files.length !== 1 ? 's' : ''}`;
+            this.iconPath = new ThemeIcon('notebook');
         } else {
             // getTooltip() inline
             if (this.type === DeepnoteTreeItemType.ProjectFile) {
@@ -51,7 +67,7 @@ export class DeepnoteTreeItem extends TreeItem {
 
             // getIcon() inline
             if (this.type === DeepnoteTreeItemType.ProjectFile) {
-                this.iconPath = new ThemeIcon('notebook');
+                this.iconPath = new ThemeIcon('file-code');
             } else {
                 this.iconPath = new ThemeIcon('file-code');
             }
@@ -59,7 +75,8 @@ export class DeepnoteTreeItem extends TreeItem {
             // getLabel() inline
             if (this.type === DeepnoteTreeItemType.ProjectFile) {
                 const project = this.data as DeepnoteProject;
-                this.label = project.project.name || 'Untitled Project';
+                const fileName = this.context.filePath.split('/').pop() ?? '';
+                this.label = fileName || project.project.name || 'Untitled Project';
             } else {
                 const notebook = this.data as DeepnoteNotebook;
                 this.label = notebook.name || 'Untitled Notebook';
@@ -68,8 +85,10 @@ export class DeepnoteTreeItem extends TreeItem {
             // getDescription() inline
             if (this.type === DeepnoteTreeItemType.ProjectFile) {
                 const project = this.data as DeepnoteProject;
-                const notebookCount = project.project.notebooks?.length || 0;
-                this.description = `${notebookCount} notebook${notebookCount !== 1 ? 's' : ''}`;
+                const initNotebookId = project.project.initNotebookId;
+                const nonInitNotebooks = project.project.notebooks?.filter((nb) => nb.id !== initNotebookId) ?? [];
+                const blockCount = nonInitNotebooks.reduce((sum, nb) => sum + (nb.blocks?.length ?? 0), 0);
+                this.description = `${blockCount} cell${blockCount !== 1 ? 's' : ''}`;
             } else {
                 const notebook = this.data as DeepnoteNotebook;
                 const blockCount = notebook.blocks?.length || 0;
@@ -77,11 +96,17 @@ export class DeepnoteTreeItem extends TreeItem {
             }
         }
 
+        // ProjectFile items open the file directly (no query param)
+        if (this.type === DeepnoteTreeItemType.ProjectFile) {
+            this.command = {
+                command: 'deepnote.openNotebook',
+                title: 'Open Notebook',
+                arguments: [this.context]
+            };
+        }
+
+        // Notebook items also open the file directly (no query param)
         if (this.type === DeepnoteTreeItemType.Notebook) {
-            // getNotebookUri() inline
-            if (this.context.notebookId) {
-                this.resourceUri = Uri.parse(`deepnote-notebook://${this.context.filePath}#${this.context.notebookId}`);
-            }
             this.command = {
                 command: 'deepnote.openNotebook',
                 title: 'Open Notebook',
@@ -103,15 +128,24 @@ export class DeepnoteTreeItem extends TreeItem {
             return;
         }
 
+        if (this.type === DeepnoteTreeItemType.ProjectGroup) {
+            const groupData = this.data as ProjectGroupData;
+            this.label = groupData.projectName || 'Untitled Project';
+            this.tooltip = `Deepnote Project: ${groupData.projectName}\n${groupData.files.length} file(s)`;
+            this.description = `${groupData.files.length} file${groupData.files.length !== 1 ? 's' : ''}`;
+            return;
+        }
+
         if (this.type === DeepnoteTreeItemType.ProjectFile) {
             const project = this.data as DeepnoteProject;
-
-            this.label = project.project.name || 'Untitled Project';
+            const fileName = this.context.filePath.split('/').pop() ?? '';
+            this.label = fileName || project.project.name || 'Untitled Project';
             this.tooltip = `Deepnote Project: ${project.project.name}\nFile: ${this.context.filePath}`;
 
-            const notebookCount = project.project.notebooks?.length || 0;
-
-            this.description = `${notebookCount} notebook${notebookCount !== 1 ? 's' : ''}`;
+            const initNotebookId = project.project.initNotebookId;
+            const nonInitNotebooks = project.project.notebooks?.filter((nb) => nb.id !== initNotebookId) ?? [];
+            const blockCount = nonInitNotebooks.reduce((sum, nb) => sum + (nb.blocks?.length ?? 0), 0);
+            this.description = `${blockCount} cell${blockCount !== 1 ? 's' : ''}`;
         } else {
             const notebook = this.data as DeepnoteNotebook;
 

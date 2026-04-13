@@ -61,8 +61,8 @@ suite('DeepnoteTreeItem', () => {
             assert.strictEqual(item.type, DeepnoteTreeItemType.ProjectFile);
             assert.deepStrictEqual(item.context, context);
             assert.strictEqual(item.collapsibleState, TreeItemCollapsibleState.Collapsed);
-            assert.strictEqual(item.label, 'Test Project');
-            assert.strictEqual(item.description, '1 notebook');
+            assert.strictEqual(item.label, 'project.deepnote');
+            assert.strictEqual(item.description, '0 cells');
         });
 
         test('should create notebook item with basic properties', () => {
@@ -117,19 +117,20 @@ suite('DeepnoteTreeItem', () => {
                 TreeItemCollapsibleState.Collapsed
             );
 
-            assert.strictEqual(item.label, 'Test Project');
+            assert.strictEqual(item.label, 'my-project.deepnote');
             assert.strictEqual(item.type, DeepnoteTreeItemType.ProjectFile);
             assert.strictEqual(item.collapsibleState, TreeItemCollapsibleState.Collapsed);
             assert.strictEqual(item.contextValue, 'projectFile');
             assert.strictEqual(item.tooltip, 'Deepnote Project: Test Project\nFile: /workspace/my-project.deepnote');
-            assert.strictEqual(item.description, '1 notebook');
+            assert.strictEqual(item.description, '0 cells');
 
-            // Should have notebook icon for project files
+            // Should have file-code icon for project files
             assert.instanceOf(item.iconPath, ThemeIcon);
-            assert.strictEqual((item.iconPath as ThemeIcon).id, 'notebook');
+            assert.strictEqual((item.iconPath as ThemeIcon).id, 'file-code');
 
-            // Should not have command for project files
-            assert.isUndefined(item.command);
+            // Should have command for project files
+            assert.isDefined(item.command);
+            assert.strictEqual(item.command!.command, 'deepnote.openNotebook');
         });
 
         test('should handle project with multiple notebooks', () => {
@@ -175,7 +176,7 @@ suite('DeepnoteTreeItem', () => {
                 TreeItemCollapsibleState.Collapsed
             );
 
-            assert.strictEqual(item.description, '3 notebooks');
+            assert.strictEqual(item.description, '0 cells');
         });
 
         test('should handle project with no notebooks', () => {
@@ -199,7 +200,7 @@ suite('DeepnoteTreeItem', () => {
                 TreeItemCollapsibleState.Collapsed
             );
 
-            assert.strictEqual(item.description, '0 notebooks');
+            assert.strictEqual(item.description, '0 cells');
         });
 
         test('should handle unnamed project', () => {
@@ -223,7 +224,7 @@ suite('DeepnoteTreeItem', () => {
                 TreeItemCollapsibleState.Collapsed
             );
 
-            assert.strictEqual(item.label, 'Untitled Project');
+            assert.strictEqual(item.label, 'project.deepnote');
         });
     });
 
@@ -259,12 +260,8 @@ suite('DeepnoteTreeItem', () => {
             assert.strictEqual(item.command!.title, 'Open Notebook');
             assert.deepStrictEqual(item.command!.arguments, [context]);
 
-            // Should have resource URI
-            assert.isDefined(item.resourceUri);
-            assert.strictEqual(
-                item.resourceUri!.toString(),
-                'deepnote-notebook:/workspace/project.deepnote#notebook-789'
-            );
+            // Should not have resource URI
+            assert.isUndefined(item.resourceUri);
         });
 
         test('should handle notebook with multiple blocks', () => {
@@ -418,7 +415,7 @@ suite('DeepnoteTreeItem', () => {
     });
 
     suite('command configuration', () => {
-        test('should not create command for project files', () => {
+        test('should create command for project files', () => {
             const context: DeepnoteTreeItemContext = {
                 filePath: '/test/project.deepnote',
                 projectId: 'project-123'
@@ -431,7 +428,10 @@ suite('DeepnoteTreeItem', () => {
                 TreeItemCollapsibleState.Collapsed
             );
 
-            assert.isUndefined(item.command);
+            assert.isDefined(item.command);
+            assert.strictEqual(item.command!.command, 'deepnote.openNotebook');
+            assert.strictEqual(item.command!.title, 'Open Notebook');
+            assert.deepStrictEqual(item.command!.arguments, [context]);
         });
 
         test('should create correct command for notebooks', () => {
@@ -457,7 +457,7 @@ suite('DeepnoteTreeItem', () => {
     });
 
     suite('icon configuration', () => {
-        test('should use notebook icon for project files', () => {
+        test('should use file-code icon for project files', () => {
             const context: DeepnoteTreeItemContext = {
                 filePath: '/test/project.deepnote',
                 projectId: 'project-123'
@@ -471,7 +471,7 @@ suite('DeepnoteTreeItem', () => {
             );
 
             assert.instanceOf(item.iconPath, ThemeIcon);
-            assert.strictEqual((item.iconPath as ThemeIcon).id, 'notebook');
+            assert.strictEqual((item.iconPath as ThemeIcon).id, 'file-code');
         });
 
         test('should use file-code icon for notebooks', () => {
@@ -746,7 +746,8 @@ suite('DeepnoteTreeItem', () => {
             items.forEach((item, index) => {
                 assert.strictEqual(item.context.filePath, contexts[index].filePath);
                 assert.strictEqual(item.context.projectId, contexts[index].projectId);
-                assert.isUndefined(item.command); // Project files don't have commands
+                assert.isDefined(item.command); // Project files have commands
+                assert.strictEqual(item.command!.command, 'deepnote.openNotebook');
             });
         });
     });

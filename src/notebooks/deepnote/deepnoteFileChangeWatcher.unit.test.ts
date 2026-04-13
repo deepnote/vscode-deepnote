@@ -162,9 +162,7 @@ suite('DeepnoteFileChangeWatcher', () => {
         mockDisposables = [];
 
         mockedNotebookManager = mock<IDeepnoteNotebookManager>();
-        when(mockedNotebookManager.consumePendingNotebookResolution(anything())).thenReturn(undefined);
         when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(validProject);
-        when(mockedNotebookManager.queueNotebookResolution(anything(), anything())).thenReturn();
         when(mockedNotebookManager.updateOriginalProject(anything(), anything())).thenReturn();
         mockNotebookManager = instance(mockedNotebookManager);
 
@@ -1557,9 +1555,7 @@ project:
                 } as any);
 
                 const mockedManagerEx = mock<IDeepnoteNotebookManager>();
-                when(mockedManagerEx.consumePendingNotebookResolution(anything())).thenReturn(undefined);
                 when(mockedManagerEx.getOriginalProject(anything())).thenReturn(validProject);
-                when(mockedManagerEx.queueNotebookResolution(anything(), anything())).thenReturn();
                 when(mockedManagerEx.updateOriginalProject(anything(), anything())).thenReturn();
 
                 const exMdWatcher = new DeepnoteFileChangeWatcher(
@@ -1618,9 +1614,7 @@ project:
                 interactionCaptures = [];
 
                 reset(mockedNotebookManager);
-                when(mockedNotebookManager.consumePendingNotebookResolution(anything())).thenReturn(undefined);
                 when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(validProject);
-                when(mockedNotebookManager.queueNotebookResolution(anything(), anything())).thenReturn();
                 when(mockedNotebookManager.updateOriginalProject(anything(), anything())).thenReturn();
                 resetCalls(mockedNotebookManager);
 
@@ -1964,7 +1958,8 @@ project:
                 );
             });
 
-            test('multi-notebook: snapshot outputs then external YAML update keeps per-notebook sources', async function () {
+            // Multi-notebook test removed — multi-notebook support has been replaced by auto-splitting into separate files
+            test.skip('multi-notebook: snapshot outputs then external YAML update keeps per-notebook sources', async function () {
                 this.timeout(12_000);
                 when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(multiNotebookProject);
 
@@ -2157,14 +2152,13 @@ project:
         });
     });
 
-    suite('multi-notebook file sync', () => {
+    // Multi-notebook file sync tests removed — multi-notebook support has been replaced by auto-splitting into separate files
+    suite.skip('multi-notebook file sync', () => {
         let workspaceSetCaptures: NotebookEditCapture[] = [];
 
         setup(() => {
             reset(mockedNotebookManager);
-            when(mockedNotebookManager.consumePendingNotebookResolution(anything())).thenReturn(undefined);
             when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(multiNotebookProject);
-            when(mockedNotebookManager.queueNotebookResolution(anything(), anything())).thenReturn();
             when(mockedNotebookManager.updateOriginalProject(anything(), anything())).thenReturn();
             resetCalls(mockedNotebookManager);
             workspaceSetCaptures = [];

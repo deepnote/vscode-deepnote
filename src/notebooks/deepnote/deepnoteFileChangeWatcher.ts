@@ -42,6 +42,11 @@ interface PendingOperation {
     type: OperationType;
     /** For snapshot-output-update: the project ID to read outputs from. */
     projectId?: string;
+    /**
+     * For snapshot-output-update: notebook ID from the snapshot filename.
+     * Omitted for legacy project-scoped snapshot files.
+     */
+    notebookId?: string;
 }
 
 /**
@@ -234,7 +239,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
                 if (op.type === 'main-file-sync') {
                     await this.executeMainFileSync(notebook, fileUri ?? notebook.uri.with({ query: '', fragment: '' }));
                 } else if (op.type === 'snapshot-output-update' && op.projectId) {
-                    await this.executeSnapshotOutputUpdate(notebook, op.projectId);
+                    await this.executeSnapshotOutputUpdate(notebook, op.projectId, op.notebookId);
                 }
             } catch (error) {
                 logger.error(`[FileChangeWatcher] Operation ${op.type} failed for ${nbKey}`, error);
@@ -282,7 +287,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             if (pending?.type === 'main-file-sync') {
                 continue;
             }
-            this.pendingOperations.set(nbKey, { type: 'snapshot-output-update', projectId });
+            this.pendingOperations.set(nbKey, { type: 'snapshot-output-update', projectId, notebookId });
             void this.drainQueue(nbKey, notebook);
         }
     }
@@ -413,12 +418,19 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
      * Prefers the notebook execution API (outputs set this way respect transientOutputs
      * and do not mark the notebook dirty). Falls back to replaceCells when no kernel is active.
      */
-    private async executeSnapshotOutputUpdate(notebook: NotebookDocument, projectId: string): Promise<void> {
+    private async executeSnapshotOutputUpdate(
+        notebook: NotebookDocument,
+        projectId: string,
+        notebookId?: string
+    ): Promise<void> {
         if (!this.snapshotService) {
             return;
         }
 
-        const snapshotOutputs = await this.snapshotService.readSnapshot(projectId);
+        const snapshotOutputs =
+            notebookId === undefined
+                ? await this.snapshotService.readSnapshot(projectId)
+                : await this.snapshotService.readSnapshot(projectId, notebookId);
         if (!snapshotOutputs || snapshotOutputs.size === 0) {
             return;
         }
@@ -433,8 +445,12 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         }
 
         const liveCells = notebook.getCells();
-        const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
-        const originalBlocks = notebookId ? notebookBlocksMap.get(notebookId) : undefined;
+        const docNotebookId =
+            notebook.metadata?.deepnoteNotebookId !== undefined &&
+            typeof notebook.metadata.deepnoteNotebookId === 'string'
+                ? notebook.metadata.deepnoteNotebookId
+                : undefined;
+        const originalBlocks = docNotebookId ? notebookBlocksMap.get(docNotebookId) : undefined;
 
         // Collect cells that need output updates
         const cellUpdates: Array<{

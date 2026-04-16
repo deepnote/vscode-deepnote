@@ -1606,6 +1606,155 @@ project:
             }
         });
 
+        test('refreshes open notebook when only notebook-scoped latest snapshot exists on disk', async () => {
+            // Catches: queued snapshot work dropped the notebook ID from the filename and called readSnapshot(projectId), so notebook-scoped latest files returned no outputs and the editor never refreshed.
+            const scopedNotebookId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+            const snapshotUri = testFileUri('snapshots', `proj_project-1_${scopedNotebookId}_latest.snapshot.deepnote`);
+
+            resetCalls(mockSnapshotService);
+            when(mockSnapshotService.isSnapshotsEnabled()).thenReturn(true);
+            when(mockSnapshotService.readSnapshot(anything(), anything())).thenCall((pid: string, nid?: string) => {
+                readSnapshotCallCount++;
+                if (typeof nid === 'undefined') {
+                    return Promise.resolve(undefined);
+                }
+                if (pid === 'project-1' && nid === scopedNotebookId) {
+                    return Promise.resolve(snapshotOutputs);
+                }
+
+                return Promise.resolve(undefined);
+            });
+
+            const notebook = createMockNotebook({
+                uri: testFileUri('scoped-snapshot-only.deepnote'),
+                metadata: {
+                    deepnoteProjectId: 'project-1',
+                    deepnoteNotebookId: scopedNotebookId
+                },
+                cells: [
+                    {
+                        metadata: { id: 'block-1', type: 'code' },
+                        outputs: [],
+                        kind: NotebookCellKind.Code,
+                        document: { getText: () => 'print("hello")' }
+                    }
+                ]
+            });
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+
+            snapshotApplyEditCount = 0;
+            snapshotOnDidChange.fire(snapshotUri);
+
+            await waitFor(() => snapshotApplyEditCount > 0);
+
+            assert.isAtLeast(readSnapshotCallCount, 1, 'readSnapshot should be called');
+            assert.isAtLeast(
+                snapshotApplyEditCount,
+                1,
+                'applyEdit should refresh outputs from notebook-scoped snapshot'
+            );
+        });
+
+        test('applies notebook-scoped latest snapshot only to the open notebook whose ID matches the filename', async () => {
+            // Catches: readSnapshot omitted the notebook ID from the snapshot path, so sibling notebooks in the same project could be updated from the wrong snapshot scope or the targeted notebook read no outputs.
+            const nb1Id = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+            const nb2Id = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+
+            resetCalls(mockSnapshotService);
+            when(mockSnapshotService.isSnapshotsEnabled()).thenReturn(true);
+
+            const readArgs: Array<{ projectId: string; notebookId?: string }> = [];
+            const nb1Outputs = new Map<string, DeepnoteOutput[]>([
+                [
+                    'block-nb1',
+                    [
+                        {
+                            output_type: 'execute_result',
+                            data: { 'text/plain': 'ForNb1Only' },
+                            execution_count: 1
+                        } as DeepnoteOutput
+                    ]
+                ]
+            ]);
+            const nb2Outputs = new Map<string, DeepnoteOutput[]>([
+                [
+                    'block-nb2',
+                    [
+                        {
+                            output_type: 'execute_result',
+                            data: { 'text/plain': 'ForNb2Only' },
+                            execution_count: 1
+                        } as DeepnoteOutput
+                    ]
+                ]
+            ]);
+
+            when(mockSnapshotService.readSnapshot(anything(), anything())).thenCall((pid: string, nid?: string) => {
+                readSnapshotCallCount++;
+                readArgs.push({ projectId: pid, notebookId: nid });
+                if (nid === nb1Id) {
+                    return Promise.resolve(nb1Outputs);
+                }
+                if (nid === nb2Id) {
+                    return Promise.resolve(nb2Outputs);
+                }
+
+                return Promise.resolve(undefined);
+            });
+
+            when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(multiNotebookProject);
+
+            const uriNb1 = testFileUri('multi-scope-nb1.deepnote');
+            const uriNb2 = testFileUri('multi-scope-nb2.deepnote');
+            const notebook1 = createMockNotebook({
+                uri: uriNb1,
+                metadata: {
+                    deepnoteProjectId: 'project-1',
+                    deepnoteNotebookId: nb1Id
+                },
+                cells: [
+                    {
+                        metadata: { id: 'block-nb1', type: 'code' },
+                        outputs: [],
+                        kind: NotebookCellKind.Code,
+                        document: { getText: () => 'print("nb1")', languageId: 'python' }
+                    }
+                ]
+            });
+            const notebook2 = createMockNotebook({
+                uri: uriNb2,
+                metadata: {
+                    deepnoteProjectId: 'project-1',
+                    deepnoteNotebookId: nb2Id
+                },
+                cells: [
+                    {
+                        metadata: { id: 'block-nb2', type: 'code' },
+                        outputs: [],
+                        kind: NotebookCellKind.Code,
+                        document: { getText: () => 'print("nb2")', languageId: 'python' }
+                    }
+                ]
+            });
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook1, notebook2]);
+
+            const snapshotUri = testFileUri('snapshots', `proj_project-1_${nb1Id}_latest.snapshot.deepnote`);
+
+            snapshotApplyEditCount = 0;
+            snapshotOnDidChange.fire(snapshotUri);
+
+            await waitFor(() => snapshotApplyEditCount >= 2);
+
+            assert.deepStrictEqual(readArgs, [{ projectId: 'project-1', notebookId: nb1Id }]);
+            assert.strictEqual(
+                snapshotApplyEditCount,
+                2,
+                'only the matching open notebook should receive snapshot edits'
+            );
+        });
+
         suite('snapshot and deserialization interaction', () => {
             let interactionCaptures: SnapshotInteractionCapture[];
             let snapshotApplyEditStub: sinon.SinonStub;

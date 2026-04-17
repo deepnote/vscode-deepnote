@@ -168,7 +168,7 @@ suite('deepnoteNotebookFileFactory', () => {
             assert.strictEqual(slugifyNotebookNameOrFallback('My Notebook'), 'my-notebook');
         });
 
-        test("should return 'notebook' for '!!!' (unslugifiable name)", () => {
+        test("should return 'notebook' for '!!!' (name that produces no slug)", () => {
             assert.strictEqual(slugifyNotebookNameOrFallback('!!!'), 'notebook');
         });
 

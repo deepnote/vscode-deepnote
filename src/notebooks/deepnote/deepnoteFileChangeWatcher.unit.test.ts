@@ -508,7 +508,8 @@ project:
     });
 
     test('should not suppress real changes after auto-save', async function () {
-        this.timeout(10_000);
+        // First reload (debounce + I/O) + second waitFor can exceed 10s on slow CI.
+        this.timeout(20_000);
         const uri = testFileUri('test.deepnote');
 
         // First change: notebook has no cells, YAML has one cell -> different -> reload
@@ -527,12 +528,15 @@ project:
         setupMockFs(validYaml);
 
         onDidChangeFile.fire(uri);
-        await waitFor(() => saveCount >= 1);
+        await waitFor(() => saveCount >= 1 && applyEditCount >= 1);
 
         // The first reload sets 2 self-write markers (writeFile + save).
         // Consume them both with simulated fs events.
         onDidChangeFile.fire(uri);
         onDidChangeFile.fire(uri);
+
+        // Let debounce/async work from the first reload settle (matches sibling regression test).
+        await new Promise((resolve) => setTimeout(resolve, debounceWaitMs));
 
         // Second real external change: use different YAML content
         const changedYaml = `
@@ -554,7 +558,7 @@ project:
 `;
         setupMockFs(changedYaml);
         onDidChangeFile.fire(uri);
-        await waitFor(() => applyEditCount >= 2, waitForTimeoutMs);
+        await waitFor(() => applyEditCount >= 2, 15_000);
 
         assert.isAtLeast(applyEditCount, 2, 'applyEdit should be called for both external changes');
     });

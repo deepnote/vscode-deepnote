@@ -779,7 +779,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
     });
 
     suite('createAndAddNotebookToProject', () => {
-        test('should create and add a new notebook to an existing project', async () => {
+        test('should create and add a new notebook as a new sibling .deepnote file', async () => {
             const projectId = 'test-project-id';
             const existingNotebookId = 'existing-notebook-id';
             const newNotebookId = 'new-notebook-id';
@@ -787,6 +787,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             const blockId = 'test-block-id';
             const fileUri = Uri.file('/workspace/test-project.deepnote');
             const notebookName = 'New Notebook';
+            const expectedNewFilePath = '/workspace/test-project_new-notebook.deepnote';
 
             // Mock existing project data
             const existingProjectData: DeepnoteFile = {
@@ -811,13 +812,14 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             const yamlContent = serializeDeepnoteFile(existingProjectData);
 
-            // Mock file system
+            // Mock file system: track writes per URI path and stat rejects (no collision)
             const mockFS = mock<typeof workspace.fs>();
             when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yamlContent)));
+            when(mockFS.stat(anything())).thenReject(new Error('File not found'));
 
-            let capturedWriteContent: Uint8Array | undefined;
-            when(mockFS.writeFile(anything(), anything())).thenCall((_uri: Uri, content: Uint8Array) => {
-                capturedWriteContent = content;
+            const writes = new Map<string, Uint8Array>();
+            when(mockFS.writeFile(anything(), anything())).thenCall((uri: Uri, content: Uint8Array) => {
+                writes.set(uri.path, content);
                 return Promise.resolve();
             });
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
@@ -825,20 +827,24 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             // Mock user input
             when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(notebookName));
 
-            // Mock UUID generation by mocking crypto.randomUUID
+            // Mock UUID generation
             const uuidStub = createUuidMock([newNotebookId, blockGroupId, blockId]);
             uuidStubs.push(uuidStub);
 
-            // Mock notebook opening
+            // Capture openNotebookDocument URI
+            let openedUri: Uri | undefined;
             const mockNotebook = { notebookType: 'deepnote' };
-            when(mockedVSCodeNamespaces.workspace.openNotebookDocument(anything())).thenReturn(
-                Promise.resolve(mockNotebook as any)
-            );
+            when(mockedVSCodeNamespaces.workspace.openNotebookDocument(anything())).thenCall((u: Uri) => {
+                openedUri = u;
+                return Promise.resolve(mockNotebook as any);
+            });
             when(mockedVSCodeNamespaces.window.showNotebookDocument(anything(), anything())).thenReturn(
                 Promise.resolve(undefined as any)
             );
 
-            // Execute the method
+            // Spy on treeDataProvider.refresh to verify it is called after the new file is written
+            const refreshSpy = sandbox.spy((explorerView as any).treeDataProvider, 'refresh');
+
             const result = await explorerView.createAndAddNotebookToProject(fileUri);
 
             // Verify result
@@ -846,25 +852,278 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             expect(result?.id).to.equal(newNotebookId);
             expect(result?.name).to.equal(notebookName);
 
-            // Verify file was written
-            expect(capturedWriteContent).to.exist;
+            // Verify original file was NOT written to
+            expect(writes.has(fileUri.path)).to.be.false;
 
-            // Verify YAML content
-            const updatedYamlContent = Buffer.from(capturedWriteContent!).toString('utf8');
-            const updatedProjectData = deserializeDeepnoteFile(updatedYamlContent) as any;
+            // Verify new sibling file at expected path was written
+            expect(writes.has(expectedNewFilePath)).to.be.true;
+            const newFileContent = writes.get(expectedNewFilePath)!;
+            const newFileYaml = Buffer.from(newFileContent).toString('utf8');
+            const newProjectData = deserializeDeepnoteFile(newFileYaml);
 
-            expect(updatedProjectData.project.notebooks).to.have.lengthOf(2);
-            expect(updatedProjectData.project.notebooks[1].id).to.equal(newNotebookId);
-            expect(updatedProjectData.project.notebooks[1].name).to.equal(notebookName);
-            expect(updatedProjectData.project.notebooks[1].blocks).to.have.lengthOf(1);
-            expect(updatedProjectData.project.notebooks[1].executionMode).to.equal('block');
+            // The new file should contain exactly 1 notebook (the new one)
+            expect(newProjectData.project.notebooks).to.have.lengthOf(1);
+            expect(newProjectData.project.notebooks[0].id).to.equal(newNotebookId);
+            expect(newProjectData.project.notebooks[0].name).to.equal(notebookName);
+            expect(newProjectData.project.notebooks[0].blocks).to.have.lengthOf(1);
+            expect(newProjectData.project.notebooks[0].executionMode).to.equal('block');
+
+            // The new file should share the source project.id
+            expect(newProjectData.project.id).to.equal(projectId);
+
+            // openNotebookDocument should have been called with the NEW file URI
+            expect(openedUri).to.exist;
+            expect(openedUri!.path).to.equal(expectedNewFilePath);
+
+            // Tree view should have been refreshed after the new file was written
+            expect(refreshSpy.called).to.be.true;
+        });
+
+        test('should clone init notebook into the new sibling file', async () => {
+            const projectId = 'test-project-id';
+            const initNotebookId = 'init-notebook-id';
+            const newNotebookId = 'new-notebook-id';
+            const blockGroupId = 'test-blockgroup-id';
+            const blockId = 'test-block-id';
+            const fileUri = Uri.file('/workspace/test-project.deepnote');
+            const notebookName = 'New Notebook';
+            const expectedNewFilePath = '/workspace/test-project_new-notebook.deepnote';
+
+            const existingProjectData: DeepnoteFile = {
+                version: '1.0.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
+                },
+                project: {
+                    id: projectId,
+                    name: 'Test Project',
+                    initNotebookId,
+                    notebooks: [
+                        {
+                            id: initNotebookId,
+                            name: 'Init',
+                            blocks: [
+                                {
+                                    blockGroup: 'init-bg',
+                                    content: 'print("init")',
+                                    id: 'init-block',
+                                    metadata: {},
+                                    sortingKey: '0',
+                                    type: 'code',
+                                    version: 1
+                                }
+                            ],
+                            executionMode: 'block'
+                        },
+                        {
+                            id: 'other-nb',
+                            name: 'Other Notebook',
+                            blocks: [],
+                            executionMode: 'block'
+                        }
+                    ]
+                }
+            };
+
+            const yamlContent = serializeDeepnoteFile(existingProjectData);
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yamlContent)));
+            when(mockFS.stat(anything())).thenReject(new Error('File not found'));
+
+            const writes = new Map<string, Uint8Array>();
+            when(mockFS.writeFile(anything(), anything())).thenCall((uri: Uri, content: Uint8Array) => {
+                writes.set(uri.path, content);
+                return Promise.resolve();
+            });
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(notebookName));
+
+            const uuidStub = createUuidMock([newNotebookId, blockGroupId, blockId]);
+            uuidStubs.push(uuidStub);
+
+            when(mockedVSCodeNamespaces.workspace.openNotebookDocument(anything())).thenReturn(
+                Promise.resolve({ notebookType: 'deepnote' } as any)
+            );
+            when(mockedVSCodeNamespaces.window.showNotebookDocument(anything(), anything())).thenReturn(
+                Promise.resolve(undefined as any)
+            );
+
+            await explorerView.createAndAddNotebookToProject(fileUri);
+
+            // Original file is not written
+            expect(writes.has(fileUri.path)).to.be.false;
+
+            // New file exists with both init + new notebook
+            const newFileYaml = Buffer.from(writes.get(expectedNewFilePath)!).toString('utf8');
+            const newProjectData = deserializeDeepnoteFile(newFileYaml);
+
+            expect(newProjectData.project.notebooks).to.have.lengthOf(2);
+            // Init notebook should be present and have preserved id + content
+            const initInNew = newProjectData.project.notebooks.find((nb) => nb.id === initNotebookId);
+            expect(initInNew).to.exist;
+            expect(initInNew!.name).to.equal('Init');
+            expect(initInNew!.blocks).to.have.lengthOf(1);
+            expect(initInNew!.blocks[0].content).to.equal('print("init")');
+
+            // New user notebook is present
+            const newNotebook = newProjectData.project.notebooks.find((nb) => nb.id === newNotebookId);
+            expect(newNotebook).to.exist;
+            expect(newNotebook!.name).to.equal(notebookName);
+
+            // initNotebookId preserved on new file
+            expect(newProjectData.project.initNotebookId).to.equal(initNotebookId);
+        });
+
+        test('should append numeric suffix when sibling filename collides', async () => {
+            const projectId = 'test-project-id';
+            const newNotebookId = 'new-notebook-id';
+            const blockGroupId = 'test-blockgroup-id';
+            const blockId = 'test-block-id';
+            const fileUri = Uri.file('/workspace/test-project.deepnote');
+            const notebookName = 'New Notebook';
+            const collidingPath = '/workspace/test-project_new-notebook.deepnote';
+            const expectedPath = '/workspace/test-project_new-notebook_2.deepnote';
+
+            const existingProjectData: DeepnoteFile = {
+                version: '1.0.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
+                },
+                project: {
+                    id: projectId,
+                    name: 'Test Project',
+                    notebooks: [{ id: 'existing', name: 'Existing', blocks: [], executionMode: 'block' }]
+                }
+            };
+
+            const yamlContent = serializeDeepnoteFile(existingProjectData);
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yamlContent)));
+
+            // First candidate exists, second does not
+            when(mockFS.stat(anything())).thenCall((uri: Uri) => {
+                if (uri.path === collidingPath) {
+                    return Promise.resolve({} as any);
+                }
+                return Promise.reject(new Error('File not found'));
+            });
+
+            const writes = new Map<string, Uint8Array>();
+            when(mockFS.writeFile(anything(), anything())).thenCall((uri: Uri, content: Uint8Array) => {
+                writes.set(uri.path, content);
+                return Promise.resolve();
+            });
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(notebookName));
+
+            const uuidStub = createUuidMock([newNotebookId, blockGroupId, blockId]);
+            uuidStubs.push(uuidStub);
+
+            let openedUri: Uri | undefined;
+            when(mockedVSCodeNamespaces.workspace.openNotebookDocument(anything())).thenCall((u: Uri) => {
+                openedUri = u;
+                return Promise.resolve({ notebookType: 'deepnote' } as any);
+            });
+            when(mockedVSCodeNamespaces.window.showNotebookDocument(anything(), anything())).thenReturn(
+                Promise.resolve(undefined as any)
+            );
+
+            await explorerView.createAndAddNotebookToProject(fileUri);
+
+            // Ensure no write to the original or the colliding path
+            expect(writes.has(fileUri.path)).to.be.false;
+            expect(writes.has(collidingPath)).to.be.false;
+
+            // The new file should have been written to the `_2` path
+            expect(writes.has(expectedPath)).to.be.true;
+            expect(openedUri?.path).to.equal(expectedPath);
+        });
+
+        test('should validate name uniqueness across sibling project files', async () => {
+            const projectId = 'test-project-id';
+            const fileUri = Uri.file('/workspace/test-project.deepnote');
+            const siblingUri = Uri.file('/workspace/test-project_other.deepnote');
+
+            const sourceData: DeepnoteFile = {
+                version: '1.0.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
+                },
+                project: {
+                    id: projectId,
+                    name: 'Test Project',
+                    notebooks: [{ id: 'nb-source', name: 'Source Notebook', blocks: [], executionMode: 'block' }]
+                }
+            };
+
+            const siblingData: DeepnoteFile = {
+                version: '1.0.0',
+                metadata: {
+                    createdAt: '2024-01-01T00:00:00.000Z',
+                    modifiedAt: '2024-01-01T00:00:00.000Z'
+                },
+                project: {
+                    id: projectId,
+                    name: 'Test Project',
+                    notebooks: [{ id: 'nb-shared', name: 'Shared Name', blocks: [], executionMode: 'block' }]
+                }
+            };
+
+            const sourceYaml = serializeDeepnoteFile(sourceData);
+            const siblingYaml = serializeDeepnoteFile(siblingData);
+
+            // Activate workspaceFolders so collectNotebookNamesForProject runs findFiles
+            const workspaceFolder = { uri: Uri.file('/workspace'), name: 'workspace', index: 0 };
+            when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder as any]);
+
+            // Return both files from findFiles
+            when(mockedVSCodeNamespaces.workspace.findFiles(anything())).thenReturn(
+                Promise.resolve([fileUri, siblingUri])
+            );
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenCall((uri: Uri) => {
+                if (uri.path === siblingUri.path) {
+                    return Promise.resolve(Buffer.from(siblingYaml));
+                }
+                return Promise.resolve(Buffer.from(sourceYaml));
+            });
+            when(mockFS.stat(anything())).thenReject(new Error('File not found'));
+            when(mockFS.writeFile(anything(), anything())).thenReturn(Promise.resolve());
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            // Capture validateInput from showInputBox options; have the user cancel so no further work runs
+            let capturedValidateInput: ((value: string) => string | null | undefined) | undefined;
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenCall((options: any) => {
+                capturedValidateInput = options?.validateInput;
+                return Promise.resolve(undefined);
+            });
+
+            await explorerView.createAndAddNotebookToProject(fileUri);
+
+            expect(capturedValidateInput).to.exist;
+
+            // 'Shared Name' is taken by sibling -> rejection (non-null string)
+            const result = capturedValidateInput!('Shared Name');
+            expect(result).to.be.a('string');
+            expect(result).to.not.be.null;
+
+            // A unique name should pass validation (null return)
+            const okResult = capturedValidateInput!('Totally Unique Name');
+            expect(okResult).to.be.null;
         });
 
         test('should return null if user cancels notebook name input', async () => {
             const projectId = 'test-project-id';
             const fileUri = Uri.file('/workspace/test-project.deepnote');
 
-            // Mock existing project data
             const existingProjectData: DeepnoteFile = {
                 version: '1.0.0',
                 metadata: {
@@ -880,19 +1139,17 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             const yamlContent = serializeDeepnoteFile(existingProjectData);
 
-            // Mock file system
             const mockFS = mock<typeof workspace.fs>();
             when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yamlContent)));
+            when(mockFS.stat(anything())).thenReject(new Error('File not found'));
             when(mockFS.writeFile(anything(), anything())).thenReturn(Promise.resolve());
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
 
-            // Mock user cancelling input
             when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(undefined));
 
-            // Execute the method
             const result = await explorerView.createAndAddNotebookToProject(fileUri);
 
-            // Verify result is null and file was not written
+            // Null result and no file writes occurred (neither original nor sibling)
             expect(result).to.be.null;
             verify(mockFS.writeFile(anything(), anything())).never();
         });
@@ -901,7 +1158,6 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             const projectId = 'test-project-id';
             const fileUri = Uri.file('/workspace/test-project.deepnote');
 
-            // Mock existing project data with multiple notebooks
             const existingProjectData: DeepnoteFile = {
                 version: '1.0.0',
                 metadata: {
@@ -920,9 +1176,15 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             const yamlContent = serializeDeepnoteFile(existingProjectData);
 
-            // Mock file system
+            // Tolerate workspace.findFiles being called - return only the source URI so only
+            // its own notebook names contribute to the suggested name logic
+            const workspaceFolder = { uri: Uri.file('/workspace'), name: 'workspace', index: 0 };
+            when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder as any]);
+            when(mockedVSCodeNamespaces.workspace.findFiles(anything())).thenReturn(Promise.resolve([fileUri]));
+
             const mockFS = mock<typeof workspace.fs>();
             when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(yamlContent)));
+            when(mockFS.stat(anything())).thenReject(new Error('File not found'));
             when(mockFS.writeFile(anything(), anything())).thenReturn(Promise.resolve());
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
 
@@ -942,10 +1204,9 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 Promise.resolve(undefined as any)
             );
 
-            // Execute the method
             await explorerView.createAndAddNotebookToProject(fileUri);
 
-            // Verify suggested name is 'Notebook 3' (next in sequence)
+            // With two existing notebooks, suggestion is `Notebook ${size + 1}` = 'Notebook 3'
             expect(capturedInputBoxOptions).to.exist;
             expect(capturedInputBoxOptions.value).to.equal('Notebook 3');
         });

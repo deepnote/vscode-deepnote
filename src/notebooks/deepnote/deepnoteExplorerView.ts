@@ -1,5 +1,5 @@
 import { injectable, inject } from 'inversify';
-import { commands, window, workspace, type TreeView, Uri, l10n } from 'vscode';
+import { commands, RelativePattern, window, workspace, type TreeView, Uri, l10n } from 'vscode';
 import { serializeDeepnoteFile, type DeepnoteBlock, type DeepnoteFile } from '@deepnote/blocks';
 import { convertDeepnoteToJupyterNotebooks, convertIpynbFilesToDeepnoteFile } from '@deepnote/convert';
 
@@ -10,7 +10,9 @@ import { type DeepnoteTreeItem, DeepnoteTreeItemType, type DeepnoteTreeItemConte
 import { uuidUtils } from '../../platform/common/uuid';
 import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { Commands } from '../../platform/common/constants';
+import { buildSiblingNotebookFileUri, buildSingleNotebookFile } from './deepnoteNotebookFileFactory';
 import { readDeepnoteProjectFile } from './deepnoteProjectUtils';
+import { SNAPSHOT_FILE_SUFFIX } from './snapshots/snapshotFiles';
 import { ILogger } from '../../platform/logging/types';
 
 /**
@@ -47,25 +49,27 @@ export class DeepnoteExplorerView {
     }
 
     /**
-     * Shared helper that creates and adds a new notebook to a project
-     * @param fileUri The URI of the project file
+     * Shared helper that creates a new notebook in a new sibling `.deepnote` file.
+     * The new file shares the same project id/name/version/metadata as the source file
+     * and contains only the newly-created notebook (plus the source's init notebook if any).
+     * @param fileUri The URI of the source project file (not modified)
      * @returns Object with notebook ID and name if successful, or null if aborted/failed
      */
     public async createAndAddNotebookToProject(fileUri: Uri): Promise<{ id: string; name: string } | null> {
         // Read the Deepnote project file
-        const projectData = await readDeepnoteProjectFile(fileUri);
+        const sourceData = await readDeepnoteProjectFile(fileUri);
 
-        if (!projectData?.project) {
+        if (!sourceData?.project) {
             await window.showErrorMessage(l10n.t('Invalid Deepnote file format'));
             return null;
         }
 
+        // Aggregate notebook names across all sibling files sharing the same project ID
+        const existingNames = await this.collectNotebookNamesForProject(sourceData.project.id);
+
         // Generate suggested name and prompt user
-        const suggestedName = this.generateSuggestedNotebookName(projectData);
-        const notebookName = await this.promptForNotebookName(
-            suggestedName,
-            new Set(projectData.project.notebooks?.map((nb: DeepnoteNotebook) => nb.name) ?? [])
-        );
+        const suggestedName = this.generateSuggestedNotebookName(existingNames);
+        const notebookName = await this.promptForNotebookName(suggestedName, existingNames);
 
         if (!notebookName) {
             return null;
@@ -74,14 +78,32 @@ export class DeepnoteExplorerView {
         // Create new notebook with initial block
         const newNotebook = this.createNotebookWithFirstBlock(notebookName);
 
-        // Add new notebook to the project (initialize array if needed)
-        if (!projectData.project.notebooks) {
-            projectData.project.notebooks = [];
-        }
-        projectData.project.notebooks.push(newNotebook);
+        // Build a single-notebook sibling file (preserves source project metadata and init notebook)
+        const newProject = await buildSingleNotebookFile(sourceData, newNotebook);
+        const newFileUri = await buildSiblingNotebookFileUri(fileUri, notebookName, async (u) => {
+            try {
+                await workspace.fs.stat(u);
 
-        // Save and open the new notebook
-        await this.saveProjectAndOpenNotebook(fileUri, projectData);
+                return true;
+            } catch {
+                return false;
+            }
+        });
+
+        const yaml = serializeDeepnoteFile(newProject);
+
+        await workspace.fs.writeFile(newFileUri, new TextEncoder().encode(yaml));
+
+        // Refresh the tree view
+        this.treeDataProvider.refresh();
+
+        // Open the newly-created file
+        const document = await workspace.openNotebookDocument(newFileUri);
+
+        await window.showNotebookDocument(document, {
+            preserveFocus: false,
+            preview: false
+        });
 
         return { id: newNotebook.id, name: notebookName };
     }
@@ -414,16 +436,15 @@ export class DeepnoteExplorerView {
     }
 
     /**
-     * Generates a suggested unique notebook name based on existing notebooks
-     * @param projectData The project data containing existing notebooks
+     * Generates a suggested unique notebook name based on the set of existing notebook names
+     * across the project group (i.e., all sibling files sharing the same project ID).
+     * @param existingNames The set of already-taken notebook names
      * @returns A unique suggested notebook name
      */
-    private generateSuggestedNotebookName(projectData: DeepnoteFile): string {
-        const notebookCount = projectData.project.notebooks?.length || 0;
-        const existingNames = new Set(projectData.project.notebooks?.map((nb: DeepnoteNotebook) => nb.name) || []);
-
-        let nextNumber = notebookCount + 1;
+    private generateSuggestedNotebookName(existingNames: Set<string>): string {
+        let nextNumber = existingNames.size + 1;
         let suggestedName = `Notebook ${nextNumber}`;
+
         while (existingNames.has(suggestedName)) {
             nextNumber++;
             suggestedName = `Notebook ${nextNumber}`;
@@ -485,32 +506,42 @@ export class DeepnoteExplorerView {
     }
 
     /**
-     * Saves the project data to file and opens the specified notebook
-     * @param fileUri The URI of the project file
-     * @param projectData The project data to save
-     * @param notebookId The notebook ID to open
+     * Aggregates notebook names across all `.deepnote` files in the workspace whose
+     * `project.id` matches the given project ID. Used for project-wide uniqueness validation.
+     * @param projectId The project ID to match against
+     * @returns Set of notebook names taken across the project group
      */
-    private async saveProjectAndOpenNotebook(fileUri: Uri, projectData: DeepnoteFile): Promise<void> {
-        // Update metadata timestamp
-        if (!projectData.metadata) {
-            projectData.metadata = { createdAt: new Date().toISOString() };
+    private async collectNotebookNamesForProject(projectId: string): Promise<Set<string>> {
+        const names = new Set<string>();
+        const workspaceFolders = workspace.workspaceFolders;
+
+        if (!workspaceFolders || workspaceFolders.length === 0) {
+            return names;
         }
-        projectData.metadata.modifiedAt = new Date().toISOString();
 
-        // Write the updated YAML
-        const updatedYaml = serializeDeepnoteFile(projectData);
-        const encoder = new TextEncoder();
-        await workspace.fs.writeFile(fileUri, encoder.encode(updatedYaml));
+        for (const folder of workspaceFolders) {
+            const pattern = new RelativePattern(folder, '**/*.deepnote');
+            const files = await workspace.findFiles(pattern);
+            const projectFiles = files.filter((file) => !file.path.endsWith(SNAPSHOT_FILE_SUFFIX));
 
-        // Refresh the tree view
-        await this.treeDataProvider.refreshNotebook(projectData.project.id);
+            for (const file of projectFiles) {
+                try {
+                    const project = await readDeepnoteProjectFile(file);
 
-        // Open the notebook
-        const document = await workspace.openNotebookDocument(fileUri);
-        await window.showNotebookDocument(document, {
-            preserveFocus: false,
-            preview: false
-        });
+                    if (project?.project?.id !== projectId) {
+                        continue;
+                    }
+
+                    for (const notebook of project.project.notebooks ?? []) {
+                        names.add(notebook.name);
+                    }
+                } catch {
+                    // Skip files that fail to parse; uniqueness is best-effort across siblings
+                }
+            }
+        }
+
+        return names;
     }
 
     public refreshTree(): void {

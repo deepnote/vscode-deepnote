@@ -1,8 +1,13 @@
 import { serializeDeepnoteFile, type DeepnoteFile } from '@deepnote/blocks';
 import { l10n, RelativePattern, Uri, window, workspace } from 'vscode';
 
-import { computeHash } from '../../platform/common/crypto';
 import { logger } from '../../platform/logging';
+import {
+    buildSingleNotebookFile,
+    computeSnapshotHash,
+    getFileStem,
+    slugifyNotebookNameOrFallback
+} from './deepnoteNotebookFileFactory';
 import { slugifyProjectName } from './snapshots/snapshotFiles';
 
 /**
@@ -39,34 +44,16 @@ export class DeepnoteAutoSplitter {
         );
 
         const parentDir = Uri.joinPath(fileUri, '..');
-        const originalStem = this.getFileStem(fileUri);
+        const originalStem = getFileStem(fileUri);
         const newFiles: Uri[] = [];
 
         // Create a new file for each extra notebook
         for (const notebook of extraNotebooks) {
-            const notebookSlug = this.slugifyNotebookName(notebook.name);
+            const notebookSlug = slugifyNotebookNameOrFallback(notebook.name);
             const newFileName = `${originalStem}_${notebookSlug}.deepnote`;
             const newFileUri = Uri.joinPath(parentDir, newFileName);
 
-            const notebooks = initNotebook ? [structuredClone(initNotebook), notebook] : [notebook];
-
-            const newProject: DeepnoteFile = {
-                metadata: deepnoteFile.metadata
-                    ? structuredClone(deepnoteFile.metadata)
-                    : { createdAt: new Date().toISOString() },
-                project: {
-                    ...deepnoteFile.project,
-                    notebooks
-                },
-                version: deepnoteFile.version
-            };
-
-            if (initNotebook && initNotebookId) {
-                newProject.project.initNotebookId = initNotebookId;
-            }
-
-            // Recompute snapshotHash for the new file
-            (newProject.metadata as Record<string, unknown>).snapshotHash = await this.computeSnapshotHash(newProject);
+            const newProject = await buildSingleNotebookFile(deepnoteFile, notebook);
 
             const yaml = serializeDeepnoteFile(newProject);
             await workspace.fs.writeFile(newFileUri, new TextEncoder().encode(yaml));
@@ -81,9 +68,7 @@ export class DeepnoteAutoSplitter {
         deepnoteFile.project.notebooks = originalNotebooks;
 
         if (deepnoteFile.metadata) {
-            (deepnoteFile.metadata as Record<string, unknown>).snapshotHash = await this.computeSnapshotHash(
-                deepnoteFile
-            );
+            (deepnoteFile.metadata as Record<string, unknown>).snapshotHash = await computeSnapshotHash(deepnoteFile);
         }
 
         const updatedYaml = serializeDeepnoteFile(deepnoteFile);
@@ -198,7 +183,7 @@ export class DeepnoteAutoSplitter {
 
             // Recompute hash
             if (notebookData.metadata) {
-                (notebookData.metadata as Record<string, unknown>).snapshotHash = await this.computeSnapshotHash(
+                (notebookData.metadata as Record<string, unknown>).snapshotHash = await computeSnapshotHash(
                     notebookData
                 );
             }
@@ -240,52 +225,5 @@ export class DeepnoteAutoSplitter {
         }
 
         return withoutSuffix.slice(projectIdIndex + 1 + projectId.length + 1);
-    }
-
-    /**
-     * Computes snapshotHash using the same algorithm as DeepnoteNotebookSerializer.
-     */
-    private async computeSnapshotHash(project: DeepnoteFile): Promise<string> {
-        const contentHashes: string[] = [];
-
-        for (const notebook of project.project.notebooks) {
-            for (const block of notebook.blocks ?? []) {
-                if (block.contentHash) {
-                    contentHashes.push(block.contentHash);
-                }
-            }
-        }
-
-        contentHashes.sort();
-
-        const hashInput = {
-            contentHashes,
-            environmentHash: project.environment?.hash ?? null,
-            integrations: (project.project.integrations ?? [])
-                .map((i: { id: string; name: string; type: string }) => ({ id: i.id, name: i.name, type: i.type }))
-                .sort((a: { id: string }, b: { id: string }) => a.id.localeCompare(b.id)),
-            version: project.version
-        };
-
-        const hashData = JSON.stringify(hashInput);
-        const hash = await computeHash(hashData, 'SHA-256');
-
-        return `sha256:${hash}`;
-    }
-
-    private getFileStem(uri: Uri): string {
-        const basename = uri.path.split('/').pop() ?? '';
-        const dotIndex = basename.indexOf('.');
-
-        return dotIndex > 0 ? basename.slice(0, dotIndex) : basename;
-    }
-
-    private slugifyNotebookName(name: string): string {
-        try {
-            return slugifyProjectName(name);
-        } catch {
-            // Fallback for names that produce empty slugs
-            return 'notebook';
-        }
     }
 }

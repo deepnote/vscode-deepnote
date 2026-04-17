@@ -162,8 +162,8 @@ suite('DeepnoteFileChangeWatcher', () => {
         mockDisposables = [];
 
         mockedNotebookManager = mock<IDeepnoteNotebookManager>();
-        when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(validProject);
-        when(mockedNotebookManager.updateOriginalProject(anything(), anything())).thenReturn();
+        when(mockedNotebookManager.getOriginalProject(anything(), anything())).thenReturn(validProject);
+        when(mockedNotebookManager.updateOriginalProject(anything(), anything(), anything())).thenReturn();
         mockNotebookManager = instance(mockedNotebookManager);
 
         // Set up FileSystemWatcher mock
@@ -563,7 +563,7 @@ project:
         this.timeout(15_000);
         const uri = testFileUri('self-write-leak.deepnote');
 
-        when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(multiNotebookProject);
+        when(mockedNotebookManager.getOriginalProject(anything(), anything())).thenReturn(multiNotebookProject);
 
         // Initial state: editor content matches disk — use the real converter
         const converter = new DeepnoteDataConverter();
@@ -1086,7 +1086,7 @@ project:
         test('should apply snapshot outputs using original blocks when metadata is lost', async () => {
             // Create a mock notebook manager that returns an original project
             const mockedManager = mock<IDeepnoteNotebookManager>();
-            when(mockedManager.getOriginalProject('project-1')).thenReturn({
+            when(mockedManager.getOriginalProject('project-1', anything())).thenReturn({
                 version: '1.0',
                 metadata: { createdAt: '2025-01-01T00:00:00Z' },
                 project: {
@@ -1353,7 +1353,7 @@ project:
             when(nfSnapshotService.onFileWritten(anything())).thenReturn({ dispose: () => {} } as Disposable);
 
             const nfManager = mock<IDeepnoteNotebookManager>();
-            when(nfManager.getOriginalProject(anything())).thenReturn(undefined);
+            when(nfManager.getOriginalProject(anything(), anything())).thenReturn(undefined);
 
             const nfWatcher = new DeepnoteFileChangeWatcher(
                 noFallbackDisposables,
@@ -1555,8 +1555,8 @@ project:
                 } as any);
 
                 const mockedManagerEx = mock<IDeepnoteNotebookManager>();
-                when(mockedManagerEx.getOriginalProject(anything())).thenReturn(validProject);
-                when(mockedManagerEx.updateOriginalProject(anything(), anything())).thenReturn();
+                when(mockedManagerEx.getOriginalProject(anything(), anything())).thenReturn(validProject);
+                when(mockedManagerEx.updateOriginalProject(anything(), anything(), anything())).thenReturn();
 
                 const exMdWatcher = new DeepnoteFileChangeWatcher(
                     exMdDisposables,
@@ -1703,7 +1703,7 @@ project:
                 return Promise.resolve(undefined);
             });
 
-            when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(multiNotebookProject);
+            when(mockedNotebookManager.getOriginalProject(anything(), anything())).thenReturn(multiNotebookProject);
 
             const uriNb1 = testFileUri('multi-scope-nb1.deepnote');
             const uriNb2 = testFileUri('multi-scope-nb2.deepnote');
@@ -1763,8 +1763,8 @@ project:
                 interactionCaptures = [];
 
                 reset(mockedNotebookManager);
-                when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(validProject);
-                when(mockedNotebookManager.updateOriginalProject(anything(), anything())).thenReturn();
+                when(mockedNotebookManager.getOriginalProject(anything(), anything())).thenReturn(validProject);
+                when(mockedNotebookManager.updateOriginalProject(anything(), anything(), anything())).thenReturn();
                 resetCalls(mockedNotebookManager);
 
                 snapshotApplyEditStub = sinon.stub(snapshotWatcher, 'applyNotebookEdits').callsFake(async function (
@@ -1809,7 +1809,7 @@ project:
             });
 
             test('snapshot change with multi-notebook project applies only matching block outputs per notebook', async () => {
-                when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(multiNotebookProject);
+                when(mockedNotebookManager.getOriginalProject(anything(), anything())).thenReturn(multiNotebookProject);
 
                 const multiOutputs = new Map<string, DeepnoteOutput[]>([
                     [
@@ -2110,7 +2110,7 @@ project:
             // Multi-notebook test removed — multi-notebook support has been replaced by auto-splitting into separate files
             test.skip('multi-notebook: snapshot outputs then external YAML update keeps per-notebook sources', async function () {
                 this.timeout(12_000);
-                when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(multiNotebookProject);
+                when(mockedNotebookManager.getOriginalProject(anything(), anything())).thenReturn(multiNotebookProject);
 
                 const multiOutputs = new Map<string, DeepnoteOutput[]>([
                     [
@@ -2238,7 +2238,7 @@ project:
             });
 
             test('snapshot outputs for sibling notebook blocks do not leak into a single open notebook', async () => {
-                when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(multiNotebookProject);
+                when(mockedNotebookManager.getOriginalProject(anything(), anything())).thenReturn(multiNotebookProject);
 
                 const multiOutputs = new Map<string, DeepnoteOutput[]>([
                     [
@@ -2307,8 +2307,8 @@ project:
 
         setup(() => {
             reset(mockedNotebookManager);
-            when(mockedNotebookManager.getOriginalProject(anything())).thenReturn(multiNotebookProject);
-            when(mockedNotebookManager.updateOriginalProject(anything(), anything())).thenReturn();
+            when(mockedNotebookManager.getOriginalProject(anything(), anything())).thenReturn(multiNotebookProject);
+            when(mockedNotebookManager.updateOriginalProject(anything(), anything(), anything())).thenReturn();
             resetCalls(mockedNotebookManager);
             workspaceSetCaptures = [];
             sinon.stub(watcher, 'applyNotebookEdits' as any).callsFake(async (...args: unknown[]) => {

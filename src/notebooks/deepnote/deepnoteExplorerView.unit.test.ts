@@ -53,6 +53,10 @@ suite('DeepnoteExplorerView', () => {
         explorerView = new DeepnoteExplorerView(mockExtensionContext, mockLogger);
     });
 
+    teardown(() => {
+        explorerView.dispose();
+    });
+
     suite('constructor', () => {
         test('should create instance with extension context', () => {
             assert.isDefined(explorerView);
@@ -189,13 +193,18 @@ suite('DeepnoteExplorerView', () => {
             const view1 = new DeepnoteExplorerView(context1, logger1);
             const view2 = new DeepnoteExplorerView(context2, logger2);
 
-            // Verify each view has its own context
-            assert.strictEqual((view1 as any).extensionContext, context1);
-            assert.strictEqual((view2 as any).extensionContext, context2);
-            assert.notStrictEqual((view1 as any).extensionContext, (view2 as any).extensionContext);
+            try {
+                // Verify each view has its own context
+                assert.strictEqual((view1 as any).extensionContext, context1);
+                assert.strictEqual((view2 as any).extensionContext, context2);
+                assert.notStrictEqual((view1 as any).extensionContext, (view2 as any).extensionContext);
 
-            // Verify views are independent instances
-            assert.notStrictEqual(view1, view2);
+                // Verify views are independent instances
+                assert.notStrictEqual(view1, view2);
+            } finally {
+                view1.dispose();
+                view2.dispose();
+            }
         });
 
         test('should maintain component references', () => {
@@ -232,6 +241,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
     });
 
     teardown(() => {
+        explorerView.dispose();
         sandbox.restore();
         uuidStubs.forEach((stub) => stub.restore());
         uuidStubs = [];

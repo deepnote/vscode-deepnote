@@ -343,11 +343,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
         this.serverOutputByFile.delete(fileKey);
 
-        const disposables = this.disposablesByFile.get(fileKey);
-        if (disposables) {
-            disposables.forEach((d) => d.dispose());
-            this.disposablesByFile.delete(fileKey);
-        }
+        this.disposeOutputListeners(fileKey);
     }
 
     /**
@@ -402,16 +398,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
      */
     private monitorServerOutput(fileKey: string, serverInfo: DeepnoteServerInfo): void {
         const proc = serverInfo.process;
-        const existing = this.disposablesByFile.get(fileKey);
-        if (existing) {
-            for (const d of existing) {
-                try {
-                    d.dispose();
-                } catch (ex) {
-                    logger.warn(`Error disposing listener for ${fileKey}`, ex);
-                }
-            }
-        }
+        this.disposeOutputListeners(fileKey);
         const disposables: IDisposable[] = [];
         this.disposablesByFile.set(fileKey, disposables);
 
@@ -456,6 +443,22 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         }
     }
 
+    /**
+     * Dispose all output listeners registered for a given file key.
+     * Per-listener try/catch ensures one failure doesn't prevent others from being disposed.
+     */
+    private disposeOutputListeners(fileKey: string): void {
+        const disposables = this.disposablesByFile.get(fileKey) ?? [];
+        for (const d of disposables) {
+            try {
+                d.dispose();
+            } catch (ex) {
+                logger.warn(`Error disposing output listener for ${fileKey}`, ex);
+            }
+        }
+        this.disposablesByFile.delete(fileKey);
+    }
+
     public async dispose(): Promise<void> {
         logger.info('Disposing DeepnoteServerStarter - stopping all servers...');
 
@@ -495,12 +498,9 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             await this.deleteLockFile(pid);
         }
 
-        for (const [fileKey, disposables] of this.disposablesByFile.entries()) {
-            try {
-                disposables.forEach((d) => d.dispose());
-            } catch (ex) {
-                logger.error(`Error disposing resources for ${fileKey}`, ex);
-            }
+        // Snapshot the keys first: disposeOutputListeners mutates disposablesByFile via .delete().
+        for (const fileKey of Array.from(this.disposablesByFile.keys())) {
+            this.disposeOutputListeners(fileKey);
         }
 
         this.disposablesByFile.clear();

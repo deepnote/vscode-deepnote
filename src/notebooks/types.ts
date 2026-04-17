@@ -37,11 +37,11 @@ export interface ProjectIntegration {
 
 export const IDeepnoteNotebookManager = Symbol('IDeepnoteNotebookManager');
 export interface IDeepnoteNotebookManager {
-    getOriginalProject(projectId: string): DeepnoteProject | undefined;
+    getOriginalProject(projectId: string, notebookId?: string): DeepnoteProject | undefined;
     hasInitNotebookBeenRun(projectId: string): boolean;
     markInitNotebookAsRun(projectId: string): void;
-    storeOriginalProject(projectId: string, project: DeepnoteProject): void;
-    updateOriginalProject(projectId: string, project: DeepnoteProject): void;
+    storeOriginalProject(projectId: string, notebookId: string, project: DeepnoteProject): void;
+    updateOriginalProject(projectId: string, notebookId: string, project: DeepnoteProject): void;
 
     /**
      * Updates the integrations list in the project data.

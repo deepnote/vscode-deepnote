@@ -29,6 +29,11 @@ export class DeepnoteExplorerView {
         this.treeDataProvider = new DeepnoteTreeDataProvider(logger);
     }
 
+    public dispose(): void {
+        this.treeView?.dispose();
+        this.treeDataProvider.dispose();
+    }
+
     public activate(): void {
         this.treeView = window.createTreeView('deepnoteExplorer', {
             treeDataProvider: this.treeDataProvider,

@@ -754,7 +754,15 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             return;
         }
 
-        const originalProject = this.notebookManager?.getOriginalProject(projectId);
+        const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
+
+        if (!notebookId) {
+            logger.warn(`[Snapshot] No notebook ID in notebook metadata`);
+
+            return;
+        }
+
+        const originalProject = this.notebookManager?.getOriginalProject(projectId, notebookId);
 
         if (!originalProject) {
             logger.warn(`[Snapshot] No original project found for ${projectId}`);
@@ -766,14 +774,6 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
         if (!projectUri) {
             logger.warn(`[Snapshot] Could not find project URI for ${projectId}`);
-
-            return;
-        }
-
-        const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
-
-        if (!notebookId) {
-            logger.warn(`[Snapshot] No notebook ID in notebook metadata`);
 
             return;
         }

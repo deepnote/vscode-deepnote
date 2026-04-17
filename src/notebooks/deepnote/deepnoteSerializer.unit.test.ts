@@ -180,7 +180,7 @@ project:
 
         test('should serialize notebook when original project exists', async () => {
             // First store the original project
-            manager.storeOriginalProject('project-123', mockProject);
+            manager.storeOriginalProject('project-123', 'notebook-1', mockProject);
 
             const mockNotebookData = {
                 cells: [
@@ -208,7 +208,7 @@ project:
         });
 
         test('should throw error when metadata notebook ID is missing', async () => {
-            manager.storeOriginalProject('project-123', mockProject);
+            manager.storeOriginalProject('project-123', 'notebook-1', mockProject);
 
             const mockNotebookData = {
                 cells: [
@@ -328,7 +328,7 @@ project:
                 }
             };
 
-            manager.storeOriginalProject('project-circular', projectWithCircularRef);
+            manager.storeOriginalProject('project-circular', 'notebook-1', projectWithCircularRef);
 
             const notebookData = {
                 cells: [
@@ -396,7 +396,7 @@ project:
             };
 
             // Store the project
-            manager.storeOriginalProject('project-id-test', projectData);
+            manager.storeOriginalProject('project-id-test', 'notebook-1', projectData);
 
             // Create cells with the EXACT metadata structure that deserializeNotebook produces
             // This simulates what VS Code should preserve from deserialization
@@ -482,7 +482,7 @@ project:
                 }
             };
 
-            manager.storeOriginalProject('project-recover-ids', projectData);
+            manager.storeOriginalProject('project-recover-ids', 'notebook-1', projectData);
 
             // Cells WITHOUT id metadata (simulating what VS Code might provide if it strips metadata)
             // But content matches the original block
@@ -549,7 +549,7 @@ project:
                 }
             };
 
-            manager.storeOriginalProject('project-new-content', projectData);
+            manager.storeOriginalProject('project-new-content', 'notebook-1', projectData);
 
             // Cell with different content than any original block
             const notebookData = {
@@ -1102,7 +1102,7 @@ project:
                 }
             };
 
-            manager.storeOriginalProject('project-snapshot-hash', projectData);
+            manager.storeOriginalProject('project-snapshot-hash', 'notebook-1', projectData);
 
             const notebookData = {
                 cells: [
@@ -1177,13 +1177,13 @@ project:
             };
 
             // Serialize twice
-            manager.storeOriginalProject('project-deterministic', structuredClone(projectData));
+            manager.storeOriginalProject('project-deterministic', 'notebook-1', structuredClone(projectData));
             const result1 = await serializer.serializeNotebook(notebookData as any, {} as any);
             const parsed1 = parseYaml(new TextDecoder().decode(result1)) as DeepnoteFile & {
                 metadata: { snapshotHash?: string };
             };
 
-            manager.storeOriginalProject('project-deterministic', structuredClone(projectData));
+            manager.storeOriginalProject('project-deterministic', 'notebook-1', structuredClone(projectData));
             const result2 = await serializer.serializeNotebook(notebookData as any, {} as any);
             const parsed2 = parseYaml(new TextDecoder().decode(result2)) as DeepnoteFile & {
                 metadata: { snapshotHash?: string };
@@ -1278,7 +1278,7 @@ project:
 
             // Serialize 5 times and collect all hashes
             for (let i = 0; i < 5; i++) {
-                manager.storeOriginalProject('project-multi-serialize', structuredClone(projectData));
+                manager.storeOriginalProject('project-multi-serialize', 'notebook-1', structuredClone(projectData));
                 const result = await serializer.serializeNotebook(notebookData as any, {} as any);
                 const parsed = parseYaml(new TextDecoder().decode(result)) as DeepnoteFile & {
                     metadata: { snapshotHash?: string };
@@ -1327,7 +1327,7 @@ project:
                 }
             };
 
-            manager.storeOriginalProject('project-content-change', projectData1);
+            manager.storeOriginalProject('project-content-change', 'notebook-1', projectData1);
 
             const notebookData1 = {
                 cells: [
@@ -1405,7 +1405,7 @@ project:
                 }
             };
 
-            manager.storeOriginalProject('project-version-change', projectData1);
+            manager.storeOriginalProject('project-version-change', 'notebook-1', projectData1);
 
             const notebookData = {
                 cells: [
@@ -1429,7 +1429,7 @@ project:
 
             // Change version
             const projectData2: DeepnoteFile = { ...structuredClone(projectData1), version: '2.0' };
-            manager.storeOriginalProject('project-version-change', projectData2);
+            manager.storeOriginalProject('project-version-change', 'notebook-1', projectData2);
 
             const result2 = await serializer.serializeNotebook(notebookData as any, {} as any);
             const parsed2 = parseYaml(new TextDecoder().decode(result2)) as DeepnoteFile & {
@@ -1471,7 +1471,7 @@ project:
                 }
             };
 
-            manager.storeOriginalProject('project-integrations-change', projectData1);
+            manager.storeOriginalProject('project-integrations-change', 'notebook-1', projectData1);
 
             const notebookData = {
                 cells: [
@@ -1496,7 +1496,7 @@ project:
             // Add integrations
             const projectData2 = structuredClone(projectData1);
             projectData2.project.integrations = [{ id: 'int-1', name: 'PostgreSQL', type: 'postgres' }];
-            manager.storeOriginalProject('project-integrations-change', projectData2);
+            manager.storeOriginalProject('project-integrations-change', 'notebook-1', projectData2);
 
             const result2 = await serializer.serializeNotebook(notebookData as any, {} as any);
             const parsed2 = parseYaml(new TextDecoder().decode(result2)) as DeepnoteFile & {
@@ -1538,7 +1538,7 @@ project:
                 }
             };
 
-            manager.storeOriginalProject('project-env-hash', projectData1);
+            manager.storeOriginalProject('project-env-hash', 'notebook-1', projectData1);
 
             const notebookData = {
                 cells: [
@@ -1563,7 +1563,7 @@ project:
             // Add environment hash
             const projectData2 = structuredClone(projectData1);
             projectData2.environment = { hash: 'env-hash-123' };
-            manager.storeOriginalProject('project-env-hash', projectData2);
+            manager.storeOriginalProject('project-env-hash', 'notebook-1', projectData2);
 
             const result2 = await serializer.serializeNotebook(notebookData as any, {} as any);
             const parsed2 = parseYaml(new TextDecoder().decode(result2)) as DeepnoteFile & {

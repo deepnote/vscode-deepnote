@@ -1,6 +1,7 @@
 import { TreeItem, TreeItemCollapsibleState, ThemeIcon } from 'vscode';
 
 import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
+import { basename } from '../../platform/vscode-path/path';
 
 /**
  * Represents different types of items in the Deepnote tree view
@@ -75,7 +76,7 @@ export class DeepnoteTreeItem extends TreeItem {
             // getLabel() inline
             if (this.type === DeepnoteTreeItemType.ProjectFile) {
                 const project = this.data as DeepnoteProject;
-                const fileName = this.context.filePath.split('/').pop() ?? '';
+                const fileName = basename(this.context.filePath);
                 this.label = fileName || project.project.name || 'Untitled Project';
             } else {
                 const notebook = this.data as DeepnoteNotebook;
@@ -138,7 +139,7 @@ export class DeepnoteTreeItem extends TreeItem {
 
         if (this.type === DeepnoteTreeItemType.ProjectFile) {
             const project = this.data as DeepnoteProject;
-            const fileName = this.context.filePath.split('/').pop() ?? '';
+            const fileName = basename(this.context.filePath);
             this.label = fileName || project.project.name || 'Untitled Project';
             this.tooltip = `Deepnote Project: ${project.project.name}\nFile: ${this.context.filePath}`;
 

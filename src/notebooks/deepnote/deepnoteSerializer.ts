@@ -150,7 +150,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 );
             }
 
-            this.notebookManager.storeOriginalProject(deepnoteFile.project.id, deepnoteFile);
+            this.notebookManager.storeOriginalProject(deepnoteFile.project.id, selectedNotebook.id, deepnoteFile);
             logger.debug(`DeepnoteSerializer: Stored project ${projectId} in notebook manager`);
 
             return {
@@ -205,10 +205,20 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
             logger.debug(`SerializeNotebook: Project ID: ${projectId}`);
 
+            const notebookId = data.metadata?.deepnoteNotebookId;
+
+            if (!notebookId) {
+                throw new Error('Cannot determine which notebook to save');
+            }
+
+            logger.debug(`SerializeNotebook: Notebook ID: ${notebookId}`);
+
             // Clone the project before modifying to prevent state corruption
             // This is critical for multi-notebook projects where the stored project
             // is shared between notebook serialization calls
-            const storedProject = this.notebookManager.getOriginalProject(projectId) as DeepnoteFile | undefined;
+            const storedProject = this.notebookManager.getOriginalProject(projectId, notebookId) as
+                | DeepnoteFile
+                | undefined;
 
             if (!storedProject) {
                 throw new Error('Original Deepnote project not found. Cannot save changes.');
@@ -217,14 +227,6 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             const originalProject = structuredClone(storedProject);
 
             logger.debug('SerializeNotebook: Got and cloned original project');
-
-            const notebookId = data.metadata?.deepnoteNotebookId;
-
-            if (!notebookId) {
-                throw new Error('Cannot determine which notebook to save');
-            }
-
-            logger.debug(`SerializeNotebook: Notebook ID: ${notebookId}`);
 
             const notebook = originalProject.project.notebooks.find((nb: { id: string }) => nb.id === notebookId);
 
@@ -306,11 +308,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             }
 
             // Store the updated project back so subsequent saves start from correct state.
-            // Use updateOriginalProject (not storeOriginalProject) to avoid overwriting
-            // currentNotebookId — when multiple notebooks share the same file, changing
-            // currentNotebookId here would cause VS Code's follow-up deserialize calls
-            // for other open notebooks to resolve to the wrong notebook.
-            this.notebookManager.updateOriginalProject(projectId, originalProject);
+            this.notebookManager.updateOriginalProject(projectId, notebookId, originalProject);
 
             logger.debug('SerializeNotebook: Serializing to YAML');
 

@@ -435,8 +435,13 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             return;
         }
 
+        const metadataNotebookId =
+            typeof notebook.metadata?.deepnoteNotebookId === 'string'
+                ? notebook.metadata.deepnoteNotebookId
+                : undefined;
+
         // Look up original project blocks for fallback block ID resolution
-        const originalProject = this.notebookManager.getOriginalProject(projectId);
+        const originalProject = this.notebookManager.getOriginalProject(projectId, notebookId ?? metadataNotebookId);
         const notebookBlocksMap = new Map<string, DeepnoteBlock[]>();
         if (originalProject) {
             for (const nb of originalProject.project.notebooks) {
@@ -445,12 +450,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         }
 
         const liveCells = notebook.getCells();
-        const docNotebookId =
-            notebook.metadata?.deepnoteNotebookId !== undefined &&
-            typeof notebook.metadata.deepnoteNotebookId === 'string'
-                ? notebook.metadata.deepnoteNotebookId
-                : undefined;
-        const originalBlocks = docNotebookId ? notebookBlocksMap.get(docNotebookId) : undefined;
+        const originalBlocks = metadataNotebookId ? notebookBlocksMap.get(metadataNotebookId) : undefined;
 
         // Collect cells that need output updates
         const cellUpdates: Array<{

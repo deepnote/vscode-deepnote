@@ -32,6 +32,12 @@ export interface ProjectGroupData {
 }
 
 /**
+ * contextValue assigned to a `.deepnote` file row that represents a single notebook
+ * (i.e., a `ProjectFile` that carries notebook-level actions in the tree menu).
+ */
+export const NOTEBOOK_FILE_CONTEXT_VALUE = 'notebookFile';
+
+/**
  * Tree item representing a Deepnote project group, file, or notebook in the explorer view
  */
 export class DeepnoteTreeItem extends TreeItem {
@@ -76,8 +82,15 @@ export class DeepnoteTreeItem extends TreeItem {
             // getLabel() inline
             if (this.type === DeepnoteTreeItemType.ProjectFile) {
                 const project = this.data as DeepnoteProject;
-                const fileName = basename(this.context.filePath);
-                this.label = fileName || project.project.name || 'Untitled Project';
+                const singleNonInitNotebook = getSingleNonInitNotebook(project);
+
+                if (singleNonInitNotebook) {
+                    this.label = singleNonInitNotebook.name || project.project.name || 'Untitled Notebook';
+                    this.contextValue = NOTEBOOK_FILE_CONTEXT_VALUE;
+                } else {
+                    const fileName = basename(this.context.filePath);
+                    this.label = fileName || project.project.name || 'Untitled Project';
+                }
             } else {
                 const notebook = this.data as DeepnoteNotebook;
                 this.label = notebook.name || 'Untitled Notebook';
@@ -139,8 +152,16 @@ export class DeepnoteTreeItem extends TreeItem {
 
         if (this.type === DeepnoteTreeItemType.ProjectFile) {
             const project = this.data as DeepnoteProject;
-            const fileName = basename(this.context.filePath);
-            this.label = fileName || project.project.name || 'Untitled Project';
+            const singleNonInitNotebook = getSingleNonInitNotebook(project);
+
+            if (singleNonInitNotebook) {
+                this.label = singleNonInitNotebook.name || project.project.name || 'Untitled Notebook';
+                this.contextValue = NOTEBOOK_FILE_CONTEXT_VALUE;
+            } else {
+                const fileName = basename(this.context.filePath);
+                this.label = fileName || project.project.name || 'Untitled Project';
+                this.contextValue = this.type;
+            }
             this.tooltip = `Deepnote Project: ${project.project.name}\nFile: ${this.context.filePath}`;
 
             const initNotebookId = project.project.initNotebookId;
@@ -158,4 +179,16 @@ export class DeepnoteTreeItem extends TreeItem {
             this.description = `${blockCount} cell${blockCount !== 1 ? 's' : ''}`;
         }
     }
+}
+
+/**
+ * Returns the sole non-init notebook on a project, or undefined if the project has zero
+ * or multiple non-init notebooks. Used to decide whether a `ProjectFile` row should act as
+ * a notebook (label + notebook actions) versus a legacy multi-notebook container.
+ */
+export function getSingleNonInitNotebook(project: DeepnoteProject): DeepnoteNotebook | undefined {
+    const initNotebookId = project.project.initNotebookId;
+    const nonInitNotebooks = project.project.notebooks?.filter((nb) => nb.id !== initNotebookId) ?? [];
+
+    return nonInitNotebooks.length === 1 ? nonInitNotebooks[0] : undefined;
 }

@@ -1,11 +1,19 @@
 import { assert } from 'chai';
 import { TreeItemCollapsibleState, ThemeIcon } from 'vscode';
 
-import { DeepnoteTreeItem, DeepnoteTreeItemType, DeepnoteTreeItemContext } from './deepnoteTreeItem';
+import {
+    DeepnoteTreeItem,
+    DeepnoteTreeItemType,
+    DeepnoteTreeItemContext,
+    NOTEBOOK_FILE_CONTEXT_VALUE,
+    getSingleNonInitNotebook
+} from './deepnoteTreeItem';
 import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 
 suite('DeepnoteTreeItem', () => {
-    const mockProject: DeepnoteProject = {
+    // A project with a single non-init notebook. Under the refactored rules this means
+    // the `ProjectFile` row should adopt the notebook's label and `notebookFile` contextValue.
+    const singleNotebookProject: DeepnoteProject = {
         metadata: {
             createdAt: '2023-01-01T00:00:00Z',
             modifiedAt: '2023-01-02T00:00:00Z'
@@ -17,6 +25,37 @@ suite('DeepnoteTreeItem', () => {
                 {
                     id: 'notebook-1',
                     name: 'First Notebook',
+                    blocks: [],
+                    executionMode: 'block',
+                    isModule: false
+                }
+            ],
+            settings: {}
+        },
+        version: '1.0.0'
+    };
+
+    // A legacy multi-notebook project. The `ProjectFile` row should use the file basename
+    // as its label and keep the default `projectFile` contextValue.
+    const multiNotebookProject: DeepnoteProject = {
+        metadata: {
+            createdAt: '2023-01-01T00:00:00Z',
+            modifiedAt: '2023-01-02T00:00:00Z'
+        },
+        project: {
+            id: 'project-123',
+            name: 'Test Project',
+            notebooks: [
+                {
+                    id: 'notebook-1',
+                    name: 'First Notebook',
+                    blocks: [],
+                    executionMode: 'block',
+                    isModule: false
+                },
+                {
+                    id: 'notebook-2',
+                    name: 'Second Notebook',
                     blocks: [],
                     executionMode: 'block',
                     isModule: false
@@ -45,7 +84,7 @@ suite('DeepnoteTreeItem', () => {
     };
 
     suite('constructor', () => {
-        test('should create project file item with basic properties', () => {
+        test('should create multi-notebook project file item with basic properties', () => {
             const context: DeepnoteTreeItemContext = {
                 filePath: '/test/project.deepnote',
                 projectId: 'project-123'
@@ -54,7 +93,7 @@ suite('DeepnoteTreeItem', () => {
             const item = new DeepnoteTreeItem(
                 DeepnoteTreeItemType.ProjectFile,
                 context,
-                mockProject,
+                multiNotebookProject,
                 TreeItemCollapsibleState.Collapsed
             );
 
@@ -95,7 +134,7 @@ suite('DeepnoteTreeItem', () => {
             const item = new DeepnoteTreeItem(
                 DeepnoteTreeItemType.ProjectFile,
                 context,
-                mockProject,
+                multiNotebookProject,
                 TreeItemCollapsibleState.Expanded
             );
 
@@ -103,7 +142,136 @@ suite('DeepnoteTreeItem', () => {
         });
     });
 
-    suite('ProjectFile type', () => {
+    suite('ProjectFile type (single non-init notebook)', () => {
+        test('should use the sole notebook name as label and notebookFile contextValue', () => {
+            const context: DeepnoteTreeItemContext = {
+                filePath: '/workspace/my-project.deepnote',
+                projectId: 'project-456'
+            };
+
+            const item = new DeepnoteTreeItem(
+                DeepnoteTreeItemType.ProjectFile,
+                context,
+                singleNotebookProject,
+                TreeItemCollapsibleState.None
+            );
+
+            assert.strictEqual(item.label, 'First Notebook');
+            assert.strictEqual(item.contextValue, NOTEBOOK_FILE_CONTEXT_VALUE);
+            assert.strictEqual(item.contextValue, 'notebookFile');
+            assert.strictEqual(item.tooltip, 'Deepnote Project: Test Project\nFile: /workspace/my-project.deepnote');
+        });
+
+        test('should fall back to project name when notebook name is empty', () => {
+            const projectWithEmptyNotebookName: DeepnoteProject = {
+                ...singleNotebookProject,
+                project: {
+                    ...singleNotebookProject.project,
+                    notebooks: [
+                        {
+                            id: 'notebook-1',
+                            name: '',
+                            blocks: [],
+                            executionMode: 'block',
+                            isModule: false
+                        }
+                    ]
+                }
+            };
+
+            const context: DeepnoteTreeItemContext = {
+                filePath: '/workspace/my-project.deepnote',
+                projectId: 'project-456'
+            };
+
+            const item = new DeepnoteTreeItem(
+                DeepnoteTreeItemType.ProjectFile,
+                context,
+                projectWithEmptyNotebookName,
+                TreeItemCollapsibleState.None
+            );
+
+            assert.strictEqual(item.label, 'Test Project');
+            assert.strictEqual(item.contextValue, NOTEBOOK_FILE_CONTEXT_VALUE);
+        });
+
+        test('should fall back to Untitled Notebook when both notebook and project names are empty', () => {
+            const projectWithNoNames: DeepnoteProject = {
+                ...singleNotebookProject,
+                project: {
+                    ...singleNotebookProject.project,
+                    name: '',
+                    notebooks: [
+                        {
+                            id: 'notebook-1',
+                            name: '',
+                            blocks: [],
+                            executionMode: 'block',
+                            isModule: false
+                        }
+                    ]
+                }
+            };
+
+            const context: DeepnoteTreeItemContext = {
+                filePath: '/workspace/my-project.deepnote',
+                projectId: 'project-456'
+            };
+
+            const item = new DeepnoteTreeItem(
+                DeepnoteTreeItemType.ProjectFile,
+                context,
+                projectWithNoNames,
+                TreeItemCollapsibleState.None
+            );
+
+            assert.strictEqual(item.label, 'Untitled Notebook');
+            assert.strictEqual(item.contextValue, NOTEBOOK_FILE_CONTEXT_VALUE);
+        });
+
+        test('should treat a file with one non-init notebook as single-notebook even when an init notebook exists', () => {
+            const projectWithInit: DeepnoteProject = {
+                ...singleNotebookProject,
+                project: {
+                    ...singleNotebookProject.project,
+                    initNotebookId: 'init-notebook',
+                    notebooks: [
+                        {
+                            id: 'init-notebook',
+                            name: 'Init',
+                            blocks: [],
+                            executionMode: 'block',
+                            isModule: false
+                        },
+                        {
+                            id: 'notebook-1',
+                            name: 'Only Real Notebook',
+                            blocks: [],
+                            executionMode: 'block',
+                            isModule: false
+                        }
+                    ]
+                }
+            };
+
+            const context: DeepnoteTreeItemContext = {
+                filePath: '/workspace/my-project.deepnote',
+                projectId: 'project-456'
+            };
+
+            const item = new DeepnoteTreeItem(
+                DeepnoteTreeItemType.ProjectFile,
+                context,
+                projectWithInit,
+                TreeItemCollapsibleState.None
+            );
+
+            assert.strictEqual(item.label, 'Only Real Notebook');
+            assert.strictEqual(item.contextValue, NOTEBOOK_FILE_CONTEXT_VALUE);
+        });
+    });
+
+    suite('ProjectFile type (legacy multi-notebook)', () => {
         test('should have correct properties for project file', () => {
             const context: DeepnoteTreeItemContext = {
                 filePath: '/workspace/my-project.deepnote',
@@ -113,7 +281,7 @@ suite('DeepnoteTreeItem', () => {
             const item = new DeepnoteTreeItem(
                 DeepnoteTreeItemType.ProjectFile,
                 context,
-                mockProject,
+                multiNotebookProject,
                 TreeItemCollapsibleState.Collapsed
             );
 
@@ -133,11 +301,11 @@ suite('DeepnoteTreeItem', () => {
             assert.strictEqual(item.command!.command, 'deepnote.openNotebook');
         });
 
-        test('should handle project with multiple notebooks', () => {
+        test('should handle project with three notebooks', () => {
             const projectWithMultipleNotebooks: DeepnoteProject = {
-                ...mockProject,
+                ...multiNotebookProject,
                 project: {
-                    ...mockProject.project,
+                    ...multiNotebookProject.project,
                     notebooks: [
                         {
                             id: 'notebook-1',
@@ -177,13 +345,15 @@ suite('DeepnoteTreeItem', () => {
             );
 
             assert.strictEqual(item.description, '0 cells');
+            assert.strictEqual(item.label, 'project.deepnote');
+            assert.strictEqual(item.contextValue, 'projectFile');
         });
 
-        test('should handle project with no notebooks', () => {
+        test('should handle project with no notebooks (label falls back to basename)', () => {
             const projectWithNoNotebooks = {
-                ...mockProject,
+                ...multiNotebookProject,
                 project: {
-                    ...mockProject.project,
+                    ...multiNotebookProject.project,
                     notebooks: []
                 }
             };
@@ -201,13 +371,15 @@ suite('DeepnoteTreeItem', () => {
             );
 
             assert.strictEqual(item.description, '0 cells');
+            assert.strictEqual(item.label, 'project.deepnote');
+            assert.strictEqual(item.contextValue, 'projectFile');
         });
 
         test('should handle unnamed project', () => {
             const unnamedProject = {
-                ...mockProject,
+                ...multiNotebookProject,
                 project: {
-                    ...mockProject.project,
+                    ...multiNotebookProject.project,
                     name: undefined
                 }
             };
@@ -395,11 +567,20 @@ suite('DeepnoteTreeItem', () => {
                 projectId: 'project-1'
             };
 
+            // Multi-notebook project file -> contextValue 'projectFile'
             const projectItem = new DeepnoteTreeItem(
                 DeepnoteTreeItemType.ProjectFile,
                 baseContext,
-                mockProject,
+                multiNotebookProject,
                 TreeItemCollapsibleState.Collapsed
+            );
+
+            // Single-notebook project file -> contextValue 'notebookFile'
+            const notebookFileItem = new DeepnoteTreeItem(
+                DeepnoteTreeItemType.ProjectFile,
+                baseContext,
+                singleNotebookProject,
+                TreeItemCollapsibleState.None
             );
 
             const notebookItem = new DeepnoteTreeItem(
@@ -410,6 +591,7 @@ suite('DeepnoteTreeItem', () => {
             );
 
             assert.strictEqual(projectItem.contextValue, 'projectFile');
+            assert.strictEqual(notebookFileItem.contextValue, NOTEBOOK_FILE_CONTEXT_VALUE);
             assert.strictEqual(notebookItem.contextValue, 'notebook');
         });
     });
@@ -424,7 +606,7 @@ suite('DeepnoteTreeItem', () => {
             const item = new DeepnoteTreeItem(
                 DeepnoteTreeItemType.ProjectFile,
                 context,
-                mockProject,
+                multiNotebookProject,
                 TreeItemCollapsibleState.Collapsed
             );
 
@@ -466,7 +648,7 @@ suite('DeepnoteTreeItem', () => {
             const item = new DeepnoteTreeItem(
                 DeepnoteTreeItemType.ProjectFile,
                 context,
-                mockProject,
+                multiNotebookProject,
                 TreeItemCollapsibleState.Collapsed
             );
 
@@ -501,9 +683,9 @@ suite('DeepnoteTreeItem', () => {
             };
 
             const projectWithName = {
-                ...mockProject,
+                ...multiNotebookProject,
                 project: {
-                    ...mockProject.project,
+                    ...multiNotebookProject.project,
                     name: 'My Amazing Project'
                 }
             };
@@ -637,9 +819,147 @@ suite('DeepnoteTreeItem', () => {
         });
     });
 
+    suite('updateVisualFields', () => {
+        // VS Code's mock TreeItem is a Proxy-based class (see build/mocha-esm-loader.js);
+        // when DeepnoteTreeItem extends it, `super(...)` creates a plain TreeItem-mock
+        // instance rather than a DeepnoteTreeItem, so instance methods on the subclass
+        // prototype are NOT reachable via the usual `item.updateVisualFields()` call.
+        // We invoke the method by reading it off the class prototype and calling it on
+        // the instance — same behaviour, just side-steps the proxy's prototype chain loss.
+        function callUpdateVisualFields(item: DeepnoteTreeItem): void {
+            const method = DeepnoteTreeItem.prototype.updateVisualFields;
+
+            assert.isFunction(method, 'updateVisualFields should be defined on the prototype');
+            method.call(item);
+        }
+
+        test('should keep notebook label and notebookFile contextValue for single-notebook ProjectFile', () => {
+            const context: DeepnoteTreeItemContext = {
+                filePath: '/workspace/my-project.deepnote',
+                projectId: 'project-456'
+            };
+
+            const item = new DeepnoteTreeItem(
+                DeepnoteTreeItemType.ProjectFile,
+                context,
+                singleNotebookProject,
+                TreeItemCollapsibleState.None
+            );
+
+            // Pre-conditions set in constructor
+            assert.strictEqual(item.label, 'First Notebook');
+            assert.strictEqual(item.contextValue, NOTEBOOK_FILE_CONTEXT_VALUE);
+
+            callUpdateVisualFields(item);
+
+            assert.strictEqual(item.label, 'First Notebook');
+            assert.strictEqual(item.contextValue, NOTEBOOK_FILE_CONTEXT_VALUE);
+        });
+
+        test('should keep file basename label and projectFile contextValue for multi-notebook ProjectFile', () => {
+            const context: DeepnoteTreeItemContext = {
+                filePath: '/workspace/my-project.deepnote',
+                projectId: 'project-456'
+            };
+
+            const item = new DeepnoteTreeItem(
+                DeepnoteTreeItemType.ProjectFile,
+                context,
+                multiNotebookProject,
+                TreeItemCollapsibleState.Collapsed
+            );
+
+            // Pre-conditions set in constructor
+            assert.strictEqual(item.label, 'my-project.deepnote');
+            assert.strictEqual(item.contextValue, 'projectFile');
+
+            callUpdateVisualFields(item);
+
+            assert.strictEqual(item.label, 'my-project.deepnote');
+            assert.strictEqual(item.contextValue, 'projectFile');
+        });
+
+        test('should flip contextValue back to projectFile when data is mutated from single to multi notebook', () => {
+            const context: DeepnoteTreeItemContext = {
+                filePath: '/workspace/my-project.deepnote',
+                projectId: 'project-456'
+            };
+
+            const item = new DeepnoteTreeItem(
+                DeepnoteTreeItemType.ProjectFile,
+                context,
+                singleNotebookProject,
+                TreeItemCollapsibleState.None
+            );
+
+            assert.strictEqual(item.contextValue, NOTEBOOK_FILE_CONTEXT_VALUE);
+
+            // Mutate data to a multi-notebook project
+            item.data = multiNotebookProject;
+            callUpdateVisualFields(item);
+
+            assert.strictEqual(item.contextValue, 'projectFile');
+            assert.strictEqual(item.label, 'my-project.deepnote');
+        });
+    });
+
+    suite('getSingleNonInitNotebook', () => {
+        test('returns the sole non-init notebook when there is exactly one', () => {
+            const result = getSingleNonInitNotebook(singleNotebookProject);
+
+            assert.isDefined(result);
+            assert.strictEqual(result!.id, 'notebook-1');
+            assert.strictEqual(result!.name, 'First Notebook');
+        });
+
+        test('returns undefined when there are multiple non-init notebooks', () => {
+            assert.isUndefined(getSingleNonInitNotebook(multiNotebookProject));
+        });
+
+        test('returns undefined when there are zero notebooks', () => {
+            const empty: DeepnoteProject = {
+                ...singleNotebookProject,
+                project: { ...singleNotebookProject.project, notebooks: [] }
+            };
+
+            assert.isUndefined(getSingleNonInitNotebook(empty));
+        });
+
+        test('excludes init notebook from the non-init count', () => {
+            const projectWithInitAndOneNotebook: DeepnoteProject = {
+                ...singleNotebookProject,
+                project: {
+                    ...singleNotebookProject.project,
+                    initNotebookId: 'init-nb',
+                    notebooks: [
+                        {
+                            id: 'init-nb',
+                            name: 'Init',
+                            blocks: [],
+                            executionMode: 'block',
+                            isModule: false
+                        },
+                        {
+                            id: 'notebook-1',
+                            name: 'Real',
+                            blocks: [],
+                            executionMode: 'block',
+                            isModule: false
+                        }
+                    ]
+                }
+            };
+
+            const result = getSingleNonInitNotebook(projectWithInitAndOneNotebook);
+
+            assert.isDefined(result);
+            assert.strictEqual(result!.id, 'notebook-1');
+        });
+    });
+
     suite('integration scenarios', () => {
         test('should create valid tree structure hierarchy', () => {
-            // Create parent project file
+            // Create parent project file (multi-notebook so it stays a projectFile row)
             const projectContext: DeepnoteTreeItemContext = {
                 filePath: '/workspace/research-project.deepnote',
                 projectId: 'research-123'
@@ -648,7 +968,7 @@ suite('DeepnoteTreeItem', () => {
             const projectItem = new DeepnoteTreeItem(
                 DeepnoteTreeItemType.ProjectFile,
                 projectContext,
-                mockProject,
+                multiNotebookProject,
                 TreeItemCollapsibleState.Expanded
             );
 
@@ -737,7 +1057,7 @@ suite('DeepnoteTreeItem', () => {
                     new DeepnoteTreeItem(
                         DeepnoteTreeItemType.ProjectFile,
                         context,
-                        mockProject,
+                        multiNotebookProject,
                         TreeItemCollapsibleState.Collapsed
                     )
             );

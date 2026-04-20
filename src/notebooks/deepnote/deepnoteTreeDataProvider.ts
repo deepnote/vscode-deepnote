@@ -204,30 +204,6 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         for (const [projectId, files] of groupsByProjectId.entries()) {
             const projectName = files[0].project.project.name;
 
-            // If only one file with one non-init notebook, show directly as a project file (no group nesting)
-            if (files.length === 1) {
-                const file = files[0];
-                const initNotebookId = file.project.project.initNotebookId;
-                const nonInitNotebooks = file.project.project.notebooks?.filter((nb) => nb.id !== initNotebookId) ?? [];
-
-                if (nonInitNotebooks.length <= 1) {
-                    const context: DeepnoteTreeItemContext = {
-                        filePath: file.filePath,
-                        projectId
-                    };
-
-                    const treeItem = new DeepnoteTreeItem(
-                        DeepnoteTreeItemType.ProjectFile,
-                        context,
-                        file.project,
-                        TreeItemCollapsibleState.None
-                    );
-                    groups.push(treeItem);
-                    continue;
-                }
-            }
-
-            // Multiple files or multi-notebook file: create a group
             const groupData: ProjectGroupData = {
                 projectId,
                 projectName,
@@ -239,11 +215,15 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
                 projectId
             };
 
+            // Expand single-file groups by default so the lone notebook stays visible
+            const collapsibleState =
+                files.length === 1 ? TreeItemCollapsibleState.Expanded : TreeItemCollapsibleState.Collapsed;
+
             const groupItem = new DeepnoteTreeItem(
                 DeepnoteTreeItemType.ProjectGroup,
                 context,
                 groupData,
-                TreeItemCollapsibleState.Collapsed
+                collapsibleState
             );
             groups.push(groupItem);
         }

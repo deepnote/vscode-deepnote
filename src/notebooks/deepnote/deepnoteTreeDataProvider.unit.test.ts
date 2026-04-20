@@ -1,9 +1,17 @@
+import { serializeDeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
-import { l10n } from 'vscode';
+import { instance, mock, when, anything } from 'ts-mockito';
+import { l10n, TreeItemCollapsibleState, Uri, workspace } from 'vscode';
 
 import { DeepnoteTreeDataProvider, compareTreeItemsByLabel } from './deepnoteTreeDataProvider';
-import { DeepnoteTreeItem, DeepnoteTreeItemType } from './deepnoteTreeItem';
+import {
+    DeepnoteTreeItem,
+    DeepnoteTreeItemType,
+    NOTEBOOK_FILE_CONTEXT_VALUE,
+    type ProjectGroupData
+} from './deepnoteTreeItem';
 import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
+import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 
 suite('DeepnoteTreeDataProvider', () => {
     let provider: DeepnoteTreeDataProvider;
@@ -338,11 +346,11 @@ suite('DeepnoteTreeDataProvider', () => {
             });
         });
 
-        test('should update visual fields when project data changes', async () => {
+        test('should update visual fields when project data changes from single to multi notebook', async () => {
             // Access private caches
             const treeItemCache = (provider as any).treeItemCache as Map<string, DeepnoteTreeItem>;
 
-            // Create initial project with 1 notebook
+            // Create initial project with 1 notebook (single-notebook file -> label = notebook name)
             const filePath = '/workspace/test-project.deepnote';
             const cacheKey = `project:${filePath}`;
             const initialProject: DeepnoteProject = {
@@ -378,11 +386,12 @@ suite('DeepnoteTreeDataProvider', () => {
             );
             treeItemCache.set(cacheKey, mockTreeItem);
 
-            // Verify initial state
-            assert.strictEqual(mockTreeItem.label, 'test-project.deepnote');
+            // With a single non-init notebook the label adopts the notebook's name.
+            assert.strictEqual(mockTreeItem.label, 'Notebook 1');
+            assert.strictEqual(mockTreeItem.contextValue, NOTEBOOK_FILE_CONTEXT_VALUE);
             assert.strictEqual(mockTreeItem.description, '0 cells');
 
-            // Update the project data (simulating rename and adding notebooks)
+            // Upgrade to a multi-notebook project (simulating a rename + add)
             const updatedProject: DeepnoteProject = {
                 ...initialProject,
                 project: {
@@ -402,25 +411,14 @@ suite('DeepnoteTreeDataProvider', () => {
             };
 
             mockTreeItem.data = updatedProject;
-            // Call updateVisualFields if it exists (it may not work properly in test environment due to proxy limitations)
-            if (typeof mockTreeItem.updateVisualFields === 'function') {
-                mockTreeItem.updateVisualFields();
-            } else {
-                // Manually update visual fields for testing purposes
-                const fileName = mockTreeItem.context.filePath.split('/').pop() ?? '';
-                mockTreeItem.label = fileName || updatedProject.project.name || 'Untitled Project';
-                mockTreeItem.tooltip = `Deepnote Project: ${updatedProject.project.name}\nFile: ${mockTreeItem.context.filePath}`;
-                const blockCount =
-                    updatedProject.project.notebooks?.reduce(
-                        (sum: number, nb: any) => sum + (nb.blocks?.length ?? 0),
-                        0
-                    ) ?? 0;
-                mockTreeItem.description = `${blockCount} cell${blockCount !== 1 ? 's' : ''}`;
-            }
+            // VS Code's mock TreeItem loses subclass prototype methods under the Proxy-based
+            // class mock, so invoke updateVisualFields via the class prototype directly.
+            DeepnoteTreeItem.prototype.updateVisualFields.call(mockTreeItem);
 
-            // Verify visual fields were updated
-            assert.strictEqual(mockTreeItem.label, 'test-project.deepnote', 'Label should reflect filename');
-            assert.strictEqual(mockTreeItem.description, '0 cells', 'Description should reflect cell count');
+            // Now the row is multi-notebook: label reverts to basename and contextValue reverts to projectFile
+            assert.strictEqual(mockTreeItem.label, 'test-project.deepnote');
+            assert.strictEqual(mockTreeItem.contextValue, 'projectFile');
+            assert.strictEqual(mockTreeItem.description, '0 cells');
             assert.include(
                 mockTreeItem.tooltip as string,
                 'Renamed Project',
@@ -648,5 +646,154 @@ suite('DeepnoteTreeDataProvider', () => {
             assert.strictEqual(notebookItems[1].label, 'Apple Notebook', 'Second should be Apple Notebook');
             assert.strictEqual(notebookItems[2].label, 'MIDDLE Notebook', 'Third should be MIDDLE Notebook');
         });
+    });
+});
+
+suite('DeepnoteTreeDataProvider - getProjectGroups (no flattening)', () => {
+    let provider: DeepnoteTreeDataProvider;
+
+    setup(() => {
+        resetVSCodeMocks();
+        provider = new DeepnoteTreeDataProvider();
+    });
+
+    teardown(() => {
+        provider.dispose();
+        resetVSCodeMocks();
+    });
+
+    async function invokeGetProjectGroups(
+        files: Array<{ uri: Uri; project: DeepnoteProject }>
+    ): Promise<DeepnoteTreeItem[]> {
+        const workspaceFolder = { uri: Uri.file('/workspace'), name: 'workspace', index: 0 };
+
+        when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder as any]);
+        when(mockedVSCodeNamespaces.workspace.findFiles(anything())).thenReturn(
+            Promise.resolve(files.map((f) => f.uri))
+        );
+
+        const mockFS = mock<typeof workspace.fs>();
+
+        when(mockFS.readFile(anything())).thenCall((uri: Uri) => {
+            const entry = files.find((f) => f.uri.path === uri.path);
+
+            if (!entry) {
+                return Promise.reject(new Error('File not found'));
+            }
+
+            return Promise.resolve(Buffer.from(serializeDeepnoteFile(entry.project)));
+        });
+        when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+        return (provider as any).getProjectGroups();
+    }
+
+    test('single-file project with one non-init notebook emits a ProjectGroup (Expanded)', async () => {
+        const project: DeepnoteProject = {
+            version: '1.0.0',
+            metadata: {
+                createdAt: '2024-01-01T00:00:00.000Z',
+                modifiedAt: '2024-01-01T00:00:00.000Z'
+            },
+            project: {
+                id: 'proj-1',
+                name: 'Single File',
+                notebooks: [
+                    {
+                        id: 'nb-1',
+                        name: 'The Notebook',
+                        blocks: [],
+                        executionMode: 'block'
+                    }
+                ]
+            }
+        };
+
+        const groups = await invokeGetProjectGroups([{ uri: Uri.file('/workspace/single.deepnote'), project }]);
+
+        assert.strictEqual(groups.length, 1);
+        assert.strictEqual(groups[0].type, DeepnoteTreeItemType.ProjectGroup);
+        assert.strictEqual(groups[0].contextValue, 'projectGroup');
+        assert.strictEqual(groups[0].collapsibleState, TreeItemCollapsibleState.Expanded);
+
+        const data = groups[0].data as ProjectGroupData;
+
+        assert.strictEqual(data.projectId, 'proj-1');
+        assert.strictEqual(data.projectName, 'Single File');
+        assert.strictEqual(data.files.length, 1);
+        assert.strictEqual(data.files[0].filePath, '/workspace/single.deepnote');
+    });
+
+    test('single-file project with multiple notebooks emits a ProjectGroup', async () => {
+        const project: DeepnoteProject = {
+            version: '1.0.0',
+            metadata: {
+                createdAt: '2024-01-01T00:00:00.000Z',
+                modifiedAt: '2024-01-01T00:00:00.000Z'
+            },
+            project: {
+                id: 'proj-2',
+                name: 'Multi Notebook',
+                notebooks: [
+                    { id: 'nb-a', name: 'A', blocks: [], executionMode: 'block' },
+                    { id: 'nb-b', name: 'B', blocks: [], executionMode: 'block' }
+                ]
+            }
+        };
+
+        const groups = await invokeGetProjectGroups([{ uri: Uri.file('/workspace/multi.deepnote'), project }]);
+
+        assert.strictEqual(groups.length, 1);
+        assert.strictEqual(groups[0].type, DeepnoteTreeItemType.ProjectGroup);
+        // Single file -> expanded by default even when the file carries multiple notebooks
+        assert.strictEqual(groups[0].collapsibleState, TreeItemCollapsibleState.Expanded);
+
+        const data = groups[0].data as ProjectGroupData;
+
+        assert.strictEqual(data.files.length, 1);
+    });
+
+    test('multi-file project emits a single ProjectGroup (Collapsed) that aggregates every file', async () => {
+        const fileA: DeepnoteProject = {
+            version: '1.0.0',
+            metadata: {
+                createdAt: '2024-01-01T00:00:00.000Z',
+                modifiedAt: '2024-01-01T00:00:00.000Z'
+            },
+            project: {
+                id: 'proj-shared',
+                name: 'Shared Project',
+                notebooks: [{ id: 'nb-a', name: 'A', blocks: [], executionMode: 'block' }]
+            }
+        };
+
+        const fileB: DeepnoteProject = {
+            version: '1.0.0',
+            metadata: {
+                createdAt: '2024-01-01T00:00:00.000Z',
+                modifiedAt: '2024-01-01T00:00:00.000Z'
+            },
+            project: {
+                id: 'proj-shared',
+                name: 'Shared Project',
+                notebooks: [{ id: 'nb-b', name: 'B', blocks: [], executionMode: 'block' }]
+            }
+        };
+
+        const groups = await invokeGetProjectGroups([
+            { uri: Uri.file('/workspace/a.deepnote'), project: fileA },
+            { uri: Uri.file('/workspace/b.deepnote'), project: fileB }
+        ]);
+
+        assert.strictEqual(groups.length, 1);
+        assert.strictEqual(groups[0].type, DeepnoteTreeItemType.ProjectGroup);
+        assert.strictEqual(groups[0].collapsibleState, TreeItemCollapsibleState.Collapsed);
+
+        const data = groups[0].data as ProjectGroupData;
+
+        assert.strictEqual(data.files.length, 2);
+        const paths = data.files.map((f) => f.filePath).sort();
+
+        assert.deepStrictEqual(paths, ['/workspace/a.deepnote', '/workspace/b.deepnote']);
     });
 });

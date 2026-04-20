@@ -1,5 +1,3 @@
-import { Uri } from 'vscode';
-
-export function createDeepnoteServerConfigHandle(environmentId: string, deepnoteFileUri: Uri): string {
-    return `deepnote-config-server-${environmentId}-${deepnoteFileUri.fsPath}`;
+export function createDeepnoteServerConfigHandle(environmentId: string, projectId: string): string {
+    return `deepnote-config-server-${environmentId}-${projectId}`;
 }

@@ -3,7 +3,7 @@ import * as sinon from 'sinon';
 import { anything, capture, instance, mock, when, verify, deepEqual, resetCalls } from 'ts-mockito';
 import { CancellationToken, Disposable, NotebookDocument, ProgressOptions, Uri } from 'vscode';
 import { DeepnoteEnvironmentsView } from './deepnoteEnvironmentsView.node';
-import { IDeepnoteEnvironmentManager, IDeepnoteKernelAutoSelector, IDeepnoteNotebookEnvironmentMapper } from '../types';
+import { IDeepnoteEnvironmentManager, IDeepnoteKernelAutoSelector, IDeepnoteProjectEnvironmentMapper } from '../types';
 import { IPythonApiProvider } from '../../../platform/api/types';
 import { IDisposableRegistry, IOutputChannel } from '../../../platform/common/types';
 import { IKernelProvider } from '../../../kernels/types';
@@ -22,7 +22,7 @@ suite('DeepnoteEnvironmentsView', () => {
     let mockPythonApiProvider: IPythonApiProvider;
     let mockDisposableRegistry: IDisposableRegistry;
     let mockKernelAutoSelector: IDeepnoteKernelAutoSelector;
-    let mockNotebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper;
+    let mockProjectEnvironmentMapper: IDeepnoteProjectEnvironmentMapper;
     let mockKernelProvider: IKernelProvider;
     let mockOutputChannel: IOutputChannel;
     let disposables: Disposable[] = [];
@@ -40,9 +40,12 @@ suite('DeepnoteEnvironmentsView', () => {
         mockPythonApiProvider = mock<IPythonApiProvider>();
         mockDisposableRegistry = mock<IDisposableRegistry>();
         mockKernelAutoSelector = mock<IDeepnoteKernelAutoSelector>();
-        mockNotebookEnvironmentMapper = mock<IDeepnoteNotebookEnvironmentMapper>();
+        mockProjectEnvironmentMapper = mock<IDeepnoteProjectEnvironmentMapper>();
         mockKernelProvider = mock<IKernelProvider>();
         mockOutputChannel = mock<IOutputChannel>();
+
+        // Default: mapper initialization completes synchronously
+        when(mockProjectEnvironmentMapper.waitForInitialization()).thenResolve();
 
         // Mock onDidChangeEnvironments to return a disposable event
         when(mockConfigManager.onDidChangeEnvironments).thenReturn((_listener: () => void) => {
@@ -59,7 +62,7 @@ suite('DeepnoteEnvironmentsView', () => {
             instance(mockPythonApiProvider),
             instance(mockDisposableRegistry),
             instance(mockKernelAutoSelector),
-            instance(mockNotebookEnvironmentMapper),
+            instance(mockProjectEnvironmentMapper),
             instance(mockKernelProvider),
             instance(mockOutputChannel)
         );
@@ -431,11 +434,11 @@ suite('DeepnoteEnvironmentsView', () => {
 
         setup(() => {
             resetCalls(mockConfigManager);
-            resetCalls(mockNotebookEnvironmentMapper);
+            resetCalls(mockProjectEnvironmentMapper);
             resetCalls(mockedVSCodeNamespaces.window);
         });
 
-        test('should successfully delete environment with notebooks using it', async () => {
+        test('should successfully delete environment with projects using it', async () => {
             // Mock environment exists
             when(mockConfigManager.getEnvironment(testEnvironmentId)).thenReturn(testEnvironment);
 
@@ -444,16 +447,14 @@ suite('DeepnoteEnvironmentsView', () => {
                 Promise.resolve('Delete')
             );
 
-            // Mock notebooks using this environment
-            const notebook1Uri = Uri.file('/workspace/notebook1.deepnote');
-            const notebook2Uri = Uri.file('/workspace/notebook2.deepnote');
-            when(mockNotebookEnvironmentMapper.getNotebooksUsingEnvironment(testEnvironmentId)).thenReturn([
-                notebook1Uri,
-                notebook2Uri
+            // Mock projects using this environment
+            when(mockProjectEnvironmentMapper.getProjectsUsingEnvironment(testEnvironmentId)).thenReturn([
+                'proj-1',
+                'proj-2'
             ]);
 
             // Mock removing environment mappings
-            when(mockNotebookEnvironmentMapper.removeEnvironmentForNotebook(anything())).thenResolve();
+            when(mockProjectEnvironmentMapper.removeEnvironmentForProject(anything())).thenResolve();
 
             // Mock window.withProgress to execute the callback
             when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall(
@@ -489,11 +490,11 @@ suite('DeepnoteEnvironmentsView', () => {
             // Verify API calls
             verify(mockConfigManager.getEnvironment(testEnvironmentId)).once();
             verify(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).once();
-            verify(mockNotebookEnvironmentMapper.getNotebooksUsingEnvironment(testEnvironmentId)).once();
+            verify(mockProjectEnvironmentMapper.getProjectsUsingEnvironment(testEnvironmentId)).once();
 
-            // Verify environment mappings were removed for both notebooks
-            verify(mockNotebookEnvironmentMapper.removeEnvironmentForNotebook(notebook1Uri)).once();
-            verify(mockNotebookEnvironmentMapper.removeEnvironmentForNotebook(notebook2Uri)).once();
+            // Verify environment mappings were removed for both projects
+            verify(mockProjectEnvironmentMapper.removeEnvironmentForProject('proj-1')).once();
+            verify(mockProjectEnvironmentMapper.removeEnvironmentForProject('proj-2')).once();
 
             // Verify environment deletion
             verify(mockConfigManager.deleteEnvironment(testEnvironmentId, anything())).once();
@@ -511,27 +512,30 @@ suite('DeepnoteEnvironmentsView', () => {
                 Promise.resolve('Delete')
             );
 
-            // Mock notebooks using this environment
-            when(mockNotebookEnvironmentMapper.getNotebooksUsingEnvironment(testEnvironmentId)).thenReturn([]);
-            when(mockNotebookEnvironmentMapper.removeEnvironmentForNotebook(anything())).thenResolve();
+            // Mock projects using this environment - none
+            when(mockProjectEnvironmentMapper.getProjectsUsingEnvironment(testEnvironmentId)).thenReturn([]);
+            when(mockProjectEnvironmentMapper.removeEnvironmentForProject(anything())).thenResolve();
 
             // Mock open notebooks with kernels
             const openNotebook1 = {
                 uri: Uri.file('/workspace/open-notebook1.deepnote'),
                 notebookType: 'deepnote',
-                isClosed: false
+                isClosed: false,
+                metadata: { deepnoteProjectId: 'proj-open-1' }
             } as any;
 
             const openNotebook2 = {
                 uri: Uri.file('/workspace/open-notebook2.deepnote'),
                 notebookType: 'jupyter-notebook',
-                isClosed: false
+                isClosed: false,
+                metadata: {}
             } as any;
 
             const openNotebook3 = {
                 uri: Uri.file('/workspace/open-notebook3.deepnote'),
                 notebookType: 'deepnote',
-                isClosed: false
+                isClosed: false,
+                metadata: { deepnoteProjectId: 'proj-open-3' }
             } as any;
 
             // Mock workspace.notebookDocuments
@@ -541,12 +545,12 @@ suite('DeepnoteEnvironmentsView', () => {
                 openNotebook3
             ]);
 
-            // Mock kernels
+            // Mock kernels — handles now use (envId, projectId)
             const mockKernel1 = {
                 kernelConnectionMetadata: {
                     kind: 'startUsingDeepnoteKernel',
                     serverProviderHandle: {
-                        handle: createDeepnoteServerConfigHandle(testEnvironmentId, openNotebook1.uri)
+                        handle: createDeepnoteServerConfigHandle(testEnvironmentId, 'proj-open-1')
                     }
                 },
                 dispose: sinon.stub().resolves()
@@ -556,7 +560,7 @@ suite('DeepnoteEnvironmentsView', () => {
                 kernelConnectionMetadata: {
                     kind: 'startUsingDeepnoteKernel',
                     serverProviderHandle: {
-                        handle: createDeepnoteServerConfigHandle('different-env-id', openNotebook3.uri)
+                        handle: createDeepnoteServerConfigHandle('different-env-id', 'proj-open-3')
                     }
                 },
                 dispose: sinon.stub().resolves()
@@ -566,6 +570,9 @@ suite('DeepnoteEnvironmentsView', () => {
             when(mockKernelProvider.get(openNotebook1)).thenReturn(mockKernel1 as any);
             when(mockKernelProvider.get(openNotebook2)).thenReturn(undefined); // No kernel for jupyter notebook
             when(mockKernelProvider.get(openNotebook3)).thenReturn(mockKernel3 as any);
+
+            // Mock clearControllerForEnvironment (now async)
+            when(mockKernelAutoSelector.clearControllerForEnvironment(anything(), anything())).thenResolve();
 
             // Mock window.withProgress
             when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall(
@@ -612,16 +619,14 @@ suite('DeepnoteEnvironmentsView', () => {
                 Promise.resolve('Delete')
             );
 
-            // Mock notebooks using this environment
-            const notebook1Uri = Uri.file('/workspace/notebook1.deepnote');
-            const notebook2Uri = Uri.file('/workspace/notebook2.deepnote');
-            when(mockNotebookEnvironmentMapper.getNotebooksUsingEnvironment(testExternalEnvironmentId)).thenReturn([
-                notebook1Uri,
-                notebook2Uri
+            // Mock projects using this environment
+            when(mockProjectEnvironmentMapper.getProjectsUsingEnvironment(testExternalEnvironmentId)).thenReturn([
+                'proj-1',
+                'proj-2'
             ]);
 
             // Mock removing environment mappings
-            when(mockNotebookEnvironmentMapper.removeEnvironmentForNotebook(anything())).thenResolve();
+            when(mockProjectEnvironmentMapper.removeEnvironmentForProject(anything())).thenResolve();
 
             // Mock open notebooks
             when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([]);
@@ -660,11 +665,11 @@ suite('DeepnoteEnvironmentsView', () => {
             // Verify API calls - same as for managed venv
             verify(mockConfigManager.getEnvironment(testExternalEnvironmentId)).once();
             verify(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).once();
-            verify(mockNotebookEnvironmentMapper.getNotebooksUsingEnvironment(testExternalEnvironmentId)).once();
+            verify(mockProjectEnvironmentMapper.getProjectsUsingEnvironment(testExternalEnvironmentId)).once();
 
-            // Verify environment mappings were removed for both notebooks
-            verify(mockNotebookEnvironmentMapper.removeEnvironmentForNotebook(notebook1Uri)).once();
-            verify(mockNotebookEnvironmentMapper.removeEnvironmentForNotebook(notebook2Uri)).once();
+            // Verify environment mappings were removed for both projects
+            verify(mockProjectEnvironmentMapper.removeEnvironmentForProject('proj-1')).once();
+            verify(mockProjectEnvironmentMapper.removeEnvironmentForProject('proj-2')).once();
 
             // Verify environment deletion - the manager is responsible for checking managedVenv
             verify(mockConfigManager.deleteEnvironment(testExternalEnvironmentId, anything())).once();
@@ -682,15 +687,16 @@ suite('DeepnoteEnvironmentsView', () => {
                 Promise.resolve('Delete')
             );
 
-            // Mock notebooks using this environment
-            when(mockNotebookEnvironmentMapper.getNotebooksUsingEnvironment(testExternalEnvironmentId)).thenReturn([]);
-            when(mockNotebookEnvironmentMapper.removeEnvironmentForNotebook(anything())).thenResolve();
+            // Mock projects using this environment
+            when(mockProjectEnvironmentMapper.getProjectsUsingEnvironment(testExternalEnvironmentId)).thenReturn([]);
+            when(mockProjectEnvironmentMapper.removeEnvironmentForProject(anything())).thenResolve();
 
             // Mock open notebooks with kernels
             const openNotebook1 = {
                 uri: Uri.file('/workspace/open-notebook1.deepnote'),
                 notebookType: 'deepnote',
-                isClosed: false
+                isClosed: false,
+                metadata: { deepnoteProjectId: 'proj-ext-1' }
             } as any;
 
             when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([openNotebook1]);
@@ -700,13 +706,16 @@ suite('DeepnoteEnvironmentsView', () => {
                 kernelConnectionMetadata: {
                     kind: 'startUsingDeepnoteKernel',
                     serverProviderHandle: {
-                        handle: createDeepnoteServerConfigHandle(testExternalEnvironmentId, openNotebook1.uri)
+                        handle: createDeepnoteServerConfigHandle(testExternalEnvironmentId, 'proj-ext-1')
                     }
                 },
                 dispose: sinon.stub().resolves()
             };
 
             when(mockKernelProvider.get(openNotebook1)).thenReturn(mockKernel1 as any);
+
+            // Mock clearControllerForEnvironment (now async)
+            when(mockKernelAutoSelector.clearControllerForEnvironment(anything(), anything())).thenResolve();
 
             // Mock window.withProgress
             when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall(
@@ -799,21 +808,27 @@ suite('DeepnoteEnvironmentsView', () => {
             lastUsedAt: new Date()
         };
 
+        const testProjectId = 'test-project-id';
+
         setup(() => {
             resetCalls(mockConfigManager);
-            resetCalls(mockNotebookEnvironmentMapper);
+            resetCalls(mockProjectEnvironmentMapper);
             resetCalls(mockKernelAutoSelector);
             resetCalls(mockKernelProvider);
             resetCalls(mockedVSCodeNamespaces.window);
+
+            // Mapper init
+            when(mockProjectEnvironmentMapper.waitForInitialization()).thenResolve();
         });
 
         test('should successfully switch to a different environment', async () => {
-            // Mock active notebook
+            // Mock active notebook with projectId in metadata so resolver succeeds
             const notebookUri = Uri.file('/workspace/notebook.deepnote');
             const mockNotebook = {
                 uri: notebookUri,
                 notebookType: 'deepnote',
-                cellCount: 5
+                cellCount: 5,
+                metadata: { deepnoteProjectId: testProjectId }
             };
             const mockNotebookEditor = {
                 notebook: mockNotebook
@@ -821,9 +836,8 @@ suite('DeepnoteEnvironmentsView', () => {
 
             when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(mockNotebookEditor as any);
 
-            // Mock current environment mapping
-            const baseFileUri = notebookUri.with({ query: '', fragment: '' });
-            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri)).thenReturn(
+            // Mock current environment mapping (by projectId)
+            when(mockProjectEnvironmentMapper.getEnvironmentForProject(testProjectId)).thenReturn(
                 currentEnvironment.id
             );
             when(mockConfigManager.getEnvironment(currentEnvironment.id)).thenReturn(currentEnvironment);
@@ -832,7 +846,6 @@ suite('DeepnoteEnvironmentsView', () => {
             when(mockConfigManager.listEnvironments()).thenReturn([currentEnvironment, newEnvironment]);
 
             // Mock environment status
-            when(mockConfigManager.getEnvironment(currentEnvironment.id)).thenReturn(currentEnvironment);
             when(mockConfigManager.getEnvironment(newEnvironment.id)).thenReturn(newEnvironment);
 
             // Mock user selecting the new environment
@@ -857,8 +870,8 @@ suite('DeepnoteEnvironmentsView', () => {
                 }
             );
 
-            // Mock environment mapping update
-            when(mockNotebookEnvironmentMapper.setEnvironmentForNotebook(baseFileUri, newEnvironment.id)).thenResolve();
+            // Mock environment mapping update (by projectId)
+            when(mockProjectEnvironmentMapper.setEnvironmentForProject(testProjectId, newEnvironment.id)).thenResolve();
 
             // Mock controller rebuild
             when(mockKernelAutoSelector.rebuildController(mockNotebook as any, anything(), anything())).thenResolve();
@@ -867,20 +880,18 @@ suite('DeepnoteEnvironmentsView', () => {
             when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenResolve(undefined);
 
             // Execute the command
-            await view.selectEnvironmentForNotebook({ notebook: mockNotebook as NotebookDocument });
+            await view.selectEnvironmentForNotebook({ notebook: mockNotebook as unknown as NotebookDocument });
 
             // Verify API calls
-            verify(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri)).once();
-            verify(mockConfigManager.getEnvironment(currentEnvironment.id)).once();
+            verify(mockProjectEnvironmentMapper.getEnvironmentForProject(testProjectId)).once();
             verify(mockConfigManager.listEnvironments()).once();
-            verify(mockConfigManager.getEnvironment(currentEnvironment.id)).once();
             verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).once();
             verify(mockKernelProvider.get(mockNotebook as any)).once();
             verify(mockKernelProvider.getKernelExecution(mockKernel as any)).once();
 
             // Verify environment switch
             verify(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).once();
-            verify(mockNotebookEnvironmentMapper.setEnvironmentForNotebook(baseFileUri, newEnvironment.id)).once();
+            verify(mockProjectEnvironmentMapper.setEnvironmentForProject(testProjectId, newEnvironment.id)).once();
             verify(mockKernelAutoSelector.rebuildController(mockNotebook as any, anything(), anything())).once();
 
             // Verify success message was shown
@@ -893,7 +904,8 @@ suite('DeepnoteEnvironmentsView', () => {
             const mockNotebook = {
                 uri: notebookUri,
                 notebookType: 'deepnote',
-                cellCount: 5
+                cellCount: 5,
+                metadata: { deepnoteProjectId: testProjectId }
             };
             const mockNotebookEditor = {
                 notebook: mockNotebook
@@ -902,8 +914,7 @@ suite('DeepnoteEnvironmentsView', () => {
             when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(mockNotebookEditor as any);
 
             // Mock current environment mapping (managed)
-            const baseFileUri = notebookUri.with({ query: '', fragment: '' });
-            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri)).thenReturn(
+            when(mockProjectEnvironmentMapper.getEnvironmentForProject(testProjectId)).thenReturn(
                 currentEnvironment.id
             );
             when(mockConfigManager.getEnvironment(currentEnvironment.id)).thenReturn(currentEnvironment);
@@ -942,7 +953,7 @@ suite('DeepnoteEnvironmentsView', () => {
 
             // Mock environment mapping update
             when(
-                mockNotebookEnvironmentMapper.setEnvironmentForNotebook(baseFileUri, newExternalEnvironment.id)
+                mockProjectEnvironmentMapper.setEnvironmentForProject(testProjectId, newExternalEnvironment.id)
             ).thenResolve();
 
             // Mock controller rebuild
@@ -952,12 +963,12 @@ suite('DeepnoteEnvironmentsView', () => {
             when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenResolve(undefined);
 
             // Execute the command
-            await view.selectEnvironmentForNotebook({ notebook: mockNotebook as NotebookDocument });
+            await view.selectEnvironmentForNotebook({ notebook: mockNotebook as unknown as NotebookDocument });
 
             // Verify environment switch to external environment
             verify(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).once();
             verify(
-                mockNotebookEnvironmentMapper.setEnvironmentForNotebook(baseFileUri, newExternalEnvironment.id)
+                mockProjectEnvironmentMapper.setEnvironmentForProject(testProjectId, newExternalEnvironment.id)
             ).once();
             verify(mockKernelAutoSelector.rebuildController(mockNotebook as any, anything(), anything())).once();
 
@@ -971,7 +982,8 @@ suite('DeepnoteEnvironmentsView', () => {
             const mockNotebook = {
                 uri: notebookUri,
                 notebookType: 'deepnote',
-                cellCount: 5
+                cellCount: 5,
+                metadata: { deepnoteProjectId: testProjectId }
             };
             const mockNotebookEditor = {
                 notebook: mockNotebook
@@ -980,8 +992,7 @@ suite('DeepnoteEnvironmentsView', () => {
             when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(mockNotebookEditor as any);
 
             // Mock current environment mapping (external)
-            const baseFileUri = notebookUri.with({ query: '', fragment: '' });
-            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri)).thenReturn(
+            when(mockProjectEnvironmentMapper.getEnvironmentForProject(testProjectId)).thenReturn(
                 currentExternalEnvironment.id
             );
             when(mockConfigManager.getEnvironment(currentExternalEnvironment.id)).thenReturn(
@@ -1016,7 +1027,7 @@ suite('DeepnoteEnvironmentsView', () => {
             );
 
             // Mock environment mapping update
-            when(mockNotebookEnvironmentMapper.setEnvironmentForNotebook(baseFileUri, newEnvironment.id)).thenResolve();
+            when(mockProjectEnvironmentMapper.setEnvironmentForProject(testProjectId, newEnvironment.id)).thenResolve();
 
             // Mock controller rebuild
             when(mockKernelAutoSelector.rebuildController(mockNotebook as any, anything(), anything())).thenResolve();
@@ -1025,11 +1036,11 @@ suite('DeepnoteEnvironmentsView', () => {
             when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenResolve(undefined);
 
             // Execute the command
-            await view.selectEnvironmentForNotebook({ notebook: mockNotebook as NotebookDocument });
+            await view.selectEnvironmentForNotebook({ notebook: mockNotebook as unknown as NotebookDocument });
 
             // Verify environment switch from external to managed
             verify(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).once();
-            verify(mockNotebookEnvironmentMapper.setEnvironmentForNotebook(baseFileUri, newEnvironment.id)).once();
+            verify(mockProjectEnvironmentMapper.setEnvironmentForProject(testProjectId, newEnvironment.id)).once();
             verify(mockKernelAutoSelector.rebuildController(mockNotebook as any, anything(), anything())).once();
 
             // Verify success message was shown

@@ -67,7 +67,7 @@ import {
     IDeepnoteKernelAutoSelector,
     IDeepnoteServerProvider,
     IDeepnoteEnvironmentManager,
-    IDeepnoteNotebookEnvironmentMapper,
+    IDeepnoteProjectEnvironmentMapper,
     IDeepnoteLspClientManager
 } from '../kernels/deepnote/types';
 import { DeepnoteAgentSkillsManager } from '../kernels/deepnote/deepnoteAgentSkillsManager.node';
@@ -83,7 +83,7 @@ import { DeepnoteEnvironmentStorage } from '../kernels/deepnote/environments/dee
 import { DeepnoteEnvironmentsView } from '../kernels/deepnote/environments/deepnoteEnvironmentsView.node';
 import { DeepnoteEnvironmentsActivationService } from '../kernels/deepnote/environments/deepnoteEnvironmentsActivationService';
 import { DeepnoteExtensionSidecarWriter } from '../kernels/deepnote/environments/deepnoteExtensionSidecarWriter.node';
-import { DeepnoteNotebookEnvironmentMapper } from '../kernels/deepnote/environments/deepnoteNotebookEnvironmentMapper.node';
+import { DeepnoteProjectEnvironmentMapper } from '../kernels/deepnote/environments/deepnoteProjectEnvironmentMapper.node';
 import { DeepnoteNotebookCommandListener } from './deepnote/deepnoteNotebookCommandListener';
 import { DeepnoteInputBlockCellStatusBarItemProvider } from './deepnote/deepnoteInputBlockCellStatusBarProvider';
 import { DeepnoteBigNumberCellStatusBarProvider } from './deepnote/deepnoteBigNumberCellStatusBarProvider';
@@ -255,10 +255,10 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
         DeepnoteEnvironmentsActivationService
     );
 
-    // Deepnote configuration selection
-    serviceManager.addSingleton<IDeepnoteNotebookEnvironmentMapper>(
-        IDeepnoteNotebookEnvironmentMapper,
-        DeepnoteNotebookEnvironmentMapper
+    // Deepnote configuration selection (project-id keyed)
+    serviceManager.addSingleton<IDeepnoteProjectEnvironmentMapper>(
+        IDeepnoteProjectEnvironmentMapper,
+        DeepnoteProjectEnvironmentMapper
     );
 
     // Sidecar file writer (exposes env mappings for external tools)

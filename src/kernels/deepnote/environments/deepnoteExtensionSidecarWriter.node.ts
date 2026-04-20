@@ -1,11 +1,10 @@
 import { inject, injectable } from 'inversify';
-import * as YAML from 'yaml';
-import { env, NotebookDocument, Uri, workspace } from 'vscode';
+import { env, Uri, workspace } from 'vscode';
 
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
 import { IDisposableRegistry } from '../../../platform/common/types';
 import { logger } from '../../../platform/logging';
-import { IDeepnoteEnvironmentManager, IDeepnoteNotebookEnvironmentMapper } from '../types';
+import { IDeepnoteEnvironmentManager, IDeepnoteProjectEnvironmentMapper } from '../types';
 
 const SIDECAR_FILENAME = 'deepnote.json';
 
@@ -45,13 +44,11 @@ interface SidecarFile {
  */
 @injectable()
 export class DeepnoteExtensionSidecarWriter implements IExtensionSyncActivationService {
-    /** Reverse map: notebookUri.fsPath → projectId (populated from sidecar + set calls). */
-    private readonly fsPathToProjectId = new Map<string, string>();
     /** Serializes sidecar writes to avoid read-modify-write races. */
     private writeQueue: Promise<void> = Promise.resolve();
 
     constructor(
-        @inject(IDeepnoteNotebookEnvironmentMapper) private readonly mapper: IDeepnoteNotebookEnvironmentMapper,
+        @inject(IDeepnoteProjectEnvironmentMapper) private readonly mapper: IDeepnoteProjectEnvironmentMapper,
         @inject(IDeepnoteEnvironmentManager) private readonly environmentManager: IDeepnoteEnvironmentManager,
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry
     ) {}
@@ -60,8 +57,7 @@ export class DeepnoteExtensionSidecarWriter implements IExtensionSyncActivationS
         this.disposables.push(
             this.mapper.onDidSetEnvironment((e) => this.handleSetEnvironment(e)),
             this.mapper.onDidRemoveEnvironment((e) => this.handleRemoveEnvironment(e)),
-            this.environmentManager.onDidChangeEnvironments(() => this.handleEnvironmentsChanged()),
-            workspace.onDidOpenNotebookDocument((doc) => this.handleNotebookOpened(doc))
+            this.environmentManager.onDidChangeEnvironments(() => this.handleEnvironmentsChanged())
         );
 
         // Sync existing mappings so the sidecar is up-to-date for existing users
@@ -106,64 +102,8 @@ export class DeepnoteExtensionSidecarWriter implements IExtensionSyncActivationS
         }
     }
 
-    /**
-     * When a notebook is opened after activation, check if it already has
-     * a mapping and add it to the sidecar.
-     */
-    private async handleNotebookOpened(doc: NotebookDocument): Promise<void> {
-        if (doc.notebookType !== 'deepnote') {
-            return;
-        }
-
+    private async handleRemoveEnvironment({ projectId }: { projectId: string }): Promise<void> {
         try {
-            const notebookUri = doc.uri.with({ query: '', fragment: '' });
-            const projectId = doc.metadata?.deepnoteProjectId as string | undefined;
-            if (!projectId) {
-                return;
-            }
-
-            const environmentId = this.mapper.getEnvironmentForNotebook(notebookUri);
-            if (!environmentId) {
-                return;
-            }
-
-            const environment = this.environmentManager.getEnvironment(environmentId);
-            if (!environment) {
-                return;
-            }
-
-            this.fsPathToProjectId.set(notebookUri.fsPath, projectId);
-
-            await this.enqueueWrite(async (sidecar) => {
-                const existing = sidecar.mappings[projectId];
-                if (
-                    existing?.environmentId === environmentId &&
-                    existing?.venvPath === environment.venvPath.fsPath &&
-                    existing?.pythonInterpreter === environment.pythonInterpreter.uri.fsPath
-                ) {
-                    return false;
-                }
-                sidecar.mappings[projectId] = {
-                    environmentId,
-                    venvPath: environment.venvPath.fsPath,
-                    pythonInterpreter: environment.pythonInterpreter.uri.fsPath
-                };
-                return true;
-            });
-        } catch (error) {
-            logger.warn('[SidecarWriter] Failed to handle notebook opened', error);
-        }
-    }
-
-    private async handleRemoveEnvironment({ notebookUri }: { notebookUri: Uri }): Promise<void> {
-        try {
-            const projectId = this.fsPathToProjectId.get(notebookUri.fsPath) ?? this.resolveProjectId(notebookUri);
-            if (!projectId) {
-                return;
-            }
-
-            this.fsPathToProjectId.delete(notebookUri.fsPath);
-
             await this.enqueueWrite(async (sidecar) => {
                 if (!(projectId in sidecar.mappings)) {
                     return false;
@@ -177,24 +117,17 @@ export class DeepnoteExtensionSidecarWriter implements IExtensionSyncActivationS
     }
 
     private async handleSetEnvironment({
-        notebookUri,
+        projectId,
         environmentId
     }: {
-        notebookUri: Uri;
+        projectId: string;
         environmentId: string;
     }): Promise<void> {
         try {
-            const projectId = this.resolveProjectId(notebookUri);
-            if (!projectId) {
-                return;
-            }
-
             const environment = this.environmentManager.getEnvironment(environmentId);
             if (!environment) {
                 return;
             }
-
-            this.fsPathToProjectId.set(notebookUri.fsPath, projectId);
 
             await this.enqueueWrite(async (sidecar) => {
                 sidecar.mappings[projectId] = {
@@ -210,49 +143,42 @@ export class DeepnoteExtensionSidecarWriter implements IExtensionSyncActivationS
     }
 
     /**
-     * On activation, iterate all persisted mapper entries (not just open
-     * notebooks) and write their mappings to the sidecar. For each entry
-     * we read the `.deepnote` file to extract the project ID.
+     * On activation, iterate all persisted mapper entries and write their
+     * mappings to the sidecar. Mappings are already keyed by project id from
+     * the new mapper, so no per-file YAML reads are required here.
      */
     private async syncExistingMappings(): Promise<void> {
         try {
             await this.environmentManager.waitForInitialization();
+            await this.mapper.waitForInitialization();
 
             const allMappings = this.mapper.getAllMappings();
             if (allMappings.size === 0) {
                 return;
             }
 
-            // Collect all project IDs outside the write queue to avoid holding the lock during I/O.
             const entries: Array<{
-                fsPath: string;
                 projectId: string;
                 environmentId: string;
                 venvPath: string;
                 pythonInterpreter: string;
             }> = [];
-            for (const [fsPath, environmentId] of allMappings) {
+
+            for (const [projectId, environmentId] of allMappings) {
                 try {
                     const environment = this.environmentManager.getEnvironment(environmentId);
                     if (!environment) {
                         continue;
                     }
 
-                    const projectId = await this.readProjectIdFromFile(Uri.file(fsPath));
-                    if (!projectId) {
-                        continue;
-                    }
-
-                    this.fsPathToProjectId.set(fsPath, projectId);
                     entries.push({
-                        fsPath,
                         projectId,
                         environmentId,
                         venvPath: environment.venvPath.fsPath,
                         pythonInterpreter: environment.pythonInterpreter.uri.fsPath
                     });
                 } catch (entryError) {
-                    logger.warn(`[SidecarWriter] Failed to process mapping for ${fsPath}`, entryError);
+                    logger.warn(`[SidecarWriter] Failed to process mapping for project ${projectId}`, entryError);
                 }
             }
 
@@ -304,16 +230,6 @@ export class DeepnoteExtensionSidecarWriter implements IExtensionSyncActivationS
         return Uri.joinPath(folder.uri, getEditorSettingsFolder(), SIDECAR_FILENAME);
     }
 
-    private async readProjectIdFromFile(fileUri: Uri): Promise<string | undefined> {
-        try {
-            const raw = await workspace.fs.readFile(fileUri);
-            const parsed = YAML.parse(Buffer.from(raw).toString('utf-8')) as { project?: { id?: string } } | undefined;
-            return parsed?.project?.id;
-        } catch {
-            return undefined;
-        }
-    }
-
     private async readSidecar(): Promise<SidecarFile> {
         const uri = this.getSidecarUri();
         if (!uri) {
@@ -331,14 +247,6 @@ export class DeepnoteExtensionSidecarWriter implements IExtensionSyncActivationS
         }
 
         return { mappings: {} };
-    }
-
-    private resolveProjectId(notebookUri: Uri): string | undefined {
-        const doc = workspace.notebookDocuments.find(
-            (d) =>
-                d.notebookType === 'deepnote' && d.uri.with({ query: '', fragment: '' }).fsPath === notebookUri.fsPath
-        );
-        return doc?.metadata?.deepnoteProjectId as string | undefined;
     }
 
     private async writeSidecar(sidecar: SidecarFile): Promise<void> {

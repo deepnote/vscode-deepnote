@@ -24,7 +24,7 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
     // private readonly notebookServerHandles = new Map<string, string>();
 
     private environments: Map<string, DeepnoteEnvironment> = new Map();
-    private environmentServers: Map<string, Uri[]> = new Map();
+    private environmentServers: Map<string, string[]> = new Map();
     private readonly _onDidChangeEnvironments = new EventEmitter<void>();
     public readonly onDidChangeEnvironments = this._onDidChangeEnvironments.event;
     private initializationPromise: Promise<void> | undefined;
@@ -207,8 +207,8 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
         }
 
         // Stop the server if running
-        for (const fileKey of this.environmentServers.get(id) ?? []) {
-            await this.serverStarter.stopServer(fileKey, token);
+        for (const projectId of this.environmentServers.get(id) ?? []) {
+            await this.serverStarter.stopServer(projectId, token);
             Cancellation.throwIfCanceled(token);
         }
 

@@ -157,7 +157,8 @@ export interface IDeepnoteServerStarter {
      * @param venvPath The path to the venv
      * @param managedVenv Whether the venv is managed by this extension (created by us)
      * @param environmentId The environment ID (for server management)
-     * @param deepnoteFileUri The URI of the .deepnote file
+     * @param projectId The Deepnote project id (shared across sibling `.deepnote` files)
+     * @param deepnoteFileUri The URI of the `.deepnote` file (used for working directory + SQL env vars)
      * @param token Cancellation token to cancel the operation
      * @returns Connection information (URL, port, etc.)
      */
@@ -167,17 +168,17 @@ export interface IDeepnoteServerStarter {
         managedVenv: boolean,
         additionalPackages: string[],
         environmentId: string,
+        projectId: string,
         deepnoteFileUri: vscode.Uri,
         token?: vscode.CancellationToken
     ): Promise<DeepnoteServerInfo>;
 
     /**
-     * Stops the deepnote-toolkit server for a kernel environment.
-     * @param environmentId The environment ID
+     * Stops the deepnote-toolkit server for a project.
+     * @param projectId The Deepnote project id
      * @param token Cancellation token to cancel the operation
      */
-    // stopServer(environmentId: string, token?: vscode.CancellationToken): Promise<void>;
-    stopServer(deepnoteFileUri: vscode.Uri, token?: vscode.CancellationToken): Promise<void>;
+    stopServer(projectId: string, token?: vscode.CancellationToken): Promise<void>;
 
     /**
      * Disposes all server processes and resources.
@@ -214,7 +215,7 @@ export interface IDeepnoteKernelAutoSelector {
      * @param notebook The notebook document
      * @param environmentId The environment ID
      */
-    clearControllerForEnvironment(notebook: vscode.NotebookDocument, environmentId: string): void;
+    clearControllerForEnvironment(notebook: vscode.NotebookDocument, environmentId: string): Promise<void>;
 
     /**
      * Ensure an environment is configured for the notebook before execution.
@@ -320,50 +321,56 @@ export interface IDeepnoteEnvironmentManager {
     dispose(): void;
 }
 
-export const IDeepnoteNotebookEnvironmentMapper = Symbol('IDeepnoteNotebookEnvironmentMapper');
-export interface IDeepnoteNotebookEnvironmentMapper {
+export const IDeepnoteProjectEnvironmentMapper = Symbol('IDeepnoteProjectEnvironmentMapper');
+export interface IDeepnoteProjectEnvironmentMapper {
     /**
-     * Get the environment ID selected for a notebook
-     * @param notebookUri The notebook URI (without query/fragment)
-     * @returns Environment ID, or undefined if not set
-     */
-    getEnvironmentForNotebook(notebookUri: vscode.Uri): string | undefined;
-
-    /**
-     * Set the environment for a notebook
-     * @param notebookUri The notebook URI (without query/fragment)
-     * @param environmentId The environment ID
-     */
-    setEnvironmentForNotebook(notebookUri: vscode.Uri, environmentId: string): Promise<void>;
-
-    /**
-     * Remove the environment mapping for a notebook
-     * @param notebookUri The notebook URI (without query/fragment)
-     */
-    removeEnvironmentForNotebook(notebookUri: vscode.Uri): Promise<void>;
-
-    /**
-     * Get all notebooks using a specific environment
-     * @param environmentId The environment ID
-     * @returns Array of notebook URIs
-     */
-    getNotebooksUsingEnvironment(environmentId: string): vscode.Uri[];
-
-    /**
-     * Get all notebook-to-environment mappings
-     * @returns Map of notebookUri.fsPath → environmentId
+     * Get all project-to-environment mappings
+     * @returns Map of projectId → environmentId
      */
     getAllMappings(): ReadonlyMap<string, string>;
 
     /**
-     * Event fired when an environment mapping is removed for a notebook
+     * Get the environment ID selected for a project
+     * @param projectId The Deepnote project id
+     * @returns Environment ID, or undefined if not set
      */
-    onDidRemoveEnvironment: vscode.Event<{ notebookUri: vscode.Uri }>;
+    getEnvironmentForProject(projectId: string): string | undefined;
 
     /**
-     * Event fired when an environment is set for a notebook
+     * Get all projects using a specific environment
+     * @param environmentId The environment ID
+     * @returns Array of project ids
      */
-    onDidSetEnvironment: vscode.Event<{ notebookUri: vscode.Uri; environmentId: string }>;
+    getProjectsUsingEnvironment(environmentId: string): string[];
+
+    /**
+     * Event fired when an environment mapping is removed for a project
+     */
+    onDidRemoveEnvironment: vscode.Event<{ projectId: string }>;
+
+    /**
+     * Event fired when an environment is set for a project
+     */
+    onDidSetEnvironment: vscode.Event<{ projectId: string; environmentId: string }>;
+
+    /**
+     * Remove the environment mapping for a project
+     * @param projectId The Deepnote project id
+     */
+    removeEnvironmentForProject(projectId: string): Promise<void>;
+
+    /**
+     * Set the environment for a project
+     * @param projectId The Deepnote project id
+     * @param environmentId The environment ID
+     */
+    setEnvironmentForProject(projectId: string, environmentId: string): Promise<void>;
+
+    /**
+     * Wait until the mapper has finished loading mappings and running the
+     * one-shot migration from the legacy notebook-URI keyed storage.
+     */
+    waitForInitialization(): Promise<void>;
 }
 
 export const IDeepnoteLspClientManager = Symbol('IDeepnoteLspClientManager');

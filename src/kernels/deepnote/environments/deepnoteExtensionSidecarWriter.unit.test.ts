@@ -5,7 +5,7 @@ import { EventEmitter, NotebookDocument, Uri, WorkspaceFolder } from 'vscode';
 
 import type { IDisposableRegistry } from '../../../platform/common/types';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
-import { IDeepnoteEnvironmentManager, IDeepnoteNotebookEnvironmentMapper } from '../types';
+import { IDeepnoteEnvironmentManager, IDeepnoteProjectEnvironmentMapper } from '../types';
 import { DeepnoteEnvironment } from './deepnoteEnvironment';
 import { DeepnoteExtensionSidecarWriter } from './deepnoteExtensionSidecarWriter.node';
 
@@ -38,36 +38,14 @@ function makeEnvironment(overrides: Partial<DeepnoteEnvironment> & { id: string 
     };
 }
 
-function makeDeepnoteYaml(projectId: string): string {
-    return `version: '1.0'\nproject:\n  id: ${projectId}\n  name: Test\n  notebooks: []\n`;
-}
-
-function createMockNotebook(opts: { uri: Uri; projectId?: string; notebookType?: string }): NotebookDocument {
-    return {
-        uri: opts.uri,
-        notebookType: opts.notebookType ?? 'deepnote',
-        metadata: { deepnoteProjectId: opts.projectId ?? 'project-1' },
-        isDirty: false,
-        isUntitled: false,
-        isClosed: false,
-        version: 1,
-        cellCount: 0,
-        cellAt: () => {
-            throw new Error('Not implemented');
-        },
-        getCells: () => [],
-        save: async () => true
-    } as unknown as NotebookDocument;
-}
-
 suite('DeepnoteExtensionSidecarWriter', () => {
     let writer: DeepnoteExtensionSidecarWriter;
     let disposables: IDisposableRegistry;
-    let mockMapper: IDeepnoteNotebookEnvironmentMapper;
+    let mockMapper: IDeepnoteProjectEnvironmentMapper;
     let mockEnvironmentManager: IDeepnoteEnvironmentManager;
 
-    let onDidSetEnvironment: EventEmitter<{ notebookUri: Uri; environmentId: string }>;
-    let onDidRemoveEnvironment: EventEmitter<{ notebookUri: Uri }>;
+    let onDidSetEnvironment: EventEmitter<{ projectId: string; environmentId: string }>;
+    let onDidRemoveEnvironment: EventEmitter<{ projectId: string }>;
     let onDidChangeEnvironments: EventEmitter<void>;
     let onDidOpenNotebookDocument: EventEmitter<NotebookDocument>;
 
@@ -75,8 +53,6 @@ suite('DeepnoteExtensionSidecarWriter', () => {
     let writeFileCallCount: number;
     let createDirectoryUris: Uri[];
     let readFileContent: string;
-    /** Per-file read responses keyed by fsPath — used for .deepnote YAML files. */
-    let fileContents: Map<string, string>;
 
     const workspaceUri = Uri.file('/workspace');
 
@@ -86,13 +62,12 @@ suite('DeepnoteExtensionSidecarWriter', () => {
         writeFileCallCount = 0;
         createDirectoryUris = [];
         readFileContent = '';
-        fileContents = new Map();
 
         disposables = [];
 
         // Set up event emitters
-        onDidSetEnvironment = new EventEmitter<{ notebookUri: Uri; environmentId: string }>();
-        onDidRemoveEnvironment = new EventEmitter<{ notebookUri: Uri }>();
+        onDidSetEnvironment = new EventEmitter<{ projectId: string; environmentId: string }>();
+        onDidRemoveEnvironment = new EventEmitter<{ projectId: string }>();
         onDidChangeEnvironments = new EventEmitter<void>();
         onDidOpenNotebookDocument = new EventEmitter<NotebookDocument>();
         disposables.push(
@@ -103,10 +78,11 @@ suite('DeepnoteExtensionSidecarWriter', () => {
         );
 
         // Set up mapper mock
-        mockMapper = mock<IDeepnoteNotebookEnvironmentMapper>();
+        mockMapper = mock<IDeepnoteProjectEnvironmentMapper>();
         when(mockMapper.onDidSetEnvironment).thenReturn(onDidSetEnvironment.event);
         when(mockMapper.onDidRemoveEnvironment).thenReturn(onDidRemoveEnvironment.event);
         when(mockMapper.getAllMappings()).thenReturn(new Map());
+        when(mockMapper.waitForInitialization()).thenResolve();
 
         // Set up environment manager mock
         mockEnvironmentManager = mock<IDeepnoteEnvironmentManager>();
@@ -137,13 +113,7 @@ suite('DeepnoteExtensionSidecarWriter', () => {
 
     function setupMockFs() {
         const mockFs = mock<typeof import('vscode').workspace.fs>();
-        when(mockFs.readFile(anything())).thenCall((uri: Uri) => {
-            // Check per-file map first (for .deepnote YAML files)
-            const perFile = fileContents.get(uri.fsPath);
-            if (perFile !== undefined) {
-                return Promise.resolve(Buffer.from(perFile, 'utf-8'));
-            }
-            // Fall back to global sidecar content
+        when(mockFs.readFile(anything())).thenCall(() => {
             if (!readFileContent) {
                 return Promise.reject(new Error('File not found'));
             }
@@ -169,10 +139,6 @@ suite('DeepnoteExtensionSidecarWriter', () => {
     }
 
     test('set mapping writes sidecar with correct projectId, environmentId, and venvPath', async () => {
-        const notebookUri = Uri.file('/workspace/project.deepnote');
-        const notebook = createMockNotebook({ uri: notebookUri, projectId: 'proj-abc' });
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-
         const env = makeEnvironment({
             id: 'env-1',
             venvPath: Uri.file('/home/user/.venvs/my-env')
@@ -181,7 +147,7 @@ suite('DeepnoteExtensionSidecarWriter', () => {
 
         writer.activate();
 
-        onDidSetEnvironment.fire({ notebookUri, environmentId: 'env-1' });
+        onDidSetEnvironment.fire({ projectId: 'proj-abc', environmentId: 'env-1' });
 
         await waitFor(() => writeFileCallCount > 0);
 
@@ -194,23 +160,19 @@ suite('DeepnoteExtensionSidecarWriter', () => {
     });
 
     test('remove mapping removes entry from sidecar', async () => {
-        const notebookUri = Uri.file('/workspace/project.deepnote');
-        const notebook = createMockNotebook({ uri: notebookUri, projectId: 'proj-abc' });
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-
         const env = makeEnvironment({ id: 'env-1' });
         when(mockEnvironmentManager.getEnvironment('env-1')).thenReturn(env);
 
         writer.activate();
 
         // First set, then remove
-        onDidSetEnvironment.fire({ notebookUri, environmentId: 'env-1' });
+        onDidSetEnvironment.fire({ projectId: 'proj-abc', environmentId: 'env-1' });
         await waitFor(() => writeFileCallCount >= 1);
 
         // Set the sidecar content so the next read picks it up
         readFileContent = writtenContent!;
 
-        onDidRemoveEnvironment.fire({ notebookUri });
+        onDidRemoveEnvironment.fire({ projectId: 'proj-abc' });
         await waitFor(() => writeFileCallCount >= 2);
 
         const sidecar = parseSidecar();
@@ -219,12 +181,6 @@ suite('DeepnoteExtensionSidecarWriter', () => {
     });
 
     test('multiple projects accumulate entries in a single sidecar', async () => {
-        const uri1 = Uri.file('/workspace/project1.deepnote');
-        const uri2 = Uri.file('/workspace/project2.deepnote');
-        const nb1 = createMockNotebook({ uri: uri1, projectId: 'proj-1' });
-        const nb2 = createMockNotebook({ uri: uri2, projectId: 'proj-2' });
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([nb1, nb2]);
-
         const env1 = makeEnvironment({ id: 'env-1', venvPath: Uri.file('/venvs/env1') });
         const env2 = makeEnvironment({ id: 'env-2', venvPath: Uri.file('/venvs/env2') });
         when(mockEnvironmentManager.getEnvironment('env-1')).thenReturn(env1);
@@ -232,11 +188,11 @@ suite('DeepnoteExtensionSidecarWriter', () => {
 
         writer.activate();
 
-        onDidSetEnvironment.fire({ notebookUri: uri1, environmentId: 'env-1' });
+        onDidSetEnvironment.fire({ projectId: 'proj-1', environmentId: 'env-1' });
         await waitFor(() => writeFileCallCount >= 1);
         readFileContent = writtenContent!;
 
-        onDidSetEnvironment.fire({ notebookUri: uri2, environmentId: 'env-2' });
+        onDidSetEnvironment.fire({ projectId: 'proj-2', environmentId: 'env-2' });
         await waitFor(() => writeFileCallCount >= 2);
 
         const sidecar = parseSidecar();
@@ -247,10 +203,6 @@ suite('DeepnoteExtensionSidecarWriter', () => {
     });
 
     test('error reading sidecar does not throw', async () => {
-        const notebookUri = Uri.file('/workspace/project.deepnote');
-        const notebook = createMockNotebook({ uri: notebookUri, projectId: 'proj-abc' });
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-
         const env = makeEnvironment({ id: 'env-1' });
         when(mockEnvironmentManager.getEnvironment('env-1')).thenReturn(env);
 
@@ -258,7 +210,7 @@ suite('DeepnoteExtensionSidecarWriter', () => {
         writer.activate();
 
         // Should not throw even though readFile fails
-        onDidSetEnvironment.fire({ notebookUri, environmentId: 'env-1' });
+        onDidSetEnvironment.fire({ projectId: 'proj-abc', environmentId: 'env-1' });
         await waitFor(() => writeFileCallCount >= 1);
 
         // Still writes successfully with a fresh sidecar
@@ -267,10 +219,6 @@ suite('DeepnoteExtensionSidecarWriter', () => {
     });
 
     test('error writing sidecar does not throw', async () => {
-        const notebookUri = Uri.file('/workspace/project.deepnote');
-        const notebook = createMockNotebook({ uri: notebookUri, projectId: 'proj-abc' });
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-
         const env = makeEnvironment({ id: 'env-1' });
         when(mockEnvironmentManager.getEnvironment('env-1')).thenReturn(env);
 
@@ -283,7 +231,7 @@ suite('DeepnoteExtensionSidecarWriter', () => {
         writer.activate();
 
         // Should not throw
-        onDidSetEnvironment.fire({ notebookUri, environmentId: 'env-1' });
+        onDidSetEnvironment.fire({ projectId: 'proj-abc', environmentId: 'env-1' });
 
         // Give time for the async operation to complete
         await new Promise((resolve) => setTimeout(resolve, 200));
@@ -292,17 +240,13 @@ suite('DeepnoteExtensionSidecarWriter', () => {
     });
 
     test('environment changed refreshes sidecar with updated venvPath', async () => {
-        const notebookUri = Uri.file('/workspace/project.deepnote');
-        const notebook = createMockNotebook({ uri: notebookUri, projectId: 'proj-abc' });
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-
         const env = makeEnvironment({ id: 'env-1', venvPath: Uri.file('/venvs/old-path') });
         when(mockEnvironmentManager.getEnvironment('env-1')).thenReturn(env);
 
         writer.activate();
 
         // Set initial mapping
-        onDidSetEnvironment.fire({ notebookUri, environmentId: 'env-1' });
+        onDidSetEnvironment.fire({ projectId: 'proj-abc', environmentId: 'env-1' });
         await waitFor(() => writeFileCallCount >= 1);
         readFileContent = writtenContent!;
 
@@ -318,16 +262,12 @@ suite('DeepnoteExtensionSidecarWriter', () => {
     });
 
     test('environment deleted removes entry on environments changed', async () => {
-        const notebookUri = Uri.file('/workspace/project.deepnote');
-        const notebook = createMockNotebook({ uri: notebookUri, projectId: 'proj-abc' });
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-
         const env = makeEnvironment({ id: 'env-1' });
         when(mockEnvironmentManager.getEnvironment('env-1')).thenReturn(env);
 
         writer.activate();
 
-        onDidSetEnvironment.fire({ notebookUri, environmentId: 'env-1' });
+        onDidSetEnvironment.fire({ projectId: 'proj-abc', environmentId: 'env-1' });
         await waitFor(() => writeFileCallCount >= 1);
         readFileContent = writtenContent!;
 
@@ -344,28 +284,21 @@ suite('DeepnoteExtensionSidecarWriter', () => {
     test('no-op when no workspace folder is open', async () => {
         when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn(undefined);
 
-        const notebookUri = Uri.file('/workspace/project.deepnote');
-        const notebook = createMockNotebook({ uri: notebookUri, projectId: 'proj-abc' });
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-
         const env = makeEnvironment({ id: 'env-1' });
         when(mockEnvironmentManager.getEnvironment('env-1')).thenReturn(env);
 
         writer.activate();
 
-        onDidSetEnvironment.fire({ notebookUri, environmentId: 'env-1' });
+        onDidSetEnvironment.fire({ projectId: 'proj-abc', environmentId: 'env-1' });
 
         await new Promise((resolve) => setTimeout(resolve, 200));
 
         assert.strictEqual(writeFileCallCount, 0, 'Should not write when no workspace folder');
     });
 
-    test('activation syncs existing mappings to sidecar by reading .deepnote files', async () => {
-        const fsPath = '/workspace/project.deepnote';
-
-        // Mapper has a persisted entry — notebook is NOT open
-        when(mockMapper.getAllMappings()).thenReturn(new Map([[fsPath, 'env-existing']]));
-        fileContents.set(fsPath, makeDeepnoteYaml('proj-existing'));
+    test('activation syncs existing project-keyed mappings to sidecar', async () => {
+        // Mapper already has project-keyed entries (no need to read any .deepnote files)
+        when(mockMapper.getAllMappings()).thenReturn(new Map([['proj-existing', 'env-existing']]));
 
         const env = makeEnvironment({ id: 'env-existing', venvPath: Uri.file('/venvs/existing') });
         when(mockEnvironmentManager.getEnvironment('env-existing')).thenReturn(env);
@@ -382,18 +315,13 @@ suite('DeepnoteExtensionSidecarWriter', () => {
         });
     });
 
-    test('activation syncs multiple projects including closed notebooks', async () => {
-        const path1 = '/workspace/proj1.deepnote';
-        const path2 = '/workspace/proj2.deepnote';
-
+    test('activation syncs multiple project-keyed mappings', async () => {
         when(mockMapper.getAllMappings()).thenReturn(
             new Map([
-                [path1, 'env-1'],
-                [path2, 'env-2']
+                ['proj-1', 'env-1'],
+                ['proj-2', 'env-2']
             ])
         );
-        fileContents.set(path1, makeDeepnoteYaml('proj-1'));
-        fileContents.set(path2, makeDeepnoteYaml('proj-2'));
 
         const env1 = makeEnvironment({ id: 'env-1', venvPath: Uri.file('/venvs/env1') });
         const env2 = makeEnvironment({ id: 'env-2', venvPath: Uri.file('/venvs/env2') });
@@ -411,23 +339,17 @@ suite('DeepnoteExtensionSidecarWriter', () => {
         });
     });
 
-    test('activation skips entries whose .deepnote file cannot be read', async () => {
-        const goodPath = '/workspace/good.deepnote';
-        const badPath = '/workspace/missing.deepnote';
-
+    test('activation skips entries whose environment does not exist', async () => {
         when(mockMapper.getAllMappings()).thenReturn(
             new Map([
-                [goodPath, 'env-1'],
-                [badPath, 'env-2']
+                ['proj-good', 'env-1'],
+                ['proj-missing', 'env-missing']
             ])
         );
-        fileContents.set(goodPath, makeDeepnoteYaml('proj-good'));
-        // badPath not in fileContents → readFile will reject
 
         const env1 = makeEnvironment({ id: 'env-1', venvPath: Uri.file('/venvs/env1') });
-        const env2 = makeEnvironment({ id: 'env-2', venvPath: Uri.file('/venvs/env2') });
         when(mockEnvironmentManager.getEnvironment('env-1')).thenReturn(env1);
-        when(mockEnvironmentManager.getEnvironment('env-2')).thenReturn(env2);
+        // env-missing returns undefined from the environment manager
 
         writer.activate();
 
@@ -439,77 +361,13 @@ suite('DeepnoteExtensionSidecarWriter', () => {
         assert.isUndefined(sidecar.mappings['proj-missing']);
     });
 
-    test('opening a notebook with existing mapping writes to sidecar', async () => {
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([]);
-
-        writer.activate();
-
-        // Wait for initial sync (no-op since no notebooks open)
-        await new Promise((resolve) => setTimeout(resolve, 100));
-
-        const notebookUri = Uri.file('/workspace/project.deepnote');
-        const notebook = createMockNotebook({ uri: notebookUri, projectId: 'proj-opened' });
-
-        const env = makeEnvironment({ id: 'env-1', venvPath: Uri.file('/venvs/env1') });
-        when(mockEnvironmentManager.getEnvironment('env-1')).thenReturn(env);
-        when(mockMapper.getEnvironmentForNotebook(anything())).thenReturn('env-1');
-
-        onDidOpenNotebookDocument.fire(notebook);
-
-        await waitFor(() => writeFileCallCount >= 1);
-
-        const sidecar = parseSidecar();
-        assert.deepStrictEqual(sidecar.mappings['proj-opened'], {
-            environmentId: 'env-1',
-            venvPath: '/venvs/env1',
-            pythonInterpreter: '/usr/bin/python3'
-        });
-    });
-
-    test('no-op when notebook has no projectId in metadata', async () => {
-        const notebookUri = Uri.file('/workspace/project.deepnote');
-        // Notebook without projectId
-        const notebook = {
-            uri: notebookUri,
-            notebookType: 'deepnote',
-            metadata: {},
-            isDirty: false,
-            isUntitled: false,
-            isClosed: false,
-            version: 1,
-            cellCount: 0,
-            cellAt: () => {
-                throw new Error('Not implemented');
-            },
-            getCells: () => [],
-            save: async () => true
-        } as unknown as NotebookDocument;
-
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-
-        const env = makeEnvironment({ id: 'env-1' });
-        when(mockEnvironmentManager.getEnvironment('env-1')).thenReturn(env);
-
-        writer.activate();
-
-        onDidSetEnvironment.fire({ notebookUri, environmentId: 'env-1' });
-
-        await new Promise((resolve) => setTimeout(resolve, 200));
-
-        assert.strictEqual(writeFileCallCount, 0, 'Should not write when no projectId');
-    });
-
     test('creates the editor settings folder before writing', async () => {
-        const notebookUri = Uri.file('/workspace/project.deepnote');
-        const notebook = createMockNotebook({ uri: notebookUri, projectId: 'proj-abc' });
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-
         const env = makeEnvironment({ id: 'env-1' });
         when(mockEnvironmentManager.getEnvironment('env-1')).thenReturn(env);
 
         writer.activate();
 
-        onDidSetEnvironment.fire({ notebookUri, environmentId: 'env-1' });
+        onDidSetEnvironment.fire({ projectId: 'proj-abc', environmentId: 'env-1' });
 
         await waitFor(() => writeFileCallCount > 0);
 

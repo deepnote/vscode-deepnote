@@ -14,6 +14,7 @@ import { IPythonApiProvider } from '../../../platform/api/types';
 import { STANDARD_OUTPUT_CHANNEL } from '../../../platform/common/constants';
 import { getDisplayPath } from '../../../platform/common/platform/fs-paths.node';
 import { IDisposableRegistry, IOutputChannel } from '../../../platform/common/types';
+import { resolveProjectIdForNotebook } from '../../../platform/deepnote/deepnoteProjectIdResolver';
 import { createDeepnoteServerConfigHandle } from '../../../platform/deepnote/deepnoteServerUtils.node';
 import { DeepnoteToolkitMissingError } from '../../../platform/errors/deepnoteKernelErrors';
 import {
@@ -27,7 +28,7 @@ import {
     DeepnoteKernelConnectionMetadata,
     IDeepnoteEnvironmentManager,
     IDeepnoteKernelAutoSelector,
-    IDeepnoteNotebookEnvironmentMapper
+    IDeepnoteProjectEnvironmentMapper
 } from '../types';
 import { CreateDeepnoteEnvironmentOptions, DeepnoteEnvironment } from './deepnoteEnvironment';
 import { DeepnoteEnvironmentTreeDataProvider } from './deepnoteEnvironmentTreeDataProvider.node';
@@ -49,8 +50,8 @@ export class DeepnoteEnvironmentsView implements Disposable {
         @inject(IPythonApiProvider) private readonly pythonApiProvider: IPythonApiProvider,
         @inject(IDisposableRegistry) disposableRegistry: IDisposableRegistry,
         @inject(IDeepnoteKernelAutoSelector) private readonly kernelAutoSelector: IDeepnoteKernelAutoSelector,
-        @inject(IDeepnoteNotebookEnvironmentMapper)
-        private readonly notebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper,
+        @inject(IDeepnoteProjectEnvironmentMapper)
+        private readonly projectEnvironmentMapper: IDeepnoteProjectEnvironmentMapper,
         @inject(IKernelProvider) private readonly kernelProvider: IKernelProvider,
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel
     ) {
@@ -300,10 +301,13 @@ export class DeepnoteEnvironmentsView implements Disposable {
                     cancellable: true
                 },
                 async (_progress, token) => {
-                    // Clean up notebook mappings referencing this env
-                    const notebooks = this.notebookEnvironmentMapper.getNotebooksUsingEnvironment(environmentId);
-                    for (const nb of notebooks) {
-                        await this.notebookEnvironmentMapper.removeEnvironmentForNotebook(nb);
+                    // Wait for the mapper to finish migration so legacy entries are resolved
+                    await this.projectEnvironmentMapper.waitForInitialization();
+
+                    // Clean up project mappings referencing this env
+                    const projectIds = this.projectEnvironmentMapper.getProjectsUsingEnvironment(environmentId);
+                    for (const projectId of projectIds) {
+                        await this.projectEnvironmentMapper.removeEnvironmentForProject(projectId);
                     }
 
                     // Dispose kernels from any open notebooks using this environment
@@ -342,26 +346,33 @@ export class DeepnoteEnvironmentsView implements Disposable {
 
             // Check if this kernel is using the environment being deleted
             const connectionMetadata = kernel.kernelConnectionMetadata;
-            if (connectionMetadata.kind === 'startUsingDeepnoteKernel') {
-                const deepnoteMetadata = connectionMetadata as DeepnoteKernelConnectionMetadata;
-                const expectedHandle = createDeepnoteServerConfigHandle(environmentId, notebook.uri);
+            if (connectionMetadata.kind !== 'startUsingDeepnoteKernel') {
+                continue;
+            }
 
-                if (deepnoteMetadata.serverProviderHandle.handle === expectedHandle) {
-                    logger.info(
-                        `Disposing kernel for notebook ${getDisplayPath(
-                            notebook.uri
-                        )} as it uses deleted environment ${environmentId}`
-                    );
+            const projectId = await resolveProjectIdForNotebook(notebook);
+            if (!projectId) {
+                continue;
+            }
 
-                    try {
-                        // First, unselect the controller from the notebook UI
-                        this.kernelAutoSelector.clearControllerForEnvironment(notebook, environmentId);
+            const deepnoteMetadata = connectionMetadata as DeepnoteKernelConnectionMetadata;
+            const expectedHandle = createDeepnoteServerConfigHandle(environmentId, projectId);
 
-                        // Then dispose the kernel
-                        await kernel.dispose();
-                    } catch (error) {
-                        logger.error(`Failed to dispose kernel for ${getDisplayPath(notebook.uri)}`, error);
-                    }
+            if (deepnoteMetadata.serverProviderHandle.handle === expectedHandle) {
+                logger.info(
+                    `Disposing kernel for notebook ${getDisplayPath(
+                        notebook.uri
+                    )} as it uses deleted environment ${environmentId}`
+                );
+
+                try {
+                    // First, unselect the controller from the notebook UI
+                    await this.kernelAutoSelector.clearControllerForEnvironment(notebook, environmentId);
+
+                    // Then dispose the kernel
+                    await kernel.dispose();
+                } catch (error) {
+                    logger.error(`Failed to dispose kernel for ${getDisplayPath(notebook.uri)}`, error);
                 }
             }
         }
@@ -370,11 +381,17 @@ export class DeepnoteEnvironmentsView implements Disposable {
     public async selectEnvironmentForNotebook({ notebook }: { notebook: NotebookDocument }): Promise<void> {
         logger.info('Selecting environment for notebook:', notebook);
 
-        // Get base file URI (without query/fragment)
-        const baseFileUri = notebook.uri.with({ query: '', fragment: '' });
+        const projectId = await resolveProjectIdForNotebook(notebook);
+        if (!projectId) {
+            void window.showWarningMessage(l10n.t('Could not resolve Deepnote project id for this notebook'));
+            return;
+        }
+
+        // Wait for the mapper to finish migration so legacy entries are resolved
+        await this.projectEnvironmentMapper.waitForInitialization();
 
         // Get current environment selection
-        const currentEnvironmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri);
+        const currentEnvironmentId = this.projectEnvironmentMapper.getEnvironmentForProject(projectId);
         const currentEnvironment = currentEnvironmentId
             ? this.environmentManager.getEnvironment(currentEnvironmentId)
             : undefined;
@@ -471,8 +488,8 @@ export class DeepnoteEnvironmentsView implements Disposable {
                     cancellable: true
                 },
                 async (progress, token) => {
-                    // Update the notebook-to-environment mapping
-                    await this.notebookEnvironmentMapper.setEnvironmentForNotebook(baseFileUri, selectedEnvironmentId);
+                    // Update the project-to-environment mapping
+                    await this.projectEnvironmentMapper.setEnvironmentForProject(projectId, selectedEnvironmentId);
 
                     // Force rebuild the controller with the new environment
                     // This clears cached metadata and creates a fresh controller.

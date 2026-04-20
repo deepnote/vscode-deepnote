@@ -1,20 +1,26 @@
 import { assert } from 'chai';
 import * as fakeTimers from '@sinonjs/fake-timers';
+import esmock from 'esmock';
+import * as sinon from 'sinon';
 import { anything, instance, mock, when } from 'ts-mockito';
+import { Uri } from 'vscode';
 
 import { DeepnoteAgentSkillsManager } from './deepnoteAgentSkillsManager.node';
+import { createMockChildProcess } from './deepnoteTestHelpers.node';
 import { DeepnoteServerStarter } from './deepnoteServerStarter.node';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { IAsyncDisposableRegistry, IOutputChannel } from '../../platform/common/types';
 import { IDeepnoteToolkitInstaller } from './types';
 import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
+import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 
 /**
  * Unit tests for DeepnoteServerStarter.
  *
  * Port allocation, server spawning, and health checks are delegated to
  * @deepnote/runtime-core's startServer/stopServer. These tests focus on the
- * extension-specific layers: SQL env var gathering and lifecycle orchestration.
+ * extension-specific layers: SQL env var gathering, lifecycle orchestration,
+ * and project-id keyed reuse of a single server across sibling files.
  */
 suite('DeepnoteServerStarter', () => {
     let serverStarter: DeepnoteServerStarter;
@@ -69,7 +75,6 @@ suite('DeepnoteServerStarter', () => {
             );
 
             const gatherEnvVars = getPrivateMethod(starterWithoutSql, 'gatherSqlIntegrationEnvVars');
-            const { Uri } = await import('vscode');
             const result = await gatherEnvVars(Uri.file('/test/file.deepnote'), 'env1');
 
             assert.deepStrictEqual(result, {});
@@ -78,7 +83,7 @@ suite('DeepnoteServerStarter', () => {
         });
 
         test('should return empty object when provider rejects with cancellation error', async () => {
-            const { CancellationError, Uri } = await import('vscode');
+            const { CancellationError } = await import('vscode');
 
             const cancelledProvider = mock<ISqlIntegrationEnvVarsProvider>();
             when(cancelledProvider.getEnvironmentVariables(anything(), anything())).thenReject(new CancellationError());
@@ -132,7 +137,8 @@ suite('DeepnoteServerStarter', () => {
                 resolveDeferred = resolve;
             });
 
-            starter.pendingOperations.set('/test/inflight.deepnote', {
+            // Internal maps are now keyed by projectId, not fsPath
+            starter.pendingOperations.set('project-id-inflight', {
                 type: 'stop',
                 promise: deferred
             });
@@ -155,6 +161,135 @@ suite('DeepnoteServerStarter', () => {
 
             assert.strictEqual(disposeResolved, true, 'dispose() should resolve after pending operation completes');
             assert.strictEqual(starter.pendingOperations.size, 0);
+        });
+    });
+
+    /**
+     * Verifies the core plan invariant: two sibling `.deepnote` files that share
+     * the same `projectId` must reuse a single underlying server process. We
+     * assert this by mocking `@deepnote/runtime-core`'s `startServer` and
+     * checking it's only called once, even though `startServer` is invoked
+     * twice with different `deepnoteFileUri`s but the same `projectId`.
+     */
+    suite('shared server for siblings with same projectId', () => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let mockedStarterModule: any;
+        let runtimeCoreStartServer: sinon.SinonStub;
+        let runtimeCoreStopServer: sinon.SinonStub;
+        let localFetchStub: sinon.SinonStub;
+
+        setup(async () => {
+            runtimeCoreStartServer = sinon.stub();
+            runtimeCoreStopServer = sinon.stub().resolves();
+
+            mockedStarterModule = await esmock('./deepnoteServerStarter.node', {
+                '@deepnote/runtime-core': {
+                    startServer: runtimeCoreStartServer,
+                    stopServer: runtimeCoreStopServer
+                }
+            });
+
+            // Stub fetch so the existing-server health check path is testable.
+            localFetchStub = sinon.stub(globalThis, 'fetch');
+        });
+
+        teardown(() => {
+            localFetchStub?.restore();
+            esmock.purge(mockedStarterModule);
+        });
+
+        test('two deepnoteFileUris sharing one projectId reuse a single server', async () => {
+            const toolkitInstaller = mock<IDeepnoteToolkitInstaller>();
+            when(toolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything(), anything())).thenResolve({
+                pythonInterpreter: {
+                    id: '/venvs/env1/bin/python',
+                    uri: Uri.file('/venvs/env1/bin/python')
+                } as PythonEnvironment,
+                toolkitVersion: '2.0.0'
+            });
+            when(toolkitInstaller.installAdditionalPackages(anything(), anything(), anything())).thenResolve();
+
+            const agentSkillsManager = mock<DeepnoteAgentSkillsManager>();
+            when(agentSkillsManager.ensureSkillsUpdated(anything(), anything())).thenReturn();
+
+            const outputChannel = mock<IOutputChannel>();
+            when(outputChannel.appendLine(anything())).thenReturn();
+
+            const processServiceFactory = mock<IProcessServiceFactory>();
+            const asyncRegistry = mock<IAsyncDisposableRegistry>();
+            when(asyncRegistry.push(anything())).thenReturn();
+
+            const mockedProcess = createMockChildProcess({ pid: 12345 });
+
+            const firstServerInfo = {
+                url: 'http://localhost:8899',
+                jupyterPort: 8899,
+                lspPort: 8900,
+                process: mockedProcess
+            };
+
+            runtimeCoreStartServer.resolves(firstServerInfo);
+
+            // Force `isServerRunning` to return true on the second call, so the
+            // existing server context is reused instead of restarted.
+            localFetchStub.resolves({ ok: true });
+
+            const StarterCtor = mockedStarterModule.DeepnoteServerStarter;
+            const starter = new StarterCtor(
+                instance(processServiceFactory),
+                instance(toolkitInstaller),
+                instance(agentSkillsManager),
+                instance(outputChannel),
+                instance(asyncRegistry)
+            );
+
+            try {
+                const interpreter = {
+                    id: '/usr/bin/python3',
+                    uri: Uri.file('/usr/bin/python3')
+                } as PythonEnvironment;
+
+                const venvPath = Uri.file('/venvs/env1');
+                const projectId = 'shared-project-id';
+
+                // Sibling 1: file A sharing the project
+                const resultA = await starter.startServer(
+                    interpreter,
+                    venvPath,
+                    true, // managedVenv
+                    [], // additionalPackages
+                    'env1', // environmentId
+                    projectId,
+                    Uri.file('/workspace/a.deepnote')
+                );
+
+                // Sibling 2: file B sharing the SAME projectId
+                const resultB = await starter.startServer(
+                    interpreter,
+                    venvPath,
+                    true,
+                    [],
+                    'env1',
+                    projectId,
+                    Uri.file('/workspace/b.deepnote')
+                );
+
+                assert.strictEqual(
+                    runtimeCoreStartServer.callCount,
+                    1,
+                    'Underlying @deepnote/runtime-core startServer should only be invoked once for two siblings sharing a projectId'
+                );
+                assert.strictEqual(resultA, firstServerInfo);
+                assert.strictEqual(resultB, firstServerInfo, 'Second call should return the same ServerInfo');
+
+                // Only one project context should exist, keyed by projectId
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const projectContexts = (starter as any).projectContexts as Map<string, unknown>;
+                assert.strictEqual(projectContexts.size, 1);
+                assert.strictEqual(projectContexts.has(projectId), true);
+            } finally {
+                await starter.dispose();
+            }
         });
     });
 });

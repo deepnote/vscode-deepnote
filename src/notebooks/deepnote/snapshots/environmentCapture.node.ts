@@ -10,9 +10,10 @@ import { computeHash } from '../../../platform/common/crypto';
 import { raceTimeout } from '../../../platform/common/utils/async';
 import { logger } from '../../../platform/logging';
 import { parsePipFreezeFile } from './pipFileParser';
-import { IDeepnoteEnvironmentManager, IDeepnoteNotebookEnvironmentMapper } from '../../../kernels/deepnote/types';
+import { IDeepnoteEnvironmentManager, IDeepnoteProjectEnvironmentMapper } from '../../../kernels/deepnote/types';
 import { Uri } from 'vscode';
 import { DeepnoteEnvironment } from '../../../kernels/deepnote/environments/deepnoteEnvironment';
+import { resolveProjectIdForFile } from '../../../platform/deepnote/deepnoteProjectIdResolver';
 import * as path from '../../../platform/vscode-path/path';
 
 const captureTimeoutInMilliseconds = 5_000;
@@ -34,13 +35,13 @@ type PythonEnvironmentType = 'uv' | 'conda' | 'venv' | 'poetry' | 'system';
 @injectable()
 export class EnvironmentCapture implements IEnvironmentCapture {
     constructor(
-        @inject(IDeepnoteNotebookEnvironmentMapper)
-        private readonly environmentMapper: IDeepnoteNotebookEnvironmentMapper,
+        @inject(IDeepnoteProjectEnvironmentMapper)
+        private readonly environmentMapper: IDeepnoteProjectEnvironmentMapper,
         @inject(IDeepnoteEnvironmentManager) private readonly environmentManager: IDeepnoteEnvironmentManager
     ) {}
 
     async captureEnvironment(notebookUri: Uri): Promise<Environment | undefined> {
-        const deepnoteEnvironment = this.getEnvironmentForNotebook(notebookUri);
+        const deepnoteEnvironment = await this.resolveEnvironmentForNotebook(notebookUri);
 
         if (!deepnoteEnvironment) {
             logger.warn('[EnvironmentCapture] No Deepnote environment found for the given notebook');
@@ -184,8 +185,17 @@ export class EnvironmentCapture implements IEnvironmentCapture {
         return raceTimeout(captureTimeoutInMilliseconds, undefined, getVersion());
     }
 
-    private getEnvironmentForNotebook(notebookUri: Uri): DeepnoteEnvironment | undefined {
-        const environmentId = this.environmentMapper.getEnvironmentForNotebook(notebookUri);
+    private async resolveEnvironmentForNotebook(notebookUri: Uri): Promise<DeepnoteEnvironment | undefined> {
+        const baseFileUri = notebookUri.with({ query: '', fragment: '' });
+        const projectId = await resolveProjectIdForFile(baseFileUri);
+
+        if (!projectId) {
+            return undefined;
+        }
+
+        await this.environmentMapper.waitForInitialization();
+
+        const environmentId = this.environmentMapper.getEnvironmentForProject(projectId);
 
         if (!environmentId) {
             return undefined;

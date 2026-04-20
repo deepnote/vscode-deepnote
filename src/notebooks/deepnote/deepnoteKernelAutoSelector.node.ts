@@ -30,7 +30,7 @@ import {
     IDeepnoteEnvironmentManager,
     IDeepnoteKernelAutoSelector,
     IDeepnoteLspClientManager,
-    IDeepnoteNotebookEnvironmentMapper,
+    IDeepnoteProjectEnvironmentMapper,
     IDeepnoteServerProvider,
     IDeepnoteServerStarter,
     IDeepnoteToolkitInstaller
@@ -50,6 +50,7 @@ import { JVSC_EXTENSION_ID, STANDARD_OUTPUT_CHANNEL } from '../../platform/commo
 import { getDisplayPath } from '../../platform/common/platform/fs-paths.node';
 import { IConfigurationService, IDisposableRegistry, IOutputChannel } from '../../platform/common/types';
 import { disposeAsync } from '../../platform/common/utils';
+import { resolveProjectIdForNotebook } from '../../platform/deepnote/deepnoteProjectIdResolver';
 import { createDeepnoteServerConfigHandle } from '../../platform/deepnote/deepnoteServerUtils.node';
 import { DeepnoteKernelError, DeepnoteToolkitMissingError } from '../../platform/errors/deepnoteKernelErrors';
 import { logger } from '../../platform/logging';
@@ -77,7 +78,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     private readonly notebookEnvironmentsIds = new Map<string, string>();
     // Track per-notebook placeholder controllers for notebooks without configured environments
     private readonly placeholderControllers = new Map<string, NotebookController>();
-    // Track server handles per PROJECT (baseFileUri) - one server per project
+    // Track server handles per PROJECT (projectId) - one server per project, shared across sibling files
     private readonly projectServerHandles = new Map<string, string>();
     // Track projects where we need to run init notebook (set during controller setup)
     private readonly projectsPendingInitNotebook = new Map<
@@ -102,8 +103,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         @inject(IDeepnoteRequirementsHelper) private readonly requirementsHelper: IDeepnoteRequirementsHelper,
         @inject(IDeepnoteEnvironmentManager) private readonly environmentManager: IDeepnoteEnvironmentManager,
         @inject(IDeepnoteServerStarter) private readonly serverStarter: IDeepnoteServerStarter,
-        @inject(IDeepnoteNotebookEnvironmentMapper)
-        private readonly notebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper,
+        @inject(IDeepnoteProjectEnvironmentMapper)
+        private readonly projectEnvironmentMapper: IDeepnoteProjectEnvironmentMapper,
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel,
         @inject(IDeepnoteToolkitInstaller) private readonly toolkitInstaller: IDeepnoteToolkitInstaller
     ) {}
@@ -391,9 +392,17 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     ): Promise<void> {
         const baseFileUri = notebook.uri.with({ query: '', fragment: '' });
         const notebookKey = notebook.uri.toString();
-        const projectKey = baseFileUri.fsPath;
 
         logger.info(`Switching controller environment for ${getDisplayPath(notebook.uri)}`);
+
+        const projectId = await resolveProjectIdForNotebook(notebook);
+        if (!projectId) {
+            logger.error(`Cannot resolve Deepnote project id for ${getDisplayPath(notebook.uri)}`);
+            return;
+        }
+
+        // Wait for the mapper to finish migration so legacy entries are resolved
+        await this.projectEnvironmentMapper.waitForInitialization();
 
         // Check if any cells are executing and log a warning
         const kernel = this.kernelProvider.get(notebook);
@@ -411,10 +420,10 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         this.notebookConnectionMetadata.delete(notebookKey);
 
         // Clear old server handle - new environment will register a new handle
-        const oldServerHandle = this.projectServerHandles.get(projectKey);
+        const oldServerHandle = this.projectServerHandles.get(projectId);
         if (oldServerHandle) {
             logger.info(`Clearing old server handle from tracking: ${oldServerHandle}`);
-            this.projectServerHandles.delete(projectKey);
+            this.projectServerHandles.delete(projectId);
         }
 
         // Stop existing LSP clients so new ones can be created with fresh environment
@@ -425,11 +434,11 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         // Update the controller with new environment's metadata
         // Because we use notebook-based controller IDs, addOrUpdate will call updateConnection()
         // on the existing controller instead of creating a new one
-        const environmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri);
+        const environmentId = this.projectEnvironmentMapper.getEnvironmentForProject(projectId);
         const environment = environmentId ? this.environmentManager.getEnvironment(environmentId) : undefined;
 
         if (environment == null) {
-            await this.notebookEnvironmentMapper.removeEnvironmentForNotebook(baseFileUri);
+            await this.projectEnvironmentMapper.removeEnvironmentForProject(projectId);
             logger.error(`No environment found for notebook ${getDisplayPath(notebook.uri)}`);
             return;
         }
@@ -439,7 +448,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             environment,
             baseFileUri,
             notebookKey,
-            projectKey,
+            projectId,
             progress,
             token
         );
@@ -452,14 +461,23 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         progress: { report(value: { message?: string; increment?: number }): void },
         token: CancellationToken
     ): Promise<boolean> {
-        // baseFileUri identifies the PROJECT (without query/fragment)
+        // baseFileUri identifies the FILE on disk (without query/fragment)
         const baseFileUri = notebook.uri.with({ query: '', fragment: '' });
         // notebookKey uniquely identifies THIS NOTEBOOK (includes query with notebook ID)
         const notebookKey = notebook.uri.toString();
-        // projectKey identifies the PROJECT for server tracking
-        const projectKey = baseFileUri.fsPath;
 
-        const environmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri);
+        const projectId = await resolveProjectIdForNotebook(notebook);
+        if (!projectId) {
+            logger.warn(`Cannot resolve Deepnote project id for ${getDisplayPath(notebook.uri)}`);
+            await this.selectPlaceholderController(notebook);
+
+            return false;
+        }
+
+        // Wait for the mapper to finish migration so legacy entries are resolved
+        await this.projectEnvironmentMapper.waitForInitialization();
+
+        const environmentId = this.projectEnvironmentMapper.getEnvironmentForProject(projectId);
 
         if (environmentId == null) {
             await this.selectPlaceholderController(notebook);
@@ -471,7 +489,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         if (environment == null) {
             logger.info(`No environment found for notebook ${getDisplayPath(notebook.uri)}`);
-            await this.notebookEnvironmentMapper.removeEnvironmentForNotebook(baseFileUri);
+            await this.projectEnvironmentMapper.removeEnvironmentForProject(projectId);
             await this.selectPlaceholderController(notebook);
 
             return false;
@@ -482,7 +500,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             environment,
             baseFileUri,
             notebookKey,
-            projectKey,
+            projectId,
             progress,
             token
         );
@@ -495,7 +513,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         configuration: DeepnoteEnvironment,
         baseFileUri: Uri,
         notebookKey: string,
-        projectKey: string,
+        projectId: string,
         progress: { report(value: { message?: string; increment?: number }): void },
         progressToken: CancellationToken
     ): Promise<void> {
@@ -553,6 +571,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             configuration.managedVenv,
             configuration.packages ?? [],
             configuration.id,
+            projectId,
             baseFileUri,
             progressToken
         );
@@ -568,12 +587,12 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         const serverProviderHandle: JupyterServerProviderHandle = {
             extensionId: JVSC_EXTENSION_ID,
             id: 'deepnote-server',
-            handle: createDeepnoteServerConfigHandle(configuration.id, baseFileUri)
+            handle: createDeepnoteServerConfigHandle(configuration.id, projectId)
         };
 
         // Register the server with the provider (one server per PROJECT)
         this.serverProvider.registerServer(serverProviderHandle.handle, serverInfo);
-        this.projectServerHandles.set(projectKey, serverProviderHandle.handle);
+        this.projectServerHandles.set(projectId, serverProviderHandle.handle);
 
         const lspInterpreterUri = this.getVenvInterpreterUri(configuration.venvPath);
 
@@ -669,11 +688,10 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         this.notebookControllers.set(notebookKey, controller);
 
         // Prepare init notebook execution
-        const projectId = notebook.metadata?.deepnoteProjectId;
         const notebookIdForProject = notebook.metadata?.deepnoteNotebookId;
-        const project = projectId
-            ? (this.notebookManager.getOriginalProject(projectId, notebookIdForProject) as DeepnoteFile | undefined)
-            : undefined;
+        const project = this.notebookManager.getOriginalProject(projectId, notebookIdForProject) as
+            | DeepnoteFile
+            | undefined;
 
         if (project) {
             // Only create requirements.txt if requirements have changed from what's on disk
@@ -689,8 +707,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 logger.info(`Skipping requirements.txt creation for project ${projectId} (no changes detected)`);
             }
 
-            if (project.project.initNotebookId && !this.notebookManager.hasInitNotebookBeenRun(projectId!)) {
-                this.projectsPendingInitNotebook.set(projectId!, { notebook, project });
+            if (project.project.initNotebookId && !this.notebookManager.hasInitNotebookBeenRun(projectId)) {
+                this.projectsPendingInitNotebook.set(projectId, { notebook, project });
                 logger.info(`Init notebook will run automatically when kernel starts for project ${projectId}`);
             }
         }
@@ -794,13 +812,21 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         const baseFileUri = notebook.uri.with({ query: '', fragment: '' });
         const notebookKey = notebook.uri.toString();
-        const projectKey = baseFileUri.fsPath;
 
-        const existingEnvironmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri);
+        const projectId = await resolveProjectIdForNotebook(notebook);
+        if (!projectId) {
+            logger.warn(`Cannot resolve Deepnote project id for ${getDisplayPath(notebook.uri)}`);
+            return false;
+        }
+
+        // Wait for the mapper to finish migration so legacy entries are resolved
+        await this.projectEnvironmentMapper.waitForInitialization();
+
+        const existingEnvironmentId = this.projectEnvironmentMapper.getEnvironmentForProject(projectId);
 
         // No environment configured - need to pick one
         if (!existingEnvironmentId) {
-            return this.pickAndSetupEnvironment(notebook, baseFileUri, notebookKey, projectKey, token);
+            return this.pickAndSetupEnvironment(notebook, baseFileUri, notebookKey, projectId, token);
         }
 
         const environment = this.environmentManager.getEnvironment(existingEnvironmentId);
@@ -808,9 +834,9 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         // Environment no longer exists - remove stale mapping and pick a new one
         if (!environment) {
             logger.info(`Removing stale environment mapping for ${getDisplayPath(notebook.uri)}`);
-            await this.notebookEnvironmentMapper.removeEnvironmentForNotebook(baseFileUri);
+            await this.projectEnvironmentMapper.removeEnvironmentForProject(projectId);
 
-            return this.pickAndSetupEnvironment(notebook, baseFileUri, notebookKey, projectKey, token);
+            return this.pickAndSetupEnvironment(notebook, baseFileUri, notebookKey, projectId, token);
         }
 
         const existingController = this.notebookControllers.get(notebookKey);
@@ -831,7 +857,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                     environment,
                     baseFileUri,
                     notebookKey,
-                    projectKey,
+                    projectId,
                     token
                 );
             }
@@ -848,7 +874,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             )}, triggering setup`
         );
 
-        return this.setupKernelForEnvironment(notebook, environment, baseFileUri, notebookKey, projectKey, token);
+        return this.setupKernelForEnvironment(notebook, environment, baseFileUri, notebookKey, projectId, token);
     }
 
     /**
@@ -858,7 +884,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         notebook: NotebookDocument,
         baseFileUri: Uri,
         notebookKey: string,
-        projectKey: string,
+        projectId: string,
         token: CancellationToken
     ): Promise<boolean> {
         Cancellation.throwIfCanceled(token);
@@ -874,14 +900,14 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         Cancellation.throwIfCanceled(token);
 
-        await this.notebookEnvironmentMapper.setEnvironmentForNotebook(baseFileUri, selectedEnvironment.id);
+        await this.projectEnvironmentMapper.setEnvironmentForProject(projectId, selectedEnvironment.id);
 
         const result = await this.setupKernelForEnvironment(
             notebook,
             selectedEnvironment,
             baseFileUri,
             notebookKey,
-            projectKey,
+            projectId,
             token
         );
 
@@ -900,7 +926,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         environment: DeepnoteEnvironment,
         baseFileUri: Uri,
         notebookKey: string,
-        projectKey: string,
+        projectId: string,
         token: CancellationToken
     ): Promise<boolean> {
         try {
@@ -916,7 +942,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                         environment,
                         baseFileUri,
                         notebookKey,
-                        projectKey,
+                        projectId,
                         progress,
                         progressToken
                     );
@@ -948,13 +974,18 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
      * Clear the controller selection for a notebook using a specific environment.
      * This is used when deleting an environment to unselect its controller from any open notebooks.
      */
-    public clearControllerForEnvironment(notebook: NotebookDocument, environmentId: string): void {
+    public async clearControllerForEnvironment(notebook: NotebookDocument, environmentId: string): Promise<void> {
         const selectedController = this.controllerRegistration.getSelected(notebook);
         if (!selectedController || selectedController.connection.kind !== 'startUsingDeepnoteKernel') {
             return;
         }
 
-        const expectedHandle = createDeepnoteServerConfigHandle(environmentId, notebook.uri);
+        const projectId = await resolveProjectIdForNotebook(notebook);
+        if (!projectId) {
+            return;
+        }
+
+        const expectedHandle = createDeepnoteServerConfigHandle(environmentId, projectId);
 
         if (selectedController.connection.serverProviderHandle.handle === expectedHandle) {
             // Unselect the controller by setting affinity to Default

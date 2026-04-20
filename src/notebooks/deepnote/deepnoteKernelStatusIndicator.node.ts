@@ -18,7 +18,7 @@ import { logger } from '../../platform/logging';
 import {
     DEEPNOTE_NOTEBOOK_TYPE,
     IDeepnoteEnvironmentManager,
-    IDeepnoteNotebookEnvironmentMapper
+    IDeepnoteProjectEnvironmentMapper
 } from '../../kernels/deepnote/types';
 import { IControllerRegistration, IVSCodeNotebookController } from '../controllers/types';
 
@@ -81,8 +81,8 @@ export class DeepnoteKernelStatusIndicator
     constructor(
         @inject(IDisposableRegistry) disposableRegistry: IDisposableRegistry,
         @inject(IControllerRegistration) private readonly controllerRegistration: IControllerRegistration,
-        @inject(IDeepnoteNotebookEnvironmentMapper)
-        private readonly environmentMapper: IDeepnoteNotebookEnvironmentMapper,
+        @inject(IDeepnoteProjectEnvironmentMapper)
+        private readonly environmentMapper: IDeepnoteProjectEnvironmentMapper,
         @inject(IDeepnoteEnvironmentManager) private readonly environmentManager: IDeepnoteEnvironmentManager
     ) {
         disposableRegistry.push(this);
@@ -283,8 +283,8 @@ export class DeepnoteKernelStatusIndicator
             return undefined;
         }
 
-        const baseUri = notebook.uri.with({ query: '', fragment: '' });
-        const environmentId = this.environmentMapper.getEnvironmentForNotebook(baseUri);
+        const projectId = notebook.metadata?.deepnoteProjectId as string | undefined;
+        const environmentId = projectId ? this.environmentMapper.getEnvironmentForProject(projectId) : undefined;
         const environmentName = environmentId ? this.environmentManager.getEnvironment(environmentId)?.name : undefined;
         const connection = controller.connection;
 

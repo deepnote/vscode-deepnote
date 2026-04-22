@@ -20,5 +20,5 @@ fonttools>=4.43.0
 jupyter-server>=2.14.1
 jupyter-core>=5.8.0
 ipython>=8.10.0
-urllib3>=2.2.2
+urllib3>=2.6.3
 jupyterlab>=4.4.8

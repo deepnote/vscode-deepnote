@@ -825,7 +825,7 @@ suite('DeepnoteTreeItem', () => {
         // instance rather than a DeepnoteTreeItem, so instance methods on the subclass
         // prototype are NOT reachable via the usual `item.updateVisualFields()` call.
         // We invoke the method by reading it off the class prototype and calling it on
-        // the instance — same behaviour, just side-steps the proxy's prototype chain loss.
+        // the instance — same behavior, just side-steps the proxy's prototype chain loss.
         function callUpdateVisualFields(item: DeepnoteTreeItem): void {
             const method = DeepnoteTreeItem.prototype.updateVisualFields;
 

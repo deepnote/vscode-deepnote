@@ -1,7 +1,7 @@
 import { NotebookDocument, Uri } from 'vscode';
 
 import { logger } from '../logging';
-import { readDeepnoteProjectFile } from '../../notebooks/deepnote/deepnoteProjectUtils';
+import { readDeepnoteProjectFile } from './deepnoteProjectFileReader';
 
 /**
  * Resolve the Deepnote project id for an open notebook document.
@@ -29,7 +29,7 @@ export async function resolveProjectIdForFile(fileUri: Uri): Promise<string | un
 
         return parsed?.project?.id;
     } catch (error) {
-        logger.warn(`Failed to resolve Deepnote project id for ${fileUri.fsPath}`, error);
+        logger.warn(`Failed to resolve Deepnote project id for ${fileUri.toString()}`, error);
 
         return undefined;
     }

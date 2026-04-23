@@ -1,5 +1,6 @@
 import { inject, injectable, named } from 'inversify';
 import {
+    CancellationTokenSource,
     commands,
     Disposable,
     l10n,
@@ -391,9 +392,9 @@ export class DeepnoteEnvironmentsView implements Disposable {
         await this.projectEnvironmentMapper.waitForInitialization();
 
         // Get current environment selection
-        const currentEnvironmentId = this.projectEnvironmentMapper.getEnvironmentForProject(projectId);
-        const currentEnvironment = currentEnvironmentId
-            ? this.environmentManager.getEnvironment(currentEnvironmentId)
+        const previousEnvironmentId = this.projectEnvironmentMapper.getEnvironmentForProject(projectId);
+        const currentEnvironment = previousEnvironmentId
+            ? this.environmentManager.getEnvironment(previousEnvironmentId)
             : undefined;
 
         // Get all environments
@@ -446,13 +447,37 @@ export class DeepnoteEnvironmentsView implements Disposable {
         }
 
         // Check if user selected the same environment
-        if (selectedEnvironmentId === currentEnvironmentId) {
+        if (selectedEnvironmentId === previousEnvironmentId) {
             logger.info(`User selected the same environment - no changes needed`);
             return;
         } else if (selectedEnvironmentId == null) {
             logger.info('User cancelled environment selection');
             return;
         }
+
+        const notebooksToRebuild: NotebookDocument[] = [notebook];
+        const initiatingNotebookUri = notebook.uri.toString();
+
+        for (const openNotebook of workspace.notebookDocuments) {
+            if (
+                openNotebook.notebookType !== 'deepnote' ||
+                openNotebook.metadata?.deepnoteProjectId !== projectId ||
+                openNotebook.uri.toString() === initiatingNotebookUri
+            ) {
+                continue;
+            }
+
+            notebooksToRebuild.push(openNotebook);
+        }
+
+        const nextEnvironmentId = selectedEnvironmentId;
+        const restoreProjectEnvironmentMapping = async () => {
+            if (previousEnvironmentId) {
+                await this.projectEnvironmentMapper.setEnvironmentForProject(projectId, previousEnvironmentId);
+            } else {
+                await this.projectEnvironmentMapper.removeEnvironmentForProject(projectId);
+            }
+        };
 
         // Check if any cells are currently executing using the kernel execution state
         // This is more reliable than checking executionSummary
@@ -478,7 +503,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
         }
 
         // User selected a different environment - switch to it
-        logger.info(`Switching notebook ${getDisplayPath(notebook.uri)} to environment ${selectedEnvironmentId}`);
+        logger.info(`Switching notebook ${getDisplayPath(notebook.uri)} to environment ${nextEnvironmentId}`);
 
         try {
             await window.withProgress(
@@ -488,15 +513,71 @@ export class DeepnoteEnvironmentsView implements Disposable {
                     cancellable: true
                 },
                 async (progress, token) => {
-                    // Update the project-to-environment mapping
-                    await this.projectEnvironmentMapper.setEnvironmentForProject(projectId, selectedEnvironmentId);
+                    const rebuiltNotebooks: NotebookDocument[] = [];
+                    const rollbackNotebookUris = new Set<string>();
+                    let mappingUpdated = false;
+                    let notebookBeingRebuilt: NotebookDocument | undefined;
 
-                    // Force rebuild the controller with the new environment
-                    // This clears cached metadata and creates a fresh controller.
-                    // await this.kernelAutoSelector.ensureKernelSelected(activeNotebook);
-                    await this.kernelAutoSelector.rebuildController(notebook, progress, token);
+                    try {
+                        // Update the project-to-environment mapping before rebuilding so controller creation
+                        // resolves the new project-scoped environment for every open notebook in the project.
+                        await this.projectEnvironmentMapper.setEnvironmentForProject(projectId, nextEnvironmentId);
+                        mappingUpdated = true;
 
-                    logger.info(`Successfully switched to environment ${selectedEnvironmentId}`);
+                        for (const targetNotebook of notebooksToRebuild) {
+                            notebookBeingRebuilt = targetNotebook;
+                            await this.kernelAutoSelector.rebuildController(targetNotebook, progress, token);
+                            rebuiltNotebooks.push(targetNotebook);
+                        }
+
+                        logger.info(`Successfully switched project ${projectId} to environment ${nextEnvironmentId}`);
+                    } catch (error) {
+                        if (mappingUpdated) {
+                            await restoreProjectEnvironmentMapping();
+
+                            const notebooksToRollBack: NotebookDocument[] = [];
+                            const addRollbackNotebook = (candidate: NotebookDocument | undefined) => {
+                                if (!candidate) {
+                                    return;
+                                }
+
+                                const candidateKey = candidate.uri.toString();
+                                if (rollbackNotebookUris.has(candidateKey)) {
+                                    return;
+                                }
+
+                                rollbackNotebookUris.add(candidateKey);
+                                notebooksToRollBack.push(candidate);
+                            };
+
+                            addRollbackNotebook(notebookBeingRebuilt);
+                            rebuiltNotebooks.forEach(addRollbackNotebook);
+
+                            const rollbackCancellation = new CancellationTokenSource();
+                            try {
+                                for (const rollbackNotebook of notebooksToRollBack) {
+                                    try {
+                                        await this.kernelAutoSelector.rebuildController(
+                                            rollbackNotebook,
+                                            progress,
+                                            rollbackCancellation.token
+                                        );
+                                    } catch (rollbackError) {
+                                        logger.error(
+                                            `Failed to roll back environment switch for ${getDisplayPath(
+                                                rollbackNotebook.uri
+                                            )}`,
+                                            rollbackError
+                                        );
+                                    }
+                                }
+                            } finally {
+                                rollbackCancellation.dispose();
+                            }
+                        }
+
+                        throw error;
+                    }
                 }
             );
 

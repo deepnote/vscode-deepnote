@@ -106,7 +106,7 @@ export class DeepnoteProjectEnvironmentMapper implements IDeepnoteProjectEnviron
      * key. The migration is a one-shot: after resolving project ids from each
      * `.deepnote` file, the legacy key is cleared.
      *
-     * Entries whose project id cannot be resolved (file missing, unparseable)
+     * Entries whose project id cannot be resolved (file missing, unparsable)
      * are logged and skipped.
      */
     private async migrateLegacyMappings(): Promise<void> {

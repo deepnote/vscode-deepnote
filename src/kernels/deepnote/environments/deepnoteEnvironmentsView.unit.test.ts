@@ -6,7 +6,7 @@ import { DeepnoteEnvironmentsView } from './deepnoteEnvironmentsView.node';
 import { IDeepnoteEnvironmentManager, IDeepnoteKernelAutoSelector, IDeepnoteProjectEnvironmentMapper } from '../types';
 import { IPythonApiProvider } from '../../../platform/api/types';
 import { IDisposableRegistry, IOutputChannel } from '../../../platform/common/types';
-import { IKernelProvider } from '../../../kernels/types';
+import { IKernel, IKernelProvider, INotebookKernelExecution } from '../../../kernels/types';
 import { DeepnoteEnvironment } from './deepnoteEnvironment';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
@@ -809,6 +809,21 @@ suite('DeepnoteEnvironmentsView', () => {
         };
 
         const testProjectId = 'test-project-id';
+        const createNotebookDocument = (path: string, projectId: string): NotebookDocument => ({
+            uri: Uri.file(path),
+            notebookType: 'deepnote',
+            version: 1,
+            isDirty: false,
+            isUntitled: false,
+            isClosed: false,
+            metadata: { deepnoteProjectId: projectId },
+            cellCount: 0,
+            cellAt: () => {
+                throw new Error('Not implemented');
+            },
+            getCells: () => [],
+            save: async () => true
+        });
 
         setup(() => {
             resetCalls(mockConfigManager);
@@ -974,6 +989,114 @@ suite('DeepnoteEnvironmentsView', () => {
 
             // Verify success message was shown
             verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
+        });
+
+        test('should rebuild every open sibling notebook when switching a project-scoped environment', async () => {
+            // Catches: project-scoped environment switches only rebuilt the initiating notebook, leaving siblings stale.
+
+            // Arrange
+            const initiatingNotebook = createNotebookDocument('/workspace/initiating.deepnote', testProjectId);
+            const siblingNotebook = createNotebookDocument('/workspace/sibling.deepnote', testProjectId);
+            const otherProjectNotebook = createNotebookDocument('/workspace/other.deepnote', 'different-project-id');
+            const executionKernel = mock<IKernel>();
+            const notebookExecution = mock<INotebookKernelExecution>();
+
+            when(mockProjectEnvironmentMapper.getEnvironmentForProject(testProjectId)).thenReturn(
+                currentEnvironment.id
+            );
+            when(mockConfigManager.getEnvironment(currentEnvironment.id)).thenReturn(currentEnvironment);
+            when(mockConfigManager.listEnvironments()).thenReturn([currentEnvironment, newEnvironment]);
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenCall(
+                (items: ReadonlyArray<{ environmentId?: string }>) => {
+                    return Promise.resolve(items.find((item) => item.environmentId === newEnvironment.id));
+                }
+            );
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([
+                initiatingNotebook,
+                siblingNotebook,
+                otherProjectNotebook
+            ]);
+            when(mockKernelProvider.get(initiatingNotebook)).thenReturn(instance(executionKernel));
+            when(notebookExecution.pendingCells).thenReturn([]);
+            when(mockKernelProvider.getKernelExecution(instance(executionKernel))).thenReturn(
+                instance(notebookExecution)
+            );
+            when(mockProjectEnvironmentMapper.setEnvironmentForProject(testProjectId, newEnvironment.id)).thenResolve();
+            when(mockKernelAutoSelector.rebuildController(initiatingNotebook, anything(), anything())).thenResolve();
+            when(mockKernelAutoSelector.rebuildController(siblingNotebook, anything(), anything())).thenResolve();
+
+            // Act
+            await view.selectEnvironmentForNotebook({ notebook: initiatingNotebook });
+
+            // Assert
+            verify(mockProjectEnvironmentMapper.setEnvironmentForProject(testProjectId, newEnvironment.id)).once();
+            verify(mockKernelAutoSelector.rebuildController(initiatingNotebook, anything(), anything())).once();
+            verify(mockKernelAutoSelector.rebuildController(siblingNotebook, anything(), anything())).once();
+            verify(mockKernelAutoSelector.rebuildController(otherProjectNotebook, anything(), anything())).never();
+            verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
+        });
+
+        test('should restore the previous project mapping and roll back rebuilt notebooks when a sibling rebuild fails', async () => {
+            // Catches: the new project mapping was committed before rebuild and stayed wrong when a sibling rebuild failed.
+
+            // Arrange
+            const initiatingNotebook = createNotebookDocument('/workspace/rollback-initiating.deepnote', testProjectId);
+            const siblingNotebook = createNotebookDocument('/workspace/rollback-sibling.deepnote', testProjectId);
+            const executionKernel = mock<IKernel>();
+            const notebookExecution = mock<INotebookKernelExecution>();
+            const rebuildCalls: string[] = [];
+            const rebuildError = new Error('rebuild failed');
+
+            when(mockProjectEnvironmentMapper.getEnvironmentForProject(testProjectId)).thenReturn(
+                currentEnvironment.id
+            );
+            when(mockConfigManager.getEnvironment(currentEnvironment.id)).thenReturn(currentEnvironment);
+            when(mockConfigManager.listEnvironments()).thenReturn([currentEnvironment, newEnvironment]);
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenCall(
+                (items: ReadonlyArray<{ environmentId?: string }>) => {
+                    return Promise.resolve(items.find((item) => item.environmentId === newEnvironment.id));
+                }
+            );
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([initiatingNotebook, siblingNotebook]);
+            when(mockKernelProvider.get(initiatingNotebook)).thenReturn(instance(executionKernel));
+            when(notebookExecution.pendingCells).thenReturn([]);
+            when(mockKernelProvider.getKernelExecution(instance(executionKernel))).thenReturn(
+                instance(notebookExecution)
+            );
+            when(mockProjectEnvironmentMapper.setEnvironmentForProject(testProjectId, newEnvironment.id)).thenResolve();
+            when(
+                mockProjectEnvironmentMapper.setEnvironmentForProject(testProjectId, currentEnvironment.id)
+            ).thenResolve();
+            when(mockKernelAutoSelector.rebuildController(anything(), anything(), anything())).thenCall(
+                async (targetNotebook: NotebookDocument) => {
+                    const notebookPath = targetNotebook.uri.toString();
+                    rebuildCalls.push(notebookPath);
+
+                    if (
+                        notebookPath === siblingNotebook.uri.toString() &&
+                        rebuildCalls.filter((call) => call === notebookPath).length === 1
+                    ) {
+                        throw rebuildError;
+                    }
+                }
+            );
+
+            // Act
+            await view.selectEnvironmentForNotebook({ notebook: initiatingNotebook });
+
+            // Assert
+            verify(mockProjectEnvironmentMapper.setEnvironmentForProject(testProjectId, newEnvironment.id)).once();
+            verify(mockProjectEnvironmentMapper.setEnvironmentForProject(testProjectId, currentEnvironment.id)).once();
+            verify(mockKernelAutoSelector.rebuildController(initiatingNotebook, anything(), anything())).twice();
+            verify(mockKernelAutoSelector.rebuildController(siblingNotebook, anything(), anything())).atLeast(1);
+            assert.deepEqual(rebuildCalls, [
+                initiatingNotebook.uri.toString(),
+                siblingNotebook.uri.toString(),
+                siblingNotebook.uri.toString(),
+                initiatingNotebook.uri.toString()
+            ]);
+            verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).never();
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything(), anything())).once();
         });
 
         test('should successfully switch from external to managed environment', async () => {

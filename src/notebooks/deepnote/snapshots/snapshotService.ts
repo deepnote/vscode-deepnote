@@ -112,7 +112,7 @@ interface NotebookExecutionState {
 const recentWriteExpirationMs = 2000;
 
 /**
- * After the cell execution queue completes, the kernel can still be delivering iopub
+ * After the cell execution queue completes, the kernel can still be delivering IOPub
  * messages (stream output, display_data, etc.) that land on `cell.outputs` AFTER
  * `onDidCompleteQueueExecution` fires. Instead of reading `cell.outputs` immediately,
  * we arm a timer and reset it every time `workspace.onDidChangeNotebookDocument` reports

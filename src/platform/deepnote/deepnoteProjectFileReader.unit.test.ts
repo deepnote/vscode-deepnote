@@ -3,10 +3,10 @@ import * as sinon from 'sinon';
 import { anything, instance, mock, when } from 'ts-mockito';
 import { Uri, workspace } from 'vscode';
 
-import { readDeepnoteProjectFile } from './deepnoteProjectUtils';
+import { readDeepnoteProjectFile } from './deepnoteProjectFileReader';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 
-suite('DeepnoteProjectUtils', () => {
+suite('DeepnoteProjectFileReader', () => {
     let sandbox: sinon.SinonSandbox;
 
     setup(() => {

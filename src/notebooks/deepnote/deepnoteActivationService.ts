@@ -61,6 +61,12 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
                 void this.checkAndSplitIfNeeded(doc);
             })
         );
+
+        // Process notebooks that are already open at activation time (e.g., restored windows)
+        for (const doc of workspace.notebookDocuments) {
+            void this.checkAndSplitIfNeeded(doc);
+        }
+
         this.extensionContext.subscriptions.push(
             workspace.onDidChangeConfiguration((event) => {
                 if (event.affectsConfiguration('deepnote.snapshots.enabled')) {

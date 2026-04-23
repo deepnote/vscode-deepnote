@@ -1,5 +1,7 @@
+import { serializeDeepnoteFile, type DeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
-import { anything, verify, when } from 'ts-mockito';
+import { anything, instance, mock, verify, when } from 'ts-mockito';
+import { Uri, workspace } from 'vscode';
 
 import { DeepnoteActivationService } from './deepnoteActivationService';
 import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
@@ -163,6 +165,71 @@ suite('DeepnoteActivationService', () => {
             configHandler?.({ affectsConfiguration: (section) => section === 'deepnote.snapshots.enabled' });
 
             verify(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything(), anything())).once();
+        });
+
+        test('should process already-open deepnote notebooks at activation time', async () => {
+            resetVSCodeMocks();
+
+            when(
+                mockedVSCodeNamespaces.workspace.registerNotebookSerializer(anything(), anything(), anything())
+            ).thenReturn({ dispose: () => undefined } as any);
+            when(mockedVSCodeNamespaces.workspace.onDidChangeConfiguration).thenReturn((() => ({
+                dispose: () => undefined
+            })) as any);
+
+            const deepnoteUri = Uri.file('/workspace/existing.deepnote');
+            const otherUri = Uri.file('/workspace/existing.ipynb');
+            const deepnoteFile: DeepnoteFile = {
+                version: '1.0.0',
+                metadata: { createdAt: '2025-01-01T00:00:00Z' },
+                project: {
+                    id: 'project-1',
+                    name: 'Restored Project',
+                    notebooks: [
+                        {
+                            id: 'notebook-1',
+                            name: 'Notebook 1',
+                            blocks: []
+                        }
+                    ]
+                }
+            };
+            const yaml = serializeDeepnoteFile(deepnoteFile);
+            const alreadyOpenDeepnoteDoc = { notebookType: 'deepnote', uri: deepnoteUri } as any;
+            const alreadyOpenOtherDoc = { notebookType: 'jupyter-notebook', uri: otherUri } as any;
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([
+                alreadyOpenDeepnoteDoc,
+                alreadyOpenOtherDoc
+            ]);
+
+            const readCalls: string[] = [];
+            const mockFs = mock<typeof workspace.fs>();
+
+            when(mockFs.readFile(anything())).thenCall((uri: Uri) => {
+                readCalls.push(uri.path);
+
+                return Promise.resolve(new TextEncoder().encode(yaml));
+            });
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
+
+            activationService = new DeepnoteActivationService(
+                mockExtensionContext,
+                manager,
+                mockIntegrationManager,
+                mockLogger
+            );
+
+            try {
+                activationService.activate();
+            } catch {
+                // Activation may fail in the test environment, but iteration should still occur.
+            }
+
+            // Allow the fire-and-forget checkAndSplitIfNeeded promises to run
+            await new Promise((resolve) => setImmediate(resolve));
+
+            assert.deepStrictEqual(readCalls, [deepnoteUri.path]);
         });
     });
 

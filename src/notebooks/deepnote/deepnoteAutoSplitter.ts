@@ -3,10 +3,9 @@ import { l10n, RelativePattern, Uri, window, workspace } from 'vscode';
 
 import { logger } from '../../platform/logging';
 import {
+    buildSiblingNotebookFileUri,
     buildSingleNotebookFile,
-    computeSnapshotHash,
-    getFileStem,
-    slugifyNotebookNameOrFallback
+    computeSnapshotHash
 } from './deepnoteNotebookFileFactory';
 import { slugifyProjectName } from './snapshots/snapshotFiles';
 
@@ -43,15 +42,27 @@ export class DeepnoteAutoSplitter {
             `[AutoSplitter] Splitting ${nonInitNotebooks.length} notebooks from project ${deepnoteFile.project.id}`
         );
 
-        const parentDir = Uri.joinPath(fileUri, '..');
-        const originalStem = getFileStem(fileUri);
         const newFiles: Uri[] = [];
+        const reservedPaths = new Set<string>();
+        const exists = async (u: Uri): Promise<boolean> => {
+            if (reservedPaths.has(u.path)) {
+                return true;
+            }
+
+            try {
+                await workspace.fs.stat(u);
+
+                return true;
+            } catch {
+                return false;
+            }
+        };
 
         // Create a new file for each extra notebook
         for (const notebook of extraNotebooks) {
-            const notebookSlug = slugifyNotebookNameOrFallback(notebook.name);
-            const newFileName = `${originalStem}_${notebookSlug}.deepnote`;
-            const newFileUri = Uri.joinPath(parentDir, newFileName);
+            const newFileUri = await buildSiblingNotebookFileUri(fileUri, notebook.name, exists);
+
+            reservedPaths.add(newFileUri.path);
 
             const newProject = await buildSingleNotebookFile(deepnoteFile, notebook);
 
@@ -60,6 +71,7 @@ export class DeepnoteAutoSplitter {
 
             newFiles.push(newFileUri);
 
+            const newFileName = newFileUri.path.split('/').pop();
             logger.info(`[AutoSplitter] Created ${newFileName} for notebook "${notebook.name}"`);
         }
 

@@ -10,7 +10,17 @@ import {
 } from '@deepnote/blocks';
 import fastDeepEqual from 'fast-deep-equal';
 import { inject, injectable, optional } from 'inversify';
-import { Disposable, FileType, NotebookCell, NotebookCellKind, RelativePattern, Uri, window, workspace } from 'vscode';
+import {
+    Disposable,
+    FileType,
+    NotebookCell,
+    NotebookCellKind,
+    NotebookDocumentChangeEvent,
+    RelativePattern,
+    Uri,
+    window,
+    workspace
+} from 'vscode';
 import { Utils } from 'vscode-uri';
 
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
@@ -101,6 +111,31 @@ interface NotebookExecutionState {
 /** How long a written URI is considered "recent" and suppressed from file-change processing. */
 const recentWriteExpirationMs = 2000;
 
+/**
+ * After the cell execution queue completes, the kernel can still be delivering iopub
+ * messages (stream output, display_data, etc.) that land on `cell.outputs` AFTER
+ * `onDidCompleteQueueExecution` fires. Instead of reading `cell.outputs` immediately,
+ * we arm a timer and reset it every time `workspace.onDidChangeNotebookDocument` reports
+ * an output-bearing cell change. The save only runs once we observe this many ms
+ * without any output activity.
+ */
+const outputSettleQuietPeriodMs = 150;
+
+/**
+ * Hard cap on how long a pending snapshot save will be deferred by output activity.
+ * Bounds a misbehaving kernel (e.g. a background thread continuously printing) so it
+ * can't starve the snapshot pipeline.
+ */
+const outputSettleMaxWaitMs = 2000;
+
+/** Pending, output-settled snapshot save for a single notebook. */
+interface PendingSnapshotSave {
+    /** Wall-clock time when the queue-complete event first armed this pending save. */
+    armedAt: number;
+    /** Active timer that will call `flushPendingSnapshotSave` when it fires. */
+    timer: ReturnType<typeof setTimeout>;
+}
+
 class TimeoutError extends Error {
     constructor(message: string) {
         super(message);
@@ -126,6 +161,11 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     private readonly converter = new DeepnoteDataConverter();
     private readonly executionStates = new Map<string, NotebookExecutionState>();
     private readonly fileWrittenCallbacks: ((uri: Uri) => void)[] = [];
+    /**
+     * Notebooks with a snapshot save scheduled but not yet executed. Keyed by notebook URI.
+     * Resettable timer debounces the save against output-bearing notebook-document changes.
+     */
+    private readonly pendingSnapshotSaves = new Map<string, PendingSnapshotSave>();
     private readonly recentlyWrittenTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private readonly recentlyWrittenUris = new Set<string>();
 
@@ -144,16 +184,28 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
                     clearTimeout(timer);
                 }
                 this.recentlyWrittenTimers.clear();
+
+                for (const pending of this.pendingSnapshotSaves.values()) {
+                    clearTimeout(pending.timer);
+                }
+                this.pendingSnapshotSaves.clear();
             }
         });
 
         workspace.onDidCloseNotebookDocument(
             (notebook) => {
-                this.clearExecutionState(notebook.uri.toString());
+                const uri = notebook.uri.toString();
+                this.clearExecutionState(uri);
+                this.cancelPendingSnapshotSave(uri);
             },
             this,
             this.disposables
         );
+
+        // Persistent listener so we can detect the kernel still delivering output AFTER
+        // onDidCompleteQueueExecution has fired. When a save is pending for this notebook,
+        // each output-bearing change defers the save by `outputSettleQuietPeriodMs`.
+        workspace.onDidChangeNotebookDocument((event) => this.onNotebookDocumentChanged(event), this, this.disposables);
 
         notebookCellExecutions.onDidChangeNotebookCellExecutionState(
             (e) => {
@@ -166,7 +218,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
         notebookCellExecutions.onDidCompleteQueueExecution(
             async (e) => {
-                logger.debug(`[Snapshot] Queue execution complete for ${e.notebookUri}`);
+                logger.debug(`[Snapshot] Queue execution complete for ${e.notebookUri}, arming settled-output save`);
                 await this.onExecutionComplete(e.notebookUri);
             },
             this,
@@ -417,27 +469,47 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             ? `**/snapshots/*_${projectId}_${notebookId}_latest.snapshot.deepnote`
             : `**/snapshots/*_${projectId}_latest.snapshot.deepnote`;
 
+        let latestOutputs: Map<string, DeepnoteOutput[]> | undefined;
+        let latestUri: Uri | undefined;
+
         for (const folder of workspaceFolders) {
             logger.debug(`[Snapshot] Searching for latest snapshot with glob: ${latestGlob} in ${folder.uri.path}`);
             const latestPattern = new RelativePattern(folder, latestGlob);
             const latestFiles = await workspace.findFiles(latestPattern, null, 1);
 
             if (latestFiles.length > 0) {
-                logger.debug(`[Snapshot] Found latest snapshot: ${latestFiles[0].path}`);
+                latestUri = latestFiles[0];
+                logger.debug(`[Snapshot] Found latest snapshot: ${latestUri.path}`);
 
                 try {
-                    return await this.parseSnapshotFile(latestFiles[0]);
+                    latestOutputs = await this.parseSnapshotFile(latestUri);
                 } catch (error) {
-                    logger.error(`[Snapshot] Failed to parse snapshot: ${Utils.basename(latestFiles[0])}`, error);
+                    logger.error(`[Snapshot] Failed to parse snapshot: ${Utils.basename(latestUri)}`, error);
 
-                    await window.showErrorMessage(`Failed to read latest snapshot: ${Utils.basename(latestFiles[0])}`);
+                    await window.showErrorMessage(`Failed to read latest snapshot: ${Utils.basename(latestUri)}`);
 
                     return;
                 }
+
+                // If `latest` carries any outputs, it's authoritative. If it exists but is
+                // empty, fall through to the timestamped fallback in case `latest` was
+                // overwritten by a partial save that lost the outputs (see save race
+                // discussion in snapshotService).
+                if (this.hasAnyOutputs(latestOutputs)) {
+                    return latestOutputs;
+                }
+
+                logger.debug(
+                    `[Snapshot] Latest snapshot has no outputs, looking for a timestamped snapshot with outputs`
+                );
+
+                break;
             }
         }
 
-        logger.debug(`[Snapshot] No latest snapshot found, looking for timestamped files`);
+        if (!latestUri) {
+            logger.debug(`[Snapshot] No latest snapshot found, looking for timestamped files`);
+        }
 
         // 2. Find timestamped snapshots across all workspace folders
         const timestampedGlob = notebookId
@@ -465,17 +537,45 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         if (sortedFiles.length === 0) {
             logger.debug(`[Snapshot] No timestamped snapshots found`);
 
-            return;
+            // No timestamped fallback. If we already parsed an empty `latest`, return it
+            // so callers can still observe that the snapshot file existed.
+            return latestOutputs;
         }
 
-        const newestFile = sortedFiles[0];
+        // Walk timestamped files newest-first and use the first one that contains outputs.
+        for (const candidate of sortedFiles) {
+            try {
+                const outputs = await this.parseSnapshotFile(candidate);
 
-        logger.debug(`[Snapshot] Using timestamped snapshot: ${Utils.basename(newestFile)}`);
+                if (this.hasAnyOutputs(outputs)) {
+                    if (latestUri) {
+                        logger.warn(
+                            `[Snapshot] Falling back to timestamped snapshot ${Utils.basename(candidate)} ` +
+                                `because ${Utils.basename(latestUri)} contained no outputs`
+                        );
+                    } else {
+                        logger.debug(`[Snapshot] Using timestamped snapshot: ${Utils.basename(candidate)}`);
+                    }
+
+                    return outputs;
+                }
+            } catch (error) {
+                logger.error(`[Snapshot] Failed to parse snapshot: ${Utils.basename(candidate)}`, error);
+                // Try the next-most-recent timestamped file rather than bailing out.
+            }
+        }
+
+        // None of the timestamped files contained outputs either; fall back to whatever
+        // we parsed from `latest` (possibly an empty map) or to the newest timestamped
+        // file's parse result so callers always get a stable answer.
+        if (latestOutputs) {
+            return latestOutputs;
+        }
 
         try {
-            return await this.parseSnapshotFile(newestFile);
+            return await this.parseSnapshotFile(sortedFiles[0]);
         } catch (error) {
-            logger.error(`[Snapshot] Failed to parse snapshot: ${Utils.basename(newestFile)}`, error);
+            logger.error(`[Snapshot] Failed to parse snapshot: ${Utils.basename(sortedFiles[0])}`, error);
 
             return;
         }
@@ -633,6 +733,26 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         return state;
     }
 
+    /**
+     * Returns true if the parsed outputs map contains at least one block with at least
+     * one real output entry. A snapshot that maps a block id to an empty array is treated
+     * as "no outputs" because it offers nothing to merge into the cells and is the
+     * signature of a save race that captured the cell before its outputs landed.
+     */
+    private hasAnyOutputs(outputs: Map<string, DeepnoteOutput[]> | undefined): boolean {
+        if (!outputs) {
+            return false;
+        }
+
+        for (const blockOutputs of outputs.values()) {
+            if (blockOutputs && blockOutputs.length > 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private handleCellExecutionStateChange(cell: NotebookCell, state: NotebookCellExecutionState): void {
         const notebookUri = cell.notebook.uri.toString();
         const cellId = cell.metadata?.id as string | undefined;
@@ -643,6 +763,19 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
         if (state === NotebookCellExecutionState.Executing) {
             const startTime = Date.now();
+
+            // A new execution is starting for this notebook. Invalidate any pending
+            // settled-output save from a previous run — the outputs it would capture
+            // are about to change, and the original armedAt would otherwise keep
+            // counting toward the max-wait cap across runs, potentially firing the
+            // save mid-execution with stale cell.outputs. The next
+            // onDidCompleteQueueExecution will arm a fresh save with a fresh armedAt.
+            if (this.pendingSnapshotSaves.has(notebookUri)) {
+                logger.debug(
+                    `[Snapshot] Cell ${cellId} starting execution; cancelling pending save for ${notebookUri}`
+                );
+                this.cancelPendingSnapshotSave(notebookUri);
+            }
 
             this.recordCellExecutionStart(notebookUri, cellId, startTime);
         } else if (state === NotebookCellExecutionState.Idle) {
@@ -727,11 +860,96 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     private async onExecutionComplete(notebookUri: string): Promise<void> {
         logger.debug(`[Snapshot] onExecutionComplete called for ${notebookUri}`);
 
-        // Wait for any pending cell state change events to be processed.
-        // This is needed because the queue completion event can fire before the
-        // last cell's Idle state change event has been processed (race condition).
+        // Wait for any pending cell state change events to be processed. The queue
+        // completion event can fire before the last cell's Idle state change event has.
         await this.waitForPendingCellStateChanges(notebookUri, 100);
 
+        // Don't write the snapshot yet. The kernel can still be delivering output via
+        // async NotebookCellExecution.appendOutput calls that land AFTER queue completion.
+        // Instead, ARM a save timer here; `onNotebookDocumentChanged` will keep resetting
+        // it as long as output-bearing notebook changes keep arriving. Once they stop,
+        // the timer fires and `flushPendingSnapshotSave` runs `performSnapshotSave`.
+        this.schedulePendingSnapshotSave(notebookUri);
+    }
+
+    private schedulePendingSnapshotSave(notebookUri: string): void {
+        const existing = this.pendingSnapshotSaves.get(notebookUri);
+        const armedAt = existing?.armedAt ?? Date.now();
+
+        if (existing) {
+            clearTimeout(existing.timer);
+        }
+
+        const delay = this.computeSettleDelay(armedAt);
+        const timer = setTimeout(() => this.flushPendingSnapshotSave(notebookUri), delay);
+
+        this.pendingSnapshotSaves.set(notebookUri, { armedAt, timer });
+    }
+
+    private computeSettleDelay(armedAt: number): number {
+        const elapsed = Date.now() - armedAt;
+        const remainingBudget = Math.max(0, outputSettleMaxWaitMs - elapsed);
+
+        return Math.min(outputSettleQuietPeriodMs, remainingBudget);
+    }
+
+    private cancelPendingSnapshotSave(notebookUri: string): void {
+        const existing = this.pendingSnapshotSaves.get(notebookUri);
+
+        if (existing) {
+            clearTimeout(existing.timer);
+            this.pendingSnapshotSaves.delete(notebookUri);
+        }
+    }
+
+    private onNotebookDocumentChanged(event: NotebookDocumentChangeEvent): void {
+        const notebookUri = event.notebook.uri.toString();
+        const pending = this.pendingSnapshotSaves.get(notebookUri);
+
+        // We only care about output activity while a save is pending — no pending save,
+        // no work to do.
+        if (!pending) {
+            return;
+        }
+
+        const hasOutputOrMetadataChange = event.cellChanges.some(
+            (change) => change.outputs !== undefined || change.metadata !== undefined
+        );
+
+        if (!hasOutputOrMetadataChange) {
+            return;
+        }
+
+        // If we've already spent the whole max-wait budget, stop deferring — let the
+        // scheduled timer fire on its existing schedule.
+        if (Date.now() - pending.armedAt >= outputSettleMaxWaitMs) {
+            return;
+        }
+
+        // Output is still landing. Reset the quiet timer so the save waits another
+        // `outputSettleQuietPeriodMs` before running.
+        clearTimeout(pending.timer);
+        const delay = this.computeSettleDelay(pending.armedAt);
+        pending.timer = setTimeout(() => this.flushPendingSnapshotSave(notebookUri), delay);
+    }
+
+    private async flushPendingSnapshotSave(notebookUri: string): Promise<void> {
+        const pending = this.pendingSnapshotSaves.get(notebookUri);
+        this.pendingSnapshotSaves.delete(notebookUri);
+
+        if (pending) {
+            const settledIn = Date.now() - pending.armedAt;
+            logger.debug(`[Snapshot] Output settled in ${settledIn}ms, running save for ${notebookUri}`);
+        }
+
+        try {
+            await this.performSnapshotSave(notebookUri);
+        } catch (error) {
+            logger.error(`[Snapshot] Failed to save snapshot for ${notebookUri}`, error);
+        }
+    }
+
+    private async performSnapshotSave(notebookUri: string): Promise<void> {
         if (!this.isSnapshotsEnabled()) {
             logger.debug(`[Snapshot] Snapshots not enabled, skipping`);
 
@@ -793,6 +1011,19 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             metadata: cell.metadata,
             outputs: [...cell.outputs]
         }));
+
+        // Diagnostic: log what we're about to persist so future staleness bugs are
+        // traceable in the user's output log without additional instrumentation.
+        for (let i = 0; i < cellData.length; i++) {
+            const cell = cellData[i];
+            const blockId = (cell.metadata?.id as string | undefined) ?? '(no-id)';
+
+            logger.debug(
+                `[Snapshot] Pre-save cell[${i}] blockId=${blockId} outputs=${cell.outputs.length} ` +
+                    `contentLen=${cell.value.length}`
+            );
+        }
+
         const blocks = this.converter.convertCellsToBlocks(cellData);
 
         const snapshotProject = structuredClone(originalProject) as DeepnoteFile;

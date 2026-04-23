@@ -9,6 +9,7 @@ import { IEnvironmentCapture } from './environmentCapture.node';
 import { SnapshotService } from './snapshotService';
 import type { DeepnoteOutput } from '../../../platform/deepnote/deepnoteTypes';
 import { IDisposableRegistry } from '../../../platform/common/types';
+import { NotebookCellExecutionState } from '../../../platform/notebooks/cellExecutionStateService';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 
 suite('SnapshotService', () => {
@@ -684,6 +685,207 @@ project:
             assert.isDefined(result);
             assert.strictEqual(result!.size, 0);
         });
+
+        test('should fall back to timestamped snapshot when latest exists but has no outputs', async () => {
+            const workspaceFolder: WorkspaceFolder = {
+                uri: Uri.file('/workspace'),
+                name: 'workspace',
+                index: 0
+            };
+            when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
+
+            const latestUri = Uri.file(
+                '/workspace/snapshots/project_test-project-id-123_notebook-1_latest.snapshot.deepnote'
+            );
+            const timestampedNewerUri = Uri.file(
+                '/workspace/snapshots/project_test-project-id-123_notebook-1_2025-01-02T10-00-00.snapshot.deepnote'
+            );
+            const timestampedOlderUri = Uri.file(
+                '/workspace/snapshots/project_test-project-id-123_notebook-1_2025-01-01T10-00-00.snapshot.deepnote'
+            );
+
+            // Mock findFiles: first call resolves latest, second resolves all matching timestamped + latest.
+            let findFilesCall = 0;
+            when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything())).thenCall(() => {
+                findFilesCall++;
+
+                if (findFilesCall === 1) {
+                    return Promise.resolve([latestUri]);
+                }
+
+                return Promise.resolve([latestUri, timestampedNewerUri, timestampedOlderUri]);
+            });
+
+            // The latest yaml has no outputs (matches the save-bug shape).
+            const latestYaml = `
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-02T00:00:00Z'
+project:
+  id: test-project-id-123
+  name: Test Project
+  notebooks:
+    - id: notebook-1
+      name: Notebook 1
+      blocks:
+        - id: block-1
+          blockGroup: group-1
+          type: code
+          sortingKey: 'a0'
+          content: print(1)
+`;
+            // The newer timestamped snapshot has real outputs.
+            const newerTimestampedYaml = `
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-02T00:00:00Z'
+project:
+  id: test-project-id-123
+  name: Test Project
+  notebooks:
+    - id: notebook-1
+      name: Notebook 1
+      blocks:
+        - id: block-1
+          blockGroup: group-1
+          type: code
+          sortingKey: 'a0'
+          content: print(1)
+          outputs:
+            - output_type: stream
+              name: stdout
+              text: 'from newer timestamped'
+`;
+            const olderTimestampedYaml = newerTimestampedYaml.replace('from newer timestamped', 'from older');
+
+            const mockFs = mock<typeof import('vscode').workspace.fs>();
+            when(mockFs.readFile(anything())).thenCall((uri: Uri) => {
+                if (uri.toString() === latestUri.toString()) {
+                    return Promise.resolve(new TextEncoder().encode(latestYaml) as any);
+                }
+
+                if (uri.toString() === timestampedNewerUri.toString()) {
+                    return Promise.resolve(new TextEncoder().encode(newerTimestampedYaml) as any);
+                }
+
+                return Promise.resolve(new TextEncoder().encode(olderTimestampedYaml) as any);
+            });
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
+
+            const result = await service.readSnapshot(projectId, 'notebook-1');
+
+            assert.isDefined(result);
+            assert.strictEqual(result!.size, 1);
+            assert.deepStrictEqual(result!.get('block-1'), [
+                { output_type: 'stream', name: 'stdout', text: 'from newer timestamped' }
+            ]);
+        });
+
+        test('should prefer latest snapshot when it already has outputs', async () => {
+            const workspaceFolder: WorkspaceFolder = {
+                uri: Uri.file('/workspace'),
+                name: 'workspace',
+                index: 0
+            };
+            when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
+
+            const latestUri = Uri.file(
+                '/workspace/snapshots/project_test-project-id-123_notebook-1_latest.snapshot.deepnote'
+            );
+
+            when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything())).thenResolve([
+                latestUri
+            ] as any);
+
+            const latestYaml = `
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-02T00:00:00Z'
+project:
+  id: test-project-id-123
+  name: Test Project
+  notebooks:
+    - id: notebook-1
+      name: Notebook 1
+      blocks:
+        - id: block-1
+          blockGroup: group-1
+          type: code
+          sortingKey: 'a0'
+          content: print(1)
+          outputs:
+            - output_type: stream
+              name: stdout
+              text: 'from latest'
+`;
+            const mockFs = mock<typeof import('vscode').workspace.fs>();
+            when(mockFs.readFile(anything())).thenResolve(new TextEncoder().encode(latestYaml) as any);
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
+
+            const result = await service.readSnapshot(projectId, 'notebook-1');
+
+            assert.isDefined(result);
+            assert.strictEqual(result!.size, 1);
+            assert.deepStrictEqual(result!.get('block-1'), [
+                { output_type: 'stream', name: 'stdout', text: 'from latest' }
+            ]);
+        });
+
+        test('should return empty latest when neither latest nor any timestamped have outputs', async () => {
+            const workspaceFolder: WorkspaceFolder = {
+                uri: Uri.file('/workspace'),
+                name: 'workspace',
+                index: 0
+            };
+            when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
+
+            const latestUri = Uri.file(
+                '/workspace/snapshots/project_test-project-id-123_notebook-1_latest.snapshot.deepnote'
+            );
+            const timestampedUri = Uri.file(
+                '/workspace/snapshots/project_test-project-id-123_notebook-1_2025-01-01T10-00-00.snapshot.deepnote'
+            );
+
+            let findFilesCall = 0;
+            when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything())).thenCall(() => {
+                findFilesCall++;
+
+                if (findFilesCall === 1) {
+                    return Promise.resolve([latestUri]);
+                }
+
+                return Promise.resolve([latestUri, timestampedUri]);
+            });
+
+            // Both files are missing the outputs field entirely.
+            const noOutputsYaml = `
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-02T00:00:00Z'
+project:
+  id: test-project-id-123
+  name: Test Project
+  notebooks:
+    - id: notebook-1
+      name: Notebook 1
+      blocks:
+        - id: block-1
+          blockGroup: group-1
+          type: code
+          sortingKey: 'a0'
+          content: print(1)
+`;
+            const mockFs = mock<typeof import('vscode').workspace.fs>();
+            when(mockFs.readFile(anything())).thenResolve(new TextEncoder().encode(noOutputsYaml) as any);
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
+
+            const result = await service.readSnapshot(projectId, 'notebook-1');
+
+            // Both latest and timestamped have no outputs; we still resolve to a map (empty)
+            // so callers can distinguish "no snapshot file at all" from "snapshot exists, no outputs".
+            assert.isDefined(result);
+            assert.strictEqual(result!.size, 0);
+        });
     });
 
     suite('createSnapshot', () => {
@@ -1149,8 +1351,11 @@ project:
                 when(mockFs.copy(anything(), anything(), anything())).thenResolve();
                 when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
 
-                // Call onExecutionComplete (which should auto-detect Run All)
-                await testServiceAny.onExecutionComplete(notebookUri);
+                // onExecutionComplete now just arms a debounced save. Drive the save
+                // directly via performSnapshotSave so the test doesn't race against the
+                // settle timer — the Run All / partial-run branch selection itself is
+                // what we care about here.
+                await testServiceAny.performSnapshotSave(notebookUri);
 
                 // ASSERT: createSnapshot should be called (full snapshot, not just latest)
                 assert.isTrue(
@@ -1160,6 +1365,31 @@ project:
                 assert.isFalse(
                     updateLatestSnapshotSpy.called,
                     'updateLatestSnapshot should NOT be called when all code cells are executed'
+                );
+            });
+
+            test('should cancel pending snapshot save when a cell starts a new execution', () => {
+                const testService = new SnapshotService(instance(mockEnvironmentCapture), mockDisposables);
+                const testServiceAny = testService as any;
+
+                // Arm a pending save from a previous run.
+                testServiceAny.schedulePendingSnapshotSave(notebookUri);
+                assert.isTrue(
+                    testServiceAny.pendingSnapshotSaves.has(notebookUri),
+                    'pending save should be armed after schedulePendingSnapshotSave'
+                );
+
+                // Simulate the notebook starting a new execution (cell becomes Executing).
+                const mockCell = {
+                    notebook: { uri: Uri.parse(notebookUri) },
+                    metadata: { id: 'cell-1' }
+                };
+
+                testServiceAny.handleCellExecutionStateChange(mockCell, NotebookCellExecutionState.Executing);
+
+                assert.isFalse(
+                    testServiceAny.pendingSnapshotSaves.has(notebookUri),
+                    'pending save should be cancelled when a new execution starts'
                 );
             });
         });

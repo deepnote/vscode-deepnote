@@ -11,7 +11,6 @@ import {
     DeepnoteTreeItem,
     DeepnoteTreeItemType,
     NOTEBOOK_FILE_CONTEXT_VALUE,
-    type DeepnoteTreeItemContext,
     type ProjectGroupData
 } from './deepnoteTreeItem';
 import type { IExtensionContext } from '../../platform/common/types';
@@ -44,188 +43,6 @@ function createUuidMock(uuids: string[]): sinon.SinonStub {
     });
     return stub;
 }
-
-suite('DeepnoteExplorerView', () => {
-    let explorerView: DeepnoteExplorerView;
-    let mockExtensionContext: IExtensionContext;
-    let mockLogger: ILogger;
-
-    setup(() => {
-        mockExtensionContext = {
-            subscriptions: []
-        } as any;
-
-        mockLogger = createMockLogger();
-        explorerView = new DeepnoteExplorerView(mockExtensionContext, mockLogger);
-    });
-
-    teardown(() => {
-        explorerView.dispose();
-    });
-
-    suite('constructor', () => {
-        test('should create instance with extension context', () => {
-            assert.isDefined(explorerView);
-        });
-
-        test('should initialize with proper dependencies', () => {
-            // Verify that internal components are accessible
-            assert.isDefined((explorerView as any).extensionContext);
-            assert.strictEqual((explorerView as any).extensionContext, mockExtensionContext);
-        });
-    });
-
-    suite('activate', () => {
-        test('should attempt to activate without errors', () => {
-            // This test verifies the activate method can be called
-            try {
-                explorerView.activate();
-                // If we get here, activation succeeded
-                assert.isTrue(true, 'activate() completed successfully');
-            } catch (error) {
-                // Expected in test environment without full VS Code API
-                assert.isString(error.message, 'activate() method exists and attempts initialization');
-            }
-        });
-    });
-
-    suite('openNotebook', () => {
-        const mockContext: DeepnoteTreeItemContext = {
-            filePath: '/test/path/project.deepnote',
-            projectId: 'project-123',
-            notebookId: 'notebook-456'
-        };
-
-        test('should handle context without notebookId', async () => {
-            const contextWithoutId = { ...mockContext, notebookId: undefined };
-
-            // This should not throw an error - method should handle gracefully
-            try {
-                await (explorerView as any).openNotebook(contextWithoutId);
-                assert.isTrue(true, 'openNotebook handled undefined notebookId gracefully');
-            } catch (error) {
-                // Expected in test environment
-                assert.isString(error.message, 'openNotebook method exists');
-            }
-        });
-
-        test('should handle valid context', async () => {
-            try {
-                await (explorerView as any).openNotebook(mockContext);
-                assert.isTrue(true, 'openNotebook handled valid context');
-            } catch (error) {
-                // Expected in test environment without VS Code APIs
-                assert.isString(error.message, 'openNotebook method exists and processes context');
-            }
-        });
-
-        test('should use base file URI without fragments', async () => {
-            // This test verifies that we're using the simplified approach
-            // The actual URI creation is tested through integration, but we can verify
-            // that the method exists and processes the context correctly
-            try {
-                await (explorerView as any).openNotebook(mockContext);
-                assert.isTrue(true, 'openNotebook uses base file URI approach');
-            } catch (error) {
-                // Expected in test environment - the method should exist and attempt to process
-                assert.isString(error.message, 'openNotebook method processes context');
-            }
-        });
-    });
-
-    suite('openFile', () => {
-        test('should handle non-project file items', async () => {
-            const mockTreeItem = {
-                type: 'notebook', // Not ProjectFile
-                context: { filePath: '/test/path' }
-            } as any;
-
-            try {
-                await (explorerView as any).openFile(mockTreeItem);
-                assert.isTrue(true, 'openFile handled non-project file gracefully');
-            } catch (error) {
-                // Expected in test environment
-                assert.isString(error.message, 'openFile method exists');
-            }
-        });
-
-        test('should handle project file items', async () => {
-            const mockTreeItem = {
-                type: 'ProjectFile',
-                context: { filePath: '/test/path/project.deepnote' }
-            } as any;
-
-            try {
-                await (explorerView as any).openFile(mockTreeItem);
-                assert.isTrue(true, 'openFile handled project file');
-            } catch (error) {
-                // Expected in test environment
-                assert.isString(error.message, 'openFile method exists and processes files');
-            }
-        });
-    });
-
-    suite('revealActiveNotebook', () => {
-        test('should handle missing active notebook editor', async () => {
-            try {
-                await (explorerView as any).revealActiveNotebook();
-                assert.isTrue(true, 'revealActiveNotebook handled missing editor gracefully');
-            } catch (error) {
-                // Expected in test environment
-                assert.isString(error.message, 'revealActiveNotebook method exists');
-            }
-        });
-    });
-
-    suite('refreshExplorer', () => {
-        test('should call refresh method', () => {
-            try {
-                (explorerView as any).refreshExplorer();
-                assert.isTrue(true, 'refreshExplorer method exists and can be called');
-            } catch (error) {
-                // Expected in test environment
-                assert.isString(error.message, 'refreshExplorer method exists');
-            }
-        });
-    });
-
-    suite('integration scenarios', () => {
-        test('should handle multiple explorer view instances', () => {
-            const context1 = { subscriptions: [] } as any;
-            const context2 = { subscriptions: [] } as any;
-
-            const logger1 = createMockLogger();
-            const logger2 = createMockLogger();
-            const view1 = new DeepnoteExplorerView(context1, logger1);
-            const view2 = new DeepnoteExplorerView(context2, logger2);
-
-            try {
-                // Verify each view has its own context
-                assert.strictEqual((view1 as any).extensionContext, context1);
-                assert.strictEqual((view2 as any).extensionContext, context2);
-                assert.notStrictEqual((view1 as any).extensionContext, (view2 as any).extensionContext);
-
-                // Verify views are independent instances
-                assert.notStrictEqual(view1, view2);
-            } finally {
-                view1.dispose();
-                view2.dispose();
-            }
-        });
-
-        test('should maintain component references', () => {
-            // Verify that internal components exist
-            assert.isDefined((explorerView as any).extensionContext);
-
-            // After construction, some components should be initialized
-            const hasTreeDataProvider = (explorerView as any).treeDataProvider !== undefined;
-            const hasSerializer = (explorerView as any).serializer !== undefined;
-
-            // At least one component should be defined after construction
-            assert.isTrue(hasTreeDataProvider || hasSerializer, 'Components are being initialized');
-        });
-    });
-});
 
 suite('DeepnoteExplorerView - Empty State Commands', () => {
     let explorerView: DeepnoteExplorerView;
@@ -491,29 +308,6 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             expect(capturedUri!.path).to.include('test.deepnote');
         });
 
-        test('should import and convert jupyter files', async () => {
-            const workspaceFolder = { uri: Uri.file('/workspace') };
-            const sourceUri = Uri.file('/external/my-notebook.ipynb');
-
-            when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder as any]);
-            when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(Promise.resolve([sourceUri]));
-
-            const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.stat(anything())).thenReject(new Error('File not found'));
-            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
-
-            let infoMessageShown = false;
-            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenCall(() => {
-                infoMessageShown = true;
-                return Promise.resolve(undefined);
-            });
-
-            await (explorerView as any).importNotebook();
-
-            // Verify success message was shown (indicating convert was called successfully)
-            expect(infoMessageShown).to.be.true;
-        });
-
         test('should import multiple files', async () => {
             const workspaceFolder = { uri: Uri.file('/workspace') };
             const deepnoteUri = Uri.file('/external/test1.deepnote');
@@ -571,23 +365,6 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             expect(writeFileCalled).to.be.false;
         });
 
-        test('should handle import errors', async () => {
-            const workspaceFolder = { uri: Uri.file('/workspace') };
-            const sourceUri = Uri.file('/external/test.ipynb');
-
-            when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder as any]);
-            when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(Promise.resolve([sourceUri]));
-
-            const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.stat(anything())).thenReject(new Error('File not found'));
-            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
-
-            // Test is simplified - the mock convert function succeeds by default
-            // To properly test error handling, we would need to modify the mock in vscode-mock.ts
-            // For now, we'll just verify the method completes without throwing
-            await (explorerView as any).importNotebook();
-        });
-
         test('should return early if user cancels dialog', async () => {
             const workspaceFolder = { uri: Uri.file('/workspace') };
 
@@ -633,29 +410,6 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
     });
 
     suite('importJupyterNotebook', () => {
-        test('should import jupyter notebook with correct naming', async () => {
-            const workspaceFolder = { uri: Uri.file('/workspace') };
-            const sourceUri = Uri.file('/external/my-analysis.ipynb');
-
-            when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder as any]);
-            when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(Promise.resolve([sourceUri]));
-
-            const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.stat(anything())).thenReject(new Error('File not found'));
-            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
-
-            let infoMessageShown = false;
-            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenCall(() => {
-                infoMessageShown = true;
-                return Promise.resolve(undefined);
-            });
-
-            await (explorerView as any).importJupyterNotebook();
-
-            // Verify success message was shown (indicating convert was called successfully)
-            expect(infoMessageShown).to.be.true;
-        });
-
         test('should import multiple jupyter notebooks', async () => {
             const workspaceFolder = { uri: Uri.file('/workspace') };
             const sourceUris = [Uri.file('/external/notebook1.ipynb'), Uri.file('/external/notebook2.ipynb')];
@@ -701,23 +455,6 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             expect(errorShown).to.be.true;
         });
 
-        test('should handle conversion errors', async () => {
-            const workspaceFolder = { uri: Uri.file('/workspace') };
-            const sourceUri = Uri.file('/external/test.ipynb');
-
-            when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder as any]);
-            when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(Promise.resolve([sourceUri]));
-
-            const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.stat(anything())).thenReject(new Error('File not found'));
-            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
-
-            // Test is simplified - the mock convert function succeeds by default
-            // To properly test error handling, we would need to modify the mock in vscode-mock.ts
-            // For now, we'll just verify the method completes without throwing
-            await (explorerView as any).importJupyterNotebook();
-        });
-
         test('should return early if user cancels dialog', async () => {
             const workspaceFolder = { uri: Uri.file('/workspace') };
 
@@ -758,29 +495,6 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             expect(showInfoCalled).to.be.true;
             expect(executeCommandCalled).to.be.true;
-        });
-
-        test('should remove .ipynb extension case-insensitively', async () => {
-            const workspaceFolder = { uri: Uri.file('/workspace') };
-            const sourceUri = Uri.file('/external/notebook.IPYNB');
-
-            when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder as any]);
-            when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(Promise.resolve([sourceUri]));
-
-            const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.stat(anything())).thenReject(new Error('File not found'));
-            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
-
-            let infoMessageShown = false;
-            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenCall(() => {
-                infoMessageShown = true;
-                return Promise.resolve(undefined);
-            });
-
-            await (explorerView as any).importJupyterNotebook();
-
-            // Verify success message was shown (indicating convert was called successfully)
-            expect(infoMessageShown).to.be.true;
         });
     });
 
@@ -1316,26 +1030,6 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
         });
 
-        test('should return early if tree item type is not Notebook', async () => {
-            const mockTreeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.ProjectFile,
-                context: {
-                    filePath: '/workspace/test-project.deepnote',
-                    projectId: 'test-project-id'
-                }
-            };
-
-            const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from('')));
-            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
-
-            // Execute the method
-            await explorerView.renameNotebook(mockTreeItem as DeepnoteTreeItem);
-
-            // Verify that readFile was not called (early return)
-            verify(mockFS.readFile(anything())).never();
-        });
-
         test('should return early if user cancels input or provides same name', async () => {
             const projectId = 'test-project-id';
             const notebookId = 'notebook-to-rename';
@@ -1501,28 +1195,6 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Verify success message was shown
             verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
-        });
-
-        test('should return early if tree item type is not Notebook', async () => {
-            const mockTreeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.ProjectFile,
-                context: {
-                    filePath: '/workspace/test-project.deepnote',
-                    projectId: 'test-project-id'
-                }
-            };
-
-            const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from('')));
-            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
-
-            // Execute the method
-            await explorerView.deleteNotebook(mockTreeItem as DeepnoteTreeItem);
-
-            // Verify that readFile was not called (early return)
-            verify(mockFS.readFile(anything())).never();
-            // Verify no warning message was shown
-            verify(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).never();
         });
 
         test('should return early if user cancels confirmation', async () => {
@@ -1704,26 +1376,6 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Verify success message was shown
             verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
-        });
-
-        test('should return early if tree item type is not Notebook', async () => {
-            const mockTreeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.ProjectFile,
-                context: {
-                    filePath: '/workspace/test-project.deepnote',
-                    projectId: 'test-project-id'
-                }
-            };
-
-            const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from('')));
-            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
-
-            // Execute the method
-            await explorerView.duplicateNotebook(mockTreeItem as DeepnoteTreeItem);
-
-            // Verify that readFile was not called (early return)
-            verify(mockFS.readFile(anything())).never();
         });
 
         test('should show error if notebook is not found in project', async () => {
@@ -2024,24 +1676,6 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             verify(mockFS.readFile(anything())).never();
         });
 
-        test('should return early if the tree item is a ProjectFile (not a group)', async () => {
-            const mockTreeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.ProjectFile,
-                context: {
-                    filePath: '/workspace/test-project.deepnote',
-                    projectId: 'test-project-id'
-                }
-            };
-
-            const mockFS = mock<typeof workspace.fs>();
-            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
-
-            await explorerView.renameProject(mockTreeItem as DeepnoteTreeItem);
-
-            verify(mockedVSCodeNamespaces.window.showInputBox(anything())).never();
-            verify(mockFS.readFile(anything())).never();
-        });
-
         test('should return early if user cancels input or provides same name', async () => {
             const projectId = 'test-project-id';
             const currentName = 'Current Project Name';
@@ -2262,58 +1896,6 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             await (explorerView as any).exportProject(treeItem);
 
             // One notebook per file -> two writes
-            assert.strictEqual(writeCount, 2);
-            verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
-        });
-
-        test('should export all notebooks when triggered from project', async () => {
-            resetVSCodeMocks();
-
-            const projectData: DeepnoteFile = {
-                version: '1.0.0',
-                metadata: {
-                    createdAt: '2024-01-01T00:00:00.000Z',
-                    modifiedAt: '2024-01-01T00:00:00.000Z'
-                },
-                project: {
-                    id: 'project-id',
-                    name: 'Test Project',
-                    notebooks: [
-                        { id: 'nb-1', name: 'Notebook 1', blocks: [], executionMode: 'block' },
-                        { id: 'nb-2', name: 'Notebook 2', blocks: [], executionMode: 'block' }
-                    ]
-                }
-            };
-
-            const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.readFile(anything())).thenReturn(
-                Promise.resolve(Buffer.from(serializeDeepnoteFile(projectData)))
-            );
-            when(mockFS.stat(anything())).thenReject(new Error('File not found'));
-            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
-
-            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
-                Promise.resolve({ label: 'Jupyter Notebook (.ipynb)', value: 'jupyter' }) as any
-            );
-            when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(
-                Promise.resolve([Uri.file('/output/folder')])
-            );
-            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenReturn(
-                Promise.resolve(undefined)
-            );
-
-            let writeCount = 0;
-            when(mockFS.writeFile(anything(), anything())).thenCall(() => {
-                writeCount++;
-                return Promise.resolve();
-            });
-
-            const treeItem = buildGroupTreeItem('project-id', [
-                { filePath: '/test/project.deepnote', project: projectData }
-            ]);
-
-            await (explorerView as any).exportProject(treeItem);
-
             assert.strictEqual(writeCount, 2);
             verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
         });

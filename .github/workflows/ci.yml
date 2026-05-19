@@ -113,7 +113,7 @@ jobs:
           VSC_JUPYTER_INSTRUMENT_CODE_FOR_COVERAGE: true
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v5
+        uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354 # v5
         with:
           use_oidc: true
           files: coverage/lcov.info
@@ -121,7 +121,7 @@ jobs:
 
       - name: Upload test results to Codecov
         if: '!cancelled()'
-        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v5
+        uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354 # v5
         with:
           use_oidc: true
           files: test-results.xml

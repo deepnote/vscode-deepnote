@@ -48,11 +48,15 @@ import { IntegrationDetector } from './deepnote/integrations/integrationDetector
 import { IntegrationManager } from './deepnote/integrations/integrationManager';
 import { IntegrationWebviewProvider } from './deepnote/integrations/integrationWebview';
 import {
+    IFederatedAuthSqlBlockCodeGenerator,
+    IFederatedAuthTokenStorage,
     IIntegrationDetector,
     IIntegrationManager,
     IIntegrationStorage,
     IIntegrationWebviewProvider
 } from './deepnote/integrations/types';
+import { FederatedAuthSqlBlockCodeGenerator } from './deepnote/integrations/federatedAuth/federatedAuthSqlBlockCodeGenerator.node';
+import { FederatedAuthTokenStorage } from './deepnote/integrations/federatedAuth/federatedAuthTokenStorage.node';
 import {
     IPlatformNotebookEditorProvider,
     IPlatformDeepnoteNotebookManager
@@ -180,6 +184,11 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IIntegrationDetector>(IIntegrationDetector, IntegrationDetector);
     serviceManager.addSingleton<IIntegrationWebviewProvider>(IIntegrationWebviewProvider, IntegrationWebviewProvider);
     serviceManager.addSingleton<IIntegrationManager>(IIntegrationManager, IntegrationManager);
+    serviceManager.addSingleton<IFederatedAuthTokenStorage>(IFederatedAuthTokenStorage, FederatedAuthTokenStorage);
+    serviceManager.addSingleton<IFederatedAuthSqlBlockCodeGenerator>(
+        IFederatedAuthSqlBlockCodeGenerator,
+        FederatedAuthSqlBlockCodeGenerator
+    );
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
         SqlCellStatusBarProvider

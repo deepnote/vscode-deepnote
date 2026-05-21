@@ -34,14 +34,30 @@ import { getCachedSysPrefix } from '../../platform/interpreter/helpers';
 import { getCellMetadata } from '../../platform/common/utils';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
 import { DeepnoteDataConverter } from '../../notebooks/deepnote/deepnoteDataConverter';
+import {
+    IFederatedAuthSqlBlockCodeGenerator,
+    NotAuthenticatedError
+} from '../../notebooks/deepnote/integrations/types';
 
 /**
  * Factory for CellExecution objects.
+ *
+ * Constructed manually outside the inversify container (see
+ * `NotebookKernelExecution`), so optional dependencies are passed through
+ * as plain constructor arguments rather than via `@inject(...) @optional()`.
  */
 export class CellExecutionFactory {
     constructor(
         private readonly controller: IKernelController,
-        private readonly requestListener: CellExecutionMessageHandlerService
+        private readonly requestListener: CellExecutionMessageHandlerService,
+        /**
+         * Federated-auth code generator. Resolved as `@optional()` in
+         * `NotebookKernelExecution` so the web build (where the symbol is
+         * unbound) passes `undefined` here; the federated branch in
+         * {@link CellExecution.execute} is then skipped via optional
+         * chaining.
+         */
+        private readonly federatedAuthSqlBlockCodeGenerator?: IFederatedAuthSqlBlockCodeGenerator
     ) {}
 
     public create(
@@ -51,7 +67,15 @@ export class CellExecutionFactory {
         info?: ResumeCellExecutionInformation
     ) {
         // eslint-disable-next-line @typescript-eslint/no-use-before-define
-        return CellExecution.fromCell(cell, code, metadata, this.controller, this.requestListener, info);
+        return CellExecution.fromCell(
+            cell,
+            code,
+            metadata,
+            this.controller,
+            this.requestListener,
+            info,
+            this.federatedAuthSqlBlockCodeGenerator
+        );
     }
 }
 
@@ -99,7 +123,8 @@ export class CellExecution implements ICellExecution, IDisposable {
         private readonly kernelConnection: Readonly<KernelConnectionMetadata>,
         private readonly controller: IKernelController,
         private readonly requestListener: CellExecutionMessageHandlerService,
-        private readonly resumeExecution?: ResumeCellExecutionInformation
+        private readonly resumeExecution?: ResumeCellExecutionInformation,
+        private readonly federatedAuthSqlBlockCodeGenerator?: IFederatedAuthSqlBlockCodeGenerator
     ) {
         workspace.onDidCloseTextDocument(
             (e) => {
@@ -147,9 +172,18 @@ export class CellExecution implements ICellExecution, IDisposable {
         metadata: Readonly<KernelConnectionMetadata>,
         controller: IKernelController,
         requestListener: CellExecutionMessageHandlerService,
-        info?: ResumeCellExecutionInformation
+        info?: ResumeCellExecutionInformation,
+        federatedAuthSqlBlockCodeGenerator?: IFederatedAuthSqlBlockCodeGenerator
     ) {
-        return new CellExecution(cell, code, metadata, controller, requestListener, info);
+        return new CellExecution(
+            cell,
+            code,
+            metadata,
+            controller,
+            requestListener,
+            info,
+            federatedAuthSqlBlockCodeGenerator
+        );
     }
     public async start(session: IKernelSession) {
         this.session = session;
@@ -393,6 +427,34 @@ export class CellExecution implements ICellExecution, IDisposable {
         return !this.cell.document.isClosed;
     }
 
+    /**
+     * Surfaces a federated-auth `generate()` failure as a cell-execution
+     * failure with a clear message. The plan's M3 scope is to emit a
+     * clear error here; the actual "Authenticate with Google" UX button
+     * is M4's job.
+     */
+    private handleFederatedGenerateError(ex: unknown) {
+        if (ex instanceof NotAuthenticatedError) {
+            logger.warn(
+                `Federated BigQuery integration "${ex.integrationName}" is not authenticated; cell Index ${this.cell.index} cannot run.`
+            );
+            // TODO(m4-l10n): wire through localize.ts once
+            // bundle.l10n.json runtime wiring lands in M4. Until then the
+            // hardcoded English string keeps the UX intelligible.
+            return this.completedWithErrors(
+                new Error(
+                    'BigQuery integration is not authenticated. Click "Authenticate with Google" in the integration panel to continue.'
+                )
+            );
+        }
+        logger.error(`Federated SQL code generation failed for cell Index ${this.cell.index}`, ex);
+        // Narrow the catch-variable to a shape that satisfies
+        // `completedWithErrors(error: Partial<Error>)` without an `as`
+        // cast: pass the original Error through, otherwise wrap a
+        // non-Error throw value so the diagnostic is preserved.
+        return this.completedWithErrors(ex instanceof Error ? ex : new Error(String(ex)));
+    }
+
     private async execute(code: string, session: IKernelSession) {
         if (!session.kernel) {
             throw new Error('No kernel available to execute code');
@@ -420,9 +482,6 @@ export class CellExecution implements ICellExecution, IDisposable {
         const dataConverter = new DeepnoteDataConverter();
         const deepnoteBlock = dataConverter.convertCellToBlock(cellData, this.cell.index);
 
-        logger.info(`Cell ${this.cell.index}: Using createPythonCode for ${deepnoteBlock.type} block`);
-        code = createPythonCode(deepnoteBlock);
-
         // Generate metadata from our cell (some kernels expect this.)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const metadata: any = {
@@ -431,6 +490,46 @@ export class CellExecution implements ICellExecution, IDisposable {
         };
 
         const kernelConnection = session.kernel;
+
+        // Federated-auth path (BigQuery + google-oauth):
+        // 1. Resolve a fresh access token + emit a silent pre-execute
+        //    that defines a kernel-global variable holding the connection
+        //    JSON. `store_history: false` keeps the token out of `In[]`.
+        // 2. Replace `code` with the variable-reference-only cell source,
+        //    which is safe to put in cell history.
+        // For non-federated cells (or when the generator is unbound on
+        // web), `federated` is undefined and we fall back to upstream
+        // `createPythonCode` exactly as before.
+        let federated: { prelude: string; cellCode: string } | undefined;
+        try {
+            federated = await this.federatedAuthSqlBlockCodeGenerator?.generate(deepnoteBlock);
+        } catch (ex) {
+            return this.handleFederatedGenerateError(ex);
+        }
+        if (federated) {
+            logger.info(`Cell ${this.cell.index}: Using federated BigQuery code path`);
+            try {
+                await kernelConnection.requestExecute(
+                    {
+                        code: federated.prelude,
+                        silent: true,
+                        store_history: false,
+                        allow_stdin: false,
+                        stop_on_error: true
+                    },
+                    /* dispose: */ true,
+                    /* metadata: */ undefined
+                ).done;
+            } catch (ex) {
+                logger.error(`Federated pre-execute failed for cell Index ${this.cell.index}`, ex);
+                return this.completedWithErrors(ex);
+            }
+            code = federated.cellCode;
+        } else {
+            logger.info(`Cell ${this.cell.index}: Using createPythonCode for ${deepnoteBlock.type} block`);
+            code = createPythonCode(deepnoteBlock);
+        }
+
         try {
             // At this point we're about to ACTUALLY execute some code. Fire an event to indicate that
             notebookCellExecutions.changeCellState(this.cell, NotebookCellExecutionState.Executing);

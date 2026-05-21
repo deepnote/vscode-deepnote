@@ -46,6 +46,7 @@ import { CodeExecution } from './execution/codeExecution';
 import type { ICodeExecution } from './execution/types';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../platform/notebooks/cellExecutionStateService';
 import { ISnapshotMetadataService } from '../notebooks/deepnote/snapshots/snapshotService';
+import { IFederatedAuthSqlBlockCodeGenerator } from '../notebooks/deepnote/integrations/types';
 
 /**
  * Everything in this classes gets disposed via the `onWillCancel` hook.
@@ -67,7 +68,18 @@ export class NotebookKernelExecution implements INotebookKernelExecution {
         context: IExtensionContext,
         formatters: ITracebackFormatter[],
         private readonly notebook: NotebookDocument,
-        private readonly snapshotService?: ISnapshotMetadataService
+        private readonly snapshotService?: ISnapshotMetadataService,
+        /**
+         * Federated-auth code generator. Optional so the web build (where
+         * the symbol is unbound) resolves it to `undefined` and the
+         * federated branch in `CellExecution.execute` is skipped — the
+         * existing `createPythonCode` path runs as today.
+         *
+         * `NotebookKernelExecution` is the inversify-managed entry point
+         * for the execution chain; it threads the resolved value through
+         * `new CellExecutionFactory(...)` below.
+         */
+        private readonly federatedAuthSqlBlockCodeGenerator?: IFederatedAuthSqlBlockCodeGenerator
     ) {
         const requestListener = new CellExecutionMessageHandlerService(
             kernel.controller,
@@ -76,7 +88,11 @@ export class NotebookKernelExecution implements INotebookKernelExecution {
             notebook
         );
         this.disposables.push(requestListener);
-        this.executionFactory = new CellExecutionFactory(kernel.controller, requestListener);
+        this.executionFactory = new CellExecutionFactory(
+            kernel.controller,
+            requestListener,
+            this.federatedAuthSqlBlockCodeGenerator
+        );
         notebookCellExecutions.onDidChangeNotebookCellExecutionState((e) => {
             if (
                 e.cell.notebook === kernel.notebook &&

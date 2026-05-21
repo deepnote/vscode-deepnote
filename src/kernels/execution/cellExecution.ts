@@ -36,7 +36,8 @@ import { NotebookCellExecutionState, notebookCellExecutions } from '../../platfo
 import { DeepnoteDataConverter } from '../../notebooks/deepnote/deepnoteDataConverter';
 import {
     IFederatedAuthSqlBlockCodeGenerator,
-    NotAuthenticatedError
+    NotAuthenticatedError,
+    OAuthClientMisconfiguredError
 } from '../../notebooks/deepnote/integrations/types';
 import { Integrations } from '../../platform/common/utils/localize';
 
@@ -440,6 +441,18 @@ export class CellExecution implements ICellExecution, IDisposable {
                 `Federated BigQuery integration "${ex.integrationName}" is not authenticated; cell Index ${this.cell.index} cannot run.`
             );
             return this.completedWithErrors(new Error(Integrations.bigQueryNotAuthenticated(ex.integrationName)));
+        }
+        if (ex instanceof OAuthClientMisconfiguredError) {
+            // Google rejected the refresh with `invalid_client` /
+            // `unauthorized_client`. The refresh token is still likely
+            // valid; the user just has the wrong clientId/clientSecret.
+            // Surface the dedicated localized message so the user knows
+            // to edit the integration settings rather than re-running
+            // the OAuth flow (which would fail with the same error).
+            logger.warn(
+                `Federated BigQuery integration "${ex.integrationName}" has misconfigured OAuth client; cell Index ${this.cell.index} cannot run.`
+            );
+            return this.completedWithErrors(new Error(Integrations.federatedAuthOAuthClientMisconfigured));
         }
         logger.error(`Federated SQL code generation failed for cell Index ${this.cell.index}`, ex);
         // Narrow the catch-variable to a shape that satisfies

@@ -14,7 +14,12 @@ import { inject, injectable, optional } from 'inversify';
 import { dedent } from 'ts-dedent';
 
 import { IIntegrationStorage } from '../../../../platform/notebooks/deepnote/types';
-import { fetchFreshAccessToken, InvalidGrantError, computeMetadataFingerprint } from './federatedAuthTokenStorage.node';
+import {
+    fetchFreshAccessToken,
+    InvalidClientError,
+    InvalidGrantError,
+    computeMetadataFingerprint
+} from './federatedAuthTokenStorage.node';
 import { GOOGLE_TOKEN_URL } from './googleOAuthProvider.node';
 import {
     createDataFrameConfig,
@@ -23,7 +28,12 @@ import {
     SqlCacheMode,
     SqlCellVariableType
 } from './vendoredBlocksHelpers';
-import { IFederatedAuthSqlBlockCodeGenerator, IFederatedAuthTokenStorage, NotAuthenticatedError } from '../types';
+import {
+    IFederatedAuthSqlBlockCodeGenerator,
+    IFederatedAuthTokenStorage,
+    NotAuthenticatedError,
+    OAuthClientMisconfiguredError
+} from '../types';
 
 /**
  * Type signature of {@link fetchFreshAccessToken}. Used to declare the
@@ -198,9 +208,21 @@ export class FederatedAuthSqlBlockCodeGenerator implements IFederatedAuthSqlBloc
                 await this.tokenStorage.delete(integrationId);
                 throw new NotAuthenticatedError(integration.name);
             }
-            // InvalidClientError and any other error mean the token is
-            // probably still valid — don't delete it. Rethrow so the
-            // caller can surface the underlying error.
+            if (error instanceof InvalidClientError) {
+                // The clientId/clientSecret on the integration are
+                // wrong (Google returned `invalid_client` /
+                // `unauthorized_client`). Re-authenticating won't help;
+                // the user has to edit the credentials. Rethrow as a
+                // cross-platform sentinel so the cell-execution path
+                // can surface a distinct, more actionable error
+                // message without importing the node-only error class.
+                // The refresh token itself is still likely valid — do
+                // NOT delete it.
+                throw new OAuthClientMisconfiguredError(integration.name);
+            }
+            // Any other error means the token is probably still
+            // valid — don't delete it. Rethrow so the caller can
+            // surface the underlying error.
             throw error;
         }
 

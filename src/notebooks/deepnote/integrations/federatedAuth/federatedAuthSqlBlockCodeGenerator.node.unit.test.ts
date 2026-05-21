@@ -4,7 +4,12 @@ import sinon from 'sinon';
 
 import { ConfigurableDatabaseIntegrationConfig } from '../../../../platform/notebooks/deepnote/integrationTypes';
 import { IIntegrationStorage } from '../../../../platform/notebooks/deepnote/types';
-import { FederatedAuthTokenEntry, IFederatedAuthTokenStorage, NotAuthenticatedError } from '../types';
+import {
+    FederatedAuthTokenEntry,
+    IFederatedAuthTokenStorage,
+    NotAuthenticatedError,
+    OAuthClientMisconfiguredError
+} from '../types';
 import {
     FederatedAuthSqlBlockCodeGenerator,
     federatedSqlVariableName
@@ -363,16 +368,22 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         sinon.assert.calledOnceWithExactly(deleteSpy, INTEGRATION_ID);
     });
 
-    test('InvalidClientError from refresh: rethrows InvalidClientError and does NOT delete the token', async () => {
+    test('InvalidClientError from refresh: throws OAuthClientMisconfiguredError and does NOT delete the token', async () => {
+        // Generator wraps the node-only `InvalidClientError` into a
+        // cross-platform `OAuthClientMisconfiguredError` so consumers
+        // like `cellExecution.ts` (bound on web too) can distinguish it
+        // without importing the node-only error class.
         setupValidFederatedIntegration();
         fetcher.rejects(new InvalidClientError());
 
         try {
             await generator.generate(sqlBlock());
-            assert.fail('Expected InvalidClientError');
+            assert.fail('Expected OAuthClientMisconfiguredError');
         } catch (err) {
-            assert.instanceOf(err, InvalidClientError);
+            assert.instanceOf(err, OAuthClientMisconfiguredError);
             assert.notInstanceOf(err, NotAuthenticatedError);
+            assert.notInstanceOf(err, InvalidClientError);
+            assert.equal((err as OAuthClientMisconfiguredError).integrationName, 'My BigQuery');
         }
         sinon.assert.notCalled(deleteSpy);
     });

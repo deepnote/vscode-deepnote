@@ -86,6 +86,13 @@ export interface IFederatedAuthTokenStorage {
     delete(integrationId: string): Promise<void>;
     get(integrationId: string): Promise<FederatedAuthTokenEntry | undefined>;
     has(integrationId: string): Promise<boolean>;
+    /**
+     * Lists all integration IDs that currently have a stored refresh-token
+     * entry. Exposed for orphaned-token cleanup — callers compare this list
+     * against the active set of integrations and delete any tokens whose
+     * integration no longer exists.
+     */
+    listIntegrationIds(): Promise<string[]>;
     save(entry: FederatedAuthTokenEntry): Promise<void>;
 }
 
@@ -115,5 +122,27 @@ export class NotAuthenticatedError extends Error {
     constructor(public readonly integrationName: string) {
         super(`Integration "${integrationName}" is not authenticated.`);
         this.name = 'NotAuthenticatedError';
+    }
+}
+
+/**
+ * Thrown by `IFederatedAuthSqlBlockCodeGenerator.generate` when the OAuth
+ * provider rejects the refresh request with `invalid_client` or
+ * `unauthorized_client` — i.e. the integration's stored OAuth client
+ * metadata (clientId/clientSecret) is misconfigured.
+ *
+ * Distinct from {@link NotAuthenticatedError}: re-running the OAuth flow
+ * won't fix the issue; the user must correct the client credentials in
+ * the integration settings.
+ *
+ * Lives in cross-platform `types.ts` (alongside `NotAuthenticatedError`)
+ * so the cell-execution path — which is bound on both node and web — can
+ * `instanceof`-check against it without importing the node-only
+ * `InvalidClientError` from `federatedAuthTokenStorage.node`.
+ */
+export class OAuthClientMisconfiguredError extends Error {
+    constructor(public readonly integrationName: string) {
+        super(`OAuth client for integration "${integrationName}" is misconfigured.`);
+        this.name = 'OAuthClientMisconfiguredError';
     }
 }

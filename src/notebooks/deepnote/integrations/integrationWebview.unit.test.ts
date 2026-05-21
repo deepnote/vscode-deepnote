@@ -50,6 +50,9 @@ function createFakeTokenStorage(): {
                 onDidChangeEmitter.fire(integrationId);
             }
         },
+        async listIntegrationIds() {
+            return Array.from(tokens.keys());
+        },
         computeMetadataFingerprint(metadata) {
             return fingerprintForTest(metadata);
         }
@@ -615,6 +618,9 @@ suite('IntegrationWebviewProvider', () => {
             },
             async delete() {
                 /* no-op */
+            },
+            async listIntegrationIds() {
+                return [];
             },
             computeMetadataFingerprint() {
                 return 'fp';

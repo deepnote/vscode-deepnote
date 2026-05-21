@@ -22,7 +22,8 @@ import { createDeferred, Deferred } from '../../platform/common/utils/async';
 import { IDisposable } from '../../platform/common/types';
 import {
     IFederatedAuthSqlBlockCodeGenerator,
-    NotAuthenticatedError
+    NotAuthenticatedError,
+    OAuthClientMisconfiguredError
 } from '../../notebooks/deepnote/integrations/types';
 import { IKernelController, IKernelSession, KernelConnectionMetadata } from '../types';
 import { createKernelController } from '../../test/datascience/notebook/executionHelper';
@@ -410,6 +411,35 @@ suite('CellExecution federated-auth branch', () => {
         assert.ok(caught instanceof Error, 'expected the cell to fail');
 
         // No requestExecute should have been issued.
+        sinon.assert.notCalled(requestExecuteSpy);
+    });
+
+    test('when generate() throws OAuthClientMisconfiguredError: surfaces the dedicated misconfigured message', async () => {
+        const generator: IFederatedAuthSqlBlockCodeGenerator = {
+            generate: sinon.stub().rejects(new OAuthClientMisconfiguredError('My BigQuery'))
+        };
+        const execution = createExecution(generator);
+
+        let caught: unknown;
+        const startPromise = execution.start(instance(session));
+        if (startPromise) {
+            await startPromise.catch((err) => {
+                caught = err;
+            });
+        }
+
+        assert.ok(caught instanceof Error, 'expected the cell to fail');
+        // The cell-execution path maps `OAuthClientMisconfiguredError`
+        // to `Integrations.federatedAuthOAuthClientMisconfigured`. We
+        // assert on the user-facing language fragment rather than the
+        // full message to keep coupling to copy minimal.
+        assert.include((caught as Error).message.toLowerCase(), 'misconfigured');
+        // Ensure the message is NOT the generic "not authenticated"
+        // toast — i.e. the two paths are distinguished.
+        assert.notInclude((caught as Error).message.toLowerCase(), 'not authenticated');
+
+        // No requestExecute should have been issued (the failure
+        // happens at code-generation time).
         sinon.assert.notCalled(requestExecuteSpy);
     });
 });

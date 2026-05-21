@@ -1,3 +1,6 @@
+import type { DeepnoteBlock } from '@deepnote/blocks';
+import { Event } from 'vscode';
+
 import { IntegrationWithStatus } from '../../../platform/notebooks/deepnote/integrationTypes';
 
 // Re-export IIntegrationStorage from platform layer
@@ -37,4 +40,60 @@ export interface IIntegrationManager {
      * Activate the integration manager by registering commands and event listeners
      */
     activate(): void;
+}
+
+/**
+ * A persisted federated-auth token entry for a single integration.
+ *
+ * The fingerprint is computed from `${clientId}|${clientSecret}|${project}`
+ * so we can detect stale tokens after the user edits their OAuth client
+ * metadata and invalidate them without consulting Google.
+ *
+ * Access tokens are never persisted — only the long-lived refresh token.
+ */
+export interface FederatedAuthTokenEntry {
+    integrationId: string;
+    refreshToken: string;
+    metadataFingerprint: string;
+}
+
+export const IFederatedAuthTokenStorage = Symbol('IFederatedAuthTokenStorage');
+export interface IFederatedAuthTokenStorage {
+    /**
+     * Fires when a token is saved or deleted; the payload is the integration id.
+     */
+    readonly onDidChangeTokens: Event<string>;
+    delete(integrationId: string): Promise<void>;
+    get(integrationId: string): Promise<FederatedAuthTokenEntry | undefined>;
+    has(integrationId: string): Promise<boolean>;
+    save(entry: FederatedAuthTokenEntry): Promise<void>;
+}
+
+export const IFederatedAuthSqlBlockCodeGenerator = Symbol('IFederatedAuthSqlBlockCodeGenerator');
+export interface IFederatedAuthSqlBlockCodeGenerator {
+    /**
+     * For a federated BigQuery SQL block, returns:
+     *   - prelude: Python to run via a silent pre-execute (variable
+     *     definition with the fresh access token). Never runs through
+     *     the normal cell-history path.
+     *   - cellCode: Python to run as the cell's main execute. References
+     *     the variable defined by prelude. Safe to put in In[] history.
+     *
+     * Returns undefined for any block that is not a federated BigQuery
+     * SQL cell, so callers fall back to @deepnote/blocks.createPythonCode.
+     */
+    generate(block: DeepnoteBlock): Promise<{ prelude: string; cellCode: string } | undefined>;
+}
+
+/**
+ * Thrown by `IFederatedAuthSqlBlockCodeGenerator.generate` (and related
+ * call sites) when the integration is federated but has no usable refresh
+ * token — either because the user has not authenticated yet or because the
+ * stored token was invalidated (fingerprint mismatch, `invalid_grant`).
+ */
+export class NotAuthenticatedError extends Error {
+    constructor(public readonly integrationName: string) {
+        super(`Integration "${integrationName}" is not authenticated.`);
+        this.name = 'NotAuthenticatedError';
+    }
 }

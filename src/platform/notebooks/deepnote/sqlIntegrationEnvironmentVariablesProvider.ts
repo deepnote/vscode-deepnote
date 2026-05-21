@@ -11,7 +11,35 @@ import {
     IPlatformDeepnoteNotebookManager
 } from './types';
 import { DATAFRAME_SQL_INTEGRATION_ID } from './integrationTypes';
-import { DatabaseIntegrationConfig, getEnvironmentVariablesForIntegrations } from '@deepnote/database-integrations';
+import {
+    DatabaseIntegrationConfig,
+    FederatedAuthMethod,
+    getEnvironmentVariablesForIntegrations,
+    isFederatedAuthMethod
+} from '@deepnote/database-integrations';
+
+/**
+ * Narrow `DatabaseIntegrationConfig['metadata']` to the federated-auth variant
+ * without an `as` cast. We can't reuse the upstream `isFederatedAuthMetadata`
+ * directly because its generic constraint (`M extends { authMethod?: string }`)
+ * does not unify with the discriminated-union shape of
+ * `DatabaseIntegrationConfig['metadata']` — several branches do not declare
+ * `authMethod` at all. The check delegates to the upstream
+ * `isFederatedAuthMethod` helper at runtime so the set of federated methods
+ * stays in sync with `@deepnote/database-integrations`.
+ */
+function isFederatedAuthMetadata(
+    metadata: DatabaseIntegrationConfig['metadata']
+): metadata is Extract<DatabaseIntegrationConfig['metadata'], { authMethod: FederatedAuthMethod }> {
+    if (typeof metadata !== 'object' || metadata === null) {
+        return false;
+    }
+    if (!('authMethod' in metadata)) {
+        return false;
+    }
+    const authMethod = metadata.authMethod;
+    return typeof authMethod === 'string' && isFederatedAuthMethod(authMethod);
+}
 
 /**
  * Provides environment variables for SQL integrations.
@@ -88,13 +116,30 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
             `SqlIntegrationEnvironmentVariablesProvider: Found ${projectIntegrations.length} integrations in project`
         );
 
-        const projectIntegrationConfigs: Array<DatabaseIntegrationConfig> = (
+        const allConfigs: Array<DatabaseIntegrationConfig> = (
             await Promise.all(
                 projectIntegrations.map((integration) => {
                     return this.integrationStorage.getIntegrationConfig(integration.id);
                 })
             )
         ).filter((config) => config != null);
+
+        // Skip federated-auth integrations at kernel startup; their access
+        // tokens are fetched fresh on every cell execution via the silent
+        // pre-execute hook in `CellExecution`. Emitting an env var here
+        // would either bake a stale token into the kernel env or require
+        // running an OAuth refresh during kernel startup — neither is
+        // acceptable per the plan.
+        const projectIntegrationConfigs: Array<DatabaseIntegrationConfig> = [];
+        for (const config of allConfigs) {
+            if (isFederatedAuthMetadata(config.metadata)) {
+                logger.debug(
+                    `SqlIntegrationEnvironmentVariablesProvider: Skipping federated integration ${config.id} (${config.type}); per-cell pre-execute handles its token.`
+                );
+                continue;
+            }
+            projectIntegrationConfigs.push(config);
+        }
 
         // Always add the internal DuckDB integration
         projectIntegrationConfigs.push({

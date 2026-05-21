@@ -38,6 +38,7 @@ import {
     IFederatedAuthSqlBlockCodeGenerator,
     NotAuthenticatedError
 } from '../../notebooks/deepnote/integrations/types';
+import { Integrations } from '../../platform/common/utils/localize';
 
 /**
  * Factory for CellExecution objects.
@@ -438,14 +439,7 @@ export class CellExecution implements ICellExecution, IDisposable {
             logger.warn(
                 `Federated BigQuery integration "${ex.integrationName}" is not authenticated; cell Index ${this.cell.index} cannot run.`
             );
-            // TODO(m4-l10n): wire through localize.ts once
-            // bundle.l10n.json runtime wiring lands in M4. Until then the
-            // hardcoded English string keeps the UX intelligible.
-            return this.completedWithErrors(
-                new Error(
-                    'BigQuery integration is not authenticated. Click "Authenticate with Google" in the integration panel to continue.'
-                )
-            );
+            return this.completedWithErrors(new Error(Integrations.bigQueryNotAuthenticated(ex.integrationName)));
         }
         logger.error(`Federated SQL code generation failed for cell Index ${this.cell.index}`, ex);
         // Narrow the catch-variable to a shape that satisfies

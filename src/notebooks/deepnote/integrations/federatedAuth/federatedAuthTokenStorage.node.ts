@@ -195,6 +195,16 @@ export class FederatedAuthTokenStorage implements IFederatedAuthTokenStorage {
         asyncRegistry.push(this);
     }
 
+    /**
+     * Instance method form of {@link computeMetadataFingerprint}, exposed so
+     * cross-platform callers (e.g. {@link IntegrationWebviewProvider}) can
+     * fingerprint OAuth-client metadata via the injected token-storage
+     * instance instead of importing the node-only helper directly.
+     */
+    public computeMetadataFingerprint(metadata: { clientId: string; clientSecret: string; project: string }): string {
+        return computeMetadataFingerprint(metadata);
+    }
+
     public async delete(integrationId: string): Promise<void> {
         await this.ensureCacheLoaded();
 

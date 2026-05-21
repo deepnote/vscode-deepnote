@@ -145,6 +145,11 @@
                 "icon": "$(plug)"
             },
             {
+                "command": "deepnote.authenticateIntegration",
+                "title": "%deepnote.commands.authenticateIntegration.title%",
+                "category": "Deepnote"
+            },
+            {
                 "command": "deepnote.openInDeepnote",
                 "title": "Open in Deepnote",
                 "category": "Deepnote",
@@ -1198,6 +1203,10 @@
                     "command": "deepnote.replayPylanceLog",
                     "title": "%deepnote.commandPalette.deepnote.replayPylanceLog.title%",
                     "when": "deepnote.development && isWorkspaceTrusted"
+                },
+                {
+                    "command": "deepnote.authenticateIntegration",
+                    "when": "false"
                 },
                 {
                     "command": "deepnote.manageAccessToKernels",

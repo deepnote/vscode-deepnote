@@ -57,12 +57,32 @@ export interface FederatedAuthTokenEntry {
     metadataFingerprint: string;
 }
 
+/**
+ * Shape of the OAuth-client metadata fingerprinted by
+ * {@link IFederatedAuthTokenStorage.computeMetadataFingerprint}. Mirrors
+ * the `google-oauth` branch of the BigQuery integration metadata schema in
+ * `@deepnote/database-integrations`.
+ */
+export interface FederatedAuthFingerprintInput {
+    clientId: string;
+    clientSecret: string;
+    project: string;
+}
+
 export const IFederatedAuthTokenStorage = Symbol('IFederatedAuthTokenStorage');
 export interface IFederatedAuthTokenStorage {
     /**
      * Fires when a token is saved or deleted; the payload is the integration id.
      */
     readonly onDidChangeTokens: Event<string>;
+    /**
+     * Computes the canonical fingerprint of the OAuth-client metadata on a
+     * federated BigQuery integration. Exposed on the interface (rather than
+     * imported directly from `federatedAuthTokenStorage.node`) so callers
+     * bound on both node and web — notably `IntegrationWebviewProvider` —
+     * don't have to import the node-only implementation file.
+     */
+    computeMetadataFingerprint(metadata: FederatedAuthFingerprintInput): string;
     delete(integrationId: string): Promise<void>;
     get(integrationId: string): Promise<FederatedAuthTokenEntry | undefined>;
     has(integrationId: string): Promise<boolean>;

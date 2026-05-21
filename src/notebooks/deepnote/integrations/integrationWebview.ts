@@ -1,14 +1,18 @@
-import { inject, injectable } from 'inversify';
-import { Disposable, l10n, Uri, ViewColumn, WebviewPanel, window } from 'vscode';
+import { inject, injectable, optional } from 'inversify';
+import { commands, Disposable, l10n, Uri, ViewColumn, WebviewPanel, window } from 'vscode';
 
+import { BigQueryAuthMethods } from '@deepnote/database-integrations';
+
+import { Commands } from '../../../platform/common/constants';
 import { IExtensionContext } from '../../../platform/common/types';
 import * as localize from '../../../platform/common/utils/localize';
 import { logger } from '../../../platform/logging';
 import { LocalizedMessages, SharedMessages } from '../../../messageTypes';
 import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
-import { IIntegrationStorage, IIntegrationWebviewProvider } from './types';
+import { IFederatedAuthTokenStorage, IIntegrationStorage, IIntegrationWebviewProvider } from './types';
 import {
     ConfigurableDatabaseIntegrationConfig,
+    FederatedAuthTokenStatus,
     IntegrationStatus,
     IntegrationWithStatus
 } from '../../../platform/notebooks/deepnote/integrationTypes';
@@ -26,11 +30,43 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
 
     private projectId: string | undefined;
 
+    /**
+     * Monotonically-incremented per `updateWebview()` call. Used as a
+     * "latest call wins" generation counter so an overlapping in-flight
+     * update that resolves last cannot overwrite a fresher one.
+     */
+    private updateGeneration = 0;
+
+    /**
+     * Long-lived disposables — notably the `onDidChangeTokens` subscription —
+     * that must survive panel close/reopen. The provider is a DI singleton,
+     * so the constructor runs once per extension lifetime; if we lumped this
+     * subscription into `this.disposables`, the panel's `onDidDispose`
+     * handler would tear it down and we'd never re-subscribe.
+     */
+    private readonly tokenStorageDisposables: Disposable[] = [];
+
     constructor(
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
-        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager
-    ) {}
+        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
+        @inject(IFederatedAuthTokenStorage)
+        @optional()
+        private readonly tokenStorage?: IFederatedAuthTokenStorage
+    ) {
+        // Refresh the webview whenever the token storage signals a change —
+        // so the pill flips between "Authenticated" and "Not authenticated"
+        // without requiring the user to reload the panel manually. Kept in
+        // `tokenStorageDisposables` (NOT `disposables`) so the subscription
+        // survives panel close/reopen.
+        if (this.tokenStorage) {
+            this.tokenStorageDisposables.push(
+                this.tokenStorage.onDidChangeTokens(() => {
+                    void this.updateWebview();
+                })
+            );
+        }
+    }
 
     /**
      * Show the integration management webview
@@ -177,6 +213,28 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsBigQueryCredentialsLabel: localize.Integrations.bigQueryCredentialsLabel,
             integrationsBigQueryCredentialsPlaceholder: localize.Integrations.bigQueryCredentialsPlaceholder,
             integrationsBigQueryCredentialsRequired: localize.Integrations.bigQueryCredentialsRequired,
+            // BigQuery federated-auth form strings (M4)
+            integrationsBigQueryAuthMethodLabel: localize.Integrations.bigQueryAuthMethodLabel,
+            integrationsBigQueryAuthMethodServiceAccount: localize.Integrations.bigQueryAuthMethodServiceAccount,
+            integrationsBigQueryAuthMethodGoogleOauth: localize.Integrations.bigQueryAuthMethodGoogleOauth,
+            integrationsBigQueryProjectLabel: localize.Integrations.bigQueryProjectLabel,
+            integrationsBigQueryProjectPlaceholder: localize.Integrations.bigQueryProjectPlaceholder,
+            integrationsBigQueryClientIdLabel: localize.Integrations.bigQueryClientIdLabel,
+            integrationsBigQueryClientIdPlaceholder: localize.Integrations.bigQueryClientIdPlaceholder,
+            integrationsBigQueryClientSecretLabel: localize.Integrations.bigQueryClientSecretLabel,
+            integrationsBigQueryClientSecretPlaceholder: localize.Integrations.bigQueryClientSecretPlaceholder,
+            integrationsBigQueryGoogleOauthHelp: localize.Integrations.bigQueryGoogleOauthHelp,
+            // Federated-auth integration management strings (M4)
+            integrationsAuthenticate: localize.Integrations.authenticate,
+            integrationsReauthenticate: localize.Integrations.reauthenticate,
+            integrationsTokenStatusAuthenticated: localize.Integrations.tokenStatusAuthenticated,
+            integrationsTokenStatusDisconnected: localize.Integrations.tokenStatusDisconnected,
+            integrationsAuthenticating: localize.Integrations.authenticating('{0}'),
+            integrationsAuthenticationSucceeded: localize.Integrations.authenticationSucceeded('{0}'),
+            integrationsAuthenticationFailed: localize.Integrations.authenticationFailed('{0}'),
+            integrationsBigQueryNotAuthenticated: localize.Integrations.bigQueryNotAuthenticated('{0}'),
+            integrationsFederatedAuthNotSupportedInWeb: localize.Integrations.federatedAuthNotSupportedInWeb,
+            integrationsFederatedAuthNotSupportedInRemote: localize.Integrations.federatedAuthNotSupportedInRemote,
             integrationsSnowflakeNameLabel: localize.Integrations.snowflakeNameLabel,
             integrationsSnowflakeNamePlaceholder: localize.Integrations.snowflakeNamePlaceholder,
             integrationsSnowflakeAccountLabel: localize.Integrations.snowflakeAccountLabel,
@@ -392,7 +450,13 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     }
 
     /**
-     * Update the webview with current integration data
+     * Update the webview with current integration data.
+     *
+     * Race safety: overlapping `updateWebview()` calls are possible — e.g.
+     * `show()` runs one inline while `onDidChangeTokens` fires another from
+     * inside `tokenStorage.save()`. We assign each call a generation number
+     * and bail out at every async boundary if either (a) a newer generation
+     * has started or (b) the panel was disposed during the await.
      */
     private async updateWebview(): Promise<void> {
         if (!this.currentPanel) {
@@ -400,13 +464,37 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             return;
         }
 
-        const integrationsData = Array.from(this.integrations.entries()).map(([id, integration]) => ({
-            config: integration.config,
-            id,
-            integrationName: integration.integrationName,
-            integrationType: integration.integrationType,
-            status: integration.status
-        }));
+        this.updateGeneration += 1;
+        const generation = this.updateGeneration;
+
+        const integrationsData = await Promise.all(
+            Array.from(this.integrations.entries()).map(async ([id, integration]) => ({
+                config: integration.config,
+                id,
+                integrationName: integration.integrationName,
+                integrationType: integration.integrationType,
+                status: integration.status,
+                tokenStatus: await this.deriveTokenStatus(id, integration.config)
+            }))
+        );
+
+        // The panel may have been disposed (e.g. user closed it) while the
+        // tokenStorage.has() round-trip was in flight; bail before
+        // dereferencing `this.currentPanel.webview`.
+        if (!this.currentPanel) {
+            logger.debug('IntegrationWebviewProvider: Panel disposed during update, skipping postMessage');
+            return;
+        }
+
+        // A newer updateWebview() call started while we awaited; let it
+        // post the fresher state instead of us posting stale data.
+        if (generation !== this.updateGeneration) {
+            logger.debug(
+                `IntegrationWebviewProvider: Superseded by newer update (gen ${generation} < ${this.updateGeneration}), skipping postMessage`
+            );
+            return;
+        }
+
         logger.debug(`IntegrationWebviewProvider: Sending ${integrationsData.length} integrations to webview`);
 
         // Get the project name from the notebook manager
@@ -424,7 +512,87 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     }
 
     /**
+     * Invalidates any stored federated refresh token whose
+     * OAuth-client-metadata fingerprint no longer matches the incoming
+     * config. Also drops the token when the new config switches away from
+     * `google-oauth` entirely (or away from `big-query`). No-ops when no
+     * token storage is bound, or when no token is stored for this
+     * integration.
+     */
+    private async invalidateStaleFederatedToken(
+        integrationId: string,
+        newConfig: ConfigurableDatabaseIntegrationConfig
+    ): Promise<void> {
+        if (!this.tokenStorage) {
+            return;
+        }
+
+        const stored = await this.tokenStorage.get(integrationId);
+        if (!stored) {
+            return;
+        }
+
+        // Switched away from google-oauth (or to a different integration type):
+        // the previously-captured token is meaningless against the new metadata.
+        if (newConfig.type !== 'big-query' || newConfig.metadata.authMethod !== BigQueryAuthMethods.GoogleOauth) {
+            logger.info(
+                `IntegrationWebviewProvider: deleting stale federated token for ${integrationId} (auth method changed).`
+            );
+            await this.tokenStorage.delete(integrationId);
+            return;
+        }
+
+        // Same auth method but the OAuth client metadata changed: fingerprint
+        // mismatch means the stored refresh token was issued against a
+        // different client and is no longer valid.
+        const { clientId, clientSecret, project } = newConfig.metadata;
+        const newFingerprint = this.tokenStorage.computeMetadataFingerprint({ clientId, clientSecret, project });
+        if (newFingerprint !== stored.metadataFingerprint) {
+            logger.info(
+                `IntegrationWebviewProvider: deleting stale federated token for ${integrationId} (fingerprint changed).`
+            );
+            await this.tokenStorage.delete(integrationId);
+        }
+    }
+
+    /**
+     * Derive the federated-auth token status for an integration. Returns
+     * `'unsupported'` when:
+     *   - the token storage is not bound (web build, or node before
+     *     `IFederatedAuthTokenStorage` is registered),
+     *   - the integration is not BigQuery, or
+     *   - the integration's `authMethod` is not `'google-oauth'`.
+     * Otherwise consults the token storage and returns `'authenticated'`
+     * if a token entry exists for the integration, `'disconnected'` if not.
+     */
+    private async deriveTokenStatus(
+        integrationId: string,
+        config: ConfigurableDatabaseIntegrationConfig | null
+    ): Promise<FederatedAuthTokenStatus> {
+        if (!this.tokenStorage) {
+            return 'unsupported';
+        }
+        if (!config || config.type !== 'big-query' || config.metadata.authMethod !== BigQueryAuthMethods.GoogleOauth) {
+            return 'unsupported';
+        }
+        try {
+            const hasToken = await this.tokenStorage.has(integrationId);
+            return hasToken ? 'authenticated' : 'disconnected';
+        } catch (err) {
+            logger.warn(
+                `IntegrationWebviewProvider: failed to check token for ${integrationId}; reporting disconnected.`,
+                err
+            );
+            return 'disconnected';
+        }
+    }
+
+    /**
      * Handle messages from the webview
+     *
+     * The shape mirrors the webview-side `WebviewOutboundMessage` discriminated
+     * union in `src/webviews/webview-side/integrations/types.ts`. Every case
+     * tag from that union should be handled here.
      */
     private async handleMessage(message: {
         type: string;
@@ -450,6 +618,21 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             case 'delete':
                 if (message.integrationId) {
                     await this.deleteConfiguration(message.integrationId);
+                }
+                break;
+            case 'authenticate':
+                if (message.integrationId) {
+                    try {
+                        await commands.executeCommand(Commands.AuthenticateIntegration, message.integrationId);
+                    } catch (error) {
+                        // The command handler shows its own user-facing toasts;
+                        // we just log here so a rejection doesn't surface as an
+                        // unhandled-promise warning in the extension host.
+                        logger.error(
+                            `IntegrationWebviewProvider: AuthenticateIntegration command failed for ${message.integrationId}`,
+                            error
+                        );
+                    }
                 }
                 break;
         }
@@ -481,6 +664,18 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         config: ConfigurableDatabaseIntegrationConfig
     ): Promise<void> {
         try {
+            // Before persisting the new config, invalidate any stale federated
+            // refresh token. There are two cases:
+            //   - new config is `google-oauth`, but the OAuth-client metadata
+            //     (clientId/clientSecret/project) changed since the token was
+            //     captured. The stored fingerprint no longer matches the new
+            //     config, so the next `generate()` would fail anyway. Delete
+            //     up front so the UI pill flips to "Not authenticated".
+            //   - new config is NOT `google-oauth` (or no longer `big-query`).
+            //     The previously-captured token is meaningless against the
+            //     new auth method; drop it.
+            await this.invalidateStaleFederatedToken(integrationId, config);
+
             await this.integrationStorage.save(config);
 
             // Update local state
@@ -528,6 +723,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     private async resetConfiguration(integrationId: string): Promise<void> {
         try {
             await this.integrationStorage.delete(integrationId);
+            await this.tokenStorage?.delete(integrationId);
 
             // Update local state
             const integration = this.integrations.get(integrationId);
@@ -563,6 +759,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     private async deleteConfiguration(integrationId: string): Promise<void> {
         try {
             await this.integrationStorage.delete(integrationId);
+            await this.tokenStorage?.delete(integrationId);
 
             // Remove from local state
             this.integrations.delete(integrationId);

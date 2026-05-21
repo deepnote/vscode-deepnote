@@ -54,6 +54,7 @@ import { DeepnoteBigNumberCellStatusBarProvider } from './deepnote/deepnoteBigNu
 import { DeepnoteNewCellLanguageService } from './deepnote/deepnoteNewCellLanguageService';
 import { SqlCellStatusBarProvider } from './deepnote/sqlCellStatusBarProvider';
 import { IntegrationKernelRestartHandler } from './deepnote/integrations/integrationKernelRestartHandler';
+import { FederatedAuthCommandHandlerWeb } from './deepnote/integrations/federatedAuth/federatedAuthCommandHandler.web';
 import { DeepnoteFileChangeWatcher } from './deepnote/deepnoteFileChangeWatcher';
 
 export function registerTypes(serviceManager: IServiceManager, isDevMode: boolean) {
@@ -136,6 +137,10 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
         IntegrationKernelRestartHandler
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        FederatedAuthCommandHandlerWeb
     );
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,

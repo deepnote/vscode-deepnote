@@ -10,7 +10,8 @@ import {
     ConfigurableDatabaseIntegrationConfig,
     ConfigurableDatabaseIntegrationType,
     IntegrationWithStatus,
-    WebviewMessage
+    WebviewMessage,
+    WebviewOutboundMessage
 } from './types';
 
 export interface IIntegrationPanelProps {
@@ -99,9 +100,20 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
         return () => window.removeEventListener('message', handleMessage);
     }, []);
 
+    const postOutbound = (message: WebviewOutboundMessage) => {
+        vscodeApi.postMessage(message);
+    };
+
     const handleConfigure = (integrationId: string) => {
-        vscodeApi.postMessage({
+        postOutbound({
             type: 'configure',
+            integrationId
+        });
+    };
+
+    const handleAuthenticate = (integrationId: string) => {
+        postOutbound({
+            type: 'authenticate',
             integrationId
         });
     };
@@ -123,7 +135,7 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
                 confirmResetTimerRef.current = null;
             }
 
-            vscodeApi.postMessage({
+            postOutbound({
                 type: 'reset',
                 integrationId: confirmReset
             });
@@ -158,7 +170,7 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
                 confirmDeleteTimerRef.current = null;
             }
 
-            vscodeApi.postMessage({
+            postOutbound({
                 type: 'delete',
                 integrationId: confirmDelete
             });
@@ -177,7 +189,7 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
     };
 
     const handleSave = (config: ConfigurableDatabaseIntegrationConfig) => {
-        vscodeApi.postMessage({
+        postOutbound({
             type: 'save',
             integrationId: config.id,
             config
@@ -216,6 +228,7 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
                 onConfigure={handleConfigure}
                 onReset={handleReset}
                 onDelete={handleDelete}
+                onAuthenticate={handleAuthenticate}
             />
 
             <IntegrationTypeSelector onSelectType={handleSelectIntegrationType} />

@@ -55,6 +55,7 @@ import {
     IIntegrationStorage,
     IIntegrationWebviewProvider
 } from './deepnote/integrations/types';
+import { FederatedAuthCommandHandlerNode } from './deepnote/integrations/federatedAuth/federatedAuthCommandHandler.node';
 import { FederatedAuthSqlBlockCodeGenerator } from './deepnote/integrations/federatedAuth/federatedAuthSqlBlockCodeGenerator.node';
 import { FederatedAuthTokenStorage } from './deepnote/integrations/federatedAuth/federatedAuthTokenStorage.node';
 import {
@@ -188,6 +189,10 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IFederatedAuthSqlBlockCodeGenerator>(
         IFederatedAuthSqlBlockCodeGenerator,
         FederatedAuthSqlBlockCodeGenerator
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        FederatedAuthCommandHandlerNode
     );
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,

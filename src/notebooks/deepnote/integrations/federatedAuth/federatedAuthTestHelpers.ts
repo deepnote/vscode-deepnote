@@ -1,4 +1,5 @@
 // Shared test fixtures and helpers for the federated-auth tests + adjacent integration tests.
+// Cross-platform: must not import from `.node.ts` modules. Node-only helpers live in `federatedAuthTestHelpers.node.ts`.
 
 import type { DeepnoteBlock } from '@deepnote/blocks';
 import sinon from 'sinon';
@@ -8,11 +9,6 @@ import type { ConfigurableDatabaseIntegrationConfig } from '../../../../platform
 import type { DeepnoteProject } from '../../../../platform/deepnote/deepnoteTypes';
 import type { IIntegrationStorage } from '../../../../platform/notebooks/deepnote/types';
 import type { FederatedAuthTokenEntry, IFederatedAuthTokenStorage } from '../types';
-import {
-    buildBigQueryGoogleOAuthStrategy,
-    type BuildBigQueryGoogleOAuthStrategyParams,
-    createInMemoryPkceStore
-} from './googleOAuthProvider.node';
 
 export const FED_AUTH_FIXTURE = {
     INTEGRATION_ID: 'bq-integration-1',
@@ -259,15 +255,4 @@ export function parsePythonSingleQuoted(escaped: string): string {
         }
     }
     return out;
-}
-
-export function buildTestStrategy(
-    overrides: Partial<BuildBigQueryGoogleOAuthStrategyParams> = {}
-): ReturnType<typeof buildBigQueryGoogleOAuthStrategy> {
-    return buildBigQueryGoogleOAuthStrategy({
-        clientId: 'cid',
-        clientSecret: 'cs',
-        store: createInMemoryPkceStore(),
-        ...overrides
-    });
 }

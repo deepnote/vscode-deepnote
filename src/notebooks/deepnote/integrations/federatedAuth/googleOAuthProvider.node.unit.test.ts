@@ -1,7 +1,7 @@
 import { assert } from 'chai';
 
 import { GOOGLE_BIGQUERY_SCOPES, createInMemoryPkceStore } from './googleOAuthProvider.node';
-import { buildTestStrategy } from './federatedAuthTestHelpers';
+import { buildTestStrategy } from './federatedAuthTestHelpers.node';
 
 suite('googleOAuthProvider', () => {
     suite('GOOGLE_BIGQUERY_SCOPES', () => {

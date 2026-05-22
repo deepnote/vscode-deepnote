@@ -5,7 +5,7 @@ import { type AddressInfo } from 'net';
 import { CancellationError, CancellationTokenSource } from 'vscode';
 
 import { runOAuthFlow } from './oauthLoopbackFlow.node';
-import { buildTestStrategy } from './federatedAuthTestHelpers';
+import { buildTestStrategy } from './federatedAuthTestHelpers.node';
 
 /** Stub Google OAuth provider for loopback-flow tests; exposes `/oauth/authorize` + `/oauth/token`, capturing the authorize query and token form for assertions. */
 interface StubBehavior {

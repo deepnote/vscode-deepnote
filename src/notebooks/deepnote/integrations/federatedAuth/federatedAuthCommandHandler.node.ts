@@ -10,7 +10,7 @@ import { Integrations } from '../../../../platform/common/utils/localize';
 import { logger } from '../../../../platform/logging';
 import { IIntegrationStorage } from '../../../../platform/notebooks/deepnote/types';
 import { IFederatedAuthTokenStorage, type FederatedAuthTokenEntry } from '../types';
-import { buildBigQueryGoogleOAuthStrategy, createInMemoryPkceStore } from './googleOAuthProvider.node';
+import { buildBigQueryGoogleOAuthStrategy, createInMemoryPKCEStore } from './googleOAuthProvider.node';
 import { computeMetadataFingerprint } from './federatedAuthTokenStorage.node';
 import { runOAuthFlow, type RunOAuthFlowParams } from './oauthLoopbackFlow.node';
 
@@ -78,7 +78,7 @@ export class FederatedAuthCommandHandlerNode implements IExtensionSyncActivation
         const { strategy, completion } = buildBigQueryGoogleOAuthStrategy({
             clientId,
             clientSecret,
-            store: createInMemoryPkceStore()
+            store: createInMemoryPKCEStore()
         });
 
         try {

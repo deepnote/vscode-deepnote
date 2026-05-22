@@ -295,8 +295,8 @@ suite('CellExecution federated-auth branch', () => {
         );
 
         // The cell-execution failure should surface the underlying error.
-        assert.ok(caught instanceof Error, 'expected the cell to fail');
-        assert.strictEqual((caught as Error).message, preludeRejection.message);
+        assert(caught instanceof Error);
+        assert.strictEqual(caught.message, preludeRejection.message);
     });
 
     (
@@ -319,8 +319,8 @@ suite('CellExecution federated-auth branch', () => {
                 });
             }
 
-            assert.ok(caught instanceof Error, 'expected the cell to fail');
-            assert.include((caught as Error).message.toLowerCase(), expectedFragment);
+            assert(caught instanceof Error);
+            assert.include(caught.message.toLowerCase(), expectedFragment);
             sinon.assert.notCalled(requestExecuteSpy);
         });
     });

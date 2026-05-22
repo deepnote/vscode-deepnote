@@ -306,8 +306,8 @@ suite('oauthLoopbackFlow', () => {
                 await flowPromise;
                 assert.fail('expected rejection');
             } catch (err) {
-                assert.instanceOf(err, Error);
-                assert.match((err as Error).message, /timed out/i);
+                assert(err instanceof Error);
+                assert.match(err.message, /timed out/i);
             }
         } finally {
             tokenSource.dispose();
@@ -330,14 +330,14 @@ suite('oauthLoopbackFlow', () => {
             });
             assert.fail('expected rejection');
         } catch (err) {
-            assert.instanceOf(err, Error);
-            assert.include((err as Error).message, 'No refresh token returned');
-            assert.include((err as Error).message, 'myaccount.google.com/permissions');
+            assert(err instanceof Error);
+            assert.include(err.message, 'No refresh token returned');
+            assert.include(err.message, 'my-account.google.com/permissions');
         }
 
         assert.strictEqual(callbackStatus, 400, 'callback should render the error page status');
         assert.isString(callbackBody);
         assert.include(callbackBody!, 'No refresh token returned');
-        assert.include(callbackBody!, 'myaccount.google.com/permissions');
+        assert.include(callbackBody!, 'my-account.google.com/permissions');
     });
 });

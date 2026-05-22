@@ -3,7 +3,7 @@
 import {
     buildBigQueryGoogleOAuthStrategy,
     type BuildBigQueryGoogleOAuthStrategyParams,
-    createInMemoryPkceStore
+    createInMemoryPKCEStore
 } from './googleOAuthProvider.node';
 
 export function buildTestStrategy(
@@ -12,7 +12,7 @@ export function buildTestStrategy(
     return buildBigQueryGoogleOAuthStrategy({
         clientId: 'cid',
         clientSecret: 'cs',
-        store: createInMemoryPkceStore(),
+        store: createInMemoryPKCEStore(),
         ...overrides
     });
 }

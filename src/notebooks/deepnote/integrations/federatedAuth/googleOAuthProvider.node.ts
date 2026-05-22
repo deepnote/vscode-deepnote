@@ -6,7 +6,7 @@ export const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 /** OAuth scopes for BigQuery federated auth. Mirrors handlers.ts:77; `openid` omitted (refresh tokens come from `access_type=offline` + `prompt=consent`). */
 export const GOOGLE_BIGQUERY_SCOPES = ['email', 'profile', 'https://www.googleapis.com/auth/bigquery'] as const;
 
-/** Per-flow record in an {@link InMemoryPkceStore}; `meta` is opaque to us and just round-tripped for passport-oauth2. */
+/** Per-flow record in an {@link InMemoryPKCEStore}; `meta` is opaque to us and just round-tripped for passport-oauth2. */
 interface PkceRecord {
     codeVerifier: string;
     meta: unknown;
@@ -16,7 +16,7 @@ interface PkceRecord {
  * passport-oauth2 state-store with 5-arg `store` / 4-arg `verify` shapes so its arity check picks the PKCE
  * branch (strategy.js:218-298). The verify `ok` slot must hold the codeVerifier string (strategy.js:171-173).
  */
-export interface InMemoryPkceStore {
+export interface InMemoryPKCEStore {
     store(
         req: unknown,
         verifier: string,
@@ -33,7 +33,7 @@ export interface InMemoryPkceStore {
 }
 
 /** Per-flow PKCE/state store: substitutes for passport-oauth2's built-in `PKCESessionStore` (which requires `req.session`). Each call gets its own store to isolate concurrent flows. */
-export function createInMemoryPkceStore(): InMemoryPkceStore {
+export function createInMemoryPKCEStore(): InMemoryPKCEStore {
     const records = new Map<string, PkceRecord>();
     return {
         store(_req, verifier, _state, meta, cb) {
@@ -65,11 +65,11 @@ export interface BuildBigQueryGoogleOAuthStrategyParams {
     authorizationURL?: string;
     clientId: string;
     clientSecret: string;
-    store: InMemoryPkceStore;
+    store: InMemoryPKCEStore;
     tokenURL?: string;
 }
 
-/** Builds Google OAuth strategy + verify pair. Verify resolves `completion` on a non-empty refresh token; an empty token rejects with the "Revoke the app at myaccount.google.com/permissions" guidance. */
+/** Builds Google OAuth strategy + verify pair. Verify resolves `completion` on a non-empty refresh token; an empty token rejects with the "Revoke the app at my-account.google.com/permissions" guidance. */
 export function buildBigQueryGoogleOAuthStrategy(
     params: BuildBigQueryGoogleOAuthStrategyParams
 ): BigQueryGoogleOAuthStrategy {
@@ -105,7 +105,7 @@ export function buildBigQueryGoogleOAuthStrategy(
     ): void => {
         if (!refreshToken) {
             const err = new Error(
-                'No refresh token returned. Revoke the app at myaccount.google.com/permissions and try again.'
+                'No refresh token returned. Revoke the app at my-account.google.com/permissions and try again.'
             );
             rejectCompletion(err);
             done(err);

@@ -1,6 +1,6 @@
 import { assert } from 'chai';
 
-import { GOOGLE_BIGQUERY_SCOPES, createInMemoryPkceStore } from './googleOAuthProvider.node';
+import { GOOGLE_BIGQUERY_SCOPES, createInMemoryPKCEStore } from './googleOAuthProvider.node';
 import { buildTestStrategy } from './federatedAuthTestHelpers.node';
 
 suite('googleOAuthProvider', () => {
@@ -14,9 +14,9 @@ suite('googleOAuthProvider', () => {
         });
     });
 
-    suite('createInMemoryPkceStore', () => {
+    suite('createInMemoryPKCEStore', () => {
         test('store + verify round-trips the code verifier', () => {
-            const store = createInMemoryPkceStore();
+            const store = createInMemoryPKCEStore();
             const verifier = 'random-verifier-12345';
 
             let issuedState: string | undefined;
@@ -40,7 +40,7 @@ suite('googleOAuthProvider', () => {
         });
 
         test('store generates a non-empty, URL-safe state', () => {
-            const store = createInMemoryPkceStore();
+            const store = createInMemoryPKCEStore();
             let issuedState: string | undefined;
             store.store(undefined, 'v', undefined, undefined, (_err, state) => {
                 issuedState = state;
@@ -52,7 +52,7 @@ suite('googleOAuthProvider', () => {
         });
 
         test('store generates distinct states across calls', () => {
-            const store = createInMemoryPkceStore();
+            const store = createInMemoryPKCEStore();
             const states: string[] = [];
             for (let i = 0; i < 5; i++) {
                 store.store(undefined, `v-${i}`, undefined, undefined, (_err, state) => {
@@ -63,7 +63,7 @@ suite('googleOAuthProvider', () => {
         });
 
         test('verify with unknown state returns (null, false, info)', () => {
-            const store = createInMemoryPkceStore();
+            const store = createInMemoryPKCEStore();
             let result: { ok: string | false; info: unknown } | undefined;
             store.verify(undefined, 'never-issued', undefined, (err, ok, info) => {
                 assert.isNull(err);
@@ -75,7 +75,7 @@ suite('googleOAuthProvider', () => {
         });
 
         test('verify deletes the entry (single-use)', () => {
-            const store = createInMemoryPkceStore();
+            const store = createInMemoryPKCEStore();
             let issuedState!: string;
             store.store(undefined, 'verifier', undefined, undefined, (_err, state) => {
                 issuedState = state!;
@@ -97,8 +97,8 @@ suite('googleOAuthProvider', () => {
         });
 
         test('isolated stores do not share state', () => {
-            const a = createInMemoryPkceStore();
-            const b = createInMemoryPkceStore();
+            const a = createInMemoryPKCEStore();
+            const b = createInMemoryPKCEStore();
             let stateA!: string;
             a.store(undefined, 'va', undefined, undefined, (_err, state) => {
                 stateA = state!;
@@ -156,9 +156,9 @@ suite('googleOAuthProvider', () => {
                 await completion;
                 assert.fail('expected rejection');
             } catch (err) {
-                assert.instanceOf(err, Error);
-                assert.include((err as Error).message, 'No refresh token returned');
-                assert.include((err as Error).message, 'myaccount.google.com/permissions');
+                assert(err instanceof Error);
+                assert.include(err.message, 'No refresh token returned');
+                assert.include(err.message, 'my-account.google.com/permissions');
             }
         });
 

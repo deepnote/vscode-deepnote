@@ -295,7 +295,8 @@ suite('federatedAuthTokenStorage', () => {
                 assert.fail('expected throw');
             } catch (err) {
                 assert.instanceOf(err, expectedError as ErrorConstructor);
-                extraAssert?.(err as Error);
+                assert(err instanceof Error);
+                extraAssert?.(err);
             }
         }
 
@@ -452,8 +453,8 @@ suite('federatedAuthTokenStorage', () => {
                 await fetchFreshAccessToken(sampleEntry, sampleConfig, 50);
                 assert.fail('expected throw');
             } catch (err) {
-                assert.instanceOf(err, Error);
-                assert.strictEqual((err as Error).name, 'AbortError');
+                assert(err instanceof Error);
+                assert.strictEqual(err.name, 'AbortError');
                 assert.isBelow(Date.now() - start, 1500);
             }
         });

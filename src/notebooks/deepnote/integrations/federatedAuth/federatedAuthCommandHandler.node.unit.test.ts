@@ -64,8 +64,7 @@ suite('FederatedAuthCommandHandlerNode', () => {
     });
 
     teardown(() => {
-        // Note: tests intentionally configure env.remoteName per-test;
-        // resetVSCodeMocks() in setup clears stale state.
+        // Tests configure env.remoteName per-test; resetVSCodeMocks() in setup clears stale state.
         reset(mockedVSCodeNamespaces.env);
         reset(mockedVSCodeNamespaces.window);
     });
@@ -203,8 +202,7 @@ suite('FederatedAuthCommandHandlerNode', () => {
         when(mockedVSCodeNamespaces.env.remoteName).thenReturn(undefined);
         setupValidGoogleOauthIntegration();
 
-        // Drive the withProgress mock with a pre-cancelled token so we can
-        // assert it lands in runOAuthFlow's params.
+        // Drive withProgress with a token so we can assert it lands in runOAuthFlow's params.
         const tokenSource = new CancellationTokenSource();
         try {
             when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall((_options, callback) =>

@@ -6,14 +6,7 @@ export type ConfigurableDatabaseIntegrationConfig = Exclude<DatabaseIntegrationC
 
 export type IntegrationStatus = 'connected' | 'disconnected' | 'error';
 
-/**
- * Federated-auth token status for an integration.
- *
- * Mirrors `FederatedAuthTokenStatus` in
- * `src/platform/notebooks/deepnote/integrationTypes.ts`. The webview is
- * bundled separately from the extension host, so the type is duplicated
- * here rather than imported across the bundle boundary.
- */
+/** Federated-auth token status; mirrors `FederatedAuthTokenStatus` in platform/integrationTypes.ts (duplicated because the webview bundles separately). */
 export type FederatedAuthTokenStatus = 'authenticated' | 'disconnected' | 'unsupported';
 
 export interface IntegrationWithStatus {
@@ -63,9 +56,7 @@ export interface AuthenticateMessage {
     integrationId: string;
 }
 
-// Outbound (webview -> extension). Dispatched in `integrationWebview.ts:handleMessage`.
-// Keep this discriminated union exhaustive — every webview-side `postMessage` should
-// produce a value of this type, and the extension-side handler should switch on `type`.
+// Outbound (webview -> extension); dispatched in `integrationWebview.ts:handleMessage`. Keep exhaustive.
 export type WebviewOutboundMessage =
     | { type: 'configure'; integrationId: string }
     | { type: 'save'; integrationId: string; config: ConfigurableDatabaseIntegrationConfig }

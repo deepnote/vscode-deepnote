@@ -12,18 +12,7 @@ const FEDERATED_AUTH_TOKEN_SERVICE_NAME = 'deepnote-federated-auth-tokens';
 const INDEX_KEY = 'index';
 const TOKEN_REFRESH_TIMEOUT_MS = 15_000; // 15s
 
-/**
- * Schema for the body returned by Google's OAuth token endpoint when
- * exchanging a refresh token for a fresh access token.
- *
- * The shape mirrors the production response handling at
- * /workspace/deepnote-internal/libs/shared-node/src/integration-federated-auth/integration-federated-auth.ts:372-433.
- *
- * - `access_token`: required on 2xx responses.
- * - `refresh_token`: returned only when Google rotates the refresh token.
- * - `expires_in`: seconds until the access token expires (unused — we never cache).
- * - `error`: returned on non-2xx responses (e.g. 'invalid_grant', 'invalid_client').
- */
+/** Schema for Google's OAuth refresh-token endpoint response. Mirrors production at integration-federated-auth.ts:372-433. */
 const tokenEndpointResponseSchema = z.object({
     access_token: z.string().optional(),
     refresh_token: z.string().optional(),
@@ -32,14 +21,7 @@ const tokenEndpointResponseSchema = z.object({
     error_description: z.string().optional()
 });
 
-/**
- * Thrown when the OAuth provider rejects the refresh request with
- * `error: 'invalid_grant'`. Indicates the stored refresh token is no
- * longer usable (revoked, expired, or invalidated by the user).
- *
- * Callers typically respond by deleting the stored token entry and
- * surfacing a "Not authenticated" state to the user.
- */
+/** Thrown on `error: 'invalid_grant'` — stored refresh token revoked/expired. Callers drop the entry and re-auth. */
 export class InvalidGrantError extends Error {
     constructor(message = 'Refresh token rejected by OAuth provider.') {
         super(message);
@@ -47,12 +29,7 @@ export class InvalidGrantError extends Error {
     }
 }
 
-/**
- * Thrown when the OAuth provider rejects the refresh request with
- * `error: 'invalid_client'` or `error: 'unauthorized_client'`. Indicates
- * the OAuth client metadata stored on the integration is misconfigured
- * (e.g. wrong clientId/clientSecret).
- */
+/** Thrown on `error: 'invalid_client'` / `unauthorized_client` — OAuth client metadata (clientId/clientSecret) is misconfigured. */
 export class InvalidClientError extends Error {
     constructor(message = 'OAuth client credentials rejected by provider.') {
         super(message);
@@ -60,15 +37,7 @@ export class InvalidClientError extends Error {
     }
 }
 
-/**
- * Computes a SHA-256 fingerprint of the OAuth-client metadata on a federated
- * integration. The fingerprint is `${clientId}|${clientSecret}|${project}`
- * hashed with SHA-256.
- *
- * Used to detect when the user edits OAuth client metadata after a token
- * has been saved — the stored entry's `metadataFingerprint` no longer
- * matches the integration, so the token must be invalidated before use.
- */
+/** SHA-256 of `${clientId}|${clientSecret}|${project}`; detects edited OAuth client metadata so the token can be invalidated. */
 export function computeMetadataFingerprint(metadata: {
     clientId: string;
     clientSecret: string;
@@ -80,21 +49,9 @@ export function computeMetadataFingerprint(metadata: {
 }
 
 /**
- * POSTs a `grant_type=refresh_token` request to the OAuth token endpoint
- * and returns the resulting fresh access token. Optionally returns a
- * rotated refresh token if the provider issues one — callers are
- * responsible for persisting it via `IFederatedAuthTokenStorage.save`.
- *
- * The plan's non-negotiable: access tokens are never cached, neither at
- * rest nor in memory beyond the single execution preparation that needs
- * them. This function MUST be called before every SQL cell execution.
- *
- * `timeoutMs` overrides {@link TOKEN_REFRESH_TIMEOUT_MS}. It exists as a
- * test seam so the timeout-on-slow-body scenario can be exercised without
- * sleeping for 15 seconds; production callers should leave it undefined.
- *
- * Reference implementation:
- * /workspace/deepnote-internal/libs/shared-node/src/integration-federated-auth/integration-federated-auth.ts:350-434
+ * POSTs `grant_type=refresh_token` to the OAuth token endpoint and returns the fresh access token (plus
+ * optional rotated refresh token). Access tokens are never cached: callers must invoke this before every
+ * SQL cell. `timeoutMs` is a test seam (default {@link TOKEN_REFRESH_TIMEOUT_MS}). Ref: integration-federated-auth.ts:350-434.
  */
 export async function fetchFreshAccessToken(
     entry: FederatedAuthTokenEntry,
@@ -106,11 +63,7 @@ export async function fetchFreshAccessToken(
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-    // The same AbortController governs both the initial fetch and the
-    // body-read (`response.json()`) so a slow body stream is also bounded
-    // by the timeout — Google sometimes sends headers fast and the body
-    // slow. The single `finally` ensures the timer is cleared regardless
-    // of which step fails.
+    // Same AbortController bounds both `fetch` and `response.json()` so a slow body stream also hits the timeout.
     let response: Response | undefined;
     let rawBody: unknown;
     try {
@@ -164,18 +117,8 @@ export async function fetchFreshAccessToken(
 }
 
 /**
- * Encrypted-storage backed implementation of {@link IFederatedAuthTokenStorage}.
- *
- * Mirrors the cache+index pattern in {@link IntegrationStorage}:
- *   - Each entry is stored under its `integrationId` key.
- *   - A separate `'index'` key holds a JSON array of known IDs so the
- *     cache can be hydrated lazily on first access.
- *   - An in-memory cache keeps reads cheap once hydrated.
- *
- * Plan non-negotiable: only the long-lived `refreshToken` (plus the
- * integration id and metadata fingerprint) is persisted. Access tokens
- * are never written here — they're fetched on demand for each cell
- * execution via {@link fetchFreshAccessToken}.
+ * Encrypted-storage backed `IFederatedAuthTokenStorage`. Mirrors `IntegrationStorage`'s cache+index pattern.
+ * Only the long-lived refresh token (plus id + metadata fingerprint) is persisted; access tokens are fetched on demand.
  */
 @injectable()
 export class FederatedAuthTokenStorage implements IFederatedAuthTokenStorage {
@@ -195,12 +138,7 @@ export class FederatedAuthTokenStorage implements IFederatedAuthTokenStorage {
         asyncRegistry.push(this);
     }
 
-    /**
-     * Instance method form of {@link computeMetadataFingerprint}, exposed so
-     * cross-platform callers (e.g. {@link IntegrationWebviewProvider}) can
-     * fingerprint OAuth-client metadata via the injected token-storage
-     * instance instead of importing the node-only helper directly.
-     */
+    /** Instance form of {@link computeMetadataFingerprint} so cross-platform callers avoid importing the node-only helper. */
     public computeMetadataFingerprint(metadata: { clientId: string; clientSecret: string; project: string }): string {
         return computeMetadataFingerprint(metadata);
     }
@@ -254,14 +192,7 @@ export class FederatedAuthTokenStorage implements IFederatedAuthTokenStorage {
         }
     }
 
-    /**
-     * Hydrate the in-memory cache from encrypted storage. Reads the
-     * `'index'` secret first to discover which integration IDs have
-     * entries persisted; then loads each entry by id.
-     *
-     * Tolerates corrupted entries (logs + skips) and a missing/corrupted
-     * index (treats storage as empty).
-     */
+    /** Hydrate the cache from the `'index'` secret then each entry. Tolerates corrupted/missing data (logs + treats as empty). */
     private async ensureCacheLoaded(): Promise<void> {
         if (this.cacheLoaded) {
             return;
@@ -286,11 +217,7 @@ export class FederatedAuthTokenStorage implements IFederatedAuthTokenStorage {
             return;
         }
 
-        // Mirrors the cleanup pattern in IntegrationStorage:165-241 — collect
-        // ids whose entries are unreadable or malformed, then purge them from
-        // encrypted storage and rewrite the index after the loop. Without this
-        // step, an orphaned refresh-token secret could linger in SecretStorage
-        // forever (and in the index until the next save/delete rewrites it).
+        // Mirrors IntegrationStorage:165-241 cleanup: purge malformed entries from storage + rewrite the index.
         const malformedIds: string[] = [];
         for (const id of integrationIds) {
             try {

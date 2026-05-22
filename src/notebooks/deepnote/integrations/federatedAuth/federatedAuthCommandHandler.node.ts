@@ -14,28 +14,13 @@ import { buildBigQueryGoogleOAuthStrategy, createInMemoryPkceStore } from './goo
 import { computeMetadataFingerprint } from './federatedAuthTokenStorage.node';
 import { runOAuthFlow, type RunOAuthFlowParams } from './oauthLoopbackFlow.node';
 
-/**
- * Function signature of {@link runOAuthFlow}. Exposed as a constructor seam
- * so unit tests can inject a stub without monkey-patching the real
- * implementation (which would also boot an `express` loopback server).
- */
+/** Signature of {@link runOAuthFlow}, exposed as a constructor seam so tests can stub the loopback server. */
 export type RunOAuthFlowFn = (params: RunOAuthFlowParams) => Promise<{ refreshToken: string }>;
 
 /**
- * Node-side command handler for `deepnote.authenticateIntegration`.
- *
- * Looks up the requested integration, validates that it's a BigQuery
- * integration configured for Google OAuth, then runs the loopback OAuth
- * flow built on `passport-google-oauth20`. On success the refresh token is
- * persisted via {@link IFederatedAuthTokenStorage}; on cancellation the
- * command exits silently; on any other failure it shows a localized error
- * toast.
- *
- * Remote VS Code (SSH-remote, Codespaces, WSL) is not supported in this
- * milestone — Google "Desktop app" OAuth clients only accept
- * `http://127.0.0.1:<port>/auth/callback` redirects, and tunneling the
- * callback through `asExternalUri` produces an `https://*.vscode.dev/...`
- * URL that Google rejects. We surface a clear message and exit early.
+ * Node-side command handler for `deepnote.authenticateIntegration`: validates the integration, runs the
+ * loopback OAuth flow, persists the refresh token. Remote VS Code is unsupported because Google "Desktop app"
+ * OAuth clients only accept `http://127.0.0.1:<port>/auth/callback` redirects.
  */
 @injectable()
 export class FederatedAuthCommandHandlerNode implements IExtensionSyncActivationService {
@@ -54,10 +39,7 @@ export class FederatedAuthCommandHandlerNode implements IExtensionSyncActivation
         );
     }
 
-    /**
-     * Core flow. Public so tests can drive the handler without going
-     * through `commands.executeCommand`.
-     */
+    /** Core flow. Public so tests can drive the handler without `commands.executeCommand`. */
     public async authenticate(integrationId: string): Promise<void> {
         if (typeof integrationId !== 'string' || integrationId.length === 0) {
             logger.warn(

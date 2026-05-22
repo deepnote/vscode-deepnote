@@ -42,27 +42,14 @@ export interface IIntegrationManager {
     activate(): void;
 }
 
-/**
- * A persisted federated-auth token entry for a single integration.
- *
- * The fingerprint is computed from `${clientId}|${clientSecret}|${project}`
- * so we can detect stale tokens after the user edits their OAuth client
- * metadata and invalidate them without consulting Google.
- *
- * Access tokens are never persisted — only the long-lived refresh token.
- */
+/** Persisted federated-auth token entry; fingerprints `${clientId}|${clientSecret}|${project}` to detect stale tokens. Only the refresh token is persisted. */
 export interface FederatedAuthTokenEntry {
     integrationId: string;
     refreshToken: string;
     metadataFingerprint: string;
 }
 
-/**
- * Shape of the OAuth-client metadata fingerprinted by
- * {@link IFederatedAuthTokenStorage.computeMetadataFingerprint}. Mirrors
- * the `google-oauth` branch of the BigQuery integration metadata schema in
- * `@deepnote/database-integrations`.
- */
+/** OAuth-client metadata fingerprinted by {@link IFederatedAuthTokenStorage.computeMetadataFingerprint}; mirrors the BigQuery `google-oauth` schema. */
 export interface FederatedAuthFingerprintInput {
     clientId: string;
     clientSecret: string;
@@ -75,60 +62,24 @@ export interface IFederatedAuthTokenStorage {
      * Fires when a token is saved or deleted; the payload is the integration id.
      */
     readonly onDidChangeTokens: Event<string>;
-    /**
-     * Computes the canonical fingerprint of the OAuth-client metadata on a
-     * federated BigQuery integration. Exposed on the interface (rather than
-     * imported directly from `federatedAuthTokenStorage.node`) so callers
-     * bound on both node and web — notably `IntegrationWebviewProvider` —
-     * don't have to import the node-only implementation file.
-     */
+    /** Canonical fingerprint of OAuth-client metadata. Exposed on the interface so cross-platform callers (e.g. `IntegrationWebviewProvider`) avoid the node-only helper. */
     computeMetadataFingerprint(metadata: FederatedAuthFingerprintInput): string;
     delete(integrationId: string): Promise<void>;
     get(integrationId: string): Promise<FederatedAuthTokenEntry | undefined>;
     has(integrationId: string): Promise<boolean>;
-    /**
-     * Lists all integration IDs that currently have a stored refresh-token
-     * entry. Exposed for orphaned-token cleanup — callers compare this list
-     * against the active set of integrations and delete any tokens whose
-     * integration no longer exists.
-     */
+    /** All integration IDs with a stored token entry; used for orphaned-token cleanup. */
     listIntegrationIds(): Promise<string[]>;
-    /**
-     * Persists a token entry.
-     *
-     * By default, fires `onDidChangeTokens` so listeners (e.g., the kernel
-     * restart bridge, the integration webview) can react to authentication
-     * state changes. Pass `options.silent = true` for refresh-token
-     * rotation: the rotated value is functionally equivalent — the
-     * extension mints a fresh access token via the per-cell pre-execute on
-     * every SQL block run, so a rotation event has no actionable effect on
-     * a running kernel and would only interrupt an in-flight SQL cell.
-     */
+    /** Persists a token entry. Pass `silent: true` for refresh-token rotation to skip `onDidChangeTokens` (avoids interrupting in-flight SQL cells). */
     save(entry: FederatedAuthTokenEntry, options?: { silent?: boolean }): Promise<void>;
 }
 
 export const IFederatedAuthSqlBlockCodeGenerator = Symbol('IFederatedAuthSqlBlockCodeGenerator');
 export interface IFederatedAuthSqlBlockCodeGenerator {
-    /**
-     * For a federated BigQuery SQL block, returns:
-     *   - prelude: Python to run via a silent pre-execute (variable
-     *     definition with the fresh access token). Never runs through
-     *     the normal cell-history path.
-     *   - cellCode: Python to run as the cell's main execute. References
-     *     the variable defined by prelude. Safe to put in In[] history.
-     *
-     * Returns undefined for any block that is not a federated BigQuery
-     * SQL cell, so callers fall back to @deepnote/blocks.createPythonCode.
-     */
+    /** Returns `{prelude, cellCode}` for federated BigQuery SQL blocks (prelude is silent, defines kernel-global with fresh token; cellCode references it); `undefined` for unrelated blocks so callers fall back to `createPythonCode`. */
     generate(block: DeepnoteBlock): Promise<{ prelude: string; cellCode: string } | undefined>;
 }
 
-/**
- * Thrown by `IFederatedAuthSqlBlockCodeGenerator.generate` (and related
- * call sites) when the integration is federated but has no usable refresh
- * token — either because the user has not authenticated yet or because the
- * stored token was invalidated (fingerprint mismatch, `invalid_grant`).
- */
+/** Thrown when a federated integration has no usable refresh token (not authenticated yet, fingerprint mismatch, or `invalid_grant`). */
 export class NotAuthenticatedError extends Error {
     constructor(public readonly integrationName: string) {
         super(`Integration "${integrationName}" is not authenticated.`);
@@ -137,19 +88,8 @@ export class NotAuthenticatedError extends Error {
 }
 
 /**
- * Thrown by `IFederatedAuthSqlBlockCodeGenerator.generate` when the OAuth
- * provider rejects the refresh request with `invalid_client` or
- * `unauthorized_client` — i.e. the integration's stored OAuth client
- * metadata (clientId/clientSecret) is misconfigured.
- *
- * Distinct from {@link NotAuthenticatedError}: re-running the OAuth flow
- * won't fix the issue; the user must correct the client credentials in
- * the integration settings.
- *
- * Lives in cross-platform `types.ts` (alongside `NotAuthenticatedError`)
- * so the cell-execution path — which is bound on both node and web — can
- * `instanceof`-check against it without importing the node-only
- * `InvalidClientError` from `federatedAuthTokenStorage.node`.
+ * Thrown when OAuth client metadata (clientId/clientSecret) is wrong — `invalid_client` / `unauthorized_client`.
+ * Distinct from {@link NotAuthenticatedError}: re-auth won't fix it. Lives here (not in `.node.ts`) so cross-platform callers can `instanceof`-check.
  */
 export class OAuthClientMisconfiguredError extends Error {
     constructor(public readonly integrationName: string) {

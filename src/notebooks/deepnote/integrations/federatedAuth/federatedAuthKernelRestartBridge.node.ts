@@ -9,19 +9,9 @@ import { IDeepnoteNotebookManager } from '../../../types';
 import { IFederatedAuthTokenStorage } from '../types';
 
 /**
- * Node-only bridge that restarts kernels for notebooks whose Deepnote
- * project references a federated integration whose token just changed.
- *
- * This restart is mostly defensive: no federated cell references the
- * integration between executions (the silent pre-execute defines a fresh
- * variable for every run). But restarting on token change clears any
- * stale `os.environ` mutations and any kernel globals defined in earlier
- * sessions, so the next cell starts with a clean slate.
- *
- * The existing {@link IntegrationKernelRestartHandler} stays unchanged —
- * it's bound on both node and web, and {@link IFederatedAuthTokenStorage}
- * is node-only. Per the plan (Step 9), the federated path lives in this
- * separate `.node.ts` bridge.
+ * Node-only bridge that restarts kernels when a federated integration's token changes, clearing stale
+ * `os.environ` mutations and kernel globals. Separate from {@link IntegrationKernelRestartHandler} because
+ * {@link IFederatedAuthTokenStorage} is node-only.
  */
 @injectable()
 export class FederatedAuthKernelRestartBridge implements IExtensionSyncActivationService {
@@ -49,10 +39,7 @@ export class FederatedAuthKernelRestartBridge implements IExtensionSyncActivatio
         // Service is activated via constructor.
     }
 
-    /**
-     * Walk open notebook documents, find the ones whose Deepnote project
-     * references the affected integration, and restart their kernels.
-     */
+    /** Restart kernels for any open Deepnote notebook whose project references {@link integrationId}. */
     private async onTokenChanged(integrationId: string): Promise<void> {
         logger.info(
             `FederatedAuthKernelRestartBridge: Token changed for integration ${integrationId}, checking affected kernels`

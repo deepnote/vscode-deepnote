@@ -17,10 +17,7 @@ suite('googleOAuthProvider', () => {
         });
 
         test('does not include openid', () => {
-            // Plan invariant (Step 5): production at
-            // /workspace/deepnote-internal/apps/webapp/server/modules/federated-integration-auth/handlers.ts:77
-            // omits 'openid'. Refresh tokens come from access_type=offline +
-            // prompt=consent, not from the OpenID Connect flow.
+            // Production at handlers.ts:77 omits openid; refresh tokens come from `access_type=offline` + `prompt=consent`.
             assert.notInclude([...GOOGLE_BIGQUERY_SCOPES], 'openid');
         });
     });
@@ -52,9 +49,7 @@ suite('googleOAuthProvider', () => {
             });
 
             assert.isDefined(verifyResult);
-            // For PKCE, the `ok` slot must hold the codeVerifier string so
-            // passport-oauth2 forwards it as `code_verifier` on the token
-            // request (see strategy.js:171-173).
+            // PKCE: `ok` must be the codeVerifier string so passport-oauth2 forwards it (strategy.js:171-173).
             assert.strictEqual(verifyResult!.ok, verifier);
         });
 
@@ -116,8 +111,7 @@ suite('googleOAuthProvider', () => {
         });
 
         test('store and verify both accept undefined req (no req.session needed)', () => {
-            // Plan invariant (Step 5): the custom store must work without
-            // express-session. We pass undefined for req and assert no throw.
+            // Custom store must work without express-session.
             const store = createInMemoryPkceStore();
             let issuedState!: string;
             assert.doesNotThrow(() => {
@@ -180,8 +174,7 @@ suite('googleOAuthProvider', () => {
                 store
             });
 
-            // `_scope` is a protected field on OAuth2Strategy; passport-oauth2
-            // sets it from options.scope. We probe it to assert wiring.
+            // `_scope` is set by passport-oauth2 from options.scope; probe to assert wiring.
             const scope = (result.strategy as unknown as { _scope: string[] })._scope;
             assert.deepStrictEqual(scope, [...GOOGLE_BIGQUERY_SCOPES]);
         });
@@ -194,8 +187,7 @@ suite('googleOAuthProvider', () => {
                 store
             });
 
-            // `_verify` is the verify callback stored by passport-oauth2 (see
-            // passport-oauth2/lib/strategy.js around line 70).
+            // `_verify` is stored by passport-oauth2 (strategy.js:~70).
             const verify = (strategy as unknown as { _verify: Function })._verify;
 
             verify(

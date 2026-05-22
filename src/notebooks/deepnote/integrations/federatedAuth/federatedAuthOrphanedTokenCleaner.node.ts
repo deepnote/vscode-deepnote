@@ -7,19 +7,8 @@ import { IFederatedAuthTokenStorage } from '../types';
 import { logger } from '../../../../platform/logging';
 
 /**
- * Node-only listener that prunes federated-auth tokens whose integration
- * has been deleted (or whose integration list was cleared entirely).
- *
- * Bound only on node because {@link IFederatedAuthTokenStorage} is
- * node-only. We deliberately do **not** modify
- * `IntegrationStorage.clear()` / `IntegrationStorage.delete()` to call
- * the token storage directly — that would force the platform-layer
- * service to import a node-only dependency, breaking the web build.
- *
- * Strategy: subscribe to {@link IIntegrationStorage.onDidChangeIntegrations}.
- * On every fire, diff the current integration IDs against the set of IDs
- * known to {@link IFederatedAuthTokenStorage} and delete the orphans.
- * This covers both the "single delete" and "clear all" paths.
+ * Node-only listener that prunes federated-auth tokens when an integration is deleted: subscribes to
+ * `onDidChangeIntegrations` and diffs current IDs against {@link IFederatedAuthTokenStorage.listIntegrationIds}.
  */
 @injectable()
 export class FederatedAuthOrphanedTokenCleaner implements IExtensionSyncActivationService {

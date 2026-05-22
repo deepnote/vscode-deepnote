@@ -263,16 +263,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
     });
 
     test('prelude round-trips through Python+json.loads when integration id contains backslash, newline, and single quote', async () => {
-        // Plan invariant (Step 1a): the prelude is a Python single-quoted
-        // string literal that Python evaluates and then `json.loads` parses
-        // on the kernel side. The escape must double backslashes, escape
-        // single quotes, and escape newlines — otherwise a user-supplied
-        // `integration.id` containing any of those breaks `json.loads`.
-        //
-        // Catches: regressing to the old single-char `\\'` escape would
-        // leave embedded `\\` and `\\n` unhandled, and Python would decode
-        // them to a single backslash / real newline before `json.loads`,
-        // producing invalid JSON at the kernel.
+        // Catches: regressing to a single-char `\\'` escape would leave `\\`/`\n` undecoded and break `json.loads` at the kernel.
         const hostileIntegrationId = "bq-with-\\-and-\n-and-'-id";
         integrationStore.set(hostileIntegrationId, {
             id: hostileIntegrationId,
@@ -296,8 +287,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
             throw new Error('expected a non-undefined result');
         }
 
-        // The prelude shape is `<variable> = <python-single-quoted-literal>`.
-        // Strip the `<variable> = ` prefix and parse what Python would.
+        // Strip `<variable> = ` prefix and parse what Python would.
         const expectedVariableName = federatedSqlVariableName(hostileIntegrationId);
         const assignmentPrefix = `${expectedVariableName} = `;
         assert.isTrue(
@@ -306,8 +296,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         );
         const literal = result.prelude.slice(assignmentPrefix.length);
 
-        // Mirror the M1 escapePythonString round-trip test: parse the
-        // Python single-quoted literal manually (inverse of \\, \', \n).
+        // Inverse of \\, \', \n — parses what Python would.
         function parsePythonSingleQuoted(escaped: string): string {
             assert.isTrue(escaped.startsWith("'") && escaped.endsWith("'"), 'must be wrapped in single quotes');
             const body = escaped.slice(1, -1);
@@ -369,10 +358,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
     });
 
     test('InvalidClientError from refresh: throws OAuthClientMisconfiguredError and does NOT delete the token', async () => {
-        // Generator wraps the node-only `InvalidClientError` into a
-        // cross-platform `OAuthClientMisconfiguredError` so consumers
-        // like `cellExecution.ts` (bound on web too) can distinguish it
-        // without importing the node-only error class.
+        // Generator wraps node-only `InvalidClientError` into cross-platform `OAuthClientMisconfiguredError` so web-bound callers can `instanceof`-check.
         setupValidFederatedIntegration();
         fetcher.rejects(new InvalidClientError());
 
@@ -405,12 +391,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
     });
 
     test('persists a rotated refresh token with { silent: true } so listeners do not restart the in-flight kernel', async () => {
-        // Catches: the kernel restart bridge interpreting a rotation event
-        // as an auth-state change and restarting the kernel mid-cell. The
-        // generator runs inside CellExecution.execute() preparing the very
-        // SQL block whose rotation triggered this save — firing
-        // onDidChangeTokens here would queue a kernel.restart() that lands
-        // microseconds later while the prelude + main execute are running.
+        // Catches: a rotation event firing `onDidChangeTokens` would queue a `kernel.restart()` while the prelude+main execute are running.
         setupValidFederatedIntegration();
         fetcher.resolves({ accessToken: ACCESS_TOKEN, newRefreshToken: 'new-refresh-token' });
 

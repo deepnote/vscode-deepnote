@@ -9,9 +9,7 @@ import { DATAFRAME_SQL_INTEGRATION_ID } from './integrationTypes';
 import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
 import type { DeepnoteProject } from '../../deepnote/deepnoteTypes';
 
-/**
- * Helper function to create a minimal DeepnoteProject for testing
- */
+/** Create a minimal `DeepnoteProject` for tests. */
 function createMockProject(
     projectId: string,
     integrations: Array<{ id: string; name: string; type: string }> = []

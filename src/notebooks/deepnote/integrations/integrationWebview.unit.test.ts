@@ -15,10 +15,7 @@ import {
 } from '../../../platform/notebooks/deepnote/integrationTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 
-// Minimal in-memory token-storage stub for tests. Mirrors the real
-// FederatedAuthTokenStorage interface enough to drive
-// IntegrationWebviewProvider's federated-auth code paths without pulling in
-// the node-only implementation file.
+// In-memory `IFederatedAuthTokenStorage` stub; avoids pulling in the node-only implementation file.
 function createFakeTokenStorage(): {
     storage: IFederatedAuthTokenStorage;
     tokens: Map<string, FederatedAuthTokenEntry>;
@@ -314,7 +311,7 @@ suite('IntegrationWebviewProvider', () => {
         const updatesBefore = fakePanel.posted.filter((m) => m.type === 'update').length;
         assert.isAtLeast(updatesBefore, 1);
 
-        // Simulate a save -> change event fires -> webview should refresh.
+        // Save → change event fires → webview should refresh.
         await fakeTokenStorage.storage.save({
             integrationId: 'bq-3',
             refreshToken: 'r',
@@ -566,13 +563,10 @@ suite('IntegrationWebviewProvider', () => {
         await show(provider, integrations);
         assert.isAtLeast(fakePanel.posted.filter((m) => m.type === 'update').length, 1);
 
-        // Simulate the user closing the panel: VS Code fires onDidDispose,
-        // which clears `this.disposables`. The token-change subscription
-        // MUST live in a separate slot and therefore survive.
+        // User closes panel: `onDidDispose` clears `this.disposables`; the token-change subscription must survive in a separate slot.
         fakePanel.triggerDispose();
 
-        // Open the panel a second time using a brand-new fake panel. We
-        // rebind the createWebviewPanel mock so `show()` gets the new one.
+        // Reopen with a brand-new fake panel; rebind the createWebviewPanel mock.
         fakePanel = createFakeWebviewPanel();
         when(
             mockedVSCodeNamespaces.window.createWebviewPanel(anyString(), anyString(), anything(), anything())
@@ -582,8 +576,7 @@ suite('IntegrationWebviewProvider', () => {
         const updatesAfterReopen = fakePanel.posted.filter((m) => m.type === 'update').length;
         assert.isAtLeast(updatesAfterReopen, 1, 'reopened panel should receive an initial update');
 
-        // Fire a token change. If the subscription was lost on dispose, the
-        // webview would NOT see an additional update message.
+        // Token change: if the subscription was lost on dispose, the webview wouldn't see an additional update.
         await fakeTokenStorage.storage.save({
             integrationId,
             refreshToken: 'r',
@@ -600,8 +593,7 @@ suite('IntegrationWebviewProvider', () => {
     });
 
     test('updateWebview does not postMessage when panel is disposed during the tokenStorage.has() await', async () => {
-        // Build a token storage whose `has()` is a deferred promise so we
-        // can dispose the panel mid-update.
+        // `has()` returns a deferred so we can dispose the panel mid-update.
         let resolveHas: ((value: boolean) => void) | undefined;
         const deferredHasPromise = new Promise<boolean>((resolve) => {
             resolveHas = resolve;
@@ -642,38 +634,29 @@ suite('IntegrationWebviewProvider', () => {
             ]
         ]);
 
-        // Capture every postMessage call so we can assert no `update` is
-        // posted after dispose.
+        // Capture every postMessage to assert no `update` is posted after dispose.
         const allPostedMessages: CapturedMessage[] = [];
         fakePanel.setPostMessageImpl(async (message) => {
             allPostedMessages.push(message);
             return true;
         });
 
-        // Fire `show()` but do NOT await: it will block on
-        // Promise.all([slowTokenStorage.has(...)]) until we resolve.
+        // Fire `show()` without awaiting; it parks on `has()`.
         const showPromise = show(provider, integrations);
 
-        // Yield once so `show()` starts the update and parks on `has()`.
+        // Yield so `show()` parks.
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // Simulate panel disposal mid-update. The provider's onDidDispose
-        // sets `this.currentPanel = undefined`.
+        // Dispose mid-update — provider's onDidDispose sets `currentPanel = undefined`.
         fakePanel.triggerDispose();
 
-        // Resolve the slow `has()` so updateWebview can finish. The
-        // post-await guard MUST detect the panel is gone and skip
-        // postMessage — otherwise we'd dereference undefined.
+        // Resolve `has()` so updateWebview finishes; the post-await guard must skip postMessage.
         resolveHas?.(false);
         await showPromise;
         onDidChangeEmitter.dispose();
 
-        // Updates posted AFTER dispose should be zero. Updates BEFORE
-        // dispose are fine (and there may be none because the panel was
-        // disposed before the first await resolved).
+        // No `update` should be posted after dispose.
         const updateMessages = allPostedMessages.filter((m) => m.type === 'update');
-        // No throws (verified by showPromise resolving) and no postMessage
-        // posted after the panel was disposed.
         assert.isEmpty(updateMessages, 'no `update` postMessage should be issued after the panel disposes mid-update');
     });
 
@@ -703,9 +686,7 @@ suite('IntegrationWebviewProvider', () => {
         ]);
         await show(provider, integrations);
 
-        // Should not reject — the provider must swallow the failure so it
-        // doesn't bubble out of the message handler as an unhandled-
-        // rejection in the extension host.
+        // Provider must swallow the failure to avoid an unhandled-rejection bubbling out of the message handler.
         await fakePanel.onDidReceiveMessage({ type: 'authenticate', integrationId });
 
         assert.isTrue(
@@ -714,7 +695,6 @@ suite('IntegrationWebviewProvider', () => {
         );
     });
 
-    // Silence unused-warning compiler complaints from `capture` import in
-    // case any future test wants to add capture-based assertions.
+    // Silence unused-warning for `capture` (kept for future capture-based assertions).
     void capture;
 });

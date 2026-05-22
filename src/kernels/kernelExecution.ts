@@ -69,16 +69,7 @@ export class NotebookKernelExecution implements INotebookKernelExecution {
         formatters: ITracebackFormatter[],
         private readonly notebook: NotebookDocument,
         private readonly snapshotService?: ISnapshotMetadataService,
-        /**
-         * Federated-auth code generator. Optional so the web build (where
-         * the symbol is unbound) resolves it to `undefined` and the
-         * federated branch in `CellExecution.execute` is skipped — the
-         * existing `createPythonCode` path runs as today.
-         *
-         * `NotebookKernelExecution` is the inversify-managed entry point
-         * for the execution chain; it threads the resolved value through
-         * `new CellExecutionFactory(...)` below.
-         */
+        /** Federated-auth generator; `undefined` on web (symbol unbound). Threaded into `CellExecutionFactory` below. */
         private readonly federatedAuthSqlBlockCodeGenerator?: IFederatedAuthSqlBlockCodeGenerator
     ) {
         const requestListener = new CellExecutionMessageHandlerService(

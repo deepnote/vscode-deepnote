@@ -152,14 +152,7 @@ export enum IntegrationStatus {
     Error = 'error'
 }
 
-/**
- * Federated-auth token status for an integration.
- *
- *   - `authenticated`: a refresh token is stored for this integration.
- *   - `disconnected`: the integration uses federated auth but has no stored token.
- *   - `unsupported`: this integration does not use federated auth, or federated
- *     auth is unavailable in the current runtime (web / remote).
- */
+/** Federated-auth token status: `'authenticated'`, `'disconnected'` (federated but no token), or `'unsupported'` (non-federated or web/remote). */
 export type FederatedAuthTokenStatus = 'authenticated' | 'disconnected' | 'unsupported';
 
 /**
@@ -177,9 +170,6 @@ export interface IntegrationWithStatus {
      * Type from the project's integrations list (used for prefilling when config is null)
      */
     integrationType?: ConfigurableDatabaseIntegrationType;
-    /**
-     * Federated-auth token status. Only meaningful for integrations that support
-     * federated auth (currently BigQuery with `authMethod === 'google-oauth'`).
-     */
+    /** Federated-auth token status; only meaningful for federated integrations (currently BigQuery + `google-oauth`). */
     tokenStatus?: FederatedAuthTokenStatus;
 }

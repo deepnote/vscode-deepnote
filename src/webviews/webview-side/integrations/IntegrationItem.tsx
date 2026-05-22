@@ -80,10 +80,7 @@ export const IntegrationItem: React.FC<IIntegrationItemProps> = ({
     const typeLabel = type ? getIntegrationTypeLabel(type) : undefined;
     const typeIcon = type ? integrationTypeIcons[type] : undefined;
 
-    // Federated-auth surface: only render the Authenticate button + status pill
-    // when the integration is BigQuery + google-oauth. For service-account
-    // BigQuery (and every other integration type) the federated controls are
-    // hidden.
+    // Federated-auth UI: only for BigQuery + google-oauth; hidden for service-account BigQuery and other types.
     const isFederatedOauth =
         integration.config?.type === 'big-query' &&
         integration.config.metadata.authMethod === BigQueryAuthMethods.GoogleOauth;

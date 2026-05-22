@@ -7,21 +7,7 @@ import { CancellationError, CancellationTokenSource } from 'vscode';
 import { buildBigQueryGoogleOAuthStrategy, createInMemoryPkceStore } from './googleOAuthProvider.node';
 import { OAUTH_FLOW_TIMEOUT_MS, runOAuthFlow } from './oauthLoopbackFlow.node';
 
-/**
- * Stub OAuth provider used by the loopback-flow tests. Exposes
- * `/oauth/authorize` and `/oauth/token` endpoints that mimic Google's
- * production endpoints enough for `passport-google-oauth20` to drive a
- * full flow.
- *
- * Configurable per-test via `setBehavior`:
- *   - `failTokenWithoutRefresh`: token endpoint omits `refresh_token`,
- *     triggering the "no refresh token" rejection in
- *     `buildBigQueryGoogleOAuthStrategy`'s verify.
- *   - `tokenStatus` / `tokenError`: simulate non-2xx token responses.
- *
- * Captures the authorize query (so tests can assert PKCE / scope /
- * access_type) and the token form (so tests can assert `code_verifier`).
- */
+/** Stub Google OAuth provider for loopback-flow tests; exposes `/oauth/authorize` + `/oauth/token`, capturing the authorize query and token form for assertions. */
 interface StubBehavior {
     failTokenWithoutRefresh?: boolean;
     tokenError?: { error: string; status: number };
@@ -122,7 +108,7 @@ class StubOAuthProvider {
                 return;
             }
 
-            // Validate the PKCE verifier matches the challenge issued at /authorize.
+            // Validate PKCE verifier against the challenge issued at /authorize.
             const code = form.get('code') ?? '';
             const verifier = form.get('code_verifier') ?? '';
             const expectedChallenge = this.codeForVerifier.get(code);
@@ -163,14 +149,7 @@ suite('oauthLoopbackFlow', () => {
         await stub.close();
     });
 
-    /**
-     * Helper: drive the full loopback flow end-to-end against the stub
-     * provider. The `onListening` callback hits the loopback /auth/start
-     * URL with `redirect: 'manual'`, follows the redirect to the stub's
-     * /oauth/authorize (which redirects back to the loopback /auth/callback
-     * with `code` + `state`), and asserts the relevant invariants along
-     * the way.
-     */
+    /** Drives the full loopback flow end-to-end against the stub provider: /auth/start → /oauth/authorize → /auth/callback. */
     async function drive(opts: {
         token?: CancellationTokenSource;
         timeoutMs?: number;
@@ -215,9 +194,7 @@ suite('oauthLoopbackFlow', () => {
                     const callbackLocation = authorizeResponse.headers.get('location');
                     assert.isString(callbackLocation);
 
-                    // Hit /auth/callback to drive the verify closure. Either 200
-                    // (success page) or 400 (error page) — the completion promise
-                    // carries the outcome.
+                    // /auth/callback drives the verify closure; the completion promise carries the outcome.
                     const callbackResponse = await fetch(callbackLocation!);
                     await callbackResponse.text();
                 }
@@ -257,12 +234,11 @@ suite('oauthLoopbackFlow', () => {
         const verifier = form!.get('code_verifier');
         assert.isString(verifier);
         assert.isAbove(verifier!.length, 0);
-        // The stub already validated verifier→challenge inside handleToken;
-        // if we made it here, the verifier matched the issued challenge.
+        // Stub already validated verifier→challenge in handleToken; reaching here means they matched.
     });
 
     test('two concurrent flows pick different ports', async () => {
-        // Two flows running in parallel must bind distinct ephemeral ports.
+        // Concurrent flows must bind distinct ephemeral ports.
         const observedPorts = new Set<number>();
         const tokenA = new CancellationTokenSource();
         const tokenB = new CancellationTokenSource();
@@ -331,8 +307,7 @@ suite('oauthLoopbackFlow', () => {
                 token: tokenSource.token,
                 onListening: async (startUrl) => {
                     observedStartUrl = startUrl;
-                    // Cancel after the server is up but before the user
-                    // completes the flow.
+                    // Cancel after listen() but before user consent.
                     tokenSource.cancel();
                 }
             });
@@ -405,9 +380,7 @@ suite('oauthLoopbackFlow', () => {
     });
 
     test('missing refresh token: callback page renders the documented error', async () => {
-        // Catches: passport routing failures yield an unfriendly browser page
-        // even though the completion promise carries the right message. We
-        // assert on the HTTP status + HTML body the user actually sees.
+        // Catches: passport routing yielding an unfriendly browser page even though completion has the right message.
         stub.setBehavior({ failTokenWithoutRefresh: true });
 
         let callbackBody: string | undefined;
@@ -445,9 +418,7 @@ suite('oauthLoopbackFlow', () => {
                 await promise;
                 assert.fail('expected rejection');
             } catch {
-                // Inspect the captured body below — the runOAuthFlow rejection
-                // is asserted elsewhere ("missing refresh token rejects with
-                // the documented message").
+                // Rejection is asserted in the other "missing refresh token rejects" test; this case asserts the rendered body.
             }
             assert.strictEqual(callbackStatus, 400, 'callback should render the error page status');
             assert.isString(callbackBody);
@@ -459,9 +430,7 @@ suite('oauthLoopbackFlow', () => {
     });
 
     test('flow completes without express-session middleware (custom PKCE store works)', async () => {
-        // The runOAuthFlow factory does not mount express-session anywhere —
-        // a successful completion is itself proof that the custom PKCE store
-        // handled the verifier round-trip without req.session.
+        // No express-session is mounted; a successful completion proves the custom PKCE store handles the verifier round-trip without req.session.
         const result = await drive({});
         assert.strictEqual(result.refreshToken, 'test-refresh-token');
     });

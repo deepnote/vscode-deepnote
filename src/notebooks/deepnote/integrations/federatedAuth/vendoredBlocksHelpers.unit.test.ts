@@ -32,10 +32,7 @@ suite('vendoredBlocksHelpers', () => {
         });
 
         test('escapes backslashes before quotes (order matters)', () => {
-            // Original: \  should become \\
-            // Original: ' should become \'
-            // The order in the upstream impl is backslash, then quote, then newline.
-            // So `\'` (one backslash + one quote) becomes `\\\\\\'` (\\ + \').
+            // Upstream order: `\` → `\\` first, then `'` → `\'`, so `\'` becomes `\\\\\\'` (i.e. `\\` + `\'`).
             assert.strictEqual(escapePythonString("\\'"), "'\\\\\\''");
         });
 
@@ -44,7 +41,7 @@ suite('vendoredBlocksHelpers', () => {
         });
 
         test('does not escape tabs', () => {
-            // Upstream only escapes \\, ', and \n. Tabs pass through verbatim.
+            // Upstream only escapes `\`, `'`, `\n`; tabs pass through verbatim.
             assert.strictEqual(escapePythonString('a\tb'), "'a\tb'");
         });
 
@@ -54,23 +51,12 @@ suite('vendoredBlocksHelpers', () => {
 
         test('handles a mixed input', () => {
             const input = `a\\b'c\nd`;
-            // \\  →  \\\\
-            // '   →  \'
-            // \n  →  \\n
+            // `\\` → `\\\\`, `'` → `\'`, `\n` → `\\n`.
             assert.strictEqual(escapePythonString(input), "'a\\\\b\\'c\\nd'");
         });
 
         test('output, when interpreted as a Python single-quoted literal, round-trips back to the original SQL query', () => {
-            // Plan invariant (Step 1a): the generator wraps the user's SQL query via
-            // escapePythonString and embeds the result inside the Python source emitted
-            // to the kernel. The escaping must be reversible by Python's string literal
-            // parser. We simulate Python's parser by reversing the same escape mapping
-            // (single quote, backslash, and \n) — anything that doesn't round-trip here
-            // would also fail in CPython.
-            //
-            // Catches: a future change that adds an extra escape (e.g. for `\t` or `\r`)
-            // without updating the inverse mapping, breaking SQL queries with those
-            // characters at runtime.
+            // Catches: a future change adding an extra escape (e.g. `\t`/`\r`) without updating the inverse mapping, breaking SQL queries at runtime.
             function parsePythonSingleQuoted(escaped: string): string {
                 assert.isTrue(escaped.startsWith("'") && escaped.endsWith("'"), 'must be wrapped in single quotes');
                 const body = escaped.slice(1, -1);
@@ -85,8 +71,7 @@ suite('vendoredBlocksHelpers', () => {
                         } else if (next === 'n') {
                             result += '\n';
                         } else {
-                            // Unrecognized escape — leave both chars in place. Python would
-                            // typically keep the backslash too.
+                            // Unrecognized escape: leave both chars in place (matches Python's behavior).
                             result += '\\' + next;
                         }
                         i++;
@@ -130,8 +115,7 @@ suite('vendoredBlocksHelpers', () => {
         });
 
         test('strips leading digits but keeps a following underscore', () => {
-            // Upstream strips `[^a-zA-Z_]+` from the start, so `123_foo` becomes `_foo`
-            // (the underscore is a valid leading character and is preserved).
+            // Upstream strips `[^a-zA-Z_]+` from the start, so `123_foo` → `_foo` (underscore is a valid leading char).
             assert.strictEqual(sanitizePythonVariableName('123_foo'), '_foo');
         });
 
@@ -164,9 +148,7 @@ suite('vendoredBlocksHelpers', () => {
         });
 
         test('collapses an all-whitespace string to a single underscore', () => {
-            // Catches: a future upstream change to the \s+ -> _ step (e.g. \W+) breaking parity
-            // without us noticing. Upstream returns '_' for whitespace-only input because the
-            // \s+ replace collapses it to '_', which is a valid leading char that survives.
+            // Catches: a future upstream change to the `\s+` → `_` step (e.g. `\W+`) breaking parity.
             assert.strictEqual(sanitizePythonVariableName('   '), '_');
         });
     });
@@ -226,22 +208,7 @@ suite('vendoredBlocksHelpers', () => {
         });
 
         test('matches the data-frame-config prefix produced by upstream @deepnote/blocks.createPythonCode', () => {
-            // Plan invariant (Step 1a): the federated cell-code generator emits the
-            // createDataFrameConfig output as the *first line[s]* of the cell output,
-            // identical to upstream createPythonCodeForSqlBlock. This test pins
-            // upstream parity by comparing our vendored helper's output against the
-            // dataframe-config prefix that upstream's createPythonCodeForSqlBlock
-            // produces for the same block.
-            //
-            // Upstream emits:
-            //   <createDataFrameConfig output>
-            //
-            //   <execute_sql_call_or_assignment>
-            // i.e. the data-frame-config block, a blank line, then the SQL call.
-            // We extract the prefix up to the first blank line and assert byte parity.
-            //
-            // Catches: any upstream change to the dataframe-config template (indentation,
-            // wording, JSON serialization order) that drifts us out of parity.
+            // Catches: an upstream change to the dataframe-config template (indentation, wording, JSON ordering) drifting us out of parity. Upstream emits `<createDataFrameConfig>\n\n<sql call>`; we compare the prefix up to the blank line.
             const tableState = {
                 pageSize: 50,
                 sortBy: [{ column: 'name', direction: 'asc' as const }],

@@ -1,13 +1,4 @@
-// Unit tests for the federated-auth branch of `CellExecution.execute()`.
-//
-// The full `CellExecution` orchestration depends on a number of VS Code
-// globals (`workspace.onDidCloseTextDocument`, the kernel controller's
-// `createNotebookCellExecution`, etc.). These tests focus exclusively on
-// the federated branch and stub the surrounding machinery just enough to
-// drive `start()` to completion. Deviation from existing test patterns:
-// no `fakeKernelConnection.node`-style end-to-end socket simulation —
-// instead we capture `requestExecute` calls on a Sinon stub. Documented
-// in the test file header so the next agent knows the shape.
+// Unit tests for the federated-auth branch of `CellExecution.execute()`; surrounding VS Code machinery is stubbed and `requestExecute` is captured on a Sinon spy (no socket simulation).
 
 import type { Kernel, KernelMessage } from '@jupyterlab/services';
 import type { IKernelConnection } from '@jupyterlab/services/lib/kernel/kernel';
@@ -66,11 +57,7 @@ suite('CellExecution federated-auth branch', () => {
         parent_header: {} as any
     };
 
-    /**
-     * Construct a minimal mocked NotebookCell whose `index`, `document`,
-     * `notebook`, `kind`, `metadata`, and `outputs` are all populated.
-     * `CellExecution`'s constructor + execute method touch all of these.
-     */
+    /** Build a minimal mocked NotebookCell populated for `CellExecution`'s constructor + execute. */
     function buildCell(opts: {
         content: string;
         languageId?: string;
@@ -105,10 +92,7 @@ suite('CellExecution federated-auth branch', () => {
         disposables.push(tokenSource);
 
         controller = createKernelController();
-        // Minimal stub of CellExecutionMessageHandlerService — the
-        // federated branch issues its silent pre-execute *before* the
-        // main `requestExecute`, so the listener is only registered for
-        // the main execute (which we let succeed without messages).
+        // Stub `CellExecutionMessageHandlerService`: only the main execute is listened to (silent prelude runs first).
         requestListener = {
             registerListenerForExecution: () =>
                 ({
@@ -146,9 +130,7 @@ suite('CellExecution federated-auth branch', () => {
         when(session.status).thenReturn('idle');
         when(kernel.isDisposed).thenReturn(false);
 
-        // The federated branch invokes `requestExecute(args, true, undefined)` (dispose=true) for
-        // the silent prelude; the main execute is `requestExecute(args, false, metadata)`.
-        // Differentiate by the 2nd positional argument so order can be asserted.
+        // Federated branch: prelude = `requestExecute(args, true)`, main = `requestExecute(args, false, metadata)`. Differentiate by dispose flag.
         requestExecuteSpy = sinon.spy(
             (_args: KernelMessage.IExecuteRequestMsg['content'], disposeOnDone: boolean, _metadata: unknown) => {
                 return disposeOnDone ? instance(preludeRequest) : instance(request);
@@ -156,12 +138,7 @@ suite('CellExecution federated-auth branch', () => {
         );
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (when(kernel.requestExecute(anything(), anything(), anything())) as any).thenCall(requestExecuteSpy);
-        // Allow the *main* execute to complete immediately so `result`
-        // resolves; the *prelude* deferred is intentionally left pending
-        // here so individual tests can drive its resolution (or rejection)
-        // explicitly. This is what lets us detect a missing `await` on the
-        // prelude `.done` — see "main requestExecute waits for prelude .done"
-        // below.
+        // Main execute resolves immediately; prelude deferred is left pending so individual tests drive its resolution explicitly.
         requestDone.resolve(successReply);
 
         connectionMetadata = {
@@ -261,10 +238,7 @@ suite('CellExecution federated-auth branch', () => {
             `Main execute code unexpectedly contains the access token: ${mainContent.code}`
         );
 
-        // Call order: the prelude is at index 0 and the main call is at
-        // index 1. Sinon records calls in the order they were invoked,
-        // so the array index alone proves the order. Cross-check via
-        // `calledBefore` to be explicit.
+        // Cross-check call order via `calledBefore` for clarity.
         assert.isTrue(
             calls[0].calledBefore(calls[1]),
             'silent prelude requestExecute must be issued before the main requestExecute'
@@ -272,14 +246,7 @@ suite('CellExecution federated-auth branch', () => {
     });
 
     test('main requestExecute waits for prelude .done before being issued', async () => {
-        // Regression guard for the `await` on the prelude `.done` in
-        // `cellExecution.execute`. If a future change drops the `await`,
-        // the main `requestExecute` would be issued synchronously after
-        // the prelude `requestExecute`, before the prelude has actually
-        // completed. To detect that, this test leaves `preludeDone`
-        // pending, ticks the microtask queue exhaustively, and asserts
-        // only the prelude has been issued. Then it resolves
-        // `preludeDone` and asserts the main call lands.
+        // Catches: a future change dropping the `await` on prelude `.done` would let the main execute fire before the prelude completes.
         const prelude = `__deepnote_federated_sql_connection__abc = '{}'`;
         const cellCode = `_dntk.execute_sql_with_connection_json('SELECT 1', __deepnote_federated_sql_connection__abc)`;
 
@@ -287,15 +254,10 @@ suite('CellExecution federated-auth branch', () => {
             generate: sinon.stub().resolves({ prelude, cellCode })
         };
         const execution = createExecution(generator);
-        // Kick off execution without awaiting; if the `await` on
-        // `preludeDone` is honored, the main `requestExecute` will not be
-        // issued yet.
+        // Kick off execution without awaiting; if `await preludeDone` is honored, main execute is not issued yet.
         const startPromise = execution.start(instance(session));
 
-        // Flush pending microtasks by yielding multiple times.
-        // Anything that the implementation queues synchronously /
-        // microtask-only will have run by now. Real I/O is mocked, so
-        // there is nothing else competing for the event loop.
+        // Flush pending microtasks; I/O is mocked.
         for (let i = 0; i < 10; i++) {
             await Promise.resolve();
         }
@@ -309,8 +271,7 @@ suite('CellExecution federated-auth branch', () => {
         );
         assert.strictEqual(preludeDispose, true, 'first call should dispose-on-done (prelude convention)');
 
-        // Now resolve the prelude — the main `requestExecute` should be
-        // issued and the cell should complete.
+        // Resolve the prelude — the main `requestExecute` should fire and the cell should complete.
         preludeDone.resolve(successReply);
         if (startPromise) {
             await startPromise.catch(() => undefined);
@@ -327,12 +288,7 @@ suite('CellExecution federated-auth branch', () => {
     });
 
     test('when prelude requestExecute rejects: main requestExecute is NOT called and cell fails', async () => {
-        // Hard invariant from the plan: a kernel rejection of the silent
-        // prelude must block the main `requestExecute` from being issued.
-        // The `try/catch` around `await kernelConnection.requestExecute(...).done`
-        // in `execute()` is what enforces this — without the `await` or
-        // with a missing `catch`, the rejected promise would either fire
-        // unhandled or let the main execute through.
+        // Catches: dropping the try/catch around `await prelude.done` in `execute()` would either swallow the rejection or let the main execute through.
         const prelude = `__deepnote_federated_sql_connection__abc = '{}'`;
         const cellCode = `_dntk.execute_sql_with_connection_json('SELECT 1', __deepnote_federated_sql_connection__abc)`;
 
@@ -342,8 +298,7 @@ suite('CellExecution federated-auth branch', () => {
         const execution = createExecution(generator);
 
         const preludeRejection = new Error('kernel error during prelude');
-        // Reject the prelude before kicking off execution so the
-        // implementation observes the rejection on its first await.
+        // Pre-reject so the implementation observes it on its first await.
         preludeDone.reject(preludeRejection);
         let caught: unknown;
         const startPromise = execution.start(instance(session));
@@ -354,8 +309,7 @@ suite('CellExecution federated-auth branch', () => {
         }
         await execution.result.catch(() => undefined);
 
-        // Exactly one `requestExecute` call — the prelude. The main
-        // execute must NOT have been called.
+        // Exactly one `requestExecute` call (prelude); main must NOT be called.
         sinon.assert.calledOnce(requestExecuteSpy);
         const [preludeArgs, preludeDispose] = requestExecuteSpy.getCalls()[0].args;
         assert.strictEqual(
@@ -376,8 +330,7 @@ suite('CellExecution federated-auth branch', () => {
         };
         const execution = createExecution(generator);
 
-        // start() returns the same promise as `result`; await it via .catch()
-        // since the failure path rejects.
+        // start() returns the same promise as `result`; await via .catch().
         let caught: unknown;
         const startPromise = execution.start(instance(session));
         if (startPromise) {
@@ -386,9 +339,7 @@ suite('CellExecution federated-auth branch', () => {
             });
         }
         assert.ok(caught instanceof Error, 'expected the cell to fail');
-        // Hardcoded English string per M3 (M4 wires l10n). Assert on the
-        // user-facing prefix, not the full message, to avoid coupling
-        // tests to copy.
+        // Assert on the user-facing prefix to keep coupling to copy minimal.
         assert.include((caught as Error).message, 'not authenticated');
 
         // No requestExecute should have been issued.
@@ -429,17 +380,12 @@ suite('CellExecution federated-auth branch', () => {
         }
 
         assert.ok(caught instanceof Error, 'expected the cell to fail');
-        // The cell-execution path maps `OAuthClientMisconfiguredError`
-        // to `Integrations.federatedAuthOAuthClientMisconfigured`. We
-        // assert on the user-facing language fragment rather than the
-        // full message to keep coupling to copy minimal.
+        // Asserts on the user-facing language fragment; full copy is owned by `Integrations.federatedAuthOAuthClientMisconfigured`.
         assert.include((caught as Error).message.toLowerCase(), 'misconfigured');
-        // Ensure the message is NOT the generic "not authenticated"
-        // toast — i.e. the two paths are distinguished.
+        // Distinct from the generic "not authenticated" path.
         assert.notInclude((caught as Error).message.toLowerCase(), 'not authenticated');
 
-        // No requestExecute should have been issued (the failure
-        // happens at code-generation time).
+        // Failure happens at code-generation time, so no requestExecute.
         sinon.assert.notCalled(requestExecuteSpy);
     });
 });

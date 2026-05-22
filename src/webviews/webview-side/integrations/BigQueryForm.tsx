@@ -108,8 +108,7 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({
     const handleAuthMethodChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const nextAuthMethod = e.target.value;
         if (!isBigQueryAuthMethod(nextAuthMethod)) {
-            // The <select> only renders the two canonical options, so this is
-            // defence-in-depth against a stale/mismatched value flowing through.
+            // Defence-in-depth; the <select> only renders the two canonical options.
             return;
         }
         setPendingConfig((prev) =>
@@ -176,9 +175,7 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({
         e.preventDefault();
 
         if (pendingConfig.metadata.authMethod === BigQueryAuthMethods.GoogleOauth) {
-            // The browser-native `required` attribute on each input already
-            // blocks empty submissions; no extra runtime validation needed
-            // beyond preventing an empty save when all the fields are blank.
+            // `required` on each input handles empty-submission blocking; no extra runtime validation.
             onSave(pendingConfig);
             return;
         }

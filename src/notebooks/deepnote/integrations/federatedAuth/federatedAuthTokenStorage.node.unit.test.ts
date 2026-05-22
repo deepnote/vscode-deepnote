@@ -44,8 +44,7 @@ suite('federatedAuthTokenStorage', () => {
         });
 
         test('treats the three fields as distinct (no field-boundary confusion)', () => {
-            // Catches a bug where someone concatenates without a separator and `a|bc`
-            // collides with `ab|c`. Empirically each field must be independent.
+            // Catches: separator-less concatenation where `a|bc` collides with `ab|c`.
             const a = computeMetadataFingerprint({ clientId: 'a', clientSecret: 'b', project: 'c' });
             const b = computeMetadataFingerprint({ clientId: 'a|b', clientSecret: '', project: 'c' });
             assert.notStrictEqual(a, b);
@@ -190,10 +189,7 @@ suite('federatedAuthTokenStorage', () => {
         });
 
         test('save with { silent: true } persists the entry but does NOT fire onDidChangeTokens', async () => {
-            // Catches: a refresh-token rotation that flips the kernel-restart
-            // bridge mid-cell. Rotation lands on disk so the next cell reads
-            // the new refresh token, but no listeners should observe it as
-            // an auth state change.
+            // Catches: a rotation event flipping the kernel-restart bridge mid-cell.
             const events: string[] = [];
             storage.onDidChangeTokens((id) => events.push(id));
 
@@ -300,8 +296,7 @@ suite('federatedAuthTokenStorage', () => {
         });
 
         test('removes malformed entries from encrypted storage during reload', async () => {
-            // Catches: orphaned refresh-token secrets persist forever when an
-            // entry's JSON shape is wrong on disk.
+            // Catches: orphaned refresh-token secrets persisting when an entry's JSON shape is wrong on disk.
             storageData.set('index', JSON.stringify(['malformed-1', 'good-1']));
             storageData.set('malformed-1', JSON.stringify({ integrationId: 'malformed-1' }));
             storageData.set(
@@ -326,8 +321,7 @@ suite('federatedAuthTokenStorage', () => {
         });
 
         test('removes malformed entries from the persisted index during reload', async () => {
-            // Catches: the index keeps referencing the malformed id even after
-            // the entry itself is gone, leading to repeated load attempts.
+            // Catches: the index keeps referencing a malformed id, causing repeated load attempts.
             storageData.set('index', JSON.stringify(['malformed-1', 'good-1']));
             storageData.set('malformed-1', JSON.stringify({ integrationId: 'malformed-1' }));
             storageData.set(
@@ -548,8 +542,7 @@ suite('federatedAuthTokenStorage', () => {
         });
 
         test('throws when access_token in a 2xx response is not a string', async () => {
-            // Zod schema drift / proxy-injected garbage: locks the schema
-            // contract on the access_token field.
+            // Locks the zod schema contract on the access_token field.
             globalThis.fetch = sinon
                 .stub()
                 .resolves(makeResponse(200, { access_token: 12345 })) as unknown as typeof fetch;
@@ -596,12 +589,7 @@ suite('federatedAuthTokenStorage', () => {
         });
 
         test('rejects when response.json() takes longer than the timeout', async () => {
-            // Headers arrive instantly, but `response.json()` never settles
-            // unless the AbortController inside fetchFreshAccessToken fires
-            // and rejects the body read. If the timeout only covered the
-            // initial fetch (the pre-fix behaviour), this test would hang
-            // until mocha's own 2s timeout — instead we want a quick reject
-            // when the body read is aborted.
+            // Catches: a timeout that covers only `fetch()` and not `response.json()`, which would let a slow body hang.
             const makeSlowResponse = (signal: AbortSignal | undefined): Response => {
                 const slowJson = (): Promise<unknown> =>
                     new Promise((_resolve, reject) => {

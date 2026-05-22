@@ -8,38 +8,25 @@ import type { DeepnoteBlock } from '@deepnote/blocks';
 import { dedent } from 'ts-dedent';
 
 /**
- * SQL block subtype of `DeepnoteBlock`. Vendored because `@deepnote/blocks`
- * does not currently export `SqlBlock` from its public API.
- *
- * TODO(deepnote-followups): replace with `import { SqlBlock } from '@deepnote/blocks'`
- * once exported upstream.
+ * SQL block subtype. Vendored because `@deepnote/blocks` does not export `SqlBlock`.
+ * TODO(deepnote-followups): replace with `import { SqlBlock } from '@deepnote/blocks'` once exported upstream.
  */
 export type SqlBlock = Extract<DeepnoteBlock, { type: 'sql' }>;
 
 /**
- * Valid values for the `sql_cache_mode` argument of
- * `_dntk.execute_sql_with_connection_json`.
- *
+ * Valid `sql_cache_mode` values for `_dntk.execute_sql_with_connection_json`.
  * TODO(deepnote-followups): remove when @deepnote/blocks exports this.
  */
 export type SqlCacheMode = 'cache_disabled' | 'always_write' | 'read_or_write';
 
 /**
- * Valid values for the `return_variable_type` argument of
- * `_dntk.execute_sql_with_connection_json`.
- *
+ * Valid `return_variable_type` values for `_dntk.execute_sql_with_connection_json`.
  * TODO(deepnote-followups): remove when @deepnote/blocks exports this.
  */
 export type SqlCellVariableType = 'dataframe' | 'query_preview';
 
 /**
- * Mirror of `@deepnote/blocks`'s bundled-internal `escapePythonString`. Single-quotes
- * a string and escapes backslashes, single quotes, and newlines.
- *
- * Byte-identical to the upstream implementation at
- * `node_modules/@deepnote/blocks/dist/index.js`:
- *   `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'").replaceAll('\n', '\\n')}'`
- *
+ * Mirror of upstream's bundled-internal `escapePythonString`: single-quotes the string and escapes `\`, `'`, `\n`.
  * TODO(deepnote-followups): remove when @deepnote/blocks exports this.
  */
 export function escapePythonString(value: string): string {
@@ -47,16 +34,8 @@ export function escapePythonString(value: string): string {
 }
 
 /**
- * Mirror of `@deepnote/blocks`'s bundled-internal `sanitizePythonVariableName`. Turns a
- * user-supplied identifier into a valid Python variable name:
- *   - replaces runs of whitespace with `_`
- *   - strips characters that are not `[0-9a-zA-Z_]`
- *   - strips a leading run of non-letter/underscore characters
- *   - returns `'input_1'` when the result is empty (matches upstream default)
- *
- * Differs from upstream by accepting `undefined` and returning `undefined` for it,
- * so call sites can pass `block.metadata.deepnote_variable_name` directly.
- *
+ * Mirror of upstream's `sanitizePythonVariableName` (whitespace→`_`, strips non-identifier chars, fallback `'input_1'`).
+ * Differs from upstream by accepting `undefined` and returning `undefined`.
  * TODO(deepnote-followups): remove when @deepnote/blocks exports this.
  */
 export function sanitizePythonVariableName(name: string | undefined): string | undefined {
@@ -77,10 +56,7 @@ export function sanitizePythonVariableName(name: string | undefined): string | u
 }
 
 /**
- * Mirror of `@deepnote/blocks`'s bundled-internal `createDataFrameConfig`. Produces a
- * two-line Python snippet that configures the dataframe formatter for the given
- * SQL block's table state.
- *
+ * Mirror of upstream's `createDataFrameConfig`: produces a two-branch Python snippet configuring the dataframe formatter.
  * TODO(deepnote-followups): remove when @deepnote/blocks exports this.
  */
 export function createDataFrameConfig(block: SqlBlock): string {

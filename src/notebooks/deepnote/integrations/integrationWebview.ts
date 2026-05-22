@@ -30,20 +30,10 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
 
     private projectId: string | undefined;
 
-    /**
-     * Monotonically-incremented per `updateWebview()` call. Used as a
-     * "latest call wins" generation counter so an overlapping in-flight
-     * update that resolves last cannot overwrite a fresher one.
-     */
+    /** Generation counter for `updateWebview()` ("latest call wins"; stale in-flight updates bail). */
     private updateGeneration = 0;
 
-    /**
-     * Long-lived disposables — notably the `onDidChangeTokens` subscription —
-     * that must survive panel close/reopen. The provider is a DI singleton,
-     * so the constructor runs once per extension lifetime; if we lumped this
-     * subscription into `this.disposables`, the panel's `onDidDispose`
-     * handler would tear it down and we'd never re-subscribe.
-     */
+    /** Disposables that must survive panel close/reopen (provider is DI-singleton; `disposables` is torn down on `onDidDispose`). */
     private readonly tokenStorageDisposables: Disposable[] = [];
 
     constructor(
@@ -54,11 +44,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         @optional()
         private readonly tokenStorage?: IFederatedAuthTokenStorage
     ) {
-        // Refresh the webview whenever the token storage signals a change —
-        // so the pill flips between "Authenticated" and "Not authenticated"
-        // without requiring the user to reload the panel manually. Kept in
-        // `tokenStorageDisposables` (NOT `disposables`) so the subscription
-        // survives panel close/reopen.
+        // Refresh on token-storage change so the auth pill flips without panel reload. Lives in `tokenStorageDisposables` to survive panel close/reopen.
         if (this.tokenStorage) {
             this.tokenStorageDisposables.push(
                 this.tokenStorage.onDidChangeTokens(() => {
@@ -449,15 +435,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         });
     }
 
-    /**
-     * Update the webview with current integration data.
-     *
-     * Race safety: overlapping `updateWebview()` calls are possible — e.g.
-     * `show()` runs one inline while `onDidChangeTokens` fires another from
-     * inside `tokenStorage.save()`. We assign each call a generation number
-     * and bail out at every async boundary if either (a) a newer generation
-     * has started or (b) the panel was disposed during the await.
-     */
+    /** Update the webview with current integration data. Each call gets a generation number; stale or post-dispose updates bail at every await. */
     private async updateWebview(): Promise<void> {
         if (!this.currentPanel) {
             logger.debug('IntegrationWebviewProvider: No current panel, skipping update');
@@ -478,16 +456,13 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             }))
         );
 
-        // The panel may have been disposed (e.g. user closed it) while the
-        // tokenStorage.has() round-trip was in flight; bail before
-        // dereferencing `this.currentPanel.webview`.
+        // Bail if the panel was disposed during the `tokenStorage.has()` await.
         if (!this.currentPanel) {
             logger.debug('IntegrationWebviewProvider: Panel disposed during update, skipping postMessage');
             return;
         }
 
-        // A newer updateWebview() call started while we awaited; let it
-        // post the fresher state instead of us posting stale data.
+        // A newer update started; let it post the fresher state.
         if (generation !== this.updateGeneration) {
             logger.debug(
                 `IntegrationWebviewProvider: Superseded by newer update (gen ${generation} < ${this.updateGeneration}), skipping postMessage`
@@ -511,14 +486,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         });
     }
 
-    /**
-     * Invalidates any stored federated refresh token whose
-     * OAuth-client-metadata fingerprint no longer matches the incoming
-     * config. Also drops the token when the new config switches away from
-     * `google-oauth` entirely (or away from `big-query`). No-ops when no
-     * token storage is bound, or when no token is stored for this
-     * integration.
-     */
+    /** Drops stale federated tokens when the new config's fingerprint changed or the auth method is no longer `google-oauth`. */
     private async invalidateStaleFederatedToken(
         integrationId: string,
         newConfig: ConfigurableDatabaseIntegrationConfig
@@ -532,8 +500,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             return;
         }
 
-        // Switched away from google-oauth (or to a different integration type):
-        // the previously-captured token is meaningless against the new metadata.
+        // Switched away from google-oauth (or another integration type): previously-captured token is meaningless.
         if (newConfig.type !== 'big-query' || newConfig.metadata.authMethod !== BigQueryAuthMethods.GoogleOauth) {
             logger.info(
                 `IntegrationWebviewProvider: deleting stale federated token for ${integrationId} (auth method changed).`
@@ -542,9 +509,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             return;
         }
 
-        // Same auth method but the OAuth client metadata changed: fingerprint
-        // mismatch means the stored refresh token was issued against a
-        // different client and is no longer valid.
+        // Same auth method but OAuth client metadata changed: stored token was issued against a different client.
         const { clientId, clientSecret, project } = newConfig.metadata;
         const newFingerprint = this.tokenStorage.computeMetadataFingerprint({ clientId, clientSecret, project });
         if (newFingerprint !== stored.metadataFingerprint) {
@@ -555,16 +520,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         }
     }
 
-    /**
-     * Derive the federated-auth token status for an integration. Returns
-     * `'unsupported'` when:
-     *   - the token storage is not bound (web build, or node before
-     *     `IFederatedAuthTokenStorage` is registered),
-     *   - the integration is not BigQuery, or
-     *   - the integration's `authMethod` is not `'google-oauth'`.
-     * Otherwise consults the token storage and returns `'authenticated'`
-     * if a token entry exists for the integration, `'disconnected'` if not.
-     */
+    /** Federated-auth token status: `'unsupported'` for non-BigQuery, non-google-oauth, or web; else `'authenticated'`/`'disconnected'`. */
     private async deriveTokenStatus(
         integrationId: string,
         config: ConfigurableDatabaseIntegrationConfig | null
@@ -587,13 +543,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         }
     }
 
-    /**
-     * Handle messages from the webview
-     *
-     * The shape mirrors the webview-side `WebviewOutboundMessage` discriminated
-     * union in `src/webviews/webview-side/integrations/types.ts`. Every case
-     * tag from that union should be handled here.
-     */
+    /** Handle messages from the webview; mirrors the `WebviewOutboundMessage` union in `src/webviews/webview-side/integrations/types.ts`. */
     private async handleMessage(message: {
         type: string;
         integrationId?: string;
@@ -625,9 +575,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                     try {
                         await commands.executeCommand(Commands.AuthenticateIntegration, message.integrationId);
                     } catch (error) {
-                        // The command handler shows its own user-facing toasts;
-                        // we just log here so a rejection doesn't surface as an
-                        // unhandled-promise warning in the extension host.
+                        // Command handler shows its own toasts; log here to avoid an unhandled-rejection.
                         logger.error(
                             `IntegrationWebviewProvider: AuthenticateIntegration command failed for ${message.integrationId}`,
                             error
@@ -664,16 +612,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         config: ConfigurableDatabaseIntegrationConfig
     ): Promise<void> {
         try {
-            // Before persisting the new config, invalidate any stale federated
-            // refresh token. There are two cases:
-            //   - new config is `google-oauth`, but the OAuth-client metadata
-            //     (clientId/clientSecret/project) changed since the token was
-            //     captured. The stored fingerprint no longer matches the new
-            //     config, so the next `generate()` would fail anyway. Delete
-            //     up front so the UI pill flips to "Not authenticated".
-            //   - new config is NOT `google-oauth` (or no longer `big-query`).
-            //     The previously-captured token is meaningless against the
-            //     new auth method; drop it.
+            // Invalidate stale federated tokens before saving (fingerprint change or auth-method switch).
             await this.invalidateStaleFederatedToken(integrationId, config);
 
             await this.integrationStorage.save(config);

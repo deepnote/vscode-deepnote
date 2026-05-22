@@ -210,9 +210,7 @@ suite('FederatedAuthKernelRestartBridge', () => {
     });
 
     test('registers its onDidChangeTokens subscription with IDisposableRegistry', () => {
-        // Construct a fresh bridge inside the test so we can measure
-        // disposables.length before vs after — the setup() block's bridge
-        // construction is not counted here.
+        // Fresh bridge here so we measure disposables.length before vs after (setup's bridge is excluded).
         const initialCount = disposables.length;
         new FederatedAuthKernelRestartBridge(
             instance(tokenStorage),

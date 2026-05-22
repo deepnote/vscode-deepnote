@@ -18,16 +18,7 @@ import {
     isFederatedAuthMethod
 } from '@deepnote/database-integrations';
 
-/**
- * Narrow `DatabaseIntegrationConfig['metadata']` to the federated-auth variant
- * without an `as` cast. We can't reuse the upstream `isFederatedAuthMetadata`
- * directly because its generic constraint (`M extends { authMethod?: string }`)
- * does not unify with the discriminated-union shape of
- * `DatabaseIntegrationConfig['metadata']` — several branches do not declare
- * `authMethod` at all. The check delegates to the upstream
- * `isFederatedAuthMethod` helper at runtime so the set of federated methods
- * stays in sync with `@deepnote/database-integrations`.
- */
+/** Narrows metadata to the federated-auth variant; upstream `isFederatedAuthMetadata` can't be reused because its generic doesn't unify with our union. Delegates to upstream `isFederatedAuthMethod` at runtime. */
 function isFederatedAuthMetadata(
     metadata: DatabaseIntegrationConfig['metadata']
 ): metadata is Extract<DatabaseIntegrationConfig['metadata'], { authMethod: FederatedAuthMethod }> {
@@ -124,12 +115,7 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
             )
         ).filter((config) => config != null);
 
-        // Skip federated-auth integrations at kernel startup; their access
-        // tokens are fetched fresh on every cell execution via the silent
-        // pre-execute hook in `CellExecution`. Emitting an env var here
-        // would either bake a stale token into the kernel env or require
-        // running an OAuth refresh during kernel startup — neither is
-        // acceptable per the plan.
+        // Skip federated-auth integrations: tokens are fetched per-cell via `CellExecution`'s silent pre-execute, not baked into kernel env.
         const projectIntegrationConfigs: Array<DatabaseIntegrationConfig> = [];
         for (const config of allConfigs) {
             if (isFederatedAuthMetadata(config.metadata)) {

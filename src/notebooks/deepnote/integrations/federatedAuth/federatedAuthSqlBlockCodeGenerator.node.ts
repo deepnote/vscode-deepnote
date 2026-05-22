@@ -228,8 +228,17 @@ export class FederatedAuthSqlBlockCodeGenerator implements IFederatedAuthSqlBloc
 
         // Persist a rotated refresh token if Google issued one. Mirrors
         // production behavior described in plan Step 1a item 6.
+        //
+        // Save silently — a rotation event must NOT fire onDidChangeTokens.
+        // Listeners (the kernel restart bridge, the webview's pill) treat
+        // token changes as authentication state changes; firing here would
+        // restart the kernel mid-cell because this save happens while
+        // CellExecution is preparing the very SQL block that triggered the
+        // rotation. The new refresh token still lands on disk; the next
+        // SQL cell will read it via the same per-execution pre-execute
+        // pathway.
         if (newRefreshToken !== undefined && newRefreshToken !== entry.refreshToken) {
-            await this.tokenStorage.save({ ...entry, refreshToken: newRefreshToken });
+            await this.tokenStorage.save({ ...entry, refreshToken: newRefreshToken }, { silent: true });
         }
 
         const connectionJson = JSON.stringify({

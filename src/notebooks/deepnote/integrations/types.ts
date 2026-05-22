@@ -93,7 +93,18 @@ export interface IFederatedAuthTokenStorage {
      * integration no longer exists.
      */
     listIntegrationIds(): Promise<string[]>;
-    save(entry: FederatedAuthTokenEntry): Promise<void>;
+    /**
+     * Persists a token entry.
+     *
+     * By default, fires `onDidChangeTokens` so listeners (e.g., the kernel
+     * restart bridge, the integration webview) can react to authentication
+     * state changes. Pass `options.silent = true` for refresh-token
+     * rotation: the rotated value is functionally equivalent — the
+     * extension mints a fresh access token via the per-cell pre-execute on
+     * every SQL block run, so a rotation event has no actionable effect on
+     * a running kernel and would only interrupt an in-flight SQL cell.
+     */
+    save(entry: FederatedAuthTokenEntry, options?: { silent?: boolean }): Promise<void>;
 }
 
 export const IFederatedAuthSqlBlockCodeGenerator = Symbol('IFederatedAuthSqlBlockCodeGenerator');

@@ -238,7 +238,7 @@ export class FederatedAuthTokenStorage implements IFederatedAuthTokenStorage {
         return Array.from(this.cache.keys());
     }
 
-    public async save(entry: FederatedAuthTokenEntry): Promise<void> {
+    public async save(entry: FederatedAuthTokenEntry, options?: { silent?: boolean }): Promise<void> {
         await this.ensureCacheLoaded();
 
         await this.encryptedStorage.store(
@@ -249,7 +249,9 @@ export class FederatedAuthTokenStorage implements IFederatedAuthTokenStorage {
         this.cache.set(entry.integrationId, entry);
         await this.updateIndex();
 
-        this._onDidChangeTokens.fire(entry.integrationId);
+        if (!options?.silent) {
+            this._onDidChangeTokens.fire(entry.integrationId);
+        }
     }
 
     /**

@@ -404,6 +404,23 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         });
     });
 
+    test('persists a rotated refresh token with { silent: true } so listeners do not restart the in-flight kernel', async () => {
+        // Catches: the kernel restart bridge interpreting a rotation event
+        // as an auth-state change and restarting the kernel mid-cell. The
+        // generator runs inside CellExecution.execute() preparing the very
+        // SQL block whose rotation triggered this save — firing
+        // onDidChangeTokens here would queue a kernel.restart() that lands
+        // microseconds later while the prelude + main execute are running.
+        setupValidFederatedIntegration();
+        fetcher.resolves({ accessToken: ACCESS_TOKEN, newRefreshToken: 'new-refresh-token' });
+
+        await generator.generate(sqlBlock());
+
+        sinon.assert.calledOnce(saveSpy);
+        const options = saveSpy.firstCall.args[1] as { silent?: boolean } | undefined;
+        assert.strictEqual(options?.silent, true, 'rotation save must pass { silent: true }');
+    });
+
     test('does NOT call save when the returned refresh token is identical to the stored one', async () => {
         setupValidFederatedIntegration();
         fetcher.resolves({ accessToken: ACCESS_TOKEN, newRefreshToken: REFRESH_TOKEN });

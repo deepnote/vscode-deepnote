@@ -189,6 +189,31 @@ suite('federatedAuthTokenStorage', () => {
             assert.deepStrictEqual(events, [entry.integrationId]);
         });
 
+        test('save with { silent: true } persists the entry but does NOT fire onDidChangeTokens', async () => {
+            // Catches: a refresh-token rotation that flips the kernel-restart
+            // bridge mid-cell. Rotation lands on disk so the next cell reads
+            // the new refresh token, but no listeners should observe it as
+            // an auth state change.
+            const events: string[] = [];
+            storage.onDidChangeTokens((id) => events.push(id));
+
+            const entry = sampleEntry();
+            await storage.save(entry, { silent: true });
+
+            assert.deepStrictEqual(events, [], 'silent save must not fire the change event');
+            assert.deepStrictEqual(await storage.get(entry.integrationId), entry, 'silent save must still persist');
+        });
+
+        test('save with { silent: false } fires onDidChangeTokens (explicit default)', async () => {
+            const events: string[] = [];
+            storage.onDidChangeTokens((id) => events.push(id));
+
+            const entry = sampleEntry();
+            await storage.save(entry, { silent: false });
+
+            assert.deepStrictEqual(events, [entry.integrationId]);
+        });
+
         test('save updates the index secret with the integration id', async () => {
             await storage.save(sampleEntry('integration-1'));
             await storage.save(sampleEntry('integration-2'));

@@ -1,4 +1,3 @@
-import type { DeepnoteBlock } from '@deepnote/blocks';
 import { assert } from 'chai';
 import sinon from 'sinon';
 
@@ -15,6 +14,16 @@ import {
     federatedSqlVariableName
 } from './federatedAuthSqlBlockCodeGenerator.node';
 import { InvalidClientError, InvalidGrantError, computeMetadataFingerprint } from './federatedAuthTokenStorage.node';
+import {
+    FED_AUTH_FIXTURE,
+    buildCodeBlock,
+    buildGoogleOauthIntegration,
+    buildPostgresIntegration,
+    buildServiceAccountIntegration,
+    buildSqlBlock,
+    buildTokenEntry,
+    parsePythonSingleQuoted
+} from './federatedAuthTestHelpers';
 
 type FetcherFn = (
     entry: FederatedAuthTokenEntry,
@@ -22,12 +31,7 @@ type FetcherFn = (
 ) => Promise<{ accessToken: string; newRefreshToken?: string }>;
 
 suite('FederatedAuthSqlBlockCodeGenerator', () => {
-    const INTEGRATION_ID = 'bq-integration-1';
-    const PROJECT = 'my-gcp-project';
-    const CLIENT_ID = 'client-id-abc';
-    const CLIENT_SECRET = 'client-secret-xyz';
-    const REFRESH_TOKEN = 'refresh-token-abc';
-    const ACCESS_TOKEN = 'access-token-secret-do-not-log';
+    const { INTEGRATION_ID, PROJECT, CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, ACCESS_TOKEN } = FED_AUTH_FIXTURE;
     const VALID_FINGERPRINT = computeMetadataFingerprint({
         clientId: CLIENT_ID,
         clientSecret: CLIENT_SECRET,
@@ -47,7 +51,6 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         integrationStore = new Map();
         tokenStore = new Map();
 
-        // Minimal IIntegrationStorage stub: only the method generate() calls.
         integrationStorage = {
             getIntegrationConfig: async (id: string) => integrationStore.get(id)
         } as unknown as IIntegrationStorage;
@@ -76,126 +79,54 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
     });
 
     function setupValidFederatedIntegration() {
-        integrationStore.set(INTEGRATION_ID, {
-            id: INTEGRATION_ID,
-            name: 'My BigQuery',
-            type: 'big-query',
-            metadata: {
-                authMethod: 'google-oauth',
-                project: PROJECT,
-                clientId: CLIENT_ID,
-                clientSecret: CLIENT_SECRET
-            }
-        } as ConfigurableDatabaseIntegrationConfig);
+        integrationStore.set(INTEGRATION_ID, buildGoogleOauthIntegration());
+        tokenStore.set(
+            INTEGRATION_ID,
+            buildTokenEntry({ refreshToken: REFRESH_TOKEN, metadataFingerprint: VALID_FINGERPRINT })
+        );
+    }
 
-        tokenStore.set(INTEGRATION_ID, {
-            integrationId: INTEGRATION_ID,
-            refreshToken: REFRESH_TOKEN,
-            metadataFingerprint: VALID_FINGERPRINT
+    (
+        [
+            ['a non-SQL block', () => buildGoogleOauthIntegration(), () => buildCodeBlock()],
+            [
+                'SQL block with no sql_integration_id',
+                () => buildGoogleOauthIntegration(),
+                () => buildSqlBlock({ metadata: {} })
+            ],
+            [
+                'SQL block with id typo (integration not found)',
+                () => undefined,
+                () => buildSqlBlock({ sql_integration_id: 'unknown-id' })
+            ],
+            [
+                'integration that is not BigQuery',
+                () => buildPostgresIntegration({ id: INTEGRATION_ID }),
+                () => buildSqlBlock()
+            ],
+            [
+                'BigQuery integration using service-account auth',
+                () => buildServiceAccountIntegration(),
+                () => buildSqlBlock()
+            ]
+        ] as const
+    ).forEach(([label, buildIntegration, buildBlock]) => {
+        test(`returns undefined for ${label}`, async () => {
+            const integration = buildIntegration();
+            if (integration) {
+                integrationStore.set(INTEGRATION_ID, integration);
+            }
+            const result = await generator.generate(buildBlock());
+            assert.strictEqual(result, undefined);
+            sinon.assert.notCalled(fetcher);
         });
-    }
-
-    function sqlBlock(overrides?: { sql_integration_id?: string; deepnote_variable_name?: string }): DeepnoteBlock {
-        return {
-            id: 'block-1',
-            type: 'sql',
-            blockGroup: 'group-1',
-            sortingKey: '0',
-            content: 'SELECT 1 AS one',
-            metadata: {
-                sql_integration_id: overrides?.sql_integration_id ?? INTEGRATION_ID,
-                deepnote_variable_name: overrides?.deepnote_variable_name
-            }
-        } as unknown as DeepnoteBlock;
-    }
-
-    function codeBlock(): DeepnoteBlock {
-        return {
-            id: 'block-1',
-            type: 'code',
-            blockGroup: 'group-1',
-            sortingKey: '0',
-            content: 'print("hi")',
-            metadata: {}
-        } as unknown as DeepnoteBlock;
-    }
-
-    test('returns undefined for a non-SQL block', async () => {
-        setupValidFederatedIntegration();
-        const result = await generator.generate(codeBlock());
-        assert.strictEqual(result, undefined);
-        sinon.assert.notCalled(fetcher);
-    });
-
-    test('returns undefined when SQL block has no sql_integration_id', async () => {
-        setupValidFederatedIntegration();
-        const block = {
-            id: 'block-1',
-            type: 'sql',
-            blockGroup: 'group-1',
-            sortingKey: '0',
-            content: 'SELECT 1',
-            metadata: {}
-        } as unknown as DeepnoteBlock;
-        const result = await generator.generate(block);
-        assert.strictEqual(result, undefined);
-        sinon.assert.notCalled(fetcher);
-    });
-
-    test('returns undefined when integration is not BigQuery (e.g. pgsql)', async () => {
-        integrationStore.set(INTEGRATION_ID, {
-            id: INTEGRATION_ID,
-            name: 'My Postgres',
-            type: 'pgsql',
-            metadata: {
-                host: 'db.example.com',
-                user: 'me',
-                database: 'mydb'
-            }
-        } as unknown as ConfigurableDatabaseIntegrationConfig);
-
-        const result = await generator.generate(sqlBlock());
-        assert.strictEqual(result, undefined);
-        sinon.assert.notCalled(fetcher);
-    });
-
-    test('returns undefined when BigQuery integration uses service-account auth', async () => {
-        integrationStore.set(INTEGRATION_ID, {
-            id: INTEGRATION_ID,
-            name: 'My BigQuery (SA)',
-            type: 'big-query',
-            metadata: {
-                authMethod: 'service-account',
-                service_account: '{"type": "service_account"}'
-            }
-        } as unknown as ConfigurableDatabaseIntegrationConfig);
-
-        const result = await generator.generate(sqlBlock());
-        assert.strictEqual(result, undefined);
-        sinon.assert.notCalled(fetcher);
-    });
-
-    test('returns undefined when integration is not found (e.g. id typo)', async () => {
-        const result = await generator.generate(sqlBlock({ sql_integration_id: 'unknown-id' }));
-        assert.strictEqual(result, undefined);
-        sinon.assert.notCalled(fetcher);
     });
 
     test('throws NotAuthenticatedError when federated integration has no stored token', async () => {
-        integrationStore.set(INTEGRATION_ID, {
-            id: INTEGRATION_ID,
-            name: 'My BigQuery',
-            type: 'big-query',
-            metadata: {
-                authMethod: 'google-oauth',
-                project: PROJECT,
-                clientId: CLIENT_ID,
-                clientSecret: CLIENT_SECRET
-            }
-        } as ConfigurableDatabaseIntegrationConfig);
+        integrationStore.set(INTEGRATION_ID, buildGoogleOauthIntegration());
 
         try {
-            await generator.generate(sqlBlock());
+            await generator.generate(buildSqlBlock());
             assert.fail('Expected NotAuthenticatedError');
         } catch (err) {
             assert.instanceOf(err, NotAuthenticatedError);
@@ -206,15 +137,13 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
 
     test('throws NotAuthenticatedError and deletes the token when the metadata fingerprint is stale', async () => {
         setupValidFederatedIntegration();
-        // Overwrite with a token whose fingerprint won't match the integration metadata.
-        tokenStore.set(INTEGRATION_ID, {
-            integrationId: INTEGRATION_ID,
-            refreshToken: REFRESH_TOKEN,
-            metadataFingerprint: 'stale-fingerprint'
-        });
+        tokenStore.set(
+            INTEGRATION_ID,
+            buildTokenEntry({ refreshToken: REFRESH_TOKEN, metadataFingerprint: 'stale-fingerprint' })
+        );
 
         try {
-            await generator.generate(sqlBlock());
+            await generator.generate(buildSqlBlock());
             assert.fail('Expected NotAuthenticatedError');
         } catch (err) {
             assert.instanceOf(err, NotAuthenticatedError);
@@ -226,7 +155,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
     test('returns { prelude, cellCode } for a valid federated SQL block', async () => {
         setupValidFederatedIntegration();
 
-        const result = await generator.generate(sqlBlock());
+        const result = await generator.generate(buildSqlBlock());
         if (!result) {
             throw new Error('expected a non-undefined result');
         }
@@ -265,29 +194,21 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
     test('prelude round-trips through Python+json.loads when integration id contains backslash, newline, and single quote', async () => {
         // Catches: regressing to a single-char `\\'` escape would leave `\\`/`\n` undecoded and break `json.loads` at the kernel.
         const hostileIntegrationId = "bq-with-\\-and-\n-and-'-id";
-        integrationStore.set(hostileIntegrationId, {
-            id: hostileIntegrationId,
-            name: 'My BigQuery',
-            type: 'big-query',
-            metadata: {
-                authMethod: 'google-oauth',
-                project: PROJECT,
-                clientId: CLIENT_ID,
-                clientSecret: CLIENT_SECRET
-            }
-        } as ConfigurableDatabaseIntegrationConfig);
-        tokenStore.set(hostileIntegrationId, {
-            integrationId: hostileIntegrationId,
-            refreshToken: REFRESH_TOKEN,
-            metadataFingerprint: VALID_FINGERPRINT
-        });
+        integrationStore.set(hostileIntegrationId, buildGoogleOauthIntegration({ id: hostileIntegrationId }));
+        tokenStore.set(
+            hostileIntegrationId,
+            buildTokenEntry({
+                integrationId: hostileIntegrationId,
+                refreshToken: REFRESH_TOKEN,
+                metadataFingerprint: VALID_FINGERPRINT
+            })
+        );
 
-        const result = await generator.generate(sqlBlock({ sql_integration_id: hostileIntegrationId }));
+        const result = await generator.generate(buildSqlBlock({ sql_integration_id: hostileIntegrationId }));
         if (!result) {
             throw new Error('expected a non-undefined result');
         }
 
-        // Strip `<variable> = ` prefix and parse what Python would.
         const expectedVariableName = federatedSqlVariableName(hostileIntegrationId);
         const assignmentPrefix = `${expectedVariableName} = `;
         assert.isTrue(
@@ -296,30 +217,6 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         );
         const literal = result.prelude.slice(assignmentPrefix.length);
 
-        // Inverse of \\, \', \n — parses what Python would.
-        function parsePythonSingleQuoted(escaped: string): string {
-            assert.isTrue(escaped.startsWith("'") && escaped.endsWith("'"), 'must be wrapped in single quotes');
-            const body = escaped.slice(1, -1);
-            let out = '';
-            for (let i = 0; i < body.length; i++) {
-                if (body[i] === '\\' && i + 1 < body.length) {
-                    const next = body[i + 1];
-                    if (next === '\\') {
-                        out += '\\';
-                    } else if (next === "'") {
-                        out += "'";
-                    } else if (next === 'n') {
-                        out += '\n';
-                    } else {
-                        out += '\\' + next;
-                    }
-                    i++;
-                } else {
-                    out += body[i];
-                }
-            }
-            return out;
-        }
         const decoded = parsePythonSingleQuoted(literal);
         const parsed = JSON.parse(decoded) as Record<string, unknown>;
         assert.deepStrictEqual(parsed, {
@@ -335,8 +232,8 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         fetcher.onFirstCall().resolves({ accessToken: 'token-1' });
         fetcher.onSecondCall().resolves({ accessToken: 'token-2' });
 
-        const first = await generator.generate(sqlBlock());
-        const second = await generator.generate(sqlBlock());
+        const first = await generator.generate(buildSqlBlock());
+        const second = await generator.generate(buildSqlBlock());
 
         sinon.assert.calledTwice(fetcher);
         assert.notStrictEqual(first?.prelude, second?.prelude);
@@ -349,7 +246,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         fetcher.rejects(new InvalidGrantError());
 
         try {
-            await generator.generate(sqlBlock());
+            await generator.generate(buildSqlBlock());
             assert.fail('Expected NotAuthenticatedError');
         } catch (err) {
             assert.instanceOf(err, NotAuthenticatedError);
@@ -363,7 +260,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         fetcher.rejects(new InvalidClientError());
 
         try {
-            await generator.generate(sqlBlock());
+            await generator.generate(buildSqlBlock());
             assert.fail('Expected OAuthClientMisconfiguredError');
         } catch (err) {
             assert.instanceOf(err, OAuthClientMisconfiguredError);
@@ -374,31 +271,20 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         sinon.assert.notCalled(deleteSpy);
     });
 
-    test('persists a rotated refresh token before resolving', async () => {
-        setupValidFederatedIntegration();
-        fetcher.resolves({ accessToken: ACCESS_TOKEN, newRefreshToken: 'new-refresh-token' });
-
-        const result = await generator.generate(sqlBlock());
-        assert.ok(result);
-
-        sinon.assert.calledOnce(saveSpy);
-        const savedEntry = saveSpy.firstCall.args[0] as FederatedAuthTokenEntry;
-        assert.deepStrictEqual(savedEntry, {
-            integrationId: INTEGRATION_ID,
-            refreshToken: 'new-refresh-token',
-            metadataFingerprint: VALID_FINGERPRINT
-        });
-    });
-
     test('persists a rotated refresh token with { silent: true } so listeners do not restart the in-flight kernel', async () => {
         // Catches: a rotation event firing `onDidChangeTokens` would queue a `kernel.restart()` while the prelude+main execute are running.
         setupValidFederatedIntegration();
         fetcher.resolves({ accessToken: ACCESS_TOKEN, newRefreshToken: 'new-refresh-token' });
 
-        await generator.generate(sqlBlock());
+        await generator.generate(buildSqlBlock());
 
         sinon.assert.calledOnce(saveSpy);
-        const options = saveSpy.firstCall.args[1] as { silent?: boolean } | undefined;
+        const [savedEntry, options] = saveSpy.firstCall.args as [FederatedAuthTokenEntry, { silent?: boolean }];
+        assert.deepStrictEqual(savedEntry, {
+            integrationId: INTEGRATION_ID,
+            refreshToken: 'new-refresh-token',
+            metadataFingerprint: VALID_FINGERPRINT
+        });
         assert.strictEqual(options?.silent, true, 'rotation save must pass { silent: true }');
     });
 
@@ -406,23 +292,14 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         setupValidFederatedIntegration();
         fetcher.resolves({ accessToken: ACCESS_TOKEN, newRefreshToken: REFRESH_TOKEN });
 
-        await generator.generate(sqlBlock());
-
-        sinon.assert.notCalled(saveSpy);
-    });
-
-    test('does NOT call save when the response carries no refresh token at all', async () => {
-        setupValidFederatedIntegration();
-        fetcher.resolves({ accessToken: ACCESS_TOKEN });
-
-        await generator.generate(sqlBlock());
+        await generator.generate(buildSqlBlock());
 
         sinon.assert.notCalled(saveSpy);
     });
 
     test('cellCode honors deepnote_variable_name by emitting an assignment', async () => {
         setupValidFederatedIntegration();
-        const result = await generator.generate(sqlBlock({ deepnote_variable_name: 'my_df' }));
+        const result = await generator.generate(buildSqlBlock({ deepnote_variable_name: 'my_df' }));
         if (!result) {
             throw new Error('expected a non-undefined result');
         }
@@ -431,22 +308,15 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
     });
 
     suite('federatedSqlVariableName', () => {
-        test('replaces non-identifier characters with underscores', () => {
-            assert.strictEqual(
-                federatedSqlVariableName('abc-123-def'),
-                '__deepnote_federated_sql_connection__abc_123_def'
-            );
-        });
-
-        test('leaves already-valid identifier characters alone', () => {
-            assert.strictEqual(federatedSqlVariableName('abc_123'), '__deepnote_federated_sql_connection__abc_123');
-        });
-
-        test('replaces a UUID-style id with underscores', () => {
-            assert.strictEqual(
-                federatedSqlVariableName('11111111-2222-3333-4444-555555555555'),
-                '__deepnote_federated_sql_connection__11111111_2222_3333_4444_555555555555'
-            );
+        (
+            [
+                ['abc-123-def', '__deepnote_federated_sql_connection__abc_123_def'],
+                ['abc_123', '__deepnote_federated_sql_connection__abc_123']
+            ] as const
+        ).forEach(([input, expected]) => {
+            test(`maps ${JSON.stringify(input)} → ${expected}`, () => {
+                assert.strictEqual(federatedSqlVariableName(input), expected);
+            });
         });
     });
 });

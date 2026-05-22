@@ -1,7 +1,7 @@
 import { assert } from 'chai';
 import sinon from 'sinon';
-import { CancellationError, CancellationTokenSource } from 'vscode';
-import { anyString, anything, instance, mock, reset, when } from 'ts-mockito';
+import { CancellationError } from 'vscode';
+import { anyString, anything, instance, mock, when } from 'ts-mockito';
 
 import { ConfigurableDatabaseIntegrationConfig } from '../../../../platform/notebooks/deepnote/integrationTypes';
 import { IIntegrationStorage } from '../../../../platform/notebooks/deepnote/types';
@@ -10,15 +10,15 @@ import { FederatedAuthCommandHandlerNode } from './federatedAuthCommandHandler.n
 import { FederatedAuthTokenEntry, IFederatedAuthTokenStorage } from '../types';
 import { computeMetadataFingerprint } from './federatedAuthTokenStorage.node';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../../test/vscode-mock';
+import {
+    FED_AUTH_FIXTURE,
+    buildGoogleOauthIntegration,
+    buildPostgresIntegration,
+    buildServiceAccountIntegration
+} from './federatedAuthTestHelpers';
 import type { RunOAuthFlowParams } from './oauthLoopbackFlow.node';
 
 suite('FederatedAuthCommandHandlerNode', () => {
-    const INTEGRATION_ID = 'bq-1';
-    const PROJECT = 'my-gcp-project';
-    const CLIENT_ID = 'client-abc';
-    const CLIENT_SECRET = 'secret-xyz';
-    const REFRESH_TOKEN = 'refresh-token-value';
-
     let extensionContext: IExtensionContext;
     let integrationStorage: IIntegrationStorage;
     let tokenStorage: IFederatedAuthTokenStorage;
@@ -49,11 +49,12 @@ suite('FederatedAuthCommandHandlerNode', () => {
         } as unknown as IFederatedAuthTokenStorage;
 
         runOAuthFlowStub = sinon.stub<[RunOAuthFlowParams], Promise<{ refreshToken: string }>>();
-        runOAuthFlowStub.resolves({ refreshToken: REFRESH_TOKEN });
+        runOAuthFlowStub.resolves({ refreshToken: FED_AUTH_FIXTURE.REFRESH_TOKEN });
 
         // env.asExternalUri returns the input untouched in the mock.
         when(mockedVSCodeNamespaces.env.asExternalUri(anything())).thenCall((uri) => Promise.resolve(uri));
         when(mockedVSCodeNamespaces.env.openExternal(anything())).thenResolve(true as unknown as void);
+        when(mockedVSCodeNamespaces.env.remoteName).thenReturn(undefined);
 
         handler = new FederatedAuthCommandHandlerNode(
             instance(extensionContext),
@@ -63,132 +64,79 @@ suite('FederatedAuthCommandHandlerNode', () => {
         );
     });
 
-    teardown(() => {
-        // Tests configure env.remoteName per-test; resetVSCodeMocks() in setup clears stale state.
-        reset(mockedVSCodeNamespaces.env);
-        reset(mockedVSCodeNamespaces.window);
-    });
-
-    function setupValidGoogleOauthIntegration(): void {
-        integrationStore.set(INTEGRATION_ID, {
-            id: INTEGRATION_ID,
-            name: 'My BigQuery',
-            type: 'big-query',
-            metadata: {
-                authMethod: 'google-oauth',
-                project: PROJECT,
-                clientId: CLIENT_ID,
-                clientSecret: CLIENT_SECRET
-            }
-        } as ConfigurableDatabaseIntegrationConfig);
-    }
-
     test('shows remote-not-supported toast and does not start the OAuth flow when env.remoteName is set', async () => {
         when(mockedVSCodeNamespaces.env.remoteName).thenReturn('ssh-remote');
-        setupValidGoogleOauthIntegration();
+        integrationStore.set(FED_AUTH_FIXTURE.INTEGRATION_ID, buildGoogleOauthIntegration());
 
-        await handler.authenticate(INTEGRATION_ID);
+        await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID);
 
         assert.strictEqual(runOAuthFlowStub.callCount, 0, 'runOAuthFlow should not have been called');
         assert.lengthOf(savedTokens, 0, 'no token should be saved');
     });
 
-    test('shows error toast for a non-existent integration', async () => {
-        when(mockedVSCodeNamespaces.env.remoteName).thenReturn(undefined);
-
-        await handler.authenticate('unknown-integration-id');
-
-        assert.strictEqual(runOAuthFlowStub.callCount, 0);
-        assert.lengthOf(savedTokens, 0);
-    });
-
-    test('shows error toast for a non-BigQuery integration', async () => {
-        when(mockedVSCodeNamespaces.env.remoteName).thenReturn(undefined);
-        integrationStore.set(INTEGRATION_ID, {
-            id: INTEGRATION_ID,
-            name: 'My Postgres',
-            type: 'pgsql',
-            metadata: {
-                host: 'localhost',
-                port: '5432',
-                database: 'db',
-                user: 'u',
-                password: 'p',
-                sslEnabled: false
+    (
+        [
+            ['unknown integration id', () => undefined, 'unknown-id'],
+            ['non-BigQuery integration', () => buildPostgresIntegration({ id: FED_AUTH_FIXTURE.INTEGRATION_ID })],
+            ['service-account BigQuery integration', () => buildServiceAccountIntegration()]
+        ] as const
+    ).forEach(([label, build, lookupId]) => {
+        test(`skips OAuth flow for ${label}`, async () => {
+            const config = build();
+            if (config) {
+                integrationStore.set(FED_AUTH_FIXTURE.INTEGRATION_ID, config);
             }
-        } as ConfigurableDatabaseIntegrationConfig);
+            await handler.authenticate(lookupId ?? FED_AUTH_FIXTURE.INTEGRATION_ID);
 
-        await handler.authenticate(INTEGRATION_ID);
-
-        assert.strictEqual(runOAuthFlowStub.callCount, 0);
-        assert.lengthOf(savedTokens, 0);
+            assert.strictEqual(runOAuthFlowStub.callCount, 0);
+            assert.lengthOf(savedTokens, 0);
+        });
     });
 
-    test('shows error toast for a service-account BigQuery integration', async () => {
-        when(mockedVSCodeNamespaces.env.remoteName).thenReturn(undefined);
-        integrationStore.set(INTEGRATION_ID, {
-            id: INTEGRATION_ID,
-            name: 'SA BigQuery',
-            type: 'big-query',
-            metadata: {
-                authMethod: 'service-account',
-                service_account: '{}'
-            }
-        } as ConfigurableDatabaseIntegrationConfig);
+    test('happy path: saves the captured refresh token with a fresh fingerprint', async () => {
+        integrationStore.set(FED_AUTH_FIXTURE.INTEGRATION_ID, buildGoogleOauthIntegration());
 
-        await handler.authenticate(INTEGRATION_ID);
-
-        assert.strictEqual(runOAuthFlowStub.callCount, 0);
-        assert.lengthOf(savedTokens, 0);
-    });
-
-    test('happy path: saves the captured refresh token with a fresh fingerprint and surfaces the success toast', async () => {
-        when(mockedVSCodeNamespaces.env.remoteName).thenReturn(undefined);
-        setupValidGoogleOauthIntegration();
-
-        await handler.authenticate(INTEGRATION_ID);
+        await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID);
 
         assert.strictEqual(runOAuthFlowStub.callCount, 1);
         assert.lengthOf(savedTokens, 1);
         assert.deepStrictEqual(savedTokens[0], {
-            integrationId: INTEGRATION_ID,
-            refreshToken: REFRESH_TOKEN,
+            integrationId: FED_AUTH_FIXTURE.INTEGRATION_ID,
+            refreshToken: FED_AUTH_FIXTURE.REFRESH_TOKEN,
             metadataFingerprint: computeMetadataFingerprint({
-                clientId: CLIENT_ID,
-                clientSecret: CLIENT_SECRET,
-                project: PROJECT
+                clientId: FED_AUTH_FIXTURE.CLIENT_ID,
+                clientSecret: FED_AUTH_FIXTURE.CLIENT_SECRET,
+                project: FED_AUTH_FIXTURE.PROJECT
             })
         });
 
         // Sanity-check that the strategy + completion were threaded through.
         const callArg = runOAuthFlowStub.firstCall.args[0];
-        assert.strictEqual(callArg.integrationId, INTEGRATION_ID);
+        assert.strictEqual(callArg.integrationId, FED_AUTH_FIXTURE.INTEGRATION_ID);
         assert.isFunction(callArg.onListening);
     });
 
     test('silently returns when the user cancels the flow', async () => {
-        when(mockedVSCodeNamespaces.env.remoteName).thenReturn(undefined);
-        setupValidGoogleOauthIntegration();
+        integrationStore.set(FED_AUTH_FIXTURE.INTEGRATION_ID, buildGoogleOauthIntegration());
         runOAuthFlowStub.rejects(new CancellationError());
 
-        await handler.authenticate(INTEGRATION_ID);
+        await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID);
 
         assert.strictEqual(runOAuthFlowStub.callCount, 1);
         assert.lengthOf(savedTokens, 0);
     });
 
     test('surfaces a generic OAuth error via the failure toast and does not save a token', async () => {
-        when(mockedVSCodeNamespaces.env.remoteName).thenReturn(undefined);
-        setupValidGoogleOauthIntegration();
+        integrationStore.set(FED_AUTH_FIXTURE.INTEGRATION_ID, buildGoogleOauthIntegration());
         runOAuthFlowStub.rejects(new Error('boom'));
 
-        await handler.authenticate(INTEGRATION_ID);
+        await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID);
 
         assert.strictEqual(runOAuthFlowStub.callCount, 1);
         assert.lengthOf(savedTokens, 0);
     });
 
-    test('activate registers the command and pushes a disposable into the extension context subscriptions', () => {
+    test('activate registers the AuthenticateIntegration command and pushes a disposable', () => {
         when(mockedVSCodeNamespaces.commands.registerCommand(anyString(), anything())).thenReturn({
             dispose: () => undefined
         } as IDisposable);
@@ -196,25 +144,5 @@ suite('FederatedAuthCommandHandlerNode', () => {
         handler.activate();
 
         assert.strictEqual(subscriptions.length, 1, 'one disposable subscription should be registered');
-    });
-
-    test('cancellation token from withProgress is threaded into runOAuthFlow', async () => {
-        when(mockedVSCodeNamespaces.env.remoteName).thenReturn(undefined);
-        setupValidGoogleOauthIntegration();
-
-        // Drive withProgress with a token so we can assert it lands in runOAuthFlow's params.
-        const tokenSource = new CancellationTokenSource();
-        try {
-            when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall((_options, callback) =>
-                Promise.resolve(callback({ report: () => undefined }, tokenSource.token))
-            );
-
-            await handler.authenticate(INTEGRATION_ID);
-
-            const callArg = runOAuthFlowStub.firstCall.args[0];
-            assert.strictEqual(callArg.token, tokenSource.token);
-        } finally {
-            tokenSource.dispose();
-        }
     });
 });

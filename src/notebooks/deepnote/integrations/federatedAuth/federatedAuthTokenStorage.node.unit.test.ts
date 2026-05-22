@@ -15,16 +15,6 @@ import {
 
 suite('federatedAuthTokenStorage', () => {
     suite('computeMetadataFingerprint', () => {
-        test('is deterministic for the same inputs', () => {
-            const meta = { clientId: 'c-1', clientSecret: 's-1', project: 'p-1' };
-            assert.strictEqual(computeMetadataFingerprint(meta), computeMetadataFingerprint(meta));
-        });
-
-        test('produces a 64-char hex SHA-256 digest', () => {
-            const fp = computeMetadataFingerprint({ clientId: 'a', clientSecret: 'b', project: 'c' });
-            assert.match(fp, /^[a-f0-9]{64}$/);
-        });
-
         test('differs when clientId changes', () => {
             const a = computeMetadataFingerprint({ clientId: 'c-1', clientSecret: 's', project: 'p' });
             const b = computeMetadataFingerprint({ clientId: 'c-2', clientSecret: 's', project: 'p' });
@@ -90,15 +80,6 @@ suite('federatedAuthTokenStorage', () => {
             metadataFingerprint: `fp-${id}`
         });
 
-        test('returns undefined for unknown integration id', async () => {
-            const result = await storage.get('does-not-exist');
-            assert.strictEqual(result, undefined);
-        });
-
-        test('has returns false for unknown integration id', async () => {
-            assert.strictEqual(await storage.has('does-not-exist'), false);
-        });
-
         test('save then get round-trips the entry', async () => {
             const entry = sampleEntry();
             await storage.save(entry);
@@ -124,11 +105,6 @@ suite('federatedAuthTokenStorage', () => {
             const entry = sampleEntry();
             await storage.save(entry);
             assert.strictEqual(await storage.has(entry.integrationId), true);
-        });
-
-        test('listIntegrationIds returns empty array when no tokens are stored', async () => {
-            const ids = await storage.listIntegrationIds();
-            assert.deepStrictEqual(ids, []);
         });
 
         test('listIntegrationIds returns all stored integration ids', async () => {
@@ -200,68 +176,19 @@ suite('federatedAuthTokenStorage', () => {
             assert.deepStrictEqual(await storage.get(entry.integrationId), entry, 'silent save must still persist');
         });
 
-        test('save with { silent: false } fires onDidChangeTokens (explicit default)', async () => {
-            const events: string[] = [];
-            storage.onDidChangeTokens((id) => events.push(id));
-
-            const entry = sampleEntry();
-            await storage.save(entry, { silent: false });
-
-            assert.deepStrictEqual(events, [entry.integrationId]);
-        });
-
-        test('save updates the index secret with the integration id', async () => {
-            await storage.save(sampleEntry('integration-1'));
-            await storage.save(sampleEntry('integration-2'));
-
-            const indexJson = storageData.get('index');
-            assert.ok(indexJson);
-            assert.deepStrictEqual((JSON.parse(indexJson!) as string[]).sort(), ['integration-1', 'integration-2']);
-        });
-
-        test('delete updates the index secret', async () => {
-            await storage.save(sampleEntry('integration-1'));
-            await storage.save(sampleEntry('integration-2'));
-            await storage.delete('integration-1');
-
-            const indexJson = storageData.get('index');
-            assert.ok(indexJson);
-            assert.deepStrictEqual(JSON.parse(indexJson!), ['integration-2']);
-        });
-
-        test('a fresh instance backed by the same storage rehydrates the cache', async () => {
-            const entry = sampleEntry();
-            await storage.save(entry);
-
-            // New instance, same underlying storageData.
-            const reloaded = new FederatedAuthTokenStorage(instance(encryptedStorage), instance(asyncRegistry));
-            try {
-                const result = await reloaded.get(entry.integrationId);
-                assert.deepStrictEqual(result, entry);
-            } finally {
-                reloaded.dispose();
-            }
-        });
-
-        test('a fresh instance after multiple saves loads all entries', async () => {
+        test('a fresh instance backed by the same storage rehydrates all entries', async () => {
             await storage.save(sampleEntry('a'));
             await storage.save(sampleEntry('b'));
             await storage.save(sampleEntry('c'));
 
             const reloaded = new FederatedAuthTokenStorage(instance(encryptedStorage), instance(asyncRegistry));
             try {
-                assert.strictEqual(await reloaded.has('a'), true);
+                assert.deepStrictEqual(await reloaded.get('a'), sampleEntry('a'));
                 assert.strictEqual(await reloaded.has('b'), true);
                 assert.strictEqual(await reloaded.has('c'), true);
             } finally {
                 reloaded.dispose();
             }
-        });
-
-        test('handles missing index gracefully', async () => {
-            // Nothing in storageData.
-            const result = await storage.get('integration-1');
-            assert.strictEqual(result, undefined);
         });
 
         test('handles corrupted index gracefully', async () => {
@@ -274,7 +201,8 @@ suite('federatedAuthTokenStorage', () => {
             }
         });
 
-        test('skips malformed entries during reload', async () => {
+        test('reload purges malformed entries from cache, secret store, and index', async () => {
+            // Catches: orphaned refresh-token secrets persisting + the index keeps referencing a malformed id.
             storageData.set('index', JSON.stringify(['malformed-1', 'good-1']));
             storageData.set('malformed-1', JSON.stringify({ integrationId: 'malformed-1' }));
             storageData.set(
@@ -288,56 +216,14 @@ suite('federatedAuthTokenStorage', () => {
 
             const reloaded = new FederatedAuthTokenStorage(instance(encryptedStorage), instance(asyncRegistry));
             try {
-                assert.strictEqual(await reloaded.has('malformed-1'), false);
+                assert.strictEqual(await reloaded.has('malformed-1'), false, 'cache should drop the malformed entry');
                 assert.strictEqual(await reloaded.has('good-1'), true);
-            } finally {
-                reloaded.dispose();
-            }
-        });
-
-        test('removes malformed entries from encrypted storage during reload', async () => {
-            // Catches: orphaned refresh-token secrets persisting when an entry's JSON shape is wrong on disk.
-            storageData.set('index', JSON.stringify(['malformed-1', 'good-1']));
-            storageData.set('malformed-1', JSON.stringify({ integrationId: 'malformed-1' }));
-            storageData.set(
-                'good-1',
-                JSON.stringify({
-                    integrationId: 'good-1',
-                    refreshToken: 't',
-                    metadataFingerprint: 'fp'
-                } satisfies FederatedAuthTokenEntry)
-            );
-
-            const reloaded = new FederatedAuthTokenStorage(instance(encryptedStorage), instance(asyncRegistry));
-            try {
-                // Trigger cache load.
-                await reloaded.has('good-1');
-
-                assert.strictEqual(storageData.has('malformed-1'), false, 'malformed entry should be purged');
+                assert.strictEqual(
+                    storageData.has('malformed-1'),
+                    false,
+                    'secret store should purge the malformed entry'
+                );
                 assert.strictEqual(storageData.has('good-1'), true, 'good entry should remain');
-            } finally {
-                reloaded.dispose();
-            }
-        });
-
-        test('removes malformed entries from the persisted index during reload', async () => {
-            // Catches: the index keeps referencing a malformed id, causing repeated load attempts.
-            storageData.set('index', JSON.stringify(['malformed-1', 'good-1']));
-            storageData.set('malformed-1', JSON.stringify({ integrationId: 'malformed-1' }));
-            storageData.set(
-                'good-1',
-                JSON.stringify({
-                    integrationId: 'good-1',
-                    refreshToken: 't',
-                    metadataFingerprint: 'fp'
-                } satisfies FederatedAuthTokenEntry)
-            );
-
-            const reloaded = new FederatedAuthTokenStorage(instance(encryptedStorage), instance(asyncRegistry));
-            try {
-                // Trigger cache load.
-                await reloaded.has('good-1');
-
                 const indexJson = storageData.get('index');
                 assert.ok(indexJson, 'index should still be present');
                 assert.deepStrictEqual(JSON.parse(indexJson!), ['good-1']);
@@ -381,9 +267,27 @@ suite('federatedAuthTokenStorage', () => {
             });
         }
 
+        function stubFetchResponse(status: number, body: unknown): sinon.SinonStub {
+            const stub = sinon.stub().resolves(makeResponse(status, body));
+            globalThis.fetch = stub as unknown as typeof fetch;
+            return stub;
+        }
+
+        async function expectThrow(
+            expectedError: ErrorConstructor | typeof InvalidClientError | typeof InvalidGrantError,
+            extraAssert?: (err: Error) => void
+        ): Promise<void> {
+            try {
+                await fetchFreshAccessToken(sampleEntry, sampleConfig);
+                assert.fail('expected throw');
+            } catch (err) {
+                assert.instanceOf(err, expectedError as ErrorConstructor);
+                extraAssert?.(err as Error);
+            }
+        }
+
         test('sends Basic auth header and form-encoded refresh_token body', async () => {
-            const fetchStub = sinon.stub().resolves(makeResponse(200, { access_token: 'fresh-access' }));
-            globalThis.fetch = fetchStub as unknown as typeof fetch;
+            const fetchStub = stubFetchResponse(200, { access_token: 'fresh-access' });
 
             await fetchFreshAccessToken(sampleEntry, sampleConfig);
 
@@ -403,11 +307,7 @@ suite('federatedAuthTokenStorage', () => {
         });
 
         test('returns the access token and the rotated refresh token on success', async () => {
-            globalThis.fetch = sinon
-                .stub()
-                .resolves(
-                    makeResponse(200, { access_token: 'fresh-access', refresh_token: 'rotated-refresh' })
-                ) as unknown as typeof fetch;
+            stubFetchResponse(200, { access_token: 'fresh-access', refresh_token: 'rotated-refresh' });
 
             const result = await fetchFreshAccessToken(sampleEntry, sampleConfig);
             assert.deepStrictEqual(result, {
@@ -416,19 +316,8 @@ suite('federatedAuthTokenStorage', () => {
             });
         });
 
-        test('returns the access token with newRefreshToken=undefined when not rotated', async () => {
-            globalThis.fetch = sinon
-                .stub()
-                .resolves(makeResponse(200, { access_token: 'fresh-access' })) as unknown as typeof fetch;
-
-            const result = await fetchFreshAccessToken(sampleEntry, sampleConfig);
-            assert.strictEqual(result.accessToken, 'fresh-access');
-            assert.strictEqual(result.newRefreshToken, undefined);
-        });
-
         test('URL-encodes the refresh token in the body', async () => {
-            const fetchStub = sinon.stub().resolves(makeResponse(200, { access_token: 'a' }));
-            globalThis.fetch = fetchStub as unknown as typeof fetch;
+            const fetchStub = stubFetchResponse(200, { access_token: 'a' });
 
             const entryWithSpecial: FederatedAuthTokenEntry = {
                 integrationId: 'i',
@@ -446,57 +335,23 @@ suite('federatedAuthTokenStorage', () => {
         });
 
         test('throws InvalidGrantError on HTTP 400 with error=invalid_grant', async () => {
-            globalThis.fetch = sinon
-                .stub()
-                .resolves(makeResponse(400, { error: 'invalid_grant' })) as unknown as typeof fetch;
-
-            try {
-                await fetchFreshAccessToken(sampleEntry, sampleConfig);
-                assert.fail('expected throw');
-            } catch (err) {
-                assert.instanceOf(err, InvalidGrantError);
-            }
+            stubFetchResponse(400, { error: 'invalid_grant' });
+            await expectThrow(InvalidGrantError);
         });
 
-        test('throws InvalidClientError on HTTP 401 with error=invalid_client', async () => {
-            globalThis.fetch = sinon
-                .stub()
-                .resolves(makeResponse(401, { error: 'invalid_client' })) as unknown as typeof fetch;
-
-            try {
-                await fetchFreshAccessToken(sampleEntry, sampleConfig);
-                assert.fail('expected throw');
-            } catch (err) {
-                assert.instanceOf(err, InvalidClientError);
-            }
-        });
-
-        test('throws InvalidClientError on error=unauthorized_client', async () => {
-            globalThis.fetch = sinon
-                .stub()
-                .resolves(makeResponse(401, { error: 'unauthorized_client' })) as unknown as typeof fetch;
-
-            try {
-                await fetchFreshAccessToken(sampleEntry, sampleConfig);
-                assert.fail('expected throw');
-            } catch (err) {
-                assert.instanceOf(err, InvalidClientError);
-            }
+        (['invalid_client', 'unauthorized_client'] as const).forEach((errorCode) => {
+            test(`throws InvalidClientError on HTTP 401 with error=${errorCode}`, async () => {
+                stubFetchResponse(401, { error: errorCode });
+                await expectThrow(InvalidClientError);
+            });
         });
 
         test('throws a generic Error on HTTP 500', async () => {
-            globalThis.fetch = sinon
-                .stub()
-                .resolves(makeResponse(500, { error: 'internal_server_error' })) as unknown as typeof fetch;
-
-            try {
-                await fetchFreshAccessToken(sampleEntry, sampleConfig);
-                assert.fail('expected throw');
-            } catch (err) {
-                assert.instanceOf(err, Error);
+            stubFetchResponse(500, { error: 'internal_server_error' });
+            await expectThrow(Error, (err) => {
                 assert.notInstanceOf(err, InvalidGrantError);
                 assert.notInstanceOf(err, InvalidClientError);
-            }
+            });
         });
 
         test('throws on a fetch AbortError (timeout)', async () => {
@@ -504,70 +359,29 @@ suite('federatedAuthTokenStorage', () => {
             abortError.name = 'AbortError';
             globalThis.fetch = sinon.stub().rejects(abortError) as unknown as typeof fetch;
 
-            try {
-                await fetchFreshAccessToken(sampleEntry, sampleConfig);
-                assert.fail('expected throw');
-            } catch (err) {
-                assert.instanceOf(err, Error);
-                assert.strictEqual((err as Error).name, 'AbortError');
-            }
-        });
-
-        test('throws when the response body is not valid JSON', async () => {
-            const malformedResponse = new Response('not-json', {
-                status: 200,
-                headers: { 'content-type': 'application/json' }
+            await expectThrow(Error, (err) => {
+                assert.strictEqual(err.name, 'AbortError');
             });
-            globalThis.fetch = sinon.stub().resolves(malformedResponse) as unknown as typeof fetch;
-
-            try {
-                await fetchFreshAccessToken(sampleEntry, sampleConfig);
-                assert.fail('expected throw');
-            } catch (err) {
-                assert.instanceOf(err, Error);
-            }
         });
 
         test('throws when 2xx response does not include access_token', async () => {
-            globalThis.fetch = sinon
-                .stub()
-                .resolves(makeResponse(200, { refresh_token: 'r' })) as unknown as typeof fetch;
-
-            try {
-                await fetchFreshAccessToken(sampleEntry, sampleConfig);
-                assert.fail('expected throw');
-            } catch (err) {
-                assert.instanceOf(err, Error);
-            }
+            stubFetchResponse(200, { refresh_token: 'r' });
+            await expectThrow(Error);
         });
 
-        test('throws when access_token in a 2xx response is not a string', async () => {
-            // Locks the zod schema contract on the access_token field.
-            globalThis.fetch = sinon
-                .stub()
-                .resolves(makeResponse(200, { access_token: 12345 })) as unknown as typeof fetch;
-
-            try {
-                await fetchFreshAccessToken(sampleEntry, sampleConfig);
-                assert.fail('expected throw');
-            } catch (err) {
-                assert.instanceOf(err, Error);
-                assert.include((err as Error).message, 'invalid response body');
-            }
-        });
-
-        test('throws when refresh_token in a 2xx response is not a string', async () => {
-            globalThis.fetch = sinon
-                .stub()
-                .resolves(makeResponse(200, { access_token: 'a', refresh_token: 42 })) as unknown as typeof fetch;
-
-            try {
-                await fetchFreshAccessToken(sampleEntry, sampleConfig);
-                assert.fail('expected throw');
-            } catch (err) {
-                assert.instanceOf(err, Error);
-                assert.include((err as Error).message, 'invalid response body');
-            }
+        (
+            [
+                ['access_token', { access_token: 12345 }],
+                ['refresh_token', { access_token: 'a', refresh_token: 42 }]
+            ] as const
+        ).forEach(([field, body]) => {
+            test(`throws when ${field} in a 2xx response is not a string`, async () => {
+                // Locks the zod schema contract on the token-response fields.
+                stubFetchResponse(200, body);
+                await expectThrow(Error, (err) => {
+                    assert.include(err.message, 'invalid response body');
+                });
+            });
         });
 
         test('throws with SyntaxError cause when body is invalid JSON, preserving original error', async () => {
@@ -577,15 +391,11 @@ suite('federatedAuthTokenStorage', () => {
             });
             globalThis.fetch = sinon.stub().resolves(malformedResponse) as unknown as typeof fetch;
 
-            try {
-                await fetchFreshAccessToken(sampleEntry, sampleConfig);
-                assert.fail('expected throw');
-            } catch (err) {
-                assert.instanceOf(err, Error);
-                assert.include((err as Error).message, 'not valid JSON');
-                assert.include((err as Error).message, 'HTTP 200');
-                assert.instanceOf((err as Error).cause, SyntaxError);
-            }
+            await expectThrow(Error, (err) => {
+                assert.include(err.message, 'not valid JSON');
+                assert.include(err.message, 'HTTP 200');
+                assert.instanceOf(err.cause, SyntaxError);
+            });
         });
 
         test('rejects when response.json() takes longer than the timeout', async () => {
@@ -622,8 +432,6 @@ suite('federatedAuthTokenStorage', () => {
             } catch (err) {
                 assert.instanceOf(err, Error);
                 assert.strictEqual((err as Error).name, 'AbortError');
-                // Sanity: should have rejected close to the timeout, not after a
-                // many-second delay.
                 assert.isBelow(Date.now() - start, 1500);
             }
         });

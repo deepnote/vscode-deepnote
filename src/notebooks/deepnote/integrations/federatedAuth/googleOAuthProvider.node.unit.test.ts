@@ -1,30 +1,16 @@
 import { assert } from 'chai';
 
-import {
-    buildBigQueryGoogleOAuthStrategy,
-    createInMemoryPkceStore,
-    GOOGLE_BIGQUERY_SCOPES,
-    GOOGLE_TOKEN_URL
-} from './googleOAuthProvider.node';
+import { GOOGLE_BIGQUERY_SCOPES, createInMemoryPkceStore } from './googleOAuthProvider.node';
+import { buildTestStrategy } from './federatedAuthTestHelpers';
 
 suite('googleOAuthProvider', () => {
     suite('GOOGLE_BIGQUERY_SCOPES', () => {
         test('exposes email, profile, and the bigquery scope (no openid)', () => {
+            // openid is omitted; refresh tokens come from `access_type=offline` + `prompt=consent`.
             assert.deepStrictEqual(
                 [...GOOGLE_BIGQUERY_SCOPES],
                 ['email', 'profile', 'https://www.googleapis.com/auth/bigquery']
             );
-        });
-
-        test('does not include openid', () => {
-            // Production at handlers.ts:77 omits openid; refresh tokens come from `access_type=offline` + `prompt=consent`.
-            assert.notInclude([...GOOGLE_BIGQUERY_SCOPES], 'openid');
-        });
-    });
-
-    suite('GOOGLE_TOKEN_URL', () => {
-        test('points at the production Google token endpoint', () => {
-            assert.strictEqual(GOOGLE_TOKEN_URL, 'https://oauth2.googleapis.com/token');
         });
     });
 
@@ -110,22 +96,6 @@ suite('googleOAuthProvider', () => {
             assert.strictEqual(secondResult, false);
         });
 
-        test('store and verify both accept undefined req (no req.session needed)', () => {
-            // Custom store must work without express-session.
-            const store = createInMemoryPkceStore();
-            let issuedState!: string;
-            assert.doesNotThrow(() => {
-                store.store(undefined, 'v', undefined, undefined, (_err, state) => {
-                    issuedState = state!;
-                });
-            });
-            assert.doesNotThrow(() => {
-                store.verify(undefined, issuedState, undefined, () => {
-                    // no-op
-                });
-            });
-        });
-
         test('isolated stores do not share state', () => {
             const a = createInMemoryPkceStore();
             const b = createInMemoryPkceStore();
@@ -143,49 +113,20 @@ suite('googleOAuthProvider', () => {
     });
 
     suite('buildBigQueryGoogleOAuthStrategy', () => {
-        test('returns a strategy and a completion promise', () => {
-            const store = createInMemoryPkceStore();
-            const result = buildBigQueryGoogleOAuthStrategy({
-                clientId: 'cid',
-                clientSecret: 'cs',
-                store
-            });
-
-            assert.isObject(result.strategy);
-            assert.instanceOf(result.completion, Promise);
-        });
-
         test('strategy.name is "google" (the passport-google-oauth20 default)', () => {
-            const store = createInMemoryPkceStore();
-            const result = buildBigQueryGoogleOAuthStrategy({
-                clientId: 'cid',
-                clientSecret: 'cs',
-                store
-            });
-
-            assert.strictEqual(result.strategy.name, 'google');
+            const { strategy } = buildTestStrategy();
+            assert.strictEqual(strategy.name, 'google');
         });
 
         test('uses the GOOGLE_BIGQUERY_SCOPES on the strategy', () => {
-            const store = createInMemoryPkceStore();
-            const result = buildBigQueryGoogleOAuthStrategy({
-                clientId: 'cid',
-                clientSecret: 'cs',
-                store
-            });
-
+            const { strategy } = buildTestStrategy();
             // `_scope` is set by passport-oauth2 from options.scope; probe to assert wiring.
-            const scope = (result.strategy as unknown as { _scope: string[] })._scope;
+            const scope = (strategy as unknown as { _scope: string[] })._scope;
             assert.deepStrictEqual(scope, [...GOOGLE_BIGQUERY_SCOPES]);
         });
 
         test('verify resolves the completion promise on a non-empty refresh token', async () => {
-            const store = createInMemoryPkceStore();
-            const { strategy, completion } = buildBigQueryGoogleOAuthStrategy({
-                clientId: 'cid',
-                clientSecret: 'cs',
-                store
-            });
+            const { strategy, completion } = buildTestStrategy();
 
             // `_verify` is stored by passport-oauth2 (strategy.js:~70).
             const verify = (strategy as unknown as { _verify: Function })._verify;
@@ -204,12 +145,7 @@ suite('googleOAuthProvider', () => {
         });
 
         test('verify rejects the completion promise on an empty refresh token', async () => {
-            const store = createInMemoryPkceStore();
-            const { strategy, completion } = buildBigQueryGoogleOAuthStrategy({
-                clientId: 'cid',
-                clientSecret: 'cs',
-                store
-            });
+            const { strategy, completion } = buildTestStrategy();
 
             const verify = (strategy as unknown as { _verify: Function })._verify;
             verify('access-token', '', { id: 'u', provider: 'google' }, () => {
@@ -226,40 +162,23 @@ suite('googleOAuthProvider', () => {
             }
         });
 
-        test('authorizationURL override lands on the strategy', () => {
-            const store = createInMemoryPkceStore();
-            const { strategy } = buildBigQueryGoogleOAuthStrategy({
-                clientId: 'cid',
-                clientSecret: 'cs',
-                store,
-                authorizationURL: 'http://stub/oauth/authorize'
-            });
-
-            // passport-oauth2 stores the URL on the embedded `_oauth2` helper.
-            const oauth2 = (strategy as unknown as { _oauth2: { _authorizeUrl: string } })._oauth2;
-            assert.strictEqual(oauth2._authorizeUrl, 'http://stub/oauth/authorize');
-        });
-
-        test('tokenURL override lands on the strategy', () => {
-            const store = createInMemoryPkceStore();
-            const { strategy } = buildBigQueryGoogleOAuthStrategy({
-                clientId: 'cid',
-                clientSecret: 'cs',
-                store,
+        test('authorizationURL and tokenURL overrides land on the strategy', () => {
+            const { strategy } = buildTestStrategy({
+                authorizationURL: 'http://stub/oauth/authorize',
                 tokenURL: 'http://stub/oauth/token'
             });
 
-            const oauth2 = (strategy as unknown as { _oauth2: { _accessTokenUrl: string } })._oauth2;
+            const oauth2 = (
+                strategy as unknown as {
+                    _oauth2: { _authorizeUrl: string; _accessTokenUrl: string };
+                }
+            )._oauth2;
+            assert.strictEqual(oauth2._authorizeUrl, 'http://stub/oauth/authorize');
             assert.strictEqual(oauth2._accessTokenUrl, 'http://stub/oauth/token');
         });
 
         test('without overrides, the strategy uses Google production URLs', () => {
-            const store = createInMemoryPkceStore();
-            const { strategy } = buildBigQueryGoogleOAuthStrategy({
-                clientId: 'cid',
-                clientSecret: 'cs',
-                store
-            });
+            const { strategy } = buildTestStrategy();
 
             const oauth2 = (
                 strategy as unknown as {

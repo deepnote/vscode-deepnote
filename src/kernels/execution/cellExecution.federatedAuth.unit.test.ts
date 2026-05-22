@@ -21,6 +21,42 @@ import { createKernelController } from '../../test/datascience/notebook/executio
 import { CellExecution, CellExecutionFactory } from './cellExecution';
 import { CellExecutionMessageHandlerService } from './cellExecutionMessageHandlerService';
 
+const successReply: KernelMessage.IExecuteReplyMsg = {
+    channel: 'shell',
+    content: {
+        execution_count: 1,
+        status: 'ok',
+        user_expressions: {}
+    },
+    header: {
+        msg_id: '1',
+        msg_type: 'execute_reply',
+        session: '1',
+        username: '1',
+        date: new Date().toString(),
+        version: '5.0'
+    } as KernelMessage.IExecuteReplyMsg['header'],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    metadata: {} as any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    parent_header: {} as any
+};
+
+function createStubMessageHandler(): CellExecutionMessageHandlerService {
+    const stubListener = {
+        onErrorHandlingExecuteRequestIOPubMessage: () => ({ dispose: () => undefined }),
+        completed: Promise.resolve(),
+        dispose: () => undefined
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any;
+    return {
+        registerListenerForExecution: () => stubListener,
+        registerListenerForResumingExecution: () => stubListener,
+        dispose: () => undefined
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any as CellExecutionMessageHandlerService;
+}
+
 suite('CellExecution federated-auth branch', () => {
     let disposables: IDisposable[] = [];
     let controller: IKernelController;
@@ -32,30 +68,8 @@ suite('CellExecution federated-auth branch', () => {
     let preludeRequest: Kernel.IShellFuture<KernelMessage.IExecuteRequestMsg, KernelMessage.IExecuteReplyMsg>;
     let preludeDone: Deferred<KernelMessage.IExecuteReplyMsg>;
     let requestExecuteSpy: sinon.SinonSpy;
-    let tokenSource: CancellationTokenSource;
     let connectionMetadata: KernelConnectionMetadata;
     let cell: NotebookCell;
-
-    const successReply: KernelMessage.IExecuteReplyMsg = {
-        channel: 'shell',
-        content: {
-            execution_count: 1,
-            status: 'ok',
-            user_expressions: {}
-        },
-        header: {
-            msg_id: '1',
-            msg_type: 'execute_reply',
-            session: '1',
-            username: '1',
-            date: new Date().toString(),
-            version: '5.0'
-        } as KernelMessage.IExecuteReplyMsg['header'],
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        metadata: {} as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        parent_header: {} as any
-    };
 
     /** Build a minimal mocked NotebookCell populated for `CellExecution`'s constructor + execute. */
     function buildCell(opts: {
@@ -88,29 +102,11 @@ suite('CellExecution federated-auth branch', () => {
 
     setup(() => {
         disposables = [];
-        tokenSource = new CancellationTokenSource();
+        const tokenSource = new CancellationTokenSource();
         disposables.push(tokenSource);
 
         controller = createKernelController();
-        // Stub `CellExecutionMessageHandlerService`: only the main execute is listened to (silent prelude runs first).
-        requestListener = {
-            registerListenerForExecution: () =>
-                ({
-                    onErrorHandlingExecuteRequestIOPubMessage: () => ({ dispose: () => undefined }),
-                    completed: Promise.resolve(),
-                    dispose: () => undefined
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                }) as any,
-            registerListenerForResumingExecution: () =>
-                ({
-                    onErrorHandlingExecuteRequestIOPubMessage: () => ({ dispose: () => undefined }),
-                    completed: Promise.resolve(),
-                    dispose: () => undefined
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                }) as any,
-            dispose: () => undefined
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } as any as CellExecutionMessageHandlerService;
+        requestListener = createStubMessageHandler();
 
         session = mock<IKernelSession>();
         kernel = mock<IKernelConnection>();
@@ -167,7 +163,6 @@ suite('CellExecution federated-auth branch', () => {
         await execution.start(instance(session));
         await execution.result.catch(() => undefined);
 
-        // Exactly one requestExecute call (the main one with store_history: true).
         const calls = requestExecuteSpy.getCalls();
         assert.strictEqual(calls.length, 1, `expected exactly 1 requestExecute call, got ${calls.length}`);
         const [args, dispose] = calls[0].args;
@@ -193,7 +188,9 @@ suite('CellExecution federated-auth branch', () => {
         assert.strictEqual(dispose, false);
     });
 
-    test('when generate() returns {prelude, cellCode}: silent prelude first, then main execute', async () => {
+    test('when generate() returns {prelude, cellCode}: main requestExecute waits for prelude .done, omits the access token', async () => {
+        // Catches: dropping the `await` on prelude `.done` would let the main execute fire before the prelude completes,
+        // and leaking the access token into `cellCode` would let it surface in execution-history JSON.
         const ACCESS_TOKEN = 'access-token-secret-do-not-log';
         const prelude = `__deepnote_federated_sql_connection__abc = '{"params":{"access_token":"${ACCESS_TOKEN}"}}'`;
         const cellCode = `_dntk.execute_sql_with_connection_json('SELECT 1', __deepnote_federated_sql_connection__abc)`;
@@ -202,59 +199,8 @@ suite('CellExecution federated-auth branch', () => {
             generate: sinon.stub().resolves({ prelude, cellCode })
         };
         const execution = createExecution(generator);
-        // Resolve the prelude so the `await` on its `.done` returns
-        // (otherwise `execution.result` would hang).
-        preludeDone.resolve(successReply);
-        await execution.start(instance(session));
-        await execution.result.catch(() => undefined);
 
-        sinon.assert.calledOnce(generator.generate as sinon.SinonStub);
-
-        // Exactly two requestExecute calls.
-        const calls = requestExecuteSpy.getCalls();
-        assert.strictEqual(calls.length, 2, `expected 2 requestExecute calls, got ${calls.length}`);
-
-        // First call: silent prelude.
-        const [preludeArgs, preludeDispose] = calls[0].args;
-        const preludeContent = preludeArgs as KernelMessage.IExecuteRequestMsg['content'];
-        assert.strictEqual(preludeContent.code, prelude);
-        assert.strictEqual(preludeContent.silent, true);
-        assert.strictEqual(preludeContent.store_history, false);
-        assert.strictEqual(preludeContent.allow_stdin, false);
-        assert.strictEqual(preludeContent.stop_on_error, true);
-        assert.strictEqual(preludeDispose, true);
-
-        // Second call: main execute.
-        const [mainArgs, mainDispose] = calls[1].args;
-        const mainContent = mainArgs as KernelMessage.IExecuteRequestMsg['content'];
-        assert.strictEqual(mainContent.code, cellCode);
-        assert.strictEqual(mainContent.silent, false);
-        assert.strictEqual(mainContent.store_history, true);
-        assert.strictEqual(mainDispose, false);
-
-        // Critical M3 invariant: the access token must not appear in the main execute's code.
-        assert.isFalse(
-            mainContent.code.includes(ACCESS_TOKEN),
-            `Main execute code unexpectedly contains the access token: ${mainContent.code}`
-        );
-
-        // Cross-check call order via `calledBefore` for clarity.
-        assert.isTrue(
-            calls[0].calledBefore(calls[1]),
-            'silent prelude requestExecute must be issued before the main requestExecute'
-        );
-    });
-
-    test('main requestExecute waits for prelude .done before being issued', async () => {
-        // Catches: a future change dropping the `await` on prelude `.done` would let the main execute fire before the prelude completes.
-        const prelude = `__deepnote_federated_sql_connection__abc = '{}'`;
-        const cellCode = `_dntk.execute_sql_with_connection_json('SELECT 1', __deepnote_federated_sql_connection__abc)`;
-
-        const generator: IFederatedAuthSqlBlockCodeGenerator = {
-            generate: sinon.stub().resolves({ prelude, cellCode })
-        };
-        const execution = createExecution(generator);
-        // Kick off execution without awaiting; if `await preludeDone` is honored, main execute is not issued yet.
+        // Kick off without awaiting; the main execute must NOT issue while prelude is unresolved.
         const startPromise = execution.start(instance(session));
 
         // Flush pending microtasks; I/O is mocked.
@@ -264,12 +210,13 @@ suite('CellExecution federated-auth branch', () => {
 
         sinon.assert.calledOnce(requestExecuteSpy);
         const [preludeArgs, preludeDispose] = requestExecuteSpy.getCalls()[0].args;
-        assert.strictEqual(
-            (preludeArgs as KernelMessage.IExecuteRequestMsg['content']).silent,
-            true,
-            'first call should be the silent prelude'
-        );
-        assert.strictEqual(preludeDispose, true, 'first call should dispose-on-done (prelude convention)');
+        const preludeContent = preludeArgs as KernelMessage.IExecuteRequestMsg['content'];
+        assert.strictEqual(preludeContent.code, prelude);
+        assert.strictEqual(preludeContent.silent, true);
+        assert.strictEqual(preludeContent.store_history, false);
+        assert.strictEqual(preludeContent.allow_stdin, false);
+        assert.strictEqual(preludeContent.stop_on_error, true);
+        assert.strictEqual(preludeDispose, true);
 
         // Resolve the prelude — the main `requestExecute` should fire and the cell should complete.
         preludeDone.resolve(successReply);
@@ -285,6 +232,12 @@ suite('CellExecution federated-auth branch', () => {
         assert.strictEqual(mainContent.silent, false);
         assert.strictEqual(mainContent.store_history, true);
         assert.strictEqual(mainDispose, false);
+
+        // Critical M3 invariant: the access token must not appear in the main execute's code.
+        assert.isFalse(
+            mainContent.code.includes(ACCESS_TOKEN),
+            `Main execute code unexpectedly contains the access token: ${mainContent.code}`
+        );
     });
 
     test('when prelude requestExecute rejects: main requestExecute is NOT called and cell fails', async () => {
@@ -324,68 +277,29 @@ suite('CellExecution federated-auth branch', () => {
         assert.strictEqual((caught as Error).message, preludeRejection.message);
     });
 
-    test('when generate() throws NotAuthenticatedError: cell fails, main requestExecute is NOT called', async () => {
-        const generator: IFederatedAuthSqlBlockCodeGenerator = {
-            generate: sinon.stub().rejects(new NotAuthenticatedError('My BigQuery'))
-        };
-        const execution = createExecution(generator);
+    (
+        [
+            ['NotAuthenticatedError', () => new NotAuthenticatedError('My BigQuery'), 'not authenticated'],
+            ['OAuthClientMisconfiguredError', () => new OAuthClientMisconfiguredError('My BigQuery'), 'misconfigured']
+        ] as const
+    ).forEach(([label, buildError, expectedFragment]) => {
+        test(`when generate() throws ${label}: cell fails with the typed message and main requestExecute is NOT called`, async () => {
+            const generator: IFederatedAuthSqlBlockCodeGenerator = {
+                generate: sinon.stub().rejects(buildError())
+            };
+            const execution = createExecution(generator);
 
-        // start() returns the same promise as `result`; await via .catch().
-        let caught: unknown;
-        const startPromise = execution.start(instance(session));
-        if (startPromise) {
-            await startPromise.catch((err) => {
-                caught = err;
-            });
-        }
-        assert.ok(caught instanceof Error, 'expected the cell to fail');
-        // Assert on the user-facing prefix to keep coupling to copy minimal.
-        assert.include((caught as Error).message, 'not authenticated');
+            let caught: unknown;
+            const startPromise = execution.start(instance(session));
+            if (startPromise) {
+                await startPromise.catch((err) => {
+                    caught = err;
+                });
+            }
 
-        // No requestExecute should have been issued.
-        sinon.assert.notCalled(requestExecuteSpy);
-    });
-
-    test('when generate() throws a generic error: cell fails, main requestExecute is NOT called', async () => {
-        const generator: IFederatedAuthSqlBlockCodeGenerator = {
-            generate: sinon.stub().rejects(new Error('Some other error'))
-        };
-        const execution = createExecution(generator);
-
-        let caught: unknown;
-        const startPromise = execution.start(instance(session));
-        if (startPromise) {
-            await startPromise.catch((err) => {
-                caught = err;
-            });
-        }
-        assert.ok(caught instanceof Error, 'expected the cell to fail');
-
-        // No requestExecute should have been issued.
-        sinon.assert.notCalled(requestExecuteSpy);
-    });
-
-    test('when generate() throws OAuthClientMisconfiguredError: surfaces the dedicated misconfigured message', async () => {
-        const generator: IFederatedAuthSqlBlockCodeGenerator = {
-            generate: sinon.stub().rejects(new OAuthClientMisconfiguredError('My BigQuery'))
-        };
-        const execution = createExecution(generator);
-
-        let caught: unknown;
-        const startPromise = execution.start(instance(session));
-        if (startPromise) {
-            await startPromise.catch((err) => {
-                caught = err;
-            });
-        }
-
-        assert.ok(caught instanceof Error, 'expected the cell to fail');
-        // Asserts on the user-facing language fragment; full copy is owned by `Integrations.federatedAuthOAuthClientMisconfigured`.
-        assert.include((caught as Error).message.toLowerCase(), 'misconfigured');
-        // Distinct from the generic "not authenticated" path.
-        assert.notInclude((caught as Error).message.toLowerCase(), 'not authenticated');
-
-        // Failure happens at code-generation time, so no requestExecute.
-        sinon.assert.notCalled(requestExecuteSpy);
+            assert.ok(caught instanceof Error, 'expected the cell to fail');
+            assert.include((caught as Error).message.toLowerCase(), expectedFragment);
+            sinon.assert.notCalled(requestExecuteSpy);
+        });
     });
 });

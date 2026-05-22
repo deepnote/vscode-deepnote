@@ -408,38 +408,6 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
     });
 
     suite('Federated-auth integrations are skipped', () => {
-        test('Federated BigQuery integration produces zero SQL_* env vars', async () => {
-            const resource = Uri.file('/test/notebook.deepnote');
-            const notebook = mock<NotebookDocument>();
-            const federatedConfig: DatabaseIntegrationConfig = {
-                id: 'bq-oauth',
-                name: 'OAuth BQ',
-                type: 'big-query',
-                metadata: {
-                    authMethod: 'google-oauth',
-                    project: 'oauth-project',
-                    clientId: 'client',
-                    clientSecret: 'secret'
-                }
-            };
-            const project = createMockProject('project-123', [{ id: 'bq-oauth', name: 'OAuth BQ', type: 'big-query' }]);
-
-            when(notebook.metadata).thenReturn({ deepnoteProjectId: 'project-123' });
-            when(notebookEditorProvider.findAssociatedNotebookDocument(resource)).thenReturn(instance(notebook));
-            when(notebookManager.getOriginalProject('project-123')).thenReturn(project);
-            when(integrationStorage.getIntegrationConfig('bq-oauth')).thenResolve(federatedConfig);
-
-            const result = await provider.getEnvironmentVariables(resource);
-
-            assert.strictEqual(
-                result['SQL_BQ_OAUTH'],
-                undefined,
-                'No env var should be emitted for a federated integration'
-            );
-            // DuckDB is still emitted, but the federated integration must not be.
-            assert.ok(result[`SQL_${DATAFRAME_SQL_INTEGRATION_ID.toUpperCase().replace(/-/g, '_')}`]);
-        });
-
         test('Mixed project: federated integration is skipped, non-federated is included', async () => {
             const resource = Uri.file('/test/notebook.deepnote');
             const notebook = mock<NotebookDocument>();

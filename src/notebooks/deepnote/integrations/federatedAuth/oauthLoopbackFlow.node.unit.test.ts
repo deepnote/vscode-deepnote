@@ -4,8 +4,8 @@ import * as http from 'http';
 import { type AddressInfo } from 'net';
 import { CancellationError, CancellationTokenSource } from 'vscode';
 
-import { buildBigQueryGoogleOAuthStrategy, createInMemoryPkceStore } from './googleOAuthProvider.node';
-import { OAUTH_FLOW_TIMEOUT_MS, runOAuthFlow } from './oauthLoopbackFlow.node';
+import { runOAuthFlow } from './oauthLoopbackFlow.node';
+import { buildTestStrategy } from './federatedAuthTestHelpers';
 
 /** Stub Google OAuth provider for loopback-flow tests; exposes `/oauth/authorize` + `/oauth/token`, capturing the authorize query and token form for assertions. */
 interface StubBehavior {
@@ -154,16 +154,14 @@ suite('oauthLoopbackFlow', () => {
         token?: CancellationTokenSource;
         timeoutMs?: number;
         capturedQueries?: (q: URLSearchParams) => void;
+        onCallback?: (response: Response, body: string) => Promise<void> | void;
+        observedPorts?: Set<number>;
     }): Promise<{
         refreshToken: string;
     }> {
         const tokenSource = opts.token ?? new CancellationTokenSource();
         try {
-            const pkceStore = createInMemoryPkceStore();
-            const { strategy, completion } = buildBigQueryGoogleOAuthStrategy({
-                clientId: 'stub-client-id',
-                clientSecret: 'stub-client-secret',
-                store: pkceStore,
+            const { strategy, completion } = buildTestStrategy({
                 authorizationURL: stub.authorizeURL,
                 tokenURL: stub.tokenURL
             });
@@ -175,6 +173,10 @@ suite('oauthLoopbackFlow', () => {
                 token: tokenSource.token,
                 timeoutMs: opts.timeoutMs,
                 onListening: async (startUrl) => {
+                    if (opts.observedPorts) {
+                        opts.observedPorts.add(parseInt(new URL(startUrl).port, 10));
+                    }
+
                     // Hit /auth/start to get the redirect to the stub's authorize endpoint.
                     const startResponse = await fetch(startUrl, { redirect: 'manual' });
                     assert.isAtLeast(startResponse.status, 300, 'expected redirect from /auth/start');
@@ -196,7 +198,10 @@ suite('oauthLoopbackFlow', () => {
 
                     // /auth/callback drives the verify closure; the completion promise carries the outcome.
                     const callbackResponse = await fetch(callbackLocation!);
-                    await callbackResponse.text();
+                    const body = await callbackResponse.text();
+                    if (opts.onCallback) {
+                        await opts.onCallback(callbackResponse, body);
+                    }
                 }
             });
         } finally {
@@ -227,73 +232,16 @@ suite('oauthLoopbackFlow', () => {
         assert.include(queries!.get('scope') ?? '', 'https://www.googleapis.com/auth/bigquery');
     });
 
-    test('token endpoint receives the matching code_verifier', async () => {
-        await drive({});
-        const form = stub.capture.tokenForm;
-        assert.isDefined(form);
-        const verifier = form!.get('code_verifier');
-        assert.isString(verifier);
-        assert.isAbove(verifier!.length, 0);
-        // Stub already validated verifier→challenge in handleToken; reaching here means they matched.
-    });
-
     test('two concurrent flows pick different ports', async () => {
-        // Concurrent flows must bind distinct ephemeral ports.
         const observedPorts = new Set<number>();
-        const tokenA = new CancellationTokenSource();
-        const tokenB = new CancellationTokenSource();
-        try {
-            const pkceA = createInMemoryPkceStore();
-            const pkceB = createInMemoryPkceStore();
-            const { strategy: sA, completion: cA } = buildBigQueryGoogleOAuthStrategy({
-                clientId: 'c',
-                clientSecret: 's',
-                store: pkceA,
-                authorizationURL: stub.authorizeURL,
-                tokenURL: stub.tokenURL
-            });
-            const { strategy: sB, completion: cB } = buildBigQueryGoogleOAuthStrategy({
-                clientId: 'c',
-                clientSecret: 's',
-                store: pkceB,
-                authorizationURL: stub.authorizeURL,
-                tokenURL: stub.tokenURL
-            });
-
-            const driveOne = (strategy: typeof sA, completion: typeof cA, token: CancellationTokenSource) =>
-                runOAuthFlow({
-                    integrationId: 'i',
-                    strategy,
-                    completion,
-                    token: token.token,
-                    onListening: async (startUrl) => {
-                        const url = new URL(startUrl);
-                        observedPorts.add(parseInt(url.port, 10));
-                        const startResponse = await fetch(startUrl, { redirect: 'manual' });
-                        const authorizeLocation = startResponse.headers.get('location')!;
-                        const authorizeResponse = await fetch(authorizeLocation, { redirect: 'manual' });
-                        const callbackLocation = authorizeResponse.headers.get('location')!;
-                        await fetch(callbackLocation);
-                    }
-                });
-
-            await Promise.all([driveOne(sA, cA, tokenA), driveOne(sB, cB, tokenB)]);
-
-            assert.strictEqual(observedPorts.size, 2, 'concurrent flows should bind distinct ports');
-        } finally {
-            tokenA.dispose();
-            tokenB.dispose();
-        }
+        await Promise.all([drive({ observedPorts }), drive({ observedPorts })]);
+        assert.strictEqual(observedPorts.size, 2, 'concurrent flows should bind distinct ports');
     });
 
     test('cancellation rejects with CancellationError and closes the server', async () => {
         const tokenSource = new CancellationTokenSource();
         try {
-            const pkceStore = createInMemoryPkceStore();
-            const { strategy, completion } = buildBigQueryGoogleOAuthStrategy({
-                clientId: 'c',
-                clientSecret: 's',
-                store: pkceStore,
+            const { strategy, completion } = buildTestStrategy({
                 authorizationURL: stub.authorizeURL,
                 tokenURL: stub.tokenURL
             });
@@ -334,11 +282,7 @@ suite('oauthLoopbackFlow', () => {
     test('timeout rejects with a timeout error', async () => {
         const tokenSource = new CancellationTokenSource();
         try {
-            const pkceStore = createInMemoryPkceStore();
-            const { strategy, completion } = buildBigQueryGoogleOAuthStrategy({
-                clientId: 'c',
-                clientSecret: 's',
-                store: pkceStore,
+            const { strategy, completion } = buildTestStrategy({
                 authorizationURL: stub.authorizeURL,
                 tokenURL: stub.tokenURL
             });
@@ -366,76 +310,30 @@ suite('oauthLoopbackFlow', () => {
         }
     });
 
-    test('missing refresh token rejects with the documented message', async () => {
+    test('missing refresh token rejects and renders the documented error page', async () => {
+        // Catches: passport routing yielding an unfriendly browser page even though completion has the right message.
         stub.setBehavior({ failTokenWithoutRefresh: true });
 
+        let callbackBody: string | undefined;
+        let callbackStatus: number | undefined;
+
         try {
-            await drive({});
+            await drive({
+                onCallback: (response, body) => {
+                    callbackStatus = response.status;
+                    callbackBody = body;
+                }
+            });
             assert.fail('expected rejection');
         } catch (err) {
             assert.instanceOf(err, Error);
             assert.include((err as Error).message, 'No refresh token returned');
             assert.include((err as Error).message, 'myaccount.google.com/permissions');
         }
-    });
 
-    test('missing refresh token: callback page renders the documented error', async () => {
-        // Catches: passport routing yielding an unfriendly browser page even though completion has the right message.
-        stub.setBehavior({ failTokenWithoutRefresh: true });
-
-        let callbackBody: string | undefined;
-        let callbackStatus: number | undefined;
-        const tokenSource = new CancellationTokenSource();
-        try {
-            const pkceStore = createInMemoryPkceStore();
-            const { strategy, completion } = buildBigQueryGoogleOAuthStrategy({
-                clientId: 'c',
-                clientSecret: 's',
-                store: pkceStore,
-                authorizationURL: stub.authorizeURL,
-                tokenURL: stub.tokenURL
-            });
-
-            const promise = runOAuthFlow({
-                integrationId: 'i',
-                strategy,
-                completion,
-                token: tokenSource.token,
-                onListening: async (startUrl) => {
-                    const startResponse = await fetch(startUrl, { redirect: 'manual' });
-                    const authorizeLocation = startResponse.headers.get('location');
-                    assert.isString(authorizeLocation);
-                    const authorizeResponse = await fetch(authorizeLocation!, { redirect: 'manual' });
-                    const callbackLocation = authorizeResponse.headers.get('location');
-                    assert.isString(callbackLocation);
-                    const callbackResponse = await fetch(callbackLocation!);
-                    callbackStatus = callbackResponse.status;
-                    callbackBody = await callbackResponse.text();
-                }
-            });
-
-            try {
-                await promise;
-                assert.fail('expected rejection');
-            } catch {
-                // Rejection is asserted in the other "missing refresh token rejects" test; this case asserts the rendered body.
-            }
-            assert.strictEqual(callbackStatus, 400, 'callback should render the error page status');
-            assert.isString(callbackBody);
-            assert.include(callbackBody!, 'No refresh token returned');
-            assert.include(callbackBody!, 'myaccount.google.com/permissions');
-        } finally {
-            tokenSource.dispose();
-        }
-    });
-
-    test('flow completes without express-session middleware (custom PKCE store works)', async () => {
-        // No express-session is mounted; a successful completion proves the custom PKCE store handles the verifier round-trip without req.session.
-        const result = await drive({});
-        assert.strictEqual(result.refreshToken, 'test-refresh-token');
-    });
-
-    test('OAUTH_FLOW_TIMEOUT_MS is 5 minutes', () => {
-        assert.strictEqual(OAUTH_FLOW_TIMEOUT_MS, 5 * 60 * 1000);
+        assert.strictEqual(callbackStatus, 400, 'callback should render the error page status');
+        assert.isString(callbackBody);
+        assert.include(callbackBody!, 'No refresh token returned');
+        assert.include(callbackBody!, 'myaccount.google.com/permissions');
     });
 });

@@ -129,8 +129,10 @@ suite('federatedAuthTokenStorage', () => {
             const entry = sampleEntry();
             await storage.save(entry);
             await storage.delete(entry.integrationId);
-            assert.strictEqual(await storage.get(entry.integrationId), undefined);
-            assert.strictEqual(await storage.has(entry.integrationId), false);
+            assert.deepStrictEqual(
+                { get: await storage.get(entry.integrationId), has: await storage.has(entry.integrationId) },
+                { get: undefined, has: false }
+            );
         });
 
         test('delete on a missing integration does not fire the change event', async () => {
@@ -183,9 +185,10 @@ suite('federatedAuthTokenStorage', () => {
 
             const reloaded = new FederatedAuthTokenStorage(instance(encryptedStorage), instance(asyncRegistry));
             try {
-                assert.deepStrictEqual(await reloaded.get('a'), sampleEntry('a'));
-                assert.strictEqual(await reloaded.has('b'), true);
-                assert.strictEqual(await reloaded.has('c'), true);
+                assert.deepStrictEqual(
+                    { a: await reloaded.get('a'), b: await reloaded.has('b'), c: await reloaded.has('c') },
+                    { a: sampleEntry('a'), b: true, c: true }
+                );
             } finally {
                 reloaded.dispose();
             }
@@ -216,17 +219,27 @@ suite('federatedAuthTokenStorage', () => {
 
             const reloaded = new FederatedAuthTokenStorage(instance(encryptedStorage), instance(asyncRegistry));
             try {
-                assert.strictEqual(await reloaded.has('malformed-1'), false, 'cache should drop the malformed entry');
-                assert.strictEqual(await reloaded.has('good-1'), true);
-                assert.strictEqual(
-                    storageData.has('malformed-1'),
-                    false,
-                    'secret store should purge the malformed entry'
-                );
-                assert.strictEqual(storageData.has('good-1'), true, 'good entry should remain');
+                // Triggers the lazy reload, which purges malformed entries from storageData and the index.
+                const cacheHasMalformed = await reloaded.has('malformed-1');
+                const cacheHasGood = await reloaded.has('good-1');
                 const indexJson = storageData.get('index');
                 assert.ok(indexJson, 'index should still be present');
-                assert.deepStrictEqual(JSON.parse(indexJson!), ['good-1']);
+                assert.deepStrictEqual(
+                    {
+                        cacheHasMalformed,
+                        cacheHasGood,
+                        secretStoreHasMalformed: storageData.has('malformed-1'),
+                        secretStoreHasGood: storageData.has('good-1'),
+                        index: JSON.parse(indexJson!)
+                    },
+                    {
+                        cacheHasMalformed: false,
+                        cacheHasGood: true,
+                        secretStoreHasMalformed: false,
+                        secretStoreHasGood: true,
+                        index: ['good-1']
+                    }
+                );
             } finally {
                 reloaded.dispose();
             }
@@ -293,17 +306,26 @@ suite('federatedAuthTokenStorage', () => {
 
             sinon.assert.calledOnce(fetchStub);
             const [url, init] = fetchStub.firstCall.args as [string, RequestInit];
-            assert.strictEqual(url, sampleConfig.tokenUrl);
-            assert.strictEqual(init.method, 'POST');
-
+            const headers = init.headers as Record<string, string>;
             const expectedBasic = Buffer.from(`${sampleConfig.clientId}:${sampleConfig.clientSecret}`).toString(
                 'base64'
             );
-            const headers = init.headers as Record<string, string>;
-            assert.strictEqual(headers.Authorization, `Basic ${expectedBasic}`);
-            assert.strictEqual(headers['Content-Type'], 'application/x-www-form-urlencoded');
-
-            assert.strictEqual(init.body, `grant_type=refresh_token&refresh_token=${sampleEntry.refreshToken}`);
+            assert.deepStrictEqual(
+                {
+                    url,
+                    method: init.method,
+                    authorization: headers.Authorization,
+                    contentType: headers['Content-Type'],
+                    body: init.body
+                },
+                {
+                    url: sampleConfig.tokenUrl,
+                    method: 'POST',
+                    authorization: `Basic ${expectedBasic}`,
+                    contentType: 'application/x-www-form-urlencoded',
+                    body: `grant_type=refresh_token&refresh_token=${sampleEntry.refreshToken}`
+                }
+            );
         });
 
         test('returns the access token and the rotated refresh token on success', async () => {

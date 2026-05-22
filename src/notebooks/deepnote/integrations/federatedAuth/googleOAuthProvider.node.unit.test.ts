@@ -162,32 +162,35 @@ suite('googleOAuthProvider', () => {
             }
         });
 
+        function oauth2Urls(strategy: object): { _authorizeUrl: string; _accessTokenUrl: string } {
+            return (strategy as unknown as { _oauth2: { _authorizeUrl: string; _accessTokenUrl: string } })._oauth2;
+        }
+
         test('authorizationURL and tokenURL overrides land on the strategy', () => {
             const { strategy } = buildTestStrategy({
                 authorizationURL: 'http://stub/oauth/authorize',
                 tokenURL: 'http://stub/oauth/token'
             });
 
-            const oauth2 = (
-                strategy as unknown as {
-                    _oauth2: { _authorizeUrl: string; _accessTokenUrl: string };
-                }
-            )._oauth2;
-            assert.strictEqual(oauth2._authorizeUrl, 'http://stub/oauth/authorize');
-            assert.strictEqual(oauth2._accessTokenUrl, 'http://stub/oauth/token');
+            const { _authorizeUrl, _accessTokenUrl } = oauth2Urls(strategy);
+            assert.deepStrictEqual(
+                { authorizeUrl: _authorizeUrl, accessTokenUrl: _accessTokenUrl },
+                { authorizeUrl: 'http://stub/oauth/authorize', accessTokenUrl: 'http://stub/oauth/token' }
+            );
         });
 
         test('without overrides, the strategy uses Google production URLs', () => {
             const { strategy } = buildTestStrategy();
 
-            const oauth2 = (
-                strategy as unknown as {
-                    _oauth2: { _authorizeUrl: string; _accessTokenUrl: string };
-                }
-            )._oauth2;
             // passport-google-oauth20/lib/strategy.js:49-50.
-            assert.strictEqual(oauth2._authorizeUrl, 'https://accounts.google.com/o/oauth2/v2/auth');
-            assert.strictEqual(oauth2._accessTokenUrl, 'https://www.googleapis.com/oauth2/v4/token');
+            const { _authorizeUrl, _accessTokenUrl } = oauth2Urls(strategy);
+            assert.deepStrictEqual(
+                { authorizeUrl: _authorizeUrl, accessTokenUrl: _accessTokenUrl },
+                {
+                    authorizeUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+                    accessTokenUrl: 'https://www.googleapis.com/oauth2/v4/token'
+                }
+            );
         });
     });
 });

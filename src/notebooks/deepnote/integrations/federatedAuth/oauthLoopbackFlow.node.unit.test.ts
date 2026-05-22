@@ -222,13 +222,17 @@ suite('oauthLoopbackFlow', () => {
             }
         });
         assert.isDefined(queries);
-        assert.strictEqual(queries!.get('access_type'), 'offline');
-        assert.strictEqual(queries!.get('prompt'), 'consent');
-        assert.isString(queries!.get('state'));
-        assert.isAbove(queries!.get('state')!.length, 0);
-        assert.isString(queries!.get('code_challenge'));
-        assert.isAbove(queries!.get('code_challenge')!.length, 0);
-        assert.strictEqual(queries!.get('code_challenge_method'), 'S256');
+        assert.deepStrictEqual(
+            {
+                access_type: queries!.get('access_type'),
+                prompt: queries!.get('prompt'),
+                code_challenge_method: queries!.get('code_challenge_method')
+            },
+            { access_type: 'offline', prompt: 'consent', code_challenge_method: 'S256' }
+        );
+        // `state` and `code_challenge` are randomly generated — verify presence + non-empty rather than exact values.
+        assert.isAbove(queries!.get('state')?.length ?? 0, 0);
+        assert.isAbove(queries!.get('code_challenge')?.length ?? 0, 0);
         assert.include(queries!.get('scope') ?? '', 'https://www.googleapis.com/auth/bigquery');
     });
 

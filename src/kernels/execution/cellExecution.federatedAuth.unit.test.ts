@@ -158,6 +158,15 @@ suite('CellExecution federated-auth branch', () => {
         return execution;
     }
 
+    function assertMainExecuteShape(call: sinon.SinonSpyCall): void {
+        const [args, dispose] = call.args;
+        const content = args as KernelMessage.IExecuteRequestMsg['content'];
+        assert.deepStrictEqual(
+            { silent: content.silent, store_history: content.store_history, dispose },
+            { silent: false, store_history: true, dispose: false }
+        );
+    }
+
     test('when generator is undefined (web): never calls generate, single requestExecute', async () => {
         const execution = createExecution(undefined);
         await execution.start(instance(session));
@@ -165,10 +174,7 @@ suite('CellExecution federated-auth branch', () => {
 
         const calls = requestExecuteSpy.getCalls();
         assert.strictEqual(calls.length, 1, `expected exactly 1 requestExecute call, got ${calls.length}`);
-        const [args, dispose] = calls[0].args;
-        assert.strictEqual((args as KernelMessage.IExecuteRequestMsg['content']).silent, false);
-        assert.strictEqual((args as KernelMessage.IExecuteRequestMsg['content']).store_history, true);
-        assert.strictEqual(dispose, false);
+        assertMainExecuteShape(calls[0]);
     });
 
     test('when generate() returns undefined: no silent pre-execute, single main requestExecute', async () => {
@@ -182,10 +188,7 @@ suite('CellExecution federated-auth branch', () => {
         sinon.assert.calledOnce(generator.generate as sinon.SinonStub);
         const calls = requestExecuteSpy.getCalls();
         assert.strictEqual(calls.length, 1, `expected exactly 1 requestExecute call, got ${calls.length}`);
-        const [args, dispose] = calls[0].args;
-        assert.strictEqual((args as KernelMessage.IExecuteRequestMsg['content']).silent, false);
-        assert.strictEqual((args as KernelMessage.IExecuteRequestMsg['content']).store_history, true);
-        assert.strictEqual(dispose, false);
+        assertMainExecuteShape(calls[0]);
     });
 
     test('when generate() returns {prelude, cellCode}: main requestExecute waits for prelude .done, omits the access token', async () => {
@@ -211,12 +214,24 @@ suite('CellExecution federated-auth branch', () => {
         sinon.assert.calledOnce(requestExecuteSpy);
         const [preludeArgs, preludeDispose] = requestExecuteSpy.getCalls()[0].args;
         const preludeContent = preludeArgs as KernelMessage.IExecuteRequestMsg['content'];
-        assert.strictEqual(preludeContent.code, prelude);
-        assert.strictEqual(preludeContent.silent, true);
-        assert.strictEqual(preludeContent.store_history, false);
-        assert.strictEqual(preludeContent.allow_stdin, false);
-        assert.strictEqual(preludeContent.stop_on_error, true);
-        assert.strictEqual(preludeDispose, true);
+        assert.deepStrictEqual(
+            {
+                code: preludeContent.code,
+                silent: preludeContent.silent,
+                store_history: preludeContent.store_history,
+                allow_stdin: preludeContent.allow_stdin,
+                stop_on_error: preludeContent.stop_on_error,
+                dispose: preludeDispose
+            },
+            {
+                code: prelude,
+                silent: true,
+                store_history: false,
+                allow_stdin: false,
+                stop_on_error: true,
+                dispose: true
+            }
+        );
 
         // Resolve the prelude — the main `requestExecute` should fire and the cell should complete.
         preludeDone.resolve(successReply);
@@ -228,10 +243,15 @@ suite('CellExecution federated-auth branch', () => {
         sinon.assert.calledTwice(requestExecuteSpy);
         const [mainArgs, mainDispose] = requestExecuteSpy.getCalls()[1].args;
         const mainContent = mainArgs as KernelMessage.IExecuteRequestMsg['content'];
-        assert.strictEqual(mainContent.code, cellCode);
-        assert.strictEqual(mainContent.silent, false);
-        assert.strictEqual(mainContent.store_history, true);
-        assert.strictEqual(mainDispose, false);
+        assert.deepStrictEqual(
+            {
+                code: mainContent.code,
+                silent: mainContent.silent,
+                store_history: mainContent.store_history,
+                dispose: mainDispose
+            },
+            { code: cellCode, silent: false, store_history: true, dispose: false }
+        );
 
         // Critical M3 invariant: the access token must not appear in the main execute's code.
         assert.isFalse(
@@ -265,12 +285,14 @@ suite('CellExecution federated-auth branch', () => {
         // Exactly one `requestExecute` call (prelude); main must NOT be called.
         sinon.assert.calledOnce(requestExecuteSpy);
         const [preludeArgs, preludeDispose] = requestExecuteSpy.getCalls()[0].args;
-        assert.strictEqual(
-            (preludeArgs as KernelMessage.IExecuteRequestMsg['content']).silent,
-            true,
+        assert.deepStrictEqual(
+            {
+                silent: (preludeArgs as KernelMessage.IExecuteRequestMsg['content']).silent,
+                dispose: preludeDispose
+            },
+            { silent: true, dispose: true },
             'the single call should be the silent prelude'
         );
-        assert.strictEqual(preludeDispose, true);
 
         // The cell-execution failure should surface the underlying error.
         assert.ok(caught instanceof Error, 'expected the cell to fail');

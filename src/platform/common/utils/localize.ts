@@ -919,9 +919,6 @@ export namespace Integrations {
     export const federatedAuthNotSupportedInWeb = l10n.t(
         'Federated authentication is not supported in the web extension. Open the workspace in desktop VS Code to authenticate.'
     );
-    export const federatedAuthNotSupportedInRemote = l10n.t(
-        'Federated authentication is not yet supported in remote VS Code. Open the workspace locally to authenticate.'
-    );
     export const federatedAuthIntegrationNotConfiguredForOAuth = (integrationName: string) =>
         l10n.t('Integration "{0}" is not configured for Google OAuth authentication.', integrationName);
     export const federatedAuthIntegrationNotFound = (integrationId: string) =>

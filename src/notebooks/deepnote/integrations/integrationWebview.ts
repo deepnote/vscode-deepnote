@@ -220,7 +220,6 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsAuthenticationFailed: localize.Integrations.authenticationFailed('{0}'),
             integrationsBigQueryNotAuthenticated: localize.Integrations.bigQueryNotAuthenticated('{0}'),
             integrationsFederatedAuthNotSupportedInWeb: localize.Integrations.federatedAuthNotSupportedInWeb,
-            integrationsFederatedAuthNotSupportedInRemote: localize.Integrations.federatedAuthNotSupportedInRemote,
             integrationsSnowflakeNameLabel: localize.Integrations.snowflakeNameLabel,
             integrationsSnowflakeNamePlaceholder: localize.Integrations.snowflakeNamePlaceholder,
             integrationsSnowflakeAccountLabel: localize.Integrations.snowflakeAccountLabel,

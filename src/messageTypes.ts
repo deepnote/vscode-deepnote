@@ -249,7 +249,6 @@ export type LocalizedMessages = {
     integrationsAuthenticationFailed: string;
     integrationsBigQueryNotAuthenticated: string;
     integrationsFederatedAuthNotSupportedInWeb: string;
-    integrationsFederatedAuthNotSupportedInRemote: string;
     // Snowflake form strings
     integrationsSnowflakeNameLabel: string;
     integrationsSnowflakeNamePlaceholder: string;

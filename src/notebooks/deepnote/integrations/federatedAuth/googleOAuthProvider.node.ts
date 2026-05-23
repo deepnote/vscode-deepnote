@@ -1,124 +1,122 @@
 import * as crypto from 'crypto';
-import { Profile as GoogleProfile, Strategy as GoogleStrategy, VerifyCallback } from 'passport-google-oauth20';
+import { z } from 'zod';
+
+import { InvalidClientError, InvalidGrantError } from './federatedAuthTokenStorage.node';
 
 export const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
-/** OAuth scopes for BigQuery federated auth. Mirrors handlers.ts:77; `openid` omitted (refresh tokens come from `access_type=offline` + `prompt=consent`). */
+/** OAuth scopes for BigQuery federated auth. Mirrors deepnote-internal handlers.ts:77; `openid` omitted (refresh tokens come from `access_type=offline` + `prompt=consent`). */
 export const GOOGLE_BIGQUERY_SCOPES = ['email', 'profile', 'https://www.googleapis.com/auth/bigquery'] as const;
 
-/** Per-flow record in an {@link InMemoryPKCEStore}; `meta` is opaque to us and just round-tripped for passport-oauth2. */
-interface PkceRecord {
+const TOKEN_EXCHANGE_TIMEOUT_MS = 15_000;
+
+const tokenEndpointResponseSchema = z.object({
+    access_token: z.string().optional(),
+    refresh_token: z.string().optional(),
+    expires_in: z.number().optional(),
+    error: z.string().optional(),
+    error_description: z.string().optional()
+});
+
+/** PKCE S256 pair. Verifier is 32 random bytes encoded as base64url (Google requires 43-128 chars; 32 bytes → 43). */
+export function generatePkcePair(): { challenge: string; verifier: string } {
+    const verifier = crypto.randomBytes(32).toString('base64url');
+    const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
+
+    return { challenge, verifier };
+}
+
+/** Random base64url nonce for the CSRF `state` parameter; 24 bytes → 32 chars. */
+export function generateOAuthStateNonce(): string {
+    return crypto.randomBytes(24).toString('base64url');
+}
+
+/** Inputs for {@link exchangeAuthorizationCode}; `tokenUrl` is a test seam (defaults to {@link GOOGLE_TOKEN_URL}). `redirectUri` must match the one used in the original `/authorize` request — Google rejects the exchange otherwise. */
+export interface ExchangeAuthorizationCodeParams {
+    clientId: string;
+    clientSecret: string;
+    code: string;
     codeVerifier: string;
-    meta: unknown;
+    redirectUri: string;
+    tokenUrl?: string;
 }
 
 /**
- * passport-oauth2 state-store with 5-arg `store` / 4-arg `verify` shapes so its arity check picks the PKCE
- * branch (strategy.js:218-298). The verify `ok` slot must hold the codeVerifier string (strategy.js:171-173).
+ * POSTs `grant_type=authorization_code` to Google's token endpoint and returns the refresh + access
+ * tokens. Mirrors {@link fetchFreshAccessToken}'s HTTP shape (Basic auth, urlencoded body, zod-validated
+ * response) and reuses {@link InvalidGrantError} / {@link InvalidClientError} for the same error taxonomy.
+ * Throws if Google's response omits `refresh_token` (we always set `prompt=consent` upstream, so a missing
+ * refresh token here means the user revoked offline access between authorize and callback).
  */
-export interface InMemoryPKCEStore {
-    store(
-        req: unknown,
-        verifier: string,
-        state: unknown,
-        meta: unknown,
-        cb: (err: Error | null, state?: string) => void
-    ): void;
-    verify(
-        req: unknown,
-        providedState: string,
-        meta: unknown,
-        cb: (err: Error | null, ok: string | false, info?: unknown) => void
-    ): void;
-}
+export async function exchangeAuthorizationCode(
+    params: ExchangeAuthorizationCodeParams,
+    timeoutMs: number = TOKEN_EXCHANGE_TIMEOUT_MS
+): Promise<{ accessToken: string; refreshToken: string }> {
+    const tokenUrl = params.tokenUrl ?? GOOGLE_TOKEN_URL;
+    const basicAuth = Buffer.from(`${params.clientId}:${params.clientSecret}`).toString('base64');
 
-/** Per-flow PKCE/state store: substitutes for passport-oauth2's built-in `PKCESessionStore` (which requires `req.session`). Each call gets its own store to isolate concurrent flows. */
-export function createInMemoryPKCEStore(): InMemoryPKCEStore {
-    const records = new Map<string, PkceRecord>();
-    return {
-        store(_req, verifier, _state, meta, cb) {
-            const state = crypto.randomBytes(24).toString('base64url');
-            records.set(state, { codeVerifier: verifier, meta });
-            cb(null, state);
-        },
-        verify(_req, providedState, _meta, cb) {
-            const record = records.get(providedState);
-            if (record === undefined) {
-                cb(null, false, { message: 'Invalid authorization request state.' });
-                return;
-            }
-            records.delete(providedState);
-            // PKCE: `ok` must be the codeVerifier string (strategy.js:171-173).
-            cb(null, record.codeVerifier);
-        }
-    };
-}
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-/** Result of {@link buildBigQueryGoogleOAuthStrategy}: configured passport strategy + completion promise (resolves with the captured refresh token; rejects on empty). */
-export interface BigQueryGoogleOAuthStrategy {
-    completion: Promise<{ refreshToken: string }>;
-    strategy: GoogleStrategy;
-}
+    const body = new URLSearchParams({
+        grant_type: 'authorization_code',
+        code: params.code,
+        redirect_uri: params.redirectUri,
+        code_verifier: params.codeVerifier
+    }).toString();
 
-/** Params for {@link buildBigQueryGoogleOAuthStrategy}; `authorizationURL`/`tokenURL` are test seams (defaults to Google's bundled URLs per passport-google-oauth20/strategy.js:49-50). */
-export interface BuildBigQueryGoogleOAuthStrategyParams {
-    authorizationURL?: string;
-    clientId: string;
-    clientSecret: string;
-    store: InMemoryPKCEStore;
-    tokenURL?: string;
-}
-
-/** Builds Google OAuth strategy + verify pair. Verify resolves `completion` on a non-empty refresh token; an empty token rejects with the "Revoke the app at my-account.google.com/permissions" guidance. */
-export function buildBigQueryGoogleOAuthStrategy(
-    params: BuildBigQueryGoogleOAuthStrategyParams
-): BigQueryGoogleOAuthStrategy {
-    let resolveCompletion!: (value: { refreshToken: string }) => void;
-    let rejectCompletion!: (reason: Error) => void;
-    const completion = new Promise<{ refreshToken: string }>((resolve, reject) => {
-        resolveCompletion = resolve;
-        rejectCompletion = reject;
-    });
-
-    const strategyOptions = {
-        clientID: params.clientId,
-        clientSecret: params.clientSecret,
-        // Placeholder; overwritten by runOAuthFlow once a port is bound.
-        callbackURL: 'http://127.0.0.1:0/auth/callback',
-        scope: [...GOOGLE_BIGQUERY_SCOPES],
-        pkce: true,
-        state: true,
-        // We only want the refresh token; skip the userinfo fetch (would fail with stub access tokens in tests).
-        skipUserProfile: true,
-        // Cast: @types/passport-oauth2 lacks the PKCE 5/4-arg overloads (index.d.ts:37-43) but passport-oauth2 picks them via `Function.length` (strategy.js:218-298).
-        store: params.store as never,
-        passReqToCallback: false as const,
-        ...(params.authorizationURL ? { authorizationURL: params.authorizationURL } : {}),
-        ...(params.tokenURL ? { tokenURL: params.tokenURL } : {})
-    };
-
-    const verify = (
-        _accessToken: string,
-        refreshToken: string,
-        _profile: GoogleProfile,
-        done: VerifyCallback
-    ): void => {
-        if (!refreshToken) {
-            const err = new Error(
-                'No refresh token returned. Revoke the app at my-account.google.com/permissions and try again.'
+    let response: Response | undefined;
+    let rawBody: unknown;
+    try {
+        response = await fetch(tokenUrl, {
+            method: 'POST',
+            headers: {
+                Authorization: `Basic ${basicAuth}`,
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body,
+            signal: controller.signal
+        });
+        rawBody = await response.json();
+    } catch (error) {
+        if (error instanceof SyntaxError && response !== undefined) {
+            throw new Error(
+                `Token exchange response was not valid JSON (HTTP ${response.status} ${response.statusText}).`,
+                { cause: error }
             );
-            rejectCompletion(err);
-            done(err);
-            return;
         }
-        resolveCompletion({ refreshToken });
-        // Truthy `user` so passport renders the configured /auth/callback success response.
-        done(null, { refreshToken } as unknown as Express.User);
+        throw error;
+    } finally {
+        clearTimeout(timeout);
+    }
+
+    const parsed = tokenEndpointResponseSchema.safeParse(rawBody);
+    if (!parsed.success) {
+        throw new Error(`Token exchange returned invalid response body: ${parsed.error.message}`);
+    }
+    const data = parsed.data;
+
+    if (!response.ok) {
+        if (data.error === 'invalid_grant') {
+            throw new InvalidGrantError(data.error_description ?? 'Authorization code rejected by OAuth provider.');
+        }
+        if (data.error === 'invalid_client' || data.error === 'unauthorized_client') {
+            throw new InvalidClientError(data.error_description ?? 'OAuth client credentials rejected by provider.');
+        }
+        throw new Error(`Token exchange failed: ${response.status} ${response.statusText}`);
+    }
+
+    if (!data.access_token) {
+        throw new Error('Token exchange succeeded but response did not include an access_token.');
+    }
+    if (!data.refresh_token) {
+        throw new Error(
+            'No refresh token returned. Revoke the app at my-account.google.com/permissions and try again.'
+        );
+    }
+
+    return {
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token
     };
-
-    const strategy = new GoogleStrategy(strategyOptions, verify);
-
-    return { strategy, completion };
 }
-
-export { GoogleStrategy };

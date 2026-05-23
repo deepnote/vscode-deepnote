@@ -5,7 +5,7 @@
 
 import type { DeepnoteBlock } from '@deepnote/blocks';
 import { BigQueryAuthMethods } from '@deepnote/database-integrations';
-import { inject, injectable, optional } from 'inversify';
+import { inject, injectable } from 'inversify';
 import { dedent } from 'ts-dedent';
 
 import { IIntegrationStorage } from '../../../../platform/notebooks/deepnote/types';
@@ -78,16 +78,13 @@ function executeSqlQueryWithConnectionJson(params: {
  */
 @injectable()
 export class FederatedAuthSqlBlockCodeGenerator implements IFederatedAuthSqlBlockCodeGenerator {
-    /** Test seam: stub replacement for {@link fetchFreshAccessToken} passed via the optional 3rd ctor param. */
-    private readonly fetchFreshAccessToken: FetchFreshAccessTokenFn;
+    /** Test seam: tests reassign this to stub the token fetch. Not a ctor param because inversify can't skip injection for an optional arg without a service identifier. */
+    public fetchFreshAccessToken: FetchFreshAccessTokenFn = fetchFreshAccessToken;
 
     constructor(
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
-        @inject(IFederatedAuthTokenStorage) private readonly tokenStorage: IFederatedAuthTokenStorage,
-        @optional() fetcher?: FetchFreshAccessTokenFn
-    ) {
-        this.fetchFreshAccessToken = fetcher ?? fetchFreshAccessToken;
-    }
+        @inject(IFederatedAuthTokenStorage) private readonly tokenStorage: IFederatedAuthTokenStorage
+    ) {}
 
     public async generate(block: DeepnoteBlock): Promise<{ prelude: string; cellCode: string } | undefined> {
         if (block.type !== 'sql') {

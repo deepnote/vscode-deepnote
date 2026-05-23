@@ -71,11 +71,8 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         fetcher = sinon.stub<Parameters<FetcherFn>, ReturnType<FetcherFn>>();
         fetcher.resolves({ accessToken: ACCESS_TOKEN });
 
-        generator = new FederatedAuthSqlBlockCodeGenerator(
-            integrationStorage,
-            tokenStorage,
-            fetcher as unknown as FetcherFn
-        );
+        generator = new FederatedAuthSqlBlockCodeGenerator(integrationStorage, tokenStorage);
+        generator.fetchFreshAccessToken = fetcher as unknown as FetcherFn;
     });
 
     function setupValidFederatedIntegration() {

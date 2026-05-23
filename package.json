@@ -1651,7 +1651,7 @@
                     "type": "string",
                     "default": "deepnote.com",
                     "description": "Deepnote domain (e.g., 'deepnote.com' or 'ra-18838.deepnote-staging.com')",
-                    "scope": "application"
+                    "scope": "resource"
                 },
                 "deepnote.disableSSLVerification": {
                     "type": "boolean",

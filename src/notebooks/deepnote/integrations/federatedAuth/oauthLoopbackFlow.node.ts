@@ -1,44 +1,56 @@
-import * as crypto from 'crypto';
 import express, { type Express, type Request, type Response } from 'express';
 import * as http from 'http';
-import passport from 'passport';
-import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { type AddressInfo } from 'net';
-import { CancellationError, CancellationToken } from 'vscode';
+import { CancellationError, CancellationToken, Uri, env } from 'vscode';
 
 import { logger } from '../../../../platform/logging';
+import { exchangeAuthorizationCode } from './googleOAuthProvider.node';
 
 /** Default OAuth-flow deadline (5 min) measured from listen(). After this the loopback server is torn down. */
 export const OAUTH_FLOW_TIMEOUT_MS = 5 * 60 * 1000;
 
 /**
- * Inputs for {@link runOAuthFlow}. Strategy + completion pair must come from {@link buildBigQueryGoogleOAuthStrategy}.
- * `onListening` fires once with the start URL after the port is bound; `timeoutMs` is a test seam.
+ * Inputs for {@link runOAuthFlow}. The flow binds a loopback server on `127.0.0.1:0`, externalizes the
+ * callback URL via `env.asExternalUri`, and fires `onListening` so the caller can build a deepnote.com
+ * OAuth-proxy URL referencing that loopback URL as `finalRedirect`. When the loopback callback fires
+ * with `code` + matching `state`, the code is exchanged for tokens directly against Google's `/token`
+ * endpoint — the refresh token never goes through deepnote.com.
  */
 export interface RunOAuthFlowParams {
-    completion: Promise<{ refreshToken: string }>;
+    clientId: string;
+    clientSecret: string;
     integrationId: string;
-    onListening: (startUrl: string) => Promise<void>;
-    strategy: GoogleStrategy;
+    onListening: (externalCallbackUrl: string) => Promise<void>;
+    /** The same `redirect_uri` that deepnote.com used in the upstream `/authorize` call. Google rejects the exchange if they don't match. */
+    redirectUri: string;
+    /** CSRF nonce the caller supplied as `state` in the deepnote.com start URL. The callback must echo this exact value. */
+    state: string;
     timeoutMs?: number;
     token: CancellationToken;
+    /** PKCE verifier paired with the challenge sent in the upstream authorize call. */
+    codeVerifier: string;
+    /** Test seam: overrides Google's token endpoint URL when exchanging the code. */
+    tokenUrl?: string;
 }
 
-/** Runs the loopback OAuth flow; resolves with the refresh token, or rejects on cancellation/timeout/OAuth error. Cleans up server + passport strategy unconditionally. */
+/** Runs the loopback OAuth-callback flow; resolves with the refresh token, or rejects on cancellation/timeout/state-mismatch/exchange error. Cleans up the server unconditionally. */
 export async function runOAuthFlow(params: RunOAuthFlowParams): Promise<{ refreshToken: string }> {
-    const strategyName = `deepnote-google-oauth-${crypto.randomBytes(8).toString('hex')}`;
     const timeoutMs = params.timeoutMs ?? OAUTH_FLOW_TIMEOUT_MS;
 
     const app: Express = express();
     const server = http.createServer(app);
 
+    let resolveCompletion!: (value: { refreshToken: string }) => void;
+    let rejectCompletion!: (reason: Error) => void;
+    const completion = new Promise<{ refreshToken: string }>((resolve, reject) => {
+        resolveCompletion = resolve;
+        rejectCompletion = reject;
+    });
+
     let cancellationSubscription: { dispose(): void } | undefined;
     let timeoutHandle: NodeJS.Timeout | undefined;
 
     try {
-        passport.use(strategyName, params.strategy);
-
-        // Loopback-only: Google "Desktop app" OAuth clients only accept redirects on the loopback interface.
         server.listen(0, '127.0.0.1');
 
         const listening = new Promise<number>((resolve, reject) => {
@@ -63,36 +75,69 @@ export async function runOAuthFlow(params: RunOAuthFlowParams): Promise<{ refres
         });
 
         const port = await listening;
-        const callbackURL = `http://127.0.0.1:${port}/auth/callback`;
-        const startUrl = `http://127.0.0.1:${port}/auth/start`;
 
-        // Patch the strategy's placeholder `_callbackURL` now that we know the bound port (used in both the authorize redirect and the token-exchange `redirect_uri`).
-        (params.strategy as unknown as { _callbackURL: string })._callbackURL = callbackURL;
+        // Route through `asExternalUri` so VS Code remote port forwarding (SSH-remote, WSL, dev-container) gives us a loopback URL the user's local browser can reach. In local VS Code this is a passthrough.
+        const externalCallbackUrl = (
+            await env.asExternalUri(Uri.parse(`http://127.0.0.1:${port}/auth/callback`))
+        ).toString();
 
-        // /auth/start kicks the authorize redirect with `accessType=offline` + `prompt=consent` so Google issues a refresh token even on re-authorization (passport-google-oauth20 strategy.js:138-143).
-        app.get(
-            '/auth/start',
-            passport.authenticate(strategyName, {
-                session: false,
-                accessType: 'offline',
-                prompt: 'consent'
-            } as Parameters<typeof passport.authenticate>[1])
-        );
+        logger.info(`runOAuthFlow: bound loopback on port ${port}; externalCallbackUrl=${externalCallbackUrl}`);
 
-        // /auth/callback runs the verify closure (resolves `completion` on success). Failures land in the error middleware below.
-        app.get(
-            '/auth/callback',
-            passport.authenticate(strategyName, { session: false } as Parameters<typeof passport.authenticate>[1]),
-            (_req: Request, res: Response) => {
-                res.status(200).send(renderSuccessPage());
+        app.get('/auth/callback', async (req: Request, res: Response) => {
+            const code = typeof req.query.code === 'string' ? req.query.code : undefined;
+            const callbackState = typeof req.query.state === 'string' ? req.query.state : undefined;
+            const providerError = typeof req.query.error === 'string' ? req.query.error : undefined;
+            const providerErrorDescription =
+                typeof req.query.error_description === 'string' ? req.query.error_description : undefined;
+
+            // State always has to match — both the success and error responses carry it (RFC 6749 §4.1.2 & §4.1.2.1).
+            if (!callbackState) {
+                const err = new Error('OAuth callback missing `state` query parameter.');
+                rejectCompletion(err);
+                res.status(400).send(renderErrorPage(err.message));
+                return;
             }
-        );
+            if (callbackState !== params.state) {
+                const err = new Error('OAuth callback `state` did not match the expected value.');
+                rejectCompletion(err);
+                res.status(400).send(renderErrorPage(err.message));
+                return;
+            }
 
-        // Renders an inline error page in the user's browser; the promise rejection comes from the verify closure separately.
-        app.use((err: unknown, _req: Request, res: Response, _next: unknown) => {
-            const message = err instanceof Error ? err.message : 'Authentication failed.';
-            logger.error('OAuth loopback flow rendered error page.', err);
-            res.status(400).send(renderErrorPage(message));
+            // OAuth provider error (e.g., user cancelled consent → `access_denied`). Surface the description if present so the user sees the actual reason rather than a timeout.
+            if (providerError) {
+                const message = providerErrorDescription
+                    ? `${providerError}: ${providerErrorDescription}`
+                    : providerError;
+                const err = new Error(`OAuth provider returned error: ${message}`);
+                rejectCompletion(err);
+                res.status(400).send(renderErrorPage(err.message));
+                return;
+            }
+
+            if (!code) {
+                const err = new Error('OAuth callback missing `code` query parameter.');
+                rejectCompletion(err);
+                res.status(400).send(renderErrorPage(err.message));
+                return;
+            }
+
+            try {
+                const { refreshToken } = await exchangeAuthorizationCode({
+                    clientId: params.clientId,
+                    clientSecret: params.clientSecret,
+                    code,
+                    codeVerifier: params.codeVerifier,
+                    redirectUri: params.redirectUri,
+                    tokenUrl: params.tokenUrl
+                });
+                resolveCompletion({ refreshToken });
+                res.status(200).send(renderSuccessPage());
+            } catch (err) {
+                rejectCompletion(err instanceof Error ? err : new Error(String(err)));
+                const message = err instanceof Error ? err.message : 'Authentication failed.';
+                res.status(400).send(renderErrorPage(message));
+            }
         });
 
         // Wire cancellation + timeout BEFORE onListening so a fast cancel inside the caller is observed (VSCode events don't replay).
@@ -111,13 +156,9 @@ export async function runOAuthFlow(params: RunOAuthFlowParams): Promise<{ refres
             }, timeoutMs);
         });
 
-        await params.onListening(startUrl);
+        await params.onListening(externalCallbackUrl);
 
-        const result = await Promise.race<{ refreshToken: string }>([
-            params.completion,
-            timeoutPromise,
-            cancellationPromise
-        ]);
+        const result = await Promise.race<{ refreshToken: string }>([completion, timeoutPromise, cancellationPromise]);
 
         return result;
     } finally {
@@ -134,7 +175,6 @@ export async function runOAuthFlow(params: RunOAuthFlowParams): Promise<{ refres
         await new Promise<void>((resolve) => {
             server.close(() => resolve());
         });
-        passport.unuse(strategyName);
     }
 }
 

@@ -1,12 +1,82 @@
 import { assert } from 'chai';
+import * as crypto from 'crypto';
+import * as http from 'http';
+import { type AddressInfo } from 'net';
 
-import { GOOGLE_BIGQUERY_SCOPES, createInMemoryPKCEStore } from './googleOAuthProvider.node';
-import { buildTestStrategy } from './federatedAuthTestHelpers.node';
+import { InvalidClientError, InvalidGrantError } from './federatedAuthTokenStorage.node';
+import {
+    GOOGLE_BIGQUERY_SCOPES,
+    exchangeAuthorizationCode,
+    generateOAuthStateNonce,
+    generatePkcePair
+} from './googleOAuthProvider.node';
+
+interface StubBehavior {
+    body?: Record<string, unknown>;
+    status?: number;
+}
+
+class StubTokenEndpoint {
+    public lastFormBody?: URLSearchParams;
+
+    public lastAuthorizationHeader?: string;
+
+    private behavior: StubBehavior = {};
+
+    private server: http.Server;
+
+    public get url(): string {
+        const address = this.server.address() as AddressInfo;
+
+        return `http://127.0.0.1:${address.port}/oauth/token`;
+    }
+
+    public constructor() {
+        this.server = http.createServer((req, res) => this.handle(req, res));
+    }
+
+    public async close(): Promise<void> {
+        await new Promise<void>((resolve) => {
+            this.server.close(() => resolve());
+        });
+    }
+
+    public async listen(): Promise<void> {
+        await new Promise<void>((resolve) => {
+            this.server.listen(0, '127.0.0.1', () => resolve());
+        });
+    }
+
+    public setBehavior(behavior: StubBehavior): void {
+        this.behavior = behavior;
+    }
+
+    private handle(req: http.IncomingMessage, res: http.ServerResponse): void {
+        let body = '';
+        req.on('data', (chunk: Buffer) => {
+            body += chunk.toString('utf8');
+        });
+        req.on('end', () => {
+            this.lastAuthorizationHeader = req.headers.authorization;
+            this.lastFormBody = new URLSearchParams(body);
+
+            const status = this.behavior.status ?? 200;
+            const responseBody = this.behavior.body ?? {
+                access_token: 'stub-access-token',
+                refresh_token: 'stub-refresh-token',
+                token_type: 'Bearer',
+                expires_in: 3600
+            };
+            res.statusCode = status;
+            res.setHeader('content-type', 'application/json');
+            res.end(JSON.stringify(responseBody));
+        });
+    }
+}
 
 suite('googleOAuthProvider', () => {
     suite('GOOGLE_BIGQUERY_SCOPES', () => {
         test('exposes email, profile, and the bigquery scope (no openid)', () => {
-            // openid is omitted; refresh tokens come from `access_type=offline` + `prompt=consent`.
             assert.deepStrictEqual(
                 [...GOOGLE_BIGQUERY_SCOPES],
                 ['email', 'profile', 'https://www.googleapis.com/auth/bigquery']
@@ -14,146 +84,133 @@ suite('googleOAuthProvider', () => {
         });
     });
 
-    suite('createInMemoryPKCEStore', () => {
-        test('store + verify round-trips the code verifier', () => {
-            const store = createInMemoryPKCEStore();
-            const verifier = 'random-verifier-12345';
-
-            let issuedState: string | undefined;
-            store.store(undefined, verifier, undefined, undefined, (err, state) => {
-                assert.isNull(err);
-                assert.isString(state);
-                issuedState = state;
-            });
-
-            assert.isDefined(issuedState);
-
-            let verifyResult: { ok: string | false; info: unknown } | undefined;
-            store.verify(undefined, issuedState!, undefined, (err, ok, info) => {
-                assert.isNull(err);
-                verifyResult = { ok, info };
-            });
-
-            assert.isDefined(verifyResult);
-            // PKCE: `ok` must be the codeVerifier string so passport-oauth2 forwards it (strategy.js:171-173).
-            assert.strictEqual(verifyResult!.ok, verifier);
-        });
-
-        test('store generates a non-empty, URL-safe state', () => {
-            const store = createInMemoryPKCEStore();
-            let issuedState: string | undefined;
-            store.store(undefined, 'v', undefined, undefined, (_err, state) => {
-                issuedState = state;
-            });
-            assert.isString(issuedState);
-            assert.isAbove(issuedState!.length, 0);
+    suite('generatePkcePair', () => {
+        test('returns base64url-encoded verifier and challenge', () => {
+            const { challenge, verifier } = generatePkcePair();
             // base64url alphabet: A-Z, a-z, 0-9, -, _ (no padding).
-            assert.match(issuedState!, /^[A-Za-z0-9_-]+$/);
+            assert.match(verifier, /^[A-Za-z0-9_-]+$/);
+            assert.match(challenge, /^[A-Za-z0-9_-]+$/);
+            // 32 bytes → 43 base64url chars (no padding).
+            assert.strictEqual(verifier.length, 43);
+            assert.strictEqual(challenge.length, 43);
         });
 
-        test('store generates distinct states across calls', () => {
-            const store = createInMemoryPKCEStore();
-            const states: string[] = [];
-            for (let i = 0; i < 5; i++) {
-                store.store(undefined, `v-${i}`, undefined, undefined, (_err, state) => {
-                    states.push(state!);
-                });
-            }
-            assert.strictEqual(new Set(states).size, 5);
+        test('challenge is SHA256(verifier) in base64url', () => {
+            const { challenge, verifier } = generatePkcePair();
+            const expected = crypto.createHash('sha256').update(verifier).digest('base64url');
+            assert.strictEqual(challenge, expected);
         });
 
-        test('verify with unknown state returns (null, false, info)', () => {
-            const store = createInMemoryPKCEStore();
-            let result: { ok: string | false; info: unknown } | undefined;
-            store.verify(undefined, 'never-issued', undefined, (err, ok, info) => {
-                assert.isNull(err);
-                result = { ok, info };
-            });
-            assert.isDefined(result);
-            assert.strictEqual(result!.ok, false);
-            assert.isDefined(result!.info);
-        });
-
-        test('verify deletes the entry (single-use)', () => {
-            const store = createInMemoryPKCEStore();
-            let issuedState!: string;
-            store.store(undefined, 'verifier', undefined, undefined, (_err, state) => {
-                issuedState = state!;
-            });
-
-            // First verify: succeeds.
-            let firstResult: string | false | undefined;
-            store.verify(undefined, issuedState, undefined, (_err, ok) => {
-                firstResult = ok;
-            });
-            assert.strictEqual(firstResult, 'verifier');
-
-            // Second verify with the same state: must fail (entry was deleted).
-            let secondResult: string | false | undefined;
-            store.verify(undefined, issuedState, undefined, (_err, ok) => {
-                secondResult = ok;
-            });
-            assert.strictEqual(secondResult, false);
-        });
-
-        test('isolated stores do not share state', () => {
-            const a = createInMemoryPKCEStore();
-            const b = createInMemoryPKCEStore();
-            let stateA!: string;
-            a.store(undefined, 'va', undefined, undefined, (_err, state) => {
-                stateA = state!;
-            });
-            // Verify stateA against the *other* store: must fail.
-            let result: string | false | undefined;
-            b.verify(undefined, stateA, undefined, (_err, ok) => {
-                result = ok;
-            });
-            assert.strictEqual(result, false);
+        test('successive calls produce distinct verifiers', () => {
+            const pairs = Array.from({ length: 5 }, () => generatePkcePair().verifier);
+            assert.strictEqual(new Set(pairs).size, 5);
         });
     });
 
-    suite('buildBigQueryGoogleOAuthStrategy', () => {
-        test('strategy.name is "google" (the passport-google-oauth20 default)', () => {
-            const { strategy } = buildTestStrategy();
-            assert.strictEqual(strategy.name, 'google');
+    suite('generateOAuthStateNonce', () => {
+        test('produces a non-empty base64url string', () => {
+            const nonce = generateOAuthStateNonce();
+            assert.match(nonce, /^[A-Za-z0-9_-]+$/);
+            assert.isAbove(nonce.length, 0);
         });
 
-        test('uses the GOOGLE_BIGQUERY_SCOPES on the strategy', () => {
-            const { strategy } = buildTestStrategy();
-            // `_scope` is set by passport-oauth2 from options.scope; probe to assert wiring.
-            const scope = (strategy as unknown as { _scope: string[] })._scope;
-            assert.deepStrictEqual(scope, [...GOOGLE_BIGQUERY_SCOPES]);
+        test('successive calls produce distinct values', () => {
+            const nonces = Array.from({ length: 5 }, () => generateOAuthStateNonce());
+            assert.strictEqual(new Set(nonces).size, 5);
+        });
+    });
+
+    suite('exchangeAuthorizationCode', () => {
+        let stub: StubTokenEndpoint;
+
+        setup(async () => {
+            stub = new StubTokenEndpoint();
+            await stub.listen();
         });
 
-        test('verify resolves the completion promise on a non-empty refresh token', async () => {
-            const { strategy, completion } = buildTestStrategy();
+        teardown(async () => {
+            await stub.close();
+        });
 
-            // `_verify` is stored by passport-oauth2 (strategy.js:~70).
-            const verify = (strategy as unknown as { _verify: Function })._verify;
+        test('happy path: sends Basic auth + form body, returns refresh + access tokens', async () => {
+            const result = await exchangeAuthorizationCode({
+                clientId: 'my-client-id',
+                clientSecret: 'my-client-secret',
+                code: 'authorization-code-from-google',
+                codeVerifier: 'pkce-verifier-value',
+                redirectUri: 'https://deepnote.com/auth/bigquery/google-oauth-callback',
+                tokenUrl: stub.url
+            });
 
-            verify(
-                'access-token',
-                'refresh-token-value',
-                { id: 'user-1', provider: 'google' },
-                (_err: unknown, user: unknown) => {
-                    assert.deepStrictEqual(user, { refreshToken: 'refresh-token-value' });
-                }
+            assert.deepStrictEqual(result, {
+                accessToken: 'stub-access-token',
+                refreshToken: 'stub-refresh-token'
+            });
+
+            const expectedBasic = Buffer.from('my-client-id:my-client-secret').toString('base64');
+            assert.strictEqual(stub.lastAuthorizationHeader, `Basic ${expectedBasic}`);
+
+            assert.isDefined(stub.lastFormBody);
+            assert.strictEqual(stub.lastFormBody!.get('grant_type'), 'authorization_code');
+            assert.strictEqual(stub.lastFormBody!.get('code'), 'authorization-code-from-google');
+            assert.strictEqual(stub.lastFormBody!.get('code_verifier'), 'pkce-verifier-value');
+            assert.strictEqual(
+                stub.lastFormBody!.get('redirect_uri'),
+                'https://deepnote.com/auth/bigquery/google-oauth-callback'
             );
-
-            const result = await completion;
-            assert.deepStrictEqual(result, { refreshToken: 'refresh-token-value' });
         });
 
-        test('verify rejects the completion promise on an empty refresh token', async () => {
-            const { strategy, completion } = buildTestStrategy();
+        test('throws InvalidGrantError on `invalid_grant` response', async () => {
+            stub.setBehavior({ status: 400, body: { error: 'invalid_grant', error_description: 'bad code' } });
 
-            const verify = (strategy as unknown as { _verify: Function })._verify;
-            verify('access-token', '', { id: 'u', provider: 'google' }, () => {
-                // done() is called with the error — we ignore here.
+            try {
+                await exchangeAuthorizationCode({
+                    clientId: 'c',
+                    clientSecret: 's',
+                    code: 'x',
+                    codeVerifier: 'v',
+                    redirectUri: 'https://deepnote.com/cb',
+                    tokenUrl: stub.url
+                });
+                assert.fail('expected InvalidGrantError');
+            } catch (err) {
+                assert(err instanceof InvalidGrantError);
+            }
+        });
+
+        test('throws InvalidClientError on `invalid_client` response', async () => {
+            stub.setBehavior({ status: 401, body: { error: 'invalid_client' } });
+
+            try {
+                await exchangeAuthorizationCode({
+                    clientId: 'c',
+                    clientSecret: 's',
+                    code: 'x',
+                    codeVerifier: 'v',
+                    redirectUri: 'https://deepnote.com/cb',
+                    tokenUrl: stub.url
+                });
+                assert.fail('expected InvalidClientError');
+            } catch (err) {
+                assert(err instanceof InvalidClientError);
+            }
+        });
+
+        test('throws generic Error on missing refresh_token (consent likely revoked)', async () => {
+            stub.setBehavior({
+                status: 200,
+                body: { access_token: 'a', token_type: 'Bearer' }
             });
 
             try {
-                await completion;
+                await exchangeAuthorizationCode({
+                    clientId: 'c',
+                    clientSecret: 's',
+                    code: 'x',
+                    codeVerifier: 'v',
+                    redirectUri: 'https://deepnote.com/cb',
+                    tokenUrl: stub.url
+                });
                 assert.fail('expected rejection');
             } catch (err) {
                 assert(err instanceof Error);
@@ -162,35 +219,35 @@ suite('googleOAuthProvider', () => {
             }
         });
 
-        function oauth2Urls(strategy: object): { _authorizeUrl: string; _accessTokenUrl: string } {
-            return (strategy as unknown as { _oauth2: { _authorizeUrl: string; _accessTokenUrl: string } })._oauth2;
-        }
-
-        test('authorizationURL and tokenURL overrides land on the strategy', () => {
-            const { strategy } = buildTestStrategy({
-                authorizationURL: 'http://stub/oauth/authorize',
-                tokenURL: 'http://stub/oauth/token'
+        test('times out a hanging request', async () => {
+            // Override the stub server with one that never responds.
+            const hangingServer = http.createServer(() => {
+                // Drop the connection.
             });
+            await new Promise<void>((resolve) => hangingServer.listen(0, '127.0.0.1', () => resolve()));
+            const hangingAddress = hangingServer.address() as AddressInfo;
+            const hangingUrl = `http://127.0.0.1:${hangingAddress.port}/oauth/token`;
 
-            const { _authorizeUrl, _accessTokenUrl } = oauth2Urls(strategy);
-            assert.deepStrictEqual(
-                { authorizeUrl: _authorizeUrl, accessTokenUrl: _accessTokenUrl },
-                { authorizeUrl: 'http://stub/oauth/authorize', accessTokenUrl: 'http://stub/oauth/token' }
-            );
-        });
-
-        test('without overrides, the strategy uses Google production URLs', () => {
-            const { strategy } = buildTestStrategy();
-
-            // passport-google-oauth20/lib/strategy.js:49-50.
-            const { _authorizeUrl, _accessTokenUrl } = oauth2Urls(strategy);
-            assert.deepStrictEqual(
-                { authorizeUrl: _authorizeUrl, accessTokenUrl: _accessTokenUrl },
-                {
-                    authorizeUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
-                    accessTokenUrl: 'https://www.googleapis.com/oauth2/v4/token'
+            try {
+                try {
+                    await exchangeAuthorizationCode(
+                        {
+                            clientId: 'c',
+                            clientSecret: 's',
+                            code: 'x',
+                            codeVerifier: 'v',
+                            redirectUri: 'https://deepnote.com/cb',
+                            tokenUrl: hangingUrl
+                        },
+                        50
+                    );
+                    assert.fail('expected timeout');
+                } catch (err) {
+                    assert(err instanceof Error);
                 }
-            );
+            } finally {
+                await new Promise<void>((resolve) => hangingServer.close(() => resolve()));
+            }
         });
     });
 });

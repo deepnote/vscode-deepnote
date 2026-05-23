@@ -1,5 +1,5 @@
 import { inject, injectable } from 'inversify';
-import { CancellationError, CancellationToken, ProgressLocation, Uri, commands, env, window } from 'vscode';
+import { CancellationError, CancellationToken, ProgressLocation, Uri, commands, env, window, workspace } from 'vscode';
 
 import { BigQueryAuthMethods } from '@deepnote/database-integrations';
 
@@ -10,7 +10,7 @@ import { Integrations } from '../../../../platform/common/utils/localize';
 import { logger } from '../../../../platform/logging';
 import { IIntegrationStorage } from '../../../../platform/notebooks/deepnote/types';
 import { IFederatedAuthTokenStorage, type FederatedAuthTokenEntry } from '../types';
-import { buildBigQueryGoogleOAuthStrategy, createInMemoryPKCEStore } from './googleOAuthProvider.node';
+import { generateOAuthStateNonce, generatePkcePair } from './googleOAuthProvider.node';
 import { computeMetadataFingerprint } from './federatedAuthTokenStorage.node';
 import { runOAuthFlow, type RunOAuthFlowParams } from './oauthLoopbackFlow.node';
 
@@ -18,9 +18,13 @@ import { runOAuthFlow, type RunOAuthFlowParams } from './oauthLoopbackFlow.node'
 export type RunOAuthFlowFn = (params: RunOAuthFlowParams) => Promise<{ refreshToken: string }>;
 
 /**
- * Node-side command handler for `deepnote.authenticateIntegration`: validates the integration, runs the
- * loopback OAuth flow, persists the refresh token. Remote VS Code is unsupported because Google "Desktop app"
- * OAuth clients only accept `http://127.0.0.1:<port>/auth/callback` redirects.
+ * Node-side command handler for `deepnote.authenticateIntegration`: validates the integration, opens a
+ * deepnote.com OAuth-proxy URL in the user's browser, accepts the resulting authorization code on a
+ * loopback callback, exchanges it for tokens against Google directly, persists the refresh token. The
+ * deepnote.com proxy step lets us reuse the customer's existing Google OAuth Web-application client
+ * (whose registered redirect URI is `https://deepnote.com/auth/bigquery/google-oauth-callback`) without
+ * adding random loopback ports — the loopback URL is only the post-consent landing spot, never the
+ * `redirect_uri` Google sees.
  */
 @injectable()
 export class FederatedAuthCommandHandlerNode implements IExtensionSyncActivationService {
@@ -50,15 +54,6 @@ export class FederatedAuthCommandHandlerNode implements IExtensionSyncActivation
             return;
         }
 
-        // Remote VS Code is not supported — see class comment.
-        if (env.remoteName !== undefined) {
-            logger.info(
-                `FederatedAuthCommandHandlerNode: remote scenario detected (${env.remoteName}); aborting federated auth.`
-            );
-            void window.showInformationMessage(Integrations.federatedAuthNotSupportedInRemote);
-            return;
-        }
-
         const integration = await this.integrationStorage.getIntegrationConfig(integrationId);
         if (!integration) {
             logger.warn(`FederatedAuthCommandHandlerNode: integration "${integrationId}" not found.`);
@@ -75,11 +70,10 @@ export class FederatedAuthCommandHandlerNode implements IExtensionSyncActivation
         }
 
         const { clientId, clientSecret, project } = integration.metadata;
-        const { strategy, completion } = buildBigQueryGoogleOAuthStrategy({
-            clientId,
-            clientSecret,
-            store: createInMemoryPKCEStore()
-        });
+        const state = generateOAuthStateNonce();
+        const { challenge: codeChallenge, verifier: codeVerifier } = generatePkcePair();
+        const deepnoteDomain = getDeepnoteDomain(getConfigurationResource());
+        const proxyCallbackUrl = `https://${deepnoteDomain}/auth/bigquery/google-oauth-callback`;
 
         try {
             const refreshTokenResult = await window.withProgress(
@@ -88,16 +82,26 @@ export class FederatedAuthCommandHandlerNode implements IExtensionSyncActivation
                     title: Integrations.authenticating(integration.name),
                     cancellable: true
                 },
-                async (_progress, token: CancellationToken) => {
+                async (_progress, cancellationToken: CancellationToken) => {
                     return this.runOAuthFlowFn({
                         integrationId,
-                        strategy,
-                        completion,
-                        token,
-                        onListening: async (startUrl: string) => {
+                        clientId,
+                        clientSecret,
+                        codeVerifier,
+                        redirectUri: proxyCallbackUrl,
+                        state,
+                        token: cancellationToken,
+                        onListening: async (externalCallbackUrl: string) => {
+                            const startUrl = buildExtensionStartUrl({
+                                deepnoteDomain,
+                                clientId,
+                                state,
+                                codeChallenge,
+                                finalRedirect: externalCallbackUrl
+                            });
+                            logger.info(`FederatedAuthCommandHandlerNode: opening start URL ${startUrl}`);
                             try {
-                                const externalUri = await env.asExternalUri(Uri.parse(startUrl));
-                                const opened = await env.openExternal(externalUri);
+                                const opened = await env.openExternal(Uri.parse(startUrl));
                                 if (!opened) {
                                     logger.warn(
                                         `FederatedAuthCommandHandlerNode: openExternal returned false for ${startUrl}; the user can paste the URL manually.`
@@ -132,4 +136,36 @@ export class FederatedAuthCommandHandlerNode implements IExtensionSyncActivation
             void window.showErrorMessage(Integrations.authenticationFailed(message));
         }
     }
+}
+
+/** Reads the deepnote-host override (`deepnote.domain` setting); default `deepnote.com`. Mirrors `importClient.node.ts`. */
+function getDeepnoteDomain(resource?: Uri): string {
+    return workspace.getConfiguration('deepnote', resource).get<string>('domain') ?? 'deepnote.com';
+}
+
+/** Prefer the active Deepnote notebook URI so workspace/folder `deepnote.domain` overrides apply. */
+function getConfigurationResource(): Uri | undefined {
+    const notebook = window.activeNotebookEditor?.notebook;
+    if (notebook?.notebookType === 'deepnote') {
+        return notebook.uri;
+    }
+
+    return undefined;
+}
+
+/** Builds the proxy-start URL the user's browser will open. Public for unit tests. */
+export function buildExtensionStartUrl(params: {
+    clientId: string;
+    codeChallenge: string;
+    deepnoteDomain: string;
+    finalRedirect: string;
+    state: string;
+}): string {
+    const url = new URL(`https://${params.deepnoteDomain}/auth/bigquery/extension/start`);
+    url.searchParams.set('clientId', params.clientId);
+    url.searchParams.set('state', params.state);
+    url.searchParams.set('codeChallenge', params.codeChallenge);
+    url.searchParams.set('finalRedirect', params.finalRedirect);
+
+    return url.toString();
 }

@@ -1,12 +1,12 @@
 import { assert } from 'chai';
 import sinon from 'sinon';
-import { CancellationError } from 'vscode';
-import { anyString, anything, instance, mock, when } from 'ts-mockito';
+import { CancellationError, Uri } from 'vscode';
+import { anyString, anything, capture, instance, mock, when } from 'ts-mockito';
 
 import { ConfigurableDatabaseIntegrationConfig } from '../../../../platform/notebooks/deepnote/integrationTypes';
 import { IIntegrationStorage } from '../../../../platform/notebooks/deepnote/types';
 import { IExtensionContext, IDisposable } from '../../../../platform/common/types';
-import { FederatedAuthCommandHandlerNode } from './federatedAuthCommandHandler.node';
+import { FederatedAuthCommandHandlerNode, buildExtensionStartUrl } from './federatedAuthCommandHandler.node';
 import { FederatedAuthTokenEntry, IFederatedAuthTokenStorage } from '../types';
 import { computeMetadataFingerprint } from './federatedAuthTokenStorage.node';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../../test/vscode-mock';
@@ -51,10 +51,7 @@ suite('FederatedAuthCommandHandlerNode', () => {
         runOAuthFlowStub = sinon.stub<[RunOAuthFlowParams], Promise<{ refreshToken: string }>>();
         runOAuthFlowStub.resolves({ refreshToken: FED_AUTH_FIXTURE.REFRESH_TOKEN });
 
-        // env.asExternalUri returns the input untouched in the mock.
-        when(mockedVSCodeNamespaces.env.asExternalUri(anything())).thenCall((uri) => Promise.resolve(uri));
         when(mockedVSCodeNamespaces.env.openExternal(anything())).thenResolve(true as unknown as void);
-        when(mockedVSCodeNamespaces.env.remoteName).thenReturn(undefined);
 
         handler = new FederatedAuthCommandHandlerNode(
             instance(extensionContext),
@@ -62,16 +59,6 @@ suite('FederatedAuthCommandHandlerNode', () => {
             tokenStorage,
             runOAuthFlowStub
         );
-    });
-
-    test('shows remote-not-supported toast and does not start the OAuth flow when env.remoteName is set', async () => {
-        when(mockedVSCodeNamespaces.env.remoteName).thenReturn('ssh-remote');
-        integrationStore.set(FED_AUTH_FIXTURE.INTEGRATION_ID, buildGoogleOauthIntegration());
-
-        await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID);
-
-        assert.strictEqual(runOAuthFlowStub.callCount, 0, 'runOAuthFlow should not have been called');
-        assert.lengthOf(savedTokens, 0, 'no token should be saved');
     });
 
     (
@@ -109,11 +96,53 @@ suite('FederatedAuthCommandHandlerNode', () => {
                 project: FED_AUTH_FIXTURE.PROJECT
             })
         });
+    });
 
-        // Sanity-check that the strategy + completion were threaded through.
+    test('runOAuthFlow is called with clientId, clientSecret, state, codeVerifier, and the deepnote-callback redirectUri', async () => {
+        integrationStore.set(FED_AUTH_FIXTURE.INTEGRATION_ID, buildGoogleOauthIntegration());
+
+        await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID);
+
+        assert.strictEqual(runOAuthFlowStub.callCount, 1);
         const callArg = runOAuthFlowStub.firstCall.args[0];
         assert.strictEqual(callArg.integrationId, FED_AUTH_FIXTURE.INTEGRATION_ID);
+        assert.strictEqual(callArg.clientId, FED_AUTH_FIXTURE.CLIENT_ID);
+        assert.strictEqual(callArg.clientSecret, FED_AUTH_FIXTURE.CLIENT_SECRET);
+        assert.strictEqual(callArg.redirectUri, 'https://deepnote.com/auth/bigquery/google-oauth-callback');
+        assert.isString(callArg.state);
+        assert.isAbove(callArg.state.length, 0);
+        assert.isString(callArg.codeVerifier);
+        assert.isAbove(callArg.codeVerifier.length, 0);
         assert.isFunction(callArg.onListening);
+    });
+
+    test('onListening opens the deepnote.com start URL with the externalized callback as finalRedirect', async () => {
+        integrationStore.set(FED_AUTH_FIXTURE.INTEGRATION_ID, buildGoogleOauthIntegration());
+
+        runOAuthFlowStub.callsFake(async (params: RunOAuthFlowParams) => {
+            await params.onListening('http://127.0.0.1:54321/auth/callback');
+
+            return { refreshToken: FED_AUTH_FIXTURE.REFRESH_TOKEN };
+        });
+
+        await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID);
+
+        const [openedUri] = capture(mockedVSCodeNamespaces.env.openExternal).last();
+        // Inspect the Uri directly — going through `Uri.parse(...).toString()` would mangle percent-encoded characters in the query (mock decodes during parse).
+        const uri = openedUri as Uri;
+        assert.strictEqual(uri.scheme, 'https');
+        assert.strictEqual(uri.authority, 'deepnote.com');
+        assert.strictEqual(uri.path, '/auth/bigquery/extension/start');
+
+        const params = new URLSearchParams(uri.query);
+        assert.strictEqual(params.get('clientId'), FED_AUTH_FIXTURE.CLIENT_ID);
+        assert.strictEqual(params.get('finalRedirect'), 'http://127.0.0.1:54321/auth/callback');
+        assert.isString(params.get('state'));
+        assert.isString(params.get('codeChallenge'));
+
+        // The state in the URL must match the state passed to runOAuthFlow (browser → server → callback → loopback contract).
+        const callArg = runOAuthFlowStub.firstCall.args[0];
+        assert.strictEqual(params.get('state'), callArg.state);
     });
 
     test('silently returns when the user cancels the flow', async () => {
@@ -144,5 +173,36 @@ suite('FederatedAuthCommandHandlerNode', () => {
         handler.activate();
 
         assert.strictEqual(subscriptions.length, 1, 'one disposable subscription should be registered');
+    });
+});
+
+suite('buildExtensionStartUrl', () => {
+    test('builds the full deepnote.com start URL with all four query params', () => {
+        const url = buildExtensionStartUrl({
+            clientId: 'my-client-id',
+            codeChallenge: 'pkce-challenge',
+            deepnoteDomain: 'deepnote.com',
+            finalRedirect: 'http://127.0.0.1:54321/auth/callback',
+            state: 'state-nonce'
+        });
+
+        const parsed = new URL(url);
+        assert.strictEqual(parsed.origin, 'https://deepnote.com');
+        assert.strictEqual(parsed.pathname, '/auth/bigquery/extension/start');
+        assert.strictEqual(parsed.searchParams.get('clientId'), 'my-client-id');
+        assert.strictEqual(parsed.searchParams.get('state'), 'state-nonce');
+        assert.strictEqual(parsed.searchParams.get('codeChallenge'), 'pkce-challenge');
+        assert.strictEqual(parsed.searchParams.get('finalRedirect'), 'http://127.0.0.1:54321/auth/callback');
+    });
+
+    test('honors the deepnoteDomain override (for dev/staging hosts)', () => {
+        const url = buildExtensionStartUrl({
+            clientId: 'c',
+            codeChallenge: 'c',
+            deepnoteDomain: 'dev.deepnote.org',
+            finalRedirect: 'http://127.0.0.1:1/cb',
+            state: 's'
+        });
+        assert.strictEqual(new URL(url).host, 'dev.deepnote.org');
     });
 });

@@ -6,5 +6,9 @@
     "GHSA-vpq2-c234-7xj6": {
         "notes": "@tootallnate/once AbortSignal control flow (promise may never settle). The current lockfile still resolves vulnerable transitive copies through @deepnote/sql-language-server -> @google-cloud/bigquery -> teeny-request -> http-proxy-agent@5 -> @tootallnate/once@2.0.0, @vscode/jupyter-ipywidgets8 -> @jupyterlab/filebrowser -> jest-environment-jsdom -> jsdom -> http-proxy-agent@5 -> @tootallnate/once@2.0.0, and @vscode/test-electron -> http-proxy-agent@4.0.1 -> @tootallnate/once@1.1.2. No @tootallnate/once override is currently applied in this repo because we are not forcing a major-version transitive override.",
         "expiry": "2026-08-15"
+    },
+    "GHSA-w5hq-g745-h8pq": {
+        "notes": "CVE-2026-41907: uuid v3/v5/v6 API methods skip bounds validation when the caller passes an external output buffer (and/or offset), allowing silent partial writes that produce malformed/truncated UUIDs. Accepted risk: all vulnerable transitive copies in the lockfile are uuid@8.3.2 reached via @nteract/commutable, @nteract/messaging, @nteract/types, istanbul-lib-processinfo, and node-notifier. Each call site uses only uuid.v4() (verified by grep in node_modules) — v4 is explicitly listed as unaffected. Bumping these transitive deps to a major-version override (>=11.1.1) is unsafe because @nteract packages declare uuid@^8.0.0 and the API surface differs across majors.",
+        "expiry": "2026-08-15"
     }
 }

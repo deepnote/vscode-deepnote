@@ -2931,6 +2931,12 @@
         "@jupyterlab/services": {
             "ws": "7.5.10"
         },
+        "@deepnote/runtime-core": {
+            "ws": "8.20.1"
+        },
+        "@jupyterlab/filebrowser": {
+            "ws": "8.20.1"
+        },
         "d3-color": "3.1.0",
         "flatted": "3.4.2",
         "vega-embed": "^7.1.0",
@@ -2965,6 +2971,7 @@
         "fast-uri": "^3.1.2",
         "ip-address": "^10.1.1",
         "mermaid": "11.15.0",
-        "postcss": "^8.5.14"
+        "postcss": "^8.5.14",
+        "qs@<6.15.2": "6.15.2"
     }
 }

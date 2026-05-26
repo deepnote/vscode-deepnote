@@ -250,7 +250,7 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({
                     <div className="form-help">
                         {getLocString(
                             'integrationsBigQueryGoogleOauthHelp',
-                            "Create a 'Desktop app' OAuth client in Google Cloud Console and paste the client ID and secret above. The redirect URI is configured automatically."
+                            "Create a 'Web application' OAuth client in Google Cloud Console and add https://deepnote.com/auth/bigquery/google-oauth-callback to its authorized redirect URIs. Then paste the client ID and secret above."
                         )}
                     </div>
 

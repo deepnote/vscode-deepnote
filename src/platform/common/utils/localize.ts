@@ -900,7 +900,7 @@ export namespace Integrations {
     export const bigQueryClientSecretLabel = l10n.t('OAuth client secret');
     export const bigQueryClientSecretPlaceholder = l10n.t('GOCSPX-...');
     export const bigQueryGoogleOauthHelp = l10n.t(
-        "Create a 'Desktop app' OAuth client in Google Cloud Console and paste the client ID and secret above. The redirect URI is configured automatically."
+        "Create a 'Web application' OAuth client in Google Cloud Console and add https://deepnote.com/auth/bigquery/google-oauth-callback to its authorized redirect URIs. Then paste the client ID and secret above."
     );
 
     // Federated-auth integration management strings (M4)

@@ -1,32 +1,83 @@
-import { assert } from 'chai';
-import { Disposable } from 'vscode';
+import sinon from 'sinon';
+import { Disposable, EventEmitter } from 'vscode';
 
 import { FederatedAuthOrphanedTokenCleaner } from './federatedAuthOrphanedTokenCleaner.node';
+import { FederatedAuthTokenEntry, IFederatedAuthTokenStorage } from '../types';
 import { IDisposable } from '../../../../platform/common/types';
+import { IIntegrationStorage } from '../../../../platform/notebooks/deepnote/types';
 import { dispose } from '../../../../platform/common/utils/lifecycle';
-import {
-    buildGoogleOauthIntegration,
-    buildTokenEntry,
-    createFakeIntegrationStorage,
-    createFakeTokenStorage,
-    settleAsyncHandlers
-} from './federatedAuthTestHelpers';
+import { buildGoogleOauthIntegration, buildTokenEntry, settleAsyncHandlers } from './federatedAuthTestHelpers';
+import type { ConfigurableDatabaseIntegrationConfig } from '../../../../platform/notebooks/deepnote/integrationTypes';
 
 suite('FederatedAuthOrphanedTokenCleaner', () => {
     let disposables: IDisposable[];
-    let fakeIntegration: ReturnType<typeof createFakeIntegrationStorage>;
-    let fakeToken: ReturnType<typeof createFakeTokenStorage>;
+    let integrations: Map<string, ConfigurableDatabaseIntegrationConfig>;
+    let tokens: Map<string, FederatedAuthTokenEntry>;
+    let onDidChangeIntegrations: EventEmitter<void>;
+    let onDidChangeTokens: EventEmitter<string>;
+    let deleteSpy: sinon.SinonSpy<[string], Promise<void>>;
+    let integrationStorage: IIntegrationStorage;
+    let tokenStorage: IFederatedAuthTokenStorage;
+
+    function buildTokenStorage(throwOnDelete?: Set<string>): IFederatedAuthTokenStorage {
+        deleteSpy = sinon.spy(async (id: string) => {
+            if (throwOnDelete?.has(id)) {
+                throw new Error(`forced throw on delete: ${id}`);
+            }
+            tokens.delete(id);
+        });
+        return {
+            onDidChangeTokens: onDidChangeTokens.event,
+            computeMetadataFingerprint: () => 'fp',
+            delete: deleteSpy,
+            get: async (id) => tokens.get(id),
+            has: async (id) => tokens.has(id),
+            listIntegrationIds: async () => Array.from(tokens.keys()),
+            save: async (entry) => {
+                tokens.set(entry.integrationId, entry);
+            }
+        };
+    }
 
     function fireChangeAndWait(): Promise<void> {
-        fakeIntegration.onDidChangeIntegrations.fire();
+        onDidChangeIntegrations.fire();
         return settleAsyncHandlers();
     }
 
     setup(() => {
         disposables = [];
-        fakeIntegration = createFakeIntegrationStorage();
-        fakeToken = createFakeTokenStorage();
-        disposables.push(new Disposable(() => fakeIntegration.onDidChangeIntegrations.dispose()));
+        integrations = new Map();
+        tokens = new Map();
+        onDidChangeIntegrations = new EventEmitter<void>();
+        onDidChangeTokens = new EventEmitter<string>();
+        integrationStorage = {
+            onDidChangeIntegrations: onDidChangeIntegrations.event,
+            dispose: () => onDidChangeIntegrations.dispose(),
+            async clear() {
+                integrations.clear();
+            },
+            async delete(id) {
+                integrations.delete(id);
+            },
+            async exists(id) {
+                return integrations.has(id);
+            },
+            async getAll() {
+                return Array.from(integrations.values());
+            },
+            async getIntegrationConfig(id) {
+                return integrations.get(id);
+            },
+            async getProjectIntegrationConfig() {
+                return undefined;
+            },
+            async save(config) {
+                integrations.set(config.id, config);
+            }
+        };
+        tokenStorage = buildTokenStorage();
+        disposables.push(new Disposable(() => onDidChangeIntegrations.dispose()));
+        disposables.push(new Disposable(() => onDidChangeTokens.dispose()));
     });
 
     teardown(() => {
@@ -34,53 +85,56 @@ suite('FederatedAuthOrphanedTokenCleaner', () => {
     });
 
     test('does not call delete when every stored token has a matching integration', async () => {
-        fakeIntegration.addIntegration(buildGoogleOauthIntegration({ id: 'bq-1' }));
-        fakeIntegration.addIntegration(buildGoogleOauthIntegration({ id: 'bq-2' }));
-        fakeToken.tokens.set('bq-1', buildTokenEntry({ integrationId: 'bq-1' }));
-        fakeToken.tokens.set('bq-2', buildTokenEntry({ integrationId: 'bq-2' }));
+        integrations.set('bq-1', buildGoogleOauthIntegration({ id: 'bq-1' }));
+        integrations.set('bq-2', buildGoogleOauthIntegration({ id: 'bq-2' }));
+        tokens.set('bq-1', buildTokenEntry({ integrationId: 'bq-1' }));
+        tokens.set('bq-2', buildTokenEntry({ integrationId: 'bq-2' }));
 
-        new FederatedAuthOrphanedTokenCleaner(fakeToken.storage, fakeIntegration.storage, disposables);
+        new FederatedAuthOrphanedTokenCleaner(tokenStorage, integrationStorage, disposables);
 
         await fireChangeAndWait();
 
-        assert.deepStrictEqual(fakeToken.deletedIds, []);
+        sinon.assert.notCalled(deleteSpy);
     });
 
     test('deletes tokens for integrations that no longer exist', async () => {
-        fakeIntegration.addIntegration(buildGoogleOauthIntegration({ id: 'bq-1' }));
-        fakeToken.tokens.set('bq-1', buildTokenEntry({ integrationId: 'bq-1' }));
-        fakeToken.tokens.set('orphan-a', buildTokenEntry({ integrationId: 'orphan-a' }));
-        fakeToken.tokens.set('orphan-b', buildTokenEntry({ integrationId: 'orphan-b' }));
+        integrations.set('bq-1', buildGoogleOauthIntegration({ id: 'bq-1' }));
+        tokens.set('bq-1', buildTokenEntry({ integrationId: 'bq-1' }));
+        tokens.set('orphan-a', buildTokenEntry({ integrationId: 'orphan-a' }));
+        tokens.set('orphan-b', buildTokenEntry({ integrationId: 'orphan-b' }));
 
-        new FederatedAuthOrphanedTokenCleaner(fakeToken.storage, fakeIntegration.storage, disposables);
+        new FederatedAuthOrphanedTokenCleaner(tokenStorage, integrationStorage, disposables);
 
         await fireChangeAndWait();
 
-        assert.deepStrictEqual(fakeToken.deletedIds.sort(), ['orphan-a', 'orphan-b']);
+        sinon.assert.calledWith(deleteSpy, 'orphan-a');
+        sinon.assert.calledWith(deleteSpy, 'orphan-b');
+        sinon.assert.neverCalledWith(deleteSpy, 'bq-1');
     });
 
     test('no-op when there are no stored tokens at all', async () => {
-        fakeIntegration.addIntegration(buildGoogleOauthIntegration({ id: 'bq-1' }));
+        integrations.set('bq-1', buildGoogleOauthIntegration({ id: 'bq-1' }));
 
-        new FederatedAuthOrphanedTokenCleaner(fakeToken.storage, fakeIntegration.storage, disposables);
+        new FederatedAuthOrphanedTokenCleaner(tokenStorage, integrationStorage, disposables);
 
         await fireChangeAndWait();
 
-        assert.deepStrictEqual(fakeToken.deletedIds, []);
+        sinon.assert.notCalled(deleteSpy);
     });
 
     test('continues deleting other orphans when one delete fails', async () => {
-        fakeIntegration.addIntegration(buildGoogleOauthIntegration({ id: 'bq-1' }));
-        fakeToken = createFakeTokenStorage({ throwOnDelete: new Set(['orphan-a']) });
-        fakeToken.tokens.set('bq-1', buildTokenEntry({ integrationId: 'bq-1' }));
-        fakeToken.tokens.set('orphan-a', buildTokenEntry({ integrationId: 'orphan-a' }));
-        fakeToken.tokens.set('orphan-b', buildTokenEntry({ integrationId: 'orphan-b' }));
+        tokenStorage = buildTokenStorage(new Set(['orphan-a']));
+        integrations.set('bq-1', buildGoogleOauthIntegration({ id: 'bq-1' }));
+        tokens.set('bq-1', buildTokenEntry({ integrationId: 'bq-1' }));
+        tokens.set('orphan-a', buildTokenEntry({ integrationId: 'orphan-a' }));
+        tokens.set('orphan-b', buildTokenEntry({ integrationId: 'orphan-b' }));
 
-        new FederatedAuthOrphanedTokenCleaner(fakeToken.storage, fakeIntegration.storage, disposables);
+        new FederatedAuthOrphanedTokenCleaner(tokenStorage, integrationStorage, disposables);
 
         await fireChangeAndWait();
 
         // Both attempts must have happened, even after orphan-a's failure.
-        assert.deepStrictEqual(fakeToken.deletedIds.sort(), ['orphan-a', 'orphan-b']);
+        sinon.assert.calledWith(deleteSpy, 'orphan-a');
+        sinon.assert.calledWith(deleteSpy, 'orphan-b');
     });
 });

@@ -2,13 +2,10 @@
 // Cross-platform: must not import from `.node.ts` modules. Node-only helpers live in `federatedAuthTestHelpers.node.ts`.
 
 import type { DeepnoteBlock } from '@deepnote/blocks';
-import sinon from 'sinon';
-import { EventEmitter } from 'vscode';
 
 import type { ConfigurableDatabaseIntegrationConfig } from '../../../../platform/notebooks/deepnote/integrationTypes';
 import type { DeepnoteProject } from '../../../../platform/deepnote/deepnoteTypes';
-import type { IIntegrationStorage } from '../../../../platform/notebooks/deepnote/types';
-import type { FederatedAuthTokenEntry, IFederatedAuthTokenStorage } from '../types';
+import type { FederatedAuthTokenEntry } from '../types';
 
 export const FED_AUTH_FIXTURE = {
     INTEGRATION_ID: 'bq-integration-1',
@@ -109,131 +106,6 @@ export function buildCodeBlock(): DeepnoteBlock {
         sortingKey: '0',
         content: 'print("hi")',
         metadata: {}
-    };
-}
-
-export interface FakeIntegrationStorage {
-    addIntegration(config: ConfigurableDatabaseIntegrationConfig): void;
-    integrationStore: Map<string, ConfigurableDatabaseIntegrationConfig>;
-    onDidChangeIntegrations: EventEmitter<void>;
-    removeIntegration(id: string): void;
-    storage: IIntegrationStorage;
-}
-
-export function createFakeIntegrationStorage(): FakeIntegrationStorage {
-    const integrationStore = new Map<string, ConfigurableDatabaseIntegrationConfig>();
-    const onDidChangeIntegrations = new EventEmitter<void>();
-    const storage: IIntegrationStorage = {
-        onDidChangeIntegrations: onDidChangeIntegrations.event,
-        dispose: () => onDidChangeIntegrations.dispose(),
-        async clear() {
-            integrationStore.clear();
-            onDidChangeIntegrations.fire();
-        },
-        async delete(integrationId: string) {
-            integrationStore.delete(integrationId);
-            onDidChangeIntegrations.fire();
-        },
-        async exists(integrationId: string) {
-            return integrationStore.has(integrationId);
-        },
-        async getAll() {
-            return Array.from(integrationStore.values());
-        },
-        async getIntegrationConfig(integrationId: string) {
-            return integrationStore.get(integrationId);
-        },
-        async getProjectIntegrationConfig() {
-            return undefined;
-        },
-        async save(config: ConfigurableDatabaseIntegrationConfig) {
-            integrationStore.set(config.id, config);
-            onDidChangeIntegrations.fire();
-        }
-    };
-    return {
-        addIntegration: (config) => integrationStore.set(config.id, config),
-        integrationStore,
-        onDidChangeIntegrations,
-        removeIntegration: (id) => integrationStore.delete(id),
-        storage
-    };
-}
-
-export interface FakeTokenStorage {
-    deletedIds: string[];
-    deleteSpy: sinon.SinonSpy;
-    fingerprintForTest(m: { clientId: string; clientSecret: string; project: string }): string;
-    onDidChangeEmitter: EventEmitter<string>;
-    saveCallArgs: Array<[FederatedAuthTokenEntry, { silent?: boolean } | undefined]>;
-    saveSpy: sinon.SinonSpy;
-    savedTokens: FederatedAuthTokenEntry[];
-    storage: IFederatedAuthTokenStorage;
-    tokens: Map<string, FederatedAuthTokenEntry>;
-}
-
-export function createFakeTokenStorage(opts?: {
-    fingerprintForTest?: (m: { clientId: string; clientSecret: string; project: string }) => string;
-    throwOnDelete?: Set<string>;
-}): FakeTokenStorage {
-    const tokens = new Map<string, FederatedAuthTokenEntry>();
-    const savedTokens: FederatedAuthTokenEntry[] = [];
-    const saveCallArgs: Array<[FederatedAuthTokenEntry, { silent?: boolean } | undefined]> = [];
-    const deletedIds: string[] = [];
-    const onDidChangeEmitter = new EventEmitter<string>();
-    const fingerprintForTest = opts?.fingerprintForTest ?? ((m) => `${m.clientId}|${m.clientSecret}|${m.project}`);
-
-    const saveSpy = sinon.spy(async (entry: FederatedAuthTokenEntry, options?: { silent?: boolean }) => {
-        tokens.set(entry.integrationId, entry);
-        savedTokens.push(entry);
-        saveCallArgs.push([entry, options]);
-        if (!options?.silent) {
-            onDidChangeEmitter.fire(entry.integrationId);
-        }
-    });
-    const deleteSpy = sinon.spy(async (id: string) => {
-        deletedIds.push(id);
-        if (opts?.throwOnDelete?.has(id)) {
-            throw new Error(`forced throw on delete: ${id}`);
-        }
-        const had = tokens.delete(id);
-        if (had) {
-            onDidChangeEmitter.fire(id);
-        }
-    });
-
-    const storage: IFederatedAuthTokenStorage = {
-        onDidChangeTokens: onDidChangeEmitter.event,
-        computeMetadataFingerprint(metadata) {
-            return fingerprintForTest(metadata);
-        },
-        async delete(integrationId: string) {
-            await deleteSpy(integrationId);
-        },
-        async get(integrationId: string) {
-            return tokens.get(integrationId);
-        },
-        async has(integrationId: string) {
-            return tokens.has(integrationId);
-        },
-        async listIntegrationIds() {
-            return Array.from(tokens.keys());
-        },
-        async save(entry: FederatedAuthTokenEntry, options?: { silent?: boolean }) {
-            await saveSpy(entry, options);
-        }
-    };
-
-    return {
-        deletedIds,
-        deleteSpy,
-        fingerprintForTest,
-        onDidChangeEmitter,
-        saveCallArgs,
-        saveSpy,
-        savedTokens,
-        storage,
-        tokens
     };
 }
 

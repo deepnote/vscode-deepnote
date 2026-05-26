@@ -7,7 +7,8 @@ import { IExtensionContext, IDisposable } from '../../../platform/common/types';
 import { Commands } from '../../../platform/common/constants';
 import { IDeepnoteNotebookManager } from '../../types';
 import { IntegrationWebviewProvider } from './integrationWebview';
-import { IFederatedAuthTokenStorage, IIntegrationStorage } from './types';
+import { FederatedAuthTokenEntry, IFederatedAuthTokenStorage, IIntegrationStorage } from './types';
+import { computeMetadataFingerprint } from './federatedAuth/federatedAuthTokenStorage.node';
 import {
     ConfigurableDatabaseIntegrationConfig,
     IntegrationStatus,
@@ -17,9 +18,7 @@ import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-m
 import {
     buildGoogleOauthIntegration,
     buildPostgresIntegration,
-    buildServiceAccountIntegration,
-    createFakeTokenStorage,
-    type FakeTokenStorage
+    buildServiceAccountIntegration
 } from './federatedAuth/federatedAuthTestHelpers';
 
 interface CapturedMessage {
@@ -96,7 +95,11 @@ suite('IntegrationWebviewProvider', () => {
     let extensionContext: IExtensionContext;
     let integrationStorage: IIntegrationStorage;
     let notebookManager: IDeepnoteNotebookManager;
-    let fakeTokenStorage: FakeTokenStorage;
+    let tokens: Map<string, FederatedAuthTokenEntry>;
+    let onDidChangeTokens: EventEmitter<string>;
+    let tokenSaveSpy: sinon.SinonSpy<[FederatedAuthTokenEntry, { silent?: boolean }?], Promise<void>>;
+    let tokenDeleteSpy: sinon.SinonSpy<[string], Promise<void>>;
+    let tokenStorage: IFederatedAuthTokenStorage;
     let extensionSubscriptions: IDisposable[];
     let fakePanel: FakeWebviewPanel;
 
@@ -109,9 +112,30 @@ suite('IntegrationWebviewProvider', () => {
         when(extensionContext.subscriptions).thenReturn(extensionSubscriptions);
         when(extensionContext.extensionUri).thenReturn(Uri.file('/ext'));
 
-        fakeTokenStorage = createFakeTokenStorage();
-        fakePanel = createFakeWebviewPanel();
+        tokens = new Map();
+        onDidChangeTokens = new EventEmitter<string>();
+        tokenSaveSpy = sinon.spy(async (entry: FederatedAuthTokenEntry, options?: { silent?: boolean }) => {
+            tokens.set(entry.integrationId, entry);
+            if (!options?.silent) {
+                onDidChangeTokens.fire(entry.integrationId);
+            }
+        });
+        tokenDeleteSpy = sinon.spy(async (id: string) => {
+            if (tokens.delete(id)) {
+                onDidChangeTokens.fire(id);
+            }
+        });
+        tokenStorage = {
+            onDidChangeTokens: onDidChangeTokens.event,
+            computeMetadataFingerprint: (m) => computeMetadataFingerprint(m),
+            delete: tokenDeleteSpy,
+            get: async (id) => tokens.get(id),
+            has: async (id) => tokens.has(id),
+            listIntegrationIds: async () => Array.from(tokens.keys()),
+            save: tokenSaveSpy
+        };
 
+        fakePanel = createFakeWebviewPanel();
         when(
             mockedVSCodeNamespaces.window.createWebviewPanel(anyString(), anyString(), anything(), anything())
         ).thenReturn(fakePanel.panel);
@@ -120,6 +144,7 @@ suite('IntegrationWebviewProvider', () => {
     teardown(() => {
         reset(mockedVSCodeNamespaces.window);
         reset(mockedVSCodeNamespaces.commands);
+        onDidChangeTokens.dispose();
     });
 
     function buildProvider(opts: { tokenStorage?: IFederatedAuthTokenStorage } = {}): IntegrationWebviewProvider {
@@ -147,7 +172,7 @@ suite('IntegrationWebviewProvider', () => {
     }
 
     function preStoreToken(id: string, fingerprint = 'fp'): void {
-        fakeTokenStorage.tokens.set(id, {
+        tokens.set(id, {
             integrationId: id,
             refreshToken: 'r',
             metadataFingerprint: fingerprint
@@ -200,7 +225,7 @@ suite('IntegrationWebviewProvider', () => {
                     preStoreToken(config.id);
                 }
                 const provider = buildProvider({
-                    tokenStorage: row.tokenStorage ? fakeTokenStorage.storage : undefined
+                    tokenStorage: row.tokenStorage ? tokenStorage : undefined
                 });
                 await show(provider, singleIntegrationMap(config.id, config));
 
@@ -219,7 +244,7 @@ suite('IntegrationWebviewProvider', () => {
             executeCommandStub(command)
         );
 
-        const provider = buildProvider({ tokenStorage: fakeTokenStorage.storage });
+        const provider = buildProvider({ tokenStorage });
         const integrationId = 'bq-auth';
         await show(provider, singleIntegrationMap(integrationId, buildGoogleOauthIntegration({ id: integrationId })));
 
@@ -235,7 +260,7 @@ suite('IntegrationWebviewProvider', () => {
         test(`${messageType}Configuration: deletes the federated token in addition to the integration config`, async () => {
             when(integrationStorage.delete(anyString())).thenResolve();
 
-            const provider = buildProvider({ tokenStorage: fakeTokenStorage.storage });
+            const provider = buildProvider({ tokenStorage });
             const integrationId = `bq-${messageType}`;
             preStoreToken(integrationId);
 
@@ -245,7 +270,7 @@ suite('IntegrationWebviewProvider', () => {
             );
             await fakePanel.onDidReceiveMessage({ type: messageType, integrationId });
 
-            assert.includeMembers(fakeTokenStorage.deletedIds, [integrationId]);
+            sinon.assert.calledWith(tokenDeleteSpy, integrationId);
             verify(integrationStorage.delete(integrationId)).once();
         });
     });
@@ -255,7 +280,7 @@ suite('IntegrationWebviewProvider', () => {
         const integrationSaveSpy = sinon.spy();
         when(integrationStorage.save(anything())).thenCall(integrationSaveSpy);
 
-        const provider = buildProvider({ tokenStorage: fakeTokenStorage.storage });
+        const provider = buildProvider({ tokenStorage });
         preStoreToken(integrationId, 'old-fingerprint');
         await show(provider, singleIntegrationMap(integrationId, buildGoogleOauthIntegration({ id: integrationId })));
 
@@ -273,36 +298,33 @@ suite('IntegrationWebviewProvider', () => {
 
         await fakePanel.onDidReceiveMessage({ type: 'save', integrationId, config: newConfig });
 
-        sinon.assert.calledOnce(fakeTokenStorage.deleteSpy);
+        sinon.assert.calledOnce(tokenDeleteSpy);
         sinon.assert.calledOnce(integrationSaveSpy);
-        assert.isTrue(
-            fakeTokenStorage.deleteSpy.calledBefore(integrationSaveSpy),
-            'token.delete must occur BEFORE storage.save'
-        );
+        assert.isTrue(tokenDeleteSpy.calledBefore(integrationSaveSpy), 'token.delete must occur BEFORE storage.save');
     });
 
     test('saveConfiguration: deletes the token when authMethod switches away from google-oauth', async () => {
         const integrationId = 'bq-switch';
         when(integrationStorage.save(anything())).thenResolve();
 
-        const provider = buildProvider({ tokenStorage: fakeTokenStorage.storage });
+        const provider = buildProvider({ tokenStorage });
         preStoreToken(integrationId, 'fp-1');
         await show(provider, singleIntegrationMap(integrationId, buildGoogleOauthIntegration({ id: integrationId })));
 
         const newConfig = buildServiceAccountIntegration({ id: integrationId });
         await fakePanel.onDidReceiveMessage({ type: 'save', integrationId, config: newConfig });
 
-        assert.includeMembers(fakeTokenStorage.deletedIds, [integrationId]);
-        assert.isFalse(fakeTokenStorage.tokens.has(integrationId));
+        sinon.assert.calledWith(tokenDeleteSpy, integrationId);
+        assert.isFalse(tokens.has(integrationId));
     });
 
     test('saveConfiguration: leaves the token intact when fingerprint matches', async () => {
         const integrationId = 'bq-stable';
         when(integrationStorage.save(anything())).thenResolve();
 
-        const provider = buildProvider({ tokenStorage: fakeTokenStorage.storage });
+        const provider = buildProvider({ tokenStorage });
         const sameConfig = buildGoogleOauthIntegration({ id: integrationId });
-        const stableFingerprint = fakeTokenStorage.fingerprintForTest({
+        const stableFingerprint = computeMetadataFingerprint({
             clientId: 'client-id-abc',
             clientSecret: 'client-secret-xyz',
             project: 'my-gcp-project'
@@ -312,12 +334,12 @@ suite('IntegrationWebviewProvider', () => {
 
         await fakePanel.onDidReceiveMessage({ type: 'save', integrationId, config: sameConfig });
 
-        assert.notInclude(fakeTokenStorage.deletedIds, integrationId);
-        assert.isTrue(fakeTokenStorage.tokens.has(integrationId));
+        sinon.assert.neverCalledWith(tokenDeleteSpy, integrationId);
+        assert.isTrue(tokens.has(integrationId));
     });
 
     test('onDidChangeTokens subscription survives panel close and reopen', async () => {
-        const provider = buildProvider({ tokenStorage: fakeTokenStorage.storage });
+        const provider = buildProvider({ tokenStorage });
         const integrationId = 'bq-reopen';
         const integrations = singleIntegrationMap(integrationId, buildGoogleOauthIntegration({ id: integrationId }));
 
@@ -339,7 +361,7 @@ suite('IntegrationWebviewProvider', () => {
         assert.isAtLeast(updatesAfterReopen, 1, 'reopened panel should receive an initial update');
 
         // Token change: if the subscription was lost on dispose, the webview wouldn't see an additional update.
-        await fakeTokenStorage.storage.save({
+        await tokenStorage.save({
             integrationId,
             refreshToken: 'r',
             metadataFingerprint: 'fp'

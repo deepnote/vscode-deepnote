@@ -1,26 +1,26 @@
 import { assert } from 'chai';
 import sinon from 'sinon';
 import { CancellationError, Uri } from 'vscode';
-import { anyString, anything, capture, instance, mock, when } from 'ts-mockito';
+import { anyString, anything, capture, deepEqual, instance, mock, verify, when } from 'ts-mockito';
 
 import { IExtensionContext, IDisposable } from '../../../../platform/common/types';
 import { FederatedAuthCommandHandlerNode, buildExtensionStartUrl } from './federatedAuthCommandHandler.node';
+import { IFederatedAuthTokenStorage } from '../types';
+import { IIntegrationStorage } from '../../../../platform/notebooks/deepnote/types';
 import { computeMetadataFingerprint } from './federatedAuthTokenStorage.node';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../../test/vscode-mock';
 import {
     FED_AUTH_FIXTURE,
     buildGoogleOauthIntegration,
     buildPostgresIntegration,
-    buildServiceAccountIntegration,
-    createFakeIntegrationStorage,
-    createFakeTokenStorage
+    buildServiceAccountIntegration
 } from './federatedAuthTestHelpers';
 import type { RunOAuthFlowParams } from './oauthLoopbackFlow.node';
 
 suite('FederatedAuthCommandHandlerNode', () => {
     let extensionContext: IExtensionContext;
-    let fakeIntegration: ReturnType<typeof createFakeIntegrationStorage>;
-    let fakeToken: ReturnType<typeof createFakeTokenStorage>;
+    let integrationStorage: IIntegrationStorage;
+    let tokenStorage: IFederatedAuthTokenStorage;
     let subscriptions: IDisposable[];
     let runOAuthFlowStub: sinon.SinonStub<[RunOAuthFlowParams], Promise<{ refreshToken: string }>>;
     let handler: FederatedAuthCommandHandlerNode;
@@ -28,21 +28,21 @@ suite('FederatedAuthCommandHandlerNode', () => {
     setup(() => {
         resetVSCodeMocks();
         subscriptions = [];
-        fakeIntegration = createFakeIntegrationStorage();
-        fakeToken = createFakeTokenStorage();
 
         extensionContext = mock<IExtensionContext>();
+        integrationStorage = mock<IIntegrationStorage>();
+        tokenStorage = mock<IFederatedAuthTokenStorage>();
         when(extensionContext.subscriptions).thenReturn(subscriptions);
 
         runOAuthFlowStub = sinon.stub<[RunOAuthFlowParams], Promise<{ refreshToken: string }>>();
         runOAuthFlowStub.resolves({ refreshToken: FED_AUTH_FIXTURE.REFRESH_TOKEN });
 
-        when(mockedVSCodeNamespaces.env.openExternal(anything())).thenResolve(true as unknown as void);
+        when(mockedVSCodeNamespaces.env.openExternal(anything())).thenReturn(Promise.resolve(true));
 
         handler = new FederatedAuthCommandHandlerNode(
             instance(extensionContext),
-            fakeIntegration.storage,
-            fakeToken.storage,
+            instance(integrationStorage),
+            instance(tokenStorage),
             runOAuthFlowStub
         );
     });
@@ -56,36 +56,43 @@ suite('FederatedAuthCommandHandlerNode', () => {
     ).forEach(([label, build, lookupId]) => {
         test(`skips OAuth flow for ${label}`, async () => {
             const config = build();
-            if (config) {
-                fakeIntegration.addIntegration(config);
-            }
-            await handler.authenticate(lookupId ?? FED_AUTH_FIXTURE.INTEGRATION_ID);
+            const id = lookupId ?? FED_AUTH_FIXTURE.INTEGRATION_ID;
+            when(integrationStorage.getIntegrationConfig(id)).thenResolve(config);
+
+            await handler.authenticate(id);
 
             assert.strictEqual(runOAuthFlowStub.callCount, 0);
-            assert.lengthOf(fakeToken.savedTokens, 0);
+            verify(tokenStorage.save(anything())).never();
         });
     });
 
     test('happy path: saves the captured refresh token with a fresh fingerprint', async () => {
-        fakeIntegration.addIntegration(buildGoogleOauthIntegration());
+        when(integrationStorage.getIntegrationConfig(FED_AUTH_FIXTURE.INTEGRATION_ID)).thenResolve(
+            buildGoogleOauthIntegration()
+        );
 
         await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID);
 
         assert.strictEqual(runOAuthFlowStub.callCount, 1);
-        assert.lengthOf(fakeToken.savedTokens, 1);
-        assert.deepStrictEqual(fakeToken.savedTokens[0], {
-            integrationId: FED_AUTH_FIXTURE.INTEGRATION_ID,
-            refreshToken: FED_AUTH_FIXTURE.REFRESH_TOKEN,
-            metadataFingerprint: computeMetadataFingerprint({
-                clientId: FED_AUTH_FIXTURE.CLIENT_ID,
-                clientSecret: FED_AUTH_FIXTURE.CLIENT_SECRET,
-                project: FED_AUTH_FIXTURE.PROJECT
-            })
-        });
+        verify(
+            tokenStorage.save(
+                deepEqual({
+                    integrationId: FED_AUTH_FIXTURE.INTEGRATION_ID,
+                    refreshToken: FED_AUTH_FIXTURE.REFRESH_TOKEN,
+                    metadataFingerprint: computeMetadataFingerprint({
+                        clientId: FED_AUTH_FIXTURE.CLIENT_ID,
+                        clientSecret: FED_AUTH_FIXTURE.CLIENT_SECRET,
+                        project: FED_AUTH_FIXTURE.PROJECT
+                    })
+                })
+            )
+        ).once();
     });
 
     test('runOAuthFlow is called with clientId, clientSecret, state, codeVerifier, and the deepnote-callback redirectUri', async () => {
-        fakeIntegration.addIntegration(buildGoogleOauthIntegration());
+        when(integrationStorage.getIntegrationConfig(FED_AUTH_FIXTURE.INTEGRATION_ID)).thenResolve(
+            buildGoogleOauthIntegration()
+        );
 
         await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID);
 
@@ -103,7 +110,9 @@ suite('FederatedAuthCommandHandlerNode', () => {
     });
 
     test('onListening opens the deepnote.com start URL with the externalized callback as finalRedirect', async () => {
-        fakeIntegration.addIntegration(buildGoogleOauthIntegration());
+        when(integrationStorage.getIntegrationConfig(FED_AUTH_FIXTURE.INTEGRATION_ID)).thenResolve(
+            buildGoogleOauthIntegration()
+        );
 
         runOAuthFlowStub.callsFake(async (params: RunOAuthFlowParams) => {
             await params.onListening('http://127.0.0.1:54321/auth/callback');
@@ -132,23 +141,27 @@ suite('FederatedAuthCommandHandlerNode', () => {
     });
 
     test('silently returns when the user cancels the flow', async () => {
-        fakeIntegration.addIntegration(buildGoogleOauthIntegration());
+        when(integrationStorage.getIntegrationConfig(FED_AUTH_FIXTURE.INTEGRATION_ID)).thenResolve(
+            buildGoogleOauthIntegration()
+        );
         runOAuthFlowStub.rejects(new CancellationError());
 
         await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID);
 
         assert.strictEqual(runOAuthFlowStub.callCount, 1);
-        assert.lengthOf(fakeToken.savedTokens, 0);
+        verify(tokenStorage.save(anything())).never();
     });
 
     test('surfaces a generic OAuth error via the failure toast and does not save a token', async () => {
-        fakeIntegration.addIntegration(buildGoogleOauthIntegration());
+        when(integrationStorage.getIntegrationConfig(FED_AUTH_FIXTURE.INTEGRATION_ID)).thenResolve(
+            buildGoogleOauthIntegration()
+        );
         runOAuthFlowStub.rejects(new Error('boom'));
 
         await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID);
 
         assert.strictEqual(runOAuthFlowStub.callCount, 1);
-        assert.lengthOf(fakeToken.savedTokens, 0);
+        verify(tokenStorage.save(anything())).never();
     });
 
     test('activate registers the AuthenticateIntegration command and pushes a disposable', () => {

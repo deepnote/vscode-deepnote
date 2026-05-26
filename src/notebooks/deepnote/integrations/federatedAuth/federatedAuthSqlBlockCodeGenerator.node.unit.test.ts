@@ -1,11 +1,18 @@
 import { assert } from 'chai';
 import sinon from 'sinon';
+import { EventEmitter } from 'vscode';
 
-import { FederatedAuthTokenEntry, NotAuthenticatedError, OAuthClientMisconfiguredError } from '../types';
+import {
+    FederatedAuthTokenEntry,
+    IFederatedAuthTokenStorage,
+    NotAuthenticatedError,
+    OAuthClientMisconfiguredError
+} from '../types';
 import {
     FederatedAuthSqlBlockCodeGenerator,
     federatedSqlVariableName
 } from './federatedAuthSqlBlockCodeGenerator.node';
+import { IIntegrationStorage } from '../../../../platform/notebooks/deepnote/types';
 import { InvalidClientError, InvalidGrantError, computeMetadataFingerprint } from './federatedAuthTokenStorage.node';
 import {
     FED_AUTH_FIXTURE,
@@ -15,10 +22,9 @@ import {
     buildServiceAccountIntegration,
     buildSqlBlock,
     buildTokenEntry,
-    createFakeIntegrationStorage,
-    createFakeTokenStorage,
     parsePythonSingleQuoted
 } from './federatedAuthTestHelpers';
+import type { ConfigurableDatabaseIntegrationConfig } from '../../../../platform/notebooks/deepnote/integrationTypes';
 
 type FetcherFn = (
     entry: FederatedAuthTokenEntry,
@@ -33,20 +39,66 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         project: PROJECT
     });
 
-    let deleteSpy: sinon.SinonSpy;
-    let fakeIntegration: ReturnType<typeof createFakeIntegrationStorage>;
-    let fakeToken: ReturnType<typeof createFakeTokenStorage>;
+    let integrations: Map<string, ConfigurableDatabaseIntegrationConfig>;
+    let tokens: Map<string, FederatedAuthTokenEntry>;
+    let onDidChangeTokens: EventEmitter<string>;
+    let onDidChangeIntegrations: EventEmitter<void>;
+    let saveSpy: sinon.SinonSpy<[FederatedAuthTokenEntry, { silent?: boolean }?], Promise<void>>;
+    let deleteSpy: sinon.SinonSpy<[string], Promise<void>>;
+    let integrationStorage: IIntegrationStorage;
+    let tokenStorage: IFederatedAuthTokenStorage;
     let fetcher: sinon.SinonStub<Parameters<FetcherFn>, ReturnType<FetcherFn>>;
-    let saveSpy: sinon.SinonSpy;
     let generator: FederatedAuthSqlBlockCodeGenerator;
 
     setup(() => {
-        fakeIntegration = createFakeIntegrationStorage();
-        fakeToken = createFakeTokenStorage();
-        deleteSpy = fakeToken.deleteSpy;
-        saveSpy = fakeToken.saveSpy;
+        integrations = new Map();
+        tokens = new Map();
+        onDidChangeTokens = new EventEmitter<string>();
+        onDidChangeIntegrations = new EventEmitter<void>();
+        saveSpy = sinon.spy(async (entry: FederatedAuthTokenEntry, _options?: { silent?: boolean }) => {
+            tokens.set(entry.integrationId, entry);
+        });
+        deleteSpy = sinon.spy(async (id: string) => {
+            tokens.delete(id);
+        });
 
-        generator = new FederatedAuthSqlBlockCodeGenerator(fakeIntegration.storage, fakeToken.storage);
+        integrationStorage = {
+            onDidChangeIntegrations: onDidChangeIntegrations.event,
+            dispose: () => onDidChangeIntegrations.dispose(),
+            async clear() {
+                integrations.clear();
+            },
+            async delete(id) {
+                integrations.delete(id);
+            },
+            async exists(id) {
+                return integrations.has(id);
+            },
+            async getAll() {
+                return Array.from(integrations.values());
+            },
+            async getIntegrationConfig(id) {
+                return integrations.get(id);
+            },
+            async getProjectIntegrationConfig() {
+                return undefined;
+            },
+            async save(config) {
+                integrations.set(config.id, config);
+            }
+        };
+
+        tokenStorage = {
+            onDidChangeTokens: onDidChangeTokens.event,
+            computeMetadataFingerprint: (m) => computeMetadataFingerprint(m),
+            delete: deleteSpy,
+            get: async (id) => tokens.get(id),
+            has: async (id) => tokens.has(id),
+            listIntegrationIds: async () => Array.from(tokens.keys()),
+            save: saveSpy
+        };
+
+        generator = new FederatedAuthSqlBlockCodeGenerator(integrationStorage, tokenStorage);
 
         fetcher = sinon.stub(generator, 'fetchFreshAccessToken');
         fetcher.resolves({ accessToken: ACCESS_TOKEN });
@@ -54,11 +106,13 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
 
     teardown(() => {
         sinon.restore();
+        onDidChangeTokens.dispose();
+        onDidChangeIntegrations.dispose();
     });
 
     function setupValidFederatedIntegration() {
-        fakeIntegration.addIntegration(buildGoogleOauthIntegration());
-        fakeToken.tokens.set(
+        integrations.set(INTEGRATION_ID, buildGoogleOauthIntegration());
+        tokens.set(
             INTEGRATION_ID,
             buildTokenEntry({ refreshToken: REFRESH_TOKEN, metadataFingerprint: VALID_FINGERPRINT })
         );
@@ -92,7 +146,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         test(`returns undefined for ${label}`, async () => {
             const integration = buildIntegration();
             if (integration) {
-                fakeIntegration.addIntegration(integration);
+                integrations.set(integration.id, integration);
             }
             const result = await generator.generate(buildBlock());
             assert.strictEqual(result, undefined);
@@ -101,21 +155,21 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
     });
 
     test('throws NotAuthenticatedError when federated integration has no stored token', async () => {
-        fakeIntegration.addIntegration(buildGoogleOauthIntegration());
+        integrations.set(INTEGRATION_ID, buildGoogleOauthIntegration());
 
         try {
             await generator.generate(buildSqlBlock());
             assert.fail('Expected NotAuthenticatedError');
         } catch (err) {
-            assert.instanceOf(err, NotAuthenticatedError);
-            assert.strictEqual((err as NotAuthenticatedError).integrationName, 'My BigQuery');
+            assert(err instanceof NotAuthenticatedError);
+            assert.strictEqual(err.integrationName, 'My BigQuery');
         }
         sinon.assert.notCalled(fetcher);
     });
 
     test('throws NotAuthenticatedError and deletes the token when the metadata fingerprint is stale', async () => {
         setupValidFederatedIntegration();
-        fakeToken.tokens.set(
+        tokens.set(
             INTEGRATION_ID,
             buildTokenEntry({ refreshToken: REFRESH_TOKEN, metadataFingerprint: 'stale-fingerprint' })
         );
@@ -148,7 +202,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
             throw new Error(`prelude did not match expected shape: ${result.prelude}`);
         }
         const safeJson = match[1];
-        const parsed = JSON.parse(safeJson.replace(/\\'/g, "'")) as Record<string, unknown>;
+        const parsed = JSON.parse(safeJson.replace(/\\'/g, "'"));
         assert.deepStrictEqual(parsed, {
             integration_id: INTEGRATION_ID,
             url: 'bigquery://?user_supplied_client=true',
@@ -172,8 +226,8 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
     test('prelude round-trips through Python+json.loads when integration id contains backslash, newline, and single quote', async () => {
         // Catches: regressing to a single-char `\\'` escape would leave `\\`/`\n` undecoded and break `json.loads` at the kernel.
         const hostileIntegrationId = "bq-with-\\-and-\n-and-'-id";
-        fakeIntegration.addIntegration(buildGoogleOauthIntegration({ id: hostileIntegrationId }));
-        fakeToken.tokens.set(
+        integrations.set(hostileIntegrationId, buildGoogleOauthIntegration({ id: hostileIntegrationId }));
+        tokens.set(
             hostileIntegrationId,
             buildTokenEntry({
                 integrationId: hostileIntegrationId,
@@ -196,7 +250,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         const literal = result.prelude.slice(assignmentPrefix.length);
 
         const decoded = parsePythonSingleQuoted(literal);
-        const parsed = JSON.parse(decoded) as Record<string, unknown>;
+        const parsed = JSON.parse(decoded);
         assert.deepStrictEqual(parsed, {
             integration_id: hostileIntegrationId,
             url: 'bigquery://?user_supplied_client=true',
@@ -241,10 +295,10 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
             await generator.generate(buildSqlBlock());
             assert.fail('Expected OAuthClientMisconfiguredError');
         } catch (err) {
-            assert.instanceOf(err, OAuthClientMisconfiguredError);
+            assert(err instanceof OAuthClientMisconfiguredError);
             assert.notInstanceOf(err, NotAuthenticatedError);
             assert.notInstanceOf(err, InvalidClientError);
-            assert.equal((err as OAuthClientMisconfiguredError).integrationName, 'My BigQuery');
+            assert.equal(err.integrationName, 'My BigQuery');
         }
         sinon.assert.notCalled(deleteSpy);
     });
@@ -257,7 +311,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         await generator.generate(buildSqlBlock());
 
         sinon.assert.calledOnce(saveSpy);
-        const [savedEntry, options] = saveSpy.firstCall.args as [FederatedAuthTokenEntry, { silent?: boolean }];
+        const [savedEntry, options] = saveSpy.firstCall.args;
         assert.deepStrictEqual(savedEntry, {
             integrationId: INTEGRATION_ID,
             refreshToken: 'new-refresh-token',

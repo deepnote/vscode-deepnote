@@ -109,7 +109,7 @@ export function buildCodeBlock(): DeepnoteBlock {
         sortingKey: '0',
         content: 'print("hi")',
         metadata: {}
-    } as unknown as DeepnoteBlock;
+    };
 }
 
 export interface FakeIntegrationStorage {

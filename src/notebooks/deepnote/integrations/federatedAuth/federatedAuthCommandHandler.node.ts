@@ -162,10 +162,10 @@ export function buildExtensionStartUrl(params: {
     state: string;
 }): string {
     const url = new URL(`https://${params.deepnoteDomain}/auth/bigquery/extension/start`);
-    url.searchParams.set('clientId', params.clientId);
+    url.searchParams.set('client_id', params.clientId);
     url.searchParams.set('state', params.state);
-    url.searchParams.set('codeChallenge', params.codeChallenge);
-    url.searchParams.set('finalRedirect', params.finalRedirect);
+    url.searchParams.set('code_challenge', params.codeChallenge);
+    url.searchParams.set('final_redirect', params.finalRedirect);
 
     return url.toString();
 }

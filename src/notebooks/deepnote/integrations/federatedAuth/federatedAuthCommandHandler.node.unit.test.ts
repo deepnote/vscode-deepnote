@@ -121,10 +121,10 @@ suite('FederatedAuthCommandHandlerNode', () => {
         assert.strictEqual(uri.path, '/auth/bigquery/extension/start');
 
         const params = new URLSearchParams(uri.query);
-        assert.strictEqual(params.get('clientId'), FED_AUTH_FIXTURE.CLIENT_ID);
-        assert.strictEqual(params.get('finalRedirect'), 'http://127.0.0.1:54321/auth/callback');
+        assert.strictEqual(params.get('client_id'), FED_AUTH_FIXTURE.CLIENT_ID);
+        assert.strictEqual(params.get('final_redirect'), 'http://127.0.0.1:54321/auth/callback');
         assert.isString(params.get('state'));
-        assert.isString(params.get('codeChallenge'));
+        assert.isString(params.get('code_challenge'));
 
         // The state in the URL must match the state passed to runOAuthFlow (browser → server → callback → loopback contract).
         const callArg = runOAuthFlowStub.firstCall.args[0];
@@ -175,10 +175,10 @@ suite('buildExtensionStartUrl', () => {
         const parsed = new URL(url);
         assert.strictEqual(parsed.origin, 'https://deepnote.com');
         assert.strictEqual(parsed.pathname, '/auth/bigquery/extension/start');
-        assert.strictEqual(parsed.searchParams.get('clientId'), 'my-client-id');
+        assert.strictEqual(parsed.searchParams.get('client_id'), 'my-client-id');
         assert.strictEqual(parsed.searchParams.get('state'), 'state-nonce');
-        assert.strictEqual(parsed.searchParams.get('codeChallenge'), 'pkce-challenge');
-        assert.strictEqual(parsed.searchParams.get('finalRedirect'), 'http://127.0.0.1:54321/auth/callback');
+        assert.strictEqual(parsed.searchParams.get('code_challenge'), 'pkce-challenge');
+        assert.strictEqual(parsed.searchParams.get('final_redirect'), 'http://127.0.0.1:54321/auth/callback');
     });
 
     test('honors the deepnoteDomain override (for dev/staging hosts)', () => {

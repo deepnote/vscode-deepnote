@@ -483,7 +483,7 @@ export class CellExecution implements ICellExecution, IDisposable {
         if (federated) {
             logger.info(`Cell ${this.cell.index}: Using federated BigQuery code path`);
             try {
-                await kernelConnection.requestExecute(
+                const preludeReply = await kernelConnection.requestExecute(
                     {
                         code: federated.prelude,
                         silent: true,
@@ -494,6 +494,14 @@ export class CellExecution implements ICellExecution, IDisposable {
                     /* dispose: */ true,
                     /* metadata: */ undefined
                 ).done;
+                if (preludeReply.content.status === 'error') {
+                    const kernelError = new KernelError(preludeReply.content);
+                    logger.error(
+                        `Federated pre-execute returned error status for cell Index ${this.cell.index}`,
+                        kernelError
+                    );
+                    return this.completedWithErrors(kernelError);
+                }
             } catch (ex) {
                 logger.error(`Federated pre-execute failed for cell Index ${this.cell.index}`, ex);
                 return this.completedWithErrors(ex);

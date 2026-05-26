@@ -299,6 +299,56 @@ suite('CellExecution federated-auth branch', () => {
         assert.strictEqual(caught.message, preludeRejection.message);
     });
 
+    test('when prelude reply has content.status === "error": main requestExecute is NOT called and cell fails with the kernel error', async () => {
+        // Catches: prelude reply with status='error' was previously ignored; main execute would then NameError on the unset global.
+        const prelude = `__deepnote_federated_sql_connection__abc = '{}'`;
+        const cellCode = `_dntk.execute_sql_with_connection_json('SELECT 1', __deepnote_federated_sql_connection__abc)`;
+
+        const generator: IFederatedAuthSqlBlockCodeGenerator = {
+            generate: sinon.stub().resolves({ prelude, cellCode })
+        };
+        const execution = createExecution(generator);
+
+        const errorReply: KernelMessage.IExecuteReplyMsg = {
+            ...successReply,
+            content: {
+                execution_count: 1,
+                status: 'error',
+                ename: 'NameError',
+                evalue: 'name "x" is not defined',
+                traceback: ['line1']
+            }
+        };
+        preludeDone.resolve(errorReply);
+
+        let caught: unknown;
+        const startPromise = execution.start(instance(session));
+        if (startPromise) {
+            await startPromise.catch((err) => {
+                caught = err;
+            });
+        }
+        await execution.result.catch((err) => {
+            if (!caught) {
+                caught = err;
+            }
+        });
+
+        // Exactly one `requestExecute` call (prelude); main must NOT be called.
+        assert.strictEqual(
+            requestExecuteSpy.callCount,
+            1,
+            `expected exactly 1 requestExecute call, got ${requestExecuteSpy.callCount}`
+        );
+
+        assert(caught instanceof Error);
+        const message = (caught as Error).message;
+        assert.isTrue(
+            message.includes('NameError') || message.includes('name "x" is not defined'),
+            `expected error message to include "NameError" or 'name "x" is not defined', got: ${message}`
+        );
+    });
+
     (
         [
             ['NotAuthenticatedError', () => new NotAuthenticatedError('My BigQuery'), 'not authenticated'],

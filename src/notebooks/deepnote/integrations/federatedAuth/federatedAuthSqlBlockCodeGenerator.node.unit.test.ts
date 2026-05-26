@@ -1,14 +1,7 @@
 import { assert } from 'chai';
 import sinon from 'sinon';
 
-import { ConfigurableDatabaseIntegrationConfig } from '../../../../platform/notebooks/deepnote/integrationTypes';
-import { IIntegrationStorage } from '../../../../platform/notebooks/deepnote/types';
-import {
-    FederatedAuthTokenEntry,
-    IFederatedAuthTokenStorage,
-    NotAuthenticatedError,
-    OAuthClientMisconfiguredError
-} from '../types';
+import { FederatedAuthTokenEntry, NotAuthenticatedError, OAuthClientMisconfiguredError } from '../types';
 import {
     FederatedAuthSqlBlockCodeGenerator,
     federatedSqlVariableName
@@ -22,6 +15,8 @@ import {
     buildServiceAccountIntegration,
     buildSqlBlock,
     buildTokenEntry,
+    createFakeIntegrationStorage,
+    createFakeTokenStorage,
     parsePythonSingleQuoted
 } from './federatedAuthTestHelpers';
 
@@ -38,46 +33,32 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         project: PROJECT
     });
 
-    let integrationStore: Map<string, ConfigurableDatabaseIntegrationConfig>;
-    let tokenStore: Map<string, FederatedAuthTokenEntry>;
     let deleteSpy: sinon.SinonSpy;
-    let saveSpy: sinon.SinonSpy;
+    let fakeIntegration: ReturnType<typeof createFakeIntegrationStorage>;
+    let fakeToken: ReturnType<typeof createFakeTokenStorage>;
     let fetcher: sinon.SinonStub<Parameters<FetcherFn>, ReturnType<FetcherFn>>;
-    let integrationStorage: IIntegrationStorage;
-    let tokenStorage: IFederatedAuthTokenStorage;
+    let saveSpy: sinon.SinonSpy;
     let generator: FederatedAuthSqlBlockCodeGenerator;
 
     setup(() => {
-        integrationStore = new Map();
-        tokenStore = new Map();
+        fakeIntegration = createFakeIntegrationStorage();
+        fakeToken = createFakeTokenStorage();
+        deleteSpy = fakeToken.deleteSpy;
+        saveSpy = fakeToken.saveSpy;
 
-        integrationStorage = {
-            getIntegrationConfig: async (id: string) => integrationStore.get(id)
-        } as unknown as IIntegrationStorage;
+        generator = new FederatedAuthSqlBlockCodeGenerator(fakeIntegration.storage, fakeToken.storage);
 
-        deleteSpy = sinon.spy(async (id: string) => {
-            tokenStore.delete(id);
-        });
-        saveSpy = sinon.spy(async (entry: FederatedAuthTokenEntry) => {
-            tokenStore.set(entry.integrationId, entry);
-        });
-
-        tokenStorage = {
-            get: async (id: string) => tokenStore.get(id),
-            delete: deleteSpy as unknown as IFederatedAuthTokenStorage['delete'],
-            save: saveSpy as unknown as IFederatedAuthTokenStorage['save']
-        } as unknown as IFederatedAuthTokenStorage;
-
-        fetcher = sinon.stub<Parameters<FetcherFn>, ReturnType<FetcherFn>>();
+        fetcher = sinon.stub(generator, 'fetchFreshAccessToken');
         fetcher.resolves({ accessToken: ACCESS_TOKEN });
+    });
 
-        generator = new FederatedAuthSqlBlockCodeGenerator(integrationStorage, tokenStorage);
-        generator.fetchFreshAccessToken = fetcher as unknown as FetcherFn;
+    teardown(() => {
+        sinon.restore();
     });
 
     function setupValidFederatedIntegration() {
-        integrationStore.set(INTEGRATION_ID, buildGoogleOauthIntegration());
-        tokenStore.set(
+        fakeIntegration.addIntegration(buildGoogleOauthIntegration());
+        fakeToken.tokens.set(
             INTEGRATION_ID,
             buildTokenEntry({ refreshToken: REFRESH_TOKEN, metadataFingerprint: VALID_FINGERPRINT })
         );
@@ -111,7 +92,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         test(`returns undefined for ${label}`, async () => {
             const integration = buildIntegration();
             if (integration) {
-                integrationStore.set(INTEGRATION_ID, integration);
+                fakeIntegration.addIntegration(integration);
             }
             const result = await generator.generate(buildBlock());
             assert.strictEqual(result, undefined);
@@ -120,7 +101,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
     });
 
     test('throws NotAuthenticatedError when federated integration has no stored token', async () => {
-        integrationStore.set(INTEGRATION_ID, buildGoogleOauthIntegration());
+        fakeIntegration.addIntegration(buildGoogleOauthIntegration());
 
         try {
             await generator.generate(buildSqlBlock());
@@ -134,7 +115,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
 
     test('throws NotAuthenticatedError and deletes the token when the metadata fingerprint is stale', async () => {
         setupValidFederatedIntegration();
-        tokenStore.set(
+        fakeToken.tokens.set(
             INTEGRATION_ID,
             buildTokenEntry({ refreshToken: REFRESH_TOKEN, metadataFingerprint: 'stale-fingerprint' })
         );
@@ -191,8 +172,8 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
     test('prelude round-trips through Python+json.loads when integration id contains backslash, newline, and single quote', async () => {
         // Catches: regressing to a single-char `\\'` escape would leave `\\`/`\n` undecoded and break `json.loads` at the kernel.
         const hostileIntegrationId = "bq-with-\\-and-\n-and-'-id";
-        integrationStore.set(hostileIntegrationId, buildGoogleOauthIntegration({ id: hostileIntegrationId }));
-        tokenStore.set(
+        fakeIntegration.addIntegration(buildGoogleOauthIntegration({ id: hostileIntegrationId }));
+        fakeToken.tokens.set(
             hostileIntegrationId,
             buildTokenEntry({
                 integrationId: hostileIntegrationId,

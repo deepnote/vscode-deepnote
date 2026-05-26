@@ -24,14 +24,12 @@ import {
     SqlCellVariableType
 } from './vendoredBlocksHelpers';
 import {
+    FederatedAuthTokenEntry,
     IFederatedAuthSqlBlockCodeGenerator,
     IFederatedAuthTokenStorage,
     NotAuthenticatedError,
     OAuthClientMisconfiguredError
 } from '../types';
-
-/** Signature of {@link fetchFreshAccessToken}, used as the constructor's optional test seam. */
-type FetchFreshAccessTokenFn = typeof fetchFreshAccessToken;
 
 /** Per-integration kernel-global variable name holding the fresh SqlAlchemy JSON. Non-identifier chars are replaced with `_` to keep the name valid for UUID-style ids. */
 export function federatedSqlVariableName(integrationId: string): string {
@@ -78,13 +76,18 @@ function executeSqlQueryWithConnectionJson(params: {
  */
 @injectable()
 export class FederatedAuthSqlBlockCodeGenerator implements IFederatedAuthSqlBlockCodeGenerator {
-    /** Test seam: tests reassign this to stub the token fetch. Not a ctor param because inversify can't skip injection for an optional arg without a service identifier. */
-    public fetchFreshAccessToken: FetchFreshAccessTokenFn = fetchFreshAccessToken;
-
     constructor(
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
         @inject(IFederatedAuthTokenStorage) private readonly tokenStorage: IFederatedAuthTokenStorage
     ) {}
+
+    /** Delegates to {@link fetchFreshAccessToken}; instance method so tests can `sinon.stub` without a ctor seam. */
+    public fetchFreshAccessToken(
+        entry: FederatedAuthTokenEntry,
+        oauthConfig: { tokenUrl: string; clientId: string; clientSecret: string }
+    ): Promise<{ accessToken: string; newRefreshToken?: string }> {
+        return fetchFreshAccessToken(entry, oauthConfig);
+    }
 
     public async generate(block: DeepnoteBlock): Promise<{ prelude: string; cellCode: string } | undefined> {
         if (block.type !== 'sql') {

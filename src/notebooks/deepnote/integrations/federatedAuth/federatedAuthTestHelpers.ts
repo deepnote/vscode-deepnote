@@ -123,11 +123,34 @@ export interface FakeIntegrationStorage {
 export function createFakeIntegrationStorage(): FakeIntegrationStorage {
     const integrationStore = new Map<string, ConfigurableDatabaseIntegrationConfig>();
     const onDidChangeIntegrations = new EventEmitter<void>();
-    const storage = {
-        getIntegrationConfig: async (id: string) => integrationStore.get(id),
-        getAll: async () => Array.from(integrationStore.values()),
-        onDidChangeIntegrations: onDidChangeIntegrations.event
-    } as unknown as IIntegrationStorage;
+    const storage: IIntegrationStorage = {
+        onDidChangeIntegrations: onDidChangeIntegrations.event,
+        dispose: () => onDidChangeIntegrations.dispose(),
+        async clear() {
+            integrationStore.clear();
+            onDidChangeIntegrations.fire();
+        },
+        async delete(integrationId: string) {
+            integrationStore.delete(integrationId);
+            onDidChangeIntegrations.fire();
+        },
+        async exists(integrationId: string) {
+            return integrationStore.has(integrationId);
+        },
+        async getAll() {
+            return Array.from(integrationStore.values());
+        },
+        async getIntegrationConfig(integrationId: string) {
+            return integrationStore.get(integrationId);
+        },
+        async getProjectIntegrationConfig() {
+            return undefined;
+        },
+        async save(config: ConfigurableDatabaseIntegrationConfig) {
+            integrationStore.set(config.id, config);
+            onDidChangeIntegrations.fire();
+        }
+    };
     return {
         addIntegration: (config) => integrationStore.set(config.id, config),
         integrationStore,
@@ -184,7 +207,9 @@ export function createFakeTokenStorage(opts?: {
         computeMetadataFingerprint(metadata) {
             return fingerprintForTest(metadata);
         },
-        delete: deleteSpy as unknown as IFederatedAuthTokenStorage['delete'],
+        async delete(integrationId: string) {
+            await deleteSpy(integrationId);
+        },
         async get(integrationId: string) {
             return tokens.get(integrationId);
         },
@@ -194,7 +219,9 @@ export function createFakeTokenStorage(opts?: {
         async listIntegrationIds() {
             return Array.from(tokens.keys());
         },
-        save: saveSpy as unknown as IFederatedAuthTokenStorage['save']
+        async save(entry: FederatedAuthTokenEntry, options?: { silent?: boolean }) {
+            await saveSpy(entry, options);
+        }
     };
 
     return {

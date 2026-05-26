@@ -75,8 +75,7 @@ export interface IFederatedAuthTokenStorage {
 
 export const IFederatedAuthSqlBlockCodeGenerator = Symbol('IFederatedAuthSqlBlockCodeGenerator');
 export interface IFederatedAuthSqlBlockCodeGenerator {
-    /** Returns `{prelude, cellCode}` for federated BigQuery SQL blocks (prelude is silent, defines kernel-global with fresh token; cellCode references it); `undefined` for unrelated blocks so callers fall back to `createPythonCode`. */
-    generate(block: DeepnoteBlock): Promise<{ prelude: string; cellCode: string } | undefined>;
+    generate(block: DeepnoteBlock): Promise<string | undefined>;
 }
 
 /** Thrown when a federated integration has no usable refresh token (not authenticated yet, fingerprint mismatch, or `invalid_grant`). */

@@ -8,10 +8,7 @@ import {
     NotAuthenticatedError,
     OAuthClientMisconfiguredError
 } from '../types';
-import {
-    FederatedAuthSqlBlockCodeGenerator,
-    federatedSqlVariableName
-} from './federatedAuthSqlBlockCodeGenerator.node';
+import { FederatedAuthSqlBlockCodeGenerator } from './federatedAuthSqlBlockCodeGenerator.node';
 import { IIntegrationStorage } from '../../../../platform/notebooks/deepnote/types';
 import { InvalidClientError, InvalidGrantError, computeMetadataFingerprint } from './federatedAuthTokenStorage.node';
 import {
@@ -118,6 +115,15 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         );
     }
 
+    /** Pull the connection-JSON literal (second positional arg) out of `_dntk.execute_sql_with_connection_json(...)`. */
+    function extractConnectionJsonLiteral(code: string): string {
+        const match = /_dntk\.execute_sql_with_connection_json\(\s*'(?:\\.|[^'\\])*',\s*('(?:\\.|[^'\\])*')/.exec(code);
+        if (!match) {
+            throw new Error(`could not locate connection JSON literal in code: ${code}`);
+        }
+        return match[1];
+    }
+
     (
         [
             ['a non-SQL block', () => buildGoogleOauthIntegration(), () => buildCodeBlock()],
@@ -184,77 +190,62 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         sinon.assert.notCalled(fetcher);
     });
 
-    test('returns { prelude, cellCode } for a valid federated SQL block', async () => {
+    test('returns a single Python string embedding the access token in the execute call for a valid federated SQL block', async () => {
+        // Mirrors deepnote-internal: one `_dntk.execute_sql_with_connection_json(...)` call with the connection JSON as a literal containing the fresh access token. Token is expected in the single execute payload, same as cloud.
         setupValidFederatedIntegration();
 
         const result = await generator.generate(buildSqlBlock());
-        if (!result) {
-            throw new Error('expected a non-undefined result');
+        if (typeof result !== 'string') {
+            throw new Error(`expected a string result, got ${typeof result}`);
         }
 
-        const expectedVariableName = federatedSqlVariableName(INTEGRATION_ID);
-        const escapedVariableName = expectedVariableName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        assert.include(result, '_dntk.execute_sql_with_connection_json(');
 
-        // prelude is exactly `<variable> = '<safe_json>'`.
-        const preludeRegex = new RegExp(`^${escapedVariableName} = '([^]*)'$`);
-        const match = preludeRegex.exec(result.prelude);
-        if (!match) {
-            throw new Error(`prelude did not match expected shape: ${result.prelude}`);
-        }
-        const safeJson = match[1];
-        const parsed = JSON.parse(safeJson.replace(/\\'/g, "'"));
+        const literal = extractConnectionJsonLiteral(result);
+        const parsed = JSON.parse(parsePythonSingleQuoted(literal));
         assert.deepStrictEqual(parsed, {
-            integration_id: INTEGRATION_ID,
             url: 'bigquery://?user_supplied_client=true',
             params: { access_token: ACCESS_TOKEN, project: PROJECT },
             param_style: 'pyformat'
         });
-
-        // cellCode invokes the connection-json function and references the variable by name (no quotes).
-        assert.include(result.cellCode, '_dntk.execute_sql_with_connection_json(');
-        // The variable is referenced unquoted between the commas.
-        const inlineRef = new RegExp(`,\\s*${escapedVariableName}\\s*,`);
-        assert.match(result.cellCode, inlineRef, 'cellCode should reference the variable as a bare identifier');
-
-        // Critical M3 invariant: the access token MUST NOT appear in cellCode.
-        assert.isFalse(
-            result.cellCode.includes(ACCESS_TOKEN),
-            `cellCode unexpectedly contains the access token: ${result.cellCode}`
-        );
     });
 
-    test('prelude round-trips through Python+json.loads when integration id contains backslash, newline, and single quote', async () => {
-        // Catches: regressing to a single-char `\\'` escape would leave `\\`/`\n` undecoded and break `json.loads` at the kernel.
-        const hostileIntegrationId = "bq-with-\\-and-\n-and-'-id";
-        integrations.set(hostileIntegrationId, buildGoogleOauthIntegration({ id: hostileIntegrationId }));
+    test('connection JSON literal round-trips through Python+json.loads when integration name contains backslash, newline, and single quote', async () => {
+        // Catches: regressing `escapePythonString` (e.g. swapping in a single-char `\\'` escape) would leave `\\`/`\n` undecoded and break `json.loads` at the kernel. The literal lives inside the execute call now (no separate prelude assignment).
+        const hostileProject = "gcp-with-\\-and-\n-and-'-project";
+        integrations.set(
+            INTEGRATION_ID,
+            buildGoogleOauthIntegration({
+                metadata: {
+                    authMethod: 'google-oauth',
+                    project: hostileProject,
+                    clientId: CLIENT_ID,
+                    clientSecret: CLIENT_SECRET
+                }
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            } as any)
+        );
+        const hostileFingerprint = computeMetadataFingerprint({
+            clientId: CLIENT_ID,
+            clientSecret: CLIENT_SECRET,
+            project: hostileProject
+        });
         tokens.set(
-            hostileIntegrationId,
-            buildTokenEntry({
-                integrationId: hostileIntegrationId,
-                refreshToken: REFRESH_TOKEN,
-                metadataFingerprint: VALID_FINGERPRINT
-            })
+            INTEGRATION_ID,
+            buildTokenEntry({ refreshToken: REFRESH_TOKEN, metadataFingerprint: hostileFingerprint })
         );
 
-        const result = await generator.generate(buildSqlBlock({ sql_integration_id: hostileIntegrationId }));
-        if (!result) {
-            throw new Error('expected a non-undefined result');
+        const result = await generator.generate(buildSqlBlock());
+        if (typeof result !== 'string') {
+            throw new Error(`expected a string result, got ${typeof result}`);
         }
 
-        const expectedVariableName = federatedSqlVariableName(hostileIntegrationId);
-        const assignmentPrefix = `${expectedVariableName} = `;
-        assert.isTrue(
-            result.prelude.startsWith(assignmentPrefix),
-            `prelude did not begin with the expected assignment prefix: ${result.prelude}`
-        );
-        const literal = result.prelude.slice(assignmentPrefix.length);
-
+        const literal = extractConnectionJsonLiteral(result);
         const decoded = parsePythonSingleQuoted(literal);
         const parsed = JSON.parse(decoded);
         assert.deepStrictEqual(parsed, {
-            integration_id: hostileIntegrationId,
             url: 'bigquery://?user_supplied_client=true',
-            params: { access_token: ACCESS_TOKEN, project: PROJECT },
+            params: { access_token: ACCESS_TOKEN, project: hostileProject },
             param_style: 'pyformat'
         });
     });
@@ -268,9 +259,9 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         const second = await generator.generate(buildSqlBlock());
 
         sinon.assert.calledTwice(fetcher);
-        assert.notStrictEqual(first?.prelude, second?.prelude);
-        assert.include(first?.prelude ?? '', 'token-1');
-        assert.include(second?.prelude ?? '', 'token-2');
+        assert.notStrictEqual(first, second);
+        assert.include(first ?? '', 'token-1');
+        assert.include(second ?? '', 'token-2');
     });
 
     test('InvalidGrantError from refresh: throws NotAuthenticatedError and deletes the token', async () => {
@@ -304,7 +295,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
     });
 
     test('persists a rotated refresh token with { silent: true } so listeners do not restart the in-flight kernel', async () => {
-        // Catches: a rotation event firing `onDidChangeTokens` would queue a `kernel.restart()` while the prelude+main execute are running.
+        // Catches: a rotation event firing `onDidChangeTokens` would queue a `kernel.restart()` while the execute is running.
         setupValidFederatedIntegration();
         fetcher.resolves({ accessToken: ACCESS_TOKEN, newRefreshToken: 'new-refresh-token' });
 
@@ -329,26 +320,13 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         sinon.assert.notCalled(saveSpy);
     });
 
-    test('cellCode honors deepnote_variable_name by emitting an assignment', async () => {
+    test('honors deepnote_variable_name by emitting an assignment in the generated code', async () => {
         setupValidFederatedIntegration();
         const result = await generator.generate(buildSqlBlock({ deepnote_variable_name: 'my_df' }));
-        if (!result) {
-            throw new Error('expected a non-undefined result');
+        if (typeof result !== 'string') {
+            throw new Error(`expected a string result, got ${typeof result}`);
         }
         // Match upstream's shape: `my_df = _dntk.execute_sql_with_connection_json(...)` followed by `my_df` on the next line.
-        assert.include(result.cellCode, 'my_df = _dntk.execute_sql_with_connection_json(');
-    });
-
-    suite('federatedSqlVariableName', () => {
-        (
-            [
-                ['abc-123-def', '__deepnote_federated_sql_connection__abc_123_def'],
-                ['abc_123', '__deepnote_federated_sql_connection__abc_123']
-            ] as const
-        ).forEach(([input, expected]) => {
-            test(`maps ${JSON.stringify(input)} → ${expected}`, () => {
-                assert.strictEqual(federatedSqlVariableName(input), expected);
-            });
-        });
+        assert.include(result, 'my_df = _dntk.execute_sql_with_connection_json(');
     });
 });

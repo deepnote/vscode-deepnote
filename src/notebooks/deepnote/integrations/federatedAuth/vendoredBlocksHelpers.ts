@@ -70,3 +70,35 @@ export function createDataFrameConfig(block: SqlBlock): string {
           _deepnote_current_table_attrs = ${escapePythonString(tableStateAsJson)}
     `;
 }
+
+/**
+ * Mirror of upstream's `executeSqlQueryWithConnectionJson` ([code-snippets.ts](file:///workspace/deepnote-internal/libs/shared/src/cells/code-snippets.ts) lines 91–123).
+ * Differs by passing `connectionJson` through {@link escapePythonString} so hostile JSON content (backslashes, newlines, single quotes) cannot break the Python literal.
+ * TODO(deepnote-followups): remove when @deepnote/blocks exports this.
+ */
+export function executeSqlQueryWithConnectionJson(params: {
+    query: string;
+    auditComment?: string;
+    connectionJson: string;
+    pythonVariableName?: string;
+    sqlCacheMode: SqlCacheMode;
+    returnVariableType: SqlCellVariableType;
+}): string {
+    const escapedQuery = escapePythonString(params.query);
+    const escapedAuditComment = escapePythonString(params.auditComment ?? '');
+    const escapedConnectionJson = escapePythonString(params.connectionJson);
+    const executeSqlFunctionCall = dedent`_dntk.execute_sql_with_connection_json(
+      ${escapedQuery},
+      ${escapedConnectionJson},
+      audit_sql_comment=${escapedAuditComment},
+      sql_cache_mode='${params.sqlCacheMode}',
+      return_variable_type='${params.returnVariableType}'
+    )`;
+
+    return params.pythonVariableName === undefined
+        ? executeSqlFunctionCall
+        : dedent`
+            ${params.pythonVariableName} = ${executeSqlFunctionCall}
+            ${params.pythonVariableName}
+        `;
+}

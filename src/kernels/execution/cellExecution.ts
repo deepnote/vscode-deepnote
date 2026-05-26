@@ -473,40 +473,16 @@ export class CellExecution implements ICellExecution, IDisposable {
 
         const kernelConnection = session.kernel;
 
-        // Federated-auth (BigQuery + google-oauth): silent pre-execute sets a kernel-global with the connection JSON (token kept out of `In[]`), then main execute uses the variable. `undefined` means non-federated or web — fall back to `createPythonCode`.
-        let federated: { prelude: string; cellCode: string } | undefined;
+        // Federated-auth (BigQuery + google-oauth): generator returns a single Python string with the connection JSON embedded as a literal (containing the fresh access token). `undefined` means non-federated or web — fall back to `createPythonCode`.
+        let federatedCode: string | undefined;
         try {
-            federated = await this.federatedAuthSqlBlockCodeGenerator?.generate(deepnoteBlock);
+            federatedCode = await this.federatedAuthSqlBlockCodeGenerator?.generate(deepnoteBlock);
         } catch (ex) {
             return this.handleFederatedGenerateError(ex);
         }
-        if (federated) {
+        if (federatedCode !== undefined) {
             logger.info(`Cell ${this.cell.index}: Using federated BigQuery code path`);
-            try {
-                const preludeReply = await kernelConnection.requestExecute(
-                    {
-                        code: federated.prelude,
-                        silent: true,
-                        store_history: false,
-                        allow_stdin: false,
-                        stop_on_error: true
-                    },
-                    /* dispose: */ true,
-                    /* metadata: */ undefined
-                ).done;
-                if (preludeReply.content.status === 'error') {
-                    const kernelError = new KernelError(preludeReply.content);
-                    logger.error(
-                        `Federated pre-execute returned error status for cell Index ${this.cell.index}`,
-                        kernelError
-                    );
-                    return this.completedWithErrors(kernelError);
-                }
-            } catch (ex) {
-                logger.error(`Federated pre-execute failed for cell Index ${this.cell.index}`, ex);
-                return this.completedWithErrors(ex);
-            }
-            code = federated.cellCode;
+            code = federatedCode;
         } else {
             logger.info(`Cell ${this.cell.index}: Using createPythonCode for ${deepnoteBlock.type} block`);
             code = createPythonCode(deepnoteBlock);

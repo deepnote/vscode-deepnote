@@ -1,12 +1,6 @@
-// VENDORED: helpers that should land in `@deepnote/blocks` (Step 10 of the upstream-migration plan).
-// Adapts upstream's `executeSqlQueryWithConnectionJson` to accept a Python *expression* so the caller
-// can reference a kernel-global holding the fresh access token. Delete once upstream exports it.
-// TODO(deepnote-followups): remove when @deepnote/blocks exports the expression-form helper.
-
 import type { DeepnoteBlock } from '@deepnote/blocks';
 import { BigQueryAuthMethods } from '@deepnote/database-integrations';
 import { inject, injectable } from 'inversify';
-import { dedent } from 'ts-dedent';
 
 import { IIntegrationStorage } from '../../../../platform/notebooks/deepnote/types';
 import {
@@ -18,7 +12,7 @@ import {
 import { GOOGLE_TOKEN_URL } from './googleOAuthProvider.node';
 import {
     createDataFrameConfig,
-    escapePythonString,
+    executeSqlQueryWithConnectionJson,
     sanitizePythonVariableName,
     SqlCacheMode,
     SqlCellVariableType
@@ -31,49 +25,6 @@ import {
     OAuthClientMisconfiguredError
 } from '../types';
 
-/** Per-integration kernel-global variable name holding the fresh SqlAlchemy JSON. Non-identifier chars are replaced with `_` to keep the name valid for UUID-style ids. */
-export function federatedSqlVariableName(integrationId: string): string {
-    const sanitized = integrationId.replace(/[^A-Za-z0-9_]/g, '_');
-    return `__deepnote_federated_sql_connection__${sanitized}`;
-}
-
-/**
- * VENDORED: mirrors upstream `executeSqlQueryWithConnectionJson` but emits `connectionJsonExpression`
- * as a bare Python identifier (kernel-global ref) instead of a string literal.
- * TODO(deepnote-followups): remove when @deepnote/blocks exports the expression-form helper.
- */
-function executeSqlQueryWithConnectionJson(params: {
-    query: string;
-    auditComment?: string;
-    connectionJsonExpression: string;
-    pythonVariableName?: string;
-    sqlCacheMode: SqlCacheMode;
-    returnVariableType: SqlCellVariableType;
-}): string {
-    const escapedQuery = escapePythonString(params.query);
-    const escapedAuditComment = escapePythonString(params.auditComment ?? '');
-    const executeSqlFunctionCall = dedent`_dntk.execute_sql_with_connection_json(
-      ${escapedQuery},
-      ${params.connectionJsonExpression},
-      audit_sql_comment=${escapedAuditComment},
-      sql_cache_mode='${params.sqlCacheMode}',
-      return_variable_type='${params.returnVariableType}'
-    )`;
-
-    return params.pythonVariableName === undefined
-        ? executeSqlFunctionCall
-        : dedent`
-            ${params.pythonVariableName} = ${executeSqlFunctionCall}
-            ${params.pythonVariableName}
-        `;
-}
-
-/**
- * Builds Python prelude + cell code for federated BigQuery SQL blocks. Returns `undefined` for unrelated
- * blocks so callers fall back to `@deepnote/blocks.createPythonCode`. Prelude (silent execute, no history)
- * sets the SqlAlchemy JSON into a kernel global; cellCode references it by name. Access tokens are never
- * cached: every `generate()` triggers a fresh refresh.
- */
 @injectable()
 export class FederatedAuthSqlBlockCodeGenerator implements IFederatedAuthSqlBlockCodeGenerator {
     constructor(
@@ -89,7 +40,7 @@ export class FederatedAuthSqlBlockCodeGenerator implements IFederatedAuthSqlBloc
         return fetchFreshAccessToken(entry, oauthConfig);
     }
 
-    public async generate(block: DeepnoteBlock): Promise<{ prelude: string; cellCode: string } | undefined> {
+    public async generate(block: DeepnoteBlock): Promise<string | undefined> {
         if (block.type !== 'sql') {
             return undefined;
         }
@@ -156,16 +107,10 @@ export class FederatedAuthSqlBlockCodeGenerator implements IFederatedAuthSqlBloc
         }
 
         const connectionJson = JSON.stringify({
-            integration_id: integration.id,
             url: 'bigquery://?user_supplied_client=true',
             params: { access_token: accessToken, project: integration.metadata.project },
             param_style: 'pyformat'
         });
-
-        const variableName = federatedSqlVariableName(integration.id);
-
-        // `escapePythonString` handles `\`, `'`, `\n` so a hostile `integration.id` can't break Python's `json.loads`.
-        const prelude = `${variableName} = ${escapePythonString(connectionJson)}`;
 
         // Mirror upstream `createPythonCodeForSqlBlock`'s metadata reads.
         const query = sqlBlock.content ?? '';
@@ -179,14 +124,12 @@ export class FederatedAuthSqlBlockCodeGenerator implements IFederatedAuthSqlBloc
         const executeSqlCall = executeSqlQueryWithConnectionJson({
             query,
             auditComment: '',
-            connectionJsonExpression: variableName,
+            connectionJson,
             pythonVariableName,
             sqlCacheMode,
             returnVariableType
         });
 
-        const cellCode = `${dataFrameConfig}\n\n${executeSqlCall}`;
-
-        return { prelude, cellCode };
+        return `${dataFrameConfig}\n\n${executeSqlCall}`;
     }
 }

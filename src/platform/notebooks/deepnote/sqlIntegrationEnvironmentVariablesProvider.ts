@@ -115,12 +115,12 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
             )
         ).filter((config) => config != null);
 
-        // Skip federated-auth integrations: tokens are fetched per-cell via `CellExecution`'s silent pre-execute, not baked into kernel env.
+        // Skip federated-auth integrations: tokens are fetched per-cell via per-cell codegen in `FederatedAuthSqlBlockCodeGenerator`, not baked into kernel env.
         const projectIntegrationConfigs: Array<DatabaseIntegrationConfig> = [];
         for (const config of allConfigs) {
             if (isFederatedAuthMetadata(config.metadata)) {
                 logger.debug(
-                    `SqlIntegrationEnvironmentVariablesProvider: Skipping federated integration ${config.id} (${config.type}); per-cell pre-execute handles its token.`
+                    `SqlIntegrationEnvironmentVariablesProvider: Skipping federated integration ${config.id} (${config.type}); per-cell codegen in FederatedAuthSqlBlockCodeGenerator handles its token.`
                 );
                 continue;
             }

@@ -65,8 +65,6 @@ suite('CellExecution federated-auth branch', () => {
     let kernel: IKernelConnection;
     let request: Kernel.IShellFuture<KernelMessage.IExecuteRequestMsg, KernelMessage.IExecuteReplyMsg>;
     let requestDone: Deferred<KernelMessage.IExecuteReplyMsg>;
-    let preludeRequest: Kernel.IShellFuture<KernelMessage.IExecuteRequestMsg, KernelMessage.IExecuteReplyMsg>;
-    let preludeDone: Deferred<KernelMessage.IExecuteReplyMsg>;
     let requestExecuteSpy: sinon.SinonSpy;
     let connectionMetadata: KernelConnectionMetadata;
     let cell: NotebookCell;
@@ -111,14 +109,10 @@ suite('CellExecution federated-auth branch', () => {
         session = mock<IKernelSession>();
         kernel = mock<IKernelConnection>();
         request = mock<Kernel.IShellFuture<KernelMessage.IExecuteRequestMsg, KernelMessage.IExecuteReplyMsg>>();
-        preludeRequest = mock<Kernel.IShellFuture<KernelMessage.IExecuteRequestMsg, KernelMessage.IExecuteReplyMsg>>();
         requestDone = createDeferred<KernelMessage.IExecuteReplyMsg>();
-        preludeDone = createDeferred<KernelMessage.IExecuteReplyMsg>();
 
         when(request.dispose()).thenReturn();
         when(request.done).thenReturn(requestDone.promise);
-        when(preludeRequest.dispose()).thenReturn();
-        when(preludeRequest.done).thenReturn(preludeDone.promise);
 
         when(session.kernel).thenReturn(instance(kernel));
         when(session.isDisposed).thenReturn(false);
@@ -126,15 +120,14 @@ suite('CellExecution federated-auth branch', () => {
         when(session.status).thenReturn('idle');
         when(kernel.isDisposed).thenReturn(false);
 
-        // Federated branch: prelude = `requestExecute(args, true)`, main = `requestExecute(args, false, metadata)`. Differentiate by dispose flag.
         requestExecuteSpy = sinon.spy(
-            (_args: KernelMessage.IExecuteRequestMsg['content'], disposeOnDone: boolean, _metadata: unknown) => {
-                return disposeOnDone ? instance(preludeRequest) : instance(request);
+            (_args: KernelMessage.IExecuteRequestMsg['content'], _disposeOnDone: boolean, _metadata: unknown) => {
+                return instance(request);
             }
         );
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (when(kernel.requestExecute(anything(), anything(), anything())) as any).thenCall(requestExecuteSpy);
-        // Main execute resolves immediately; prelude deferred is left pending so individual tests drive its resolution explicitly.
+        // Default: main execute resolves immediately. Individual tests can override the deferred before kicking off `start`.
         requestDone.resolve(successReply);
 
         connectionMetadata = {
@@ -177,7 +170,7 @@ suite('CellExecution federated-auth branch', () => {
         assertMainExecuteShape(calls[0]);
     });
 
-    test('when generate() returns undefined: no silent pre-execute, single main requestExecute', async () => {
+    test('when generate() returns undefined: single requestExecute with silent=false, store_history=true', async () => {
         const generator: IFederatedAuthSqlBlockCodeGenerator = {
             generate: sinon.stub().resolves(undefined)
         };
@@ -191,135 +184,51 @@ suite('CellExecution federated-auth branch', () => {
         assertMainExecuteShape(calls[0]);
     });
 
-    test('when generate() returns {prelude, cellCode}: main requestExecute waits for prelude .done, omits the access token', async () => {
-        // Catches: dropping the `await` on prelude `.done` would let the main execute fire before the prelude completes,
-        // and leaking the access token into `cellCode` would let it surface in execution-history JSON.
+    test('when generate() returns a string: exactly one requestExecute with the generated code; token IS present in the execute payload (matches deepnote-internal)', async () => {
+        // Mirrors deepnote-internal: a single execute carries the connection JSON (token included) as a Python literal. Cloud history has it; local must match.
         const ACCESS_TOKEN = 'access-token-secret-do-not-log';
-        const prelude = `__deepnote_federated_sql_connection__abc = '{"params":{"access_token":"${ACCESS_TOKEN}"}}'`;
-        const cellCode = `_dntk.execute_sql_with_connection_json('SELECT 1', __deepnote_federated_sql_connection__abc)`;
+        const federatedCode = `_dntk.execute_sql_with_connection_json('SELECT 1', '{"params":{"access_token":"${ACCESS_TOKEN}"}}', audit_sql_comment='', sql_cache_mode='cache_disabled', return_variable_type='dataframe')`;
 
         const generator: IFederatedAuthSqlBlockCodeGenerator = {
-            generate: sinon.stub().resolves({ prelude, cellCode })
+            generate: sinon.stub().resolves(federatedCode)
         };
         const execution = createExecution(generator);
 
-        // Kick off without awaiting; the main execute must NOT issue while prelude is unresolved.
-        const startPromise = execution.start(instance(session));
-
-        // Flush pending microtasks; I/O is mocked.
-        for (let i = 0; i < 10; i++) {
-            await Promise.resolve();
-        }
-
-        sinon.assert.calledOnce(requestExecuteSpy);
-        const [preludeArgs, preludeDispose] = requestExecuteSpy.getCalls()[0].args;
-        const preludeContent = preludeArgs as KernelMessage.IExecuteRequestMsg['content'];
-        assert.deepStrictEqual(
-            {
-                code: preludeContent.code,
-                silent: preludeContent.silent,
-                store_history: preludeContent.store_history,
-                allow_stdin: preludeContent.allow_stdin,
-                stop_on_error: preludeContent.stop_on_error,
-                dispose: preludeDispose
-            },
-            {
-                code: prelude,
-                silent: true,
-                store_history: false,
-                allow_stdin: false,
-                stop_on_error: true,
-                dispose: true
-            }
-        );
-
-        // Resolve the prelude — the main `requestExecute` should fire and the cell should complete.
-        preludeDone.resolve(successReply);
-        if (startPromise) {
-            await startPromise.catch(() => undefined);
-        }
+        await execution.start(instance(session));
         await execution.result.catch(() => undefined);
 
-        sinon.assert.calledTwice(requestExecuteSpy);
-        const [mainArgs, mainDispose] = requestExecuteSpy.getCalls()[1].args;
-        const mainContent = mainArgs as KernelMessage.IExecuteRequestMsg['content'];
+        sinon.assert.calledOnce(requestExecuteSpy);
+        const [args, dispose] = requestExecuteSpy.getCalls()[0].args;
+        const content = args as KernelMessage.IExecuteRequestMsg['content'];
         assert.deepStrictEqual(
             {
-                code: mainContent.code,
-                silent: mainContent.silent,
-                store_history: mainContent.store_history,
-                dispose: mainDispose
+                code: content.code,
+                silent: content.silent,
+                store_history: content.store_history,
+                dispose
             },
-            { code: cellCode, silent: false, store_history: true, dispose: false }
+            { code: federatedCode, silent: false, store_history: true, dispose: false }
         );
-
-        // Critical M3 invariant: the access token must not appear in the main execute's code.
-        assert.isFalse(
-            mainContent.code.includes(ACCESS_TOKEN),
-            `Main execute code unexpectedly contains the access token: ${mainContent.code}`
+        assert.include(
+            content.code,
+            ACCESS_TOKEN,
+            'federated execute payload must carry the access token in the connection-JSON literal (single-call parity with deepnote-internal)'
         );
     });
 
-    test('when prelude requestExecute rejects: main requestExecute is NOT called and cell fails', async () => {
-        // Catches: dropping the try/catch around `await prelude.done` in `execute()` would either swallow the rejection or let the main execute through.
-        const prelude = `__deepnote_federated_sql_connection__abc = '{}'`;
-        const cellCode = `_dntk.execute_sql_with_connection_json('SELECT 1', __deepnote_federated_sql_connection__abc)`;
-
+    test('when generate() returns a string and the execute .done rejects: cell fails with the underlying error', async () => {
+        // Catches: regressing the federated branch to swallow execute rejections (or routing them through a second call) would break the standard error surface.
+        const federatedCode = `_dntk.execute_sql_with_connection_json('SELECT 1', '{}', audit_sql_comment='', sql_cache_mode='cache_disabled', return_variable_type='dataframe')`;
         const generator: IFederatedAuthSqlBlockCodeGenerator = {
-            generate: sinon.stub().resolves({ prelude, cellCode })
+            generate: sinon.stub().resolves(federatedCode)
         };
         const execution = createExecution(generator);
 
-        const preludeRejection = new Error('kernel error during prelude');
-        // Pre-reject so the implementation observes it on its first await.
-        preludeDone.reject(preludeRejection);
-        let caught: unknown;
-        const startPromise = execution.start(instance(session));
-        if (startPromise) {
-            await startPromise.catch((err) => {
-                caught = err;
-            });
-        }
-        await execution.result.catch(() => undefined);
-
-        // Exactly one `requestExecute` call (prelude); main must NOT be called.
-        sinon.assert.calledOnce(requestExecuteSpy);
-        const [preludeArgs, preludeDispose] = requestExecuteSpy.getCalls()[0].args;
-        assert.deepStrictEqual(
-            {
-                silent: (preludeArgs as KernelMessage.IExecuteRequestMsg['content']).silent,
-                dispose: preludeDispose
-            },
-            { silent: true, dispose: true },
-            'the single call should be the silent prelude'
-        );
-
-        // The cell-execution failure should surface the underlying error.
-        assert(caught instanceof Error);
-        assert.strictEqual(caught.message, preludeRejection.message);
-    });
-
-    test('when prelude reply has content.status === "error": main requestExecute is NOT called and cell fails with the kernel error', async () => {
-        // Catches: prelude reply with status='error' was previously ignored; main execute would then NameError on the unset global.
-        const prelude = `__deepnote_federated_sql_connection__abc = '{}'`;
-        const cellCode = `_dntk.execute_sql_with_connection_json('SELECT 1', __deepnote_federated_sql_connection__abc)`;
-
-        const generator: IFederatedAuthSqlBlockCodeGenerator = {
-            generate: sinon.stub().resolves({ prelude, cellCode })
-        };
-        const execution = createExecution(generator);
-
-        const errorReply: KernelMessage.IExecuteReplyMsg = {
-            ...successReply,
-            content: {
-                execution_count: 1,
-                status: 'error',
-                ename: 'NameError',
-                evalue: 'name "x" is not defined',
-                traceback: ['line1']
-            }
-        };
-        preludeDone.resolve(errorReply);
+        const rejection = new Error('kernel error during execute');
+        // Override the default-resolved deferred with a fresh, rejecting one before kicking off start.
+        requestDone = createDeferred<KernelMessage.IExecuteReplyMsg>();
+        when(request.done).thenReturn(requestDone.promise);
+        requestDone.reject(rejection);
 
         let caught: unknown;
         const startPromise = execution.start(instance(session));
@@ -334,13 +243,49 @@ suite('CellExecution federated-auth branch', () => {
             }
         });
 
-        // Exactly one `requestExecute` call (prelude); main must NOT be called.
-        assert.strictEqual(
-            requestExecuteSpy.callCount,
-            1,
-            `expected exactly 1 requestExecute call, got ${requestExecuteSpy.callCount}`
-        );
+        sinon.assert.calledOnce(requestExecuteSpy);
+        assertMainExecuteShape(requestExecuteSpy.getCalls()[0]);
+        assert(caught instanceof Error);
+        assert.strictEqual((caught as Error).message, rejection.message);
+    });
 
+    test('when generate() returns a string and execute reply has content.status === "error": cell fails with the kernel error', async () => {
+        const federatedCode = `_dntk.execute_sql_with_connection_json('SELECT 1', '{}', audit_sql_comment='', sql_cache_mode='cache_disabled', return_variable_type='dataframe')`;
+        const generator: IFederatedAuthSqlBlockCodeGenerator = {
+            generate: sinon.stub().resolves(federatedCode)
+        };
+        const execution = createExecution(generator);
+
+        const errorReply: KernelMessage.IExecuteReplyMsg = {
+            ...successReply,
+            content: {
+                execution_count: 1,
+                status: 'error',
+                ename: 'NameError',
+                evalue: 'name "x" is not defined',
+                traceback: ['line1']
+            }
+        };
+        // Replace the default-resolved deferred with one that resolves to an error reply.
+        requestDone = createDeferred<KernelMessage.IExecuteReplyMsg>();
+        when(request.done).thenReturn(requestDone.promise);
+        requestDone.resolve(errorReply);
+
+        let caught: unknown;
+        const startPromise = execution.start(instance(session));
+        if (startPromise) {
+            await startPromise.catch((err) => {
+                caught = err;
+            });
+        }
+        await execution.result.catch((err) => {
+            if (!caught) {
+                caught = err;
+            }
+        });
+
+        sinon.assert.calledOnce(requestExecuteSpy);
+        assertMainExecuteShape(requestExecuteSpy.getCalls()[0]);
         assert(caught instanceof Error);
         const message = (caught as Error).message;
         assert.isTrue(

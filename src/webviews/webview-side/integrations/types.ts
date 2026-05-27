@@ -6,12 +6,16 @@ export type ConfigurableDatabaseIntegrationConfig = Exclude<DatabaseIntegrationC
 
 export type IntegrationStatus = 'connected' | 'disconnected' | 'error';
 
+/** Federated-auth token status; mirrors `FederatedAuthTokenStatus` in platform/integrationTypes.ts (duplicated because the webview bundles separately). */
+export type FederatedAuthTokenStatus = 'authenticated' | 'disconnected' | 'unsupported';
+
 export interface IntegrationWithStatus {
     id: string;
     config: ConfigurableDatabaseIntegrationConfig | null;
     status: IntegrationStatus;
     integrationName?: string;
     integrationType?: ConfigurableDatabaseIntegrationType;
+    tokenStatus?: FederatedAuthTokenStatus;
 }
 
 export interface IVsCodeMessage {
@@ -44,4 +48,18 @@ export interface LocInitMessage {
     locStrings: Partial<import('../../../messageTypes').LocalizedMessages>;
 }
 
+// Inbound (extension -> webview). Consumed by `MessageEvent<WebviewMessage>` in the webview.
 export type WebviewMessage = UpdateMessage | ShowFormMessage | StatusMessage | LocInitMessage;
+
+export interface AuthenticateMessage {
+    type: 'authenticate';
+    integrationId: string;
+}
+
+// Outbound (webview -> extension); dispatched in `integrationWebview.ts:handleMessage`. Keep exhaustive.
+export type WebviewOutboundMessage =
+    | { type: 'configure'; integrationId: string }
+    | { type: 'save'; integrationId: string; config: ConfigurableDatabaseIntegrationConfig }
+    | { type: 'reset'; integrationId: string }
+    | { type: 'delete'; integrationId: string }
+    | AuthenticateMessage;

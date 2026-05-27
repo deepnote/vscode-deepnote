@@ -9,9 +9,7 @@ import { DATAFRAME_SQL_INTEGRATION_ID } from './integrationTypes';
 import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
 import type { DeepnoteProject } from '../../deepnote/deepnoteTypes';
 
-/**
- * Helper function to create a minimal DeepnoteProject for testing
- */
+/** Create a minimal `DeepnoteProject` for tests. */
 function createMockProject(
     projectId: string,
     integrations: Array<{ id: string; name: string; type: string }> = []
@@ -406,6 +404,52 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                     'URL should contain application=Deepnote_Workspaces parameter'
                 );
             });
+        });
+    });
+
+    suite('Federated-auth integrations are skipped', () => {
+        test('Mixed project: federated integration is skipped, non-federated is included', async () => {
+            const resource = Uri.file('/test/notebook.deepnote');
+            const notebook = mock<NotebookDocument>();
+            const postgresConfig: DatabaseIntegrationConfig = {
+                id: 'pg-1',
+                name: 'Postgres',
+                type: 'pgsql',
+                metadata: {
+                    host: 'localhost',
+                    port: '5432',
+                    database: 'db',
+                    user: 'u',
+                    password: 'p',
+                    sslEnabled: false
+                }
+            };
+            const federatedConfig: DatabaseIntegrationConfig = {
+                id: 'bq-oauth',
+                name: 'OAuth BQ',
+                type: 'big-query',
+                metadata: {
+                    authMethod: 'google-oauth',
+                    project: 'oauth-project',
+                    clientId: 'client',
+                    clientSecret: 'secret'
+                }
+            };
+            const project = createMockProject('project-123', [
+                { id: 'pg-1', name: 'Postgres', type: 'pgsql' },
+                { id: 'bq-oauth', name: 'OAuth BQ', type: 'big-query' }
+            ]);
+
+            when(notebook.metadata).thenReturn({ deepnoteProjectId: 'project-123' });
+            when(notebookEditorProvider.findAssociatedNotebookDocument(resource)).thenReturn(instance(notebook));
+            when(notebookManager.getOriginalProject('project-123')).thenReturn(project);
+            when(integrationStorage.getIntegrationConfig('pg-1')).thenResolve(postgresConfig);
+            when(integrationStorage.getIntegrationConfig('bq-oauth')).thenResolve(federatedConfig);
+
+            const result = await provider.getEnvironmentVariables(resource);
+
+            assert.ok(result['SQL_PG_1'], 'Non-federated postgres env var should be present');
+            assert.strictEqual(result['SQL_BQ_OAUTH'], undefined, 'Federated integration env var should be omitted');
         });
     });
 

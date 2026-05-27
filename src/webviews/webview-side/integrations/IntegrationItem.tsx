@@ -1,4 +1,6 @@
 import * as React from 'react';
+import { BigQueryAuthMethods } from '@deepnote/database-integrations';
+
 import { getLocString } from '../react-common/locReactSide';
 import { ConfigurableDatabaseIntegrationType, IntegrationWithStatus } from './types';
 import { integrationTypeIcons } from './integrationUtils';
@@ -8,6 +10,7 @@ export interface IIntegrationItemProps {
     onConfigure: (integrationId: string) => void;
     onReset: (integrationId: string) => void;
     onDelete: (integrationId: string) => void;
+    onAuthenticate: (integrationId: string) => void;
 }
 
 const getIntegrationTypeLabel = (type: ConfigurableDatabaseIntegrationType): string => {
@@ -51,7 +54,13 @@ const getIntegrationTypeLabel = (type: ConfigurableDatabaseIntegrationType): str
     }
 };
 
-export const IntegrationItem: React.FC<IIntegrationItemProps> = ({ integration, onConfigure, onReset, onDelete }) => {
+export const IntegrationItem: React.FC<IIntegrationItemProps> = ({
+    integration,
+    onConfigure,
+    onReset,
+    onDelete,
+    onAuthenticate
+}) => {
     const statusClass = integration.status === 'connected' ? 'status-connected' : 'status-disconnected';
     const statusText =
         integration.status === 'connected'
@@ -71,6 +80,24 @@ export const IntegrationItem: React.FC<IIntegrationItemProps> = ({ integration, 
     const typeLabel = type ? getIntegrationTypeLabel(type) : undefined;
     const typeIcon = type ? integrationTypeIcons[type] : undefined;
 
+    // Federated-auth UI: only for BigQuery + google-oauth; hidden for service-account BigQuery and other types.
+    const isFederatedOauth =
+        integration.config?.type === 'big-query' &&
+        integration.config.metadata.authMethod === BigQueryAuthMethods.GoogleOauth;
+    const tokenStatus = integration.tokenStatus;
+    const showFederatedPill = isFederatedOauth && tokenStatus && tokenStatus !== 'unsupported';
+    const showFederatedAuthButton = isFederatedOauth && tokenStatus && tokenStatus !== 'unsupported';
+
+    const tokenStatusText =
+        tokenStatus === 'authenticated'
+            ? getLocString('integrationsTokenStatusAuthenticated', 'Authenticated')
+            : getLocString('integrationsTokenStatusDisconnected', 'Not authenticated');
+    const tokenStatusPillClass = tokenStatus === 'authenticated' ? 'status-connected' : 'status-disconnected';
+    const authenticateButtonText =
+        tokenStatus === 'authenticated'
+            ? getLocString('integrationsReauthenticate', 'Re-authenticate with Google')
+            : getLocString('integrationsAuthenticate', 'Authenticate with Google');
+
     return (
         <div className="integration-item">
             {typeIcon && (
@@ -84,12 +111,23 @@ export const IntegrationItem: React.FC<IIntegrationItemProps> = ({ integration, 
                     {typeLabel && <span className="integration-type">{typeLabel}</span>}
                     {typeLabel && <span className="integration-meta-separator"> • </span>}
                     <span className={`integration-status ${statusClass}`}>{statusText}</span>
+                    {showFederatedPill && (
+                        <>
+                            <span className="integration-meta-separator"> • </span>
+                            <span className={`integration-status ${tokenStatusPillClass}`}>{tokenStatusText}</span>
+                        </>
+                    )}
                 </div>
             </div>
             <div className="integration-actions">
                 <button type="button" onClick={() => onConfigure(integration.id)}>
                     {configureText}
                 </button>
+                {showFederatedAuthButton && (
+                    <button type="button" onClick={() => onAuthenticate(integration.id)}>
+                        {authenticateButtonText}
+                    </button>
+                )}
                 {integration.config && (
                     <button type="button" className="secondary" onClick={() => onReset(integration.id)}>
                         {getLocString('integrationsReset', 'Reset')}

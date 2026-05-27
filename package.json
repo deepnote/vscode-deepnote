@@ -145,6 +145,11 @@
                 "icon": "$(plug)"
             },
             {
+                "command": "deepnote.authenticateIntegration",
+                "title": "%deepnote.commands.authenticateIntegration.title%",
+                "category": "Deepnote"
+            },
+            {
                 "command": "deepnote.openInDeepnote",
                 "title": "Open in Deepnote",
                 "category": "Deepnote",
@@ -1200,6 +1205,10 @@
                     "when": "deepnote.development && isWorkspaceTrusted"
                 },
                 {
+                    "command": "deepnote.authenticateIntegration",
+                    "when": "false"
+                },
+                {
                     "command": "deepnote.manageAccessToKernels",
                     "title": "%deepnote.command.manageAccessToKernels%"
                 },
@@ -1642,7 +1651,7 @@
                     "type": "string",
                     "default": "deepnote.com",
                     "description": "Deepnote domain (e.g., 'deepnote.com' or 'ra-18838.deepnote-staging.com')",
-                    "scope": "application"
+                    "scope": "resource"
                 },
                 "deepnote.disableSSLVerification": {
                     "type": "boolean",
@@ -2704,6 +2713,7 @@
         "cross-fetch": "^3.1.5",
         "d3-format": "^3.1.0",
         "encoding": "^0.1.13",
+        "express": "^5.2.1",
         "fast-deep-equal": "^2.0.1",
         "format-util": "^1.0.5",
         "fs-extra": "^4.0.3",
@@ -2750,6 +2760,7 @@
         "tailwind-merge": "^3.3.1",
         "tcp-port-used": "^1.0.1",
         "tmp": "^0.2.6",
+        "ts-dedent": "^2.2.0",
         "url-parse": "^1.5.10",
         "uuid": "^13.0.2",
         "vega": "^6.2.0",
@@ -2781,6 +2792,7 @@
         "@types/dedent": "^0.7.0",
         "@types/del": "^4.0.0",
         "@types/event-stream": "^3.3.33",
+        "@types/express": "^5.0.6",
         "@types/format-util": "^1.0.2",
         "@types/fs-extra": "^5.0.1",
         "@types/get-port": "^3.2.0",

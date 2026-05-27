@@ -6,6 +6,15 @@ import { IKernelSession } from '../types';
 
 export type IExecution = ICellExecution | ICodeExecution;
 
+/** How {@link CellExecution} writes an error into cell output. Omit to leave existing output unchanged. */
+export type CellExecutionErrorOutputMode = 'append' | 'replace';
+
+export interface CellExecutionCompletedWithErrorsOptions {
+    completedTime?: number;
+    error: Partial<Error>;
+    output?: CellExecutionErrorOutputMode;
+}
+
 export interface ICellExecution {
     type: 'cell';
     cell: NotebookCell;

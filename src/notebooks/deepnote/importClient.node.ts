@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { workspace } from 'vscode';
+import { Uri, workspace } from 'vscode';
 import { logger } from '../../platform/logging';
 import fetch from 'node-fetch';
 
@@ -28,18 +28,19 @@ export interface ApiError {
 export const MAX_FILE_SIZE = 100 * 1024 * 1024;
 
 /**
- * Gets the Deepnote domain from configuration
+ * Gets the Deepnote domain from configuration for the given resource (file/notebook URI).
+ * When omitted, uses the active workspace folder context.
  */
-function getDomain(): string {
-    const config = workspace.getConfiguration('deepnote');
+function getDomain(resource?: Uri): string {
+    const config = workspace.getConfiguration('deepnote', resource);
     return config.get<string>('domain', 'deepnote.com');
 }
 
 /**
  * Gets the API endpoint from configuration
  */
-function getApiEndpoint(): string {
-    const domain = getDomain();
+function getApiEndpoint(resource?: Uri): string {
+    const domain = getDomain(resource);
     return `https://api.${domain}`;
 }
 
@@ -51,8 +52,8 @@ function getApiEndpoint(): string {
  * @returns Promise with import ID, upload URL, and expiration time
  * @throws ApiError if the request fails
  */
-export async function initImport(fileName: string, fileSize: number): Promise<InitImportResponse> {
-    const apiEndpoint = getApiEndpoint();
+export async function initImport(fileName: string, fileSize: number, resource?: Uri): Promise<InitImportResponse> {
+    const apiEndpoint = getApiEndpoint(resource);
     const url = `${apiEndpoint}/v1/import/init`;
 
     const response = await fetch(url, {
@@ -167,6 +168,6 @@ export function getErrorMessage(error: unknown): string {
 /**
  * Gets the Deepnote domain from configuration for building launch URLs
  */
-export function getDeepnoteDomain(): string {
-    return getDomain();
+export function getDeepnoteDomain(resource?: Uri): string {
+    return getDomain(resource);
 }

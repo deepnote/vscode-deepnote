@@ -1,3 +1,6 @@
+import type { DeepnoteBlock } from '@deepnote/blocks';
+import { Event } from 'vscode';
+
 import { IntegrationWithStatus } from '../../../platform/notebooks/deepnote/integrationTypes';
 
 // Re-export IIntegrationStorage from platform layer
@@ -37,4 +40,59 @@ export interface IIntegrationManager {
      * Activate the integration manager by registering commands and event listeners
      */
     activate(): void;
+}
+
+/** Persisted federated-auth token entry; fingerprints `${clientId}|${clientSecret}|${project}` to detect stale tokens. Only the refresh token is persisted. */
+export interface FederatedAuthTokenEntry {
+    integrationId: string;
+    refreshToken: string;
+    metadataFingerprint: string;
+}
+
+/** OAuth-client metadata fingerprinted by {@link IFederatedAuthTokenStorage.computeMetadataFingerprint}; mirrors the BigQuery `google-oauth` schema. */
+export interface FederatedAuthFingerprintInput {
+    clientId: string;
+    clientSecret: string;
+    project: string;
+}
+
+export const IFederatedAuthTokenStorage = Symbol('IFederatedAuthTokenStorage');
+export interface IFederatedAuthTokenStorage {
+    /**
+     * Fires when a token is saved or deleted; the payload is the integration id.
+     */
+    readonly onDidChangeTokens: Event<string>;
+    /** Canonical fingerprint of OAuth-client metadata. Exposed on the interface so cross-platform callers (e.g. `IntegrationWebviewProvider`) avoid the node-only helper. */
+    computeMetadataFingerprint(metadata: FederatedAuthFingerprintInput): string;
+    delete(integrationId: string): Promise<void>;
+    get(integrationId: string): Promise<FederatedAuthTokenEntry | undefined>;
+    has(integrationId: string): Promise<boolean>;
+    /** All integration IDs with a stored token entry; used for orphaned-token cleanup. */
+    listIntegrationIds(): Promise<string[]>;
+    /** Persists a token entry. Pass `silent: true` for refresh-token rotation to skip `onDidChangeTokens` (avoids interrupting in-flight SQL cells). */
+    save(entry: FederatedAuthTokenEntry, options?: { silent?: boolean }): Promise<void>;
+}
+
+export const IFederatedAuthSqlBlockCodeGenerator = Symbol('IFederatedAuthSqlBlockCodeGenerator');
+export interface IFederatedAuthSqlBlockCodeGenerator {
+    generate(block: DeepnoteBlock): Promise<string | undefined>;
+}
+
+/** Thrown when a federated integration has no usable refresh token (not authenticated yet, fingerprint mismatch, or `invalid_grant`). */
+export class NotAuthenticatedError extends Error {
+    constructor(public readonly integrationName: string) {
+        super(`Integration "${integrationName}" is not authenticated.`);
+        this.name = 'NotAuthenticatedError';
+    }
+}
+
+/**
+ * Thrown when OAuth client metadata (clientId/clientSecret) is wrong — `invalid_client` / `unauthorized_client`.
+ * Distinct from {@link NotAuthenticatedError}: re-auth won't fix it. Lives here (not in `.node.ts`) so cross-platform callers can `instanceof`-check.
+ */
+export class OAuthClientMisconfiguredError extends Error {
+    constructor(public readonly integrationName: string) {
+        super(`OAuth client for integration "${integrationName}" is misconfigured.`);
+        this.name = 'OAuthClientMisconfiguredError';
+    }
 }

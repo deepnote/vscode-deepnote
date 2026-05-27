@@ -18,6 +18,7 @@ import {
 } from '../../notebooks/deepnote/integrations/types';
 import { IKernelController, IKernelSession, KernelConnectionMetadata } from '../types';
 import { createKernelController } from '../../test/datascience/notebook/executionHelper';
+import { CellExecutionOutputError } from '../errors/cellExecutionOutputError';
 import { CellExecution, CellExecutionFactory } from './cellExecution';
 import { CellExecutionMessageHandlerService } from './cellExecutionMessageHandlerService';
 
@@ -314,7 +315,7 @@ suite('CellExecution federated-auth branch', () => {
                 });
             }
 
-            assert(caught instanceof Error);
+            assert(caught instanceof CellExecutionOutputError);
             assert.include(caught.message.toLowerCase(), expectedFragment);
             sinon.assert.notCalled(requestExecuteSpy);
         });

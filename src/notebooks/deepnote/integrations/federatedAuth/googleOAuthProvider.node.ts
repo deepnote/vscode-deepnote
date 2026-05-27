@@ -10,13 +10,18 @@ export const GOOGLE_BIGQUERY_SCOPES = ['email', 'profile', 'https://www.googleap
 
 const TOKEN_EXCHANGE_TIMEOUT_MS = 15_000;
 
-const tokenEndpointResponseSchema = z.object({
-    access_token: z.string().optional(),
-    refresh_token: z.string().optional(),
-    expires_in: z.number().optional(),
-    error: z.string().optional(),
+const tokenEndpointErrorResponseSchema = z.object({
+    error: z.string(),
     error_description: z.string().optional()
 });
+
+const tokenEndpointSuccessResponseSchema = z.object({
+    access_token: z.string(),
+    refresh_token: z.string().optional(),
+    expires_in: z.number().optional()
+});
+
+const tokenEndpointResponseSchema = z.union([tokenEndpointSuccessResponseSchema, tokenEndpointErrorResponseSchema]);
 
 /** PKCE S256 pair. Verifier is 32 random bytes encoded as base64url (Google requires 43-128 chars; 32 bytes → 43). */
 export function generatePkcePair(): { challenge: string; verifier: string } {
@@ -97,6 +102,9 @@ export async function exchangeAuthorizationCode(
     const data = parsed.data;
 
     if (!response.ok) {
+        if (!('error' in data)) {
+            throw new Error(`Token exchange failed: ${response.status} ${response.statusText}`);
+        }
         if (data.error === 'invalid_grant') {
             throw new InvalidGrantError(data.error_description ?? 'Authorization code rejected by OAuth provider.');
         }
@@ -106,8 +114,8 @@ export async function exchangeAuthorizationCode(
         throw new Error(`Token exchange failed: ${response.status} ${response.statusText}`);
     }
 
-    if (!data.access_token) {
-        throw new Error('Token exchange succeeded but response did not include an access_token.');
+    if ('error' in data) {
+        throw new Error('Token exchange succeeded but response body contained an OAuth error.');
     }
     if (!data.refresh_token) {
         throw new Error(

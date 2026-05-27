@@ -1,6 +1,7 @@
 import express, { type Express, type Request, type Response } from 'express';
 import * as http from 'http';
 import { type AddressInfo } from 'net';
+import { z } from 'zod';
 import { CancellationError, CancellationToken, Uri, env } from 'vscode';
 
 import { logger } from '../../../../platform/logging';
@@ -8,6 +9,18 @@ import { exchangeAuthorizationCode } from './googleOAuthProvider.node';
 
 /** Default OAuth-flow deadline (5 min) measured from listen(). After this the loopback server is torn down. */
 export const OAUTH_FLOW_TIMEOUT_MS = 5 * 60 * 1000;
+
+/** Express may deliver query values as `string | string[] | ParsedQs`; OAuth callbacks only send single strings. */
+const oauthCallbackQueryParamSchema = z.preprocess((value) => {
+    return z.string().safeParse(value).data;
+}, z.string().optional());
+
+const oauthCallbackQuerySchema = z.object({
+    code: oauthCallbackQueryParamSchema,
+    error: oauthCallbackQueryParamSchema,
+    error_description: oauthCallbackQueryParamSchema,
+    state: oauthCallbackQueryParamSchema
+});
 
 /**
  * Inputs for {@link runOAuthFlow}. The flow binds a loopback server on `127.0.0.1:0`, externalizes the
@@ -84,11 +97,12 @@ export async function runOAuthFlow(params: RunOAuthFlowParams): Promise<{ refres
         logger.info(`runOAuthFlow: bound loopback on port ${port}; externalCallbackUrl=${externalCallbackUrl}`);
 
         app.get('/auth/callback', async (req: Request, res: Response) => {
-            const code = typeof req.query.code === 'string' ? req.query.code : undefined;
-            const callbackState = typeof req.query.state === 'string' ? req.query.state : undefined;
-            const providerError = typeof req.query.error === 'string' ? req.query.error : undefined;
-            const providerErrorDescription =
-                typeof req.query.error_description === 'string' ? req.query.error_description : undefined;
+            const {
+                code,
+                error: providerError,
+                error_description: providerErrorDescription,
+                state: callbackState
+            } = oauthCallbackQuerySchema.parse(req.query);
 
             // State always has to match — both the success and error responses carry it (RFC 6749 §4.1.2 & §4.1.2.1).
             if (!callbackState) {

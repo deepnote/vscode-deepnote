@@ -1,7 +1,6 @@
 // VENDORED from @deepnote/blocks bundled internals. None of these symbols are part of the
-// package's public exports (verified against dist/index.d.ts). Track removal in
-// /home/ubuntu/.claude/plans/look-at-the-pr-curious-toast.md Step 10 — once @deepnote/blocks
-// exports them, delete this file and import directly.
+// package's public exports (verified against dist/index.d.ts).
+// once @deepnote/blocks exports them, delete this file and import directly.
 // TODO(deepnote-followups): remove when @deepnote/blocks exports these helpers.
 
 import type { DeepnoteBlock } from '@deepnote/blocks';

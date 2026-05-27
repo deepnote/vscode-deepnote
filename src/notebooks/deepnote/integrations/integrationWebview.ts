@@ -4,7 +4,7 @@ import { commands, Disposable, l10n, Uri, ViewColumn, WebviewPanel, window } fro
 import { BigQueryAuthMethods } from '@deepnote/database-integrations';
 
 import { Commands } from '../../../platform/common/constants';
-import { IExtensionContext } from '../../../platform/common/types';
+import { IDisposableRegistry, IExtensionContext } from '../../../platform/common/types';
 import * as localize from '../../../platform/common/utils/localize';
 import { logger } from '../../../platform/logging';
 import { LocalizedMessages, SharedMessages } from '../../../messageTypes';
@@ -33,20 +33,18 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     /** Generation counter for `updateWebview()` ("latest call wins"; stale in-flight updates bail). */
     private updateGeneration = 0;
 
-    /** Disposables that must survive panel close/reopen (provider is DI-singleton; `disposables` is torn down on `onDidDispose`). */
-    private readonly tokenStorageDisposables: Disposable[] = [];
-
     constructor(
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
+        @inject(IDisposableRegistry) private readonly disposableRegistry: IDisposableRegistry,
         @inject(IFederatedAuthTokenStorage)
         @optional()
         private readonly tokenStorage?: IFederatedAuthTokenStorage
     ) {
-        // Refresh on token-storage change so the auth pill flips without panel reload. Lives in `tokenStorageDisposables` to survive panel close/reopen.
+        // Refresh on token-storage change so the auth pill flips without panel reload. Pushed into the extension-lifetime registry to survive panel close/reopen.
         if (this.tokenStorage) {
-            this.tokenStorageDisposables.push(
+            this.disposableRegistry.push(
                 this.tokenStorage.onDidChangeTokens(() => {
                     this.updateWebview().catch((err) => {
                         logger.error('IntegrationWebviewProvider: Failed to update webview', err);
@@ -505,7 +503,12 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             logger.info(
                 `IntegrationWebviewProvider: deleting stale federated token for ${integrationId} (auth method changed).`
             );
-            await this.tokenStorage.delete(integrationId);
+            await this.tokenStorage.delete(integrationId).catch((err) => {
+                logger.warn(
+                    `IntegrationWebviewProvider: failed to delete stale federated token for ${integrationId}`,
+                    err
+                );
+            });
             return;
         }
 
@@ -516,7 +519,12 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             logger.info(
                 `IntegrationWebviewProvider: deleting stale federated token for ${integrationId} (fingerprint changed).`
             );
-            await this.tokenStorage.delete(integrationId);
+            await this.tokenStorage.delete(integrationId).catch((err) => {
+                logger.warn(
+                    `IntegrationWebviewProvider: failed to delete stale federated token for ${integrationId}`,
+                    err
+                );
+            });
         }
     }
 

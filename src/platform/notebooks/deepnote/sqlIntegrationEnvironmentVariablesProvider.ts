@@ -1,6 +1,13 @@
 import { inject, injectable } from 'inversify';
 import { CancellationToken, Event, EventEmitter } from 'vscode';
 
+import {
+    DatabaseIntegrationConfig,
+    FederatedAuthMethod,
+    getEnvironmentVariablesForIntegrations,
+    isFederatedAuthMethod
+} from '@deepnote/database-integrations';
+
 import { IDisposableRegistry, Resource } from '../../common/types';
 import { EnvironmentVariables } from '../../common/variables/types';
 import { logger } from '../../logging';
@@ -11,12 +18,6 @@ import {
     IPlatformDeepnoteNotebookManager
 } from './types';
 import { DATAFRAME_SQL_INTEGRATION_ID } from './integrationTypes';
-import {
-    DatabaseIntegrationConfig,
-    FederatedAuthMethod,
-    getEnvironmentVariablesForIntegrations,
-    isFederatedAuthMethod
-} from '@deepnote/database-integrations';
 
 /** Narrows metadata to the federated-auth variant; upstream `isFederatedAuthMetadata` can't be reused because its generic doesn't unify with our union. Delegates to upstream `isFederatedAuthMethod` at runtime. */
 function isFederatedAuthMetadata(

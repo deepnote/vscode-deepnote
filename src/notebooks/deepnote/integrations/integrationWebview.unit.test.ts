@@ -152,6 +152,7 @@ suite('IntegrationWebviewProvider', () => {
             instance(extensionContext),
             instance(integrationStorage),
             instance(notebookManager),
+            extensionSubscriptions,
             opts.tokenStorage
         );
     }

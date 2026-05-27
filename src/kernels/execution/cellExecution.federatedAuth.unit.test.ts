@@ -7,7 +7,6 @@ import sinon from 'sinon';
 import { anything, instance, mock, when } from 'ts-mockito';
 import { NotebookCell, NotebookCellKind, Uri } from 'vscode';
 
-import { CancellationTokenSource } from 'vscode';
 import { dispose } from '../../platform/common/utils/lifecycle';
 import { createDeferred, Deferred } from '../../platform/common/utils/async';
 import { IDisposable } from '../../platform/common/types';
@@ -101,8 +100,6 @@ suite('CellExecution federated-auth branch', () => {
 
     setup(() => {
         disposables = [];
-        const tokenSource = new CancellationTokenSource();
-        disposables.push(tokenSource);
 
         controller = createKernelController();
         requestListener = createStubMessageHandler();

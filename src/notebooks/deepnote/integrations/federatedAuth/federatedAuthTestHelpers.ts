@@ -7,6 +7,8 @@ import type { ConfigurableDatabaseIntegrationConfig } from '../../../../platform
 import type { DeepnoteProject } from '../../../../platform/deepnote/deepnoteTypes';
 import type { FederatedAuthTokenEntry } from '../types';
 
+const DEFAULT_SETTLE_DELAY_MS = 10;
+
 export const FED_AUTH_FIXTURE = {
     INTEGRATION_ID: 'bq-integration-1',
     PROJECT: 'my-gcp-project',
@@ -125,7 +127,7 @@ export function createMockProject(projectId: string, integrationIds: string[] = 
     };
 }
 
-export function settleAsyncHandlers(ms = 10): Promise<void> {
+export function settleAsyncHandlers(ms = DEFAULT_SETTLE_DELAY_MS): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 

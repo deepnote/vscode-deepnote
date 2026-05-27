@@ -199,7 +199,6 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsBigQueryCredentialsLabel: localize.Integrations.bigQueryCredentialsLabel,
             integrationsBigQueryCredentialsPlaceholder: localize.Integrations.bigQueryCredentialsPlaceholder,
             integrationsBigQueryCredentialsRequired: localize.Integrations.bigQueryCredentialsRequired,
-            // BigQuery federated-auth form strings (M4)
             integrationsBigQueryAuthMethodLabel: localize.Integrations.bigQueryAuthMethodLabel,
             integrationsBigQueryAuthMethodServiceAccount: localize.Integrations.bigQueryAuthMethodServiceAccount,
             integrationsBigQueryAuthMethodGoogleOauth: localize.Integrations.bigQueryAuthMethodGoogleOauth,
@@ -209,7 +208,6 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsBigQueryClientIdPlaceholder: localize.Integrations.bigQueryClientIdPlaceholder,
             integrationsBigQueryClientSecretLabel: localize.Integrations.bigQueryClientSecretLabel,
             integrationsBigQueryClientSecretPlaceholder: localize.Integrations.bigQueryClientSecretPlaceholder,
-            // Federated-auth integration management strings (M4)
             integrationsAuthenticate: localize.Integrations.authenticate,
             integrationsReauthenticate: localize.Integrations.reauthenticate,
             integrationsTokenStatusAuthenticated: localize.Integrations.tokenStatusAuthenticated,

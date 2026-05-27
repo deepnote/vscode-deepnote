@@ -107,13 +107,19 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
             `SqlIntegrationEnvironmentVariablesProvider: Found ${projectIntegrations.length} integrations in project`
         );
 
-        const allConfigs: Array<DatabaseIntegrationConfig> = (
-            await Promise.all(
-                projectIntegrations.map((integration) => {
-                    return this.integrationStorage.getIntegrationConfig(integration.id);
-                })
-            )
-        ).filter((config) => config != null);
+        const configResults = await Promise.allSettled(
+            projectIntegrations.map((integration) => this.integrationStorage.getIntegrationConfig(integration.id))
+        );
+        const allConfigs: Array<DatabaseIntegrationConfig> = configResults.flatMap((result, index) => {
+            if (result.status === 'fulfilled') {
+                return result.value ? [result.value] : [];
+            }
+            logger.error(
+                `SqlIntegrationEnvironmentVariablesProvider: Failed to load integration config ${projectIntegrations[index].id}`,
+                result.reason
+            );
+            return [];
+        });
 
         // Skip federated-auth integrations: tokens are fetched per-cell via per-cell codegen in `FederatedAuthSqlBlockCodeGenerator`, not baked into kernel env.
         const projectIntegrationConfigs: Array<DatabaseIntegrationConfig> = [];

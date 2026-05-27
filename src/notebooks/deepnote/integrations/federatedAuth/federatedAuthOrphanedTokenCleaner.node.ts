@@ -29,7 +29,9 @@ export class FederatedAuthOrphanedTokenCleaner implements IExtensionSyncActivati
     }
 
     public activate(): void {
-        // Service is activated via constructor.
+        this.cleanupOrphanedTokens().catch((err) =>
+            logger.error('FederatedAuthOrphanedTokenCleaner: Initial orphaned token cleanup failed', err)
+        );
     }
 
     private async cleanupOrphanedTokens(): Promise<void> {

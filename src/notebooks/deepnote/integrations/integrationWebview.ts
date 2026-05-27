@@ -48,7 +48,9 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         if (this.tokenStorage) {
             this.tokenStorageDisposables.push(
                 this.tokenStorage.onDidChangeTokens(() => {
-                    void this.updateWebview();
+                    this.updateWebview().catch((err) => {
+                        logger.error('IntegrationWebviewProvider: Failed to update webview', err);
+                    });
                 })
             );
         }
@@ -209,7 +211,6 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsBigQueryClientIdPlaceholder: localize.Integrations.bigQueryClientIdPlaceholder,
             integrationsBigQueryClientSecretLabel: localize.Integrations.bigQueryClientSecretLabel,
             integrationsBigQueryClientSecretPlaceholder: localize.Integrations.bigQueryClientSecretPlaceholder,
-            integrationsBigQueryGoogleOauthHelp: localize.Integrations.bigQueryGoogleOauthHelp,
             // Federated-auth integration management strings (M4)
             integrationsAuthenticate: localize.Integrations.authenticate,
             integrationsReauthenticate: localize.Integrations.reauthenticate,
@@ -661,7 +662,9 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     private async resetConfiguration(integrationId: string): Promise<void> {
         try {
             await this.integrationStorage.delete(integrationId);
-            await this.tokenStorage?.delete(integrationId);
+            await this.tokenStorage?.delete(integrationId).catch((error) => {
+                logger.warn(`IntegrationWebviewProvider: failed to delete federated token for ${integrationId}`, error);
+            });
 
             // Update local state
             const integration = this.integrations.get(integrationId);
@@ -697,7 +700,9 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     private async deleteConfiguration(integrationId: string): Promise<void> {
         try {
             await this.integrationStorage.delete(integrationId);
-            await this.tokenStorage?.delete(integrationId);
+            await this.tokenStorage?.delete(integrationId).catch((error) => {
+                logger.warn(`IntegrationWebviewProvider: failed to delete federated token for ${integrationId}`, error);
+            });
 
             // Remove from local state
             this.integrations.delete(integrationId);

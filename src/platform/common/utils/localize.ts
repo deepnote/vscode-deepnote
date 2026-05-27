@@ -893,15 +893,12 @@ export namespace Integrations {
     export const bigQueryAuthMethodLabel = l10n.t('Authentication method');
     export const bigQueryAuthMethodServiceAccount = l10n.t('Service account');
     export const bigQueryAuthMethodGoogleOauth = l10n.t('Google OAuth');
-    export const bigQueryProjectLabel = l10n.t('Project');
-    export const bigQueryProjectPlaceholder = l10n.t('my-project-id');
-    export const bigQueryClientIdLabel = l10n.t('OAuth client ID');
-    export const bigQueryClientIdPlaceholder = l10n.t('1234567890-abc.apps.googleusercontent.com');
-    export const bigQueryClientSecretLabel = l10n.t('OAuth client secret');
-    export const bigQueryClientSecretPlaceholder = l10n.t('GOCSPX-...');
-    export const bigQueryGoogleOauthHelp = l10n.t(
-        "Create a 'Web application' OAuth client in Google Cloud Console and add https://deepnote.com/auth/bigquery/google-oauth-callback to its authorized redirect URIs. Then paste the client ID and secret above."
-    );
+    export const bigQueryProjectLabel = l10n.t('Google Project ID');
+    export const bigQueryProjectPlaceholder = l10n.t('my-dev-project');
+    export const bigQueryClientIdLabel = l10n.t('Client ID');
+    export const bigQueryClientIdPlaceholder = l10n.t('1234567890-abcdefg.apps.googleusercontent.com');
+    export const bigQueryClientSecretLabel = l10n.t('Client Secret');
+    export const bigQueryClientSecretPlaceholder = l10n.t('XyZ123AbCdEfGhI');
 
     // Federated-auth integration management strings (M4)
     export const authenticate = l10n.t('Authenticate with Google');

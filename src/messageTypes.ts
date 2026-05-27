@@ -238,7 +238,6 @@ export type LocalizedMessages = {
     integrationsBigQueryClientIdPlaceholder: string;
     integrationsBigQueryClientSecretLabel: string;
     integrationsBigQueryClientSecretPlaceholder: string;
-    integrationsBigQueryGoogleOauthHelp: string;
     // Federated-auth integration management strings
     integrationsAuthenticate: string;
     integrationsReauthenticate: string;

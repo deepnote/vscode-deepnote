@@ -8,7 +8,8 @@ suite('Federated auth invariants', () => {
 
         // Compile-time check: tsc fails this file if a forbidden key is ever added.
         type Forbidden = 'accessToken' | 'expiresAt';
-        type AssertEntryOmitsForbidden = Forbidden extends keyof FederatedAuthTokenEntry ? never : true;
+        type PresentForbidden = Extract<keyof FederatedAuthTokenEntry, Forbidden>;
+        type AssertEntryOmitsForbidden = PresentForbidden extends never ? true : never;
         const _entryShapeCheck: AssertEntryOmitsForbidden = true;
         void _entryShapeCheck;
 

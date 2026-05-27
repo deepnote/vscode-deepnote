@@ -247,32 +247,9 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({
 
             {authMethod === BigQueryAuthMethods.GoogleOauth && (
                 <>
-                    <div className="form-help">
-                        {getLocString(
-                            'integrationsBigQueryGoogleOauthHelp',
-                            "Create a 'Web application' OAuth client in Google Cloud Console and add https://deepnote.com/auth/bigquery/google-oauth-callback to its authorized redirect URIs. Then paste the client ID and secret above."
-                        )}
-                    </div>
-
-                    <div className="form-group">
-                        <label htmlFor="bigquery-project">
-                            {getLocString('integrationsBigQueryProjectLabel', 'Project')}{' '}
-                            <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
-                        </label>
-                        <input
-                            type="text"
-                            id="bigquery-project"
-                            value={oauthProject}
-                            onChange={handleOauthFieldChange('project')}
-                            placeholder={getLocString('integrationsBigQueryProjectPlaceholder', 'my-project-id')}
-                            autoComplete="off"
-                            required
-                        />
-                    </div>
-
                     <div className="form-group">
                         <label htmlFor="bigquery-client-id">
-                            {getLocString('integrationsBigQueryClientIdLabel', 'OAuth client ID')}{' '}
+                            {getLocString('integrationsBigQueryClientIdLabel', 'Client ID')}{' '}
                             <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                         </label>
                         <input
@@ -282,7 +259,7 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({
                             onChange={handleOauthFieldChange('clientId')}
                             placeholder={getLocString(
                                 'integrationsBigQueryClientIdPlaceholder',
-                                '1234567890-abc.apps.googleusercontent.com'
+                                '1234567890-abcdefg.apps.googleusercontent.com'
                             )}
                             autoComplete="off"
                             required
@@ -291,7 +268,7 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({
 
                     <div className="form-group">
                         <label htmlFor="bigquery-client-secret">
-                            {getLocString('integrationsBigQueryClientSecretLabel', 'OAuth client secret')}{' '}
+                            {getLocString('integrationsBigQueryClientSecretLabel', 'Client Secret')}{' '}
                             <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
                         </label>
                         <input
@@ -299,7 +276,23 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({
                             id="bigquery-client-secret"
                             value={oauthClientSecret}
                             onChange={handleOauthFieldChange('clientSecret')}
-                            placeholder={getLocString('integrationsBigQueryClientSecretPlaceholder', 'GOCSPX-...')}
+                            placeholder={getLocString('integrationsBigQueryClientSecretPlaceholder', 'XyZ123AbCdEfGhI')}
+                            autoComplete="off"
+                            required
+                        />
+                    </div>
+
+                    <div className="form-group">
+                        <label htmlFor="bigquery-project">
+                            {getLocString('integrationsBigQueryProjectLabel', 'Google Project ID')}{' '}
+                            <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
+                        </label>
+                        <input
+                            type="text"
+                            id="bigquery-project"
+                            value={oauthProject}
+                            onChange={handleOauthFieldChange('project')}
+                            placeholder={getLocString('integrationsBigQueryProjectPlaceholder', 'my-dev-project')}
                             autoComplete="off"
                             required
                         />

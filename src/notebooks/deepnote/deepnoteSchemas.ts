@@ -117,9 +117,11 @@ export const DeepnoteSelectInputMetadataSchema = DeepnoteBaseInputWithLabelMetad
         .transform((val) => val ?? DEEPNOTE_SELECT_INPUT_DEFAULT_OPTIONS),
     deepnote_variable_select_type: z
         .enum(['from-options', 'from-variable'])
-        // .string()
+        // Default to 'from-options' (not null): the @deepnote/blocks serialize
+        // schema rejects null here, which previously made new Input Select blocks
+        // impossible to save and could trigger a content-reformat loop.
         .nullish()
-        .transform((val) => val ?? null),
+        .transform((val) => val ?? 'from-options'),
     deepnote_allow_multiple_values: z
         .boolean()
         .nullish()

@@ -13,6 +13,7 @@ import {
     ButtonBlockConverter
 } from './inputConverters';
 import { DEEPNOTE_VSCODE_RAW_CONTENT_KEY } from './constants';
+import { DeepnoteSelectInputMetadataSchema } from '../deepnoteSchemas';
 
 suite('InputTextBlockConverter', () => {
     let converter: InputTextBlockConverter;
@@ -266,6 +267,47 @@ suite('InputTextareaBlockConverter', () => {
 
             assert.strictEqual(block.metadata?.deepnote_variable_value, '');
         });
+    });
+});
+
+suite('Input Select block — save/serialize regression', () => {
+    test('new input-select metadata defaults select_type to a valid enum value, not null', () => {
+        // The @deepnote/blocks serializer validates deepnote_variable_select_type
+        // against a strict 'from-options' | 'from-variable' enum and rejects null.
+        // A null default made freshly-created Input Select blocks impossible to
+        // save, which also kicked off a runaway content-reformat loop.
+        const metadata = DeepnoteSelectInputMetadataSchema.parse({ deepnote_variable_name: 'input_1' });
+
+        assert.strictEqual(metadata.deepnote_variable_select_type, 'from-options');
+    });
+
+    test('round-trips block -> cell -> block -> cell without growing the value (no runaway escaping)', () => {
+        const converter = new InputSelectBlockConverter();
+        const block: DeepnoteBlock = {
+            blockGroup: 'g',
+            content: '',
+            id: 'b1',
+            metadata: {
+                deepnote_variable_name: 'input_1',
+                deepnote_variable_value: 'Option 1',
+                deepnote_variable_options: ['Option 1', 'Option 2'],
+                deepnote_variable_select_type: 'from-options',
+                deepnote_variable_custom_options: ['Option 1', 'Option 2'],
+                deepnote_variable_selected_variable: ''
+            },
+            sortingKey: 'x',
+            type: 'input-select'
+        };
+
+        const firstCell = converter.convertToCell(block);
+        converter.applyChangesToBlock(block, firstCell);
+        const secondCell = converter.convertToCell(block);
+
+        // Each pass must be idempotent: JSON.stringify must not re-escape an
+        // already-escaped value. Previously the value grew without bound and
+        // froze the renderer with megabytes of backslashes.
+        assert.strictEqual(firstCell.value, '"Option 1"');
+        assert.strictEqual(secondCell.value, firstCell.value);
     });
 });
 

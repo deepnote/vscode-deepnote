@@ -1099,6 +1099,19 @@ export namespace Integrations {
     export const alloyDBPasswordLabel = l10n.t('Password');
     export const alloyDBPasswordPlaceholder = l10n.t('••••••••');
 
+    // Cloud SQL form strings
+    export const cloudSqlNameLabel = l10n.t('Name (optional)');
+    export const cloudSqlNamePlaceholder = l10n.t('e.g. Sales data');
+    export const cloudSqlServiceAccountLabel = l10n.t('Service Account JSON');
+    export const cloudSqlServiceAccountPlaceholder = l10n.t(
+        '{\n  "type": "service_account",\n  "project_id": "...",\n  ...\n}'
+    );
+    export const cloudSqlServiceAccountHelp = l10n.t(
+        'Paste the contents of your Google Cloud service account JSON key file.'
+    );
+    export const cloudSqlServiceAccountInvalidJson = l10n.t('Invalid JSON format');
+    export const cloudSqlLearnMore = l10n.t('Learn more.');
+
     // ClickHouse form strings
     export const clickHouseNameLabel = l10n.t('Name (optional)');
     export const clickHouseNamePlaceholder = l10n.t('My ClickHouse Database');

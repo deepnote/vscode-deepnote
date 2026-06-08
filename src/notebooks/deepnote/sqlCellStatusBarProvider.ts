@@ -23,11 +23,11 @@ import { IDisposableRegistry } from '../../platform/common/types';
 import { IIntegrationStorage } from './integrations/types';
 import { Commands } from '../../platform/common/constants';
 import {
+    allDatabaseIntegrationTypes,
     ConfigurableDatabaseIntegrationType,
     DATAFRAME_SQL_INTEGRATION_ID
 } from '../../platform/notebooks/deepnote/integrationTypes';
 import { IDeepnoteNotebookManager } from '../types';
-import { DatabaseIntegrationType, databaseIntegrationTypes } from '@deepnote/database-integrations';
 
 /**
  * QuickPick item with an integration ID
@@ -41,6 +41,7 @@ const integrationTypeLabels: Record<ConfigurableDatabaseIntegrationType, string>
     athena: l10n.t('Amazon Athena'),
     'big-query': l10n.t('Google BigQuery'),
     clickhouse: l10n.t('ClickHouse'),
+    'cloud-sql': l10n.t('Google Cloud SQL'),
     databricks: l10n.t('Databricks'),
     dremio: l10n.t('Dremio'),
     mariadb: l10n.t('MariaDB'),
@@ -361,19 +362,21 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
         // Add all project integrations
         for (const projectIntegration of projectIntegrations) {
-            const integrationType =
-                projectIntegration.type &&
-                (databaseIntegrationTypes as readonly string[]).includes(projectIntegration.type)
-                    ? (projectIntegration.type as DatabaseIntegrationType)
-                    : null;
-
             // Skip the internal DuckDB integration
-            if (projectIntegration.id === DATAFRAME_SQL_INTEGRATION_ID || integrationType === 'pandas-dataframe') {
+            if (
+                projectIntegration.id === DATAFRAME_SQL_INTEGRATION_ID ||
+                projectIntegration.type === 'pandas-dataframe'
+            ) {
                 continue;
             }
 
+            const integrationType =
+                projectIntegration.type && allDatabaseIntegrationTypes.includes(projectIntegration.type)
+                    ? (projectIntegration.type as ConfigurableDatabaseIntegrationType)
+                    : null;
+
             const typeLabel =
-                integrationType && (databaseIntegrationTypes as readonly string[]).includes(integrationType)
+                integrationType && allDatabaseIntegrationTypes.includes(integrationType)
                     ? integrationTypeLabels[integrationType] ?? integrationType
                     : projectIntegration.type;
 

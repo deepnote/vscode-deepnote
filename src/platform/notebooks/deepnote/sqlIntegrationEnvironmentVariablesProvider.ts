@@ -17,7 +17,11 @@ import {
     IPlatformNotebookEditorProvider,
     IPlatformDeepnoteNotebookManager
 } from './types';
-import { DATAFRAME_SQL_INTEGRATION_ID } from './integrationTypes';
+import {
+    ConfigurableDatabaseIntegrationConfig,
+    DATAFRAME_SQL_INTEGRATION_ID,
+    PENDING_INTEGRATION_TYPES
+} from './integrationTypes';
 
 /** Narrows metadata to the federated-auth variant; upstream `isFederatedAuthMetadata` can't be reused because its generic doesn't unify with our union. Delegates to upstream `isFederatedAuthMethod` at runtime. */
 function isFederatedAuthMetadata(
@@ -111,7 +115,7 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
         const configResults = await Promise.allSettled(
             projectIntegrations.map((integration) => this.integrationStorage.getIntegrationConfig(integration.id))
         );
-        const allConfigs: Array<DatabaseIntegrationConfig> = configResults.flatMap((result, index) => {
+        const allConfigs: Array<ConfigurableDatabaseIntegrationConfig> = configResults.flatMap((result, index) => {
             if (result.status === 'fulfilled') {
                 return result.value ? [result.value] : [];
             }
@@ -122,16 +126,26 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
             return [];
         });
 
-        // Skip federated-auth integrations: tokens are fetched per-cell via per-cell codegen in `FederatedAuthSqlBlockCodeGenerator`, not baked into kernel env.
+        // Skip pending integration types (e.g. cloud-sql) that the upstream env-var generator doesn't support yet,
+        // and federated-auth integrations whose tokens are fetched per-cell via FederatedAuthSqlBlockCodeGenerator.
+        const pendingTypes: readonly string[] = PENDING_INTEGRATION_TYPES;
         const projectIntegrationConfigs: Array<DatabaseIntegrationConfig> = [];
         for (const config of allConfigs) {
-            if (isFederatedAuthMetadata(config.metadata)) {
+            if (pendingTypes.includes(config.type)) {
+                logger.debug(
+                    `SqlIntegrationEnvironmentVariablesProvider: Skipping pending integration ${config.id} (${config.type}); env-var generation not yet supported.`
+                );
+                continue;
+            }
+
+            const dbConfig = config as DatabaseIntegrationConfig;
+            if (isFederatedAuthMetadata(dbConfig.metadata)) {
                 logger.debug(
                     `SqlIntegrationEnvironmentVariablesProvider: Skipping federated integration ${config.id} (${config.type}); per-cell codegen in FederatedAuthSqlBlockCodeGenerator handles its token.`
                 );
                 continue;
             }
-            projectIntegrationConfigs.push(config);
+            projectIntegrationConfigs.push(dbConfig);
         }
 
         // Always add the internal DuckDB integration

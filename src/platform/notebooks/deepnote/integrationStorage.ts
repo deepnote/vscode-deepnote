@@ -6,8 +6,37 @@ import { IAsyncDisposableRegistry } from '../../common/types';
 import { logger } from '../../logging';
 import { IIntegrationStorage } from './types';
 import { upgradeLegacyIntegrationConfig } from './legacyIntegrationConfigUtils';
-import { databaseIntegrationTypes, databaseMetadataSchemasByType } from '@deepnote/database-integrations';
-import { ConfigurableDatabaseIntegrationConfig, DATAFRAME_SQL_INTEGRATION_ID } from './integrationTypes';
+import { z } from 'zod';
+import { databaseMetadataSchemasByType } from '@deepnote/database-integrations';
+import {
+    allDatabaseIntegrationTypes,
+    ConfigurableDatabaseIntegrationConfig,
+    DATAFRAME_SQL_INTEGRATION_ID
+} from './integrationTypes';
+
+// Pending addition to @deepnote/database-integrations; remove once the package includes 'cloud-sql'.
+const cloudSqlMetadataSchema = z.object({
+    service_account: z
+        .string()
+        .trim()
+        .min(1)
+        .refine(
+            (value) => {
+                try {
+                    JSON.parse(value);
+
+                    return true;
+                } catch {
+                    return false;
+                }
+            },
+            { message: 'Invalid JSON format' }
+        )
+});
+const allMetadataSchemasByType = {
+    ...databaseMetadataSchemasByType,
+    'cloud-sql': cloudSqlMetadataSchema
+} as Record<string, { safeParse(data: unknown): { data: unknown } }>;
 
 const INTEGRATION_SERVICE_NAME = 'deepnote-integrations';
 
@@ -204,12 +233,12 @@ export class IntegrationStorage implements IIntegrationStorage {
                             // Already versioned config - validate against current schema
                             const { version: _version, ...rawConfig } = parsedData;
                             const config =
-                                databaseIntegrationTypes.includes(rawConfig.type) &&
+                                allDatabaseIntegrationTypes.includes(rawConfig.type) &&
                                 rawConfig.type !== 'pandas-dataframe'
                                     ? (rawConfig as ConfigurableDatabaseIntegrationConfig)
                                     : null;
                             const validMetadata = config
-                                ? databaseMetadataSchemasByType[config.type].safeParse(config.metadata).data
+                                ? allMetadataSchemasByType[config.type]?.safeParse(config.metadata).data
                                 : null;
                             if (config && validMetadata) {
                                 this.cache.set(

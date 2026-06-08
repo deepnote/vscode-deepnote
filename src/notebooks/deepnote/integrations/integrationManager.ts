@@ -5,9 +5,12 @@ import { IExtensionContext } from '../../../platform/common/types';
 import { Commands } from '../../../platform/common/constants';
 import { logger } from '../../../platform/logging';
 import { IIntegrationDetector, IIntegrationManager, IIntegrationStorage, IIntegrationWebviewProvider } from './types';
-import { IntegrationStatus } from '../../../platform/notebooks/deepnote/integrationTypes';
+import {
+    allDatabaseIntegrationTypes,
+    ConfigurableDatabaseIntegrationType,
+    IntegrationStatus
+} from '../../../platform/notebooks/deepnote/integrationTypes';
 import { IDeepnoteNotebookManager } from '../../types';
-import { DatabaseIntegrationType, databaseIntegrationTypes } from '@deepnote/database-integrations';
 
 /**
  * Manages integration UI and commands for Deepnote notebooks
@@ -150,19 +153,20 @@ export class IntegrationManager implements IIntegrationManager {
             const projectIntegration = project?.project.integrations?.find((i) => i.id === selectedIntegrationId);
 
             let integrationName: string | undefined;
-            let integrationType: DatabaseIntegrationType | undefined;
+            let integrationType: ConfigurableDatabaseIntegrationType | undefined;
 
             // Validate that projectIntegration.type against supported types
             if (
                 projectIntegration &&
-                (databaseIntegrationTypes as readonly string[]).includes(projectIntegration.type)
+                allDatabaseIntegrationTypes.includes(projectIntegration.type) &&
+                projectIntegration.type !== 'pandas-dataframe'
             ) {
                 integrationName = projectIntegration.name;
-                integrationType = projectIntegration.type as DatabaseIntegrationType;
+                integrationType = projectIntegration.type as ConfigurableDatabaseIntegrationType;
             }
 
-            if (integrationType === 'pandas-dataframe') {
-                logger.debug(`IntegrationManager: Skipping internal DuckDB integration ${selectedIntegrationId}`);
+            if (!integrationType) {
+                logger.debug(`IntegrationManager: Skipping unsupported integration ${selectedIntegrationId}`);
             } else {
                 integrations.set(selectedIntegrationId, {
                     config: config || null,

@@ -4,6 +4,7 @@ import { AlloyDBForm } from './AlloyDBForm';
 import { AthenaForm } from './AthenaForm';
 import { BigQueryForm } from './BigQueryForm';
 import { ClickHouseForm } from './ClickHouseForm';
+import { CloudSQLForm } from './CloudSQLForm';
 import { DatabricksForm } from './DatabricksForm';
 import { DremioForm } from './DremioForm';
 import { MariaDBForm } from './MariaDBForm';
@@ -108,6 +109,16 @@ export const ConfigurationForm: React.FC<IConfigurationFormProps> = ({
                                     <AlloyDBForm
                                         integrationId={integrationId}
                                         existingConfig={existingConfig?.type === 'alloydb' ? existingConfig : null}
+                                        defaultName={defaultName}
+                                        onSave={onSave}
+                                        onCancel={onCancel}
+                                    />
+                                );
+                            case 'cloud-sql':
+                                return (
+                                    <CloudSQLForm
+                                        integrationId={integrationId}
+                                        existingConfig={existingConfig?.type === 'cloud-sql' ? existingConfig : null}
                                         defaultName={defaultName}
                                         onSave={onSave}
                                         onCancel={onCancel}

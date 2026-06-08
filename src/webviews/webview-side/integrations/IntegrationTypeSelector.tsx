@@ -90,6 +90,11 @@ const DATABASE_INTEGRATION_TYPES: IntegrationTypeInfo[] = [
         icon: integrationTypeIcons['alloydb']
     },
     {
+        type: 'cloud-sql',
+        label: integrationTypeLabels['cloud-sql'],
+        icon: integrationTypeIcons['cloud-sql']
+    },
+    {
         type: 'spanner',
         label: integrationTypeLabels['spanner'],
         icon: integrationTypeIcons['spanner']

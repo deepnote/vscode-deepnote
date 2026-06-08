@@ -3,12 +3,12 @@ import { inject, injectable } from 'inversify';
 import { logger } from '../../../platform/logging';
 import { IDeepnoteNotebookManager } from '../../types';
 import {
+    allDatabaseIntegrationTypes,
     ConfigurableDatabaseIntegrationType,
     IntegrationStatus,
     IntegrationWithStatus
 } from '../../../platform/notebooks/deepnote/integrationTypes';
 import { IIntegrationDetector, IIntegrationStorage } from './types';
-import { databaseIntegrationTypes } from '@deepnote/database-integrations';
 
 /**
  * Service for detecting integrations used in Deepnote notebooks
@@ -45,10 +45,7 @@ export class IntegrationDetector implements IIntegrationDetector {
         for (const projectIntegration of projectIntegrations) {
             const integrationId = projectIntegration.id;
             const integrationType = projectIntegration.type;
-            if (
-                !(databaseIntegrationTypes as readonly string[]).includes(integrationType) ||
-                integrationType === 'pandas-dataframe'
-            ) {
+            if (!allDatabaseIntegrationTypes.includes(integrationType) || integrationType === 'pandas-dataframe') {
                 logger.debug(`IntegrationDetector: Skipping unsupported integration type: ${integrationType}`);
                 continue;
             }

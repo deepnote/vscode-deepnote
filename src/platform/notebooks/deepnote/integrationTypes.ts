@@ -74,7 +74,28 @@ export interface LegacyDuckDBIntegrationConfig extends BaseLegacyIntegrationConf
     type: LegacyIntegrationType.DuckDB;
 }
 
-import { DatabaseIntegrationConfig, DatabaseIntegrationType } from '@deepnote/database-integrations';
+import {
+    DatabaseIntegrationConfig,
+    DatabaseIntegrationType,
+    databaseIntegrationTypes
+} from '@deepnote/database-integrations';
+
+// Pending addition to @deepnote/database-integrations; remove once the package includes 'cloud-sql'.
+export const PENDING_INTEGRATION_TYPES = ['cloud-sql'] as const;
+export const allDatabaseIntegrationTypes: readonly string[] = [
+    ...databaseIntegrationTypes,
+    ...PENDING_INTEGRATION_TYPES
+];
+
+export interface CloudSqlIntegrationConfig {
+    id: string;
+    name: string;
+    type: 'cloud-sql';
+    metadata: {
+        service_account: string;
+    };
+}
+
 // Import and re-export Snowflake auth constants from shared module
 import {
     type SnowflakeAuthMethod,
@@ -136,12 +157,11 @@ export type LegacyIntegrationConfig =
     | LegacySnowflakeIntegrationConfig
     | LegacyDuckDBIntegrationConfig;
 
-export type ConfigurableDatabaseIntegrationConfig = Extract<
-    DatabaseIntegrationConfig,
-    { type: ConfigurableDatabaseIntegrationType }
->;
+export type ConfigurableDatabaseIntegrationConfig =
+    | Extract<DatabaseIntegrationConfig, { type: Exclude<DatabaseIntegrationType, 'pandas-dataframe'> }>
+    | CloudSqlIntegrationConfig;
 
-export type ConfigurableDatabaseIntegrationType = Exclude<DatabaseIntegrationType, 'pandas-dataframe'>;
+export type ConfigurableDatabaseIntegrationType = Exclude<DatabaseIntegrationType, 'pandas-dataframe'> | 'cloud-sql';
 
 /**
  * Integration connection status

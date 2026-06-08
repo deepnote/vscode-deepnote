@@ -391,6 +391,14 @@ export type LocalizedMessages = {
     integrationsAlloyDBUsernamePlaceholder: string;
     integrationsAlloyDBPasswordLabel: string;
     integrationsAlloyDBPasswordPlaceholder: string;
+    // Cloud SQL form strings
+    integrationsCloudSqlNameLabel: string;
+    integrationsCloudSqlNamePlaceholder: string;
+    integrationsCloudSqlServiceAccountLabel: string;
+    integrationsCloudSqlServiceAccountPlaceholder: string;
+    integrationsCloudSqlServiceAccountHelp: string;
+    integrationsCloudSqlServiceAccountInvalidJson: string;
+    integrationsCloudSqlLearnMore: string;
     // ClickHouse form strings
     integrationsClickHouseNameLabel: string;
     integrationsClickHouseNamePlaceholder: string;

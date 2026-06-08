@@ -1,8 +1,20 @@
 import { DatabaseIntegrationConfig, type DatabaseIntegrationType } from '@deepnote/database-integrations';
 
-export type ConfigurableDatabaseIntegrationType = Exclude<DatabaseIntegrationType, 'pandas-dataframe'>;
+// Pending addition to @deepnote/database-integrations; remove once the package includes 'cloud-sql'.
+export interface CloudSqlIntegrationConfig {
+    id: string;
+    name: string;
+    type: 'cloud-sql';
+    metadata: {
+        service_account: string;
+    };
+}
 
-export type ConfigurableDatabaseIntegrationConfig = Exclude<DatabaseIntegrationConfig, { type: 'pandas-dataframe' }>;
+export type ConfigurableDatabaseIntegrationType = Exclude<DatabaseIntegrationType, 'pandas-dataframe'> | 'cloud-sql';
+
+export type ConfigurableDatabaseIntegrationConfig =
+    | Exclude<DatabaseIntegrationConfig, { type: 'pandas-dataframe' }>
+    | CloudSqlIntegrationConfig;
 
 export type IntegrationStatus = 'connected' | 'disconnected' | 'error';
 

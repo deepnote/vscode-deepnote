@@ -116,7 +116,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         // Check if venv already exists with toolkit installed
         const existingVenv = await this.getVenvInterpreterByPath(venvPath);
         if (existingVenv) {
-            const toolkitVersion = await this.isToolkitInstalled(existingVenv);
+            const toolkitVersion = await this.isToolkitInstalled(existingVenv, token);
             if (toolkitVersion != null) {
                 logger.info(`deepnote-toolkit venv already exists at ${venvPath.fsPath}`);
 
@@ -194,7 +194,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             const installResult = await venvProcessService.exec(
                 venvInterpreter.uri.fsPath,
                 ['-m', 'pip', 'install', '--upgrade', ...packages],
-                { throwOnStdErr: false }
+                { throwOnStdErr: false, token }
             );
 
             if (installResult.stdout) {
@@ -281,7 +281,8 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             // Use undefined as resource to get full system environment
             const processService = await this.processServiceFactory.create(undefined);
             const venvResult = await processService.exec(baseInterpreter.uri.fsPath, ['-m', 'venv', venvPath.fsPath], {
-                throwOnStdErr: false
+                throwOnStdErr: false,
+                token
             });
 
             // Log any stderr output (warnings, etc.) but don't fail on it
@@ -348,7 +349,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         const pipUpgradeResult = await venvProcessService.exec(
             venvInterpreter.uri.fsPath,
             ['-m', 'pip', 'install', '--upgrade', 'pip'],
-            { throwOnStdErr: false }
+            { throwOnStdErr: false, token }
         );
 
         if (pipUpgradeResult.stdout) {
@@ -380,7 +381,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                 'python-lsp-server[all]',
                 'deepnote-cli'
             ],
-            { throwOnStdErr: false }
+            { throwOnStdErr: false, token }
         );
 
         Cancellation.throwIfCanceled(token);
@@ -393,7 +394,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         }
 
         // Verify installation
-        const installedToolkitVersion = await this.isToolkitInstalled(venvInterpreter);
+        const installedToolkitVersion = await this.isToolkitInstalled(venvInterpreter, token);
         if (installedToolkitVersion != null) {
             logger.info('deepnote-toolkit installed successfully in venv');
 
@@ -422,14 +423,18 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         }
     }
 
-    private async isToolkitInstalled(interpreter: PythonEnvironment): Promise<string | undefined> {
+    private async isToolkitInstalled(
+        interpreter: PythonEnvironment,
+        token?: CancellationToken
+    ): Promise<string | undefined> {
         try {
             // Use undefined as resource to get full system environment
             const processService = await this.processServiceFactory.create(undefined);
-            const result = await processService.exec(interpreter.uri.fsPath, [
-                '-c',
-                'import deepnote_toolkit; print(deepnote_toolkit.__version__)'
-            ]);
+            const result = await processService.exec(
+                interpreter.uri.fsPath,
+                ['-c', 'import deepnote_toolkit; print(deepnote_toolkit.__version__)'],
+                { token }
+            );
             logger.info(`isToolkitInstalled result: ${result.stdout}`);
             const version = result.stdout.trim();
             return version.length > 0 ? version : undefined;
@@ -508,7 +513,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                 '--display-name',
                 kernelDisplayName
             ],
-            { throwOnStdErr: false }
+            { throwOnStdErr: false, token }
         );
 
         logger.info(`Kernel spec installed successfully to ${kernelSpecPath.fsPath}`);

@@ -1,13 +1,13 @@
 import { inject, injectable } from 'inversify';
+import { z } from 'zod';
 import { EventEmitter } from 'vscode';
+import { databaseMetadataSchemasByType } from '@deepnote/database-integrations';
 
 import { IEncryptedStorage } from '../../common/application/types';
 import { IAsyncDisposableRegistry } from '../../common/types';
 import { logger } from '../../logging';
 import { IIntegrationStorage } from './types';
 import { upgradeLegacyIntegrationConfig } from './legacyIntegrationConfigUtils';
-import { z } from 'zod';
-import { databaseMetadataSchemasByType } from '@deepnote/database-integrations';
 import {
     allDatabaseIntegrationTypes,
     ConfigurableDatabaseIntegrationConfig,
@@ -20,18 +20,15 @@ const cloudSqlMetadataSchema = z.object({
         .string()
         .trim()
         .min(1)
-        .refine(
-            (value) => {
-                try {
-                    JSON.parse(value);
+        .refine((value) => {
+            try {
+                JSON.parse(value);
 
-                    return true;
-                } catch {
-                    return false;
-                }
-            },
-            { message: 'Invalid JSON format' }
-        )
+                return true;
+            } catch {
+                return false;
+            }
+        }, 'Invalid JSON format')
 });
 const allMetadataSchemasByType = {
     ...databaseMetadataSchemasByType,

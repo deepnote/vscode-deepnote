@@ -29,9 +29,14 @@ export const CloudSQLForm: React.FC<ICloudSQLFormProps> = ({
     onSave,
     onCancel
 }) => {
+    const cloneConfig = (cfg: CloudSqlIntegrationConfig) =>
+        typeof structuredClone !== 'undefined'
+            ? structuredClone(cfg)
+            : (JSON.parse(JSON.stringify(cfg)) as CloudSqlIntegrationConfig);
+
     const [pendingConfig, setPendingConfig] = React.useState<CloudSqlIntegrationConfig>(
         existingConfig
-            ? structuredClone(existingConfig)
+            ? cloneConfig(existingConfig)
             : createEmptyCloudSqlConfig({ id: integrationId, name: defaultName })
     );
     const [serviceAccountError, setServiceAccountError] = React.useState<string | null>(null);
@@ -40,7 +45,7 @@ export const CloudSQLForm: React.FC<ICloudSQLFormProps> = ({
         setServiceAccountError(null);
         setPendingConfig(
             existingConfig
-                ? structuredClone(existingConfig)
+                ? cloneConfig(existingConfig)
                 : createEmptyCloudSqlConfig({ id: integrationId, name: defaultName })
         );
     }, [existingConfig, integrationId, defaultName]);
@@ -91,7 +96,7 @@ export const CloudSQLForm: React.FC<ICloudSQLFormProps> = ({
             return;
         }
 
-        onSave(pendingConfig);
+        onSave({ ...pendingConfig, metadata: { ...pendingConfig.metadata, service_account: trimmedServiceAccount } });
     };
 
     return (

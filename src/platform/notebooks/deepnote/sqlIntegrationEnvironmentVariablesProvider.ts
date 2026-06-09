@@ -128,10 +128,9 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
 
         // Skip pending integration types (e.g. cloud-sql) that the upstream env-var generator doesn't support yet,
         // and federated-auth integrations whose tokens are fetched per-cell via FederatedAuthSqlBlockCodeGenerator.
-        const pendingTypes: readonly string[] = PENDING_INTEGRATION_TYPES;
         const projectIntegrationConfigs: Array<DatabaseIntegrationConfig> = [];
         for (const config of allConfigs) {
-            if (pendingTypes.includes(config.type)) {
+            if ((PENDING_INTEGRATION_TYPES as readonly string[]).includes(config.type)) {
                 logger.debug(
                     `SqlIntegrationEnvironmentVariablesProvider: Skipping pending integration ${config.id} (${config.type}); env-var generation not yet supported.`
                 );

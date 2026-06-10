@@ -3,6 +3,14 @@ import { NotebookCellData, NotebookCellKind } from 'vscode';
 
 import type { BlockConverter } from './blockConverter';
 
+// Must remain the exact inverse of escapeMarkdown in @deepnote/blocks@4.3.0
+// (identical character class). If a future library version unescapes inside
+// stripMarkdown itself, this wrapper must be deleted — the round-trip unit
+// tests fail loudly (double-unescape) in that case.
+function unescapeMarkdown(text: string): string {
+    return text.replace(/\\([\\`*_{}[\]()#+\-.!|>])/g, '$1');
+}
+
 export class TextBlockConverter implements BlockConverter {
     protected static readonly textBlockTypes = [
         'text-cell-h1',
@@ -27,7 +35,7 @@ export class TextBlockConverter implements BlockConverter {
         block.content = cell.value || '';
 
         // Then strip the markdown formatting to get plain text
-        const textValue = stripMarkdown(block);
+        const textValue = unescapeMarkdown(stripMarkdown(block));
 
         block.content = textValue;
     }

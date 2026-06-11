@@ -67,12 +67,14 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
     private readonly pendingOperations = new Map<string, PendingOperation>();
     private readonly runningOperations = new Set<string>();
 
+    private readonly selfWriteTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
     /**
      * Deterministic self-write tracking for workspace.save() calls.
-     * Incremented before save, decremented when the fs event arrives.
+     * One-shot markers keyed by the base file URI (query/fragment stripped),
+     * added before save and consumed when the fs event arrives.
      */
-    private readonly selfWriteCounts = new Map<string, number>();
-    private readonly selfWriteTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    private readonly selfWriteUris = new Set<string>();
     private readonly serializer: DeepnoteNotebookSerializer;
 
     /**
@@ -102,7 +104,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         if (this.snapshotService) {
             this.disposables.push(
                 this.snapshotService.onFileWritten((uri) => {
-                    const key = uri.toString();
+                    const key = this.selfWriteKey(uri);
                     this.snapshotSelfWriteUris.add(key);
 
                     // Safety net: clean stale entries after 30s
@@ -132,7 +134,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             clearTimeout(timer);
         }
         this.selfWriteTimers.clear();
-        this.selfWriteCounts.clear();
+        this.selfWriteUris.clear();
 
         for (const timer of this.snapshotSelfWriteTimers.values()) {
             clearTimeout(timer);
@@ -145,7 +147,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
      * Consumes a self-write marker. Returns true if the fs event was self-triggered.
      */
     private consumeSelfWrite(uri: Uri): boolean {
-        const key = uri.toString();
+        const key = this.selfWriteKey(uri);
 
         // Check snapshot self-writes first
         if (this.snapshotSelfWriteUris.has(key)) {
@@ -159,17 +161,12 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         }
 
         // Check workspace.save self-writes
-        const count = this.selfWriteCounts.get(key);
-        if (count && count > 0) {
-            if (count === 1) {
-                this.selfWriteCounts.delete(key);
-                const timer = this.selfWriteTimers.get(key);
-                if (timer) {
-                    clearTimeout(timer);
-                    this.selfWriteTimers.delete(key);
-                }
-            } else {
-                this.selfWriteCounts.set(key, count - 1);
+        if (this.selfWriteUris.has(key)) {
+            this.selfWriteUris.delete(key);
+            const timer = this.selfWriteTimers.get(key);
+            if (timer) {
+                clearTimeout(timer);
+                this.selfWriteTimers.delete(key);
             }
             return true;
         }
@@ -581,9 +578,8 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
      * Call before workspace.save() to prevent the resulting fs event from triggering a reload.
      */
     private markSelfWrite(uri: Uri): void {
-        const key = uri.toString();
-        const count = this.selfWriteCounts.get(key) ?? 0;
-        this.selfWriteCounts.set(key, count + 1);
+        const key = this.selfWriteKey(uri);
+        this.selfWriteUris.add(key);
 
         // Safety net: clean stale entries after 30s
         const existing = this.selfWriteTimers.get(key);
@@ -593,7 +589,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         this.selfWriteTimers.set(
             key,
             setTimeout(() => {
-                this.selfWriteCounts.delete(key);
+                this.selfWriteUris.delete(key);
                 this.selfWriteTimers.delete(key);
             }, selfWriteExpirationMs)
         );
@@ -640,6 +636,10 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             }
         }
         return true;
+    }
+
+    private selfWriteKey(uri: Uri): string {
+        return uri.with({ query: '', fragment: '' }).toString();
     }
 
     /**

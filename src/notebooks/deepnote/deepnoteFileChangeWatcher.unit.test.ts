@@ -399,6 +399,212 @@ project:
         assert.strictEqual(applyEditCount, 0, 'applyEdit should NOT be called for auto-save (same source)');
     });
 
+    suite('normalized one-shot self-write markers', () => {
+        // YAML matching `print("hello")` lives in `validYaml` above.
+        const helloYaml = validYaml;
+        const worldYaml = `
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00Z'
+project:
+  id: project-1
+  name: Test Project
+  notebooks:
+    - id: notebook-1
+      name: Notebook 1
+      blocks:
+        - id: block-1
+          type: code
+          sortingKey: a0
+          blockGroup: '1'
+          content: print("world")
+`;
+        // Two-notebook file, used for the coalesced-event test.
+        const twoNotebookYaml = `
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00Z'
+project:
+  id: project-1
+  name: Test Project
+  notebooks:
+    - id: n1
+      name: Notebook 1
+      blocks:
+        - id: block-1
+          type: code
+          sortingKey: a0
+          blockGroup: '1'
+          content: print("one")
+    - id: n2
+      name: Notebook 2
+      blocks:
+        - id: block-2
+          type: code
+          sortingKey: a0
+          blockGroup: '2'
+          content: print("two")
+`;
+
+        test('consumes self-write keyed by base URI for a query-URI notebook (no second read)', async function () {
+            this.timeout(8000);
+            const baseUri = Uri.file('/x/test.deepnote');
+            // Sidebar-opened notebook: URI carries a ?notebook= query.
+            const notebookUri = baseUri.with({ query: 'notebook=n1' });
+            // Live cells differ from the YAML on disk, so the watcher reloads + saves.
+            const notebook = createMockNotebook({ uri: notebookUri, cellCount: 0, cells: [] });
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+            setupMockFs(helloYaml);
+
+            // Fire the external change at the BARE base URI (fs events deliver the base URI).
+            onDidChangeFile.fire(baseUri);
+
+            // Reload runs: applyEdit, then markSelfWrite(notebook.uri) keyed by the base URI, then save.
+            await waitFor(() => saveCount >= 1);
+            assert.isAtLeast(applyEditCount, 1, 'reload should applyEdit on the genuine change');
+            const readsAfterFirstCycle = readFileCalls;
+
+            // The watcher's own save marked the base key. Now the fs event for that save
+            // arrives at the BARE base URI — it must be consumed BEFORE any read.
+            onDidChangeFile.fire(baseUri);
+
+            // Wait well past the 500ms debounce to prove no read was scheduled.
+            await new Promise((resolve) => setTimeout(resolve, debounceWaitMs));
+
+            assert.strictEqual(
+                readFileCalls,
+                readsAfterFirstCycle,
+                'readFile must NOT be called again for the self-write event (consumed before the read)'
+            );
+        });
+
+        test('coalesced self-writes (one base key) do not swallow a later genuine change', async function () {
+            this.timeout(8000);
+            const baseUri = Uri.file('/x/test.deepnote');
+            // Two notebooks from the same file, different ?notebook= queries.
+            // Their declared notebook ids (n1/n2) must exist in the YAML on disk so the
+            // serializer can resolve them via its open-document fallback.
+            const nb1 = createMockNotebook({
+                uri: baseUri.with({ query: 'notebook=n1' }),
+                cellCount: 0,
+                cells: [],
+                metadata: { deepnoteProjectId: 'project-1', deepnoteNotebookId: 'n1' }
+            });
+            const nb2 = createMockNotebook({
+                uri: baseUri.with({ query: 'notebook=n2' }),
+                cellCount: 0,
+                cells: [],
+                metadata: { deepnoteProjectId: 'project-1', deepnoteNotebookId: 'n2' }
+            });
+
+            // Genuine change: same two-notebook structure (so n1/n2 still resolve), but with
+            // DIFFERENT block content so contentActuallyChanged is true.
+            const changedTwoNotebookYaml = `
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00Z'
+project:
+  id: project-1
+  name: Test Project
+  notebooks:
+    - id: n1
+      name: Notebook 1
+      blocks:
+        - id: block-1
+          type: code
+          sortingKey: a0
+          blockGroup: '1'
+          content: print("one-changed")
+    - id: n2
+      name: Notebook 2
+      blocks:
+        - id: block-2
+          type: code
+          sortingKey: a0
+          blockGroup: '2'
+          content: print("two-changed")
+`;
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([nb1, nb2]);
+            setupMockFs(twoNotebookYaml);
+
+            // One external change reloads BOTH notebooks in one cycle → two markSelfWrite
+            // calls, both keyed by the SAME base URI → they collapse into ONE Set entry.
+            onDidChangeFile.fire(baseUri);
+            await waitFor(() => saveCount >= 2);
+            const applyEditsAfterCoalesce = applyEditCount;
+            assert.strictEqual(applyEditsAfterCoalesce, 2, 'both notebooks reload in the coalesced cycle');
+
+            // First bare event consumes the single one-shot marker.
+            onDidChangeFile.fire(baseUri);
+            await new Promise((resolve) => setTimeout(resolve, autoSaveGraceMs));
+
+            // A genuine external change with DIFFERENT YAML must STILL reload (marker already gone).
+            // A counter-based scheme would have left a stale count of 1 and wrongly swallowed this.
+            setupMockFs(changedTwoNotebookYaml);
+            onDidChangeFile.fire(baseUri);
+
+            await waitFor(() => applyEditCount >= applyEditsAfterCoalesce + 1, waitForTimeoutMs);
+
+            assert.isAtLeast(
+                applyEditCount,
+                applyEditsAfterCoalesce + 1,
+                'genuine external change after a consumed coalesced marker must reload'
+            );
+        });
+
+        test('duplicate self-write events fall through to the content comparison (no applyEdit)', async function () {
+            this.timeout(8000);
+            const baseUri = Uri.file('/x/test.deepnote');
+            const notebookUri = baseUri.with({ query: 'notebook=n1' });
+            // Live cells match helloYaml. The first external change uses worldYaml so the
+            // content differs → reload + mark + save. Afterwards disk matches the live cells.
+            const notebook = createMockNotebook({
+                uri: notebookUri,
+                cells: [
+                    {
+                        metadata: { id: 'block-1' },
+                        outputs: [],
+                        kind: NotebookCellKind.Code,
+                        document: { getText: () => 'print("hello")', languageId: 'python' }
+                    }
+                ]
+            });
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+
+            // First: genuine change (different source) → reload + markSelfWrite + save.
+            setupMockFs(worldYaml);
+            onDidChangeFile.fire(baseUri);
+            await waitFor(() => saveCount >= 1);
+            assert.strictEqual(applyEditCount, 1, 'first genuine change reloads exactly once');
+
+            // Disk now matches the live cells (steady state after the reload).
+            setupMockFs(helloYaml);
+            const readsBeforeDuplicates = readFileCalls;
+
+            // Fire TWO bare events. The first is consumed by the one-shot marker (no read);
+            // the second falls through to the content comparison and ends without applyEdit.
+            onDidChangeFile.fire(baseUri);
+            onDidChangeFile.fire(baseUri);
+
+            await waitFor(() => readFileCalls > readsBeforeDuplicates);
+            await new Promise((resolve) => setTimeout(resolve, autoSaveGraceMs));
+
+            assert.strictEqual(
+                readFileCalls,
+                readsBeforeDuplicates + 1,
+                'only the second event reaches the read; the first was consumed as a self-write'
+            );
+            assert.strictEqual(
+                applyEditCount,
+                1,
+                'the duplicate event ends at "Source unchanged" — no additional applyEdit'
+            );
+        });
+    });
+
     suite('snapshot file watching', () => {
         let mockSnapshotService: SnapshotService;
         let snapshotWatcher: DeepnoteFileChangeWatcher;

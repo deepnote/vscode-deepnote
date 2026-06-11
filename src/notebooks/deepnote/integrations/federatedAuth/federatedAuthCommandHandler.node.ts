@@ -100,19 +100,22 @@ export class FederatedAuthCommandHandlerNode implements IExtensionSyncActivation
                                 finalRedirect: externalCallbackUrl
                             });
                             logger.info(`FederatedAuthCommandHandlerNode: opening start URL ${startUrl}`);
-                            try {
-                                const opened = await env.openExternal(Uri.parse(startUrl));
-                                if (!opened) {
+                            // The promise might hang, and not resolve
+                            env.openExternal(Uri.parse(startUrl)).then(
+                                (opened) => {
+                                    if (!opened) {
+                                        logger.warn(
+                                            `FederatedAuthCommandHandlerNode: openExternal returned false for ${startUrl}; the user can paste the URL manually.`
+                                        );
+                                    }
+                                },
+                                (err) => {
                                     logger.warn(
-                                        `FederatedAuthCommandHandlerNode: openExternal returned false for ${startUrl}; the user can paste the URL manually.`
+                                        `FederatedAuthCommandHandlerNode: failed to open browser for ${startUrl}.`,
+                                        err
                                     );
                                 }
-                            } catch (err) {
-                                logger.warn(
-                                    `FederatedAuthCommandHandlerNode: failed to open browser for ${startUrl}.`,
-                                    err
-                                );
-                            }
+                            );
                         }
                     });
                 }

@@ -2979,7 +2979,7 @@
         "brace-expansion@<1.1.13": "1.1.13",
         "brace-expansion@>=2.0.0 <2.0.3": "2.0.3",
         "yaml": "2.8.3",
-        "dompurify": "^3.4.2",
+        "dompurify": "^3.4.10",
         "fast-uri": "^3.1.2",
         "ip-address": "^10.1.1",
         "mermaid": "11.15.0",

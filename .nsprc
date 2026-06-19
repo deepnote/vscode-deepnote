@@ -10,5 +10,13 @@
     "GHSA-w5hq-g745-h8pq": {
         "notes": "CVE-2026-41907: uuid v3/v5/v6 API methods skip bounds validation when the caller passes an external output buffer (and/or offset), allowing silent partial writes that produce malformed/truncated UUIDs. Accepted risk: all vulnerable transitive copies in the lockfile are uuid@8.3.2 reached via @nteract/commutable, @nteract/messaging, @nteract/types, istanbul-lib-processinfo, and node-notifier. Each call site uses only uuid.v4() (verified by grep in node_modules) — v4 is explicitly listed as unaffected. Bumping these transitive deps to a major-version override (>=11.1.1) is unsafe because @nteract packages declare uuid@^8.0.0 and the API surface differs across majors.",
         "expiry": "2026-08-15"
+    },
+    "GHSA-8988-4f7v-96qf": {
+        "notes": "@opentelemetry/core unbounded memory allocation in W3C Baggage propagation parsing (moderate). Reached only via @vscode/extension-telemetry@0.7.7 -> applicationinsights@2.5.0 -> @opentelemetry/core@1.10.1. Accepted risk: telemetry is permanently disabled in this extension (isTelemetryDisabled() in src/platform/telemetry/index.ts hard-returns true), so the Baggage propagator is never exercised. No safe transitive override exists: the fix is @opentelemetry/core>=2.8.0, but applicationinsights@2.5.0 and the 1.x @opentelemetry/sdk-trace-base and @opentelemetry/resources still in the tree call symbols removed in otel 2.x (getEnv, DEFAULT_ATTRIBUTE_COUNT_LIMIT, TracesSamplerValues), so forcing core to 2.x breaks them at runtime. The real remediation is upgrading @vscode/extension-telemetry to >=1.5.2 (which drops applicationinsights and @opentelemetry entirely) — a major upgrade deferred to a dedicated change.",
+        "expiry": "2026-08-15"
+    },
+    "GHSA-h67p-54hq-rp68": {
+        "notes": "js-yaml quadratic-complexity DoS in merge-key handling via repeated aliases (moderate). The 4.x copies are pinned to the patched js-yaml@4.2.0 via the `js-yaml@4` override. The remaining vulnerable copies are js-yaml@3.14.2, reached only through dev/test tooling (tslint -> js-yaml and @istanbuljs/load-nyc-config -> js-yaml, both declaring ^3.x). Accepted risk: no 3.x backport exists (latest 3.x is 3.14.2, still affected) and forcing these consumers to 4.x is a breaking API change (v4 removed safeLoad/safeDump). These paths run only during local lint/coverage, never in the shipped extension bundle, and do not parse untrusted YAML.",
+        "expiry": "2026-08-15"
     }
 }

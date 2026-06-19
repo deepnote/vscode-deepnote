@@ -16,7 +16,7 @@
         "expiry": "2026-08-15"
     },
     "GHSA-h67p-54hq-rp68": {
-        "notes": "js-yaml quadratic-complexity DoS in merge-key handling via repeated aliases (moderate). The 4.x copies are pinned to the patched js-yaml@4.2.0 via the `js-yaml@4` override. The remaining vulnerable copies are js-yaml@3.14.2, reached only through dev/test tooling (tslint -> js-yaml and @istanbuljs/load-nyc-config -> js-yaml, both declaring ^3.x). Accepted risk: no 3.x backport exists (latest 3.x is 3.14.2, still affected) and forcing these consumers to 4.x is a breaking API change (v4 removed safeLoad/safeDump). These paths run only during local lint/coverage, never in the shipped extension bundle, and do not parse untrusted YAML.",
+        "notes": "js-yaml quadratic-complexity DoS in merge-key handling via repeated aliases (moderate). The top-level js-yaml dependency is bumped to the patched ^4.2.0 (an explicit `js-yaml@4` override is rejected by npm because js-yaml is also a direct dependency), which dedupes the other 4.x consumers. The remaining vulnerable copies are js-yaml@3.14.2, reached only through dev/test tooling (tslint -> js-yaml and @istanbuljs/load-nyc-config -> js-yaml, both declaring ^3.x). Accepted risk: no 3.x backport exists (latest 3.x is 3.14.2, still affected) and forcing these consumers to 4.x is a breaking API change (v4 removed safeLoad/safeDump). These paths run only during local lint/coverage, never in the shipped extension bundle, and do not parse untrusted YAML.",
         "expiry": "2026-08-15"
     }
 }

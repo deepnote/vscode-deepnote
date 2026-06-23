@@ -328,6 +328,7 @@ export async function load(url, context, nextLoad) {
                 export const NotebookRendererMessaging = createClassProxy('NotebookRendererMessaging');
                 export const NotebookRendererScript = createClassProxy('NotebookRendererScript');
                 export const NotebookVariableProvider = createClassProxy('NotebookVariableProvider');
+                export const TabInputNotebook = createClassProxy('TabInputNotebook');
                 export const ColorThemeKind = createClassProxy('ColorThemeKind');
                 export const UIKind = createClassProxy('UIKind');
                 export const ThemeIcon = createClassProxy('ThemeIcon');
@@ -384,6 +385,47 @@ export async function load(url, context, nextLoad) {
                                 nbformat: 4,
                                 nbformat_minor: 5
                             }
+                        }));
+                    };
+
+                    export const slugifyProjectName = (name) => {
+                        return (name || '')
+                            .normalize('NFD')
+                            .replace(/[\\u0300-\\u036f]/g, '')
+                            .toLowerCase()
+                            .replace(/[^a-z0-9]+/g, '-')
+                            .replace(/-+/g, '-')
+                            .replace(/^-|-$/g, '');
+                    };
+
+                    export const isSingleNotebookDeepnoteFile = (file) => {
+                        return (file?.project?.notebooks?.length || 0) === 1;
+                    };
+
+                    export const splitByNotebooks = (file, sourceFileStem) => {
+                        const notebooks = file?.project?.notebooks || [];
+                        const initNotebookId = file?.project?.initNotebookId;
+                        const used = new Set();
+                        const allocate = (slug) => {
+                            const base = sourceFileStem + '-' + (slug || 'notebook');
+                            let candidate = base + '.deepnote';
+                            let n = 2;
+                            while (used.has(candidate)) {
+                                candidate = base + '-' + n + '.deepnote';
+                                n++;
+                            }
+                            used.add(candidate);
+                            return candidate;
+                        };
+                        const ordered = [...notebooks].sort((a, b) => {
+                            const aInit = a.id === initNotebookId ? 0 : 1;
+                            const bInit = b.id === initNotebookId ? 0 : 1;
+                            return aInit - bInit;
+                        });
+                        return ordered.map((nb) => ({
+                            notebook: { id: nb.id, name: nb.name },
+                            file: { ...file, project: { ...file.project, notebooks: [nb] } },
+                            outputFilename: allocate(slugifyProjectName(nb.name))
                         }));
                     };
                 `,

@@ -45,6 +45,15 @@ export class DeepnoteExplorerView {
      * @param fileUri The URI of the project file
      * @returns Object with notebook ID and name if successful, or null if aborted/failed
      */
+    /**
+     * Refreshes the full Deepnote explorer tree.
+     * Exposed so callers outside the explorer (e.g. the multi-notebook splitter) can
+     * trigger a refresh without reaching into the private tree data provider.
+     */
+    public refresh(): void {
+        this.treeDataProvider.refresh();
+    }
+
     public async createAndAddNotebookToProject(fileUri: Uri): Promise<{ id: string; name: string } | null> {
         // Read the Deepnote project file
         const projectData = await readDeepnoteProjectFile(fileUri);

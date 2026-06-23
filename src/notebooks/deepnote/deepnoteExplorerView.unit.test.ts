@@ -6,7 +6,6 @@ import { Uri, workspace } from 'vscode';
 import { stringify as yamlStringify } from 'yaml';
 
 import { DeepnoteExplorerView } from './deepnoteExplorerView';
-import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
 import { DeepnoteTreeItem, DeepnoteTreeItemType, type DeepnoteTreeItemContext } from './deepnoteTreeItem';
 import type { IExtensionContext } from '../../platform/common/types';
 import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
@@ -42,7 +41,6 @@ function createUuidMock(uuids: string[]): sinon.SinonStub {
 suite('DeepnoteExplorerView', () => {
     let explorerView: DeepnoteExplorerView;
     let mockExtensionContext: IExtensionContext;
-    let manager: DeepnoteNotebookManager;
     let mockLogger: ILogger;
 
     setup(() => {
@@ -50,9 +48,8 @@ suite('DeepnoteExplorerView', () => {
             subscriptions: []
         } as any;
 
-        manager = new DeepnoteNotebookManager();
         mockLogger = createMockLogger();
-        explorerView = new DeepnoteExplorerView(mockExtensionContext, manager, mockLogger);
+        explorerView = new DeepnoteExplorerView(mockExtensionContext, mockLogger);
     });
 
     suite('constructor', () => {
@@ -186,12 +183,10 @@ suite('DeepnoteExplorerView', () => {
             const context1 = { subscriptions: [] } as any;
             const context2 = { subscriptions: [] } as any;
 
-            const manager1 = new DeepnoteNotebookManager();
-            const manager2 = new DeepnoteNotebookManager();
             const logger1 = createMockLogger();
             const logger2 = createMockLogger();
-            const view1 = new DeepnoteExplorerView(context1, manager1, logger1);
-            const view2 = new DeepnoteExplorerView(context2, manager2, logger2);
+            const view1 = new DeepnoteExplorerView(context1, logger1);
+            const view2 = new DeepnoteExplorerView(context2, logger2);
 
             // Verify each view has its own context
             assert.strictEqual((view1 as any).extensionContext, context1);
@@ -219,7 +214,6 @@ suite('DeepnoteExplorerView', () => {
 suite('DeepnoteExplorerView - Empty State Commands', () => {
     let explorerView: DeepnoteExplorerView;
     let mockContext: IExtensionContext;
-    let mockManager: DeepnoteNotebookManager;
     let sandbox: sinon.SinonSandbox;
     let uuidStubs: sinon.SinonStub[] = [];
 
@@ -232,9 +226,8 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             subscriptions: []
         } as unknown as IExtensionContext;
 
-        mockManager = new DeepnoteNotebookManager();
         const mockLogger = createMockLogger();
-        explorerView = new DeepnoteExplorerView(mockContext, mockManager, mockLogger);
+        explorerView = new DeepnoteExplorerView(mockContext, mockLogger);
     });
 
     teardown(() => {

@@ -9,12 +9,10 @@ import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
  */
 @injectable()
 export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
-    private readonly currentNotebookId = new Map<string, string>();
     // Cached originals are keyed by projectId, then by notebookId, so sibling files
     // that share a single project.id do not clobber each other's cached project data.
     private readonly originalProjects = new Map<string /*projectId*/, Map<string /*notebookId*/, DeepnoteProject>>();
     private readonly projectsWithInitNotebookRun = new Set<string>();
-    private readonly selectedNotebookByProject = new Map<string, string>();
 
     /**
      * Returns any cached project entry for the given project id.
@@ -40,15 +38,6 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
     }
 
     /**
-     * Gets the currently selected notebook ID for a project.
-     * @param projectId Project identifier
-     * @returns Current notebook ID or undefined if not set
-     */
-    getCurrentNotebookId(projectId: string): string | undefined {
-        return this.currentNotebookId.get(projectId);
-    }
-
-    /**
      * Retrieves the cached project data for an exact (projectId, notebookId) pair.
      * This performs an exact match only and never falls back to another sibling's
      * project — it returns undefined when that precise entry is not cached.
@@ -58,15 +47,6 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
      */
     getOriginalProject(projectId: string, notebookId: string): DeepnoteProject | undefined {
         return this.originalProjects.get(projectId)?.get(notebookId);
-    }
-
-    /**
-     * Gets the selected notebook ID for a specific project.
-     * @param projectId Project identifier
-     * @returns Selected notebook ID or undefined if not set
-     */
-    getTheSelectedNotebookForAProject(projectId: string): string | undefined {
-        return this.selectedNotebookByProject.get(projectId);
     }
 
     /**
@@ -87,21 +67,8 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
     }
 
     /**
-     * Associates a notebook ID with a project to remember user's notebook selection.
-     * When a Deepnote project contains multiple notebooks, this mapping persists the user's
-     * choice so we can automatically open the same notebook on subsequent file opens.
-     *
-     * @param projectId - The project ID that identifies the Deepnote project
-     * @param notebookId - The ID of the selected notebook within the project
-     */
-    selectNotebookForProject(projectId: string, notebookId: string): void {
-        this.selectedNotebookByProject.set(projectId, notebookId);
-    }
-
-    /**
-     * Stores the original project data for an exact (projectId, notebookId) pair and
-     * records the notebook as the project's current notebook.
-     * This is used during deserialization to cache project data and track the active notebook.
+     * Stores the original project data for an exact (projectId, notebookId) pair.
+     * This is used during deserialization to cache project data.
      * @param projectId Project identifier
      * @param notebookId Notebook identifier within the project
      * @param project Original project data to store
@@ -119,17 +86,6 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
         }
 
         notebookEntries.set(notebookId, clonedProject);
-        this.currentNotebookId.set(projectId, notebookId);
-    }
-
-    /**
-     * Updates the current notebook ID for a project.
-     * Used when switching notebooks within the same project.
-     * @param projectId Project identifier
-     * @param notebookId New current notebook ID
-     */
-    updateCurrentNotebookId(projectId: string, notebookId: string): void {
-        this.currentNotebookId.set(projectId, notebookId);
     }
 
     /**

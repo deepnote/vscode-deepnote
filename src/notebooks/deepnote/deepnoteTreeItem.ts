@@ -1,4 +1,4 @@
-import { TreeItem, TreeItemCollapsibleState, Uri, ThemeIcon } from 'vscode';
+import { TreeItem, TreeItemCollapsibleState, ThemeIcon } from 'vscode';
 import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 
 /**
@@ -78,10 +78,6 @@ export class DeepnoteTreeItem extends TreeItem {
         }
 
         if (this.type === DeepnoteTreeItemType.Notebook) {
-            // getNotebookUri() inline
-            if (this.context.notebookId) {
-                this.resourceUri = Uri.parse(`deepnote-notebook://${this.context.filePath}#${this.context.notebookId}`);
-            }
             this.command = {
                 command: 'deepnote.openNotebook',
                 title: 'Open Notebook',

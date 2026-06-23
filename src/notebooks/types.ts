@@ -43,16 +43,12 @@ export interface IDeepnoteNotebookManager {
      * project — never use it on a save path.
      */
     getAnyProjectEntry(projectId: string): DeepnoteProject | undefined;
-    getCurrentNotebookId(projectId: string): string | undefined;
     /**
      * Returns the cached project for an exact (projectId, notebookId) pair, or undefined.
      * Exact match only — never falls back to another sibling. The save path uses this.
      */
     getOriginalProject(projectId: string, notebookId: string): DeepnoteProject | undefined;
-    getTheSelectedNotebookForAProject(projectId: string): string | undefined;
-    selectNotebookForProject(projectId: string, notebookId: string): void;
     storeOriginalProject(projectId: string, notebookId: string, project: DeepnoteProject): void;
-    updateCurrentNotebookId(projectId: string, notebookId: string): void;
     /**
      * Updates the cached project for an exact (projectId, notebookId) pair, without changing
      * the project's current-notebook bookkeeping.

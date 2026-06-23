@@ -258,13 +258,6 @@ suite('DeepnoteTreeItem', () => {
             assert.strictEqual(item.command!.command, 'deepnote.openNotebook');
             assert.strictEqual(item.command!.title, 'Open Notebook');
             assert.deepStrictEqual(item.command!.arguments, [context]);
-
-            // Should have resource URI
-            assert.isDefined(item.resourceUri);
-            assert.strictEqual(
-                item.resourceUri!.toString(),
-                'deepnote-notebook:/workspace/project.deepnote#notebook-789'
-            );
         });
 
         test('should handle notebook with multiple blocks', () => {

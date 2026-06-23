@@ -4,7 +4,6 @@ import { serializeDeepnoteFile, type DeepnoteBlock, type DeepnoteFile } from '@d
 import { convertDeepnoteToJupyterNotebooks, convertIpynbFilesToDeepnoteFile } from '@deepnote/convert';
 
 import { IExtensionContext } from '../../platform/common/types';
-import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteTreeDataProvider } from './deepnoteTreeDataProvider';
 import { type DeepnoteTreeItem, DeepnoteTreeItemType, type DeepnoteTreeItemContext } from './deepnoteTreeItem';
 import { uuidUtils } from '../../platform/common/uuid';
@@ -24,7 +23,6 @@ export class DeepnoteExplorerView {
 
     constructor(
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
-        @inject(IDeepnoteNotebookManager) private readonly manager: IDeepnoteNotebookManager,
         @inject(ILogger) logger: ILogger
     ) {
         this.treeDataProvider = new DeepnoteTreeDataProvider(logger);
@@ -77,7 +75,7 @@ export class DeepnoteExplorerView {
         projectData.project.notebooks.push(newNotebook);
 
         // Save and open the new notebook
-        await this.saveProjectAndOpenNotebook(fileUri, projectData, newNotebook.id);
+        await this.saveProjectAndOpenNotebook(fileUri, projectData);
 
         return { id: newNotebook.id, name: notebookName };
     }
@@ -260,9 +258,7 @@ export class DeepnoteExplorerView {
             await this.treeDataProvider.refreshNotebook(treeItem.context.projectId);
 
             // Optionally open the duplicated notebook
-            this.manager.selectNotebookForProject(treeItem.context.projectId, newNotebook.id);
-            const notebookUri = fileUri.with({ query: `notebook=${newNotebook.id}` });
-            const document = await workspace.openNotebookDocument(notebookUri);
+            const document = await workspace.openNotebookDocument(fileUri);
             await window.showNotebookDocument(document, {
                 preserveFocus: false,
                 preview: false
@@ -483,16 +479,11 @@ export class DeepnoteExplorerView {
     }
 
     /**
-     * Saves the project data to file and opens the specified notebook
+     * Saves the project data to file and opens it as a notebook
      * @param fileUri The URI of the project file
      * @param projectData The project data to save
-     * @param notebookId The notebook ID to open
      */
-    private async saveProjectAndOpenNotebook(
-        fileUri: Uri,
-        projectData: DeepnoteFile,
-        notebookId: string
-    ): Promise<void> {
+    private async saveProjectAndOpenNotebook(fileUri: Uri, projectData: DeepnoteFile): Promise<void> {
         // Update metadata timestamp
         if (!projectData.metadata) {
             projectData.metadata = { createdAt: new Date().toISOString() };
@@ -507,10 +498,8 @@ export class DeepnoteExplorerView {
         // Refresh the tree view - use granular refresh for notebooks
         await this.treeDataProvider.refreshNotebook(projectData.project.id);
 
-        // Open the new notebook
-        this.manager.selectNotebookForProject(projectData.project.id, notebookId);
-        const notebookUri = fileUri.with({ query: `notebook=${notebookId}` });
-        const document = await workspace.openNotebookDocument(notebookUri);
+        // Open the notebook
+        const document = await workspace.openNotebookDocument(fileUri);
         await window.showNotebookDocument(document, {
             preserveFocus: false,
             preview: false
@@ -522,8 +511,6 @@ export class DeepnoteExplorerView {
     }
 
     private async openNotebook(context: DeepnoteTreeItemContext): Promise<void> {
-        console.log(`Opening notebook: ${context.notebookId} in project: ${context.projectId}.`);
-
         if (!context.notebookId) {
             await window.showWarningMessage(l10n.t('Cannot open: missing notebook id.'));
 
@@ -531,19 +518,8 @@ export class DeepnoteExplorerView {
         }
 
         try {
-            // Create a unique URI by adding the notebook ID as a query parameter
-            // This ensures VS Code treats each notebook as a separate document
-            const fileUri = Uri.file(context.filePath).with({ query: `notebook=${context.notebookId}` });
-
-            console.log(`Selecting notebook in manager.`);
-
-            this.manager.selectNotebookForProject(context.projectId, context.notebookId);
-
-            console.log(`Opening notebook document.`, fileUri);
-
+            const fileUri = Uri.file(context.filePath);
             const document = await workspace.openNotebookDocument(fileUri);
-
-            console.log(`Showing notebook document.`);
 
             await window.showNotebookDocument(document, {
                 preview: false,
@@ -701,10 +677,7 @@ export class DeepnoteExplorerView {
 
             this.treeDataProvider.refresh();
 
-            this.manager.selectNotebookForProject(projectId, notebookId);
-
-            const notebookUri = fileUri.with({ query: `notebook=${notebookId}` });
-            const document = await workspace.openNotebookDocument(notebookUri);
+            const document = await workspace.openNotebookDocument(fileUri);
 
             await window.showNotebookDocument(document, {
                 preserveFocus: false,
@@ -725,12 +698,7 @@ export class DeepnoteExplorerView {
         }
 
         const document = activeEditor.notebook;
-
-        // Get the file URI (strip query params if present)
-        let fileUri = document.uri;
-        if (fileUri.query) {
-            fileUri = fileUri.with({ query: '' });
-        }
+        const fileUri = document.uri;
 
         try {
             // Use shared helper to create and add notebook

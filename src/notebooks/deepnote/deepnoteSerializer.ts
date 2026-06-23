@@ -1,7 +1,7 @@
 import type { DeepnoteBlock, DeepnoteFile, DeepnoteSnapshot } from '@deepnote/blocks';
 import { deserializeDeepnoteFile, isExecutableBlock, serializeDeepnoteSnapshot } from '@deepnote/blocks';
 import { inject, injectable, optional } from 'inversify';
-import { l10n, window, workspace, type CancellationToken, type NotebookData, type NotebookSerializer } from 'vscode';
+import { workspace, type CancellationToken, type NotebookData, type NotebookSerializer } from 'vscode';
 
 import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
@@ -62,7 +62,8 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
     /**
      * Deserializes a Deepnote YAML file into VS Code notebook format.
      * Parses YAML and converts the selected notebook's blocks to cells.
-     * The notebook to deserialize must be pre-selected and stored in the manager.
+     * A .deepnote file holds a single notebook; the first non-init notebook is rendered
+     * (falling back to the init notebook only when it is the file's only notebook).
      * @param content Raw file content as bytes
      * @param token Cancellation token (unused)
      * @returns Promise resolving to notebook data
@@ -90,21 +91,20 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             }
 
             const projectId = deepnoteFile.project.id;
-            const notebookId = this.findCurrentNotebookId(projectId);
-
-            logger.debug(`DeepnoteSerializer: Project ID: ${projectId}, Selected notebook ID: ${notebookId}`);
 
             if (deepnoteFile.project.notebooks.length === 0) {
                 throw new Error('Deepnote project contains no notebooks.');
             }
 
-            const selectedNotebook = notebookId
-                ? deepnoteFile.project.notebooks.find((nb) => nb.id === notebookId)
-                : this.findDefaultNotebook(deepnoteFile);
+            // A .deepnote file holds a single notebook. Render the first non-init notebook,
+            // falling back to the init notebook only when it is the only notebook in the file.
+            const selectedNotebook = this.findDefaultNotebook(deepnoteFile);
 
             if (!selectedNotebook) {
-                throw new Error(l10n.t('No notebook selected or found'));
+                throw new Error('No notebook found in Deepnote file');
             }
+
+            logger.debug(`DeepnoteSerializer: Project ID: ${projectId}, Selected notebook ID: ${selectedNotebook.id}`);
 
             // Log block IDs from source file
             for (let i = 0; i < (selectedNotebook.blocks ?? []).length; i++) {
@@ -182,39 +182,6 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
     }
 
     /**
-     * Finds the notebook ID to deserialize by checking the manager's stored selection.
-     * The notebook ID should be set via selectNotebookForProject before opening the document.
-     * @param projectId The project ID to find a notebook for
-     * @returns The notebook ID to deserialize, or undefined if none found
-     */
-    findCurrentNotebookId(projectId: string): string | undefined {
-        // Prefer the active notebook editor when it matches the project
-        const activeEditorNotebook = window.activeNotebookEditor?.notebook;
-
-        if (
-            activeEditorNotebook?.notebookType === 'deepnote' &&
-            activeEditorNotebook.metadata?.deepnoteProjectId === projectId &&
-            activeEditorNotebook.metadata?.deepnoteNotebookId
-        ) {
-            return activeEditorNotebook.metadata.deepnoteNotebookId;
-        }
-
-        // Check the manager's stored selection - this should be set when opening from explorer
-        const storedNotebookId = this.notebookManager.getTheSelectedNotebookForAProject(projectId);
-
-        if (storedNotebookId) {
-            return storedNotebookId;
-        }
-
-        // Fallback: Check if there's an active notebook document for this project
-        const openNotebook = workspace.notebookDocuments.find(
-            (doc) => doc.notebookType === 'deepnote' && doc.metadata?.deepnoteProjectId === projectId
-        );
-
-        return openNotebook?.metadata?.deepnoteNotebookId;
-    }
-
-    /**
      * Gets the data converter instance for cell/block conversion.
      * @returns DeepnoteDataConverter instance
      */
@@ -238,37 +205,28 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             logger.debug('SerializeNotebook: Starting serialization');
 
             const projectId = data.metadata?.deepnoteProjectId;
+            const notebookId = data.metadata?.deepnoteNotebookId;
 
-            if (!projectId) {
-                throw new Error('Missing Deepnote project ID in notebook metadata');
+            // Resolve the target notebook from the document metadata alone. Both ids must be
+            // present; the file holds a single notebook keyed by this exact (projectId, notebookId).
+            if (!projectId || !notebookId) {
+                throw new Error('Cannot determine which notebook to save');
             }
 
-            logger.debug(`SerializeNotebook: Project ID: ${projectId}`);
+            logger.debug(`SerializeNotebook: Project ID: ${projectId}, Notebook ID: ${notebookId}`);
 
-            // Clone the project before modifying to prevent state corruption
-            // This is critical for multi-notebook projects where the stored project
-            // is shared between notebook serialization calls
-            // Chunk 1 keeps the save path behaviour identical to before by using the
-            // project-only lookup. Chunk 2 will switch this to the exact (projectId, notebookId)
-            // lookup (getOriginalProject) once the notebook id is resolved first.
-            const storedProject = this.notebookManager.getAnyProjectEntry(projectId) as DeepnoteFile | undefined;
+            // Fetch the cached project with an exact (projectId, notebookId) lookup. Sibling files
+            // share a project.id, so a project-only lookup could return a different sibling's project.
+            const storedProject = this.notebookManager.getOriginalProject(projectId, notebookId);
 
             if (!storedProject) {
                 throw new Error('Original Deepnote project not found. Cannot save changes.');
             }
 
+            // Clone the project before modifying to prevent state corruption.
             const originalProject = structuredClone(storedProject);
 
             logger.debug('SerializeNotebook: Got and cloned original project');
-
-            const notebookId =
-                data.metadata?.deepnoteNotebookId || this.notebookManager.getTheSelectedNotebookForAProject(projectId);
-
-            if (!notebookId) {
-                throw new Error('Cannot determine which notebook to save');
-            }
-
-            logger.debug(`SerializeNotebook: Notebook ID: ${notebookId}`);
 
             const notebook = originalProject.project.notebooks.find((nb: { id: string }) => nb.id === notebookId);
 
@@ -497,56 +455,49 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
     /**
      * Detects whether actual content has changed between two project versions.
-     * Compares notebook content (block sources, types, and IDs) while ignoring
+     * A .deepnote file holds a single notebook, so this compares that one notebook's
+     * notebook-level fields and block content (sources, types, and IDs) while ignoring
      * outputs, execution metadata, and timestamps.
      * @param newProject The project with potential changes
      * @param originalProject The stored original project
      * @returns true if content has changed, false otherwise
      */
     private detectContentChanges(newProject: DeepnoteFile, originalProject: DeepnoteFile): boolean {
-        for (const originalNotebook of originalProject.project.notebooks) {
-            const newNotebook = newProject.project.notebooks.find((nb) => nb.id === originalNotebook.id);
+        const newNotebook = newProject.project.notebooks[0];
+        const originalNotebook = originalProject.project.notebooks[0];
 
-            if (!newNotebook) {
-                return true; // Notebook removed
-            }
+        if (!newNotebook || !originalNotebook) {
+            return newNotebook !== originalNotebook;
         }
 
-        for (const newNotebook of newProject.project.notebooks) {
-            const originalNotebook = originalProject.project.notebooks.find((nb) => nb.id === newNotebook.id);
+        if (
+            newNotebook.id !== originalNotebook.id ||
+            newNotebook.name !== originalNotebook.name ||
+            newNotebook.executionMode !== originalNotebook.executionMode ||
+            newNotebook.isModule !== originalNotebook.isModule ||
+            newNotebook.workingDirectory !== originalNotebook.workingDirectory
+        ) {
+            return true;
+        }
 
-            if (!originalNotebook) {
-                return true; // New notebook added
-            }
+        const newBlocks = newNotebook.blocks ?? [];
+        const originalBlocks = originalNotebook.blocks ?? [];
 
+        if (newBlocks.length !== originalBlocks.length) {
+            return true;
+        }
+
+        for (let i = 0; i < newBlocks.length; i++) {
+            const newBlock = newBlocks[i];
+            const originalBlock = originalBlocks[i];
+
+            // Compare content and type (the things that matter for actual changes)
             if (
-                newNotebook.name !== originalNotebook.name ||
-                newNotebook.executionMode !== originalNotebook.executionMode ||
-                newNotebook.isModule !== originalNotebook.isModule ||
-                newNotebook.workingDirectory !== originalNotebook.workingDirectory
+                newBlock.content !== originalBlock.content ||
+                newBlock.type !== originalBlock.type ||
+                newBlock.id !== originalBlock.id
             ) {
                 return true;
-            }
-
-            const newBlocks = newNotebook.blocks ?? [];
-            const originalBlocks = originalNotebook.blocks ?? [];
-
-            if (newBlocks.length !== originalBlocks.length) {
-                return true;
-            }
-
-            for (let i = 0; i < newBlocks.length; i++) {
-                const newBlock = newBlocks[i];
-                const originalBlock = originalBlocks[i];
-
-                // Compare content and type (the things that matter for actual changes)
-                if (
-                    newBlock.content !== originalBlock.content ||
-                    newBlock.type !== originalBlock.type ||
-                    newBlock.id !== originalBlock.id
-                ) {
-                    return true;
-                }
             }
         }
 
@@ -554,25 +505,15 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
     }
 
     /**
-     * Finds the default notebook to open when no selection is made.
-     * @param file
-     * @returns
+     * Finds the notebook to render: the first non-init notebook, falling back to the
+     * first notebook when the only notebook in the file is the init notebook.
+     * @param file The parsed Deepnote file
+     * @returns The notebook to render, or undefined if the file has no notebooks
      */
     private findDefaultNotebook(file: DeepnoteFile): DeepnoteNotebook | undefined {
-        if (file.project.notebooks.length === 0) {
-            return undefined;
-        }
+        const { notebooks, initNotebookId } = file.project;
 
-        const sortedNotebooks = file.project.notebooks.slice().sort((a, b) => a.name.localeCompare(b.name));
-        const sortedNotebooksWithoutInit = file.project.initNotebookId
-            ? sortedNotebooks.filter((nb) => nb.id !== file.project.initNotebookId)
-            : sortedNotebooks;
-
-        if (sortedNotebooksWithoutInit.length > 0) {
-            return sortedNotebooksWithoutInit[0];
-        }
-
-        return sortedNotebooks[0];
+        return notebooks.find((nb) => nb.id !== initNotebookId) ?? notebooks[0];
     }
 
     /**

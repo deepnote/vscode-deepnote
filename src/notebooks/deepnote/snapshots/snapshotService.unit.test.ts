@@ -1117,7 +1117,7 @@ project:
                 };
 
                 const mockNotebookManager = {
-                    getOriginalProject: sinon.stub().returns(originalProject)
+                    getAnyProjectEntry: sinon.stub().returns(originalProject)
                 };
 
                 // Create a new service with the mock notebook manager

@@ -739,7 +739,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             return;
         }
 
-        const originalProject = this.notebookManager?.getOriginalProject(projectId);
+        const originalProject = this.notebookManager?.getAnyProjectEntry(projectId);
 
         if (!originalProject) {
             logger.warn(`[Snapshot] No original project found for ${projectId}`);

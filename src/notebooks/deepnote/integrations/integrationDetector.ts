@@ -26,7 +26,7 @@ export class IntegrationDetector implements IIntegrationDetector {
      */
     async detectIntegrations(projectId: string): Promise<Map<string, IntegrationWithStatus>> {
         // Get the project
-        const project = this.notebookManager.getOriginalProject(projectId);
+        const project = this.notebookManager.getAnyProjectEntry(projectId);
         if (!project) {
             logger.warn(
                 `IntegrationDetector: No project found for ID: ${projectId}. The project may not have been loaded yet.`

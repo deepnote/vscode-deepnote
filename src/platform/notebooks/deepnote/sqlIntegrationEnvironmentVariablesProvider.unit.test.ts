@@ -102,7 +102,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             const notebook = mock<NotebookDocument>();
             when(notebook.metadata).thenReturn({ deepnoteProjectId: 'project-123' });
             when(notebookEditorProvider.findAssociatedNotebookDocument(resource)).thenReturn(instance(notebook));
-            when(notebookManager.getOriginalProject('project-123')).thenReturn(undefined);
+            when(notebookManager.getAnyProjectEntry('project-123')).thenReturn(undefined);
 
             const result = await provider.getEnvironmentVariables(resource);
 
@@ -116,7 +116,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
 
             when(notebook.metadata).thenReturn({ deepnoteProjectId: 'project-123' });
             when(notebookEditorProvider.findAssociatedNotebookDocument(resource)).thenReturn(instance(notebook));
-            when(notebookManager.getOriginalProject('project-123')).thenReturn(project);
+            when(notebookManager.getAnyProjectEntry('project-123')).thenReturn(project);
 
             const result = await provider.getEnvironmentVariables(resource);
 
@@ -148,7 +148,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
 
             when(notebook.metadata).thenReturn({ deepnoteProjectId: 'project-123' });
             when(notebookEditorProvider.findAssociatedNotebookDocument(resource)).thenReturn(instance(notebook));
-            when(notebookManager.getOriginalProject('project-123')).thenReturn(project);
+            when(notebookManager.getAnyProjectEntry('project-123')).thenReturn(project);
             when(integrationStorage.getIntegrationConfig('postgres-1')).thenResolve(postgresConfig);
 
             const result = await provider.getEnvironmentVariables(resource);
@@ -180,7 +180,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
 
             when(notebook.metadata).thenReturn({ deepnoteProjectId: 'project-123' });
             when(notebookEditorProvider.findAssociatedNotebookDocument(resource)).thenReturn(instance(notebook));
-            when(notebookManager.getOriginalProject('project-123')).thenReturn(project);
+            when(notebookManager.getAnyProjectEntry('project-123')).thenReturn(project);
             when(integrationStorage.getIntegrationConfig('postgres-1')).thenResolve(postgresConfig);
             when(integrationStorage.getIntegrationConfig('missing-integration')).thenResolve(undefined);
 
@@ -197,7 +197,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
 
             when(notebook.metadata).thenReturn({ deepnoteProjectId: 'project-123' });
             when(notebookEditorProvider.findAssociatedNotebookDocument(resource)).thenReturn(instance(notebook));
-            when(notebookManager.getOriginalProject('project-123')).thenReturn(project);
+            when(notebookManager.getAnyProjectEntry('project-123')).thenReturn(project);
 
             const result = await provider.getEnvironmentVariables(resource);
 
@@ -237,7 +237,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
 
             when(notebook.metadata).thenReturn({ deepnoteProjectId: 'project-123' });
             when(notebookEditorProvider.findAssociatedNotebookDocument(resource)).thenReturn(instance(notebook));
-            when(notebookManager.getOriginalProject('project-123')).thenReturn(project);
+            when(notebookManager.getAnyProjectEntry('project-123')).thenReturn(project);
             when(integrationStorage.getIntegrationConfig('postgres-1')).thenResolve(postgresConfig);
             when(integrationStorage.getIntegrationConfig('bigquery-1')).thenResolve(bigqueryConfig);
 
@@ -270,7 +270,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
 
                 when(notebook.metadata).thenReturn({ deepnoteProjectId: 'project-123' });
                 when(notebookEditorProvider.findAssociatedNotebookDocument(resource)).thenReturn(instance(notebook));
-                when(notebookManager.getOriginalProject('project-123')).thenReturn(project);
+                when(notebookManager.getAnyProjectEntry('project-123')).thenReturn(project);
                 when(integrationStorage.getIntegrationConfig('my-postgres')).thenResolve(postgresConfig);
 
                 const result = await provider.getEnvironmentVariables(resource);
@@ -322,7 +322,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
 
                 when(notebook.metadata).thenReturn({ deepnoteProjectId: 'project-123' });
                 when(notebookEditorProvider.findAssociatedNotebookDocument(resource)).thenReturn(instance(notebook));
-                when(notebookManager.getOriginalProject('project-123')).thenReturn(project);
+                when(notebookManager.getAnyProjectEntry('project-123')).thenReturn(project);
                 when(integrationStorage.getIntegrationConfig('my-bigquery')).thenResolve(bigqueryConfig);
 
                 const result = await provider.getEnvironmentVariables(resource);
@@ -348,7 +348,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
 
                 when(notebook.metadata).thenReturn({ deepnoteProjectId: 'project-123' });
                 when(notebookEditorProvider.findAssociatedNotebookDocument(resource)).thenReturn(instance(notebook));
-                when(notebookManager.getOriginalProject('project-123')).thenReturn(project);
+                when(notebookManager.getAnyProjectEntry('project-123')).thenReturn(project);
 
                 const result = await provider.getEnvironmentVariables(resource);
 
@@ -381,7 +381,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
 
                 when(notebook.metadata).thenReturn({ deepnoteProjectId: 'project-123' });
                 when(notebookEditorProvider.findAssociatedNotebookDocument(resource)).thenReturn(instance(notebook));
-                when(notebookManager.getOriginalProject('project-123')).thenReturn(project);
+                when(notebookManager.getAnyProjectEntry('project-123')).thenReturn(project);
                 when(integrationStorage.getIntegrationConfig('my-snowflake')).thenResolve(snowflakeConfig);
 
                 const result = await provider.getEnvironmentVariables(resource);
@@ -442,7 +442,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
 
             when(notebook.metadata).thenReturn({ deepnoteProjectId: 'project-123' });
             when(notebookEditorProvider.findAssociatedNotebookDocument(resource)).thenReturn(instance(notebook));
-            when(notebookManager.getOriginalProject('project-123')).thenReturn(project);
+            when(notebookManager.getAnyProjectEntry('project-123')).thenReturn(project);
             when(integrationStorage.getIntegrationConfig('pg-1')).thenResolve(postgresConfig);
             when(integrationStorage.getIntegrationConfig('bq-oauth')).thenResolve(federatedConfig);
 

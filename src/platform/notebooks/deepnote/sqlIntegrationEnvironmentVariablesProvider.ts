@@ -96,7 +96,7 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
         logger.trace(`SqlIntegrationEnvironmentVariablesProvider: Project ID: ${projectId}`);
 
         // Get the project from the notebook manager
-        const project = this.notebookManager.getOriginalProject(projectId);
+        const project = this.notebookManager.getAnyProjectEntry(projectId);
         if (!project) {
             logger.trace(`SqlIntegrationEnvironmentVariablesProvider: No project found for ID: ${projectId}`);
             return {};

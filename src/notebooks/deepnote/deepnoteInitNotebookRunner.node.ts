@@ -72,7 +72,7 @@ export class DeepnoteInitNotebookRunner {
             }
 
             // Get the project data
-            const project = this.notebookManager.getOriginalProject(projectId) as DeepnoteProject | undefined;
+            const project = this.notebookManager.getAnyProjectEntry(projectId) as DeepnoteProject | undefined;
             if (!project) {
                 logger.warn(`Project ${projectId} not found, cannot run init notebook`);
                 return;

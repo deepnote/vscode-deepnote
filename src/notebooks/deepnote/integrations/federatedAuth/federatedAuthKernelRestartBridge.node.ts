@@ -62,7 +62,7 @@ export class FederatedAuthKernelRestartBridge implements IExtensionSyncActivatio
                 continue;
             }
 
-            const project = this.notebookManager.getOriginalProject(projectId);
+            const project = this.notebookManager.getAnyProjectEntry(projectId);
             if (!project) {
                 continue;
             }

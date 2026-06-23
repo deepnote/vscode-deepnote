@@ -169,7 +169,7 @@ suite('SqlCellStatusBarProvider', () => {
         });
 
         when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve(undefined);
-        when(notebookManager.getOriginalProject('project-1')).thenReturn({
+        when(notebookManager.getAnyProjectEntry('project-1')).thenReturn({
             project: {
                 integrations: []
             }
@@ -200,7 +200,7 @@ suite('SqlCellStatusBarProvider', () => {
         });
 
         when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve(undefined);
-        when(notebookManager.getOriginalProject('project-1')).thenReturn({
+        when(notebookManager.getAnyProjectEntry('project-1')).thenReturn({
             project: {
                 integrations: [
                     {
@@ -430,7 +430,7 @@ suite('SqlCellStatusBarProvider', () => {
                 },
                 selection: { start: 0 }
             } as any);
-            when(activateNotebookManager.getOriginalProject('project-1')).thenReturn({
+            when(activateNotebookManager.getAnyProjectEntry('project-1')).thenReturn({
                 project: { integrations: [] }
             } as any);
             when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
@@ -840,7 +840,7 @@ suite('SqlCellStatusBarProvider', () => {
             });
             const newIntegrationId = 'new-integration';
 
-            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+            when(commandNotebookManager.getAnyProjectEntry('project-1')).thenReturn({
                 project: {
                     integrations: [
                         {
@@ -872,7 +872,7 @@ suite('SqlCellStatusBarProvider', () => {
                 notebookMetadata
             });
 
-            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+            when(commandNotebookManager.getAnyProjectEntry('project-1')).thenReturn({
                 project: {
                     integrations: []
                 }
@@ -897,7 +897,7 @@ suite('SqlCellStatusBarProvider', () => {
             });
             const newIntegrationId = 'new-integration';
 
-            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+            when(commandNotebookManager.getAnyProjectEntry('project-1')).thenReturn({
                 project: {
                     integrations: []
                 }
@@ -922,7 +922,7 @@ suite('SqlCellStatusBarProvider', () => {
             });
             const newIntegrationId = 'new-integration';
 
-            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+            when(commandNotebookManager.getAnyProjectEntry('project-1')).thenReturn({
                 project: {
                     integrations: []
                 }
@@ -952,7 +952,7 @@ suite('SqlCellStatusBarProvider', () => {
                 notebookMetadata
             });
 
-            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+            when(commandNotebookManager.getAnyProjectEntry('project-1')).thenReturn({
                 project: {
                     integrations: []
                 }
@@ -978,7 +978,7 @@ suite('SqlCellStatusBarProvider', () => {
             const cell = createMockCell({ languageId: 'sql', notebookMetadata });
             let quickPickItems: any[] = [];
 
-            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+            when(commandNotebookManager.getAnyProjectEntry('project-1')).thenReturn({
                 project: {
                     integrations: []
                 }
@@ -1001,7 +1001,7 @@ suite('SqlCellStatusBarProvider', () => {
             const cell = createMockCell({ languageId: 'sql', notebookMetadata });
             let quickPickItems: any[] = [];
 
-            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+            when(commandNotebookManager.getAnyProjectEntry('project-1')).thenReturn({
                 project: {
                     integrations: [
                         {
@@ -1030,7 +1030,7 @@ suite('SqlCellStatusBarProvider', () => {
             const cell = createMockCell({ languageId: 'sql', notebookMetadata });
             let quickPickItems: any[] = [];
 
-            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+            when(commandNotebookManager.getAnyProjectEntry('project-1')).thenReturn({
                 project: {
                     integrations: [
                         {
@@ -1064,7 +1064,7 @@ suite('SqlCellStatusBarProvider', () => {
             });
             let quickPickItems: any[] = [];
 
-            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+            when(commandNotebookManager.getAnyProjectEntry('project-1')).thenReturn({
                 project: {
                     integrations: [
                         {
@@ -1101,7 +1101,7 @@ suite('SqlCellStatusBarProvider', () => {
             const notebookMetadata = { deepnoteProjectId: 'missing-project' };
             const cell = createMockCell({ languageId: 'sql', notebookMetadata });
 
-            when(commandNotebookManager.getOriginalProject('missing-project')).thenReturn(undefined);
+            when(commandNotebookManager.getAnyProjectEntry('missing-project')).thenReturn(undefined);
 
             await switchIntegrationHandler(cell);
 
@@ -1114,7 +1114,7 @@ suite('SqlCellStatusBarProvider', () => {
             const cell = createMockCell({ languageId: 'sql', notebookMetadata });
             let quickPickItems: any[] = [];
 
-            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+            when(commandNotebookManager.getAnyProjectEntry('project-1')).thenReturn({
                 project: {
                     integrations: [
                         {
@@ -1163,7 +1163,7 @@ suite('SqlCellStatusBarProvider', () => {
                 notebookMetadata
             });
 
-            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+            when(commandNotebookManager.getAnyProjectEntry('project-1')).thenReturn({
                 project: {
                     integrations: [
                         {
@@ -1193,7 +1193,7 @@ suite('SqlCellStatusBarProvider', () => {
                 notebookMetadata
             });
 
-            when(commandNotebookManager.getOriginalProject('project-1')).thenReturn({
+            when(commandNotebookManager.getAnyProjectEntry('project-1')).thenReturn({
                 project: {
                     integrations: []
                 }

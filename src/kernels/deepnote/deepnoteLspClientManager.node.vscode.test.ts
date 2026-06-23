@@ -48,7 +48,7 @@ suite('DeepnoteLspClientManager Integration Tests', () => {
     // Mock notebook manager
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mockNotebookManager = {
-        getOriginalProject: () => undefined
+        getAnyProjectEntry: () => undefined
     } as any;
 
     setup(() => {

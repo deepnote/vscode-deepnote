@@ -671,7 +671,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         // Prepare init notebook execution
         const projectId = notebook.metadata?.deepnoteProjectId;
         const project = projectId
-            ? (this.notebookManager.getOriginalProject(projectId) as DeepnoteFile | undefined)
+            ? (this.notebookManager.getAnyProjectEntry(projectId) as DeepnoteFile | undefined)
             : undefined;
 
         if (project) {

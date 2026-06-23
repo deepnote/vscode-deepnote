@@ -366,7 +366,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         }
 
         // Look up original project blocks for fallback block ID resolution
-        const originalProject = this.notebookManager.getOriginalProject(projectId);
+        const originalProject = this.notebookManager.getAnyProjectEntry(projectId);
         const notebookBlocksMap = new Map<string, DeepnoteBlock[]>();
         if (originalProject) {
             for (const nb of originalProject.project.notebooks) {

@@ -1019,7 +1019,7 @@ project:
         test('should apply snapshot outputs using original blocks when metadata is lost', async () => {
             // Create a mock notebook manager that returns an original project
             const mockedManager = mock<IDeepnoteNotebookManager>();
-            when(mockedManager.getOriginalProject('project-1')).thenReturn({
+            when(mockedManager.getAnyProjectEntry('project-1')).thenReturn({
                 version: '1.0',
                 metadata: { createdAt: '2025-01-01T00:00:00Z' },
                 project: {

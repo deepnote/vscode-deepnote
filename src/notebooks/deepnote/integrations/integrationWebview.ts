@@ -471,7 +471,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         // Get the project name from the notebook manager
         let projectName: string | undefined;
         if (this.projectId) {
-            const project = this.notebookManager.getOriginalProject(this.projectId);
+            const project = this.notebookManager.getAnyProjectEntry(this.projectId);
             projectName = project?.project.name;
         }
 

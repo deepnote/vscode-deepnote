@@ -10,9 +10,34 @@ import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 @injectable()
 export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
     private readonly currentNotebookId = new Map<string, string>();
-    private readonly originalProjects = new Map<string, DeepnoteProject>();
+    // Cached originals are keyed by projectId, then by notebookId, so sibling files
+    // that share a single project.id do not clobber each other's cached project data.
+    private readonly originalProjects = new Map<string /*projectId*/, Map<string /*notebookId*/, DeepnoteProject>>();
     private readonly projectsWithInitNotebookRun = new Set<string>();
     private readonly selectedNotebookByProject = new Map<string, string>();
+
+    /**
+     * Returns any cached project entry for the given project id.
+     * Intended for project-level read-only callers that have only a `projectId`
+     * (no specific notebook). Because sibling files deliberately share a `project.id`,
+     * this may return the cached project of any one sibling — it must never be used
+     * on a save path (use {@link getOriginalProject} there).
+     * @param projectId Project identifier
+     * @returns A cached project for the project, or undefined if none is cached
+     */
+    getAnyProjectEntry(projectId: string): DeepnoteProject | undefined {
+        const notebookEntries = this.originalProjects.get(projectId);
+
+        if (!notebookEntries) {
+            return undefined;
+        }
+
+        for (const project of notebookEntries.values()) {
+            return project;
+        }
+
+        return undefined;
+    }
 
     /**
      * Gets the currently selected notebook ID for a project.
@@ -24,12 +49,15 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
     }
 
     /**
-     * Retrieves the original project data for a given project ID.
+     * Retrieves the cached project data for an exact (projectId, notebookId) pair.
+     * This performs an exact match only and never falls back to another sibling's
+     * project — it returns undefined when that precise entry is not cached.
      * @param projectId Project identifier
-     * @returns Original project data or undefined if not found
+     * @param notebookId Notebook identifier within the project
+     * @returns The cached project data for that notebook, or undefined if not found
      */
-    getOriginalProject(projectId: string): DeepnoteProject | undefined {
-        return this.originalProjects.get(projectId);
+    getOriginalProject(projectId: string, notebookId: string): DeepnoteProject | undefined {
+        return this.originalProjects.get(projectId)?.get(notebookId);
     }
 
     /**
@@ -39,75 +67,6 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
      */
     getTheSelectedNotebookForAProject(projectId: string): string | undefined {
         return this.selectedNotebookByProject.get(projectId);
-    }
-
-    /**
-     * Associates a notebook ID with a project to remember user's notebook selection.
-     * When a Deepnote project contains multiple notebooks, this mapping persists the user's
-     * choice so we can automatically open the same notebook on subsequent file opens.
-     *
-     * @param projectId - The project ID that identifies the Deepnote project
-     * @param notebookId - The ID of the selected notebook within the project
-     */
-    selectNotebookForProject(projectId: string, notebookId: string): void {
-        this.selectedNotebookByProject.set(projectId, notebookId);
-    }
-
-    /**
-     * Stores the original project data and sets the initial current notebook.
-     * This is used during deserialization to cache project data and track the active notebook.
-     * @param projectId Project identifier
-     * @param project Original project data to store
-     * @param notebookId Initial notebook ID to set as current
-     */
-    storeOriginalProject(projectId: string, project: DeepnoteProject, notebookId: string): void {
-        // Deep clone to prevent mutations from affecting stored state
-        // This is critical for multi-notebook projects where multiple notebooks
-        // share the same stored project reference
-        // Using structuredClone to handle circular references (e.g., in output metadata)
-        const clonedProject = structuredClone(project);
-
-        this.originalProjects.set(projectId, clonedProject);
-        this.currentNotebookId.set(projectId, notebookId);
-    }
-
-    /**
-     * Updates the current notebook ID for a project.
-     * Used when switching notebooks within the same project.
-     * @param projectId Project identifier
-     * @param notebookId New current notebook ID
-     */
-    updateCurrentNotebookId(projectId: string, notebookId: string): void {
-        this.currentNotebookId.set(projectId, notebookId);
-    }
-
-    /**
-     * Updates the integrations list in the project data.
-     * This modifies the stored project to reflect changes in configured integrations.
-     *
-     * @param projectId - Project identifier
-     * @param integrations - Array of integration metadata to store in the project
-     * @returns `true` if the project was found and updated successfully, `false` if the project does not exist
-     */
-    updateProjectIntegrations(projectId: string, integrations: ProjectIntegration[]): boolean {
-        const project = this.originalProjects.get(projectId);
-
-        if (!project) {
-            return false;
-        }
-
-        const updatedProject = structuredClone(project);
-        updatedProject.project.integrations = integrations;
-
-        const currentNotebookId = this.currentNotebookId.get(projectId);
-
-        if (currentNotebookId) {
-            this.storeOriginalProject(projectId, updatedProject, currentNotebookId);
-        } else {
-            this.originalProjects.set(projectId, updatedProject);
-        }
-
-        return true;
     }
 
     /**
@@ -125,5 +84,98 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
      */
     markInitNotebookAsRun(projectId: string): void {
         this.projectsWithInitNotebookRun.add(projectId);
+    }
+
+    /**
+     * Associates a notebook ID with a project to remember user's notebook selection.
+     * When a Deepnote project contains multiple notebooks, this mapping persists the user's
+     * choice so we can automatically open the same notebook on subsequent file opens.
+     *
+     * @param projectId - The project ID that identifies the Deepnote project
+     * @param notebookId - The ID of the selected notebook within the project
+     */
+    selectNotebookForProject(projectId: string, notebookId: string): void {
+        this.selectedNotebookByProject.set(projectId, notebookId);
+    }
+
+    /**
+     * Stores the original project data for an exact (projectId, notebookId) pair and
+     * records the notebook as the project's current notebook.
+     * This is used during deserialization to cache project data and track the active notebook.
+     * @param projectId Project identifier
+     * @param notebookId Notebook identifier within the project
+     * @param project Original project data to store
+     */
+    storeOriginalProject(projectId: string, notebookId: string, project: DeepnoteProject): void {
+        // Deep clone to prevent mutations from affecting stored state.
+        // Using structuredClone to handle circular references (e.g., in output metadata).
+        const clonedProject = structuredClone(project);
+
+        let notebookEntries = this.originalProjects.get(projectId);
+
+        if (!notebookEntries) {
+            notebookEntries = new Map<string, DeepnoteProject>();
+            this.originalProjects.set(projectId, notebookEntries);
+        }
+
+        notebookEntries.set(notebookId, clonedProject);
+        this.currentNotebookId.set(projectId, notebookId);
+    }
+
+    /**
+     * Updates the current notebook ID for a project.
+     * Used when switching notebooks within the same project.
+     * @param projectId Project identifier
+     * @param notebookId New current notebook ID
+     */
+    updateCurrentNotebookId(projectId: string, notebookId: string): void {
+        this.currentNotebookId.set(projectId, notebookId);
+    }
+
+    /**
+     * Updates the cached project data for an exact (projectId, notebookId) pair.
+     * Unlike {@link storeOriginalProject}, this does not change the project's current
+     * notebook bookkeeping — it only refreshes the cached project for that notebook.
+     * @param projectId Project identifier
+     * @param notebookId Notebook identifier within the project
+     * @param project Updated project data to store
+     */
+    updateOriginalProject(projectId: string, notebookId: string, project: DeepnoteProject): void {
+        const clonedProject = structuredClone(project);
+
+        let notebookEntries = this.originalProjects.get(projectId);
+
+        if (!notebookEntries) {
+            notebookEntries = new Map<string, DeepnoteProject>();
+            this.originalProjects.set(projectId, notebookEntries);
+        }
+
+        notebookEntries.set(notebookId, clonedProject);
+    }
+
+    /**
+     * Updates the integrations list in the cached project data (cache-only).
+     * Iterates every cached notebook entry under the project and updates each entry's
+     * integrations. The on-disk fan-out across sibling files is handled separately.
+     *
+     * @param projectId - Project identifier
+     * @param integrations - Array of integration metadata to store in the project
+     * @returns `true` if at least one cached entry was found and updated, `false` otherwise
+     */
+    updateProjectIntegrations(projectId: string, integrations: ProjectIntegration[]): boolean {
+        const notebookEntries = this.originalProjects.get(projectId);
+
+        if (!notebookEntries || notebookEntries.size === 0) {
+            return false;
+        }
+
+        for (const [notebookId, project] of notebookEntries) {
+            const updatedProject = structuredClone(project);
+            updatedProject.project.integrations = integrations;
+
+            notebookEntries.set(notebookId, updatedProject);
+        }
+
+        return true;
     }
 }

@@ -71,8 +71,8 @@ suite('FederatedAuthKernelRestartBridge', () => {
         when(kernelProvider.get(notebookA)).thenReturn(instance(kernelA));
         when(kernelProvider.get(notebookB)).thenReturn(instance(kernelB));
         // Only project A references 'bq-shared'.
-        when(notebookManager.getOriginalProject('project-a')).thenReturn(createMockProject('project-a', ['bq-shared']));
-        when(notebookManager.getOriginalProject('project-b')).thenReturn(createMockProject('project-b', ['other-bq']));
+        when(notebookManager.getAnyProjectEntry('project-a')).thenReturn(createMockProject('project-a', ['bq-shared']));
+        when(notebookManager.getAnyProjectEntry('project-b')).thenReturn(createMockProject('project-b', ['other-bq']));
 
         onDidChangeTokens.fire('bq-shared');
         await settleAsyncHandlers();
@@ -90,8 +90,8 @@ suite('FederatedAuthKernelRestartBridge', () => {
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebookA, notebookB]);
         when(kernelProvider.get(notebookA)).thenReturn(instance(kernelA));
         when(kernelProvider.get(notebookB)).thenReturn(instance(kernelB));
-        when(notebookManager.getOriginalProject('project-a')).thenReturn(createMockProject('project-a', ['bq-shared']));
-        when(notebookManager.getOriginalProject('project-b')).thenReturn(createMockProject('project-b', ['bq-shared']));
+        when(notebookManager.getAnyProjectEntry('project-a')).thenReturn(createMockProject('project-a', ['bq-shared']));
+        when(notebookManager.getAnyProjectEntry('project-b')).thenReturn(createMockProject('project-b', ['bq-shared']));
 
         onDidChangeTokens.fire('bq-shared');
         await settleAsyncHandlers();
@@ -130,7 +130,7 @@ suite('FederatedAuthKernelRestartBridge', () => {
             when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
             when(kernelProvider.get(notebook)).thenReturn(instance(kernel));
             if (project) {
-                when(notebookManager.getOriginalProject('project-a')).thenReturn(project);
+                when(notebookManager.getAnyProjectEntry('project-a')).thenReturn(project);
             }
 
             onDidChangeTokens.fire('bq-1');
@@ -138,7 +138,7 @@ suite('FederatedAuthKernelRestartBridge', () => {
 
             verify(kernel.restart()).never();
             if (!project) {
-                verify(notebookManager.getOriginalProject(anyString())).never();
+                verify(notebookManager.getAnyProjectEntry(anyString())).never();
             }
         });
     });
@@ -152,8 +152,8 @@ suite('FederatedAuthKernelRestartBridge', () => {
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebookA, notebookB]);
         when(kernelProvider.get(notebookA)).thenReturn(instance(kernelA));
         when(kernelProvider.get(notebookB)).thenReturn(instance(kernelB));
-        when(notebookManager.getOriginalProject('project-a')).thenReturn(createMockProject('project-a', ['bq-shared']));
-        when(notebookManager.getOriginalProject('project-b')).thenReturn(createMockProject('project-b', ['bq-shared']));
+        when(notebookManager.getAnyProjectEntry('project-a')).thenReturn(createMockProject('project-a', ['bq-shared']));
+        when(notebookManager.getAnyProjectEntry('project-b')).thenReturn(createMockProject('project-b', ['bq-shared']));
 
         onDidChangeTokens.fire('bq-shared');
         await settleAsyncHandlers();

@@ -146,7 +146,7 @@ export class IntegrationManager implements IIntegrationManager {
             const config = await this.integrationStorage.getIntegrationConfig(selectedIntegrationId);
 
             // Try to get integration metadata from the project
-            const project = this.notebookManager.getOriginalProject(projectId);
+            const project = this.notebookManager.getAnyProjectEntry(projectId);
             const projectIntegration = project?.project.integrations?.find((i) => i.id === selectedIntegrationId);
 
             let integrationName: string | undefined;

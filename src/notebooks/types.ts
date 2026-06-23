@@ -37,20 +37,35 @@ export interface ProjectIntegration {
 
 export const IDeepnoteNotebookManager = Symbol('IDeepnoteNotebookManager');
 export interface IDeepnoteNotebookManager {
+    /**
+     * Returns any cached project entry for the project id (project-level read-only callers).
+     * Because sibling files share a `project.id`, this may return any one sibling's cached
+     * project — never use it on a save path.
+     */
+    getAnyProjectEntry(projectId: string): DeepnoteProject | undefined;
     getCurrentNotebookId(projectId: string): string | undefined;
-    getOriginalProject(projectId: string): DeepnoteProject | undefined;
+    /**
+     * Returns the cached project for an exact (projectId, notebookId) pair, or undefined.
+     * Exact match only — never falls back to another sibling. The save path uses this.
+     */
+    getOriginalProject(projectId: string, notebookId: string): DeepnoteProject | undefined;
     getTheSelectedNotebookForAProject(projectId: string): string | undefined;
     selectNotebookForProject(projectId: string, notebookId: string): void;
-    storeOriginalProject(projectId: string, project: DeepnoteProject, notebookId: string): void;
+    storeOriginalProject(projectId: string, notebookId: string, project: DeepnoteProject): void;
     updateCurrentNotebookId(projectId: string, notebookId: string): void;
+    /**
+     * Updates the cached project for an exact (projectId, notebookId) pair, without changing
+     * the project's current-notebook bookkeeping.
+     */
+    updateOriginalProject(projectId: string, notebookId: string, project: DeepnoteProject): void;
 
     /**
-     * Updates the integrations list in the project data.
-     * This modifies the stored project to reflect changes in configured integrations.
+     * Updates the integrations list in the cached project data (cache-only).
+     * Iterates every cached notebook entry under the project and updates each.
      *
      * @param projectId - Project identifier
      * @param integrations - Array of integration metadata to store in the project
-     * @returns `true` if the project was found and updated successfully, `false` if the project does not exist
+     * @returns `true` if at least one cached entry was found and updated, `false` otherwise
      */
     updateProjectIntegrations(projectId: string, integrations: ProjectIntegration[]): boolean;
 

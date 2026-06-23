@@ -610,7 +610,7 @@ export class DeepnoteLspClientManager
                 return [];
             }
 
-            const project = this.notebookManager.getOriginalProject(projectId);
+            const project = this.notebookManager.getAnyProjectEntry(projectId);
 
             if (!project) {
                 logger.warn(`SQL LSP: No project found for ID: ${projectId}`);

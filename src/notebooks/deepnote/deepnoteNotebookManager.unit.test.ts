@@ -33,7 +33,7 @@ suite('DeepnoteNotebookManager', () => {
         });
 
         test('should return notebook ID after storing project', () => {
-            manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
+            manager.storeOriginalProject('project-123', 'notebook-456', mockProject);
 
             const result = manager.getCurrentNotebookId('project-123');
 
@@ -41,7 +41,7 @@ suite('DeepnoteNotebookManager', () => {
         });
 
         test('should return updated notebook ID', () => {
-            manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
+            manager.storeOriginalProject('project-123', 'notebook-456', mockProject);
             manager.updateCurrentNotebookId('project-123', 'notebook-789');
 
             const result = manager.getCurrentNotebookId('project-123');
@@ -52,15 +52,15 @@ suite('DeepnoteNotebookManager', () => {
 
     suite('getOriginalProject', () => {
         test('should return undefined for unknown project', () => {
-            const result = manager.getOriginalProject('unknown-project');
+            const result = manager.getOriginalProject('unknown-project', 'notebook-456');
 
             assert.strictEqual(result, undefined);
         });
 
         test('should return original project after storing', () => {
-            manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
+            manager.storeOriginalProject('project-123', 'notebook-456', mockProject);
 
-            const result = manager.getOriginalProject('project-123');
+            const result = manager.getOriginalProject('project-123', 'notebook-456');
 
             assert.deepStrictEqual(result, mockProject);
         });
@@ -125,9 +125,9 @@ suite('DeepnoteNotebookManager', () => {
 
     suite('storeOriginalProject', () => {
         test('should store both project and current notebook ID', () => {
-            manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
+            manager.storeOriginalProject('project-123', 'notebook-456', mockProject);
 
-            const storedProject = manager.getOriginalProject('project-123');
+            const storedProject = manager.getOriginalProject('project-123', 'notebook-456');
             const currentNotebookId = manager.getCurrentNotebookId('project-123');
 
             assert.deepStrictEqual(storedProject, mockProject);
@@ -143,20 +143,20 @@ suite('DeepnoteNotebookManager', () => {
                 }
             };
 
-            manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
-            manager.storeOriginalProject('project-123', updatedProject, 'notebook-789');
+            manager.storeOriginalProject('project-123', 'notebook-456', mockProject);
+            manager.storeOriginalProject('project-123', 'notebook-456', updatedProject);
 
-            const storedProject = manager.getOriginalProject('project-123');
+            const storedProject = manager.getOriginalProject('project-123', 'notebook-456');
             const currentNotebookId = manager.getCurrentNotebookId('project-123');
 
             assert.deepStrictEqual(storedProject, updatedProject);
-            assert.strictEqual(currentNotebookId, 'notebook-789');
+            assert.strictEqual(currentNotebookId, 'notebook-456');
         });
     });
 
     suite('updateCurrentNotebookId', () => {
         test('should update notebook ID for existing project', () => {
-            manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
+            manager.storeOriginalProject('project-123', 'notebook-456', mockProject);
             manager.updateCurrentNotebookId('project-123', 'notebook-789');
 
             const result = manager.getCurrentNotebookId('project-123');
@@ -186,7 +186,7 @@ suite('DeepnoteNotebookManager', () => {
 
     suite('updateProjectIntegrations', () => {
         test('should update integrations list for existing project and return true', () => {
-            manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
+            manager.storeOriginalProject('project-123', 'notebook-456', mockProject);
 
             const integrations: ProjectIntegration[] = [
                 { id: 'int-1', name: 'PostgreSQL', type: 'pgsql' },
@@ -197,7 +197,7 @@ suite('DeepnoteNotebookManager', () => {
 
             assert.strictEqual(result, true);
 
-            const updatedProject = manager.getOriginalProject('project-123');
+            const updatedProject = manager.getOriginalProject('project-123', 'notebook-456');
             assert.deepStrictEqual(updatedProject?.project.integrations, integrations);
         });
 
@@ -210,7 +210,7 @@ suite('DeepnoteNotebookManager', () => {
                 }
             };
 
-            manager.storeOriginalProject('project-123', projectWithIntegrations, 'notebook-456');
+            manager.storeOriginalProject('project-123', 'notebook-456', projectWithIntegrations);
 
             const newIntegrations: ProjectIntegration[] = [
                 { id: 'new-int-1', name: 'New Integration 1', type: 'pgsql' },
@@ -221,7 +221,7 @@ suite('DeepnoteNotebookManager', () => {
 
             assert.strictEqual(result, true);
 
-            const updatedProject = manager.getOriginalProject('project-123');
+            const updatedProject = manager.getOriginalProject('project-123', 'notebook-456');
             assert.deepStrictEqual(updatedProject?.project.integrations, newIntegrations);
         });
 
@@ -234,13 +234,13 @@ suite('DeepnoteNotebookManager', () => {
                 }
             };
 
-            manager.storeOriginalProject('project-123', projectWithIntegrations, 'notebook-456');
+            manager.storeOriginalProject('project-123', 'notebook-456', projectWithIntegrations);
 
             const result = manager.updateProjectIntegrations('project-123', []);
 
             assert.strictEqual(result, true);
 
-            const updatedProject = manager.getOriginalProject('project-123');
+            const updatedProject = manager.getOriginalProject('project-123', 'notebook-456');
             assert.deepStrictEqual(updatedProject?.project.integrations, []);
         });
 
@@ -251,12 +251,12 @@ suite('DeepnoteNotebookManager', () => {
 
             assert.strictEqual(result, false);
 
-            const project = manager.getOriginalProject('unknown-project');
+            const project = manager.getOriginalProject('unknown-project', 'notebook-456');
             assert.strictEqual(project, undefined);
         });
 
         test('should preserve other project properties and return true', () => {
-            manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
+            manager.storeOriginalProject('project-123', 'notebook-456', mockProject);
 
             const integrations: ProjectIntegration[] = [{ id: 'int-1', name: 'PostgreSQL', type: 'pgsql' }];
 
@@ -264,7 +264,7 @@ suite('DeepnoteNotebookManager', () => {
 
             assert.strictEqual(result, true);
 
-            const updatedProject = manager.getOriginalProject('project-123');
+            const updatedProject = manager.getOriginalProject('project-123', 'notebook-456');
             assert.strictEqual(updatedProject?.project.id, mockProject.project.id);
             assert.strictEqual(updatedProject?.project.name, mockProject.project.name);
             assert.strictEqual(updatedProject?.version, mockProject.version);
@@ -273,7 +273,7 @@ suite('DeepnoteNotebookManager', () => {
 
         test('should update integrations when currentNotebookId is undefined and return true', () => {
             // Store project with a notebook ID, then clear it to simulate the edge case
-            manager.storeOriginalProject('project-123', mockProject, 'notebook-456');
+            manager.storeOriginalProject('project-123', 'notebook-456', mockProject);
             manager.updateCurrentNotebookId('project-123', undefined as any);
 
             const integrations: ProjectIntegration[] = [
@@ -285,7 +285,7 @@ suite('DeepnoteNotebookManager', () => {
 
             assert.strictEqual(result, true);
 
-            const updatedProject = manager.getOriginalProject('project-123');
+            const updatedProject = manager.getOriginalProject('project-123', 'notebook-456');
             assert.deepStrictEqual(updatedProject?.project.integrations, integrations);
             // Verify other properties remain unchanged
             assert.strictEqual(updatedProject?.project.id, mockProject.project.id);
@@ -297,10 +297,10 @@ suite('DeepnoteNotebookManager', () => {
 
     suite('integration scenarios', () => {
         test('should handle complete workflow for multiple projects', () => {
-            manager.storeOriginalProject('project-1', mockProject, 'notebook-1');
+            manager.storeOriginalProject('project-1', 'notebook-1', mockProject);
             manager.selectNotebookForProject('project-1', 'notebook-1');
 
-            manager.storeOriginalProject('project-2', mockProject, 'notebook-2');
+            manager.storeOriginalProject('project-2', 'notebook-2', mockProject);
             manager.selectNotebookForProject('project-2', 'notebook-2');
 
             assert.strictEqual(manager.getCurrentNotebookId('project-1'), 'notebook-1');
@@ -310,7 +310,7 @@ suite('DeepnoteNotebookManager', () => {
         });
 
         test('should handle notebook switching within same project', () => {
-            manager.storeOriginalProject('project-123', mockProject, 'notebook-1');
+            manager.storeOriginalProject('project-123', 'notebook-1', mockProject);
             manager.selectNotebookForProject('project-123', 'notebook-1');
 
             manager.updateCurrentNotebookId('project-123', 'notebook-2');
@@ -322,7 +322,7 @@ suite('DeepnoteNotebookManager', () => {
 
         test('should maintain separation between current and selected notebook IDs', () => {
             // Store original project sets current notebook
-            manager.storeOriginalProject('project-123', mockProject, 'notebook-original');
+            manager.storeOriginalProject('project-123', 'notebook-original', mockProject);
 
             // Selecting a different notebook for the project
             manager.selectNotebookForProject('project-123', 'notebook-selected');
@@ -330,6 +330,118 @@ suite('DeepnoteNotebookManager', () => {
             // Both should be maintained independently
             assert.strictEqual(manager.getCurrentNotebookId('project-123'), 'notebook-original');
             assert.strictEqual(manager.getTheSelectedNotebookForAProject('project-123'), 'notebook-selected');
+        });
+    });
+
+    // Two sibling .deepnote files of ONE project share project.id but each holds a
+    // different single notebook. These tests pin the load-bearing new semantics:
+    // nested (projectId, notebookId) storage with an exact, no-fallback lookup.
+    suite('nested sibling storage', () => {
+        const projectId = 'shared-project-id';
+        const nbA = 'notebook-A';
+        const nbB = 'notebook-B';
+
+        // A project (whole DeepnoteFile) for one sibling: same projectId, distinct notebook.
+        function siblingProject(notebookId: string, notebookName: string): DeepnoteProject {
+            return {
+                ...mockProject,
+                project: {
+                    ...mockProject.project,
+                    id: projectId,
+                    notebooks: [
+                        {
+                            id: notebookId,
+                            name: notebookName,
+                            blocks: []
+                        }
+                    ]
+                }
+            };
+        }
+
+        test('stores two siblings of the same project without clobbering each other', () => {
+            const projectA = siblingProject(nbA, 'Sibling A');
+            const projectB = siblingProject(nbB, 'Sibling B');
+
+            manager.storeOriginalProject(projectId, nbA, projectA);
+            manager.storeOriginalProject(projectId, nbB, projectB);
+
+            assert.deepStrictEqual(manager.getOriginalProject(projectId, nbA), projectA);
+            assert.deepStrictEqual(manager.getOriginalProject(projectId, nbB), projectB);
+        });
+
+        test('getOriginalProject is exact: returns undefined for an uncached notebook even though a sibling IS cached (NO fallback)', () => {
+            manager.storeOriginalProject(projectId, nbA, siblingProject(nbA, 'Sibling A'));
+
+            // A different notebook of the SAME project is cached, but the requested one is not.
+            // The exact lookup must NOT fall back to the sibling — this is the key anti-regression
+            // (a save path relies on it to never write against the wrong sibling's project).
+            const result = manager.getOriginalProject(projectId, 'not-cached');
+
+            assert.strictEqual(result, undefined);
+        });
+
+        test('getAnyProjectEntry returns one of the project entries (project-level)', () => {
+            const projectA = siblingProject(nbA, 'Sibling A');
+            const projectB = siblingProject(nbB, 'Sibling B');
+
+            manager.storeOriginalProject(projectId, nbA, projectA);
+            manager.storeOriginalProject(projectId, nbB, projectB);
+
+            const result = manager.getAnyProjectEntry(projectId);
+
+            assert.notStrictEqual(result, undefined);
+            // It must be one of the project's own cached entries.
+            const isOneOfTheSiblings =
+                JSON.stringify(result) === JSON.stringify(projectA) ||
+                JSON.stringify(result) === JSON.stringify(projectB);
+            assert.strictEqual(
+                isOneOfTheSiblings,
+                true,
+                'getAnyProjectEntry should return one of the cached sibling projects'
+            );
+        });
+
+        test('getAnyProjectEntry returns undefined for an unknown project', () => {
+            manager.storeOriginalProject(projectId, nbA, siblingProject(nbA, 'Sibling A'));
+
+            assert.strictEqual(manager.getAnyProjectEntry('unknown-project'), undefined);
+        });
+
+        test('updateOriginalProject refreshes the exact entry without affecting the sibling', () => {
+            const projectA = siblingProject(nbA, 'Sibling A');
+            const projectB = siblingProject(nbB, 'Sibling B');
+
+            manager.storeOriginalProject(projectId, nbA, projectA);
+            manager.storeOriginalProject(projectId, nbB, projectB);
+
+            const renamedA: DeepnoteProject = {
+                ...projectA,
+                project: { ...projectA.project, name: 'Sibling A Renamed' }
+            };
+
+            manager.updateOriginalProject(projectId, nbA, renamedA);
+
+            assert.deepStrictEqual(manager.getOriginalProject(projectId, nbA), renamedA);
+            // Sibling B must be untouched by the update to A.
+            assert.deepStrictEqual(manager.getOriginalProject(projectId, nbB), projectB);
+        });
+
+        test('updateProjectIntegrations updates every cached notebook entry under the project', () => {
+            manager.storeOriginalProject(projectId, nbA, siblingProject(nbA, 'Sibling A'));
+            manager.storeOriginalProject(projectId, nbB, siblingProject(nbB, 'Sibling B'));
+
+            const integrations: ProjectIntegration[] = [
+                { id: 'int-1', name: 'PostgreSQL', type: 'pgsql' },
+                { id: 'int-2', name: 'BigQuery', type: 'big-query' }
+            ];
+
+            const updated = manager.updateProjectIntegrations(projectId, integrations);
+
+            assert.strictEqual(updated, true);
+            // BOTH siblings of the project must see the new integrations.
+            assert.deepStrictEqual(manager.getOriginalProject(projectId, nbA)?.project.integrations, integrations);
+            assert.deepStrictEqual(manager.getOriginalProject(projectId, nbB)?.project.integrations, integrations);
         });
     });
 });

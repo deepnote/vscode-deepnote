@@ -157,7 +157,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 );
             }
 
-            this.notebookManager.storeOriginalProject(deepnoteFile.project.id, deepnoteFile, selectedNotebook.id);
+            this.notebookManager.storeOriginalProject(deepnoteFile.project.id, selectedNotebook.id, deepnoteFile);
             logger.debug(`DeepnoteSerializer: Stored project ${projectId} in notebook manager`);
 
             return {
@@ -248,7 +248,10 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             // Clone the project before modifying to prevent state corruption
             // This is critical for multi-notebook projects where the stored project
             // is shared between notebook serialization calls
-            const storedProject = this.notebookManager.getOriginalProject(projectId) as DeepnoteFile | undefined;
+            // Chunk 1 keeps the save path behaviour identical to before by using the
+            // project-only lookup. Chunk 2 will switch this to the exact (projectId, notebookId)
+            // lookup (getOriginalProject) once the notebook id is resolved first.
+            const storedProject = this.notebookManager.getAnyProjectEntry(projectId) as DeepnoteFile | undefined;
 
             if (!storedProject) {
                 throw new Error('Original Deepnote project not found. Cannot save changes.');
@@ -347,7 +350,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             }
 
             // Store the updated project back so subsequent saves start from correct state
-            this.notebookManager.storeOriginalProject(projectId, originalProject, notebookId);
+            this.notebookManager.storeOriginalProject(projectId, notebookId, originalProject);
 
             logger.debug('SerializeNotebook: Serializing to YAML');
 

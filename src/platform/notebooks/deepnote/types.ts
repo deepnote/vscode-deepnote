@@ -115,5 +115,10 @@ export interface IPlatformNotebookEditorProvider {
  */
 export const IPlatformDeepnoteNotebookManager = Symbol('IPlatformDeepnoteNotebookManager');
 export interface IPlatformDeepnoteNotebookManager {
-    getOriginalProject(projectId: string): DeepnoteProject | undefined;
+    /**
+     * Returns any cached project entry for the project id, for project-level read-only callers
+     * that have only a `projectId` (no specific notebook). Sibling files share a `project.id`,
+     * so this may return any one sibling's cached project.
+     */
+    getAnyProjectEntry(projectId: string): DeepnoteProject | undefined;
 }

@@ -6,6 +6,7 @@ import { Disposable, EventEmitter, FileSystemWatcher, NotebookCellKind, Notebook
 import type { IControllerRegistration } from '../controllers/types';
 import type { IDisposableRegistry } from '../../platform/common/types';
 import type { DeepnoteOutput, DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
+import type { IDeepnoteProjectMetadataPropagator } from '../../platform/deepnote/types';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteFileChangeWatcher } from './deepnoteFileChangeWatcher';
@@ -1341,6 +1342,118 @@ project:
             }
             fbOnDidChange.dispose();
             fbOnDidCreate.dispose();
+        });
+    });
+
+    suite('metadata-propagator self-write suppression', () => {
+        let propagatorDisposables: IDisposableRegistry;
+        let propagatorOnDidChange: EventEmitter<Uri>;
+        let propagatorOnDidCreate: EventEmitter<Uri>;
+        let onFileWrittenCallback: ((uri: Uri) => void) | undefined;
+        let propagatorReadFileCalls: number;
+        let propagatorApplyEditCount: number;
+        let propagatorSaveCount: number;
+
+        setup(() => {
+            propagatorDisposables = [];
+            onFileWrittenCallback = undefined;
+            propagatorReadFileCalls = 0;
+            propagatorApplyEditCount = 0;
+            propagatorSaveCount = 0;
+
+            propagatorOnDidChange = new EventEmitter<Uri>();
+            propagatorOnDidCreate = new EventEmitter<Uri>();
+            const fsWatcherProp = mock<FileSystemWatcher>();
+            when(fsWatcherProp.onDidChange).thenReturn(propagatorOnDidChange.event);
+            when(fsWatcherProp.onDidCreate).thenReturn(propagatorOnDidCreate.event);
+            when(fsWatcherProp.dispose()).thenReturn();
+            when(mockedVSCodeNamespaces.workspace.createFileSystemWatcher(anything())).thenReturn(
+                instance(fsWatcherProp)
+            );
+
+            const mockFs = mock<typeof import('vscode').workspace.fs>();
+            when(mockFs.readFile(anything())).thenCall(() => {
+                propagatorReadFileCalls++;
+                return Promise.resolve(new TextEncoder().encode(validYaml));
+            });
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
+
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenCall(() => {
+                propagatorApplyEditCount++;
+                return Promise.resolve(true);
+            });
+            when(mockedVSCodeNamespaces.workspace.save(anything())).thenCall(() => {
+                propagatorSaveCount++;
+                return Promise.resolve(Uri.file('/workspace/test.deepnote'));
+            });
+
+            const mockPropagator = mock<IDeepnoteProjectMetadataPropagator>();
+            when(mockPropagator.onFileWritten(anything())).thenCall((cb: (uri: Uri) => void) => {
+                onFileWrittenCallback = cb;
+                return {
+                    dispose: () => {
+                        onFileWrittenCallback = undefined;
+                    }
+                } as Disposable;
+            });
+
+            const propagatorWatcher = new DeepnoteFileChangeWatcher(
+                propagatorDisposables,
+                mockNotebookManager,
+                undefined,
+                undefined,
+                instance(mockPropagator)
+            );
+            propagatorWatcher.activate();
+        });
+
+        teardown(() => {
+            for (const d of propagatorDisposables) {
+                d.dispose();
+            }
+            propagatorOnDidChange.dispose();
+            propagatorOnDidCreate.dispose();
+        });
+
+        test('a propagated write marks the uri as a self-write so handleFileChange skips the reload-and-resave path', async () => {
+            const uri = Uri.file('/workspace/sibling.deepnote');
+            // Live cells differ from the YAML on disk, so WITHOUT the self-write the watcher would
+            // read + applyEdit + save. The propagated-write marker must short-circuit all of that.
+            const notebook = createMockNotebook({ uri, cellCount: 0, cells: [] });
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+
+            // The propagator wrote this sibling → fires its onFileWritten callback (registered on activate()).
+            assert.isDefined(
+                onFileWrittenCallback,
+                'metadataPropagator.onFileWritten should be subscribed on activate'
+            );
+            onFileWrittenCallback!(uri);
+
+            // The resulting fs change event for that write must be consumed as a self-write.
+            propagatorOnDidChange.fire(uri);
+
+            // Wait well past the debounce to prove nothing was scheduled.
+            await new Promise((resolve) => setTimeout(resolve, debounceWaitMs));
+
+            assert.strictEqual(propagatorReadFileCalls, 0, 'readFile must NOT be called for a propagated self-write');
+            assert.strictEqual(propagatorApplyEditCount, 0, 'applyEdit must NOT be called for a propagated self-write');
+            assert.strictEqual(propagatorSaveCount, 0, 'save must NOT be called for a propagated self-write');
+        });
+
+        test('without a preceding propagated write, an external change to the same sibling still reloads (proves the suppression is the propagated mark, not a blanket skip)', async () => {
+            const uri = Uri.file('/workspace/sibling-external.deepnote');
+            const notebook = createMockNotebook({ uri, cellCount: 0, cells: [] });
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+
+            // No onFileWrittenCallback fired → a genuine external change reloads.
+            propagatorOnDidChange.fire(uri);
+
+            await waitFor(() => propagatorSaveCount > 0);
+
+            assert.isAtLeast(propagatorApplyEditCount, 1, 'a genuine external change should applyEdit');
+            assert.isAtLeast(propagatorSaveCount, 1, 'a genuine external change should save');
         });
     });
 });

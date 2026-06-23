@@ -11,6 +11,7 @@ import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { Commands } from '../../platform/common/constants';
 import { readDeepnoteProjectFile } from './deepnoteProjectUtils';
 import { ILogger } from '../../platform/logging/types';
+import type { IDeepnoteProjectMetadataPropagator } from '../../platform/deepnote/types';
 
 /**
  * Manages the Deepnote explorer tree view and related commands
@@ -23,7 +24,8 @@ export class DeepnoteExplorerView {
 
     constructor(
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
-        @inject(ILogger) logger: ILogger
+        @inject(ILogger) logger: ILogger,
+        private readonly metadataPropagator?: IDeepnoteProjectMetadataPropagator
     ) {
         this.treeDataProvider = new DeepnoteTreeDataProvider(logger);
     }
@@ -304,6 +306,20 @@ export class DeepnoteExplorerView {
         }
 
         try {
+            // Desktop: rename the project across every sibling .deepnote file (open or closed),
+            // not just the clicked file.
+            if (this.metadataPropagator) {
+                await this.metadataPropagator.propagateProjectMetadata(treeItem.context.projectId, (file) => {
+                    file.project.name = newName;
+                });
+
+                this.treeDataProvider.refresh();
+                await window.showInformationMessage(l10n.t('Project renamed to: {0}', newName));
+
+                return;
+            }
+
+            // Web fallback (no filesystem fan-out): rename only the clicked file.
             const fileUri = Uri.file(treeItem.context.filePath);
             const projectData = await readDeepnoteProjectFile(fileUri);
 

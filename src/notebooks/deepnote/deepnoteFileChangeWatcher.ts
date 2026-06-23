@@ -17,6 +17,7 @@ import { IControllerRegistration } from '../controllers/types';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { logger } from '../../platform/logging';
+import { IDeepnoteProjectMetadataPropagator } from '../../platform/deepnote/types';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
@@ -88,7 +89,10 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
         @inject(SnapshotService) @optional() private readonly snapshotService?: SnapshotService,
-        @inject(IControllerRegistration) @optional() private readonly controllerRegistration?: IControllerRegistration
+        @inject(IControllerRegistration) @optional() private readonly controllerRegistration?: IControllerRegistration,
+        @inject(IDeepnoteProjectMetadataPropagator)
+        @optional()
+        private readonly metadataPropagator?: IDeepnoteProjectMetadataPropagator
     ) {
         this.serializer = new DeepnoteNotebookSerializer(this.notebookManager, this.snapshotService);
     }
@@ -102,25 +106,14 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         this.disposables.push({ dispose: () => this.clearAllTimers() });
 
         if (this.snapshotService) {
-            this.disposables.push(
-                this.snapshotService.onFileWritten((uri) => {
-                    const key = this.selfWriteKey(uri);
-                    this.snapshotSelfWriteUris.add(key);
+            this.disposables.push(this.snapshotService.onFileWritten((uri) => this.markSnapshotSelfWrite(uri)));
+        }
 
-                    // Safety net: clean stale entries after 30s
-                    const existing = this.snapshotSelfWriteTimers.get(key);
-                    if (existing) {
-                        clearTimeout(existing);
-                    }
-                    this.snapshotSelfWriteTimers.set(
-                        key,
-                        setTimeout(() => {
-                            this.snapshotSelfWriteUris.delete(key);
-                            this.snapshotSelfWriteTimers.delete(key);
-                        }, selfWriteExpirationMs)
-                    );
-                })
-            );
+        if (this.metadataPropagator) {
+            // A propagated write to an open sibling must be treated as a self-write so it does
+            // not bounce through the reload-and-resave path. Reuse the same self-write registry
+            // and consumption path as the snapshot subscription.
+            this.disposables.push(this.metadataPropagator.onFileWritten((uri) => this.markSnapshotSelfWrite(uri)));
         }
     }
 
@@ -591,6 +584,29 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             setTimeout(() => {
                 this.selfWriteUris.delete(key);
                 this.selfWriteTimers.delete(key);
+            }, selfWriteExpirationMs)
+        );
+    }
+
+    /**
+     * Marks a URI as written by the snapshot service or the metadata propagator, so the
+     * resulting fs event is treated as a self-write and skipped. Shared by both subscriptions
+     * to keep a single, non-divergent self-write registry.
+     */
+    private markSnapshotSelfWrite(uri: Uri): void {
+        const key = this.selfWriteKey(uri);
+        this.snapshotSelfWriteUris.add(key);
+
+        // Safety net: clean stale entries after 30s
+        const existing = this.snapshotSelfWriteTimers.get(key);
+        if (existing) {
+            clearTimeout(existing);
+        }
+        this.snapshotSelfWriteTimers.set(
+            key,
+            setTimeout(() => {
+                this.snapshotSelfWriteUris.delete(key);
+                this.snapshotSelfWriteTimers.delete(key);
             }, selfWriteExpirationMs)
         );
     }

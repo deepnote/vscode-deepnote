@@ -64,6 +64,8 @@ import {
     IPlatformNotebookEditorProvider,
     IPlatformDeepnoteNotebookManager
 } from '../platform/notebooks/deepnote/types';
+import { IDeepnoteProjectMetadataPropagator } from '../platform/deepnote/types';
+import { DeepnoteProjectMetadataPropagator } from '../platform/deepnote/deepnoteProjectMetadataPropagator.node';
 import { SqlCellStatusBarProvider } from './deepnote/sqlCellStatusBarProvider';
 import { DirtyInputBlockStatusBarProvider } from './deepnote/dirtyInputBlockStatusBarProvider';
 import { StaleOutputStatusBarProvider } from './deepnote/staleOutputStatusBarProvider';
@@ -183,6 +185,11 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IDeepnoteNotebookManager>(IDeepnoteNotebookManager, DeepnoteNotebookManager);
     // Bind the platform-layer interface to the same implementation
     serviceManager.addBinding(IDeepnoteNotebookManager, IPlatformDeepnoteNotebookManager);
+    // Project-metadata propagation across sibling .deepnote files (desktop-only filesystem fan-out)
+    serviceManager.addSingleton<IDeepnoteProjectMetadataPropagator>(
+        IDeepnoteProjectMetadataPropagator,
+        DeepnoteProjectMetadataPropagator
+    );
     serviceManager.addSingleton<IIntegrationStorage>(IIntegrationStorage, IntegrationStorage);
     serviceManager.addSingleton<IIntegrationDetector>(IIntegrationDetector, IntegrationDetector);
     serviceManager.addSingleton<IIntegrationWebviewProvider>(IIntegrationWebviewProvider, IntegrationWebviewProvider);

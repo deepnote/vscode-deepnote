@@ -4,6 +4,7 @@ import { commands, l10n, workspace, window, type Disposable, type NotebookDocume
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IExtensionContext } from '../../platform/common/types';
 import { ILogger } from '../../platform/logging/types';
+import { IDeepnoteProjectMetadataPropagator } from '../../platform/deepnote/types';
 import { IDeepnoteNotebookEnvironmentMapper } from '../../kernels/deepnote/types';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
@@ -42,7 +43,10 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
         @inject(SnapshotService) @optional() private readonly snapshotService?: SnapshotService,
         @inject(IDeepnoteNotebookEnvironmentMapper)
         @optional()
-        private readonly environmentMapper?: IDeepnoteNotebookEnvironmentMapper
+        private readonly environmentMapper?: IDeepnoteNotebookEnvironmentMapper,
+        @inject(IDeepnoteProjectMetadataPropagator)
+        @optional()
+        private readonly metadataPropagator?: IDeepnoteProjectMetadataPropagator
     ) {
         this.integrationManager = integrationManager;
     }
@@ -53,7 +57,7 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
      */
     public activate() {
         this.serializer = new DeepnoteNotebookSerializer(this.notebookManager, this.snapshotService);
-        this.explorerView = new DeepnoteExplorerView(this.extensionContext, this.logger);
+        this.explorerView = new DeepnoteExplorerView(this.extensionContext, this.logger, this.metadataPropagator);
         this.editProtection = new DeepnoteInputBlockEditProtection(this.logger);
         this.snapshotsEnabled = this.isSnapshotsEnabled();
 

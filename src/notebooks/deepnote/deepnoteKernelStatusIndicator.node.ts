@@ -46,9 +46,8 @@ export interface IDeepnoteKernelStatusService {
 }
 
 function normalizeNotebookBaseUri(uri: Uri): string {
-    const normalized = uri.with({ query: '', fragment: '' });
     // toString(true) keeps the URI unencoded, matching how fsPath-based keys are generated elsewhere
-    return normalized.toString(true);
+    return uri.toString(true);
 }
 
 export function getNotebookStatusKeyFromNotebook(notebook: NotebookDocument): string {
@@ -283,8 +282,7 @@ export class DeepnoteKernelStatusIndicator
             return undefined;
         }
 
-        const baseUri = notebook.uri.with({ query: '', fragment: '' });
-        const environmentId = this.environmentMapper.getEnvironmentForNotebook(baseUri);
+        const environmentId = this.environmentMapper.getEnvironmentForNotebook(notebook.uri);
         const environmentName = environmentId ? this.environmentManager.getEnvironment(environmentId)?.name : undefined;
         const connection = controller.connection;
 

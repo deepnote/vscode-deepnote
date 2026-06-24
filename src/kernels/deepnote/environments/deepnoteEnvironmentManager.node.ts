@@ -10,7 +10,7 @@ import { IProcessServiceFactory } from '../../../platform/common/process/types.n
 import { IExtensionContext, IOutputChannel } from '../../../platform/common/types';
 import { generateUuid as uuid } from '../../../platform/common/uuid';
 import { logger } from '../../../platform/logging';
-import { IDeepnoteEnvironmentManager, IDeepnoteServerStarter } from '../types';
+import { IDeepnoteEnvironmentManager } from '../types';
 import { CreateDeepnoteEnvironmentOptions, DeepnoteEnvironment } from './deepnoteEnvironment';
 import { DeepnoteEnvironmentStorage } from './deepnoteEnvironmentStorage.node';
 
@@ -20,11 +20,7 @@ import { DeepnoteEnvironmentStorage } from './deepnoteEnvironmentStorage.node';
  */
 @injectable()
 export class DeepnoteEnvironmentManager implements IExtensionSyncActivationService, IDeepnoteEnvironmentManager {
-    // Track server handles per notebook URI for cleanup
-    // private readonly notebookServerHandles = new Map<string, string>();
-
     private environments: Map<string, DeepnoteEnvironment> = new Map();
-    private environmentServers: Map<string, Uri[]> = new Map();
     private readonly _onDidChangeEnvironments = new EventEmitter<void>();
     public readonly onDidChangeEnvironments = this._onDidChangeEnvironments.event;
     private initializationPromise: Promise<void> | undefined;
@@ -32,7 +28,6 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
     constructor(
         @inject(IExtensionContext) private readonly context: IExtensionContext,
         @inject(DeepnoteEnvironmentStorage) private readonly storage: DeepnoteEnvironmentStorage,
-        @inject(IDeepnoteServerStarter) private readonly serverStarter: IDeepnoteServerStarter,
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel,
         @inject(IFileSystem) private readonly fileSystem: IFileSystem,
         @inject(IProcessServiceFactory) private readonly processServiceFactory: IProcessServiceFactory
@@ -206,11 +201,9 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
             throw new Error(`Environment not found: ${id}`);
         }
 
-        // Stop the server if running
-        for (const fileKey of this.environmentServers.get(id) ?? []) {
-            await this.serverStarter.stopServer(fileKey, token);
-            Cancellation.throwIfCanceled(token);
-        }
+        // Note: stopping the per-notebook servers that use this environment is the view's
+        // responsibility (DeepnoteEnvironmentsView.deleteEnvironmentCommand) — it drives the
+        // stop loop from the notebook-environment mapper before this method runs.
 
         Cancellation.throwIfCanceled(token);
 

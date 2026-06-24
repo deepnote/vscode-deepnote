@@ -288,7 +288,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 'ensureKernelSelected should be called with the notebook'
             );
             assert.strictEqual(
-                ensureKernelSelectedWithConfigurationStub.firstCall.args[6],
+                ensureKernelSelectedWithConfigurationStub.firstCall.args[4],
                 instance(mockCancellationToken),
                 'ensureKernelSelected should be called with the cancellation token'
             );
@@ -410,9 +410,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
         test('should return true and call ensureKernelSelectedWithConfiguration when environment is found', async () => {
             // Arrange
-            const baseFileUri = mockNotebook.uri.with({ query: '', fragment: '' });
             const notebookKey = mockNotebook.uri.toString();
-            const projectKey = baseFileUri.fsPath;
             const environmentId = 'test-env-id';
             const mockEnvironment = createMockEnvironment(environmentId, 'Test Environment');
 
@@ -447,11 +445,9 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             const callArgs = ensureKernelSelectedStub.firstCall.args;
             assert.strictEqual(callArgs[0], mockNotebook, 'First arg should be notebook');
             assert.strictEqual(callArgs[1], mockEnvironment, 'Second arg should be environment');
-            assert.strictEqual(callArgs[2].toString(), baseFileUri.toString(), 'Third arg should be baseFileUri');
-            assert.strictEqual(callArgs[3], notebookKey, 'Fourth arg should be notebookKey');
-            assert.strictEqual(callArgs[4], projectKey, 'Fifth arg should be projectKey');
-            assert.strictEqual(callArgs[5], mockProgress, 'Sixth arg should be progress');
-            assert.strictEqual(callArgs[6], instance(mockCancellationToken), 'Seventh arg should be token');
+            assert.strictEqual(callArgs[2], notebookKey, 'Third arg should be notebookKey');
+            assert.strictEqual(callArgs[3], mockProgress, 'Fourth arg should be progress');
+            assert.strictEqual(callArgs[4], instance(mockCancellationToken), 'Fifth arg should be token');
 
             verify(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).once();
             verify(mockEnvironmentManager.getEnvironment(environmentId)).once();

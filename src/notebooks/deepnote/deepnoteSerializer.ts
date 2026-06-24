@@ -1,5 +1,6 @@
 import type { DeepnoteBlock, DeepnoteFile, DeepnoteSnapshot } from '@deepnote/blocks';
 import { deserializeDeepnoteFile, isExecutableBlock, serializeDeepnoteSnapshot } from '@deepnote/blocks';
+import { computeSnapshotHash } from '@deepnote/convert';
 import { inject, injectable, optional } from 'inversify';
 import { workspace, type CancellationToken, type NotebookData, type NotebookSerializer } from 'vscode';
 
@@ -125,7 +126,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             if (this.snapshotService?.isSnapshotsEnabled()) {
                 logger.debug(`[Snapshot] Snapshots enabled, reading snapshot for project ${projectId}`);
                 try {
-                    const snapshotOutputs = await this.snapshotService.readSnapshot(projectId);
+                    const snapshotOutputs = await this.snapshotService.readSnapshot(projectId, selectedNotebook.id);
 
                     if (snapshotOutputs && snapshotOutputs.size > 0) {
                         logger.debug(`[Snapshot] Merging ${snapshotOutputs.size} block outputs from snapshot`);
@@ -286,10 +287,10 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
             logger.debug('SerializeNotebook: Cloned blocks, computing snapshotHash');
 
-            // Compute snapshot hash from all execution-affecting factors
-            (originalProject.metadata as { snapshotHash?: string }).snapshotHash = await this.computeSnapshotHash(
-                originalProject
-            );
+            // Compute snapshot hash from all execution-affecting factors. convert's computeSnapshotHash
+            // is synchronous; a one-time hash-value change vs the prior local impl is acceptable (the
+            // field is stripped on serialize and recomputed each save).
+            (originalProject.metadata as { snapshotHash?: string }).snapshotHash = computeSnapshotHash(originalProject);
 
             // Update modifiedAt conditionally based on snapshot mode
             if (this.snapshotService?.isSnapshotsEnabled()) {
@@ -416,41 +417,6 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
         } else {
             logger.debug('[Serializer] No environment metadata returned.');
         }
-    }
-
-    /**
-     * Computes a deterministic hash of all factors that affect notebook execution and outputs.
-     * Includes contentHashes from all blocks, environment hash, version, and integrations.
-     * Excludes temporal fields to ensure identical snapshots produce identical hashes.
-     */
-    private async computeSnapshotHash(project: DeepnoteFile): Promise<string> {
-        // Collect all block contentHashes (sorted for determinism)
-        const contentHashes: string[] = [];
-
-        for (const notebook of project.project.notebooks) {
-            for (const block of notebook.blocks ?? []) {
-                if (block.contentHash) {
-                    contentHashes.push(block.contentHash);
-                }
-            }
-        }
-
-        contentHashes.sort();
-
-        // Build deterministic hash input
-        const hashInput = {
-            contentHashes,
-            environmentHash: project.environment?.hash ?? null,
-            integrations: (project.project.integrations ?? [])
-                .map((i) => ({ id: i.id, name: i.name, type: i.type }))
-                .sort((a, b) => a.id.localeCompare(b.id)),
-            version: project.version
-        };
-
-        const hashData = JSON.stringify(hashInput);
-        const hash = await computeHash(hashData, 'SHA-256');
-
-        return `sha256:${hash}`;
     }
 
     /**

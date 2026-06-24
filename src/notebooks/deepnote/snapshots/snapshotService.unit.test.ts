@@ -1,10 +1,12 @@
+import * as fakeTimers from '@sinonjs/fake-timers';
 import { assert } from 'chai';
 import * as sinon from 'sinon';
-import { anything, instance, mock, when } from 'ts-mockito';
+import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { FileType, NotebookCellKind, Uri, WorkspaceConfiguration, WorkspaceFolder } from 'vscode';
 
 import type { DeepnoteBlock, DeepnoteFile, ExecutableBlock } from '@deepnote/blocks';
 
+import { NotebookCellExecutionState } from '../../../platform/notebooks/cellExecutionStateService';
 import { IEnvironmentCapture } from './environmentCapture.node';
 import { SnapshotService } from './snapshotService';
 import type { DeepnoteOutput } from '../../../platform/deepnote/deepnoteTypes';
@@ -105,7 +107,19 @@ suite('SnapshotService', () => {
 
             const result = serviceAny.buildSnapshotPath(projectUri, projectId, projectName, 'latest');
 
-            assert.include(result.fsPath, 'testproject');
+            // convert's slugifyProjectName collapses a run of special characters to a single hyphen.
+            assert.include(result.fsPath, 'test-project');
+        });
+
+        test('should embed the notebook id when provided', () => {
+            const projectUri = Uri.file('/path/to/my-project.deepnote');
+            const projectId = 'e132b172-b114-410e-8331-011517db664f';
+            const projectName = 'My Project';
+            const notebookId = 'notebook-1';
+
+            const result = serviceAny.buildSnapshotPath(projectUri, projectId, projectName, 'latest', notebookId);
+
+            assert.include(result.fsPath, `${projectId}_notebook-1_latest.snapshot.deepnote`);
         });
 
         test('should handle project names with multiple spaces', () => {
@@ -498,7 +512,7 @@ suite('SnapshotService', () => {
     });
 
     suite('readSnapshot', () => {
-        const projectId = 'test-project-id-123';
+        const projectId = 'e132b172-b114-410e-8331-011517db664f';
 
         test('should return undefined when no workspace folders exist', async () => {
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn(undefined);
@@ -524,7 +538,7 @@ suite('SnapshotService', () => {
             };
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
 
-            const snapshotUri = Uri.file('/workspace/snapshots/project_test-project-id-123_latest.snapshot.deepnote');
+            const snapshotUri = Uri.file(`/workspace/snapshots/project_${projectId}_latest.snapshot.deepnote`);
             when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything())).thenResolve([
                 snapshotUri
             ] as any);
@@ -534,7 +548,7 @@ version: '1.0.0'
 metadata:
   createdAt: '2025-01-01T00:00:00Z'
 project:
-  id: test-project-id-123
+  id: ${projectId}
   name: Test Project
   notebooks:
     - id: notebook-1
@@ -588,31 +602,24 @@ project:
             };
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
 
-            // First call for latest - returns empty
-            // Second call for timestamped - returns files
             const timestampedUri1 = Uri.file(
-                '/workspace/snapshots/project_test-project-id-123_2025-01-01T10-00-00.snapshot.deepnote'
+                `/workspace/snapshots/project_${projectId}_2025-01-01T10-00-00.snapshot.deepnote`
             );
             const timestampedUri2 = Uri.file(
-                '/workspace/snapshots/project_test-project-id-123_2025-01-02T10-00-00.snapshot.deepnote'
+                `/workspace/snapshots/project_${projectId}_2025-01-02T10-00-00.snapshot.deepnote`
             );
 
-            let callCount = 0;
-            when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything())).thenCall(() => {
-                callCount++;
-                if (callCount === 1) {
-                    return Promise.resolve([]);
-                }
-
-                return Promise.resolve([timestampedUri1, timestampedUri2]);
-            });
+            when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything())).thenResolve([
+                timestampedUri1,
+                timestampedUri2
+            ] as any);
 
             const snapshotYaml = `
 version: '1.0.0'
 metadata:
   createdAt: '2025-01-02T00:00:00Z'
 project:
-  id: test-project-id-123
+  id: ${projectId}
   name: Test Project
   notebooks:
     - id: notebook-1
@@ -637,7 +644,7 @@ project:
             assert.strictEqual(result!.size, 1);
         });
 
-        test('should return empty map when snapshot file read fails', async () => {
+        test('should return undefined when the only snapshot file read fails', async () => {
             const workspaceFolder: WorkspaceFolder = {
                 uri: Uri.file('/workspace'),
                 name: 'workspace',
@@ -645,7 +652,7 @@ project:
             };
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
 
-            const snapshotUri = Uri.file('/workspace/snapshots/project_test-project-id-123_latest.snapshot.deepnote');
+            const snapshotUri = Uri.file(`/workspace/snapshots/project_${projectId}_latest.snapshot.deepnote`);
             when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything())).thenResolve([
                 snapshotUri
             ] as any);
@@ -656,12 +663,12 @@ project:
 
             const result = await service.readSnapshot(projectId);
 
-            // parseSnapshotFile catches read errors and returns empty map
-            assert.isDefined(result);
-            assert.strictEqual(result!.size, 0);
+            // A corrupt/unreadable candidate is skipped during the safe-restore walk; with no other
+            // candidate the lookup resolves to undefined (the open-time merge becomes a no-op).
+            assert.isUndefined(result);
         });
 
-        test('should return empty map when snapshot has invalid structure', async () => {
+        test('should return undefined when the only snapshot candidate has no outputs', async () => {
             const workspaceFolder: WorkspaceFolder = {
                 uri: Uri.file('/workspace'),
                 name: 'workspace',
@@ -669,20 +676,384 @@ project:
             };
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
 
-            const snapshotUri = Uri.file('/workspace/snapshots/project_test-project-id-123_latest.snapshot.deepnote');
+            const snapshotUri = Uri.file(`/workspace/snapshots/project_${projectId}_latest.snapshot.deepnote`);
             when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything())).thenResolve([
                 snapshotUri
             ] as any);
 
-            const invalidYaml = 'not_an_object';
+            // A `latest` snapshot whose blocks carry no real outputs signals a save race and is
+            // skipped by the safe-restore walk.
+            const emptyOutputsYaml = `
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00Z'
+project:
+  id: ${projectId}
+  name: Test Project
+  notebooks:
+    - id: notebook-1
+      name: Notebook 1
+      blocks:
+        - id: block-1
+          blockGroup: group-1
+          type: code
+          sortingKey: 'a0'
+          content: print(1)
+          outputs: []
+`;
             const mockFs = mock<typeof import('vscode').workspace.fs>();
-            when(mockFs.readFile(anything())).thenResolve(new TextEncoder().encode(invalidYaml) as any);
+            when(mockFs.readFile(anything())).thenResolve(new TextEncoder().encode(emptyOutputsYaml) as any);
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
 
             const result = await service.readSnapshot(projectId);
 
-            assert.isDefined(result);
-            assert.strictEqual(result!.size, 0);
+            assert.isUndefined(result);
+        });
+    });
+
+    suite('readSnapshot backward-compatible ranking', () => {
+        // UUIDs are required: convert's (faithfully mocked) parseSnapshotFilename only matches a
+        // 36-char projectId AND a UUID-shaped notebook id, so non-UUID ids would never parse.
+        const projectId = 'e132b172-b114-410e-8331-011517db664f';
+        const notebookId = '11111111-2222-3333-4444-555555555555';
+        const otherNotebookId = '99999999-8888-7777-6666-555555555555';
+
+        const workspaceFolder: WorkspaceFolder = {
+            uri: Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0
+        };
+
+        /** A snapshot whose single block carries one stream output tagged with `marker`. */
+        function snapshotYamlWithOutput(marker: string): string {
+            return `
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00Z'
+project:
+  id: ${projectId}
+  name: Test Project
+  notebooks:
+    - id: notebook-1
+      name: Notebook 1
+      blocks:
+        - id: block-1
+          blockGroup: group-1
+          type: code
+          sortingKey: 'a0'
+          content: print(1)
+          outputs:
+            - output_type: stream
+              name: stdout
+              text: '${marker}'
+`;
+        }
+
+        /**
+         * Stub findFiles to return the given URIs and readFile to dispatch bytes per-URI by fsPath.
+         * ts-mockito's single-arg matcher returns one value for every call, so per-URI content must
+         * be dispatched explicitly — otherwise every candidate would read identical bytes and the
+         * "which file won" assertions would be meaningless.
+         */
+        function stubSnapshotFiles(filesByUri: Array<{ uri: Uri; yaml: string }>): void {
+            when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
+            when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything())).thenResolve(
+                filesByUri.map((f) => f.uri) as any
+            );
+
+            const byPath = new Map(filesByUri.map((f) => [f.uri.fsPath, f.yaml]));
+            const mockFs = mock<typeof import('vscode').workspace.fs>();
+            when(mockFs.readFile(anything())).thenCall((uri: Uri) => {
+                const yaml = byPath.get(uri.fsPath);
+                if (yaml === undefined) {
+                    return Promise.reject(new Error(`Unexpected readFile for ${uri.fsPath}`));
+                }
+
+                return Promise.resolve(new TextEncoder().encode(yaml));
+            });
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
+
+            return;
+        }
+
+        function markerOf(result: Map<string, DeepnoteOutput[]> | undefined): string | undefined {
+            const outputs = result?.get('block-1');
+            const first = outputs?.[0] as { text?: string } | undefined;
+
+            return first?.text;
+        }
+
+        test('still loads a legacy project-scoped snapshot when a notebookId is requested but only the legacy file exists (catches dropping the legacy fallback)', async () => {
+            const legacyUri = Uri.file(`/workspace/snapshots/test-project_${projectId}_latest.snapshot.deepnote`);
+            stubSnapshotFiles([{ uri: legacyUri, yaml: snapshotYamlWithOutput('from-legacy') }]);
+
+            const result = await service.readSnapshot(projectId, notebookId);
+
+            assert.strictEqual(markerOf(result), 'from-legacy');
+        });
+
+        test('prefers the notebook-scoped snapshot over a legacy one for the requested notebookId (catches ranking legacy ahead of the notebook-scoped match)', async () => {
+            const scopedUri = Uri.file(
+                `/workspace/snapshots/test-project_${projectId}_${notebookId}_latest.snapshot.deepnote`
+            );
+            const legacyUri = Uri.file(`/workspace/snapshots/test-project_${projectId}_latest.snapshot.deepnote`);
+
+            stubSnapshotFiles([
+                { uri: legacyUri, yaml: snapshotYamlWithOutput('from-legacy') },
+                { uri: scopedUri, yaml: snapshotYamlWithOutput('from-scoped') }
+            ]);
+
+            const result = await service.readSnapshot(projectId, notebookId);
+
+            assert.strictEqual(markerOf(result), 'from-scoped');
+        });
+
+        test('ignores a different notebook scoped snapshot and falls back to the legacy one (catches reading another notebook outputs into this notebook)', async () => {
+            const otherScopedUri = Uri.file(
+                `/workspace/snapshots/test-project_${projectId}_${otherNotebookId}_latest.snapshot.deepnote`
+            );
+            const legacyUri = Uri.file(`/workspace/snapshots/test-project_${projectId}_latest.snapshot.deepnote`);
+
+            stubSnapshotFiles([
+                { uri: otherScopedUri, yaml: snapshotYamlWithOutput('from-other-notebook') },
+                { uri: legacyUri, yaml: snapshotYamlWithOutput('from-legacy') }
+            ]);
+
+            const result = await service.readSnapshot(projectId, notebookId);
+
+            assert.strictEqual(markerOf(result), 'from-legacy');
+        });
+
+        test('never deletes or renames the legacy snapshot file while reading it (catches a destructive migration on open)', async () => {
+            const legacyUri = Uri.file(`/workspace/snapshots/test-project_${projectId}_latest.snapshot.deepnote`);
+
+            when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
+            when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything())).thenResolve([
+                legacyUri
+            ] as any);
+
+            const mockFs = mock<typeof import('vscode').workspace.fs>();
+            when(mockFs.readFile(anything())).thenResolve(
+                new TextEncoder().encode(snapshotYamlWithOutput('from-legacy')) as any
+            );
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
+
+            const result = await service.readSnapshot(projectId, notebookId);
+
+            // The read must succeed AND leave the file untouched: no delete/rename/write of the legacy.
+            assert.strictEqual(markerOf(result), 'from-legacy');
+            verify(mockFs.delete(anything())).never();
+            verify(mockFs.delete(anything(), anything())).never();
+            verify(mockFs.rename(anything(), anything())).never();
+            verify(mockFs.rename(anything(), anything(), anything())).never();
+            verify(mockFs.writeFile(anything(), anything())).never();
+        });
+    });
+
+    suite('readSnapshot safe restore', () => {
+        const projectId = 'e132b172-b114-410e-8331-011517db664f';
+
+        const workspaceFolder: WorkspaceFolder = {
+            uri: Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0
+        };
+
+        function snapshotYaml(blockContent: string, outputsYaml: string): string {
+            return `
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00Z'
+project:
+  id: ${projectId}
+  name: Test Project
+  notebooks:
+    - id: notebook-1
+      name: Notebook 1
+      blocks:
+        - id: block-1
+          blockGroup: group-1
+          type: code
+          sortingKey: 'a0'
+          content: ${blockContent}
+          outputs:${outputsYaml}
+`;
+        }
+
+        function stubFiles(filesByUri: Array<{ uri: Uri; yaml: string }>): void {
+            when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
+            when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything())).thenResolve(
+                filesByUri.map((f) => f.uri) as any
+            );
+
+            const byPath = new Map(filesByUri.map((f) => [f.uri.fsPath, f.yaml]));
+            const mockFs = mock<typeof import('vscode').workspace.fs>();
+            when(mockFs.readFile(anything())).thenCall((uri: Uri) => {
+                const yaml = byPath.get(uri.fsPath);
+                if (yaml === undefined) {
+                    return Promise.reject(new Error(`Unexpected readFile for ${uri.fsPath}`));
+                }
+
+                return Promise.resolve(new TextEncoder().encode(yaml));
+            });
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
+
+            return;
+        }
+
+        test('skips an empty-output latest and falls through to a timestamped candidate that has outputs (catches restoring a save-race empty latest)', async () => {
+            const latestUri = Uri.file(`/workspace/snapshots/test-project_${projectId}_latest.snapshot.deepnote`);
+            const timestampedUri = Uri.file(
+                `/workspace/snapshots/test-project_${projectId}_2025-01-02T10-00-00.snapshot.deepnote`
+            );
+
+            stubFiles([
+                // `latest` ranks first but has empty outputs (a save race) and must be skipped.
+                { uri: latestUri, yaml: snapshotYaml('print(1)', ' []') },
+                // The timestamped candidate has real outputs and must be the one returned.
+                {
+                    uri: timestampedUri,
+                    yaml: snapshotYaml(
+                        'print(1)',
+                        `\n            - output_type: stream\n              name: stdout\n              text: 'from-timestamped'`
+                    )
+                }
+            ]);
+
+            const result = await service.readSnapshot(projectId);
+
+            const first = result?.get('block-1')?.[0] as { text?: string } | undefined;
+            assert.strictEqual(first?.text, 'from-timestamped');
+        });
+
+        test('skips a corrupt/unparseable candidate and uses the next valid one (catches aborting the lookup on one bad file)', async () => {
+            // `latest` sorts first; make it unparseable so the walk must continue to the timestamped one.
+            const latestUri = Uri.file(`/workspace/snapshots/test-project_${projectId}_latest.snapshot.deepnote`);
+            const timestampedUri = Uri.file(
+                `/workspace/snapshots/test-project_${projectId}_2025-01-02T10-00-00.snapshot.deepnote`
+            );
+
+            stubFiles([
+                { uri: latestUri, yaml: 'this: is: not: valid: deepnote: [[[' },
+                {
+                    uri: timestampedUri,
+                    yaml: snapshotYaml(
+                        'print(1)',
+                        `\n            - output_type: stream\n              name: stdout\n              text: 'from-valid'`
+                    )
+                }
+            ]);
+
+            const result = await service.readSnapshot(projectId);
+
+            const first = result?.get('block-1')?.[0] as { text?: string } | undefined;
+            assert.strictEqual(first?.text, 'from-valid');
+        });
+    });
+
+    suite('deferred snapshot save timing', () => {
+        const notebookUri = 'file:///workspace/notebook.deepnote';
+        let clock: fakeTimers.InstalledClock;
+        let performSaveStub: sinon.SinonStub;
+
+        setup(() => {
+            // install() patches Date.now AND setTimeout/clearTimeout, both of which armSnapshotSave
+            // relies on (armedAt = Date.now(); the quiet/max-wait delays are real setTimeout calls).
+            clock = fakeTimers.install();
+
+            // Replace the flush so the only thing under test is *whether/when* it is invoked — never
+            // real file I/O. The arm timer reads this.performSnapshotSave at fire time, so stubbing
+            // the instance property is observed by the already-armed timer.
+            performSaveStub = sinon.stub(serviceAny, 'performSnapshotSave').resolves();
+        });
+
+        teardown(() => {
+            clock.uninstall();
+            performSaveStub.restore();
+        });
+
+        /** Drives the same "output/metadata changed" event the service listens to while a save is pending. */
+        function fireOutputChange(): void {
+            serviceAny.handleNotebookDocumentChange({
+                notebook: { uri: Uri.parse(notebookUri) },
+                cellChanges: [{ outputs: [] }],
+                contentChanges: [],
+                metadata: undefined
+            });
+        }
+
+        test('does NOT save immediately when execution completes — only after the quiet period elapses (catches writing a snapshot before outputs settle)', () => {
+            serviceAny.armSnapshotSave(notebookUri);
+
+            // Just before the quiet window closes: nothing flushed yet.
+            clock.tick(149);
+            assert.isFalse(performSaveStub.called, 'save must not flush before the quiet period elapses');
+
+            // Crossing the quiet window with no further changes flushes exactly once.
+            clock.tick(1);
+            assert.isTrue(performSaveStub.calledOnce, 'save must flush once the quiet period elapses');
+        });
+
+        test('re-arms (delays) the save when an output change arrives within the quiet window (catches flushing mid-output-stream)', () => {
+            serviceAny.armSnapshotSave(notebookUri);
+
+            clock.tick(100);
+            assert.isFalse(performSaveStub.called);
+
+            // An output change at t=100 resets the 150ms quiet window.
+            fireOutputChange();
+
+            // t=200: would have fired under the original arm (100+? ) but the re-arm pushed it out.
+            clock.tick(100);
+            assert.isFalse(performSaveStub.called, 'an in-window change must re-arm and delay the save');
+
+            // t=250: 150ms after the re-arm — now it flushes.
+            clock.tick(50);
+            assert.isTrue(performSaveStub.calledOnce, 'save flushes one quiet period after the last change');
+        });
+
+        test('forces a flush at the max-wait bound even under continuous output changes (catches an unbounded deferral starving the save)', () => {
+            serviceAny.armSnapshotSave(notebookUri);
+
+            // Hammer an output change every 100ms; each one would reset the 150ms quiet window, but the
+            // 2000ms max-wait measured from the first arm must force a flush regardless.
+            for (let elapsed = 0; elapsed < 2000; elapsed += 100) {
+                clock.tick(100);
+                fireOutputChange();
+            }
+
+            // By t=2000 the max-wait bound has forced exactly one flush despite the continuous churn.
+            assert.isTrue(performSaveStub.called, 'max-wait must force a flush under continuous changes');
+        });
+
+        test('cancels a pending save when a cell re-enters the executing state (catches writing a stale snapshot mid re-execution)', () => {
+            serviceAny.armSnapshotSave(notebookUri);
+
+            clock.tick(100);
+
+            // Drive the real cell-state handler: an Executing transition must cancel the armed save
+            // (otherwise a snapshot from the *previous* run would be written during the new run).
+            const cell = {
+                notebook: { uri: Uri.parse(notebookUri) },
+                metadata: { id: 'cell-1' }
+            };
+            serviceAny.handleCellExecutionStateChange(cell, NotebookCellExecutionState.Executing);
+
+            clock.tick(1000);
+            assert.isFalse(performSaveStub.called, 're-execution must cancel the pending deferred save');
+        });
+
+        test('cancels a pending save when the notebook is closed (catches a flush firing after the document is gone)', () => {
+            serviceAny.armSnapshotSave(notebookUri);
+
+            clock.tick(100);
+
+            // The close handler registered in activate() cancels the pending save via this primitive;
+            // once cancelled the timer must never flush even after the full quiet/max-wait window.
+            serviceAny.cancelPendingSnapshotSave(notebookUri);
+
+            clock.tick(2000);
+            assert.isFalse(performSaveStub.called, 'closing the notebook must cancel the pending deferred save');
         });
     });
 
@@ -1149,8 +1520,9 @@ project:
                 when(mockFs.copy(anything(), anything(), anything())).thenResolve();
                 when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
 
-                // Call onExecutionComplete (which should auto-detect Run All)
-                await testServiceAny.onExecutionComplete(notebookUri);
+                // onExecutionComplete arms a deferred (output-settled) save; invoke the flush body
+                // directly to assert the Run-All-vs-partial routing without waiting on the timer.
+                await testServiceAny.performSnapshotSave(notebookUri);
 
                 // ASSERT: createSnapshot should be called (full snapshot, not just latest)
                 assert.isTrue(

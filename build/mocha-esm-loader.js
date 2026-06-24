@@ -369,6 +369,8 @@ export async function load(url, context, nextLoad) {
             return {
                 format: 'module',
                 source: `
+                    import { createHash } from 'node:crypto';
+
                     export const convertIpynbFilesToDeepnoteFile = async () => {
                         // Mock implementation - does nothing in tests
                     };
@@ -438,6 +440,144 @@ export async function load(url, context, nextLoad) {
                             file: { ...file, project: { ...file.project, notebooks: [nb] } },
                             outputFilename: allocate(slugifyProjectName(nb.name))
                         }));
+                    };
+
+                    // --- Snapshot filename helpers (faithful to @deepnote/convert dist) ---
+
+                    const FILENAME_SAFE_NOTEBOOK_ID_CHAR = /[A-Za-z0-9_-]/;
+                    const utf8Encoder = new TextEncoder();
+                    const utf8Decoder = new TextDecoder();
+
+                    const sanitizeFilenameComponent = (value) => value.replace(/[^a-zA-Z0-9_-]/g, '_');
+
+                    export const encodeNotebookIdForFilename = (notebookId) => {
+                        let encoded = '';
+                        for (const char of notebookId) {
+                            if (FILENAME_SAFE_NOTEBOOK_ID_CHAR.test(char)) {
+                                encoded += char;
+                                continue;
+                            }
+                            for (const byte of utf8Encoder.encode(char)) {
+                                encoded += '%' + byte.toString(16).toUpperCase().padStart(2, '0');
+                            }
+                        }
+                        return encoded;
+                    };
+
+                    export const decodeNotebookIdFromFilename = (encoded) => {
+                        const bytes = [];
+                        let i = 0;
+                        while (i < encoded.length) {
+                            const hex = encoded.slice(i + 1, i + 3);
+                            if (encoded[i] === '%' && /^[0-9A-Fa-f]{2}$/.test(hex)) {
+                                bytes.push(Number.parseInt(hex, 16));
+                                i += 3;
+                            } else {
+                                bytes.push(encoded.charCodeAt(i));
+                                i += 1;
+                            }
+                        }
+                        return utf8Decoder.decode(new Uint8Array(bytes));
+                    };
+
+                    export const generateSnapshotFilename = (params) => {
+                        const { slug, projectId, notebookId, timestamp = 'latest' } = params;
+                        const safeSlug = sanitizeFilenameComponent(slug);
+                        const safeProjectId = sanitizeFilenameComponent(projectId);
+                        if (notebookId) {
+                            return safeSlug + '_' + safeProjectId + '_' + encodeNotebookIdForFilename(notebookId) + '_' + timestamp + '.snapshot.deepnote';
+                        }
+                        return safeSlug + '_' + safeProjectId + '_' + timestamp + '.snapshot.deepnote';
+                    };
+
+                    const SNAPSHOT_SINGLE_NOTEBOOK_FILENAME_PATTERN = new RegExp('^(.+)_([0-9a-f-]{36})_([0-9a-f]{32}|[0-9a-f-]{36}|[A-Za-z0-9%][A-Za-z0-9_%-]*)_(latest|[\\\\dT:-]+)\\\\.snapshot\\\\.deepnote$');
+                    const SNAPSHOT_MULTI_NOTEBOOK_FILENAME_PATTERN = new RegExp('^(.+)_([0-9a-f-]{36})_(latest|[\\\\dT:-]+)\\\\.snapshot\\\\.deepnote$');
+
+                    export const parseSnapshotFilename = (filename) => {
+                        const match = SNAPSHOT_SINGLE_NOTEBOOK_FILENAME_PATTERN.exec(filename);
+                        if (match) {
+                            return {
+                                slug: match[1],
+                                projectId: match[2],
+                                notebookId: decodeNotebookIdFromFilename(match[3]),
+                                timestamp: match[4]
+                            };
+                        }
+                        const legacy = SNAPSHOT_MULTI_NOTEBOOK_FILENAME_PATTERN.exec(filename);
+                        if (!legacy) {
+                            return null;
+                        }
+                        return {
+                            slug: legacy[1],
+                            projectId: legacy[2],
+                            timestamp: legacy[3]
+                        };
+                    };
+
+                    export const resolveSnapshotNotebookId = (file) => {
+                        const project = file?.project || {};
+                        const notebooks = project.notebooks || [];
+                        const initNotebookId = project.initNotebookId;
+                        if (notebooks.length === 1) {
+                            return notebooks[0].id;
+                        }
+                        if (notebooks.length === 2 && initNotebookId !== undefined) {
+                            const initNotebook = notebooks.find((nb) => nb.id === initNotebookId);
+                            const nonInit = notebooks.find((nb) => nb.id !== initNotebookId);
+                            if (initNotebook !== undefined && nonInit !== undefined) {
+                                return nonInit.id;
+                            }
+                        }
+                        return undefined;
+                    };
+
+                    // --- Snapshot output/hash helpers (faithful to @deepnote/convert dist) ---
+
+                    const EXECUTABLE_BLOCK_TYPES = new Set(['code', 'sql', 'chart', 'input', 'button']);
+                    const isExecutableBlockTypeMock = (type) =>
+                        EXECUTABLE_BLOCK_TYPES.has(type) || (typeof type === 'string' && type.startsWith('sql'));
+
+                    export const hasOutputs = (file) => {
+                        for (const notebook of file?.project?.notebooks || []) {
+                            for (const block of notebook.blocks || []) {
+                                if (!isExecutableBlockTypeMock(block.type)) continue;
+                                if (block.outputs && block.outputs.length > 0) return true;
+                            }
+                        }
+                        return false;
+                    };
+
+                    export const countBlocksWithOutputs = (file) => {
+                        let count = 0;
+                        for (const notebook of file?.project?.notebooks || []) {
+                            for (const block of notebook.blocks || []) {
+                                if (block.outputs && block.outputs.length > 0) count++;
+                            }
+                        }
+                        return count;
+                    };
+
+                    export const computeSnapshotHash = (file) => {
+                        const parts = [];
+                        parts.push('version:' + file.version);
+                        if (file.environment && file.environment.hash) {
+                            parts.push('env:' + file.environment.hash);
+                        }
+                        const sortedIntegrations = [...(file.project.integrations || [])].sort((a, b) =>
+                            a.id.localeCompare(b.id)
+                        );
+                        for (const integration of sortedIntegrations) {
+                            parts.push('integration:' + integration.id + ':' + integration.type);
+                        }
+                        for (const notebook of file.project.notebooks) {
+                            for (const block of notebook.blocks) {
+                                if (block.contentHash) {
+                                    parts.push('block:' + block.id + ':' + block.contentHash);
+                                }
+                            }
+                        }
+                        const combined = parts.join('\\n');
+                        return 'sha256:' + createHash('sha256').update(combined, 'utf-8').digest('hex');
                     };
                 `,
                 shortCircuit: true

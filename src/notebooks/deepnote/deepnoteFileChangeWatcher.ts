@@ -353,7 +353,8 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             return;
         }
 
-        const snapshotOutputs = await this.snapshotService.readSnapshot(projectId);
+        const notebookIdForSnapshot = notebook.metadata?.deepnoteNotebookId as string | undefined;
+        const snapshotOutputs = await this.snapshotService.readSnapshot(projectId, notebookIdForSnapshot);
         if (!snapshotOutputs || snapshotOutputs.size === 0) {
             return;
         }

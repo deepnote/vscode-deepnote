@@ -1185,7 +1185,7 @@ project:
 
             const serializerAny = serializer as any;
             const projectCopy = structuredClone(project);
-            const result = serializerAny.detectContentChanges(project, projectCopy);
+            const result = serializerAny.detectContentChanges(project, projectCopy, 'nb-1');
 
             assert.isFalse(result);
         });
@@ -1242,7 +1242,7 @@ project:
             };
 
             const serializerAny = serializer as any;
-            const result = serializerAny.detectContentChanges(newProject, originalProject);
+            const result = serializerAny.detectContentChanges(newProject, originalProject, 'nb-1');
 
             assert.isTrue(result);
         });
@@ -1299,7 +1299,7 @@ project:
             };
 
             const serializerAny = serializer as any;
-            const result = serializerAny.detectContentChanges(newProject, originalProject);
+            const result = serializerAny.detectContentChanges(newProject, originalProject, 'nb-1');
 
             assert.isTrue(result);
         });
@@ -1364,7 +1364,7 @@ project:
             };
 
             const serializerAny = serializer as any;
-            const result = serializerAny.detectContentChanges(newProject, originalProject);
+            const result = serializerAny.detectContentChanges(newProject, originalProject, 'nb-1');
 
             assert.isTrue(result);
         });
@@ -1422,7 +1422,7 @@ project:
             };
 
             const serializerAny = serializer as any;
-            const result = serializerAny.detectContentChanges(newProject, originalProject);
+            const result = serializerAny.detectContentChanges(newProject, originalProject, 'nb-1');
 
             assert.isFalse(result);
         });
@@ -1482,7 +1482,7 @@ project:
             };
 
             const serializerAny = serializer as any;
-            const result = serializerAny.detectContentChanges(newProject, originalProject);
+            const result = serializerAny.detectContentChanges(newProject, originalProject, 'nb-1');
 
             assert.isFalse(result);
         });
@@ -1533,7 +1533,7 @@ project:
                 const newProject = singleNotebookFile({ [field]: changed });
 
                 const serializerAny = serializer as any;
-                const result = serializerAny.detectContentChanges(newProject, originalProject);
+                const result = serializerAny.detectContentChanges(newProject, originalProject, 'nb-1');
 
                 assert.isTrue(result, `change to notebook-level field '${field}' should be detected`);
             });
@@ -1544,7 +1544,7 @@ project:
             const newProject = structuredClone(originalProject);
 
             const serializerAny = serializer as any;
-            const result = serializerAny.detectContentChanges(newProject, originalProject);
+            const result = serializerAny.detectContentChanges(newProject, originalProject, 'nb-1');
 
             assert.isFalse(result);
         });
@@ -1555,9 +1555,47 @@ project:
             newProject.project.notebooks[0].blocks[0].id = 'b1-renamed';
 
             const serializerAny = serializer as any;
-            const result = serializerAny.detectContentChanges(newProject, originalProject);
+            const result = serializerAny.detectContentChanges(newProject, originalProject, 'nb-1');
 
             assert.isTrue(result);
+        });
+
+        test('matches the edited notebook by id, not the [0] slot (legacy [init, main] file)', () => {
+            // Legacy shape: init at index 0, the edited/rendered notebook (main) at index 1. Comparing
+            // a fixed [0] slot would compare the (unchanged) init and miss real edits to main.
+            const makeFile = (mainContent: string): DeepnoteFile => ({
+                version: '1.0.0',
+                metadata: { createdAt: '2023-01-01T00:00:00Z' },
+                project: {
+                    id: 'project-1',
+                    name: 'Test',
+                    initNotebookId: 'init-1',
+                    notebooks: [
+                        { id: 'init-1', name: 'Init', blocks: [] },
+                        {
+                            id: 'main-1',
+                            name: 'Main',
+                            blocks: [
+                                {
+                                    id: 'b1',
+                                    type: 'code',
+                                    sortingKey: 'a0',
+                                    blockGroup: '1',
+                                    metadata: {},
+                                    content: mainContent
+                                }
+                            ]
+                        }
+                    ]
+                }
+            });
+
+            const serializerAny = serializer as any;
+
+            // Editing main (index 1) IS detected when matching by id; the old [0] comparison missed it.
+            assert.isTrue(serializerAny.detectContentChanges(makeFile('print(2)'), makeFile('print(1)'), 'main-1'));
+            // Identical main → no content change.
+            assert.isFalse(serializerAny.detectContentChanges(makeFile('print(1)'), makeFile('print(1)'), 'main-1'));
         });
     });
 

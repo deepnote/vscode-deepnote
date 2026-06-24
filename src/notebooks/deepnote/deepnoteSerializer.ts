@@ -295,7 +295,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             // Update modifiedAt conditionally based on snapshot mode
             if (this.snapshotService?.isSnapshotsEnabled()) {
                 // In snapshot mode, only update modifiedAt if content actually changed
-                const hasContentChanges = this.detectContentChanges(originalProject, storedProject);
+                const hasContentChanges = this.detectContentChanges(originalProject, storedProject, notebookId);
 
                 if (hasContentChanges) {
                     originalProject.metadata.modifiedAt = new Date().toISOString();
@@ -428,9 +428,12 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
      * @param originalProject The stored original project
      * @returns true if content has changed, false otherwise
      */
-    private detectContentChanges(newProject: DeepnoteFile, originalProject: DeepnoteFile): boolean {
-        const newNotebook = newProject.project.notebooks[0];
-        const originalNotebook = originalProject.project.notebooks[0];
+    private detectContentChanges(newProject: DeepnoteFile, originalProject: DeepnoteFile, notebookId: string): boolean {
+        // Match the edited notebook by id rather than a fixed [0] slot. For a single-notebook file
+        // these coincide, but for a legacy [init, main] file the rendered/edited notebook is not at
+        // index 0, so comparing [0] (the init) would miss real edits and wrongly preserve modifiedAt.
+        const newNotebook = newProject.project.notebooks.find((nb) => nb.id === notebookId);
+        const originalNotebook = originalProject.project.notebooks.find((nb) => nb.id === notebookId);
 
         if (!newNotebook || !originalNotebook) {
             return newNotebook !== originalNotebook;

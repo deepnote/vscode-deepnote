@@ -20,6 +20,7 @@ import { ILogger } from '../../platform/logging/types';
 import type { IDeepnoteProjectMetadataPropagator } from '../../platform/deepnote/types';
 import { buildSingleNotebookFile, buildSiblingNotebookFileUri } from './deepnoteNotebookFileFactory';
 import { deepnoteFileExists } from './deepnoteSiblingFileAllocator';
+import { isSnapshotFile } from './snapshots/snapshotFiles';
 
 /**
  * Manages the Deepnote explorer tree view and related commands.
@@ -463,6 +464,13 @@ export class DeepnoteExplorerView {
             }
 
             for (const fileUri of files) {
+                // Skip snapshot sidecars (`*.snapshot.deepnote`): they are full project clones, so
+                // their stale notebook names would otherwise pollute the uniqueness set. The tree
+                // provider and metadata propagator filter them the same way.
+                if (isSnapshotFile(fileUri)) {
+                    continue;
+                }
+
                 try {
                     const projectData = await readDeepnoteProjectFile(fileUri);
 

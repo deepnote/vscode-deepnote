@@ -1488,7 +1488,8 @@ project:
                 };
 
                 const mockNotebookManager = {
-                    getAnyProjectEntry: sinon.stub().returns(originalProject)
+                    getAnyProjectEntry: sinon.stub().returns(originalProject),
+                    getOriginalProject: sinon.stub().returns(originalProject)
                 };
 
                 // Create a new service with the mock notebook manager
@@ -1532,6 +1533,18 @@ project:
                 assert.isFalse(
                     updateLatestSnapshotSpy.called,
                     'updateLatestSnapshot should NOT be called when all code cells are executed'
+                );
+
+                // F1 regression: the save path must resolve the project via the EXACT
+                // (projectId, notebookId) lookup, not the project-only getAnyProjectEntry (which can
+                // return a different open sibling and silently skip the snapshot write).
+                assert.isTrue(
+                    mockNotebookManager.getOriginalProject.calledWith(projectId, notebookId),
+                    'performSnapshotSave must fetch via getOriginalProject(projectId, notebookId)'
+                );
+                assert.isFalse(
+                    mockNotebookManager.getAnyProjectEntry.called,
+                    'performSnapshotSave must NOT use the project-only getAnyProjectEntry'
                 );
             });
         });

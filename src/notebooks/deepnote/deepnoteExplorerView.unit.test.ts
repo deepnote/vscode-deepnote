@@ -3096,5 +3096,41 @@ suite('DeepnoteExplorerView - Sibling-file command semantics', () => {
             assert.isFalse(names.has('Alpha'), 'the excluded current name must not be in the set');
             assert.strictEqual(names.size, 0);
         });
+
+        test('excludes snapshot sidecar files so stale snapshot notebook names cannot pollute the set', async () => {
+            const projectId = 'group-project';
+            const pathA = '/workspace/a.deepnote';
+            // A snapshot sidecar is a full project clone (same project.id) ending in `.snapshot.deepnote`,
+            // carrying a notebook name that may be stale (e.g. a since-renamed/deleted notebook).
+            const snapshotPath = '/workspace/snapshots/test_group-project_latest.snapshot.deepnote';
+            const fileA = singleNotebookFile(projectId, 'nb-a', 'Alpha');
+            const snapshotFile = singleNotebookFile(projectId, 'nb-stale', 'StaleSnapshotName');
+
+            when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([
+                { uri: Uri.file('/workspace') } as any
+            ]);
+            when(mockedVSCodeNamespaces.workspace.findFiles(anything())).thenReturn(
+                Promise.resolve([Uri.file(pathA), Uri.file(snapshotPath)])
+            );
+
+            const byPath: Record<string, DeepnoteFile> = {
+                [Uri.file(pathA).fsPath]: fileA,
+                [Uri.file(snapshotPath).fsPath]: snapshotFile
+            };
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenCall((uri: Uri) =>
+                Promise.resolve(Buffer.from(serializeDeepnoteFile(byPath[uri.fsPath])))
+            );
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            const names: Set<string> = await (explorerView as any).collectNotebookNamesForProject(projectId);
+
+            assert.isTrue(names.has('Alpha'), 'the real sibling name must be collected');
+            assert.isFalse(
+                names.has('StaleSnapshotName'),
+                'names from snapshot sidecars must be excluded from the uniqueness set'
+            );
+            assert.deepStrictEqual([...names].sort(), ['Alpha']);
+        });
     });
 });

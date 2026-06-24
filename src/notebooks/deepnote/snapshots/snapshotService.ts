@@ -918,10 +918,22 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             return;
         }
 
-        const originalProject = this.notebookManager?.getAnyProjectEntry(projectId);
+        const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
+
+        if (!notebookId) {
+            logger.warn(`[Snapshot] No notebook ID in notebook metadata`);
+
+            return;
+        }
+
+        // Fetch the cached project with an exact (projectId, notebookId) lookup. Sibling files share a
+        // project.id, so a project-only lookup (getAnyProjectEntry) can return a different sibling's
+        // project whose notebooks do not contain this notebookId — which would silently skip the
+        // snapshot write for every sibling but the first one cached.
+        const originalProject = this.notebookManager?.getOriginalProject(projectId, notebookId);
 
         if (!originalProject) {
-            logger.warn(`[Snapshot] No original project found for ${projectId}`);
+            logger.warn(`[Snapshot] No original project found for ${projectId}/${notebookId}`);
 
             return;
         }
@@ -934,14 +946,6 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             return;
         }
 
-        const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
-
-        if (!notebookId) {
-            logger.warn(`[Snapshot] No notebook ID in notebook metadata`);
-
-            return;
-        }
-
         const deepnoteNotebook = originalProject.project.notebooks?.find((nb) => nb.id === notebookId);
 
         if (!deepnoteNotebook) {
@@ -950,66 +954,72 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             return;
         }
 
-        const cellData = notebook.getCells().map((cell) => ({
-            kind: cell.kind,
-            value: cell.document.getText(),
-            languageId: cell.document.languageId,
-            metadata: cell.metadata,
-            outputs: [...cell.outputs]
-        }));
-        const blocks = this.converter.convertCellsToBlocks(cellData);
+        try {
+            const cellData = notebook.getCells().map((cell) => ({
+                kind: cell.kind,
+                value: cell.document.getText(),
+                languageId: cell.document.languageId,
+                metadata: cell.metadata,
+                outputs: [...cell.outputs]
+            }));
+            const blocks = this.converter.convertCellsToBlocks(cellData);
 
-        const snapshotProject = structuredClone(originalProject) as DeepnoteFile;
-        const snapshotNotebook = snapshotProject.project.notebooks?.find((nb) => nb.id === notebookId);
+            const snapshotProject = structuredClone(originalProject) as DeepnoteFile;
+            const snapshotNotebook = snapshotProject.project.notebooks?.find((nb) => nb.id === notebookId);
 
-        if (snapshotNotebook) {
-            snapshotNotebook.blocks = blocks as DeepnoteBlock[];
-        }
-
-        // The snapshot filename is scoped by the file's snapshot notebook id (single-notebook file →
-        // its one notebook; [init, main] → the main notebook), falling back to the rendered
-        // notebook's metadata id for any unexpected multi-notebook shape.
-        const snapshotNotebookId = resolveSnapshotNotebookId(snapshotProject) ?? notebookId;
-
-        // Detect "Run All" by checking if all code cells in the notebook were executed
-        const state = this.executionStates.get(notebookUri);
-        const totalCodeCells = notebook.getCells().filter((cell) => cell.kind === NotebookCellKind.Code).length;
-        const isRunAll = state && state.blocksExecuted === totalCodeCells;
-
-        if (isRunAll) {
-            logger.debug(`[Snapshot] Creating full snapshot (Run All mode)`);
-
-            const snapshotUri = await this.createSnapshot(
-                projectUri,
-                projectId,
-                originalProject.project.name,
-                snapshotProject,
-                snapshotNotebookId,
-                notebookUri
-            );
-
-            if (snapshotUri) {
-                logger.info(`[Snapshot] Created full snapshot: ${snapshotUri.toString()}`);
+            if (snapshotNotebook) {
+                snapshotNotebook.blocks = blocks as DeepnoteBlock[];
             }
-        } else {
-            logger.debug(`[Snapshot] Updating latest snapshot only (partial run)`);
 
-            const snapshotUri = await this.updateLatestSnapshot(
-                projectUri,
-                projectId,
-                originalProject.project.name,
-                snapshotProject,
-                snapshotNotebookId,
-                notebookUri
-            );
+            // The snapshot filename is scoped by the file's snapshot notebook id (single-notebook file →
+            // its one notebook; [init, main] → the main notebook), falling back to the rendered
+            // notebook's metadata id for any unexpected multi-notebook shape.
+            const snapshotNotebookId = resolveSnapshotNotebookId(snapshotProject) ?? notebookId;
 
-            if (snapshotUri) {
-                logger.info(`[Snapshot] Updated latest snapshot: ${snapshotUri.toString()}`);
+            // Detect "Run All" by checking if all code cells in the notebook were executed
+            const state = this.executionStates.get(notebookUri);
+            const totalCodeCells = notebook.getCells().filter((cell) => cell.kind === NotebookCellKind.Code).length;
+            const isRunAll = state && state.blocksExecuted === totalCodeCells;
+
+            if (isRunAll) {
+                logger.debug(`[Snapshot] Creating full snapshot (Run All mode)`);
+
+                const snapshotUri = await this.createSnapshot(
+                    projectUri,
+                    projectId,
+                    originalProject.project.name,
+                    snapshotProject,
+                    snapshotNotebookId,
+                    notebookUri
+                );
+
+                if (snapshotUri) {
+                    logger.info(`[Snapshot] Created full snapshot: ${snapshotUri.toString()}`);
+                }
+            } else {
+                logger.debug(`[Snapshot] Updating latest snapshot only (partial run)`);
+
+                const snapshotUri = await this.updateLatestSnapshot(
+                    projectUri,
+                    projectId,
+                    originalProject.project.name,
+                    snapshotProject,
+                    snapshotNotebookId,
+                    notebookUri
+                );
+
+                if (snapshotUri) {
+                    logger.info(`[Snapshot] Updated latest snapshot: ${snapshotUri.toString()}`);
+                }
             }
+        } catch (error) {
+            // Deferred fire-and-forget save: log and swallow so a snapshot build/write failure never
+            // becomes an unhandled rejection.
+            logger.error(`[Snapshot] Failed to save deferred snapshot for ${notebookUri}`, error);
+        } finally {
+            // Clear execution state so the next run starts fresh (even if the save above failed).
+            this.clearExecutionState(notebookUri);
         }
-
-        // Clear execution state so the next run starts fresh
-        this.clearExecutionState(notebookUri);
     }
 
     /**

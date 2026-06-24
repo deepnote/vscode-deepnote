@@ -1,18 +1,38 @@
+import type { DeepnoteFile } from '@deepnote/blocks';
+import { isValidSiblingInitCandidate } from '@deepnote/convert';
 import { inject, injectable } from 'inversify';
 import {
     type NotebookDocument,
     ProgressLocation,
+    Uri,
     window,
+    workspace,
     CancellationTokenSource,
     type CancellationToken,
     l10n
 } from 'vscode';
 
 import { logger } from '../../platform/logging';
-import { IDeepnoteNotebookManager } from '../types';
-import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
-import { IKernelProvider } from '../../kernels/types';
+import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
+import { DEEPNOTE_NOTEBOOK_TYPE } from '../../kernels/deepnote/types';
+import { IKernel, IKernelProvider } from '../../kernels/types';
+import { IExtensionSyncActivationService } from '../../platform/activation/types';
+import { IDisposableRegistry } from '../../platform/common/types';
 import { getDisplayPath } from '../../platform/common/platform/fs-paths.node';
+import { readDeepnoteProjectFile } from '../../platform/deepnote/deepnoteProjectFileReader';
+import { resolveProjectIdForNotebook } from '../../platform/deepnote/deepnoteProjectIdResolver';
+import { IDeepnoteNotebookManager } from '../types';
+
+const DEEPNOTE_FILE_EXTENSION = '.deepnote';
+const SNAPSHOT_FILE_SUFFIX = '.snapshot.deepnote';
+
+// How long to keep the "initialization complete" message visible before resolving.
+const INIT_COMPLETE_DISPLAY_DELAY_MS = 1000;
+
+// Progress weighting for the init run (sums to 100 across start + per-block + finish).
+const INIT_PROGRESS_START_INCREMENT = 5;
+const INIT_PROGRESS_BLOCKS_INCREMENT = 90;
+const INIT_PROGRESS_FINISH_INCREMENT = 5;
 
 const DEEPNOTE_CLOUD_INIT_NOTEBOOK_BLOCK_CONTENT = `%%bash
 # If your project has a 'requirements.txt' file, we'll install it here.
@@ -31,100 +51,155 @@ else:
     print("There's no requirements.txt, so nothing to install.")`.trim();
 
 /**
- * Service responsible for running init notebooks before the main notebook starts.
- * Init notebooks typically contain setup code like pip installs.
+ * Service responsible for running a project's init notebook in a kernel.
+ *
+ * The init notebook lives in its own sibling `.deepnote` file (referenced by the main
+ * file's `project.initNotebookId`). Its setup blocks (typically pip installs) are run in
+ * the notebook's kernel on kernel start, and re-run after a kernel restart (a restart loses
+ * all in-kernel state). "Has the init already run" is tracked per kernel — not per project
+ * or per notebook URI — so the same-environment restart case re-initializes correctly.
  */
 @injectable()
-export class DeepnoteInitNotebookRunner {
+export class DeepnoteInitNotebookRunner implements IDeepnoteInitNotebookRunner, IExtensionSyncActivationService {
+    // Tracks kernels that have already run init in their current lifetime. A fresh kernel is
+    // not in the set (init runs, then it is added); a restart re-runs unconditionally and
+    // re-marks; on kernel dispose the entry is collected automatically.
+    private readonly initRunByKernel = new WeakSet<IKernel>();
+
     constructor(
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
-        @inject(IKernelProvider) private readonly kernelProvider: IKernelProvider
+        @inject(IKernelProvider) private readonly kernelProvider: IKernelProvider,
+        @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry
     ) {}
 
+    public activate(): void {
+        // A fresh kernel start runs init once (gated by the WeakSet); an in-place restart
+        // fires onDidRestartKernel (not onDidStartKernel) and must always re-run init.
+        this.kernelProvider.onDidStartKernel(this.onDidStartKernel, this, this.disposables);
+        this.kernelProvider.onDidRestartKernel(this.onDidRestartKernel, this, this.disposables);
+    }
+
+    private async onDidStartKernel(kernel: IKernel): Promise<void> {
+        if (this.initRunByKernel.has(kernel)) {
+            return;
+        }
+
+        await this.runInitForKernel(kernel);
+
+        // Mark this kernel as initialized even when no valid sibling init was found — that
+        // only affects THIS kernel; a new kernel re-scans, so a later-added/fixed sibling is
+        // still picked up.
+        this.initRunByKernel.add(kernel);
+    }
+
+    private async onDidRestartKernel(kernel: IKernel): Promise<void> {
+        // A restart loses all in-kernel state, so re-run init unconditionally and re-mark.
+        await this.runInitForKernel(kernel);
+        this.initRunByKernel.add(kernel);
+    }
+
     /**
-     * Runs the init notebook if it exists and hasn't been run yet for this project.
-     * This should be called after the kernel is started but before user code executes.
-     * @param notebook The notebook document
-     * @param projectId The Deepnote project ID
-     * @param token Optional cancellation token to stop execution if notebook is closed
+     * Runs the init notebook for a kernel, sourcing it from the project's sibling init file.
+     * Never throws — failures are logged so the user can continue.
      */
-    async runInitNotebookIfNeeded(
-        projectId: string,
-        notebook: NotebookDocument,
-        token?: CancellationToken
-    ): Promise<void> {
+    private async runInitForKernel(kernel: IKernel): Promise<void> {
+        const notebook = kernel.notebook;
+
+        // Only Deepnote notebooks have init notebooks.
+        if (notebook.notebookType !== DEEPNOTE_NOTEBOOK_TYPE) {
+            return;
+        }
+
         try {
-            // Check for cancellation before starting
-            if (token?.isCancellationRequested) {
-                logger.info(`Init notebook cancelled before start for project ${projectId}`);
-                return;
-            }
-
-            // Check if init notebook has already run for this project
-            if (this.notebookManager.hasInitNotebookBeenRun(projectId)) {
-                logger.info(`Init notebook already ran for project ${projectId}, skipping`);
-                return;
-            }
-
-            if (token?.isCancellationRequested) {
-                logger.info(`Init notebook cancelled for project ${projectId}`);
-                return;
-            }
-
-            // Get the project data
-            const project = this.notebookManager.getAnyProjectEntry(projectId) as DeepnoteProject | undefined;
-            if (!project) {
-                logger.warn(`Project ${projectId} not found, cannot run init notebook`);
-                return;
-            }
-
-            // Check if project has an init notebook ID
-            const initNotebookId = (project.project as { initNotebookId?: string }).initNotebookId;
-            if (!initNotebookId) {
-                logger.info(`No init notebook configured for project ${projectId}`);
-                // Mark as run so we don't check again
-                this.notebookManager.markInitNotebookAsRun(projectId);
-                return;
-            }
-
-            // Find the init notebook
-            const initNotebook = project.project.notebooks.find((nb) => nb.id === initNotebookId);
-            if (!initNotebook) {
-                logger.warn(
-                    `Init notebook ${initNotebookId} not found in project ${projectId}, skipping initialization`
+            const projectId = await resolveProjectIdForNotebook(notebook);
+            if (!projectId) {
+                logger.info(
+                    `No Deepnote project id resolved for ${getDisplayPath(notebook.uri)}, skipping init notebook`
                 );
-                this.notebookManager.markInitNotebookAsRun(projectId);
                 return;
             }
 
-            if (token?.isCancellationRequested) {
-                logger.info(`Init notebook cancelled before execution for project ${projectId}`);
+            const initNotebookId = this.notebookManager.getAnyProjectEntry(projectId)?.project.initNotebookId;
+            if (!initNotebookId) {
+                logger.info(`No init notebook configured for project ${projectId}, skipping init`);
                 return;
             }
 
-            logger.info(`Running init notebook "${initNotebook.name}" (${initNotebookId}) for project ${projectId}`);
+            const initNotebook = await this.findSiblingInitNotebook(notebook, projectId, initNotebookId);
+            if (!initNotebook) {
+                // No valid sibling init found — log and skip. Do NOT permanently mark init as
+                // run beyond this kernel, so a later-added/fixed sibling is picked up next time.
+                logger.warn(
+                    `No valid sibling init file found for project ${projectId} (initNotebookId ${initNotebookId}), skipping init`
+                );
+                return;
+            }
 
-            // Execute the init notebook with progress
-            const success = await this.executeInitNotebook(notebook, initNotebook, token);
+            logger.info(
+                `Running init notebook "${
+                    initNotebook.name
+                }" (${initNotebookId}) for project ${projectId} in kernel for ${getDisplayPath(notebook.uri)}`
+            );
+
+            const success = await this.executeInitNotebook(notebook, initNotebook);
 
             if (success) {
-                // Mark as run so we don't run it again
-                this.notebookManager.markInitNotebookAsRun(projectId);
                 logger.info(`Init notebook completed successfully for project ${projectId}`);
             } else {
                 logger.warn(`Init notebook did not execute for project ${projectId} - kernel not available`);
             }
         } catch (error) {
-            // Check if this is a cancellation error
-            if (error instanceof Error && error.message === 'Cancelled') {
-                logger.info(`Init notebook cancelled for project ${projectId}`);
-                return;
-            }
-            // Log error but don't throw - we want to let user continue anyway
-            logger.error(`Error running init notebook for project ${projectId}:`, error);
-            // Still mark as run to avoid retrying on every notebook open
-            this.notebookManager.markInitNotebookAsRun(projectId);
+            // Log error but don't throw - we want to let the user continue anyway.
+            logger.error(`Error running init notebook for ${getDisplayPath(notebook.uri)}:`, error);
         }
+    }
+
+    /**
+     * Finds the init notebook in its sibling `.deepnote` file.
+     *
+     * Scans the directory containing `notebook.uri` for `.deepnote` files (ignoring snapshot
+     * files), parses each, and returns the single notebook of the first file that is a valid
+     * init source for this project (same `project.id`, exactly one notebook whose `id`
+     * matches `initNotebookId`).
+     *
+     * @returns The init notebook, or undefined when no valid sibling init is found.
+     */
+    private async findSiblingInitNotebook(
+        notebook: NotebookDocument,
+        projectId: string,
+        initNotebookId: string
+    ): Promise<DeepnoteNotebook | undefined> {
+        const dirUri = Uri.joinPath(notebook.uri, '..');
+
+        let entries: [string, number][];
+        try {
+            entries = await workspace.fs.readDirectory(dirUri);
+        } catch (error) {
+            logger.warn(`Failed to read directory ${getDisplayPath(dirUri)} while looking for init notebook:`, error);
+            return undefined;
+        }
+
+        for (const [name] of entries) {
+            if (!name.endsWith(DEEPNOTE_FILE_EXTENSION) || name.endsWith(SNAPSHOT_FILE_SUFFIX)) {
+                continue;
+            }
+
+            const candidateUri = Uri.joinPath(dirUri, name);
+            try {
+                const candidate: DeepnoteFile = await readDeepnoteProjectFile(candidateUri);
+                const validation = isValidSiblingInitCandidate(candidate, projectId, initNotebookId);
+
+                if (validation.valid) {
+                    return candidate.project.notebooks[0];
+                }
+            } catch (error) {
+                // Per-iteration error handling: a single unreadable/invalid file must not
+                // stop the scan of the rest.
+                logger.warn(`Failed to read candidate init file ${getDisplayPath(candidateUri)}:`, error);
+            }
+        }
+
+        return undefined;
     }
 
     /**
@@ -211,13 +286,13 @@ export class DeepnoteInitNotebookRunner {
             progress(`Running init notebook "${initNotebook.name}"...`, 0);
 
             // Get the kernel for this notebook
-            // Note: This should always exist because onKernelStarted already fired
+            // Note: This should always exist because the kernel start/restart event already fired
             const kernel = this.kernelProvider.get(notebook);
             if (!kernel) {
                 logger.error(
                     `No kernel found for ${getDisplayPath(
                         notebook.uri
-                    )} even after onDidStartKernel fired - this should not happen`
+                    )} even after the kernel start/restart event fired - this should not happen`
                 );
                 return false;
             }
@@ -237,7 +312,7 @@ export class DeepnoteInitNotebookRunner {
                 `Preparing to execute ${codeBlocks.length} initialization ${
                     codeBlocks.length === 1 ? 'block' : 'blocks'
                 }...`,
-                5
+                INIT_PROGRESS_START_INCREMENT
             );
 
             // Check for cancellation
@@ -263,7 +338,7 @@ export class DeepnoteInitNotebookRunner {
                 // Show more detailed progress with percentage
                 progress(
                     `[${percentComplete}%] Executing block ${i + 1} of ${codeBlocks.length}...`,
-                    90 / codeBlocks.length // Reserve 5% for start, 5% for finish
+                    INIT_PROGRESS_BLOCKS_INCREMENT / codeBlocks.length
                 );
 
                 logger.info(`Executing init notebook block ${i + 1}/${codeBlocks.length}`);
@@ -303,10 +378,10 @@ export class DeepnoteInitNotebookRunner {
             }
 
             logger.info(`Completed executing all init notebook blocks`);
-            progress(`✓ Initialization complete! Environment ready.`, 5);
+            progress(`✓ Initialization complete! Environment ready.`, INIT_PROGRESS_FINISH_INCREMENT);
 
             // Give user a moment to see the completion message
-            await new Promise((resolve) => setTimeout(resolve, 1000));
+            await new Promise((resolve) => setTimeout(resolve, INIT_COMPLETE_DISPLAY_DELAY_MS));
 
             return true;
         } catch (error) {
@@ -318,5 +393,5 @@ export class DeepnoteInitNotebookRunner {
 
 export const IDeepnoteInitNotebookRunner = Symbol('IDeepnoteInitNotebookRunner');
 export interface IDeepnoteInitNotebookRunner {
-    runInitNotebookIfNeeded(projectId: string, notebook: NotebookDocument, token?: CancellationToken): Promise<void>;
+    activate(): void;
 }

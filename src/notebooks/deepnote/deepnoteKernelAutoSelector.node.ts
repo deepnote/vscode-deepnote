@@ -7,7 +7,6 @@ import { inject, injectable, named, optional } from 'inversify';
 import {
     CancellationToken,
     CancellationTokenSource,
-    Disposable,
     NotebookController,
     NotebookControllerAffinity,
     NotebookDocument,
@@ -42,7 +41,7 @@ import {
     IJupyterRequestCreator,
     JupyterServerProviderHandle
 } from '../../kernels/jupyter/types';
-import { IJupyterKernelSpec, IKernel, IKernelProvider } from '../../kernels/types';
+import { IJupyterKernelSpec, IKernelProvider } from '../../kernels/types';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IPythonExtensionChecker } from '../../platform/api/types';
 import { Cancellation, isCancellationError } from '../../platform/common/cancellation';
@@ -56,7 +55,6 @@ import { logger } from '../../platform/logging';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { IControllerRegistration, IVSCodeNotebookController } from '../controllers/types';
 import { IDeepnoteNotebookManager } from '../types';
-import { IDeepnoteInitNotebookRunner } from './deepnoteInitNotebookRunner.node';
 import { computeRequirementsHash } from './deepnoteProjectUtils';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
 
@@ -79,11 +77,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     private readonly placeholderControllers = new Map<string, NotebookController>();
     // Track server handles per NOTEBOOK (keyed by notebook.uri.toString()) - one server per notebook
     private readonly projectServerHandles = new Map<string, string>();
-    // Track projects where we need to run init notebook (set during controller setup)
-    private readonly projectsPendingInitNotebook = new Map<
-        string,
-        { notebook: NotebookDocument; project: DeepnoteFile }
-    >();
 
     constructor(
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
@@ -96,7 +89,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         @optional()
         private readonly requestAgentCreator: IJupyterRequestAgentCreator | undefined,
         @inject(IConfigurationService) private readonly configService: IConfigurationService,
-        @inject(IDeepnoteInitNotebookRunner) private readonly initNotebookRunner: IDeepnoteInitNotebookRunner,
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
         @inject(IKernelProvider) private readonly kernelProvider: IKernelProvider,
         @inject(IDeepnoteRequirementsHelper) private readonly requirementsHelper: IDeepnoteRequirementsHelper,
@@ -122,10 +114,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             this,
             this.disposables
         );
-
-        // Listen to kernel starts to run init notebooks
-        // Kernels are created lazily when cells are executed, so this is the right time to run init notebook
-        this.kernelProvider.onDidStartKernel(this.onKernelStarted, this, this.disposables);
 
         // Handle currently open notebooks - await all async operations
         Promise.all(workspace.notebookDocuments.map((d) => this.onDidOpenNotebook(d))).catch((error) => {
@@ -316,64 +304,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             logger.info(`Disposing placeholder controller for closed notebook: ${getDisplayPath(notebook.uri)}`);
             placeholder.dispose();
             this.placeholderControllers.delete(notebookKey);
-        }
-    }
-
-    public async onKernelStarted(kernel: IKernel) {
-        // Only handle deepnote notebooks
-        if (kernel.notebook?.notebookType !== DEEPNOTE_NOTEBOOK_TYPE) {
-            return;
-        }
-
-        const notebook = kernel.notebook;
-        const projectId = notebook.metadata?.deepnoteProjectId;
-
-        if (!projectId) {
-            return;
-        }
-
-        // Check if we have a pending init notebook for this project
-        const pendingInit = this.projectsPendingInitNotebook.get(projectId);
-        if (!pendingInit) {
-            return; // No init notebook to run
-        }
-
-        logger.info(`Kernel started for Deepnote notebook, running init notebook for project ${projectId}`);
-
-        // Remove from pending list
-        this.projectsPendingInitNotebook.delete(projectId);
-
-        // Create a CancellationTokenSource tied to the notebook lifecycle
-        const cts = new CancellationTokenSource();
-        const disposables: Disposable[] = [];
-
-        try {
-            // Register handler to cancel the token if the notebook is closed
-            // Note: We check the URI to ensure we only cancel for the specific notebook that closed
-            const closeListener = workspace.onDidCloseNotebookDocument((closedNotebook) => {
-                if (closedNotebook.uri.toString() === notebook.uri.toString()) {
-                    logger.info(`Notebook closed while init notebook was running, cancelling for project ${projectId}`);
-                    cts.cancel();
-                }
-            });
-            disposables.push(closeListener);
-
-            // Run init notebook with cancellation support
-            await this.initNotebookRunner.runInitNotebookIfNeeded(projectId, notebook, cts.token);
-        } catch (error) {
-            // Check if this is a cancellation error - if so, just log and continue
-            if (error instanceof Error && error.message === 'Cancelled') {
-                logger.info(`Init notebook cancelled for project ${projectId}`);
-
-                return;
-            }
-
-            logger.error('Error running init notebook', error);
-            // Continue anyway - don't block user if init fails
-        } finally {
-            // Always clean up the CTS and event listeners
-            cts.dispose();
-            disposables.forEach((d) => d.dispose());
         }
     }
 
@@ -661,11 +591,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 logger.info(`Created/updated requirements.txt for project ${projectId}`);
             } else {
                 logger.info(`Skipping requirements.txt creation for project ${projectId} (no changes detected)`);
-            }
-
-            if (project.project.initNotebookId && !this.notebookManager.hasInitNotebookBeenRun(projectId!)) {
-                this.projectsPendingInitNotebook.set(projectId!, { notebook, project });
-                logger.info(`Init notebook will run automatically when kernel starts for project ${projectId}`);
             }
         }
 

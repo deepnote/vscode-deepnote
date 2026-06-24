@@ -12,7 +12,6 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
     // Cached originals are keyed by projectId, then by notebookId, so sibling files
     // that share a single project.id do not clobber each other's cached project data.
     private readonly originalProjects = new Map<string /*projectId*/, Map<string /*notebookId*/, DeepnoteProject>>();
-    private readonly projectsWithInitNotebookRun = new Set<string>();
 
     /**
      * Returns any cached project entry for the given project id.
@@ -47,23 +46,6 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
      */
     getOriginalProject(projectId: string, notebookId: string): DeepnoteProject | undefined {
         return this.originalProjects.get(projectId)?.get(notebookId);
-    }
-
-    /**
-     * Checks if the init notebook has already been run for a project.
-     * @param projectId Project identifier
-     * @returns True if init notebook has been run, false otherwise
-     */
-    hasInitNotebookBeenRun(projectId: string): boolean {
-        return this.projectsWithInitNotebookRun.has(projectId);
-    }
-
-    /**
-     * Marks the init notebook as having been run for a project.
-     * @param projectId Project identifier
-     */
-    markInitNotebookAsRun(projectId: string): void {
-        this.projectsWithInitNotebookRun.add(projectId);
     }
 
     /**

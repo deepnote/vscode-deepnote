@@ -16,7 +16,6 @@ import { IDisposableRegistry, IOutputChannel } from '../../platform/common/types
 import { IPythonExtensionChecker } from '../../platform/api/types';
 import { IJupyterRequestCreator } from '../../kernels/jupyter/types';
 import { IConfigurationService } from '../../platform/common/types';
-import { IDeepnoteInitNotebookRunner } from './deepnoteInitNotebookRunner.node';
 import { IDeepnoteNotebookManager } from '../types';
 import { IKernelProvider, IKernel, IJupyterKernelSpec } from '../../kernels/types';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
@@ -35,7 +34,6 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
     let mockLspClientManager: IDeepnoteLspClientManager;
     let mockRequestCreator: IJupyterRequestCreator;
     let mockConfigService: IConfigurationService;
-    let mockInitNotebookRunner: IDeepnoteInitNotebookRunner;
     let mockNotebookManager: IDeepnoteNotebookManager;
     let mockKernelProvider: IKernelProvider;
     let mockRequirementsHelper: IDeepnoteRequirementsHelper;
@@ -65,7 +63,6 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         mockLspClientManager = mock<IDeepnoteLspClientManager>();
         mockRequestCreator = mock<IJupyterRequestCreator>();
         mockConfigService = mock<IConfigurationService>();
-        mockInitNotebookRunner = mock<IDeepnoteInitNotebookRunner>();
         mockNotebookManager = mock<IDeepnoteNotebookManager>();
         mockKernelProvider = mock<IKernelProvider>();
         mockRequirementsHelper = mock<IDeepnoteRequirementsHelper>();
@@ -131,7 +128,6 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             instance(mockRequestCreator),
             undefined, // requestAgentCreator is optional
             instance(mockConfigService),
-            instance(mockInitNotebookRunner),
             instance(mockNotebookManager),
             instance(mockKernelProvider),
             instance(mockRequirementsHelper),
@@ -319,26 +315,6 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
             // Assert
             assert.strictEqual(result, mockEnv1, 'Should return the selected environment');
-        });
-    });
-
-    suite('onKernelStarted', () => {
-        test('should return early and not call initNotebookRunner for non-deepnote notebooks', async () => {
-            // Arrange
-            const mockKernel = mock<IKernel>();
-            const mockJupyterNotebook = mock<NotebookDocument>();
-
-            when(mockJupyterNotebook.notebookType).thenReturn('jupyter-notebook');
-            when(mockKernel.notebook).thenReturn(instance(mockJupyterNotebook));
-
-            // Mock initNotebookRunner to track if it gets called
-            when(mockInitNotebookRunner.runInitNotebookIfNeeded(anything(), anything(), anything())).thenResolve();
-
-            // Act
-            await selector.onKernelStarted(instance(mockKernel));
-
-            // Assert - verify initNotebookRunner was never called
-            verify(mockInitNotebookRunner.runInitNotebookIfNeeded(anything(), anything(), anything())).never();
         });
     });
 

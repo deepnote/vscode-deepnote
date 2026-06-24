@@ -64,7 +64,4 @@ export interface IDeepnoteNotebookManager {
      * @returns `true` if at least one cached entry was found and updated, `false` otherwise
      */
     updateProjectIntegrations(projectId: string, integrations: ProjectIntegration[]): boolean;
-
-    hasInitNotebookBeenRun(projectId: string): boolean;
-    markInitNotebookAsRun(projectId: string): void;
 }

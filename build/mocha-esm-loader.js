@@ -442,6 +442,39 @@ export async function load(url, context, nextLoad) {
                         }));
                     };
 
+                    export const isValidSiblingInitCandidate = (candidate, expectedProjectId, initNotebookId) => {
+                        if (candidate?.project?.id !== expectedProjectId) {
+                            return {
+                                valid: false,
+                                reason:
+                                    'project.id mismatch (expected ' +
+                                    expectedProjectId +
+                                    ', got ' +
+                                    candidate?.project?.id +
+                                    ')'
+                            };
+                        }
+                        const candidateNotebooks = candidate?.project?.notebooks || [];
+                        if (candidateNotebooks.length !== 1) {
+                            return {
+                                valid: false,
+                                reason: 'expected exactly 1 notebook, found ' + candidateNotebooks.length
+                            };
+                        }
+                        const onlyNotebook = candidateNotebooks[0];
+                        if (onlyNotebook.id !== initNotebookId) {
+                            return {
+                                valid: false,
+                                reason:
+                                    'single notebook id ' +
+                                    onlyNotebook.id +
+                                    ' does not match initNotebookId ' +
+                                    initNotebookId
+                            };
+                        }
+                        return { valid: true };
+                    };
+
                     // --- Snapshot filename helpers (faithful to @deepnote/convert dist) ---
 
                     const FILENAME_SAFE_NOTEBOOK_ID_CHAR = /[A-Za-z0-9_-]/;

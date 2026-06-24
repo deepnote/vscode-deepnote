@@ -220,7 +220,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         notebookCellExecutions.onDidCompleteQueueExecution(
             (e) => {
                 logger.debug(`[Snapshot] Queue execution complete for ${e.notebookUri}`);
-                this.onExecutionComplete(e.notebookUri);
+                void this.onExecutionComplete(e.notebookUri);
             },
             this,
             this.disposables

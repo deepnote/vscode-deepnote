@@ -241,7 +241,7 @@ export class DeepnoteExplorerView {
                 return;
             }
 
-            // Legacy multi-notebook file: append the duplicate in place (existing behaviour).
+            // Legacy multi-notebook file: append the duplicate in place (existing behavior).
             projectData.project.notebooks.push(newNotebook);
 
             await this.writeProjectFile(fileUri, projectData);

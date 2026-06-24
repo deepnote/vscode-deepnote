@@ -33,13 +33,15 @@ sensibly and so the setup is reproducible.
 - **A venv-capable Python interpreter** — env creation runs `python -m venv` (needs
   `ensurepip`) then `pip install deepnote-toolkit[server] ipykernel python-lsp-server
   deepnote-cli` (needs network). On Ubuntu: `python3.12-venv python3-pip`.
-- **Proposed-API allow-listing.** The extension declares `enabledApiProposals` (notebook
-  kernel/execution APIs). VS Code blocks those for a normally-installed VSIX, and ExTester's
-  `setup-and-run` exposes no `--enable-proposed-api` flag, so we write the extension into the
-  downloaded VS Code's `product.json` `extensionEnabledApiProposals` allow-list — the same
-  mechanism stable VS Code uses for Microsoft extensions. Done by `test/e2e/enable-proposed-api.js`
-  (§6.8), wired as `npm run setup:e2e:proposed-api`. **Without this the extension never
-  activates** and the notebook stays empty.
+- **No proposed-API allow-listing is needed.** The extension declares `enabledApiProposals`
+  (Jupyter's notebook kernel/execution set, inherited from the vscode-jupyter fork), and on a
+  plain stable VS Code those proposals are *not* granted — VS Code logs a non-fatal "CANNOT USE
+  these API proposals" line. That does **not** block anything: activation, the notebook
+  serializer, kernel execution, and output rendering all run on **stable** APIs (output goes
+  through `controller.createNotebookCellExecution` with a `replaceCells` fallback), and the few
+  genuinely-proposed calls are guarded (e.g. `if (!controller.createNotebookExecution)`). The
+  suite is verified passing on a plain stable VS Code with **no** `product.json` patch — which is
+  also how the published Marketplace/Open VSX extension runs for end users.
 - **`.gitignore` is not `.vscodeignore`.** `vsce` packs from `.vscodeignore`; the e2e
   `.test-extensions/` dir (~200 MB) must be excluded there too or every run packages a
   ~300 MB VSIX. (§6.2)
@@ -82,7 +84,6 @@ sensibly and so the setup is reproducible.
    - 6.5 [`test/e2e/settings.json`](#65-teste2esettingsjson)
    - 6.6 [`test/e2e/fixtures/hello-world.deepnote`](#66-teste2efixtureshello-worlddeepnote)
    - 6.7 [`test/e2e/suite/helloWorld.e2e.test.ts`](#67-teste2esuitehelloworlde2etestts)
-   - 6.8 [`test/e2e/enable-proposed-api.js`](#68-teste2eenable-proposed-apijs)
 7. [How the hard parts work](#7-how-the-hard-parts-work)
    - 7.1 [Reading rendered output from nested iframes](#71-reading-rendered-output-from-nested-iframes)
    - 7.2 [Driving QuickPicks & InputBoxes](#72-driving-quickpicks--inputboxes)
@@ -102,8 +103,7 @@ sensibly and so the setup is reproducible.
 ```bash
 # one-time / when the extension changes
 npm run compile            # build the extension under test  → dist/extension.node.js
-npm run setup:e2e          # download test VS Code + ChromeDriver, install ms-python.python,
-                           # and allow-list the extension's proposed APIs in product.json
+npm run setup:e2e          # download test VS Code + ChromeDriver and install ms-python.python
 
 # run the E2E suite (pretest compiles test/e2e → out/e2e, then extest packages & runs)
 npm run test:e2e
@@ -112,9 +112,9 @@ npm run test:e2e
 xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' npm run test:e2e
 ```
 
-`npm run setup:e2e` is the umbrella for `setup:e2e:vscode` → `setup:e2e:deps` →
-`setup:e2e:proposed-api` (in that order — the proposed-API patch needs VS Code already
-downloaded). Re-running it is safe (idempotent).
+`npm run setup:e2e` is the umbrella for `setup:e2e:vscode` → `setup:e2e:deps` (in that order —
+installing the Python extension uses the downloaded VS Code's CLI). Re-running it is safe. No
+proposed-API patch is needed (§0).
 
 Prerequisites: the **system libraries + Xvfb** and a **venv-capable Python interpreter** from
 §0, and **network access** (creating the environment installs the Deepnote toolkit; the first
@@ -248,7 +248,6 @@ A minimal one-notebook, one-code-block file is in §6.6.
 | `test/e2e/.mocharc.js` | new | UI-test timeouts/retries/reporter |
 | `test/e2e/settings.json` | new | VS Code user settings for the test instance |
 | `test/e2e/fixtures/hello-world.deepnote` | new | the one-notebook hello-world fixture |
-| `test/e2e/enable-proposed-api.js` | new | allow-lists proposed APIs in the test VS Code's `product.json` (§0, §6.8) |
 | `test/e2e/suite/helloWorld.e2e.test.ts` | new | the single E2E test |
 
 Resulting layout:
@@ -292,16 +291,13 @@ Add these scripts (placed alongside the other `test:*` scripts):
   "pretest:e2e": "npm run compile-e2e",
   "setup:e2e:vscode": "extest get-vscode -c max && extest get-chromedriver -c max",
   "setup:e2e:deps": "extest install-from-marketplace ms-python.python -e .test-extensions",
-  "setup:e2e:proposed-api": "node ./test/e2e/enable-proposed-api.js",
-  "setup:e2e": "npm run setup:e2e:vscode && npm run setup:e2e:deps && npm run setup:e2e:proposed-api",
+  "setup:e2e": "npm run setup:e2e:vscode && npm run setup:e2e:deps",
   "test:e2e": "extest setup-and-run \"./out/e2e/suite/*.e2e.test.js\" -c max -o ./test/e2e/settings.json -e .test-extensions -m ./test/e2e/.mocharc.js -i"
 }
 ```
 
 `setup:e2e:deps` installs the Python extension using the *downloaded* test VS Code's CLI, so
-`setup:e2e:vscode` must run first; `setup:e2e:proposed-api` patches that VS Code's
-`product.json`, which `setup-and-run` then reuses from cache (it does not re-extract a cached
-VS Code, so the patch survives).
+`setup:e2e:vscode` must run first.
 
 What the `extest setup-and-run` flags mean:
 
@@ -868,96 +864,6 @@ describe('Deepnote E2E — run "hello world"', function () {
 });
 ```
 
-### 6.8 `test/e2e/enable-proposed-api.js`
-
-New file: allow-lists the extension's proposed APIs in the downloaded VS Code's
-`product.json` (see §0). Run via `npm run setup:e2e:proposed-api` after the test VS Code
-has been downloaded; idempotent.
-
-```js
-// Enables the extension's proposed VS Code APIs in the ExTester-managed VS Code instance.
-//
-// The Deepnote extension declares `enabledApiProposals` in package.json (notebook kernel /
-// execution APIs, etc.). VS Code blocks proposed APIs for a normally-installed extension unless
-// it is launched in extension-development mode or with `--enable-proposed-api`, neither of which
-// ExTester's `setup-and-run` exposes. The supported, black-box-friendly alternative is the
-// `extensionEnabledApiProposals` allowlist in the downloaded VS Code's `product.json` — the very
-// mechanism stable VS Code uses to allow Microsoft extensions (e.g. ms-python.python) to use
-// proposed APIs. This script writes our extension into that allowlist, idempotently.
-//
-// It must run AFTER VS Code has been downloaded (`extest get-vscode`) and is safe to re-run.
-// ExTester caches VS Code under `os.tmpdir()/test-resources` (override with TEST_RESOURCES), and
-// `setup-and-run` does not re-extract a cached VS Code, so the patch survives subsequent runs.
-
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
-
-const extensionManifest = require('../../package.json');
-
-function getStorageFolder() {
-    return process.env.TEST_RESOURCES ? process.env.TEST_RESOURCES : path.join(os.tmpdir(), 'test-resources');
-}
-
-// Locate `*/resources/app/product.json` under the storage folder across platforms
-// (VSCode-linux-x64, VSCode-win32-x64, "Visual Studio Code.app/Contents", …).
-function findProductJson(storageFolder) {
-    if (!fs.existsSync(storageFolder)) {
-        return undefined;
-    }
-
-    for (const entry of fs.readdirSync(storageFolder)) {
-        const base = path.join(storageFolder, entry);
-
-        for (const candidate of [
-            path.join(base, 'resources', 'app', 'product.json'),
-            path.join(base, 'Contents', 'Resources', 'app', 'product.json')
-        ]) {
-            if (fs.existsSync(candidate)) {
-                return candidate;
-            }
-        }
-    }
-
-    return undefined;
-}
-
-function main() {
-    const proposals = extensionManifest.enabledApiProposals;
-    if (!Array.isArray(proposals) || proposals.length === 0) {
-        console.log('No enabledApiProposals declared in package.json; nothing to do.');
-        return;
-    }
-
-    const storageFolder = getStorageFolder();
-    const productJsonPath = findProductJson(storageFolder);
-    if (!productJsonPath) {
-        console.error(
-            `Could not find a VS Code product.json under ${storageFolder}. ` +
-                `Download VS Code first (e.g. \`npm run setup:e2e:vscode\`), then re-run this script.`
-        );
-        process.exit(1);
-    }
-
-    const product = JSON.parse(fs.readFileSync(productJsonPath, 'utf8'));
-    product.extensionEnabledApiProposals = product.extensionEnabledApiProposals || {};
-
-    // Match on the canonical id and its lowercase form: VS Code compares extension ids
-    // case-insensitively (ExtensionIdentifier.toKey lowercases), and our publisher is capitalized.
-    const extensionId = `${extensionManifest.publisher}.${extensionManifest.name}`;
-    for (const id of new Set([extensionId, extensionId.toLowerCase()])) {
-        product.extensionEnabledApiProposals[id] = proposals;
-    }
-
-    fs.writeFileSync(productJsonPath, `${JSON.stringify(product, null, '\t')}\n`);
-
-    console.log(`Enabled proposed APIs for ${extensionId} in ${productJsonPath}`);
-    console.log(`Proposals: ${proposals.join(', ')}`);
-}
-
-main();
-```
-
 ---
 
 ## 7. How the hard parts work
@@ -1016,8 +922,9 @@ Flakiness guards built into the test:
   interpreters found"* and returns (no quick pick). The test detects the missing quick pick
   (`tryOpenInputBox` times out), dismisses notifications, waits, and **retries up to 6
   times**.
-- **Unique environment name per run** (`E2E Hello Env <timestamp>`) so a leftover env from
-  a Mocha retry can't trip the "name already exists" guard.
+- **Idempotent environment creation** with a stable name (`E2E Hello Env`): `createEnvironment`
+  treats the "name already exists" guard as success, so a leftover env from a Mocha retry (or a
+  persistent local instance) is reused rather than colliding — and its venv is reused too.
 - **Notification waits are best-effort** for the transient success toasts; the authoritative
   gate is the rendered output, so an auto-dismissed toast never fails the test.
 - **`driver.wait(...)`** is used for every asynchronous UI state instead of bare sleeps
@@ -1032,8 +939,7 @@ real VS Code window. First-time sequence:
 
 ```bash
 npm run compile     # build the extension under test (produces dist/extension.node.js)
-npm run setup:e2e   # download test VS Code + ChromeDriver, install ms-python.python,
-                    # and allow-list proposed APIs (§0) — one-time, idempotent
+npm run setup:e2e   # download test VS Code + ChromeDriver and install ms-python.python (one-time)
 npm run test:e2e    # pretest compiles test/e2e → out/e2e, then extest packages & runs
 ```
 
@@ -1086,8 +992,8 @@ e2e:
           libxcomposite1 libxdamage1 libxrandr2 libxfixes3 libxext6 libxrender1 libpango-1.0-0 \
           libcairo2 libatspi2.0-0 libx11-xcb1 libxcb-dri3-0 libxtst6 libsecret-1-0 \
           libgssapi-krb5-2 libdbus-1-3 libexpat1 python3.12-venv python3-pip
-    # Download the test VS Code, install ms-python.python, and allow-list proposed APIs (§0).
-    # ExTester always launches with --no-sandbox, so no AppArmor sysctl is required.
+    # Download the test VS Code and install ms-python.python (§0). ExTester always launches with
+    # --no-sandbox, so no AppArmor sysctl is required; no proposed-API patch is needed either.
     - run: npm run setup:e2e
     - name: Run E2E
       uses: nick-fields/retry@v4           # absorb transient UI flakiness

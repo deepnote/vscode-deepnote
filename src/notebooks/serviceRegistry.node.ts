@@ -104,6 +104,7 @@ import { IntegrationKernelRestartHandler } from './deepnote/integrations/integra
 import { ISnapshotMetadataService, SnapshotService } from './deepnote/snapshots/snapshotService';
 import { EnvironmentCapture, IEnvironmentCapture } from './deepnote/snapshots/environmentCapture.node';
 import { DeepnoteFileChangeWatcher } from './deepnote/deepnoteFileChangeWatcher';
+import { DeepnoteNotebookInfoStatusBar } from './deepnote/deepnoteNotebookInfoStatusBar';
 
 export function registerTypes(serviceManager: IServiceManager, isDevMode: boolean) {
     registerControllerTypes(serviceManager, isDevMode);
@@ -264,6 +265,10 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
         DeepnoteNewCellLanguageService
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        DeepnoteNotebookInfoStatusBar
     );
 
     // Deepnote configuration services

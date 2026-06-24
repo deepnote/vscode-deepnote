@@ -13,10 +13,18 @@ suite('DeepnoteTreeItem', () => {
         project: {
             id: 'project-123',
             name: 'Test Project',
+            // Two notebooks → a legacy multi-notebook (collapsible) ProjectFile node.
             notebooks: [
                 {
                     id: 'notebook-1',
                     name: 'First Notebook',
+                    blocks: [],
+                    executionMode: 'block',
+                    isModule: false
+                },
+                {
+                    id: 'notebook-2',
+                    name: 'Second Notebook',
                     blocks: [],
                     executionMode: 'block',
                     isModule: false
@@ -62,7 +70,7 @@ suite('DeepnoteTreeItem', () => {
             assert.deepStrictEqual(item.context, context);
             assert.strictEqual(item.collapsibleState, TreeItemCollapsibleState.Collapsed);
             assert.strictEqual(item.label, 'Test Project');
-            assert.strictEqual(item.description, '1 notebook');
+            assert.strictEqual(item.description, '2 notebooks');
         });
 
         test('should create notebook item with basic properties', () => {
@@ -122,7 +130,7 @@ suite('DeepnoteTreeItem', () => {
             assert.strictEqual(item.collapsibleState, TreeItemCollapsibleState.Collapsed);
             assert.strictEqual(item.contextValue, 'projectFile');
             assert.strictEqual(item.tooltip, 'Deepnote Project: Test Project\nFile: /workspace/my-project.deepnote');
-            assert.strictEqual(item.description, '1 notebook');
+            assert.strictEqual(item.description, '2 notebooks');
 
             // Should have notebook icon for project files
             assert.instanceOf(item.iconPath, ThemeIcon);

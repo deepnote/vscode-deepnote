@@ -2,8 +2,36 @@ import { assert } from 'chai';
 import { l10n } from 'vscode';
 
 import { DeepnoteTreeDataProvider, compareTreeItemsByLabel } from './deepnoteTreeDataProvider';
-import { DeepnoteTreeItem, DeepnoteTreeItemType } from './deepnoteTreeItem';
+import { DeepnoteTreeItem, DeepnoteTreeItemType, getNonInitNotebooks } from './deepnoteTreeItem';
 import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
+
+/**
+ * Build a single-notebook DeepnoteProject (whole-file shape) for a given project/notebook id.
+ */
+function makeSingleNotebookProject(
+    projectId: string,
+    notebookId: string,
+    projectName = 'Test Project'
+): DeepnoteProject {
+    return {
+        metadata: { createdAt: '2023-01-01T00:00:00Z', modifiedAt: '2023-01-02T00:00:00Z' },
+        project: {
+            id: projectId,
+            name: projectName,
+            notebooks: [
+                {
+                    id: notebookId,
+                    name: `Notebook ${notebookId}`,
+                    blocks: [],
+                    executionMode: 'block',
+                    isModule: false
+                }
+            ],
+            settings: {}
+        },
+        version: '1.0.0'
+    };
+}
 
 suite('DeepnoteTreeDataProvider', () => {
     let provider: DeepnoteTreeDataProvider;
@@ -339,12 +367,11 @@ suite('DeepnoteTreeDataProvider', () => {
         });
 
         test('should update visual fields when project data changes', async () => {
-            // Access private caches
-            const treeItemCache = (provider as any).treeItemCache as Map<string, DeepnoteTreeItem>;
+            // Access the file-item cache (keyed by file path)
+            const fileItemCache = (provider as any).fileItemCache as Map<string, DeepnoteTreeItem>;
 
-            // Create initial project with 1 notebook
+            // Create initial legacy multi-notebook project (2 notebooks → projectFile node)
             const filePath = '/workspace/test-project.deepnote';
-            const cacheKey = `project:${filePath}`;
             const initialProject: DeepnoteProject = {
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
@@ -357,6 +384,13 @@ suite('DeepnoteTreeDataProvider', () => {
                         {
                             id: 'notebook-1',
                             name: 'Notebook 1',
+                            blocks: [],
+                            executionMode: 'block',
+                            isModule: false
+                        },
+                        {
+                            id: 'notebook-2',
+                            name: 'Notebook 2',
                             blocks: [],
                             executionMode: 'block',
                             isModule: false
@@ -376,23 +410,23 @@ suite('DeepnoteTreeDataProvider', () => {
                 initialProject,
                 1
             );
-            treeItemCache.set(cacheKey, mockTreeItem);
+            fileItemCache.set(filePath, mockTreeItem);
 
             // Verify initial state
             assert.strictEqual(mockTreeItem.label, 'Original Name');
-            assert.strictEqual(mockTreeItem.description, '1 notebook');
+            assert.strictEqual(mockTreeItem.description, '2 notebooks');
 
-            // Update the project data (simulating rename and adding notebooks)
+            // Update the project data (simulating rename and adding a notebook)
             const updatedProject: DeepnoteProject = {
                 ...initialProject,
                 project: {
                     ...initialProject.project,
                     name: 'Renamed Project',
                     notebooks: [
-                        initialProject.project.notebooks[0],
+                        ...initialProject.project.notebooks,
                         {
-                            id: 'notebook-2',
-                            name: 'Notebook 2',
+                            id: 'notebook-3',
+                            name: 'Notebook 3',
                             blocks: [],
                             executionMode: 'block',
                             isModule: false
@@ -402,11 +436,11 @@ suite('DeepnoteTreeDataProvider', () => {
             };
 
             mockTreeItem.data = updatedProject;
-            // Call updateVisualFields if it exists (it may not work properly in test environment due to proxy limitations)
+            // Call updateVisualFields if it is available (in the VS Code test mock the subclass
+            // method may not be exposed on the proxied TreeItem); otherwise update fields manually.
             if (typeof mockTreeItem.updateVisualFields === 'function') {
                 mockTreeItem.updateVisualFields();
             } else {
-                // Manually update visual fields for testing purposes
                 mockTreeItem.label = updatedProject.project.name || 'Untitled Project';
                 mockTreeItem.tooltip = `Deepnote Project: ${updatedProject.project.name}\nFile: ${mockTreeItem.context.filePath}`;
                 const notebookCount = updatedProject.project.notebooks?.length || 0;
@@ -417,7 +451,7 @@ suite('DeepnoteTreeDataProvider', () => {
             assert.strictEqual(mockTreeItem.label, 'Renamed Project', 'Label should reflect new project name');
             assert.strictEqual(
                 mockTreeItem.description,
-                '2 notebooks',
+                '3 notebooks',
                 'Description should reflect new notebook count'
             );
             assert.include(
@@ -430,11 +464,10 @@ suite('DeepnoteTreeDataProvider', () => {
         test('should clear both caches when file is deleted', () => {
             // Access private caches
             const cachedProjects = (provider as any).cachedProjects as Map<string, DeepnoteProject>;
-            const treeItemCache = (provider as any).treeItemCache as Map<string, DeepnoteTreeItem>;
+            const fileItemCache = (provider as any).fileItemCache as Map<string, DeepnoteTreeItem>;
 
-            // Add entries to both caches
+            // Add entries to both caches (both keyed by file path)
             const filePath = '/workspace/test-project.deepnote';
-            const cacheKey = `project:${filePath}`;
 
             cachedProjects.set(filePath, mockProject);
             const mockTreeItem = new DeepnoteTreeItem(
@@ -446,20 +479,20 @@ suite('DeepnoteTreeDataProvider', () => {
                 mockProject,
                 1
             );
-            treeItemCache.set(cacheKey, mockTreeItem);
+            fileItemCache.set(filePath, mockTreeItem);
 
             // Verify both caches have the entry
             assert.isTrue(cachedProjects.has(filePath), 'cachedProjects should have entry before deletion');
-            assert.isTrue(treeItemCache.has(cacheKey), 'treeItemCache should have entry before deletion');
+            assert.isTrue(fileItemCache.has(filePath), 'fileItemCache should have entry before deletion');
 
             // Simulate file deletion by calling the internal cleanup logic
             // (we can't easily trigger the file watcher in unit tests)
             cachedProjects.delete(filePath);
-            treeItemCache.delete(cacheKey);
+            fileItemCache.delete(filePath);
 
             // Verify both caches have been cleared
             assert.isFalse(cachedProjects.has(filePath), 'cachedProjects should not have entry after deletion');
-            assert.isFalse(treeItemCache.has(cacheKey), 'treeItemCache should not have entry after deletion');
+            assert.isFalse(fileItemCache.has(filePath), 'fileItemCache should not have entry after deletion');
         });
     });
 
@@ -646,6 +679,229 @@ suite('DeepnoteTreeDataProvider', () => {
             assert.strictEqual(notebookItems[0].label, 'Apple Notebook', 'First should be Apple Notebook');
             assert.strictEqual(notebookItems[1].label, 'MIDDLE Notebook', 'Second should be MIDDLE Notebook');
             assert.strictEqual(notebookItems[2].label, 'zebra notebook', 'Third should be zebra notebook');
+        });
+    });
+
+    // Load-bearing: sibling files share one project.id, so refresh must rebuild the whole grouped
+    // subtree rather than patch a single cached item. These assert the §7 grouping-safe semantics.
+    suite('grouping-safe refresh semantics', () => {
+        const projectId = 'shared-project-id';
+        const otherProjectId = 'other-project-id';
+        const filePathA = '/workspace/proj-a.deepnote';
+        const filePathB = '/workspace/proj-b.deepnote';
+        const filePathOther = '/workspace/other.deepnote';
+
+        let cachedProjects: Map<string, DeepnoteProject>;
+        let fireArgs: Array<DeepnoteTreeItem | undefined | null | void>;
+
+        setup(() => {
+            // Seed two sibling files sharing one project.id plus a third file of a DIFFERENT project.
+            cachedProjects = (provider as any).cachedProjects as Map<string, DeepnoteProject>;
+            cachedProjects.set(filePathA, makeSingleNotebookProject(projectId, 'nb-a'));
+            cachedProjects.set(filePathB, makeSingleNotebookProject(projectId, 'nb-b'));
+            cachedProjects.set(filePathOther, makeSingleNotebookProject(otherProjectId, 'nb-other'));
+
+            // Capture every fire arg through the PUBLIC event so a scoped fire(item) would be visible.
+            fireArgs = [];
+            provider.onDidChangeTreeData((arg) => fireArgs.push(arg));
+        });
+
+        test('refreshNotebook evicts BOTH sibling entries (not just the first match), so a stale sibling cannot win', () => {
+            provider.refreshNotebook(projectId);
+
+            assert.isFalse(
+                cachedProjects.has(filePathA),
+                'sibling A must be evicted (refreshNotebook must not break on the first match)'
+            );
+            assert.isFalse(cachedProjects.has(filePathB), 'sibling B must be evicted too');
+        });
+
+        test('refreshNotebook leaves the OTHER project entry intact (does not over-evict across projects)', () => {
+            provider.refreshNotebook(projectId);
+
+            assert.isTrue(
+                cachedProjects.has(filePathOther),
+                'a file belonging to a different project.id must NOT be evicted'
+            );
+        });
+
+        test('refreshNotebook fires a FULL-tree change (undefined), never a scoped fire(item)', () => {
+            provider.refreshNotebook(projectId);
+
+            assert.strictEqual(fireArgs.length, 1, 'refreshNotebook must fire exactly once');
+            assert.isUndefined(fireArgs[0], 'refreshNotebook must fire undefined (full-tree), not a tree item');
+        });
+
+        test('refreshProject evicts ONLY that file path, leaving sibling B and the other project cached', () => {
+            provider.refreshProject(filePathA);
+
+            assert.isFalse(cachedProjects.has(filePathA), 'the targeted file path must be evicted');
+            assert.isTrue(cachedProjects.has(filePathB), 'the sibling sharing project.id must remain cached');
+            assert.isTrue(cachedProjects.has(filePathOther), 'the other project must remain cached');
+        });
+
+        test('refreshProject fires a FULL-tree change (undefined), never a scoped fire(item)', () => {
+            provider.refreshProject(filePathA);
+
+            assert.strictEqual(fireArgs.length, 1, 'refreshProject must fire exactly once');
+            assert.isUndefined(fireArgs[0], 'refreshProject must fire undefined (full-tree), not a tree item');
+        });
+
+        test('every refresh path (refresh/refreshProject/refreshNotebook) fires undefined only — no scoped fire(item)', () => {
+            provider.refresh();
+            provider.refreshProject(filePathB);
+            provider.refreshNotebook(projectId);
+
+            assert.strictEqual(fireArgs.length, 3, 'each refresh call fires exactly once');
+            for (const arg of fireArgs) {
+                assert.isUndefined(arg, 'no refresh path may use a scoped fire(item); all fires must be undefined');
+            }
+        });
+    });
+
+    suite('getNonInitNotebooks excludes the init notebook', () => {
+        test('the init notebook (project.initNotebookId) is excluded from the file notebook list', () => {
+            const project: DeepnoteProject = {
+                metadata: { createdAt: '2023-01-01T00:00:00Z', modifiedAt: '2023-01-02T00:00:00Z' },
+                project: {
+                    id: 'project-with-init',
+                    name: 'Has Init',
+                    initNotebookId: 'init-nb',
+                    notebooks: [
+                        { id: 'init-nb', name: 'Init', blocks: [], executionMode: 'block', isModule: false },
+                        { id: 'main-nb', name: 'Main', blocks: [], executionMode: 'block', isModule: false }
+                    ],
+                    settings: {}
+                },
+                version: '1.0.0'
+            };
+
+            const nonInit = getNonInitNotebooks(project);
+
+            assert.strictEqual(nonInit.length, 1, 'only the non-init notebook should remain');
+            assert.strictEqual(nonInit[0].id, 'main-nb', 'the surviving notebook must be the main (non-init) one');
+        });
+    });
+
+    // If feasible with the test mocks: build the grouped tree from a seeded cache and assert the
+    // node types/contextValues/labels for grouping, single-notebook leaf vs legacy collapsible, and
+    // init exclusion.
+    suite('getChildren groups siblings and distinguishes leaf vs legacy files', () => {
+        const projectId = 'group-project';
+
+        // Seed the file→project cache and call the private group builder directly. We invoke
+        // `getProjectGroups()`/`getChildren(groupItem)` rather than the root `getChildren()` because
+        // the root branch short-circuits to `[]` when `workspace.workspaceFolders` is unset (the
+        // tree test deliberately avoids ts-mockito); `loadAllProjects` then iterates an empty
+        // folder list and simply returns the pre-seeded cache, so grouping is exercised faithfully.
+        function seed(entries: Array<[string, DeepnoteProject]>): void {
+            const cachedProjects = (provider as any).cachedProjects as Map<string, DeepnoteProject>;
+            for (const [filePath, project] of entries) {
+                cachedProjects.set(filePath, project);
+            }
+        }
+
+        async function getGroupItems(): Promise<DeepnoteTreeItem[]> {
+            return (provider as any).getProjectGroups() as Promise<DeepnoteTreeItem[]>;
+        }
+
+        test('two siblings sharing one project.id collapse into ONE ProjectGroup', async () => {
+            seed([
+                ['/workspace/a.deepnote', makeSingleNotebookProject(projectId, 'nb-a', 'Grouped')],
+                ['/workspace/b.deepnote', makeSingleNotebookProject(projectId, 'nb-b', 'Grouped')]
+            ]);
+
+            const groups = (await getGroupItems()).filter((item) => item.type === DeepnoteTreeItemType.ProjectGroup);
+
+            assert.strictEqual(groups.length, 1, 'both siblings must roll up into a single ProjectGroup');
+            assert.strictEqual(groups[0].context.projectId, projectId);
+            assert.strictEqual(groups[0].contextValue, 'projectGroup', 'group node contextValue');
+        });
+
+        test('a single-notebook file renders as a notebookFile leaf; a legacy multi-notebook file is collapsible', async () => {
+            const legacyMulti: DeepnoteProject = {
+                metadata: { createdAt: '2023-01-01T00:00:00Z', modifiedAt: '2023-01-02T00:00:00Z' },
+                project: {
+                    id: projectId,
+                    name: 'Grouped',
+                    notebooks: [
+                        { id: 'm1', name: 'Main 1', blocks: [], executionMode: 'block', isModule: false },
+                        { id: 'm2', name: 'Main 2', blocks: [], executionMode: 'block', isModule: false }
+                    ],
+                    settings: {}
+                },
+                version: '1.0.0'
+            };
+
+            const singleFile: [string, DeepnoteProject] = [
+                '/workspace/single.deepnote',
+                makeSingleNotebookProject(projectId, 'only-nb', 'Grouped')
+            ];
+
+            seed([singleFile, ['/workspace/legacy.deepnote', legacyMulti]]);
+
+            const group = (await getGroupItems()).find((item) => item.type === DeepnoteTreeItemType.ProjectGroup);
+            assert.isDefined(group, 'a ProjectGroup must exist');
+
+            const files = await provider.getChildren(group);
+
+            const leaf = files.find((f) => f.context.filePath === '/workspace/single.deepnote');
+            const legacy = files.find((f) => f.context.filePath === '/workspace/legacy.deepnote');
+
+            assert.isDefined(leaf, 'single-notebook file item must exist');
+            assert.isDefined(legacy, 'legacy multi-notebook file item must exist');
+
+            assert.strictEqual(leaf!.contextValue, 'notebookFile', 'single-notebook file is a notebookFile leaf');
+            assert.strictEqual(
+                leaf!.collapsibleState,
+                0 /* TreeItemCollapsibleState.None */,
+                'a single-notebook leaf must not be collapsible'
+            );
+
+            assert.strictEqual(legacy!.contextValue, 'projectFile', 'legacy multi-notebook file is a projectFile');
+            assert.strictEqual(
+                legacy!.collapsibleState,
+                1 /* TreeItemCollapsibleState.Collapsed */,
+                'a legacy multi-notebook file must be collapsible'
+            );
+
+            // The legacy file expands into its non-init Notebook children.
+            const notebooks = await provider.getChildren(legacy);
+            assert.strictEqual(notebooks.length, 2, 'legacy file expands into its notebooks');
+            assert.isTrue(
+                notebooks.every((n) => n.type === DeepnoteTreeItemType.Notebook),
+                'legacy children are Notebook items'
+            );
+        });
+
+        test('the init notebook is excluded from a file group/leaf — an init+main file renders as a single-notebook leaf', async () => {
+            const initPlusMain: DeepnoteProject = {
+                metadata: { createdAt: '2023-01-01T00:00:00Z', modifiedAt: '2023-01-02T00:00:00Z' },
+                project: {
+                    id: projectId,
+                    name: 'Grouped',
+                    initNotebookId: 'the-init',
+                    notebooks: [
+                        { id: 'the-init', name: 'Init', blocks: [], executionMode: 'block', isModule: false },
+                        { id: 'the-main', name: 'Main', blocks: [], executionMode: 'block', isModule: false }
+                    ],
+                    settings: {}
+                },
+                version: '1.0.0'
+            };
+
+            seed([['/workspace/initmain.deepnote', initPlusMain]]);
+
+            const group = (await getGroupItems()).find((item) => item.type === DeepnoteTreeItemType.ProjectGroup);
+            const files = await provider.getChildren(group);
+
+            assert.strictEqual(files.length, 1, 'one file in the group');
+            assert.strictEqual(
+                files[0].contextValue,
+                'notebookFile',
+                'with the init excluded, exactly one non-init notebook remains → leaf'
+            );
+            assert.strictEqual(files[0].label, 'Main', 'the leaf is labelled with the non-init notebook name');
         });
     });
 });

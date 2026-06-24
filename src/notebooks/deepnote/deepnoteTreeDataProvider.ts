@@ -13,7 +13,13 @@ import {
     l10n
 } from 'vscode';
 
-import { DeepnoteTreeItem, DeepnoteTreeItemType, DeepnoteTreeItemContext } from './deepnoteTreeItem';
+import {
+    DeepnoteTreeItem,
+    DeepnoteTreeItemType,
+    DeepnoteTreeItemContext,
+    ProjectGroupData,
+    getNonInitNotebooks
+} from './deepnoteTreeItem';
 import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { readDeepnoteProjectFile } from './deepnoteProjectUtils';
 import { ILogger } from '../../platform/logging/types';
@@ -25,12 +31,20 @@ import { isSnapshotFile, SNAPSHOT_FILE_SUFFIX } from './snapshots/snapshotFiles'
 export function compareTreeItemsByLabel(a: DeepnoteTreeItem, b: DeepnoteTreeItem): number {
     const labelA = typeof a.label === 'string' ? a.label : '';
     const labelB = typeof b.label === 'string' ? b.label : '';
+
     return labelA.toLowerCase().localeCompare(labelB.toLowerCase());
 }
 
 /**
  * Tree data provider for the Deepnote explorer view.
- * Manages the tree structure displaying Deepnote project files and their notebooks.
+ *
+ * The tree is grouped by `project.id`: root → `ProjectGroup` (one per distinct project id) →
+ * `ProjectFile` (one per sibling file) → `Notebook` (legacy multi-notebook files only).
+ *
+ * `cachedProjects` is keyed by **file path**; the `ProjectGroup` layer is re-derived from that
+ * cache on every read (group membership is "files whose `project.id` matches"). Because sibling
+ * files deliberately share one `project.id`, every refresh fires a full-tree change rather than a
+ * per-item scoped change.
  */
 export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeItem> {
     private _onDidChangeTreeData: EventEmitter<DeepnoteTreeItem | undefined | null | void> = new EventEmitter<
@@ -39,8 +53,9 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
     readonly onDidChangeTreeData: Event<DeepnoteTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
 
     private fileWatcher: FileSystemWatcher | undefined;
-    private cachedProjects: Map<string, DeepnoteProject> = new Map();
-    private treeItemCache: Map<string, DeepnoteTreeItem> = new Map();
+    private cachedProjects: Map<string /* filePath */, DeepnoteProject> = new Map();
+    private groupItemCache: Map<string /* projectId */, DeepnoteTreeItem> = new Map();
+    private fileItemCache: Map<string /* filePath */, DeepnoteTreeItem> = new Map();
     private isInitialScanComplete: boolean = false;
     private initialScanPromise: Promise<void> | undefined;
     private readonly logger?: ILogger;
@@ -58,91 +73,43 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
 
     public refresh(): void {
         this.cachedProjects.clear();
-        this.treeItemCache.clear();
+        this.groupItemCache.clear();
+        this.fileItemCache.clear();
         this.isInitialScanComplete = false;
         this.initialScanPromise = undefined;
         this.updateContextKey();
-        this._onDidChangeTreeData.fire();
+        this._onDidChangeTreeData.fire(undefined);
     }
 
     /**
-     * Refresh a specific project file in the tree
+     * Refresh a single project file in the tree by evicting its cache entry and firing a full-tree
+     * change. A full-tree fire (not a scoped `fire(item)`) is required because adding/removing/
+     * renaming one file can move it between groups or change a group's collapse state/label.
      * @param filePath The path to the project file to refresh
      */
-    public async refreshProject(filePath: string): Promise<void> {
-        // Get the cached tree item BEFORE clearing caches
-        const cacheKey = `project:${filePath}`;
-        const cachedTreeItem = this.treeItemCache.get(cacheKey);
-
-        // Clear the project data cache to force reload
+    public refreshProject(filePath: string): void {
         this.cachedProjects.delete(filePath);
-
-        if (cachedTreeItem) {
-            // Reload the project data and update the cached tree item
-            try {
-                const fileUri = Uri.file(filePath);
-                const project = await this.loadDeepnoteProject(fileUri);
-                if (project) {
-                    // Update the tree item's data
-                    cachedTreeItem.data = project;
-
-                    // Update visual fields (label, description, tooltip) to reflect changes
-                    cachedTreeItem.updateVisualFields();
-                }
-            } catch (error) {
-                this.logger?.error(`Failed to reload project ${filePath}`, error);
-            }
-
-            // Fire change event with the existing cached tree item
-            this._onDidChangeTreeData.fire(cachedTreeItem);
-        } else {
-            // If not found in cache, do a full refresh
-            this._onDidChangeTreeData.fire();
-        }
+        this.fileItemCache.delete(filePath);
+        this._onDidChangeTreeData.fire(undefined);
     }
 
     /**
-     * Refresh notebooks for a specific project
-     * @param projectId The project ID whose notebooks should be refreshed
+     * Refresh every sibling file of a project by evicting ALL `cachedProjects` entries whose
+     * `project.id` matches, then firing a full-tree change. Iterating all entries (never breaking
+     * on the first match) keeps the whole project group consistent when one sibling's notebook is
+     * renamed/deleted/duplicated.
+     * @param projectId The project ID whose sibling files should be refreshed
      */
-    public async refreshNotebook(projectId: string): Promise<void> {
-        // Find the cached tree item by scanning the cache
-        let cachedTreeItem: DeepnoteTreeItem | undefined;
-        let filePath: string | undefined;
-
-        for (const [key, item] of this.treeItemCache.entries()) {
-            if (key.startsWith('project:') && item.context.projectId === projectId) {
-                cachedTreeItem = item;
-                filePath = item.context.filePath;
-                break;
+    public refreshNotebook(projectId: string): void {
+        for (const [filePath, project] of this.cachedProjects) {
+            if (project.project.id === projectId) {
+                this.cachedProjects.delete(filePath);
+                this.fileItemCache.delete(filePath);
             }
         }
 
-        if (cachedTreeItem && filePath) {
-            // Clear the project data cache to force reload
-            this.cachedProjects.delete(filePath);
-
-            // Reload the project data and update the cached tree item
-            try {
-                const fileUri = Uri.file(filePath);
-                const project = await this.loadDeepnoteProject(fileUri);
-                if (project) {
-                    // Update the tree item's data
-                    cachedTreeItem.data = project;
-
-                    // Update visual fields (label, description, tooltip) to reflect changes
-                    cachedTreeItem.updateVisualFields();
-                }
-            } catch (error) {
-                this.logger?.error(`Failed to reload project ${filePath}`, error);
-            }
-
-            // Fire change event with the existing cached tree item to refresh its children
-            this._onDidChangeTreeData.fire(cachedTreeItem);
-        } else {
-            // If not found in cache, do a full refresh
-            this._onDidChangeTreeData.fire();
-        }
+        this.groupItemCache.delete(projectId);
+        this._onDidChangeTreeData.fire(undefined);
     }
 
     public getTreeItem(element: DeepnoteTreeItem): TreeItem {
@@ -150,10 +117,13 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
     }
 
     public async getChildren(element?: DeepnoteTreeItem): Promise<DeepnoteTreeItem[]> {
-        // If element is provided, we can return children regardless of workspace
         if (element) {
+            if (element.type === DeepnoteTreeItemType.ProjectGroup) {
+                return this.getFilesForGroup(element);
+            }
+
             if (element.type === DeepnoteTreeItemType.ProjectFile) {
-                return this.getNotebooksForProject(element);
+                return this.getNotebooksForProjectFile(element);
             }
 
             return [];
@@ -172,7 +142,44 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
             return [this.createLoadingTreeItem()];
         }
 
-        return this.getDeepnoteProjectFiles();
+        return this.getProjectGroups();
+    }
+
+    /**
+     * Find a tree item by project ID and optional notebook ID.
+     * Returns the project group when no notebook id is given; otherwise the matching file/notebook.
+     */
+    public async findTreeItem(projectId: string, notebookId?: string): Promise<DeepnoteTreeItem | undefined> {
+        const groups = await this.getProjectGroups();
+
+        for (const group of groups) {
+            if (group.context.projectId !== projectId) {
+                continue;
+            }
+
+            if (!notebookId) {
+                return group;
+            }
+
+            const files = await this.getFilesForGroup(group);
+
+            for (const fileItem of files) {
+                if (fileItem.context.notebookId === notebookId) {
+                    return fileItem;
+                }
+
+                const notebooks = await this.getNotebooksForProjectFile(fileItem);
+                const match = notebooks.find((notebookItem) => notebookItem.context.notebookId === notebookId);
+
+                if (match) {
+                    return match;
+                }
+            }
+
+            return group;
+        }
+
+        return undefined;
     }
 
     private createLoadingTreeItem(): DeepnoteTreeItem {
@@ -184,85 +191,142 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         );
         loadingItem.label = l10n.t('Scanning for Deepnote projects...');
         loadingItem.iconPath = new ThemeIcon('loading~spin');
+
         return loadingItem;
     }
 
     private async performInitialScan(): Promise<void> {
         try {
-            await this.getDeepnoteProjectFiles();
+            await this.loadAllProjects();
         } finally {
             this.isInitialScanComplete = true;
             this.initialScanPromise = undefined;
             this.updateContextKey();
-            this._onDidChangeTreeData.fire();
+            this._onDidChangeTreeData.fire(undefined);
         }
     }
 
-    private async getDeepnoteProjectFiles(): Promise<DeepnoteTreeItem[]> {
-        const deepnoteFiles: DeepnoteTreeItem[] = [];
+    /**
+     * Build the root-level `ProjectGroup` nodes: one per distinct `project.id` across all
+     * `.deepnote` files, sorted by project name. Single-file groups are expanded; multi-file
+     * groups are collapsed.
+     */
+    private async getProjectGroups(): Promise<DeepnoteTreeItem[]> {
+        const projectsByPath = await this.loadAllProjects();
+        const groups = this.buildProjectGroups(projectsByPath);
 
-        for (const workspaceFolder of workspace.workspaceFolders || []) {
-            const pattern = new RelativePattern(workspaceFolder, '**/*.deepnote');
-            const files = await workspace.findFiles(pattern);
-            const projectFiles = files.filter((file) => !file.path.endsWith(SNAPSHOT_FILE_SUFFIX));
+        const groupItems: DeepnoteTreeItem[] = [];
 
-            for (const file of projectFiles) {
-                try {
-                    const project = await this.loadDeepnoteProject(file);
-                    if (!project) {
-                        continue;
-                    }
+        for (const group of groups) {
+            const collapsibleState =
+                group.files.length > 1 ? TreeItemCollapsibleState.Collapsed : TreeItemCollapsibleState.Expanded;
 
-                    const context: DeepnoteTreeItemContext = {
-                        filePath: file.path,
-                        projectId: project.project.id
-                    };
+            let groupItem = this.groupItemCache.get(group.projectId);
 
-                    // Check if we have a cached tree item for this project
-                    const cacheKey = `project:${file.path}`;
-                    let treeItem = this.treeItemCache.get(cacheKey);
-
-                    if (!treeItem) {
-                        // Create new tree item only if not cached
-                        const hasNotebooks = project.project.notebooks && project.project.notebooks.length > 0;
-                        const collapsibleState = hasNotebooks
-                            ? TreeItemCollapsibleState.Collapsed
-                            : TreeItemCollapsibleState.None;
-
-                        treeItem = new DeepnoteTreeItem(
-                            DeepnoteTreeItemType.ProjectFile,
-                            context,
-                            project,
-                            collapsibleState
-                        );
-
-                        this.treeItemCache.set(cacheKey, treeItem);
-                    } else {
-                        // Update the cached tree item's data
-                        treeItem.data = project;
-                    }
-
-                    deepnoteFiles.push(treeItem);
-                } catch (error) {
-                    this.logger?.error(`Failed to load Deepnote project from ${file.path}`, error);
-                }
+            if (groupItem) {
+                groupItem.data = group;
+                groupItem.collapsibleState = collapsibleState;
+                groupItem.updateVisualFields();
+            } else {
+                groupItem = new DeepnoteTreeItem(
+                    DeepnoteTreeItemType.ProjectGroup,
+                    { filePath: group.files[0]?.filePath ?? '', projectId: group.projectId },
+                    group,
+                    collapsibleState
+                );
+                this.groupItemCache.set(group.projectId, groupItem);
             }
+
+            groupItems.push(groupItem);
         }
 
-        // Sort projects alphabetically by name (case-insensitive)
-        deepnoteFiles.sort(compareTreeItemsByLabel);
+        groupItems.sort(compareTreeItemsByLabel);
 
-        return deepnoteFiles;
+        return groupItems;
     }
 
-    private async getNotebooksForProject(projectItem: DeepnoteTreeItem): Promise<DeepnoteTreeItem[]> {
+    /**
+     * Group the cached file→project entries by `project.id` into `ProjectGroupData`, sorted by
+     * project name. Files within a group are sorted by file path for stable ordering.
+     */
+    private buildProjectGroups(projectsByPath: Map<string, DeepnoteProject>): ProjectGroupData[] {
+        const groupsById = new Map<string, ProjectGroupData>();
+
+        for (const [filePath, project] of projectsByPath) {
+            const projectId = project.project.id;
+            let group = groupsById.get(projectId);
+
+            if (!group) {
+                group = {
+                    projectId,
+                    projectName: project.project.name || 'Untitled Project',
+                    files: []
+                };
+                groupsById.set(projectId, group);
+            }
+
+            group.files.push({ filePath, project });
+        }
+
+        const groups = Array.from(groupsById.values());
+
+        for (const group of groups) {
+            group.files.sort((a, b) => a.filePath.localeCompare(b.filePath));
+        }
+
+        groups.sort((a, b) => a.projectName.toLowerCase().localeCompare(b.projectName.toLowerCase()));
+
+        return groups;
+    }
+
+    /**
+     * Children of a `ProjectGroup`: one `ProjectFile` per sibling file. A single-notebook file is a
+     * leaf; a legacy multi-notebook file is collapsible into its notebooks.
+     */
+    private async getFilesForGroup(groupItem: DeepnoteTreeItem): Promise<DeepnoteTreeItem[]> {
+        const group = groupItem.data as ProjectGroupData;
+        const fileItems: DeepnoteTreeItem[] = [];
+
+        for (const { filePath, project } of group.files) {
+            const isLeaf = getNonInitNotebooks(project).length === 1;
+            const collapsibleState = isLeaf ? TreeItemCollapsibleState.None : TreeItemCollapsibleState.Collapsed;
+
+            const context: DeepnoteTreeItemContext = {
+                filePath,
+                projectId: project.project.id
+            };
+
+            let fileItem = this.fileItemCache.get(filePath);
+
+            if (fileItem) {
+                fileItem.data = project;
+                fileItem.collapsibleState = collapsibleState;
+                fileItem.updateVisualFields();
+            } else {
+                fileItem = new DeepnoteTreeItem(DeepnoteTreeItemType.ProjectFile, context, project, collapsibleState);
+                this.fileItemCache.set(filePath, fileItem);
+            }
+
+            fileItems.push(fileItem);
+        }
+
+        fileItems.sort(compareTreeItemsByLabel);
+
+        return fileItems;
+    }
+
+    /**
+     * Children of a legacy multi-notebook `ProjectFile`: one `Notebook` per non-init notebook.
+     */
+    private async getNotebooksForProjectFile(projectItem: DeepnoteTreeItem): Promise<DeepnoteTreeItem[]> {
         const project = projectItem.data as DeepnoteProject;
-        const notebooks = project.project.notebooks || [];
+        const notebooks = getNonInitNotebooks(project);
 
         // Sort notebooks alphabetically by name (case-insensitive)
         const sortedNotebooks = [...notebooks].sort((a, b) => {
             const nameA = a.name || '';
             const nameB = b.name || '';
+
             return nameA.toLowerCase().localeCompare(nameB.toLowerCase());
         });
 
@@ -282,10 +346,33 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         });
     }
 
+    /**
+     * Scan every workspace folder for `.deepnote` files (skipping snapshots) and populate
+     * `cachedProjects`. Returns the file→project map used to build groups.
+     */
+    private async loadAllProjects(): Promise<Map<string, DeepnoteProject>> {
+        for (const workspaceFolder of workspace.workspaceFolders || []) {
+            const pattern = new RelativePattern(workspaceFolder, '**/*.deepnote');
+            const files = await workspace.findFiles(pattern);
+            const projectFiles = files.filter((file) => !file.path.endsWith(SNAPSHOT_FILE_SUFFIX));
+
+            for (const file of projectFiles) {
+                try {
+                    await this.loadDeepnoteProject(file);
+                } catch (error) {
+                    this.logger?.error(`Failed to load Deepnote project from ${file.path}`, error);
+                }
+            }
+        }
+
+        return this.cachedProjects;
+    }
+
     private async loadDeepnoteProject(fileUri: Uri): Promise<DeepnoteProject | undefined> {
         const filePath = fileUri.path;
 
         const cached = this.cachedProjects.get(filePath);
+
         if (cached) {
             return cached;
         }
@@ -295,6 +382,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
 
             if (project && project.project && project.project.id) {
                 this.cachedProjects.set(filePath, project);
+
                 return project;
             }
         } catch (error) {
@@ -321,51 +409,31 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
             if (isSnapshotFile(uri)) {
                 return;
             }
-            // Use granular refresh for file changes
-            void this.refreshProject(uri.path);
+
+            this.refreshProject(uri.path);
         });
 
         this.fileWatcher.onDidCreate((uri) => {
             if (isSnapshotFile(uri)) {
                 return;
             }
-            // New file created, do full refresh
-            this._onDidChangeTreeData.fire();
+
+            // New file created: evict by path (no-op if absent) and do a full-tree refresh.
+            this.cachedProjects.delete(uri.path);
+            this.fileItemCache.delete(uri.path);
+            this._onDidChangeTreeData.fire(undefined);
         });
 
         this.fileWatcher.onDidDelete((uri) => {
             if (isSnapshotFile(uri)) {
                 return;
             }
-            // File deleted, clear both caches and do full refresh
+
+            // File deleted: evict by path and do a full-tree refresh.
             this.cachedProjects.delete(uri.path);
-            this.treeItemCache.delete(`project:${uri.path}`);
-            this._onDidChangeTreeData.fire();
+            this.fileItemCache.delete(uri.path);
+            this._onDidChangeTreeData.fire(undefined);
         });
-    }
-
-    /**
-     * Find a tree item by project ID and optional notebook ID
-     */
-    public async findTreeItem(projectId: string, notebookId?: string): Promise<DeepnoteTreeItem | undefined> {
-        const projectFiles = await this.getDeepnoteProjectFiles();
-
-        for (const projectItem of projectFiles) {
-            if (projectItem.context.projectId === projectId) {
-                if (!notebookId) {
-                    return projectItem;
-                }
-
-                const notebooks = await this.getNotebooksForProject(projectItem);
-                for (const notebookItem of notebooks) {
-                    if (notebookItem.context.notebookId === notebookId) {
-                        return notebookItem;
-                    }
-                }
-            }
-        }
-
-        return undefined;
     }
 
     private updateContextKey(): void {

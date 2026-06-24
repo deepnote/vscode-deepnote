@@ -1,5 +1,6 @@
 import { deserializeDeepnoteFile, ExecutableBlock, serializeDeepnoteFile, type DeepnoteFile } from '@deepnote/blocks';
 import { assert, expect } from 'chai';
+import esmock from 'esmock';
 import * as sinon from 'sinon';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { Uri, workspace } from 'vscode';
@@ -446,6 +447,23 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
     });
 
     suite('importNotebook', () => {
+        // `convertIpynbFilesToDeepnoteFile` does real node:fs I/O, so stub just that one
+        // @deepnote/convert export (all other exports stay the real implementation) while the
+        // import flow is exercised. This mocks the side-effecting function where it matters,
+        // instead of reimplementing the whole package.
+        let importModule: typeof import('./deepnoteExplorerView');
+
+        setup(async () => {
+            importModule = await esmock('./deepnoteExplorerView', {
+                '@deepnote/convert': { convertIpynbFilesToDeepnoteFile: async () => {} }
+            });
+            explorerView = new importModule.DeepnoteExplorerView(mockContext, createMockLogger());
+        });
+
+        teardown(() => {
+            esmock.purge(importModule);
+        });
+
         test('should import deepnote files', async () => {
             const workspaceFolder = { uri: Uri.file('/workspace') };
             const sourceUri = Uri.file('/external/test.deepnote');
@@ -616,6 +634,21 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
     });
 
     suite('importJupyterNotebook', () => {
+        // Stub only the side-effecting `convertIpynbFilesToDeepnoteFile` (real node:fs I/O);
+        // all other @deepnote/convert exports remain the real implementation.
+        let importModule: typeof import('./deepnoteExplorerView');
+
+        setup(async () => {
+            importModule = await esmock('./deepnoteExplorerView', {
+                '@deepnote/convert': { convertIpynbFilesToDeepnoteFile: async () => {} }
+            });
+            explorerView = new importModule.DeepnoteExplorerView(mockContext, createMockLogger());
+        });
+
+        teardown(() => {
+            esmock.purge(importModule);
+        });
+
         test('should import jupyter notebook with correct naming', async () => {
             const workspaceFolder = { uri: Uri.file('/workspace') };
             const sourceUri = Uri.file('/external/my-analysis.ipynb');

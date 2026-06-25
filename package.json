@@ -2673,7 +2673,7 @@
         "test:performance:notebook": "cross-env VSC_JUPYTER_CI_TEST_GREP=@notebookPerformance VSC_JUPYTER_CI_TEST_DO_NOT_INSTALL_PYTHON_EXT=true CODE_TESTS_WORKSPACE=src/test/datascience TEST_FILES_SUFFIX=*.vscode.test,*.vscode.common.test node ./out/test/standardTest.node.js",
         "test:smoke": "cross-env VSC_JUPYTER_FORCE_LOGGING=true node --no-force-async-hooks-checks ./out/test/smokeTest.node.js",
         "compile-e2e": "tsc -p ./test/e2e/tsconfig.json",
-        "pretest:e2e": "npm run compile-e2e",
+        "compile-e2e-watch": "tsc -p ./test/e2e/tsconfig.json --watch",
         "setup:e2e:vscode": "extest get-vscode -c max && extest get-chromedriver -c max",
         "setup:e2e:deps": "extest install-from-marketplace ms-python.python -e .test-extensions",
         "setup:e2e": "npm run setup:e2e:vscode && npm run setup:e2e:deps",

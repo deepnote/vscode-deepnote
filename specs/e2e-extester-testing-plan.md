@@ -105,7 +105,10 @@ sensibly and so the setup is reproducible.
 npm run compile            # build the extension under test  → dist/extension.node.js
 npm run setup:e2e          # download test VS Code + ChromeDriver and install ms-python.python
 
-# run the E2E suite (pretest compiles test/e2e → out/e2e, then extest packages & runs)
+# compile the test sources (test/e2e → out/e2e), or run compile-e2e-watch while iterating
+npm run compile-e2e
+
+# run the E2E suite (extest packages the extension, downloads/launches VS Code, runs the tests)
 npm run test:e2e
 
 # headless Linux (CI or a server without a display): wrap in a virtual framebuffer
@@ -288,7 +291,7 @@ Add these scripts (placed alongside the other `test:*` scripts):
 "scripts": {
   // …existing…
   "compile-e2e": "tsc -p ./test/e2e/tsconfig.json",
-  "pretest:e2e": "npm run compile-e2e",
+  "compile-e2e-watch": "tsc -p ./test/e2e/tsconfig.json --watch",
   "setup:e2e:vscode": "extest get-vscode -c max && extest get-chromedriver -c max",
   "setup:e2e:deps": "extest install-from-marketplace ms-python.python -e .test-extensions",
   "setup:e2e": "npm run setup:e2e:vscode && npm run setup:e2e:deps",
@@ -296,8 +299,10 @@ Add these scripts (placed alongside the other `test:*` scripts):
 }
 ```
 
-`setup:e2e:deps` installs the Python extension using the *downloaded* test VS Code's CLI, so
-`setup:e2e:vscode` must run first.
+`compile-e2e` builds `test/e2e` → `out/e2e` (run it, or `compile-e2e-watch`, before `test:e2e`) —
+mirroring the unit-test flow (`compile-tsc` / `compile-tsc-watch` then `test:unittests`), with no
+`pre`-hook coupling compilation to the run. `setup:e2e:deps` installs the Python extension using
+the *downloaded* test VS Code's CLI, so `setup:e2e:vscode` must run first.
 
 What the `extest setup-and-run` flags mean:
 
@@ -938,9 +943,10 @@ Flakiness guards built into the test:
 real VS Code window. First-time sequence:
 
 ```bash
-npm run compile     # build the extension under test (produces dist/extension.node.js)
-npm run setup:e2e   # download test VS Code + ChromeDriver and install ms-python.python (one-time)
-npm run test:e2e    # pretest compiles test/e2e → out/e2e, then extest packages & runs
+npm run compile      # build the extension under test (produces dist/extension.node.js)
+npm run setup:e2e    # download test VS Code + ChromeDriver and install ms-python.python (one-time)
+npm run compile-e2e  # build the test sources (test/e2e → out/e2e); or run compile-e2e-watch
+npm run test:e2e     # extest packages the extension, downloads/launches VS Code, runs the tests
 ```
 
 - **Linux is headless** → install the Electron/Chromium system libraries and Xvfb (§0), then

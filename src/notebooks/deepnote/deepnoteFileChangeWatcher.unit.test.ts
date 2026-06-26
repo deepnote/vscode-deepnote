@@ -1,6 +1,6 @@
 import { assert } from 'chai';
 import * as sinon from 'sinon';
-import { anything, instance, mock, when } from 'ts-mockito';
+import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { Disposable, EventEmitter, FileSystemWatcher, NotebookCellKind, NotebookDocument, Uri } from 'vscode';
 
 import type { IControllerRegistration } from '../controllers/types';
@@ -1042,9 +1042,10 @@ project:
         });
 
         test('should apply snapshot outputs using original blocks when metadata is lost', async () => {
-            // Create a mock notebook manager that returns an original project
+            // Create a mock notebook manager that returns an original project via the exact
+            // (projectId, notebookId) lookup the snapshot path uses.
             const mockedManager = mock<IDeepnoteNotebookManager>();
-            when(mockedManager.getAnyProjectEntry('e132b172-b114-410e-8331-011517db664f')).thenReturn({
+            when(mockedManager.getOriginalProject('e132b172-b114-410e-8331-011517db664f', 'notebook-1')).thenReturn({
                 version: '1.0',
                 metadata: { createdAt: '2025-01-01T00:00:00Z' },
                 project: {
@@ -1133,6 +1134,131 @@ project:
             }
             fallbackOnDidChange.dispose();
             fallbackOnDidCreate.dispose();
+        });
+
+        test('should recover lost block IDs via exact (projectId, notebookId) lookup for sibling notebooks', async () => {
+            const projectId = 'e132b172-b114-410e-8331-011517db664f';
+
+            // Two single-notebook siblings of ONE project: they share project.id but each project's
+            // notebooks contains only its own notebook. A returns the WRONG project (no nb-B), B the right one.
+            const siblingAProject = {
+                version: '1.0',
+                metadata: { createdAt: '2025-01-01T00:00:00Z' },
+                project: {
+                    id: projectId,
+                    name: 'Test Project',
+                    notebooks: [
+                        {
+                            id: 'nb-A',
+                            name: 'Notebook A',
+                            blocks: [{ id: 'block-A', type: 'code', sortingKey: 'a0' }]
+                        }
+                    ]
+                }
+            } as DeepnoteProject;
+            const siblingBProject = {
+                version: '1.0',
+                metadata: { createdAt: '2025-01-01T00:00:00Z' },
+                project: {
+                    id: projectId,
+                    name: 'Test Project',
+                    notebooks: [
+                        {
+                            id: 'nb-B',
+                            name: 'Notebook B',
+                            blocks: [{ id: 'block-B', type: 'code', sortingKey: 'a0' }]
+                        }
+                    ]
+                }
+            } as DeepnoteProject;
+
+            const mockedManager = mock<IDeepnoteNotebookManager>();
+            // Project-only lookup returns the arbitrary sibling A (the wrong one, which lacks nb-B).
+            when(mockedManager.getAnyProjectEntry(projectId)).thenReturn(siblingAProject);
+            // Exact lookup returns sibling B — this is what the fix must use.
+            when(mockedManager.getOriginalProject(projectId, 'nb-B')).thenReturn(siblingBProject);
+            when(mockedManager.getOriginalProject(projectId, 'nb-A')).thenReturn(siblingAProject);
+
+            const siblingDisposables: IDisposableRegistry = [];
+            const siblingOnDidChange = new EventEmitter<Uri>();
+            const siblingOnDidCreate = new EventEmitter<Uri>();
+            const siblingFsWatcher = mock<FileSystemWatcher>();
+            when(siblingFsWatcher.onDidChange).thenReturn(siblingOnDidChange.event);
+            when(siblingFsWatcher.onDidCreate).thenReturn(siblingOnDidCreate.event);
+            when(siblingFsWatcher.dispose()).thenReturn();
+            when(mockedVSCodeNamespaces.workspace.createFileSystemWatcher(anything())).thenReturn(
+                instance(siblingFsWatcher)
+            );
+
+            let siblingApplyEditCount = 0;
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenCall(() => {
+                siblingApplyEditCount++;
+                return Promise.resolve(true);
+            });
+
+            const siblingWatcher = new DeepnoteFileChangeWatcher(
+                siblingDisposables,
+                instance(mockedManager),
+                instance(mockSnapshotService)
+            );
+            siblingWatcher.activate();
+
+            const snapshotUri = Uri.file(`/workspace/snapshots/my-project_${projectId}_latest.snapshot.deepnote`);
+            // The open notebook is sibling B, with cell metadata block-id MISSING (metadata-lost case),
+            // so recovery must use originalBlocks resolved from the exact lookup.
+            const notebook = createMockNotebook({
+                uri: Uri.file('/workspace/sibling-b.deepnote'),
+                metadata: {
+                    deepnoteProjectId: projectId,
+                    deepnoteNotebookId: 'nb-B'
+                },
+                cells: [
+                    {
+                        metadata: { type: 'code' }, // No id!
+                        outputs: [],
+                        kind: NotebookCellKind.Code,
+                        document: { getText: () => 'print("hello")' }
+                    }
+                ]
+            });
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+
+            // Snapshot has an output keyed by B's block id only.
+            const siblingOutputs = new Map<string, DeepnoteOutput[]>([
+                [
+                    'block-B',
+                    [
+                        {
+                            output_type: 'execute_result',
+                            data: { 'text/plain': 'Sibling B Output' },
+                            execution_count: 1
+                        } as DeepnoteOutput
+                    ]
+                ]
+            ]);
+            when(mockSnapshotService.readSnapshot(anything(), anything())).thenReturn(Promise.resolve(siblingOutputs));
+
+            siblingOnDidChange.fire(snapshotUri);
+
+            await waitFor(() => siblingApplyEditCount > 0);
+
+            // Recovery only succeeds if the code used getOriginalProject(projectId, 'nb-B') — the exact
+            // lookup. With the old getAnyProjectEntry(projectId) (sibling A, no nb-B), originalBlocks
+            // would be undefined, block-id recovery could not run, and no edit would be applied.
+            assert.isAtLeast(
+                siblingApplyEditCount,
+                1,
+                'snapshot output should be applied to sibling B via exact (projectId, notebookId) lookup'
+            );
+            verify(mockedManager.getOriginalProject(projectId, 'nb-B')).called();
+
+            // Cleanup
+            for (const d of siblingDisposables) {
+                d.dispose();
+            }
+            siblingOnDidChange.dispose();
+            siblingOnDidCreate.dispose();
         });
 
         test('should only update cells whose outputs changed (per-cell updates)', async () => {

@@ -141,12 +141,28 @@ export class DeepnoteInitNotebookRunner implements IDeepnoteInitNotebookRunner, 
                 }" (${initNotebookId}) for project ${projectId} in kernel for ${getDisplayPath(notebook.uri)}`
             );
 
-            const success = await this.executeInitNotebook(notebook, initNotebook);
+            // Tie the init run to the notebook's lifecycle: if the user closes the notebook
+            // mid-init, cancel so the remaining init blocks/progress stop. This is per-run state
+            // and must be cleaned up when the run finishes — do NOT register it in `disposables`.
+            const cts = new CancellationTokenSource();
+            const closeListener = workspace.onDidCloseNotebookDocument((closedNotebook) => {
+                if (closedNotebook.uri.toString() === notebook.uri.toString()) {
+                    logger.info(`Notebook closed while init notebook was running, cancelling for project ${projectId}`);
+                    cts.cancel();
+                }
+            });
 
-            if (success) {
-                logger.info(`Init notebook completed successfully for project ${projectId}`);
-            } else {
-                logger.warn(`Init notebook did not execute for project ${projectId} - kernel not available`);
+            try {
+                const success = await this.executeInitNotebook(notebook, initNotebook, cts.token);
+
+                if (success) {
+                    logger.info(`Init notebook completed successfully for project ${projectId}`);
+                } else {
+                    logger.warn(`Init notebook did not execute for project ${projectId} - kernel not available`);
+                }
+            } finally {
+                closeListener.dispose();
+                cts.dispose();
             }
         } catch (error) {
             // Log error but don't throw - we want to let the user continue anyway.

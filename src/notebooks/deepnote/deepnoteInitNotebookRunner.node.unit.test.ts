@@ -98,6 +98,48 @@ function makeSingleNotebookFile(projectId: string, notebookId: string, codeConte
     } as unknown as DeepnoteFile;
 }
 
+/**
+ * Build a single-notebook DeepnoteFile whose one notebook carries TWO code blocks (in order).
+ * Used to prove per-block behavior across the init loop (e.g. cancellation between blocks).
+ */
+function makeTwoCodeBlockFile(
+    projectId: string,
+    notebookId: string,
+    firstCode: string,
+    secondCode: string
+): DeepnoteFile {
+    return {
+        version: '1.0.0',
+        metadata: { createdAt: '2020-01-01T00:00:00Z', modifiedAt: '2021-01-01T00:00:00Z' },
+        project: {
+            id: projectId,
+            name: 'Proj',
+            notebooks: [
+                {
+                    id: notebookId,
+                    name: 'Init',
+                    blocks: [
+                        {
+                            id: `${notebookId}-code-1`,
+                            type: 'code',
+                            sortingKey: 'a0',
+                            blockGroup: 'g',
+                            content: firstCode
+                        },
+                        {
+                            id: `${notebookId}-code-2`,
+                            type: 'code',
+                            sortingKey: 'a1',
+                            blockGroup: 'g',
+                            content: secondCode
+                        }
+                    ]
+                }
+            ]
+        }
+    } as unknown as DeepnoteFile;
+}
+
 /** The cached project entry the manager returns for `getAnyProjectEntry` (carries initNotebookId). */
 function makeMainProjectEntry(projectId: string, initNotebookId: string | undefined): DeepnoteProject {
     return {
@@ -368,6 +410,55 @@ suite('DeepnoteInitNotebookRunner', () => {
 
         assert.strictEqual(executeHiddenSpy.callCount, 0, 'no init must run when initNotebookId is undefined');
         assert.strictEqual(readDirectoryCount, 0, 'with no init configured there is no need to scan the directory');
+    });
+
+    test('closing the notebook mid-init stops remaining init blocks (close cancels the run)', async () => {
+        // Regression for a lifecycle cancellation bug: runInitForKernel must pass a token tied to
+        // notebook close into executeInitNotebook, so closing the notebook while init is running
+        // stops the remaining blocks. Without that token BOTH blocks run regardless of close.
+        const FIRST_BLOCK_CODE = 'pip install first-init-package';
+        const SECOND_BLOCK_CODE = 'pip install second-init-package';
+
+        putFile(MAIN_FILE_NAME, makeMainProjectEntry(PROJECT_ID, INIT_NOTEBOOK_ID) as unknown as DeepnoteFile);
+        putFile(
+            SIBLING_INIT_FILE_NAME,
+            makeTwoCodeBlockFile(PROJECT_ID, INIT_NOTEBOOK_ID, FIRST_BLOCK_CODE, SECOND_BLOCK_CODE)
+        );
+
+        // Wire a close emitter we can fire (the runner subscribes to workspace.onDidCloseNotebookDocument).
+        const onDidCloseNotebookDocument = new EventEmitter<NotebookDocument>();
+        when(mockedVSCodeNamespaces.workspace.onDidCloseNotebookDocument).thenReturn(onDidCloseNotebookDocument.event);
+
+        // Hold the FIRST block's execution open so we can fire close while init is mid-loop. The
+        // second block must never run because the per-block cancellation check trips after close.
+        let resolveFirstBlock!: () => void;
+        const firstBlockGate = new Promise<[]>((resolve) => {
+            resolveFirstBlock = () => resolve([]);
+        });
+        executeHiddenSpy.callsFake((code: string) =>
+            code === FIRST_BLOCK_CODE ? firstBlockGate : Promise.resolve([])
+        );
+
+        const kernel = makeKernel(MAIN_FILE_NAME);
+        onDidStartKernel.fire(kernel);
+
+        // Wait until the first block is in flight (its executeHidden has been called and is pending).
+        await waitFor(() => executeHiddenSpy.callCount >= 1);
+        assert.strictEqual(executeHiddenSpy.callCount, 1, 'the first init block should be executing');
+        assert.strictEqual(executeHiddenSpy.firstCall.args[0], FIRST_BLOCK_CODE, 'first block runs first');
+
+        // Close the notebook (URI-matched) — this must cancel the run's token.
+        onDidCloseNotebookDocument.fire(kernel.notebook);
+
+        // Let the first block finish; the loop then re-checks the (now cancelled) token before block 2.
+        resolveFirstBlock();
+        await settle();
+
+        assert.strictEqual(executeHiddenSpy.callCount, 1, 'after close, the remaining init block(s) must NOT execute');
+        assert.isFalse(
+            executeHiddenSpy.getCalls().some((c) => c.args[0] === SECOND_BLOCK_CODE),
+            'the second init block must never run once the notebook is closed mid-init'
+        );
     });
 
     test('sibling of a DIFFERENT project is not a valid init source (project.id must match)', async () => {

@@ -353,14 +353,18 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             return;
         }
 
-        const notebookIdForSnapshot = notebook.metadata?.deepnoteNotebookId as string | undefined;
-        const snapshotOutputs = await this.snapshotService.readSnapshot(projectId, notebookIdForSnapshot);
+        const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
+        const snapshotOutputs = await this.snapshotService.readSnapshot(projectId, notebookId);
         if (!snapshotOutputs || snapshotOutputs.size === 0) {
             return;
         }
 
-        // Look up original project blocks for fallback block ID resolution
-        const originalProject = this.notebookManager.getAnyProjectEntry(projectId);
+        // Look up original project blocks for fallback block ID resolution with an exact
+        // (projectId, notebookId) lookup. Sibling files share a project.id, so a project-only
+        // lookup (getAnyProjectEntry) can return a different sibling's project whose notebooks do
+        // not contain this notebookId — leaving originalBlocks undefined and silently skipping the
+        // metadata-lost block-id recovery below. Mirrors the F1 fix in snapshotService.ts.
+        const originalProject = notebookId ? this.notebookManager.getOriginalProject(projectId, notebookId) : undefined;
         const notebookBlocksMap = new Map<string, DeepnoteBlock[]>();
         if (originalProject) {
             for (const nb of originalProject.project.notebooks) {
@@ -369,7 +373,6 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         }
 
         const liveCells = notebook.getCells();
-        const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
         const originalBlocks = notebookId ? notebookBlocksMap.get(notebookId) : undefined;
 
         // Collect cells that need output updates

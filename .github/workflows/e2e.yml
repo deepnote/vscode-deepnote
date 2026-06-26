@@ -1,19 +1,20 @@
 name: E2E
 
-# Runs the ExTester end-to-end suite against the extension VSIX produced by the CD workflow, so the
-# extension is built only once (in CD) and merely installed + exercised here.
+# Builds the extension VSIX and runs the ExTester end-to-end suite against it. The VSIX is packaged
+# here (same as CD) rather than downloaded from CD, so this workflow is self-contained and triggers
+# on the same events as CI.
 on:
-  workflow_run:
-    workflows: [CD]
-    types: [completed]
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
-  actions: read # required to download the VSIX artifact from the triggering CD run
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch || github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -21,18 +22,14 @@ jobs:
     name: E2E (ExTester)
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    # Only run after a *successful* CD (a failed CD produces no VSIX). Manual runs always proceed.
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     env:
       # Keep ExTester's downloads (test VS Code, ChromeDriver, settings, screenshots) inside the
       # workspace so the artifact-upload paths are predictable. Both this and .test-extensions are
       # gitignored.
       TEST_RESOURCES: ${{ github.workspace }}/test-resources
     steps:
-      - name: Checkout (the commit CD built)
+      - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
@@ -46,7 +43,18 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: npm ci --prefer-offline --no-audit
+        run: |
+          npm ci --prefer-offline --no-audit
+          # Verify Tailwind CSS native modules are installed for Linux (npm optional deps bug)
+          # See: https://github.com/npm/cli/issues/4828
+          node -e "try { require('lightningcss'); } catch { process.exit(1); }" 2>/dev/null || npm install lightningcss-linux-x64-gnu
+          node -e "try { require('@tailwindcss/oxide'); } catch { process.exit(1); }" 2>/dev/null || npm install @tailwindcss/oxide-linux-x64-gnu
+
+      - name: Install vsce
+        run: npm install -g @vscode/vsce
+
+      - name: Package extension
+        run: npm run package
 
       - name: Compile the E2E test sources
         run: npm run compile-e2e
@@ -61,42 +69,11 @@ jobs:
             libcairo2 libatspi2.0-0 libx11-xcb1 libxcb-dri3-0 libxtst6 libsecret-1-0 \
             libgssapi-krb5-2 libdbus-1-3 libexpat1 python3.12-venv python3-pip
 
-      - name: Resolve the CD run that built the VSIX
-        id: cd
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            RUN_ID="${{ github.event.workflow_run.id }}"
-          else
-            # Manual run: fall back to the most recent successful CD run.
-            RUN_ID=$(gh run list --workflow cd.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')
-          fi
-          test -n "$RUN_ID"
-          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
-          echo "Using CD run id: $RUN_ID"
-
-      - name: Download the extension VSIX built by CD
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
-        with:
-          run-id: ${{ steps.cd.outputs.run_id }}
-          github-token: ${{ github.token }}
-          path: ./vsix
-          merge-multiple: true
-
-      - name: Locate the VSIX
-        id: vsix
-        run: |
-          FILE=$(ls ./vsix/vscode-deepnote-*.vsix | head -1)
-          test -f "$FILE"
-          echo "path=$FILE" >> "$GITHUB_OUTPUT"
-          echo "Testing VSIX: $FILE"
-
       - name: Download the test VS Code + ChromeDriver
         run: npm run setup:e2e:vscode
 
-      - name: Install the CD-built extension into the test instance (no rebuild)
-        run: npx extest install-vsix -f "${{ steps.vsix.outputs.path }}" -e .test-extensions
+      - name: Install the built extension into the test instance
+        run: npx extest install-vsix -f vscode-deepnote-insiders.vsix -e .test-extensions
 
       - name: Install the Python extension into the test instance
         run: npm run setup:e2e:deps

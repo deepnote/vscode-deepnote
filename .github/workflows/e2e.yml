@@ -78,6 +78,20 @@ jobs:
       - name: Install the Python extension into the test instance
         run: npm run setup:e2e:deps
 
+      - name: Cache pip wheel downloads
+        # Provisioning the Deepnote environment pip-installs the toolkit dependency tree into a
+        # fresh venv on first kernel connect — the bulk of the E2E runtime. Caching pip's wheel
+        # cache makes that warm on later runs (the installs use the cache; nothing passes
+        # --no-cache-dir). The key busts when the toolkit version / install set changes; the
+        # restore-keys prefix keeps the cache warm across unrelated changes, since pip's cache is
+        # additive.
+        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-py312-${{ hashFiles('src/kernels/deepnote/types.ts', 'src/kernels/deepnote/deepnoteToolkitInstaller.node.ts') }}
+          restore-keys: |
+            pip-${{ runner.os }}-py312-
+
       - name: Run E2E
         # ExTester launches VS Code with --no-sandbox by default, so no AppArmor sysctl is needed.
         # A small retry absorbs transient UI/launch flakiness (mocha already retries the test once).

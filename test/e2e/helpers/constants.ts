@@ -7,9 +7,14 @@ export const ENV_CREATED_TIMEOUT = 120_000;
 export const KERNEL_CONNECT_TIMEOUT = 300_000;
 export const OUTPUT_TIMEOUT = 300_000;
 
-// How often to re-issue "Run All" while waiting for output — the first run can be dropped right
-// after the kernel connects.
-export const RUN_ALL_REISSUE_INTERVAL = 25_000;
+// How often to re-issue "Run All" while waiting for output. VS Code drops the first run request(s)
+// while the kernel is still connecting, so we keep nudging it; a short interval makes recovery from
+// a dropped run fast (a coarse interval can add a full interval's delay per dropped run — observed
+// adding ~100s with a 25s value).
+export const RUN_ALL_REISSUE_INTERVAL = 5_000;
+
+// How often to poll the output webview for the expected text.
+export const OUTPUT_POLL_INTERVAL = 1_500;
 
 export const INTERPRETER_RETRY_DELAY = 5_000;
 export const MAX_CREATE_ATTEMPTS = 6;

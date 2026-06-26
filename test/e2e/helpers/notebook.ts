@@ -1,6 +1,6 @@
 import { By, EditorView, VSBrowser, WebView } from 'vscode-extension-tester';
 
-import { OUTPUT_SELECTOR, RUN_ALL_REISSUE_INTERVAL, WORKBENCH_TIMEOUT } from './constants';
+import { OUTPUT_POLL_INTERVAL, OUTPUT_SELECTOR, RUN_ALL_REISSUE_INTERVAL, WORKBENCH_TIMEOUT } from './constants';
 
 /**
  * Focuses the given notebook editor and clicks its toolbar "Run All" button. The command-palette
@@ -84,7 +84,7 @@ export async function runAndAwaitOutput(notebookFileName: string, expected: stri
             return lastText;
         }
 
-        await driver.sleep(2_000);
+        await driver.sleep(OUTPUT_POLL_INTERVAL);
     }
 
     throw new Error(

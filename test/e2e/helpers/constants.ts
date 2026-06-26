@@ -19,6 +19,11 @@ export const OUTPUT_POLL_INTERVAL = 1_500;
 export const INTERPRETER_RETRY_DELAY = 5_000;
 export const MAX_CREATE_ATTEMPTS = 6;
 
+// How long to wait for an optional input box (packages/description) to appear after confirming the
+// environment name. When the name already exists the create command short-circuits with an "already
+// exists" notification and opens no further inputs, so this wait elapses and the prompts are skipped.
+export const OPTIONAL_PROMPT_TIMEOUT = 5_000;
+
 // The in-window simple file/folder dialog needs a beat to resolve a typed path before it accepts.
 export const DIALOG_RESOLVE_DELAY = 1_500;
 export const FOLDER_OPEN_ATTEMPTS = 5;

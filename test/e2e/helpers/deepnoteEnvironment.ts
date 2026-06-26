@@ -5,6 +5,7 @@ import {
     INTERPRETER_RETRY_DELAY,
     KERNEL_CONNECT_TIMEOUT,
     MAX_CREATE_ATTEMPTS,
+    OPTIONAL_PROMPT_TIMEOUT,
     QUICK_PICK_TIMEOUT
 } from './constants';
 import { dismissAllNotifications, waitForNotification } from './notifications';
@@ -58,11 +59,19 @@ export async function createEnvironment(name: string): Promise<void> {
         await nameBox.setText(name);
         await nameBox.confirm();
 
-        // Packages (optional) — leave empty.
-        await (await InputBox.create()).confirm();
+        // On an existing name the create command short-circuits after the name prompt with an
+        // "already exists" notification and opens no further inputs, so only drive the optional
+        // prompts when the packages box actually appears. This keeps the documented idempotent
+        // retry path working: a leftover environment is reused rather than failing the test on a
+        // timed-out InputBox that never opens.
+        const packagesBox = await tryOpenInputBox(OPTIONAL_PROMPT_TIMEOUT);
+        if (packagesBox) {
+            // Packages (optional) — leave empty.
+            await packagesBox.confirm();
 
-        // Description (optional) — leave empty.
-        await (await InputBox.create()).confirm();
+            // Description (optional) — leave empty.
+            await (await InputBox.create()).confirm();
+        }
 
         // Treat both the success toast and the "already exists" guard as success: a leftover
         // environment from a previous/retried run is fine — it will be selected next.

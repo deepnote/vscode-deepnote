@@ -851,6 +851,7 @@ export namespace Integrations {
     export const alloyDBTypeLabel = l10n.t('Google AlloyDB');
     export const athenaTypeLabel = l10n.t('Amazon Athena');
     export const clickHouseTypeLabel = l10n.t('ClickHouse');
+    export const cloudSqlTypeLabel = l10n.t('Google Cloud SQL');
     export const databricksTypeLabel = l10n.t('Databricks');
     export const dremioTypeLabel = l10n.t('Dremio');
     export const mariaDBTypeLabel = l10n.t('MariaDB');
@@ -1085,6 +1086,18 @@ export namespace Integrations {
     export const spannerDataBoostHelp = l10n.t(
         'Data Boost provides independent compute resources for analytics queries.'
     );
+
+    // Cloud SQL form strings
+    export const cloudSqlNameLabel = l10n.t('Name (optional)');
+    export const cloudSqlNamePlaceholder = l10n.t('My Cloud SQL Database');
+    export const cloudSqlServiceAccountLabel = l10n.t('Service Account JSON');
+    export const cloudSqlServiceAccountPlaceholder = l10n.t(
+        '{\n  "type": "service_account",\n  "project_id": "...",\n  ...\n}'
+    );
+    export const cloudSqlServiceAccountHelp = l10n.t(
+        'Paste the contents of your Google Cloud service account JSON key file.'
+    );
+    export const cloudSqlServiceAccountInvalidJson = l10n.t('Invalid JSON format');
 
     // AlloyDB form strings
     export const alloyDBNameLabel = l10n.t('Name (optional)');

@@ -194,6 +194,7 @@ export type LocalizedMessages = {
     integrationsAlloyDBTypeLabel: string;
     integrationsAthenaTypeLabel: string;
     integrationsClickHouseTypeLabel: string;
+    integrationsCloudSqlTypeLabel: string;
     integrationsDatabricksTypeLabel: string;
     integrationsDremioTypeLabel: string;
     integrationsMariaDBTypeLabel: string;
@@ -379,6 +380,13 @@ export type LocalizedMessages = {
     integrationsSpannerServiceAccountInvalidJson: string;
     integrationsSpannerDataBoostLabel: string;
     integrationsSpannerDataBoostHelp: string;
+    // Cloud SQL form strings
+    integrationsCloudSqlNameLabel: string;
+    integrationsCloudSqlNamePlaceholder: string;
+    integrationsCloudSqlServiceAccountLabel: string;
+    integrationsCloudSqlServiceAccountPlaceholder: string;
+    integrationsCloudSqlServiceAccountHelp: string;
+    integrationsCloudSqlServiceAccountInvalidJson: string;
     // AlloyDB form strings
     integrationsAlloyDBNameLabel: string;
     integrationsAlloyDBNamePlaceholder: string;

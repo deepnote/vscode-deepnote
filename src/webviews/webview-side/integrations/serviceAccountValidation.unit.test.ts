@@ -20,6 +20,14 @@ suite('validateServiceAccountJson', () => {
         assert.strictEqual(result?.kind, 'invalid-json');
     });
 
+    // Catches: JSON.parse accepting non-object payloads (numbers, strings, null, arrays) as valid credentials.
+    test("returns 'invalid-json' for valid JSON that is not an object", () => {
+        assert.strictEqual(validateServiceAccountJson('123')?.kind, 'invalid-json');
+        assert.strictEqual(validateServiceAccountJson('"a string"')?.kind, 'invalid-json');
+        assert.strictEqual(validateServiceAccountJson('null')?.kind, 'invalid-json');
+        assert.strictEqual(validateServiceAccountJson('[1, 2]')?.kind, 'invalid-json');
+    });
+
     // Catches: a valid credential being wrongly rejected, including when wrapped in surrounding whitespace.
     test('returns null for valid JSON, ignoring surrounding whitespace', () => {
         assert.strictEqual(validateServiceAccountJson('  {"type":"service_account"}  '), null);

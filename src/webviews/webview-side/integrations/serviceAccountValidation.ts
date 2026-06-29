@@ -20,10 +20,17 @@ export function validateServiceAccountJson(value: string): ServiceAccountValidat
         return { kind: 'required' };
     }
 
+    let parsed: unknown;
     try {
-        JSON.parse(trimmed);
+        parsed = JSON.parse(trimmed);
     } catch (error) {
         return { kind: 'invalid-json', detail: error instanceof Error ? error.message : 'Invalid JSON' };
+    }
+
+    // A service-account credential is always a JSON object. `JSON.parse` also accepts primitives,
+    // `null` and arrays (e.g. `123`, `"foo"`, `null`, `[]`), so reject anything that is not an object.
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        return { kind: 'invalid-json', detail: 'Expected a JSON object' };
     }
 
     return null;

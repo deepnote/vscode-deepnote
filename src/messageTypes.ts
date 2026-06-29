@@ -378,6 +378,7 @@ export type LocalizedMessages = {
     integrationsSpannerServiceAccountPlaceholder: string;
     integrationsSpannerServiceAccountHelp: string;
     integrationsSpannerServiceAccountInvalidJson: string;
+    integrationsSpannerServiceAccountRequired: string;
     integrationsSpannerDataBoostLabel: string;
     integrationsSpannerDataBoostHelp: string;
     // Cloud SQL form strings
@@ -387,6 +388,7 @@ export type LocalizedMessages = {
     integrationsCloudSqlServiceAccountPlaceholder: string;
     integrationsCloudSqlServiceAccountHelp: string;
     integrationsCloudSqlServiceAccountInvalidJson: string;
+    integrationsCloudSqlServiceAccountRequired: string;
     // AlloyDB form strings
     integrationsAlloyDBNameLabel: string;
     integrationsAlloyDBNamePlaceholder: string;

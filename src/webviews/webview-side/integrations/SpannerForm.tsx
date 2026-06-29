@@ -48,6 +48,7 @@ export const SpannerForm: React.FC<ISpannerFormProps> = ({
                 ? structuredClone(existingConfig)
                 : createEmptySpannerConfig({ id: integrationId, name: defaultName })
         );
+        setServiceAccountError(null);
     }, [existingConfig, integrationId, defaultName]);
 
     const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -91,16 +92,22 @@ export const SpannerForm: React.FC<ISpannerFormProps> = ({
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
+        const serviceAccount = pendingConfig.metadata.service_account.trim();
+
+        // Service account is required (`required` on the textarea does not reject whitespace-only input)
+        if (!serviceAccount) {
+            setServiceAccountError(
+                getLocString('integrationsSpannerServiceAccountRequired', 'Service account is required')
+            );
+            return;
+        }
+
         // Validate service account JSON
-        if (pendingConfig.metadata.service_account.trim()) {
-            try {
-                JSON.parse(pendingConfig.metadata.service_account);
-            } catch (err) {
-                setServiceAccountError(
-                    getLocString('integrationsSpannerServiceAccountInvalidJson', 'Invalid JSON format')
-                );
-                return;
-            }
+        try {
+            JSON.parse(serviceAccount);
+        } catch (err) {
+            setServiceAccountError(getLocString('integrationsSpannerServiceAccountInvalidJson', 'Invalid JSON format'));
+            return;
         }
 
         onSave(pendingConfig);

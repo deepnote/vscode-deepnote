@@ -1082,6 +1082,7 @@ export namespace Integrations {
         'Paste the contents of your Google Cloud service account JSON key file.'
     );
     export const spannerServiceAccountInvalidJson = l10n.t('Invalid JSON format');
+    export const spannerServiceAccountRequired = l10n.t('Service account is required');
     export const spannerDataBoostLabel = l10n.t('Enable Data Boost');
     export const spannerDataBoostHelp = l10n.t(
         'Data Boost provides independent compute resources for analytics queries.'
@@ -1098,6 +1099,7 @@ export namespace Integrations {
         'Paste the contents of your Google Cloud service account JSON key file.'
     );
     export const cloudSqlServiceAccountInvalidJson = l10n.t('Invalid JSON format');
+    export const cloudSqlServiceAccountRequired = l10n.t('Service account is required');
 
     // AlloyDB form strings
     export const alloyDBNameLabel = l10n.t('Name (optional)');

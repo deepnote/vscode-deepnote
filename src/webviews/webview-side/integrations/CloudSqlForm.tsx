@@ -2,6 +2,7 @@ import * as React from 'react';
 import { getLocString } from '../react-common/locReactSide';
 import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
 import { getDefaultIntegrationName } from './integrationUtils';
+import { validateServiceAccountJson } from './serviceAccountValidation';
 
 function createEmptyCloudSqlConfig(params: {
     id: string;
@@ -55,39 +56,28 @@ export const CloudSqlForm: React.FC<ICloudSqlFormProps> = ({
 
     const handleServiceAccountChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const value = e.target.value;
-        setServiceAccountError(null);
+        const validationError = validateServiceAccountJson(value);
 
-        // Try to parse as JSON to validate
-        if (value.trim()) {
-            try {
-                JSON.parse(value);
-            } catch (err) {
-                setServiceAccountError(
-                    getLocString('integrationsCloudSqlServiceAccountInvalidJson', 'Invalid JSON format')
-                );
-            }
-        }
-
+        // Only surface invalid-JSON while typing; missing input is reported on submit.
+        setServiceAccountError(
+            validationError?.kind === 'invalid-json'
+                ? getLocString('integrationsCloudSqlServiceAccountInvalidJson', 'Invalid JSON format')
+                : null
+        );
         setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, service_account: value } }));
     };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        const serviceAccount = pendingConfig.metadata.service_account.trim();
-
-        // Service account is required (`required` on the textarea does not reject whitespace-only input)
-        if (!serviceAccount) {
+        const validationError = validateServiceAccountJson(pendingConfig.metadata.service_account);
+        if (validationError?.kind === 'required') {
             setServiceAccountError(
                 getLocString('integrationsCloudSqlServiceAccountRequired', 'Service account is required')
             );
             return;
         }
-
-        // Validate service account JSON
-        try {
-            JSON.parse(serviceAccount);
-        } catch (err) {
+        if (validationError?.kind === 'invalid-json') {
             setServiceAccountError(
                 getLocString('integrationsCloudSqlServiceAccountInvalidJson', 'Invalid JSON format')
             );

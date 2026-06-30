@@ -1,30 +1,8 @@
-import {
-    decodeNotebookIdFromFilename,
-    encodeNotebookIdForFilename,
-    generateSnapshotFilename,
-    parseSnapshotFilename,
-    resolveSnapshotNotebookId,
-    slugifyProjectName
-} from '@deepnote/convert';
+import { parseSnapshotFilename } from '@deepnote/convert';
 import { Uri } from 'vscode';
 
 /** File suffix for snapshot files */
 export const SNAPSHOT_FILE_SUFFIX = '.snapshot.deepnote';
-
-/**
- * Re-export the snapshot filename helpers from `@deepnote/convert` so the snapshot service
- * and tests share a single, CLI-compatible implementation of the filename grammar (which
- * percent-encodes the notebook id and NFD-normalizes accents). The local hand-written
- * regex/slugify previously diverged from the CLI and is gone.
- */
-export {
-    decodeNotebookIdFromFilename,
-    encodeNotebookIdForFilename,
-    generateSnapshotFilename,
-    parseSnapshotFilename,
-    resolveSnapshotNotebookId,
-    slugifyProjectName
-};
 
 /**
  * Checks if a URI represents a snapshot file

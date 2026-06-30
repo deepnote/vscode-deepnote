@@ -8,7 +8,14 @@ import {
     type Execution,
     type ExecutionError
 } from '@deepnote/blocks';
-import { countBlocksWithOutputs, hasOutputs } from '@deepnote/convert';
+import {
+    countBlocksWithOutputs,
+    generateSnapshotFilename,
+    hasOutputs,
+    parseSnapshotFilename,
+    resolveSnapshotNotebookId,
+    slugifyProjectName
+} from '@deepnote/convert';
 import fastDeepEqual from 'fast-deep-equal';
 import { inject, injectable, optional } from 'inversify';
 import {
@@ -28,12 +35,6 @@ import { IExtensionSyncActivationService } from '../../../platform/activation/ty
 import { IDisposableRegistry } from '../../../platform/common/types';
 import type { DeepnoteOutput } from '../../../platform/deepnote/deepnoteTypes';
 import { InvalidProjectNameError } from '../../../platform/errors/invalidProjectNameError';
-import {
-    generateSnapshotFilename,
-    parseSnapshotFilename,
-    resolveSnapshotNotebookId,
-    slugifyProjectName
-} from './snapshotFiles';
 import { logger } from '../../../platform/logging';
 import {
     notebookCellExecutions,

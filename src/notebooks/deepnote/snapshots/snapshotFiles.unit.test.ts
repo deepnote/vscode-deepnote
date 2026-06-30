@@ -1,14 +1,8 @@
+import { generateSnapshotFilename, parseSnapshotFilename, slugifyProjectName } from '@deepnote/convert';
 import { assert } from 'chai';
 import { Uri } from 'vscode';
 
-import {
-    extractProjectIdFromSnapshotUri,
-    generateSnapshotFilename,
-    isSnapshotFile,
-    parseSnapshotFilename,
-    slugifyProjectName,
-    SNAPSHOT_FILE_SUFFIX
-} from './snapshotFiles';
+import { extractProjectIdFromSnapshotUri, isSnapshotFile, SNAPSHOT_FILE_SUFFIX } from './snapshotFiles';
 
 suite('snapshotFiles', () => {
     suite('SNAPSHOT_FILE_SUFFIX', () => {

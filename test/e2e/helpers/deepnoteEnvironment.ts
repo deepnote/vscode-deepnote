@@ -2,6 +2,7 @@ import { EditorView, InputBox, VSBrowser, Workbench } from 'vscode-extension-tes
 
 import {
     ENV_CREATED_TIMEOUT,
+    INTERPRETER_PROMPT_TIMEOUT,
     INTERPRETER_RETRY_DELAY,
     KERNEL_CONNECT_TIMEOUT,
     MAX_CREATE_ATTEMPTS,
@@ -31,7 +32,7 @@ export async function createEnvironment(name: string): Promise<void> {
 
         // Either the interpreter quick pick opens, or (no interpreter discovered yet) the command
         // shows a "No Python interpreters found" notification and returns.
-        const interpreterPick = await tryOpenInputBox(5_000);
+        const interpreterPick = await tryOpenInputBox(INTERPRETER_PROMPT_TIMEOUT);
         if (!interpreterPick) {
             await dismissAllNotifications();
             await driver.sleep(INTERPRETER_RETRY_DELAY);

@@ -1,6 +1,7 @@
 import { By, EditorView, VSBrowser, WebView } from 'vscode-extension-tester';
 
-import { OUTPUT_POLL_INTERVAL, OUTPUT_SELECTOR, RUN_ALL_REISSUE_INTERVAL, WORKBENCH_TIMEOUT } from './constants';
+import { OUTPUT_FRAME_SWITCH_TIMEOUT, OUTPUT_POLL_INTERVAL, OUTPUT_SELECTOR, WORKBENCH_TIMEOUT } from './constants';
+import { dismissAllNotifications } from './notifications';
 
 /**
  * Focuses the given notebook editor and clicks its toolbar "Run All" button. The command-palette
@@ -13,16 +14,31 @@ export async function clickRunAll(notebookFileName: string): Promise<void> {
 
     await new EditorView().openEditor(notebookFileName);
 
-    const runAllButton = await driver.wait(
+    // Locate AND click inside the same wait loop. The notebook toolbar can re-render between finding
+    // the button and clicking it (the editor re-focuses, kernel status / notifications change), which
+    // would otherwise surface as a StaleElementReferenceError. Re-finding and clicking on the next
+    // tick is still a SINGLE "Run All" — the run is only issued once the click actually lands, so
+    // this does not re-run a notebook whose first execution was accepted.
+    await driver.wait(
         async () => {
-            const [button] = await driver.findElements(By.css('a.action-label[aria-label="Run All"]'));
+            try {
+                const [button] = await driver.findElements(By.css('a.action-label[aria-label="Run All"]'));
+                if (!button) {
+                    return false;
+                }
 
-            return button;
+                await button.click();
+
+                return true;
+            } catch (error) {
+                console.warn('[deepnote-e2e] locate/click notebook Run All (retrying):', error);
+
+                return false;
+            }
         },
         WORKBENCH_TIMEOUT,
-        'notebook "Run All" button did not appear'
+        'notebook "Run All" button did not appear or could not be clicked'
     );
-    await runAllButton.click();
 }
 
 /**
@@ -46,7 +62,7 @@ export async function readRenderedOutput(): Promise<string> {
 
     let text = '';
     try {
-        await webView.switchToFrame(5_000);
+        await webView.switchToFrame(OUTPUT_FRAME_SWITCH_TIMEOUT);
         const elements = await webView.findWebElements(By.css(OUTPUT_SELECTOR));
         const texts = await Promise.all(
             elements.map((element) =>
@@ -90,24 +106,31 @@ export async function readRenderedOutput(): Promise<string> {
 }
 
 /**
- * Clicks "Run All" and polls the notebook output webview until the expected text renders, re-issuing
- * "Run All" periodically. The first run can be dropped when the kernel has only just finished
- * connecting, so we keep nudging it until output appears (re-running `print(...)` is harmless).
+ * Issues a SINGLE "Run All" after the kernel has been selected and polls the notebook output webview
+ * until the expected text renders. It deliberately does NOT re-issue "Run All" when output is
+ * missing: the kernel is already bound before we get here (`selectEnvironmentForNotebook` waits for
+ * the post-binding "switched successfully" toast), so a first run that renders nothing means the
+ * execution request was dropped — exactly the kernel-binding regression this suite must catch.
+ * Re-running until output eventually appeared would mask that bug.
  */
-export async function runAndAwaitOutput(notebookFileName: string, expected: string, timeout: number): Promise<string> {
+export async function runOnceAndAwaitOutput(
+    notebookFileName: string,
+    expected: string,
+    timeout: number
+): Promise<string> {
     const driver = VSBrowser.instance.driver;
+
+    // Clear the "switched successfully" toast so it cannot intercept the single toolbar click.
+    await dismissAllNotifications().catch((error) => {
+        console.warn('[deepnote-e2e] dismiss notifications before Run All:', error);
+    });
+
+    await clickRunAll(notebookFileName);
+
     const deadline = Date.now() + timeout;
-    let lastRunAt = 0;
     let lastText = '';
 
     while (Date.now() < deadline) {
-        if (Date.now() - lastRunAt > RUN_ALL_REISSUE_INTERVAL) {
-            await clickRunAll(notebookFileName).catch((error) => {
-                console.warn('[deepnote-e2e] click notebook Run All:', error);
-            });
-            lastRunAt = Date.now();
-        }
-
         lastText = await readRenderedOutput();
         if (lastText.includes(expected)) {
             return lastText;
@@ -117,7 +140,8 @@ export async function runAndAwaitOutput(notebookFileName: string, expected: stri
     }
 
     throw new Error(
-        `Timed out after ${timeout}ms waiting for rendered output to contain "${expected}". ` +
-            `Last observed output: ${JSON.stringify(lastText)}`
+        `Timed out after ${timeout}ms waiting for the first "Run All" to render output containing ` +
+            `"${expected}". No re-run was issued, so a dropped first execution (kernel not bound to a ` +
+            `NotebookEditor) surfaces here. Last observed output: ${JSON.stringify(lastText)}`
     );
 }

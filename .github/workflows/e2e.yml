@@ -29,6 +29,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
@@ -42,15 +44,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: |
-          npm ci --prefer-offline --no-audit
-          # Verify Tailwind CSS native modules are installed for Linux (npm optional deps bug)
-          # See: https://github.com/npm/cli/issues/4828
-          node -e "try { require('lightningcss'); } catch { process.exit(1); }" 2>/dev/null || npm install lightningcss-linux-x64-gnu
-          node -e "try { require('@tailwindcss/oxide'); } catch { process.exit(1); }" 2>/dev/null || npm install @tailwindcss/oxide-linux-x64-gnu
-
-      - name: Install vsce
-        run: npm install -g @vscode/vsce
+        run: npm ci --prefer-offline --no-audit
 
       - name: Package extension
         run: npm run package

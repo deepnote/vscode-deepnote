@@ -22,13 +22,14 @@ import { expect } from 'chai';
 import { EditorView, VSBrowser, WebView } from 'vscode-extension-tester';
 
 import {
-    OUTPUT_TIMEOUT,
+    FIRST_RUN_OUTPUT_TIMEOUT,
+    SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
     copyFixtureToTempDir,
     createEnvironment,
     openFolderViaDialog,
     openWorkspaceFile,
-    runAndAwaitOutput,
+    runOnceAndAwaitOutput,
     selectEnvironmentForNotebook
 } from '../helpers';
 
@@ -37,16 +38,20 @@ const EXPECTED_OUTPUT = 'hello world';
 
 describe('Deepnote E2E — run "hello world"', function () {
     // Per-test timeout for the whole suite (overrides the mocharc default for these tests).
-    this.timeout(22 * 60 * 1000);
+    this.timeout(SUITE_TIMEOUT);
 
     // A stable name: createEnvironment is idempotent (it treats "already exists" as success), so a
     // leftover environment from a previous or retried run is reused rather than colliding — which
     // also lets a persistent test instance reuse the already-provisioned venv.
     const environmentName = 'E2E Hello Env';
 
+    // Captured in `before` and invoked in `after` to remove the throwaway temp dir.
+    let cleanupTempDir: (() => void) | undefined;
+
     before(async function () {
         // Work on a throwaway copy so execution-dirtied notebook state never touches the source tree.
-        const { tempDir } = copyFixtureToTempDir(NOTEBOOK_FILE_NAME);
+        const { cleanup, tempDir } = copyFixtureToTempDir(NOTEBOOK_FILE_NAME);
+        cleanupTempDir = cleanup;
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
@@ -79,13 +84,20 @@ describe('Deepnote E2E — run "hello world"', function () {
         await new EditorView().closeAllEditors().catch((error) => {
             console.warn('[deepnote-e2e] close all editors during cleanup:', error);
         });
+
+        // Remove the throwaway temp dir last so a failure above can't leak it.
+        try {
+            cleanupTempDir?.();
+        } catch (error) {
+            console.warn('[deepnote-e2e] remove temp workspace dir during cleanup:', error);
+        }
     });
 
     it('creates an environment, connects the kernel, runs the cell and renders output', async function () {
         await createEnvironment(environmentName);
         await selectEnvironmentForNotebook(environmentName, NOTEBOOK_FILE_NAME);
 
-        const renderedOutput = await runAndAwaitOutput(NOTEBOOK_FILE_NAME, EXPECTED_OUTPUT, OUTPUT_TIMEOUT);
+        const renderedOutput = await runOnceAndAwaitOutput(NOTEBOOK_FILE_NAME, EXPECTED_OUTPUT, FIRST_RUN_OUTPUT_TIMEOUT);
         expect(renderedOutput).to.contain(EXPECTED_OUTPUT);
     });
 });

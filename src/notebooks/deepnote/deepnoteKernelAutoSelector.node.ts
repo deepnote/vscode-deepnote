@@ -743,10 +743,16 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         // happens to settle — observed as a multi-minute stall before the first cell runs.
         const notebookEditor = await this.findNotebookEditor(notebook);
 
+        if (!notebookEditor) {
+            logger.warn(
+                `Could not find NotebookEditor for ${getDisplayPath(notebook.uri)}, kernel may not be selected`
+            );
+            return;
+        }
+
         await commands.executeCommand('notebook.selectKernel', {
-            notebookEditor: notebookEditor ?? notebook,
+            notebookEditor,
             id: controller.connection.id,
-            // id: controller.controller.id,
             extension: JVSC_EXTENSION_ID
         });
     }

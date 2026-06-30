@@ -5,19 +5,31 @@ export const WORKBENCH_TIMEOUT = 60_000;
 export const QUICK_PICK_TIMEOUT = 30_000;
 export const ENV_CREATED_TIMEOUT = 120_000;
 export const KERNEL_CONNECT_TIMEOUT = 300_000;
-export const OUTPUT_TIMEOUT = 300_000;
 
-// How often to re-issue "Run All" while waiting for output. VS Code drops the first run request(s)
-// while the kernel is still connecting, so we keep nudging it; a short interval makes recovery from
-// a dropped run fast (a coarse interval can add a full interval's delay per dropped run — observed
-// adding ~100s with a 25s value).
-export const RUN_ALL_REISSUE_INTERVAL = 5_000;
+// Mocha per-test timeout applied to the whole suite (overrides the .mocharc default). Stays just
+// under the 25 min .mocharc.js default; the slowest single step is the first kernel start (venv +
+// Deepnote toolkit provisioning).
+export const SUITE_TIMEOUT = 1_320_000; // 22 min
+
+// A single "Run All" against an already-selected kernel must render output within this window. It
+// sits well above a healthy first run (the kernel is bound before the click — see
+// selectEnvironmentForNotebook) and below the multi-minute stall a dropped first run would cause,
+// so the kernel-binding regression fails here instead of being masked by re-runs.
+export const FIRST_RUN_OUTPUT_TIMEOUT = 120_000;
 
 // How often to poll the output webview for the expected text.
 export const OUTPUT_POLL_INTERVAL = 1_500;
 
+// How long to wait for the notebook output iframe (`#active-frame`) to become switchable.
+export const OUTPUT_FRAME_SWITCH_TIMEOUT = 5_000;
+
 export const INTERPRETER_RETRY_DELAY = 5_000;
 export const MAX_CREATE_ATTEMPTS = 6;
+
+// How long to wait for the interpreter quick pick to open after issuing the create-environment
+// command. When no interpreter has been discovered yet the command shows a "No Python interpreters
+// found" notification and returns instead, so this wait elapses and the attempt is retried.
+export const INTERPRETER_PROMPT_TIMEOUT = 5_000;
 
 // How long to wait for an optional input box (packages/description) to appear after confirming the
 // environment name. When the name already exists the create command short-circuits with an "already

@@ -157,8 +157,7 @@ export interface IDeepnoteServerStarter {
      * @param venvPath The path to the venv
      * @param managedVenv Whether the venv is managed by this extension (created by us)
      * @param environmentId The environment ID (for server management)
-     * @param notebookUri The URI of the notebook (used both as the server key and to derive
-     *                    the working directory and SQL integration environment)
+     * @param deepnoteFileUri The URI of the .deepnote file
      * @param token Cancellation token to cancel the operation
      * @returns Connection information (URL, port, etc.)
      */
@@ -168,17 +167,16 @@ export interface IDeepnoteServerStarter {
         managedVenv: boolean,
         additionalPackages: string[],
         environmentId: string,
-        notebookUri: vscode.Uri,
+        deepnoteFileUri: vscode.Uri,
         token?: vscode.CancellationToken
     ): Promise<DeepnoteServerInfo>;
 
     /**
-     * Stops the deepnote-toolkit server for a notebook.
-     * Safe no-op when the notebook has no running server.
-     * @param notebookUri The URI of the notebook
+     * Stops the deepnote-toolkit server for a kernel environment.
+     * @param environmentId The environment ID
      * @param token Cancellation token to cancel the operation
      */
-    stopServer(notebookUri: vscode.Uri, token?: vscode.CancellationToken): Promise<void>;
+    stopServer(deepnoteFileUri: vscode.Uri, token?: vscode.CancellationToken): Promise<void>;
 
     /**
      * Disposes all server processes and resources.

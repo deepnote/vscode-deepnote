@@ -1,6 +1,7 @@
 import { By, EditorView, VSBrowser, WebView } from 'vscode-extension-tester';
 
 import { OUTPUT_POLL_INTERVAL, OUTPUT_SELECTOR, RUN_ALL_REISSUE_INTERVAL, WORKBENCH_TIMEOUT } from './constants';
+import { catchAndLog, logCaughtError } from './logging';
 
 /**
  * Focuses the given notebook editor and clicks its toolbar "Run All" button. The command-palette
@@ -35,7 +36,9 @@ export async function clickRunAll(notebookFileName: string): Promise<void> {
  */
 export async function readRenderedOutput(): Promise<string> {
     const webView = new WebView();
-    const outputFrame = await webView.getViewToSwitchTo().catch(() => undefined);
+    const outputFrame = await webView
+        .getViewToSwitchTo()
+        .catch(catchAndLog('locate notebook output webview', undefined));
     if (!outputFrame) {
         return '';
     }
@@ -44,19 +47,24 @@ export async function readRenderedOutput(): Promise<string> {
     try {
         await webView.switchToFrame(5_000);
         const elements = await webView.findWebElements(By.css(OUTPUT_SELECTOR));
-        const texts = await Promise.all(elements.map((element) => element.getText().catch(() => '')));
+        const texts = await Promise.all(
+            elements.map((element) => element.getText().catch(catchAndLog('read output element text', '')))
+        );
         text = texts.join('\n').trim();
 
         // Fallback: if the renderer used unexpected classes, read the frame body — safe here because
         // we have confirmed we are inside the output iframe, not the editor.
         if (!text) {
-            const body = await webView.findWebElement(By.css('body')).catch(() => undefined);
-            text = body ? (await body.getText().catch(() => '')).trim() : '';
+            const body = await webView
+                .findWebElement(By.css('body'))
+                .catch(catchAndLog('read output frame body', undefined));
+            text = body ? (await body.getText().catch(catchAndLog('read output frame body text', ''))).trim() : '';
         }
-    } catch {
+    } catch (error) {
         // Frame went stale or output not painted yet — treat as no output this tick.
+        logCaughtError('read rendered notebook output', error);
     } finally {
-        await webView.switchBack().catch(() => undefined);
+        await webView.switchBack().catch(catchAndLog('switch back from notebook output webview', undefined));
     }
 
     return text;
@@ -75,7 +83,7 @@ export async function runAndAwaitOutput(notebookFileName: string, expected: stri
 
     while (Date.now() < deadline) {
         if (Date.now() - lastRunAt > RUN_ALL_REISSUE_INTERVAL) {
-            await clickRunAll(notebookFileName).catch(() => undefined);
+            await clickRunAll(notebookFileName).catch(catchAndLog('click notebook Run All', undefined));
             lastRunAt = Date.now();
         }
 

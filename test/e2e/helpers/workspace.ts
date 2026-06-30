@@ -1,6 +1,7 @@
 import { By, InputBox, VSBrowser, Workbench } from 'vscode-extension-tester';
 
 import { DIALOG_RESOLVE_DELAY, FOLDER_OPEN_ATTEMPTS, FOLDER_RELOAD_TIMEOUT, QUICK_PICK_TIMEOUT } from './constants';
+import { catchAndLog, logCaughtError } from './logging';
 import { clickDialogOkButton } from './quickInput';
 
 /**
@@ -51,12 +52,12 @@ export async function openFolderViaDialog(folder: string): Promise<void> {
                 QUICK_PICK_TIMEOUT,
                 'dialog did not resolve path'
             )
-            .catch(() => undefined);
+            .catch(catchAndLog('wait for folder dialog path listing', undefined));
         await driver.sleep(DIALOG_RESOLVE_DELAY);
 
         const accepted = await clickDialogOkButton();
         if (!accepted) {
-            await new InputBox().cancel().catch(() => undefined);
+            await new InputBox().cancel().catch(catchAndLog('cancel folder dialog', undefined));
             continue;
         }
 
@@ -66,18 +67,21 @@ export async function openFolderViaDialog(folder: string): Promise<void> {
                     await previousWorkbench.getTagName();
 
                     return false;
-                } catch {
+                } catch (error) {
+                    // Stale element reference means the workbench reloaded.
+                    logCaughtError('detect workbench reload via stale element', error, true);
+
                     return true;
                 }
             }, FOLDER_RELOAD_TIMEOUT)
             .then(() => true)
-            .catch(() => false);
+            .catch(catchAndLog('wait for workbench reload', false));
         if (reloaded) {
             return;
         }
 
         // The folder did not open this time; dismiss any lingering dialog and retry.
-        await new InputBox().cancel().catch(() => undefined);
+        await new InputBox().cancel().catch(catchAndLog('cancel lingering folder dialog', undefined));
     }
 
     throw new Error(`Failed to open folder "${folder}" after ${FOLDER_OPEN_ATTEMPTS} attempts`);

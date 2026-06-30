@@ -1,10 +1,14 @@
 import { Notification, VSBrowser, Workbench } from 'vscode-extension-tester';
 
+import { catchAndLog, logCaughtError } from './logging';
+
 /** Dismisses every currently-visible toast notification (best effort). */
 export async function dismissAllNotifications(): Promise<void> {
-    const notifications = await new Workbench().getNotifications().catch(() => [] as Notification[]);
+    const notifications = await new Workbench()
+        .getNotifications()
+        .catch(catchAndLog('get notifications', [] as Notification[]));
     for (const notification of notifications) {
-        await notification.dismiss().catch(() => undefined);
+        await notification.dismiss().catch(catchAndLog('dismiss notification', undefined));
     }
 }
 
@@ -23,9 +27,11 @@ export async function waitForNotification(
     try {
         return (await driver.wait(
             async () => {
-                const notifications = await new Workbench().getNotifications().catch(() => [] as Notification[]);
+                const notifications = await new Workbench()
+                    .getNotifications()
+                    .catch(catchAndLog('get notifications', [] as Notification[]));
                 for (const notification of notifications) {
-                    const message = await notification.getMessage().catch(() => '');
+                    const message = await notification.getMessage().catch(catchAndLog('read notification message', ''));
                     if (pattern.test(message)) {
                         return notification;
                     }
@@ -40,6 +46,8 @@ export async function waitForNotification(
         if (required) {
             throw error;
         }
+
+        logCaughtError(`wait for optional notification matching ${pattern}`, error);
 
         return undefined;
     }

@@ -1,5 +1,7 @@
 import { By, InputBox, VSBrowser } from 'vscode-extension-tester';
 
+import { catchAndLog, logCaughtError } from './logging';
+
 /**
  * Tries to open the active InputBox/QuickPick, returning `undefined` instead of throwing when none
  * appears within `timeout`. Useful when a command may either open a quick pick or bail with a
@@ -8,7 +10,9 @@ import { By, InputBox, VSBrowser } from 'vscode-extension-tester';
 export async function tryOpenInputBox(timeout: number): Promise<InputBox | undefined> {
     try {
         return await InputBox.create(timeout);
-    } catch {
+    } catch (error) {
+        logCaughtError('open input box', error);
+
         return undefined;
     }
 }
@@ -22,10 +26,10 @@ export async function clickDialogOkButton(): Promise<boolean> {
     const driver = VSBrowser.instance.driver;
     const buttons = await driver
         .findElements(By.css('.quick-input-widget .monaco-button.monaco-text-button'))
-        .catch(() => []);
+        .catch(catchAndLog('find folder dialog buttons', []));
 
     for (const button of buttons) {
-        const text = (await button.getText().catch(() => '')).trim();
+        const text = (await button.getText().catch(catchAndLog('read folder dialog button text', ''))).trim();
         if (text === 'OK') {
             await button.click();
 

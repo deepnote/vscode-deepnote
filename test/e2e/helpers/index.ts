@@ -2,6 +2,7 @@
 export * from './constants';
 export * from './deepnoteEnvironment';
 export * from './fixtures';
+export * from './logging';
 export * from './notebook';
 export * from './notifications';
 export * from './quickInput';

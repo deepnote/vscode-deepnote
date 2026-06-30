@@ -276,7 +276,13 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
         const { latestPath, content } = prepared;
         const timestamp = generateTimestamp();
-        const timestampedPath = this.buildSnapshotPath(projectUri, projectId, projectName, timestamp, notebookId);
+        const timestampedPath = this.buildSnapshotPath({
+            projectUri,
+            projectId,
+            projectName,
+            variant: timestamp,
+            notebookId
+        });
 
         // Write to timestamped file first (safe - doesn't touch existing files)
         try {
@@ -579,19 +585,22 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         return this.recentlyWrittenUris.has(uri.toString());
     }
 
-    private buildSnapshotPath(
-        projectUri: Uri,
-        projectId: string,
-        projectName: string,
-        variant: 'latest' | string,
-        notebookId?: string
-    ): Uri {
+    private buildSnapshotPath({
+        notebookId,
+        projectId,
+        projectName,
+        projectUri,
+        variant
+    }: {
+        notebookId?: string;
+        projectId: string;
+        projectName: string;
+        projectUri: Uri;
+        variant: 'latest' | string;
+    }): Uri {
         const parentDir = Uri.joinPath(projectUri, '..');
 
-        // convert's slugifyProjectName returns '' (rather than throwing) for names with no
-        // slug-safe characters; preserve the existing "skip snapshots for invalid names" contract
-        // by validating here so prepareSnapshotData can catch InvalidProjectNameError.
-        if (typeof projectName !== 'string' || !projectName.trim()) {
+        if (projectName.trim().length <= 0) {
             throw new InvalidProjectNameError();
         }
 
@@ -1073,7 +1082,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         let latestPath: Uri;
 
         try {
-            latestPath = this.buildSnapshotPath(projectUri, projectId, projectName, 'latest', notebookId);
+            latestPath = this.buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest', notebookId });
         } catch (error) {
             if (error instanceof InvalidProjectNameError) {
                 logger.warn('[Snapshot] Skipping snapshots due to invalid project name', error);

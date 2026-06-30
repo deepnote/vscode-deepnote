@@ -64,7 +64,7 @@ suite('SnapshotService', () => {
             const projectId = 'e132b172-b114-410e-8331-011517db664f';
             const projectName = 'My Project';
 
-            const result = serviceAny.buildSnapshotPath(projectUri, projectId, projectName, 'latest');
+            const result = serviceAny.buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest' });
 
             assert.include(result.fsPath, 'snapshots');
             assert.include(result.fsPath, 'my-project');
@@ -79,7 +79,7 @@ suite('SnapshotService', () => {
             const projectName = 'My Project';
             const timestamp = '2025-12-11T10-31-48';
 
-            const result = serviceAny.buildSnapshotPath(projectUri, projectId, projectName, timestamp);
+            const result = serviceAny.buildSnapshotPath({ projectUri, projectId, projectName, variant: timestamp });
 
             assert.include(result.fsPath, 'snapshots');
             assert.include(result.fsPath, 'my-project');
@@ -93,7 +93,7 @@ suite('SnapshotService', () => {
             const projectId = 'abc-123';
             const projectName = 'Customer Churn ML Playbook!';
 
-            const result = serviceAny.buildSnapshotPath(projectUri, projectId, projectName, 'latest');
+            const result = serviceAny.buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest' });
 
             assert.include(result.fsPath, 'customer-churn-ml-playbook');
             assert.notInclude(result.fsPath, '!');
@@ -105,7 +105,7 @@ suite('SnapshotService', () => {
             const projectId = 'abc-123';
             const projectName = 'Test@#$%Project';
 
-            const result = serviceAny.buildSnapshotPath(projectUri, projectId, projectName, 'latest');
+            const result = serviceAny.buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest' });
 
             // convert's slugifyProjectName collapses a run of special characters to a single hyphen.
             assert.include(result.fsPath, 'test-project');
@@ -117,7 +117,13 @@ suite('SnapshotService', () => {
             const projectName = 'My Project';
             const notebookId = 'notebook-1';
 
-            const result = serviceAny.buildSnapshotPath(projectUri, projectId, projectName, 'latest', notebookId);
+            const result = serviceAny.buildSnapshotPath({
+                projectUri,
+                projectId,
+                projectName,
+                variant: 'latest',
+                notebookId
+            });
 
             assert.include(result.fsPath, `${projectId}_notebook-1_latest.snapshot.deepnote`);
         });
@@ -127,7 +133,7 @@ suite('SnapshotService', () => {
             const projectId = 'abc-123';
             const projectName = 'My   Project   Name';
 
-            const result = serviceAny.buildSnapshotPath(projectUri, projectId, projectName, 'latest');
+            const result = serviceAny.buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest' });
 
             assert.include(result.fsPath, 'my-project-name');
             assert.notInclude(result.fsPath, '--');
@@ -139,7 +145,7 @@ suite('SnapshotService', () => {
             const projectName = '';
 
             assert.throws(
-                () => serviceAny.buildSnapshotPath(projectUri, projectId, projectName, 'latest'),
+                () => serviceAny.buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest' }),
                 'Project name cannot be empty or contain only special characters'
             );
         });
@@ -150,7 +156,7 @@ suite('SnapshotService', () => {
             const projectName = '@#$%^&*()';
 
             assert.throws(
-                () => serviceAny.buildSnapshotPath(projectUri, projectId, projectName, 'latest'),
+                () => serviceAny.buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest' }),
                 'Project name cannot be empty or contain only special characters'
             );
         });
@@ -161,7 +167,7 @@ suite('SnapshotService', () => {
             const projectName = '   ';
 
             assert.throws(
-                () => serviceAny.buildSnapshotPath(projectUri, projectId, projectName, 'latest'),
+                () => serviceAny.buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest' }),
                 'Project name cannot be empty or contain only special characters'
             );
         });
@@ -1615,7 +1621,7 @@ project:
                 // notebook B's OWN uri (folder /bar), not sibling A's (/foo). The pre-fix projectId-only
                 // lookup would have passed A's uri here (A is enumerated first).
                 assert.isTrue(buildSnapshotPathSpy.called, 'buildSnapshotPath should be called');
-                const projectUriArg = buildSnapshotPathSpy.firstCall.args[0] as Uri;
+                const projectUriArg = buildSnapshotPathSpy.firstCall.args[0].projectUri as Uri;
                 assert.strictEqual(
                     projectUriArg.toString(),
                     Uri.parse(targetBUri).toString(),

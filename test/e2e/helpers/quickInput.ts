@@ -1,7 +1,5 @@
 import { By, InputBox, VSBrowser } from 'vscode-extension-tester';
 
-import { catchAndLog, logCaughtError } from './logging';
-
 /**
  * Tries to open the active InputBox/QuickPick, returning `undefined` instead of throwing when none
  * appears within `timeout`. Useful when a command may either open a quick pick or bail with a
@@ -11,7 +9,7 @@ export async function tryOpenInputBox(timeout: number): Promise<InputBox | undef
     try {
         return await InputBox.create(timeout);
     } catch (error) {
-        logCaughtError('open input box', error);
+        console.warn('[deepnote-e2e] open input box:', error);
 
         return undefined;
     }
@@ -26,10 +24,20 @@ export async function clickDialogOkButton(): Promise<boolean> {
     const driver = VSBrowser.instance.driver;
     const buttons = await driver
         .findElements(By.css('.quick-input-widget .monaco-button.monaco-text-button'))
-        .catch(catchAndLog('find folder dialog buttons', []));
+        .catch((error) => {
+            console.warn('[deepnote-e2e] find folder dialog buttons:', error);
+
+            return [];
+        });
 
     for (const button of buttons) {
-        const text = (await button.getText().catch(catchAndLog('read folder dialog button text', ''))).trim();
+        const text = (
+            await button.getText().catch((error) => {
+                console.warn('[deepnote-e2e] read folder dialog button text:', error);
+
+                return '';
+            })
+        ).trim();
         if (text === 'OK') {
             await button.click();
 

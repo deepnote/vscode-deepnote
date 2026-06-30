@@ -1,14 +1,16 @@
 import { Notification, VSBrowser, Workbench } from 'vscode-extension-tester';
 
-import { catchAndLog, logCaughtError } from './logging';
-
 /** Dismisses every currently-visible toast notification (best effort). */
 export async function dismissAllNotifications(): Promise<void> {
-    const notifications = await new Workbench()
-        .getNotifications()
-        .catch(catchAndLog('get notifications', [] as Notification[]));
+    const notifications = await new Workbench().getNotifications().catch((error) => {
+        console.warn('[deepnote-e2e] get notifications:', error);
+
+        return [] as Notification[];
+    });
     for (const notification of notifications) {
-        await notification.dismiss().catch(catchAndLog('dismiss notification', undefined));
+        await notification.dismiss().catch((error) => {
+            console.warn('[deepnote-e2e] dismiss notification:', error);
+        });
     }
 }
 
@@ -27,11 +29,17 @@ export async function waitForNotification(
     try {
         return (await driver.wait(
             async () => {
-                const notifications = await new Workbench()
-                    .getNotifications()
-                    .catch(catchAndLog('get notifications', [] as Notification[]));
+                const notifications = await new Workbench().getNotifications().catch((error) => {
+                    console.warn('[deepnote-e2e] get notifications:', error);
+
+                    return [] as Notification[];
+                });
                 for (const notification of notifications) {
-                    const message = await notification.getMessage().catch(catchAndLog('read notification message', ''));
+                    const message = await notification.getMessage().catch((error) => {
+                        console.warn('[deepnote-e2e] read notification message:', error);
+
+                        return '';
+                    });
                     if (pattern.test(message)) {
                         return notification;
                     }
@@ -47,7 +55,7 @@ export async function waitForNotification(
             throw error;
         }
 
-        logCaughtError(`wait for optional notification matching ${pattern}`, error);
+        console.warn(`[deepnote-e2e] wait for optional notification matching ${pattern}:`, error);
 
         return undefined;
     }

@@ -24,7 +24,6 @@ import { EditorView, VSBrowser, WebView } from 'vscode-extension-tester';
 import {
     OUTPUT_TIMEOUT,
     WORKBENCH_TIMEOUT,
-    catchAndLog,
     copyFixtureToTempDir,
     createEnvironment,
     openFolderViaDialog,
@@ -74,8 +73,12 @@ describe('Deepnote E2E — run "hello world"', function () {
 
     after(async function () {
         // Defensive cleanup: never leave the driver stuck inside a webview frame, and close tabs.
-        await new WebView().switchBack().catch(catchAndLog('switch back from webview during cleanup', undefined));
-        await new EditorView().closeAllEditors().catch(catchAndLog('close all editors during cleanup', undefined));
+        await new WebView().switchBack().catch((error) => {
+            console.warn('[deepnote-e2e] switch back from webview during cleanup:', error);
+        });
+        await new EditorView().closeAllEditors().catch((error) => {
+            console.warn('[deepnote-e2e] close all editors during cleanup:', error);
+        });
     });
 
     it('creates an environment, connects the kernel, runs the cell and renders output', async function () {

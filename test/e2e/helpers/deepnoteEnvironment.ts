@@ -8,7 +8,6 @@ import {
     OPTIONAL_PROMPT_TIMEOUT,
     QUICK_PICK_TIMEOUT
 } from './constants';
-import { catchAndLog } from './logging';
 import { dismissAllNotifications, waitForNotification } from './notifications';
 import { tryOpenInputBox } from './quickInput';
 
@@ -47,7 +46,9 @@ export async function createEnvironment(name: string): Promise<void> {
                 'no Python interpreters were listed'
             );
         } catch (error) {
-            await interpreterPick.cancel().catch(catchAndLog('cancel interpreter quick pick', undefined));
+            await interpreterPick.cancel().catch((cancelError) => {
+                console.warn('[deepnote-e2e] cancel interpreter quick pick:', cancelError);
+            });
             await dismissAllNotifications();
             await driver.sleep(INTERPRETER_RETRY_DELAY);
             lastError = error;

@@ -11,12 +11,12 @@ export interface IIntegrationDetector {
     /**
      * Detect all integrations used in the given project
      */
-    detectIntegrations(projectId: string): Promise<Map<string, IntegrationWithStatus>>;
+    detectIntegrations(projectId: string, notebookId: string): Promise<Map<string, IntegrationWithStatus>>;
 
     /**
      * Check if a project has any unconfigured integrations
      */
-    hasUnconfiguredIntegrations(projectId: string): Promise<boolean>;
+    hasUnconfiguredIntegrations(projectId: string, notebookId: string): Promise<boolean>;
 }
 
 export const IIntegrationWebviewProvider = Symbol('IIntegrationWebviewProvider');
@@ -26,11 +26,13 @@ export interface IIntegrationWebviewProvider {
      * @param projectId The Deepnote project ID
      * @param integrations Map of integration IDs to their status
      * @param selectedIntegrationId Optional integration ID to select/configure immediately
+     * @param projectName Optional project display name (sourced from the active notebook's metadata)
      */
     show(
         projectId: string,
         integrations: Map<string, IntegrationWithStatus>,
-        selectedIntegrationId?: string
+        selectedIntegrationId?: string,
+        projectName?: string
     ): Promise<void>;
 }
 

@@ -25,9 +25,9 @@ suite('DeepnoteNotebookManager', () => {
         manager = new DeepnoteNotebookManager();
     });
 
-    suite('getOriginalProject', () => {
+    suite('getProjectForNotebook', () => {
         test('should return undefined for unknown project', () => {
-            const result = manager.getOriginalProject('unknown-project', 'notebook-456');
+            const result = manager.getProjectForNotebook('unknown-project', 'notebook-456');
 
             assert.strictEqual(result, undefined);
         });
@@ -35,7 +35,7 @@ suite('DeepnoteNotebookManager', () => {
         test('should return original project after storing', () => {
             manager.storeOriginalProject('project-123', 'notebook-456', mockProject);
 
-            const result = manager.getOriginalProject('project-123', 'notebook-456');
+            const result = manager.getProjectForNotebook('project-123', 'notebook-456');
 
             assert.deepStrictEqual(result, mockProject);
         });
@@ -45,7 +45,7 @@ suite('DeepnoteNotebookManager', () => {
         test('should store the project for the (projectId, notebookId) pair', () => {
             manager.storeOriginalProject('project-123', 'notebook-456', mockProject);
 
-            const storedProject = manager.getOriginalProject('project-123', 'notebook-456');
+            const storedProject = manager.getProjectForNotebook('project-123', 'notebook-456');
 
             assert.deepStrictEqual(storedProject, mockProject);
         });
@@ -62,7 +62,7 @@ suite('DeepnoteNotebookManager', () => {
             manager.storeOriginalProject('project-123', 'notebook-456', mockProject);
             manager.storeOriginalProject('project-123', 'notebook-456', updatedProject);
 
-            const storedProject = manager.getOriginalProject('project-123', 'notebook-456');
+            const storedProject = manager.getProjectForNotebook('project-123', 'notebook-456');
 
             assert.deepStrictEqual(storedProject, updatedProject);
         });
@@ -81,7 +81,7 @@ suite('DeepnoteNotebookManager', () => {
 
             assert.strictEqual(result, true);
 
-            const updatedProject = manager.getOriginalProject('project-123', 'notebook-456');
+            const updatedProject = manager.getProjectForNotebook('project-123', 'notebook-456');
             assert.deepStrictEqual(updatedProject?.project.integrations, integrations);
         });
 
@@ -105,7 +105,7 @@ suite('DeepnoteNotebookManager', () => {
 
             assert.strictEqual(result, true);
 
-            const updatedProject = manager.getOriginalProject('project-123', 'notebook-456');
+            const updatedProject = manager.getProjectForNotebook('project-123', 'notebook-456');
             assert.deepStrictEqual(updatedProject?.project.integrations, newIntegrations);
         });
 
@@ -124,7 +124,7 @@ suite('DeepnoteNotebookManager', () => {
 
             assert.strictEqual(result, true);
 
-            const updatedProject = manager.getOriginalProject('project-123', 'notebook-456');
+            const updatedProject = manager.getProjectForNotebook('project-123', 'notebook-456');
             assert.deepStrictEqual(updatedProject?.project.integrations, []);
         });
 
@@ -135,7 +135,7 @@ suite('DeepnoteNotebookManager', () => {
 
             assert.strictEqual(result, false);
 
-            const project = manager.getOriginalProject('unknown-project', 'notebook-456');
+            const project = manager.getProjectForNotebook('unknown-project', 'notebook-456');
             assert.strictEqual(project, undefined);
         });
 
@@ -148,7 +148,7 @@ suite('DeepnoteNotebookManager', () => {
 
             assert.strictEqual(result, true);
 
-            const updatedProject = manager.getOriginalProject('project-123', 'notebook-456');
+            const updatedProject = manager.getProjectForNotebook('project-123', 'notebook-456');
             assert.strictEqual(updatedProject?.project.id, mockProject.project.id);
             assert.strictEqual(updatedProject?.project.name, mockProject.project.name);
             assert.strictEqual(updatedProject?.version, mockProject.version);
@@ -170,8 +170,8 @@ suite('DeepnoteNotebookManager', () => {
             manager.storeOriginalProject('project-1', 'notebook-1', projectOne);
             manager.storeOriginalProject('project-2', 'notebook-2', projectTwo);
 
-            assert.deepStrictEqual(manager.getOriginalProject('project-1', 'notebook-1'), projectOne);
-            assert.deepStrictEqual(manager.getOriginalProject('project-2', 'notebook-2'), projectTwo);
+            assert.deepStrictEqual(manager.getProjectForNotebook('project-1', 'notebook-1'), projectOne);
+            assert.deepStrictEqual(manager.getProjectForNotebook('project-2', 'notebook-2'), projectTwo);
         });
     });
 
@@ -208,65 +208,19 @@ suite('DeepnoteNotebookManager', () => {
             manager.storeOriginalProject(projectId, nbA, projectA);
             manager.storeOriginalProject(projectId, nbB, projectB);
 
-            assert.deepStrictEqual(manager.getOriginalProject(projectId, nbA), projectA);
-            assert.deepStrictEqual(manager.getOriginalProject(projectId, nbB), projectB);
+            assert.deepStrictEqual(manager.getProjectForNotebook(projectId, nbA), projectA);
+            assert.deepStrictEqual(manager.getProjectForNotebook(projectId, nbB), projectB);
         });
 
-        test('getOriginalProject is exact: returns undefined for an uncached notebook even though a sibling IS cached (NO fallback)', () => {
+        test('getProjectForNotebook is exact: returns undefined for an uncached notebook even though a sibling IS cached (NO fallback)', () => {
             manager.storeOriginalProject(projectId, nbA, siblingProject(nbA, 'Sibling A'));
 
             // A different notebook of the SAME project is cached, but the requested one is not.
             // The exact lookup must NOT fall back to the sibling — this is the key anti-regression
             // (a save path relies on it to never write against the wrong sibling's project).
-            const result = manager.getOriginalProject(projectId, 'not-cached');
+            const result = manager.getProjectForNotebook(projectId, 'not-cached');
 
             assert.strictEqual(result, undefined);
-        });
-
-        test('getAnyProjectEntry returns one of the project entries (project-level)', () => {
-            const projectA = siblingProject(nbA, 'Sibling A');
-            const projectB = siblingProject(nbB, 'Sibling B');
-
-            manager.storeOriginalProject(projectId, nbA, projectA);
-            manager.storeOriginalProject(projectId, nbB, projectB);
-
-            const result = manager.getAnyProjectEntry(projectId);
-
-            assert.notStrictEqual(result, undefined);
-            // It must be one of the project's own cached entries.
-            const isOneOfTheSiblings =
-                JSON.stringify(result) === JSON.stringify(projectA) ||
-                JSON.stringify(result) === JSON.stringify(projectB);
-            assert.strictEqual(
-                isOneOfTheSiblings,
-                true,
-                'getAnyProjectEntry should return one of the cached sibling projects'
-            );
-        });
-
-        test('getAnyProjectEntry returns undefined for an unknown project', () => {
-            manager.storeOriginalProject(projectId, nbA, siblingProject(nbA, 'Sibling A'));
-
-            assert.strictEqual(manager.getAnyProjectEntry('unknown-project'), undefined);
-        });
-
-        test('updateOriginalProject refreshes the exact entry without affecting the sibling', () => {
-            const projectA = siblingProject(nbA, 'Sibling A');
-            const projectB = siblingProject(nbB, 'Sibling B');
-
-            manager.storeOriginalProject(projectId, nbA, projectA);
-            manager.storeOriginalProject(projectId, nbB, projectB);
-
-            const renamedA: DeepnoteProject = {
-                ...projectA,
-                project: { ...projectA.project, name: 'Sibling A Renamed' }
-            };
-
-            manager.updateOriginalProject(projectId, nbA, renamedA);
-
-            assert.deepStrictEqual(manager.getOriginalProject(projectId, nbA), renamedA);
-            // Sibling B must be untouched by the update to A.
-            assert.deepStrictEqual(manager.getOriginalProject(projectId, nbB), projectB);
         });
 
         test('updateProjectIntegrations updates every cached notebook entry under the project', () => {
@@ -282,8 +236,8 @@ suite('DeepnoteNotebookManager', () => {
 
             assert.strictEqual(updated, true);
             // BOTH siblings of the project must see the new integrations.
-            assert.deepStrictEqual(manager.getOriginalProject(projectId, nbA)?.project.integrations, integrations);
-            assert.deepStrictEqual(manager.getOriginalProject(projectId, nbB)?.project.integrations, integrations);
+            assert.deepStrictEqual(manager.getProjectForNotebook(projectId, nbA)?.project.integrations, integrations);
+            assert.deepStrictEqual(manager.getProjectForNotebook(projectId, nbB)?.project.integrations, integrations);
         });
     });
 });

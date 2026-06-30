@@ -88,15 +88,18 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
 
         // Get the project ID from the notebook metadata
         const projectId = notebook.metadata?.deepnoteProjectId as string | undefined;
-        if (!projectId) {
-            logger.trace(`SqlIntegrationEnvironmentVariablesProvider: No project ID found in notebook metadata`);
+        const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
+        if (!projectId || !notebookId) {
+            logger.trace(
+                `SqlIntegrationEnvironmentVariablesProvider: No project/notebook ID found in notebook metadata`
+            );
             return {};
         }
 
         logger.trace(`SqlIntegrationEnvironmentVariablesProvider: Project ID: ${projectId}`);
 
         // Get the project from the notebook manager
-        const project = this.notebookManager.getAnyProjectEntry(projectId);
+        const project = this.notebookManager.getProjectForNotebook(projectId, notebookId);
         if (!project) {
             logger.trace(`SqlIntegrationEnvironmentVariablesProvider: No project found for ID: ${projectId}`);
             return {};

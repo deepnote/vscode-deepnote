@@ -604,13 +604,14 @@ export class DeepnoteLspClientManager
             }
 
             const projectId = notebook.metadata?.deepnoteProjectId as string | undefined;
+            const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
 
-            if (!projectId) {
-                logger.warn('SQL LSP: No project ID in notebook metadata');
+            if (!projectId || !notebookId) {
+                logger.warn('SQL LSP: No project/notebook ID in notebook metadata');
                 return [];
             }
 
-            const project = this.notebookManager.getAnyProjectEntry(projectId);
+            const project = this.notebookManager.getProjectForNotebook(projectId, notebookId);
 
             if (!project) {
                 logger.warn(`SQL LSP: No project found for ID: ${projectId}`);

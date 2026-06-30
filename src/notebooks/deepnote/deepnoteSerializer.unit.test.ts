@@ -362,8 +362,7 @@ project:
         });
 
         test('should handle manager state operations', () => {
-            assert.isFunction(manager.getAnyProjectEntry, 'has getAnyProjectEntry method');
-            assert.isFunction(manager.getOriginalProject, 'has getOriginalProject method');
+            assert.isFunction(manager.getProjectForNotebook, 'has getProjectForNotebook method');
             assert.isFunction(manager.storeOriginalProject, 'has storeOriginalProject method');
         });
     });

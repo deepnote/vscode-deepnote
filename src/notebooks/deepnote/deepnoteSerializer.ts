@@ -218,7 +218,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
             // Fetch the cached project with an exact (projectId, notebookId) lookup. Sibling files
             // share a project.id, so a project-only lookup could return a different sibling's project.
-            const storedProject = this.notebookManager.getOriginalProject(projectId, notebookId);
+            const storedProject = this.notebookManager.getProjectForNotebook(projectId, notebookId);
 
             if (!storedProject) {
                 throw new Error('Original Deepnote project not found. Cannot save changes.');

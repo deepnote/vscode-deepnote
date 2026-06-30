@@ -140,7 +140,7 @@ function makeTwoCodeBlockFile(
     } as unknown as DeepnoteFile;
 }
 
-/** The cached project entry the manager returns for `getAnyProjectEntry` (carries initNotebookId). */
+/** The cached project entry the manager returns for `getProjectForNotebook` (carries initNotebookId). */
 function makeMainProjectEntry(projectId: string, initNotebookId: string | undefined): DeepnoteProject {
     return {
         version: '1.0.0',
@@ -198,7 +198,7 @@ suite('DeepnoteInitNotebookRunner', () => {
         const notebook = {
             uri,
             notebookType: opts?.notebookType ?? 'deepnote',
-            metadata: { deepnoteProjectId: opts?.projectId ?? PROJECT_ID }
+            metadata: { deepnoteProjectId: opts?.projectId ?? PROJECT_ID, deepnoteNotebookId: MAIN_NOTEBOOK_ID }
         } as unknown as NotebookDocument;
 
         return { notebook } as unknown as IKernel;
@@ -226,7 +226,7 @@ suite('DeepnoteInitNotebookRunner', () => {
         } as never);
 
         // Default cached project: has an init notebook configured.
-        when(mockNotebookManager.getAnyProjectEntry(PROJECT_ID)).thenReturn(
+        when(mockNotebookManager.getProjectForNotebook(PROJECT_ID, MAIN_NOTEBOOK_ID)).thenReturn(
             makeMainProjectEntry(PROJECT_ID, INIT_NOTEBOOK_ID)
         );
 
@@ -399,7 +399,7 @@ suite('DeepnoteInitNotebookRunner', () => {
 
     test('no init configured: undefined initNotebookId runs nothing and never scans the directory', async () => {
         // The cached project has NO initNotebookId.
-        when(mockNotebookManager.getAnyProjectEntry(PROJECT_ID)).thenReturn(
+        when(mockNotebookManager.getProjectForNotebook(PROJECT_ID, MAIN_NOTEBOOK_ID)).thenReturn(
             makeMainProjectEntry(PROJECT_ID, undefined)
         );
         putFile(MAIN_FILE_NAME, makeMainProjectEntry(PROJECT_ID, undefined) as unknown as DeepnoteFile);

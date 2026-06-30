@@ -575,9 +575,11 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         // Prepare init notebook execution
         const projectId = notebook.metadata?.deepnoteProjectId;
-        const project = projectId
-            ? (this.notebookManager.getAnyProjectEntry(projectId) as DeepnoteFile | undefined)
-            : undefined;
+        const notebookId = notebook.metadata?.deepnoteNotebookId;
+        const project =
+            projectId && notebookId
+                ? (this.notebookManager.getProjectForNotebook(projectId, notebookId) as DeepnoteFile | undefined)
+                : undefined;
 
         if (project) {
             // Only create requirements.txt if requirements have changed from what's on disk

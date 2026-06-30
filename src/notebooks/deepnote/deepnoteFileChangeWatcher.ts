@@ -17,7 +17,6 @@ import { IControllerRegistration } from '../controllers/types';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { logger } from '../../platform/logging';
-import { IDeepnoteProjectMetadataPropagator } from '../../platform/deepnote/types';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
@@ -89,10 +88,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
         @inject(SnapshotService) @optional() private readonly snapshotService?: SnapshotService,
-        @inject(IControllerRegistration) @optional() private readonly controllerRegistration?: IControllerRegistration,
-        @inject(IDeepnoteProjectMetadataPropagator)
-        @optional()
-        private readonly metadataPropagator?: IDeepnoteProjectMetadataPropagator
+        @inject(IControllerRegistration) @optional() private readonly controllerRegistration?: IControllerRegistration
     ) {
         this.serializer = new DeepnoteNotebookSerializer(this.notebookManager, this.snapshotService);
     }
@@ -107,13 +103,6 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
 
         if (this.snapshotService) {
             this.disposables.push(this.snapshotService.onFileWritten((uri) => this.markSnapshotSelfWrite(uri)));
-        }
-
-        if (this.metadataPropagator) {
-            // A propagated write to an open sibling must be treated as a self-write so it does
-            // not bounce through the reload-and-resave path. Reuse the same self-write registry
-            // and consumption path as the snapshot subscription.
-            this.disposables.push(this.metadataPropagator.onFileWritten((uri) => this.markSnapshotSelfWrite(uri)));
         }
     }
 
@@ -361,10 +350,12 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
 
         // Look up original project blocks for fallback block ID resolution with an exact
         // (projectId, notebookId) lookup. Sibling files share a project.id, so a project-only
-        // lookup (getAnyProjectEntry) can return a different sibling's project whose notebooks do
-        // not contain this notebookId — leaving originalBlocks undefined and silently skipping the
-        // metadata-lost block-id recovery below. Mirrors the F1 fix in snapshotService.ts.
-        const originalProject = notebookId ? this.notebookManager.getOriginalProject(projectId, notebookId) : undefined;
+        // lookup can return a different sibling's project whose notebooks do not contain this
+        // notebookId — leaving originalBlocks undefined and silently skipping the metadata-lost
+        // block-id recovery below. Mirrors the exact-lookup guard in snapshotService.ts.
+        const originalProject = notebookId
+            ? this.notebookManager.getProjectForNotebook(projectId, notebookId)
+            : undefined;
         const notebookBlocksMap = new Map<string, DeepnoteBlock[]>();
         if (originalProject) {
             for (const nb of originalProject.project.notebooks) {
@@ -593,9 +584,8 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
     }
 
     /**
-     * Marks a URI as written by the snapshot service or the metadata propagator, so the
-     * resulting fs event is treated as a self-write and skipped. Shared by both subscriptions
-     * to keep a single, non-divergent self-write registry.
+     * Marks a URI as written by the snapshot service, so the resulting fs event is treated as a
+     * self-write and skipped.
      */
     private markSnapshotSelfWrite(uri: Uri): void {
         const key = this.selfWriteKey(uri);

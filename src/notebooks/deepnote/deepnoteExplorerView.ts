@@ -1,7 +1,7 @@
 import { injectable, inject } from 'inversify';
 import { commands, window, workspace, type TreeView, RelativePattern, Uri, l10n } from 'vscode';
 import { serializeDeepnoteFile, type DeepnoteBlock, type DeepnoteFile } from '@deepnote/blocks';
-import { convertDeepnoteToJupyterNotebooks, convertIpynbFilesToDeepnoteFile } from '@deepnote/convert';
+import { convertDeepnoteToJupyterNotebooks, convertIpynbFileToDeepnoteFile } from '@deepnote/convert';
 
 import { IExtensionContext } from '../../platform/common/types';
 import { DeepnoteTreeDataProvider } from './deepnoteTreeDataProvider';
@@ -17,7 +17,6 @@ import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { Commands } from '../../platform/common/constants';
 import { readDeepnoteProjectFile } from './deepnoteProjectUtils';
 import { ILogger } from '../../platform/logging/types';
-import type { IDeepnoteProjectMetadataPropagator } from '../../platform/deepnote/types';
 import { buildSingleNotebookFile, buildSiblingNotebookFileUri } from './deepnoteNotebookFileFactory';
 import { deepnoteFileExists } from './deepnoteSiblingFileAllocator';
 import { isSnapshotFile } from './snapshots/snapshotFiles';
@@ -38,8 +37,7 @@ export class DeepnoteExplorerView {
 
     constructor(
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
-        @inject(ILogger) private readonly logger: ILogger,
-        private readonly metadataPropagator?: IDeepnoteProjectMetadataPropagator
+        @inject(ILogger) private readonly logger: ILogger
     ) {
         this.treeDataProvider = new DeepnoteTreeDataProvider(logger);
     }
@@ -287,19 +285,7 @@ export class DeepnoteExplorerView {
         }
 
         try {
-            // Desktop: rename the project across every sibling .deepnote file (open or closed).
-            if (this.metadataPropagator) {
-                await this.metadataPropagator.propagateProjectMetadata(treeItem.context.projectId, (file) => {
-                    file.project.name = newName;
-                });
-
-                this.treeDataProvider.refresh();
-                await window.showInformationMessage(l10n.t('Project renamed to: {0}', newName));
-
-                return;
-            }
-
-            // Web fallback (no filesystem fan-out): rename each sibling file in the group.
+            // Rename each sibling .deepnote file in the project group.
             for (const { filePath } of group.files) {
                 try {
                     const fileUri = Uri.file(filePath);
@@ -368,12 +354,6 @@ export class DeepnoteExplorerView {
         );
 
         this.extensionContext.subscriptions.push(
-            commands.registerCommand(Commands.DeleteProject, (treeItem: DeepnoteTreeItem) =>
-                this.deleteProject(treeItem)
-            )
-        );
-
-        this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.RenameNotebook, (treeItem: DeepnoteTreeItem) =>
                 this.renameNotebook(treeItem)
             )
@@ -394,12 +374,6 @@ export class DeepnoteExplorerView {
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.AddNotebookToProject, (treeItem: DeepnoteTreeItem) =>
                 this.addNotebookToProject(treeItem)
-            )
-        );
-
-        this.extensionContext.subscriptions.push(
-            commands.registerCommand(Commands.ExportProject, (treeItem: DeepnoteTreeItem) =>
-                this.exportProject(treeItem)
             )
         );
 
@@ -466,7 +440,7 @@ export class DeepnoteExplorerView {
             for (const fileUri of files) {
                 // Skip snapshot sidecars (`*.snapshot.deepnote`): they are full project clones, so
                 // their stale notebook names would otherwise pollute the uniqueness set. The tree
-                // provider and metadata propagator filter them the same way.
+                // provider filters them the same way.
                 if (isSnapshotFile(fileUri)) {
                     continue;
                 }
@@ -842,6 +816,66 @@ export class DeepnoteExplorerView {
         }
     }
 
+    private async checkJupyterImportTargetsAvailable(jupyterUris: readonly Uri[], folderUri: Uri): Promise<boolean> {
+        // Each Jupyter notebook imports into its own .deepnote sibling; don't overwrite an existing
+        // file or let two selected notebooks with the same base name clobber each other.
+        const seenNames = new Set<string>();
+
+        for (const jupyterUri of jupyterUris) {
+            const { outputFileName, outputUri } = this.deepnoteTargetForJupyterUri(jupyterUri, folderUri);
+            let exists = seenNames.has(outputFileName);
+
+            if (!exists) {
+                try {
+                    await workspace.fs.stat(outputUri);
+                    exists = true;
+                } catch {
+                    // No file at the target path — available.
+                }
+            }
+
+            if (exists) {
+                await window.showErrorMessage(
+                    l10n.t('A file named "{0}" already exists in this workspace.', outputFileName)
+                );
+
+                return false;
+            }
+
+            seenNames.add(outputFileName);
+        }
+
+        return true;
+    }
+
+    private async convertJupyterUrisToDeepnoteFiles(jupyterUris: readonly Uri[], folderUri: Uri): Promise<void> {
+        // Each Jupyter notebook becomes its own single-notebook .deepnote file.
+        for (const jupyterUri of jupyterUris) {
+            const { inputPath, outputUri, projectName } = this.deepnoteTargetForJupyterUri(jupyterUri, folderUri);
+
+            await convertIpynbFileToDeepnoteFile(inputPath, {
+                outputPath: outputUri.path,
+                projectName
+            });
+        }
+    }
+
+    private deepnoteTargetForJupyterUri(
+        jupyterUri: Uri,
+        folderUri: Uri
+    ): { inputPath: string; outputFileName: string; outputUri: Uri; projectName: string } {
+        const fileName = jupyterUri.path.split('/').pop() || 'notebook.ipynb';
+        const projectName = fileName.replace(/\.ipynb$/i, '');
+        const outputFileName = `${projectName}.deepnote`;
+
+        return {
+            inputPath: jupyterUri.path,
+            outputFileName,
+            outputUri: Uri.joinPath(folderUri, outputFileName),
+            projectName
+        };
+    }
+
     private async importNotebook(): Promise<void> {
         if (!workspace.workspaceFolders || workspace.workspaceFolders.length === 0) {
             const selection = await window.showInformationMessage(
@@ -894,23 +928,9 @@ export class DeepnoteExplorerView {
                 }
             }
 
-            // Check for existing jupyter import output file
-            if (jupyterUris.length > 0) {
-                const firstFileName = jupyterUris[0].path.split('/').pop() || 'notebook.ipynb';
-                const projectName = firstFileName.replace(/\.ipynb$/i, '');
-                const outputFileName = `${projectName}.deepnote`;
-                const outputUri = Uri.joinPath(workspaceFolder.uri, outputFileName);
-
-                try {
-                    await workspace.fs.stat(outputUri);
-                    await window.showErrorMessage(
-                        l10n.t('A file named "{0}" already exists in this workspace.', outputFileName)
-                    );
-
-                    return;
-                } catch {
-                    // File doesn't exist, continue
-                }
+            // Check that each Jupyter import target is available (one .deepnote per notebook).
+            if (!(await this.checkJupyterImportTargetsAvailable(jupyterUris, workspaceFolder.uri))) {
+                return;
             }
 
             // Import deepnote files
@@ -923,21 +943,8 @@ export class DeepnoteExplorerView {
                 await workspace.fs.writeFile(targetUri, content);
             }
 
-            // Convert and import jupyter files
-            if (jupyterUris.length > 0) {
-                const inputFilePaths = jupyterUris.map((uri) => uri.path);
-
-                // Use the first Jupyter file's name for the project
-                const firstFileName = jupyterUris[0].path.split('/').pop() || 'notebook.ipynb';
-                const projectName = firstFileName.replace(/\.ipynb$/i, '');
-                const outputFileName = `${projectName}.deepnote`;
-                const outputPath = Uri.joinPath(workspaceFolder.uri, outputFileName).path;
-
-                await convertIpynbFilesToDeepnoteFile(inputFilePaths, {
-                    outputPath: outputPath,
-                    projectName: projectName
-                });
-            }
+            // Convert jupyter files — each becomes its own single-notebook .deepnote file.
+            await this.convertJupyterUrisToDeepnoteFiles(jupyterUris, workspaceFolder.uri);
 
             const numberOfNotebooks = jupyterUris.length + deepnoteUris.length;
 
@@ -986,30 +993,13 @@ export class DeepnoteExplorerView {
 
         try {
             const workspaceFolder = workspace.workspaceFolders[0];
-            const inputFilePaths = fileUris.map((uri) => uri.path);
 
-            // Use the first Jupyter file's name for the project
-            const firstFileName = fileUris[0].path.split('/').pop() || 'notebook.ipynb';
-            const projectName = firstFileName.replace(/\.ipynb$/i, '');
-            const outputFileName = `${projectName}.deepnote`;
-            const outputUri = Uri.joinPath(workspaceFolder.uri, outputFileName);
-
-            // Check if file already exists
-            try {
-                await workspace.fs.stat(outputUri);
-                await window.showErrorMessage(
-                    l10n.t('A file named "{0}" already exists in this workspace.', outputFileName)
-                );
-
+            // Each Jupyter notebook becomes its own single-notebook .deepnote file.
+            if (!(await this.checkJupyterImportTargetsAvailable(fileUris, workspaceFolder.uri))) {
                 return;
-            } catch {
-                // File doesn't exist, continue
             }
 
-            await convertIpynbFilesToDeepnoteFile(inputFilePaths, {
-                outputPath: outputUri.path,
-                projectName: projectName
-            });
+            await this.convertJupyterUrisToDeepnoteFiles(fileUris, workspaceFolder.uri);
 
             const numberOfNotebooks = fileUris.length;
 
@@ -1027,50 +1017,6 @@ export class DeepnoteExplorerView {
 
             await window.showErrorMessage(l10n.t(`Failed to import Jupyter notebook: {0}`, errorMessage));
         }
-    }
-
-    private async deleteProject(treeItem: DeepnoteTreeItem): Promise<void> {
-        if (treeItem.type !== DeepnoteTreeItemType.ProjectGroup) {
-            return;
-        }
-
-        const group = treeItem.data as ProjectGroupData;
-        const projectName = group.projectName;
-
-        const confirmation = await window.showWarningMessage(
-            l10n.t('Are you sure you want to delete project "{0}"?', projectName),
-            { modal: true },
-            l10n.t('Delete')
-        );
-
-        if (confirmation !== l10n.t('Delete')) {
-            return;
-        }
-
-        // Delete every sibling file in the group, with per-iteration error handling so one failure
-        // does not stop the rest.
-        const failedFiles: string[] = [];
-
-        for (const { filePath } of group.files) {
-            try {
-                await workspace.fs.delete(Uri.file(filePath), { useTrash: true });
-            } catch (error) {
-                this.logger.error(`Failed to delete project file ${filePath}`, error);
-                failedFiles.push(filePath);
-            }
-        }
-
-        this.treeDataProvider.refresh();
-
-        if (failedFiles.length > 0) {
-            await window.showErrorMessage(
-                l10n.t('Failed to delete {0} of {1} project files.', failedFiles.length, group.files.length)
-            );
-
-            return;
-        }
-
-        await window.showInformationMessage(l10n.t('Project deleted: {0}', projectName));
     }
 
     private async addNotebookToProject(treeItem: DeepnoteTreeItem): Promise<void> {
@@ -1098,109 +1044,6 @@ export class DeepnoteExplorerView {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             await window.showErrorMessage(l10n.t('Failed to add notebook: {0}', errorMessage));
-        }
-    }
-
-    /**
-     * Exports every notebook of a project group (across all sibling files) to Jupyter format.
-     * @param treeItem The tree item representing a project group
-     */
-    private async exportProject(treeItem: DeepnoteTreeItem): Promise<void> {
-        if (treeItem.type !== DeepnoteTreeItemType.ProjectGroup) {
-            return;
-        }
-
-        const group = treeItem.data as ProjectGroupData;
-
-        try {
-            const format = await window.showQuickPick([{ label: 'Jupyter Notebook (.ipynb)', value: 'jupyter' }], {
-                placeHolder: l10n.t('Select export format')
-            });
-
-            if (!format) {
-                return;
-            }
-
-            // Collect the Jupyter notebooks to write across every sibling file (validate before
-            // prompting for an output folder).
-            const jupyterNotebooks: Array<{ filename: string; notebook: unknown }> = [];
-
-            for (const { filePath } of group.files) {
-                try {
-                    const projectData = await readDeepnoteProjectFile(Uri.file(filePath));
-
-                    if (!projectData?.project) {
-                        continue;
-                    }
-
-                    jupyterNotebooks.push(...convertDeepnoteToJupyterNotebooks(projectData));
-                } catch (error) {
-                    this.logger.error(`Failed to read ${filePath} for export`, error);
-                }
-            }
-
-            if (jupyterNotebooks.length === 0) {
-                await window.showErrorMessage(l10n.t('Invalid Deepnote file format'));
-
-                return;
-            }
-
-            const outputFolder = await window.showOpenDialog({
-                canSelectFiles: false,
-                canSelectFolders: true,
-                canSelectMany: false,
-                openLabel: l10n.t('Export Here'),
-                title: l10n.t('Select Export Location')
-            });
-
-            if (!outputFolder?.length) {
-                return;
-            }
-
-            // Check for existing files before writing
-            const existingFiles: string[] = [];
-
-            for (const { filename } of jupyterNotebooks) {
-                const outputPath = Uri.joinPath(outputFolder[0], filename);
-
-                try {
-                    await workspace.fs.stat(outputPath);
-                    existingFiles.push(filename);
-                } catch {
-                    // File doesn't exist, safe to write
-                }
-            }
-
-            if (existingFiles.length > 0) {
-                const fileList = existingFiles.join(', ');
-                const overwrite = l10n.t('Overwrite');
-                const result = await window.showWarningMessage(
-                    l10n.t('The following files already exist: {0}. Do you want to overwrite them?', fileList),
-                    { modal: true },
-                    overwrite
-                );
-
-                if (result !== overwrite) {
-                    return;
-                }
-            }
-
-            for (const { filename, notebook } of jupyterNotebooks) {
-                const outputPath = Uri.joinPath(outputFolder[0], filename);
-
-                await workspace.fs.writeFile(outputPath, new TextEncoder().encode(JSON.stringify(notebook, null, 2)));
-            }
-
-            const count = jupyterNotebooks.length;
-            const message =
-                count === 1
-                    ? l10n.t('Exported 1 notebook successfully')
-                    : l10n.t('Exported {0} notebooks successfully', count);
-
-            await window.showInformationMessage(message);
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            await window.showErrorMessage(l10n.t('Failed to export: {0}', errorMessage));
         }
     }
 

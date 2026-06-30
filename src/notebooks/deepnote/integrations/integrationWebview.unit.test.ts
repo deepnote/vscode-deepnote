@@ -6,7 +6,6 @@ import { anyString, anything, instance, mock, reset, verify, when } from 'ts-moc
 import { IExtensionContext, IDisposable } from '../../../platform/common/types';
 import { Commands } from '../../../platform/common/constants';
 import { IDeepnoteNotebookManager } from '../../types';
-import { IDeepnoteProjectMetadataPropagator, ProjectMetadataPropagationResult } from '../../../platform/deepnote/types';
 import { IntegrationWebviewProvider } from './integrationWebview';
 import { FederatedAuthTokenEntry, IFederatedAuthTokenStorage, IIntegrationStorage } from './types';
 import { computeMetadataFingerprint } from './federatedAuth/federatedAuthTokenStorage.node';
@@ -151,7 +150,6 @@ suite('IntegrationWebviewProvider', () => {
     function buildProvider(
         opts: {
             tokenStorage?: IFederatedAuthTokenStorage;
-            metadataPropagator?: IDeepnoteProjectMetadataPropagator;
         } = {}
     ): IntegrationWebviewProvider {
         return new IntegrationWebviewProvider(
@@ -159,8 +157,7 @@ suite('IntegrationWebviewProvider', () => {
             instance(integrationStorage),
             instance(notebookManager),
             extensionSubscriptions,
-            opts.tokenStorage,
-            opts.metadataPropagator
+            opts.tokenStorage
         );
     }
 
@@ -439,51 +436,29 @@ suite('IntegrationWebviewProvider', () => {
         assert.isEmpty(updateMessages, 'no `update` postMessage should be issued after the panel disposes mid-update');
     });
 
-    suite('updateProjectIntegrationsList: propagator vs cache-only fan-out', () => {
-        function makePropagator(result: ProjectMetadataPropagationResult): {
-            propagator: IDeepnoteProjectMetadataPropagator;
-            calls: Array<{ projectId: string; mutator: (file: import('@deepnote/blocks').DeepnoteFile) => void }>;
-        } {
-            const calls: Array<{
-                projectId: string;
-                mutator: (file: import('@deepnote/blocks').DeepnoteFile) => void;
-            }> = [];
-            const propagator: IDeepnoteProjectMetadataPropagator = {
-                onFileWritten: () => ({ dispose: () => undefined }),
-                propagateProjectMetadata: async (projectId, mutator) => {
-                    calls.push({ projectId, mutator });
-
-                    return result;
-                }
-            };
-
-            return { propagator, calls };
-        }
-
+    suite('updateProjectIntegrationsList: cache-only update', () => {
         async function callUpdateProjectIntegrationsList(provider: IntegrationWebviewProvider): Promise<void> {
-            // `show()` sets `projectId` + the integrations map; then drive the private fan-out method.
+            // `show()` sets `projectId` + the integrations map; then drive the private update method.
             await show(provider, singleIntegrationMap('pg-1', buildPostgresIntegration({ id: 'pg-1' })));
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             await (provider as any).updateProjectIntegrationsList();
         }
 
-        test('when the propagator is present it drives propagateProjectMetadata (NOT the cache-only updateProjectIntegrations)', async () => {
-            const { propagator, calls } = makePropagator({ updated: [Uri.file('/x/a.deepnote')], failures: [] });
+        test('updates the cached project integrations via notebookManager.updateProjectIntegrations', async () => {
             const updateProjectIntegrationsSpy = sinon.spy((_projectId: string, _integrations: unknown[]) => true);
             when(notebookManager.updateProjectIntegrations(anyString(), anything())).thenCall(
                 updateProjectIntegrationsSpy
             );
 
-            const provider = buildProvider({ tokenStorage, metadataPropagator: propagator });
+            const provider = buildProvider({ tokenStorage });
             await callUpdateProjectIntegrationsList(provider);
 
-            assert.strictEqual(calls.length, 1, 'propagateProjectMetadata should be called once');
-            assert.strictEqual(calls[0].projectId, PROJECT_ID);
-            sinon.assert.notCalled(updateProjectIntegrationsSpy);
+            sinon.assert.calledOnce(updateProjectIntegrationsSpy);
+            sinon.assert.calledWith(updateProjectIntegrationsSpy, PROJECT_ID);
         });
 
-        test('"project not found" error shows only when updated.length === 0 AND failures.length === 0', async () => {
+        test('shows a "project not found" error when no cached entry was updated', async () => {
             const errors: string[] = [];
             when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenCall((msg: string) => {
                 errors.push(msg);
@@ -491,63 +466,17 @@ suite('IntegrationWebviewProvider', () => {
                 return Promise.resolve(undefined);
             });
 
-            // updated.length === 0 && failures.length === 0 → group empty/unresolvable → error.
-            const { propagator } = makePropagator({ updated: [], failures: [] });
-            const provider = buildProvider({ tokenStorage, metadataPropagator: propagator });
+            // updateProjectIntegrations returns false → no cached entry for the project → error.
+            when(notebookManager.updateProjectIntegrations(anyString(), anything())).thenReturn(false);
+
+            const provider = buildProvider({ tokenStorage });
             await callUpdateProjectIntegrationsList(provider);
 
             assert.strictEqual(
                 errors.length,
                 1,
-                'project-not-found error should show when nothing was updated and nothing failed'
+                'project-not-found error should show when no cached entry was updated'
             );
-        });
-
-        test('"project not found" error does NOT show when at least one file was updated', async () => {
-            const errors: string[] = [];
-            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenCall((msg: string) => {
-                errors.push(msg);
-
-                return Promise.resolve(undefined);
-            });
-
-            const { propagator } = makePropagator({ updated: [Uri.file('/x/a.deepnote')], failures: [] });
-            const provider = buildProvider({ tokenStorage, metadataPropagator: propagator });
-            await callUpdateProjectIntegrationsList(provider);
-
-            assert.deepStrictEqual(errors, [], 'no project-not-found error when a file was updated');
-        });
-
-        test('"project not found" error does NOT show when there were per-file failures (propagator already surfaced them)', async () => {
-            const errors: string[] = [];
-            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenCall((msg: string) => {
-                errors.push(msg);
-
-                return Promise.resolve(undefined);
-            });
-
-            // updated empty but failures present → propagator already warned; no project-not-found error.
-            const { propagator } = makePropagator({
-                updated: [],
-                failures: [{ uri: Uri.file('/x/bad.deepnote'), error: new Error('boom') }]
-            });
-            const provider = buildProvider({ tokenStorage, metadataPropagator: propagator });
-            await callUpdateProjectIntegrationsList(provider);
-
-            assert.deepStrictEqual(errors, [], 'no project-not-found error when failures were collected');
-        });
-
-        test('when the propagator is absent (web) it falls back to notebookManager.updateProjectIntegrations', async () => {
-            const updateProjectIntegrationsSpy = sinon.spy((_projectId: string, _integrations: unknown[]) => true);
-            when(notebookManager.updateProjectIntegrations(anyString(), anything())).thenCall(
-                updateProjectIntegrationsSpy
-            );
-
-            const provider = buildProvider({ tokenStorage }); // no metadataPropagator
-            await callUpdateProjectIntegrationsList(provider);
-
-            sinon.assert.calledOnce(updateProjectIntegrationsSpy);
-            sinon.assert.calledWith(updateProjectIntegrationsSpy, PROJECT_ID);
         });
     });
 });

@@ -8,7 +8,6 @@ import { IDisposableRegistry, IExtensionContext } from '../../../platform/common
 import * as localize from '../../../platform/common/utils/localize';
 import { logger } from '../../../platform/logging';
 import { LocalizedMessages, SharedMessages } from '../../../messageTypes';
-import { IDeepnoteProjectMetadataPropagator } from '../../../platform/deepnote/types';
 import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
 import { IFederatedAuthTokenStorage, IIntegrationStorage, IIntegrationWebviewProvider } from './types';
 import {
@@ -31,6 +30,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
 
     private projectId: string | undefined;
 
+    private projectName: string | undefined;
+
     /** Generation counter for `updateWebview()` ("latest call wins"; stale in-flight updates bail). */
     private updateGeneration = 0;
 
@@ -41,10 +42,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         @inject(IDisposableRegistry) private readonly disposableRegistry: IDisposableRegistry,
         @inject(IFederatedAuthTokenStorage)
         @optional()
-        private readonly tokenStorage?: IFederatedAuthTokenStorage,
-        @inject(IDeepnoteProjectMetadataPropagator)
-        @optional()
-        private readonly metadataPropagator?: IDeepnoteProjectMetadataPropagator
+        private readonly tokenStorage?: IFederatedAuthTokenStorage
     ) {
         // Refresh on token-storage change so the auth pill flips without panel reload. Pushed into the extension-lifetime registry to survive panel close/reopen.
         if (this.tokenStorage) {
@@ -63,14 +61,17 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
      * @param projectId The Deepnote project ID
      * @param integrations Map of integration IDs to their status
      * @param selectedIntegrationId Optional integration ID to select/configure immediately
+     * @param projectName Optional project display name (sourced from the active notebook's metadata)
      */
     public async show(
         projectId: string,
         integrations: Map<string, IntegrationWithStatus>,
-        selectedIntegrationId?: string
+        selectedIntegrationId?: string,
+        projectName?: string
     ): Promise<void> {
         // Update the stored integrations and project ID with the latest data
         this.projectId = projectId;
+        this.projectName = projectName;
         this.integrations = integrations;
 
         const column = window.activeTextEditor ? window.activeTextEditor.viewColumn : ViewColumn.One;
@@ -472,16 +473,9 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
 
         logger.debug(`IntegrationWebviewProvider: Sending ${integrationsData.length} integrations to webview`);
 
-        // Get the project name from the notebook manager
-        let projectName: string | undefined;
-        if (this.projectId) {
-            const project = this.notebookManager.getAnyProjectEntry(this.projectId);
-            projectName = project?.project.name;
-        }
-
         await this.currentPanel.webview.postMessage({
             integrations: integrationsData,
-            projectName,
+            projectName: this.projectName,
             type: 'update'
         });
     }
@@ -768,34 +762,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             `IntegrationWebviewProvider: Updating project ${this.projectId} with ${projectIntegrations.length} integrations`
         );
 
-        // Desktop: fan out the integrations change to every sibling .deepnote file on disk
-        // (open or closed). The propagator's cache refresh subsumes the manager cache update,
-        // so this is the single place that updates both disk and the in-memory copies.
-        if (this.metadataPropagator) {
-            const { updated, failures } = await this.metadataPropagator.propagateProjectMetadata(
-                this.projectId,
-                (file) => {
-                    file.project.integrations = projectIntegrations;
-                }
-            );
-
-            // Preserve the existing "project not found" contract: surface it only when no file
-            // matched the project (failures are surfaced by the propagator itself).
-            if (updated.length === 0 && failures.length === 0) {
-                logger.error(
-                    `IntegrationWebviewProvider: Failed to update integrations for project ${this.projectId} - project not found`
-                );
-                void window.showErrorMessage(
-                    l10n.t(
-                        'Failed to update integrations: project not found. Please reopen the notebook and try again.'
-                    )
-                );
-            }
-
-            return;
-        }
-
-        // Web fallback (no filesystem fan-out): update only the cached project entries.
+        // Update the cached project entries; each notebook persists its own integrations on save.
         const success = this.notebookManager.updateProjectIntegrations(this.projectId, projectIntegrations);
 
         if (!success) {

@@ -1488,8 +1488,7 @@ project:
                 };
 
                 const mockNotebookManager = {
-                    getAnyProjectEntry: sinon.stub().returns(originalProject),
-                    getOriginalProject: sinon.stub().returns(originalProject)
+                    getProjectForNotebook: sinon.stub().returns(originalProject)
                 };
 
                 // Create a new service with the mock notebook manager
@@ -1535,16 +1534,92 @@ project:
                     'updateLatestSnapshot should NOT be called when all code cells are executed'
                 );
 
-                // F1 regression: the save path must resolve the project via the EXACT
-                // (projectId, notebookId) lookup, not the project-only getAnyProjectEntry (which can
-                // return a different open sibling and silently skip the snapshot write).
+                // Regression: the save path must resolve the project via the EXACT
+                // (projectId, notebookId) lookup — a project-only lookup could return a different
+                // open sibling and silently skip the snapshot write.
                 assert.isTrue(
-                    mockNotebookManager.getOriginalProject.calledWith(projectId, notebookId),
-                    'performSnapshotSave must fetch via getOriginalProject(projectId, notebookId)'
+                    mockNotebookManager.getProjectForNotebook.calledWith(projectId, notebookId),
+                    'performSnapshotSave must fetch via getProjectForNotebook(projectId, notebookId)'
                 );
-                assert.isFalse(
-                    mockNotebookManager.getAnyProjectEntry.called,
-                    'performSnapshotSave must NOT use the project-only getAnyProjectEntry'
+            });
+
+            test('writes the snapshot next to the saved notebook, not a sibling that shares the project id', async () => {
+                const mockConfig = mock<WorkspaceConfiguration>();
+                when(mockConfig.get<boolean>('snapshots.enabled', true)).thenReturn(true);
+                when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote')).thenReturn(instance(mockConfig));
+
+                const sharedProjectId = 'shared-project-id';
+                // Two single-notebook siblings share a project.id but live in DIFFERENT folders.
+                const siblingAUri = 'file:///workspace/foo/a.deepnote';
+                const targetBUri = 'file:///workspace/bar/b.deepnote';
+
+                const makeCell = (id: string) => ({
+                    kind: NotebookCellKind.Code,
+                    document: { getText: () => 'print(1)', languageId: 'python' },
+                    metadata: { id },
+                    outputs: [],
+                    executionSummary: { success: true }
+                });
+                const siblingA = {
+                    uri: Uri.parse(siblingAUri),
+                    notebookType: 'deepnote',
+                    metadata: { deepnoteProjectId: sharedProjectId, deepnoteNotebookId: 'notebook-a' },
+                    getCells: () => [makeCell('cell-a')]
+                };
+                const notebookB = {
+                    uri: Uri.parse(targetBUri),
+                    notebookType: 'deepnote',
+                    metadata: { deepnoteProjectId: sharedProjectId, deepnoteNotebookId: 'notebook-b' },
+                    getCells: () => [makeCell('cell-b')]
+                };
+
+                // Sibling A is enumerated FIRST — a projectId-only lookup would pick A's folder.
+                when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([siblingA, notebookB] as any);
+
+                const originalProject: DeepnoteFile = {
+                    metadata: { createdAt: '2025-01-01T00:00:00Z' },
+                    version: '1.0.0',
+                    project: {
+                        id: sharedProjectId,
+                        name: 'Test Project',
+                        notebooks: [{ id: 'notebook-b', name: 'Notebook B', blocks: [] }]
+                    }
+                };
+                const mockNotebookManager = {
+                    getProjectForNotebook: sinon.stub().returns(originalProject)
+                };
+
+                const testService = new SnapshotService(
+                    instance(mockEnvironmentCapture),
+                    mockDisposables,
+                    mockNotebookManager as any
+                );
+                const testServiceAny = testService as any;
+
+                const startTime = Date.now();
+                testServiceAny.recordCellExecutionStart(targetBUri, 'cell-b', startTime);
+                testServiceAny.recordCellExecutionEnd(targetBUri, 'cell-b', startTime + 100, true);
+
+                const mockFs = mock<typeof import('vscode').workspace.fs>();
+                when(mockFs.stat(anything())).thenResolve({ type: FileType.Directory } as any);
+                when(mockFs.readFile(anything())).thenReject(new Error('ENOENT'));
+                when(mockFs.writeFile(anything(), anything())).thenResolve();
+                when(mockFs.copy(anything(), anything(), anything())).thenResolve();
+                when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
+
+                const buildSnapshotPathSpy = sinon.spy(testServiceAny, 'buildSnapshotPath');
+
+                await testServiceAny.performSnapshotSave(targetBUri);
+
+                // The snapshot dir is derived from projectUri's parent. With the fix, projectUri is
+                // notebook B's OWN uri (folder /bar), not sibling A's (/foo). The pre-fix projectId-only
+                // lookup would have passed A's uri here (A is enumerated first).
+                assert.isTrue(buildSnapshotPathSpy.called, 'buildSnapshotPath should be called');
+                const projectUriArg = buildSnapshotPathSpy.firstCall.args[0] as Uri;
+                assert.strictEqual(
+                    projectUriArg.toString(),
+                    Uri.parse(targetBUri).toString(),
+                    'snapshot must be built from the saved notebook own uri, not a sibling sharing the project id'
                 );
             });
         });

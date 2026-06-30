@@ -95,16 +95,17 @@ export class IntegrationManager implements IIntegrationManager {
             return;
         }
 
-        // Get the project ID from the notebook metadata
+        // Get the project and notebook IDs from the notebook metadata
         const projectId = activeNotebook.metadata?.deepnoteProjectId;
-        if (!projectId) {
+        const notebookId = activeNotebook.metadata?.deepnoteNotebookId;
+        if (!projectId || !notebookId) {
             await commands.executeCommand('setContext', this.hasIntegrationsContext, false);
             await commands.executeCommand('setContext', this.hasUnconfiguredIntegrationsContext, false);
             return;
         }
 
         // Detect integrations in the project
-        const integrations = await this.integrationDetector.detectIntegrations(projectId);
+        const integrations = await this.integrationDetector.detectIntegrations(projectId, notebookId);
         const hasIntegrations = integrations.size > 0;
         const hasUnconfigured = Array.from(integrations.values()).some(
             (integration) => integration.status === IntegrationStatus.Disconnected
@@ -127,7 +128,8 @@ export class IntegrationManager implements IIntegrationManager {
         }
 
         const projectId = activeNotebook.metadata?.deepnoteProjectId;
-        if (!projectId) {
+        const notebookId = activeNotebook.metadata?.deepnoteNotebookId;
+        if (!projectId || !notebookId) {
             void window.showErrorMessage(l10n.t('Cannot determine project ID'));
             return;
         }
@@ -136,7 +138,7 @@ export class IntegrationManager implements IIntegrationManager {
         logger.trace(`IntegrationManager: Notebook metadata:`, activeNotebook.metadata);
 
         // First try to detect integrations from the stored project
-        let integrations = await this.integrationDetector.detectIntegrations(projectId);
+        let integrations = await this.integrationDetector.detectIntegrations(projectId, notebookId);
         logger.debug(`IntegrationManager: Found ${integrations.size} integrations`);
 
         // If a specific integration was requested (e.g., from status bar click),
@@ -146,7 +148,7 @@ export class IntegrationManager implements IIntegrationManager {
             const config = await this.integrationStorage.getIntegrationConfig(selectedIntegrationId);
 
             // Try to get integration metadata from the project
-            const project = this.notebookManager.getAnyProjectEntry(projectId);
+            const project = this.notebookManager.getProjectForNotebook(projectId, notebookId);
             const projectIntegration = project?.project.integrations?.find((i) => i.id === selectedIntegrationId);
 
             let integrationName: string | undefined;
@@ -174,6 +176,11 @@ export class IntegrationManager implements IIntegrationManager {
         }
 
         // Show the webview with optional selected integration
-        await this.webviewProvider.show(projectId, integrations, selectedIntegrationId);
+        await this.webviewProvider.show(
+            projectId,
+            integrations,
+            selectedIntegrationId,
+            activeNotebook.metadata?.deepnoteProjectName
+        );
     }
 }

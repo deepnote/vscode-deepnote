@@ -18,11 +18,18 @@ suite('FederatedAuthKernelRestartBridge', () => {
     let disposables: IDisposable[];
     let onDidChangeTokens: EventEmitter<string>;
 
-    function createMockNotebook(notebookType: string, uri: Uri, projectId?: string): NotebookDocument {
+    function createMockNotebook(
+        notebookType: string,
+        uri: Uri,
+        projectId?: string,
+        notebookId?: string
+    ): NotebookDocument {
         const notebook = mock<NotebookDocument>();
         when(notebook.notebookType).thenReturn(notebookType);
         when(notebook.uri).thenReturn(uri);
-        when(notebook.metadata).thenReturn(projectId ? { deepnoteProjectId: projectId } : {});
+        when(notebook.metadata).thenReturn(
+            projectId ? { deepnoteProjectId: projectId, deepnoteNotebookId: notebookId } : {}
+        );
         return instance(notebook);
     }
 
@@ -62,8 +69,8 @@ suite('FederatedAuthKernelRestartBridge', () => {
     });
 
     test('restarts only the affected notebook when one of many references the integration', async () => {
-        const notebookA = createMockNotebook('deepnote', Uri.file('/a.ipynb'), 'project-a');
-        const notebookB = createMockNotebook('deepnote', Uri.file('/b.ipynb'), 'project-b');
+        const notebookA = createMockNotebook('deepnote', Uri.file('/a.ipynb'), 'project-a', 'notebook-a');
+        const notebookB = createMockNotebook('deepnote', Uri.file('/b.ipynb'), 'project-b', 'notebook-b');
         const kernelA = mkKernel();
         const kernelB = mkKernel();
 
@@ -71,8 +78,12 @@ suite('FederatedAuthKernelRestartBridge', () => {
         when(kernelProvider.get(notebookA)).thenReturn(instance(kernelA));
         when(kernelProvider.get(notebookB)).thenReturn(instance(kernelB));
         // Only project A references 'bq-shared'.
-        when(notebookManager.getAnyProjectEntry('project-a')).thenReturn(createMockProject('project-a', ['bq-shared']));
-        when(notebookManager.getAnyProjectEntry('project-b')).thenReturn(createMockProject('project-b', ['other-bq']));
+        when(notebookManager.getProjectForNotebook('project-a', 'notebook-a')).thenReturn(
+            createMockProject('project-a', ['bq-shared'])
+        );
+        when(notebookManager.getProjectForNotebook('project-b', 'notebook-b')).thenReturn(
+            createMockProject('project-b', ['other-bq'])
+        );
 
         onDidChangeTokens.fire('bq-shared');
         await settleAsyncHandlers();
@@ -82,16 +93,20 @@ suite('FederatedAuthKernelRestartBridge', () => {
     });
 
     test('restarts both kernels when two notebooks reference the same integration', async () => {
-        const notebookA = createMockNotebook('deepnote', Uri.file('/a.ipynb'), 'project-a');
-        const notebookB = createMockNotebook('deepnote', Uri.file('/b.ipynb'), 'project-b');
+        const notebookA = createMockNotebook('deepnote', Uri.file('/a.ipynb'), 'project-a', 'notebook-a');
+        const notebookB = createMockNotebook('deepnote', Uri.file('/b.ipynb'), 'project-b', 'notebook-b');
         const kernelA = mkKernel();
         const kernelB = mkKernel();
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebookA, notebookB]);
         when(kernelProvider.get(notebookA)).thenReturn(instance(kernelA));
         when(kernelProvider.get(notebookB)).thenReturn(instance(kernelB));
-        when(notebookManager.getAnyProjectEntry('project-a')).thenReturn(createMockProject('project-a', ['bq-shared']));
-        when(notebookManager.getAnyProjectEntry('project-b')).thenReturn(createMockProject('project-b', ['bq-shared']));
+        when(notebookManager.getProjectForNotebook('project-a', 'notebook-a')).thenReturn(
+            createMockProject('project-a', ['bq-shared'])
+        );
+        when(notebookManager.getProjectForNotebook('project-b', 'notebook-b')).thenReturn(
+            createMockProject('project-b', ['bq-shared'])
+        );
 
         onDidChangeTokens.fire('bq-shared');
         await settleAsyncHandlers();
@@ -104,13 +119,13 @@ suite('FederatedAuthKernelRestartBridge', () => {
         [
             [
                 'non-Deepnote notebooks',
-                () => createMockNotebook('jupyter-notebook', Uri.file('/a.ipynb'), 'project-a'),
+                () => createMockNotebook('jupyter-notebook', Uri.file('/a.ipynb'), 'project-a', 'notebook-a'),
                 () => mkKernel(),
                 () => createMockProject('project-a', ['bq-1'])
             ],
             [
                 'notebooks whose kernel has not started',
-                () => createMockNotebook('deepnote', Uri.file('/a.ipynb'), 'project-a'),
+                () => createMockNotebook('deepnote', Uri.file('/a.ipynb'), 'project-a', 'notebook-a'),
                 () => mkKernel({ startedAtLeastOnce: false }),
                 () => createMockProject('project-a', ['bq-1'])
             ],
@@ -130,7 +145,7 @@ suite('FederatedAuthKernelRestartBridge', () => {
             when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
             when(kernelProvider.get(notebook)).thenReturn(instance(kernel));
             if (project) {
-                when(notebookManager.getAnyProjectEntry('project-a')).thenReturn(project);
+                when(notebookManager.getProjectForNotebook('project-a', 'notebook-a')).thenReturn(project);
             }
 
             onDidChangeTokens.fire('bq-1');
@@ -138,22 +153,26 @@ suite('FederatedAuthKernelRestartBridge', () => {
 
             verify(kernel.restart()).never();
             if (!project) {
-                verify(notebookManager.getAnyProjectEntry(anyString())).never();
+                verify(notebookManager.getProjectForNotebook(anyString(), anyString())).never();
             }
         });
     });
 
     test('continues restarting other kernels when one fails', async () => {
-        const notebookA = createMockNotebook('deepnote', Uri.file('/a.ipynb'), 'project-a');
-        const notebookB = createMockNotebook('deepnote', Uri.file('/b.ipynb'), 'project-b');
+        const notebookA = createMockNotebook('deepnote', Uri.file('/a.ipynb'), 'project-a', 'notebook-a');
+        const notebookB = createMockNotebook('deepnote', Uri.file('/b.ipynb'), 'project-b', 'notebook-b');
         const kernelA = mkKernel({ restartRejects: new Error('boom') });
         const kernelB = mkKernel();
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebookA, notebookB]);
         when(kernelProvider.get(notebookA)).thenReturn(instance(kernelA));
         when(kernelProvider.get(notebookB)).thenReturn(instance(kernelB));
-        when(notebookManager.getAnyProjectEntry('project-a')).thenReturn(createMockProject('project-a', ['bq-shared']));
-        when(notebookManager.getAnyProjectEntry('project-b')).thenReturn(createMockProject('project-b', ['bq-shared']));
+        when(notebookManager.getProjectForNotebook('project-a', 'notebook-a')).thenReturn(
+            createMockProject('project-a', ['bq-shared'])
+        );
+        when(notebookManager.getProjectForNotebook('project-b', 'notebook-b')).thenReturn(
+            createMockProject('project-b', ['bq-shared'])
+        );
 
         onDidChangeTokens.fire('bq-shared');
         await settleAsyncHandlers();

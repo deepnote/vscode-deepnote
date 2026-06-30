@@ -119,7 +119,10 @@ export class DeepnoteInitNotebookRunner implements IDeepnoteInitNotebookRunner, 
                 return;
             }
 
-            const initNotebookId = this.notebookManager.getAnyProjectEntry(projectId)?.project.initNotebookId;
+            const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
+            const initNotebookId = notebookId
+                ? this.notebookManager.getProjectForNotebook(projectId, notebookId)?.project.initNotebookId
+                : undefined;
             if (!initNotebookId) {
                 logger.info(`No init notebook configured for project ${projectId}, skipping init`);
                 return;

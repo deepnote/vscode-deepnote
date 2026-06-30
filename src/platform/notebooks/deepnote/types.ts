@@ -116,22 +116,9 @@ export interface IPlatformNotebookEditorProvider {
 export const IPlatformDeepnoteNotebookManager = Symbol('IPlatformDeepnoteNotebookManager');
 export interface IPlatformDeepnoteNotebookManager {
     /**
-     * Returns any cached project entry for the project id, for project-level read-only callers
-     * that have only a `projectId` (no specific notebook). Sibling files share a `project.id`,
-     * so this may return any one sibling's cached project.
-     */
-    getAnyProjectEntry(projectId: string): DeepnoteProject | undefined;
-
-    /**
      * Returns the cached project for an exact (projectId, notebookId) pair, or undefined if
      * that precise entry is not cached. Performs an exact match only and never falls back to
      * another sibling's project.
      */
-    getOriginalProject(projectId: string, notebookId: string): DeepnoteProject | undefined;
-
-    /**
-     * Refreshes the cached project for an exact (projectId, notebookId) pair so the in-memory
-     * copy matches disk. Used by the project-metadata propagator to keep open siblings in sync.
-     */
-    updateOriginalProject(projectId: string, notebookId: string, project: DeepnoteProject): void;
+    getProjectForNotebook(projectId: string, notebookId: string): DeepnoteProject | undefined;
 }

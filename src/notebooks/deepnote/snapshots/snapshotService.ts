@@ -683,14 +683,6 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         }
     }
 
-    private findProjectUriFromId(projectId: string): Uri | undefined {
-        const notebookDoc = workspace.notebookDocuments.find(
-            (doc) => doc.notebookType === 'deepnote' && doc.metadata?.deepnoteProjectId === projectId
-        );
-
-        return notebookDoc?.uri;
-    }
-
     private getComparableProjectContent(data: DeepnoteFile): object {
         return {
             version: data.version,
@@ -927,10 +919,10 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         }
 
         // Fetch the cached project with an exact (projectId, notebookId) lookup. Sibling files share a
-        // project.id, so a project-only lookup (getAnyProjectEntry) can return a different sibling's
-        // project whose notebooks do not contain this notebookId — which would silently skip the
-        // snapshot write for every sibling but the first one cached.
-        const originalProject = this.notebookManager?.getOriginalProject(projectId, notebookId);
+        // project.id, so a project-only lookup can return a different sibling's project whose notebooks
+        // do not contain this notebookId — which would silently skip the snapshot write for every
+        // sibling but the first one cached.
+        const originalProject = this.notebookManager?.getProjectForNotebook(projectId, notebookId);
 
         if (!originalProject) {
             logger.warn(`[Snapshot] No original project found for ${projectId}/${notebookId}`);
@@ -938,13 +930,10 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             return;
         }
 
-        const projectUri = this.findProjectUriFromId(projectId);
-
-        if (!projectUri) {
-            logger.warn(`[Snapshot] Could not find project URI for ${projectId}`);
-
-            return;
-        }
+        // Use the exact saved notebook's own URI (resolved above) so the snapshot lands in this
+        // file's sibling `snapshots/` dir. A projectId-only lookup could pick a different open
+        // sibling sharing this project.id and write the snapshot next to the wrong file.
+        const projectUri = notebook.uri;
 
         const deepnoteNotebook = originalProject.project.notebooks?.find((nb) => nb.id === notebookId);
 

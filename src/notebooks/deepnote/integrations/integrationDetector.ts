@@ -24,9 +24,9 @@ export class IntegrationDetector implements IIntegrationDetector {
      * Detect all integrations used in the given project.
      * Uses the project's integrations field as the source of truth.
      */
-    async detectIntegrations(projectId: string): Promise<Map<string, IntegrationWithStatus>> {
+    async detectIntegrations(projectId: string, notebookId: string): Promise<Map<string, IntegrationWithStatus>> {
         // Get the project
-        const project = this.notebookManager.getAnyProjectEntry(projectId);
+        const project = this.notebookManager.getProjectForNotebook(projectId, notebookId);
         if (!project) {
             logger.warn(
                 `IntegrationDetector: No project found for ID: ${projectId}. The project may not have been loaded yet.`
@@ -74,8 +74,8 @@ export class IntegrationDetector implements IIntegrationDetector {
     /**
      * Check if a project has any unconfigured integrations
      */
-    async hasUnconfiguredIntegrations(projectId: string): Promise<boolean> {
-        const integrations = await this.detectIntegrations(projectId);
+    async hasUnconfiguredIntegrations(projectId: string, notebookId: string): Promise<boolean> {
+        const integrations = await this.detectIntegrations(projectId, notebookId);
 
         for (const integration of integrations.values()) {
             if (integration.status === IntegrationStatus.Disconnected) {

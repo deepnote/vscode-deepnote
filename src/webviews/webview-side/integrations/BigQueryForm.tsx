@@ -2,6 +2,7 @@ import * as React from 'react';
 import { format, getLocString } from '../react-common/locReactSide';
 import { BigQueryAuthMethods, DatabaseIntegrationConfig } from '@deepnote/database-integrations';
 import { getDefaultIntegrationName } from './integrationUtils';
+import { validateServiceAccountJson } from './serviceAccountValidation';
 
 type BigQueryConfig = Extract<DatabaseIntegrationConfig, { type: 'big-query' }>;
 type BigQueryAuthMethod = BigQueryConfig['metadata']['authMethod'];
@@ -118,21 +119,19 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({
     };
 
     const validateCredentials = (value: string): boolean => {
-        if (!value.trim()) {
+        const validationError = validateServiceAccountJson(value);
+        if (validationError === null) {
+            setCredentialsError(null);
+            return true;
+        }
+
+        if (validationError.kind === 'required') {
             setCredentialsError(getLocString('integrationsBigQueryCredentialsRequired', 'Credentials are required'));
             return false;
         }
 
-        try {
-            JSON.parse(value);
-            setCredentialsError(null);
-            return true;
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Invalid JSON format';
-            const invalidJsonMsg = format('Invalid JSON: {0}', errorMessage);
-            setCredentialsError(invalidJsonMsg);
-            return false;
-        }
+        setCredentialsError(format('Invalid JSON: {0}', validationError.detail));
+        return false;
     };
 
     const handleCredentialsChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {

@@ -33,7 +33,7 @@ This ensures consistency between the VSCode extension and Deepnote's cloud platf
 
 **Supported Integration Types:**
 
-The extension supports all 18 database integration types from the `@deepnote/database-integrations` package:
+The extension supports all 19 database integration types from the `@deepnote/database-integrations` package:
 
 **SQL Databases (standard authentication):**
 
@@ -52,6 +52,7 @@ The extension supports all 18 database integration types from the `@deepnote/dat
 - `'big-query'` - Google BigQuery (service account JSON)
 - `'snowflake'` - Snowflake (password or key-pair auth)
 - `'spanner'` - Google Spanner (service account JSON)
+- `'cloud-sql'` - Google Cloud SQL (service account JSON)
 
 **Cloud Databases (AWS credentials):**
 
@@ -349,6 +350,16 @@ The system uses `DatabaseIntegrationConfig` from `@deepnote/database-integration
     dataBoostEnabled: boolean;
   }
 }
+
+// Cloud SQL (type: 'cloud-sql')
+{
+  id: string;
+  name: string;
+  type: 'cloud-sql';
+  metadata: {
+    service_account: string; // JSON string
+  }
+}
 ```
 
 **Note:** The `pandas-dataframe` type is an internal integration that is automatically configured and cannot be modified by users.
@@ -567,9 +578,10 @@ Supported databases with standard forms:
 
 - **MongoDB**: Connection String (supports mongodb:// and mongodb+srv:// formats)
 
-**Google Cloud Forms** (`SpannerForm.tsx`):
+**Google Cloud Forms** (`SpannerForm.tsx`, `CloudSqlForm.tsx`):
 
 - **Spanner**: Instance ID, Database, Service Account JSON, Data Boost Enabled (checkbox)
+- **Cloud SQL**: Service Account JSON
 
 **Validation:**
 
@@ -817,7 +829,7 @@ The system was refactored to use the `@deepnote/database-integrations` package a
 
 ## Adding New Integration Types
 
-The extension now supports all 18 integration types from the `@deepnote/database-integrations` package (v1.1.1). To add support for a new integration type in the future:
+The extension now supports all 19 integration types from the `@deepnote/database-integrations` package. To add support for a new integration type in the future:
 
 1. **Add support to `@deepnote/database-integrations` package** (if not already supported):
 

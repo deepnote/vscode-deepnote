@@ -23,6 +23,8 @@ const getIntegrationTypeLabel = (type: ConfigurableDatabaseIntegrationType): str
             return getLocString('integrationsBigQueryTypeLabel', 'Google BigQuery');
         case 'clickhouse':
             return getLocString('integrationsClickHouseTypeLabel', 'ClickHouse');
+        case 'cloud-sql':
+            return getLocString('integrationsCloudSqlTypeLabel', 'Google Cloud SQL');
         case 'databricks':
             return getLocString('integrationsDatabricksTypeLabel', 'Databricks');
         case 'dremio':

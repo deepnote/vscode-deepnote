@@ -2,6 +2,7 @@ import * as React from 'react';
 import { getLocString } from '../react-common/locReactSide';
 import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
 import { getDefaultIntegrationName } from './integrationUtils';
+import { validateServiceAccountJson } from './serviceAccountValidation';
 
 function createEmptySpannerConfig(params: {
     id: string;
@@ -48,6 +49,7 @@ export const SpannerForm: React.FC<ISpannerFormProps> = ({
                 ? structuredClone(existingConfig)
                 : createEmptySpannerConfig({ id: integrationId, name: defaultName })
         );
+        setServiceAccountError(null);
     }, [existingConfig, integrationId, defaultName]);
 
     const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -67,19 +69,14 @@ export const SpannerForm: React.FC<ISpannerFormProps> = ({
 
     const handleServiceAccountChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const value = e.target.value;
-        setServiceAccountError(null);
+        const validationError = validateServiceAccountJson(value);
 
-        // Try to parse as JSON to validate
-        if (value.trim()) {
-            try {
-                JSON.parse(value);
-            } catch (err) {
-                setServiceAccountError(
-                    getLocString('integrationsSpannerServiceAccountInvalidJson', 'Invalid JSON format')
-                );
-            }
-        }
-
+        // Only surface invalid-JSON while typing; missing input is reported on submit.
+        setServiceAccountError(
+            validationError?.kind === 'invalid-json'
+                ? getLocString('integrationsSpannerServiceAccountInvalidJson', 'Invalid JSON format')
+                : null
+        );
         setPendingConfig((prev) => ({ ...prev, metadata: { ...prev.metadata, service_account: value } }));
     };
 
@@ -91,16 +88,16 @@ export const SpannerForm: React.FC<ISpannerFormProps> = ({
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Validate service account JSON
-        if (pendingConfig.metadata.service_account.trim()) {
-            try {
-                JSON.parse(pendingConfig.metadata.service_account);
-            } catch (err) {
-                setServiceAccountError(
-                    getLocString('integrationsSpannerServiceAccountInvalidJson', 'Invalid JSON format')
-                );
-                return;
-            }
+        const validationError = validateServiceAccountJson(pendingConfig.metadata.service_account);
+        if (validationError?.kind === 'required') {
+            setServiceAccountError(
+                getLocString('integrationsSpannerServiceAccountRequired', 'Service account is required')
+            );
+            return;
+        }
+        if (validationError?.kind === 'invalid-json') {
+            setServiceAccountError(getLocString('integrationsSpannerServiceAccountInvalidJson', 'Invalid JSON format'));
+            return;
         }
 
         onSave(pendingConfig);

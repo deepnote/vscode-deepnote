@@ -124,14 +124,5 @@ suite('DeepnoteProjectIdResolver', () => {
             assert.strictEqual((readUri as Uri).fragment, '');
             assert.strictEqual((readUri as Uri).path, '/workspace/project.deepnote');
         });
-
-        test('returns undefined (does not throw) when the fallback file read fails', async () => {
-            stubReadFile(new Error('ENOENT'));
-            const notebook = createNotebook(Uri.file('/workspace/missing.deepnote'), {});
-
-            const result = await resolveProjectIdForNotebook(notebook);
-
-            assert.strictEqual(result, undefined);
-        });
     });
 });

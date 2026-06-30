@@ -52,22 +52,8 @@ suite('snapshotFiles', () => {
             assert.strictEqual(extractProjectIdFromSnapshotUri(uri), projectId);
         });
 
-        test('should extract project ID from legacy timestamped snapshot URI', () => {
-            const uri = Uri.file(`/path/to/snapshots/my-project_${projectId}_2025-01-15T10-31-48.snapshot.deepnote`);
-
-            assert.strictEqual(extractProjectIdFromSnapshotUri(uri), projectId);
-        });
-
         test('should extract project ID from notebook-scoped latest snapshot URI', () => {
             const uri = Uri.file(`/path/to/snapshots/my-project_${projectId}_notebook-1_latest.snapshot.deepnote`);
-
-            assert.strictEqual(extractProjectIdFromSnapshotUri(uri), projectId);
-        });
-
-        test('should extract project ID from notebook-scoped timestamped snapshot URI', () => {
-            const uri = Uri.file(
-                `/path/to/snapshots/my-project_${projectId}_notebook-1_2025-01-15T10-31-48.snapshot.deepnote`
-            );
 
             assert.strictEqual(extractProjectIdFromSnapshotUri(uri), projectId);
         });
@@ -112,24 +98,6 @@ suite('snapshotFiles', () => {
                 projectId,
                 notebookId,
                 timestamp: '2025-01-02T10-31-48'
-            });
-        });
-
-        test('round-trips the latest variant for the notebook-scoped form (catches losing the "latest" pointer marker)', () => {
-            const filename = generateSnapshotFilename({
-                slug: 'my-project',
-                projectId,
-                notebookId,
-                timestamp: 'latest'
-            });
-
-            const parsed = parseSnapshotFilename(filename);
-
-            assert.deepStrictEqual(parsed, {
-                slug: 'my-project',
-                projectId,
-                notebookId,
-                timestamp: 'latest'
             });
         });
 

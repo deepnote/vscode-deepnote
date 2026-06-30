@@ -154,14 +154,16 @@ suite('DeepnoteServerStarter', () => {
             const infoB = await start(uriB);
 
             // runtime-core startServer must be invoked once per notebook — NOT reused across siblings.
-            assert.strictEqual(
-                runtimeCore.__getStartServerCalls().length,
-                2,
-                'each distinct notebook URI must spawn its own server process'
-            );
+            const calls = runtimeCore.__getStartServerCalls();
+            assert.strictEqual(calls.length, 2, 'each distinct notebook URI must spawn its own server process');
 
             // The two servers are distinct (distinct map entries / distinct ServerInfo).
             assert.notStrictEqual(infoA.url, infoB.url, 'sibling notebooks must not share one server');
+
+            // Each server uses dirname(its own notebookUri.fsPath) as working directory.
+            // Both files share the same parent dir, so both servers use that dir as cwd.
+            assert.strictEqual(calls[0].workingDirectory, '/workspace/project');
+            assert.strictEqual(calls[1].workingDirectory, '/workspace/project');
 
             // Two distinct projectContexts keyed by notebook.uri.toString().
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -169,19 +171,6 @@ suite('DeepnoteServerStarter', () => {
             assert.strictEqual(contexts.size, 2, 'one project context per notebook URI');
             assert.isTrue(contexts.has(uriA.toString()), 'context keyed by notebook A URI');
             assert.isTrue(contexts.has(uriB.toString()), 'context keyed by notebook B URI');
-        });
-
-        test("each notebook's server uses dirname(its own notebookUri.fsPath) as working directory (catches wrong-cwd capture)", async () => {
-            const runtimeCore = await getRuntimeCoreMock();
-
-            await start(uriA);
-            await start(uriB);
-
-            const calls = runtimeCore.__getStartServerCalls();
-            assert.strictEqual(calls.length, 2);
-            // Both files share the same parent dir, so both servers use that dir as cwd.
-            assert.strictEqual(calls[0].workingDirectory, '/workspace/project');
-            assert.strictEqual(calls[1].workingDirectory, '/workspace/project');
         });
 
         test('REUSES the running server when the SAME notebook URI re-requests the same environment (catches redundant respawn)', async () => {

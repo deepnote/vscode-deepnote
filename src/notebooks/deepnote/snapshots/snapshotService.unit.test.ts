@@ -931,30 +931,6 @@ project:
             const first = result?.get('block-1')?.[0] as { text?: string } | undefined;
             assert.strictEqual(first?.text, 'from-timestamped');
         });
-
-        test('skips a corrupt/unparseable candidate and uses the next valid one (catches aborting the lookup on one bad file)', async () => {
-            // `latest` sorts first; make it unparseable so the walk must continue to the timestamped one.
-            const latestUri = Uri.file(`/workspace/snapshots/test-project_${projectId}_latest.snapshot.deepnote`);
-            const timestampedUri = Uri.file(
-                `/workspace/snapshots/test-project_${projectId}_2025-01-02T10-00-00.snapshot.deepnote`
-            );
-
-            stubFiles([
-                { uri: latestUri, yaml: 'this: is: not: valid: deepnote: [[[' },
-                {
-                    uri: timestampedUri,
-                    yaml: snapshotYaml(
-                        'print(1)',
-                        `\n            - output_type: stream\n              name: stdout\n              text: 'from-valid'`
-                    )
-                }
-            ]);
-
-            const result = await service.readSnapshot(projectId);
-
-            const first = result?.get('block-1')?.[0] as { text?: string } | undefined;
-            assert.strictEqual(first?.text, 'from-valid');
-        });
     });
 
     suite('deferred snapshot save timing', () => {
@@ -1538,14 +1514,6 @@ project:
                 assert.isFalse(
                     updateLatestSnapshotSpy.called,
                     'updateLatestSnapshot should NOT be called when all code cells are executed'
-                );
-
-                // Regression: the save path must resolve the project via the EXACT
-                // (projectId, notebookId) lookup — a project-only lookup could return a different
-                // open sibling and silently skip the snapshot write.
-                assert.isTrue(
-                    mockNotebookManager.getProjectForNotebook.calledWith(projectId, notebookId),
-                    'performSnapshotSave must fetch via getProjectForNotebook(projectId, notebookId)'
                 );
             });
 

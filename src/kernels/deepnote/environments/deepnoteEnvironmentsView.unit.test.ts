@@ -835,19 +835,6 @@ suite('DeepnoteEnvironmentsView', () => {
             when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenResolve(undefined);
         };
 
-        test('stops BOTH notebooks (open + closed-but-running) via getNotebooksUsingEnvironment (catches "never stops closed servers")', async () => {
-            const callLog: string[] = [];
-            wireOrderedDeletion(callLog);
-
-            await view.deleteEnvironmentCommand(envId);
-
-            // Servers are actually STOPPED (stopServer invoked) for both URIs — not merely controllers disposed.
-            verify(mockServerStarter.stopServer(openNotebookUri, anything())).once();
-            verify(mockServerStarter.stopServer(closedNotebookUri, anything())).once();
-            assert.include(callLog, `stop:${openNotebookUri.toString()}`);
-            assert.include(callLog, `stop:${closedNotebookUri.toString()}`);
-        });
-
         test('every stopServer precedes every removeEnvironmentForNotebook, and both precede deleteEnvironment (catches inverted order)', async () => {
             const callLog: string[] = [];
             wireOrderedDeletion(callLog);

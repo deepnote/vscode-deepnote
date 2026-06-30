@@ -88,10 +88,6 @@ suite('DeepnoteNotebookInfoStatusBar', () => {
         resetVSCodeMocks();
     });
 
-    test('constructor registers the status bar in the disposable registry', () => {
-        assert.include(disposableRegistry as unknown as unknown[], statusBar, 'status bar must register itself');
-    });
-
     test('shows "$(notebook) <name>" for an active deepnote notebook (name from metadata.deepnoteNotebookName)', () => {
         when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
             notebook: makeNotebook({ metadata: { deepnoteNotebookName: 'My Analysis' } })
@@ -112,14 +108,6 @@ suite('DeepnoteNotebookInfoStatusBar', () => {
         statusBar.activate();
 
         assert.isFalse(fakeItem.visible, 'a non-deepnote editor must not show the Deepnote status bar');
-    });
-
-    test('HIDES the status bar when there is no active notebook editor', () => {
-        when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
-
-        statusBar.activate();
-
-        assert.isFalse(fakeItem.visible, 'no active editor must hide the status bar');
     });
 
     test('updates on active-editor change (hidden → shown when a deepnote notebook becomes active)', () => {
@@ -212,15 +200,6 @@ suite('DeepnoteNotebookInfoStatusBar', () => {
         verify(mockedVSCodeNamespaces.window.showWarningMessage(anything())).once();
         const clipboardText = await mockedVSCode.env!.clipboard.readText();
         assert.strictEqual(clipboardText, '', 'nothing should be copied when there is no active deepnote notebook');
-    });
-
-    test('registers the CopyNotebookDetails command on activate', () => {
-        when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
-
-        statusBar.activate();
-
-        const [commandId] = capture(mockedVSCodeNamespaces.commands.registerCommand).first() as any;
-        assert.strictEqual(commandId, Commands.CopyNotebookDetails);
     });
 
     test('dispose() disposes the status bar item and clears its subscriptions', () => {

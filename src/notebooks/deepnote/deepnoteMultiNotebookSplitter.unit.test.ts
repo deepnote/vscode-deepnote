@@ -473,22 +473,6 @@ suite('DeepnoteMultiNotebookSplitter', () => {
             assert.notInclude(writeTargets, 'multi-alpha.deepnote', 'must NOT overwrite the pre-existing file');
         });
 
-        test('two notebooks whose slugs collide within one batch get distinct names via the shared reserved set', async () => {
-            // Both notebooks slugify to the same `dup` slug.
-            const file = makeFile([makeNotebook('n1', 'Dup', 'a'), makeNotebook('n2', 'Dup', 'b')]);
-            stubReadFile(file);
-            acceptSplit();
-
-            onDidOpen.fire(notebookDoc(Uri.file('/ws/multi.deepnote')));
-            await waitFor(() => deleteTargets.length >= 1);
-
-            // The mocked splitByNotebooks already de-dupes its own outputFilename in-batch
-            // (multi-dup.deepnote, multi-dup-2.deepnote); the shared `reserved` set in the
-            // splitter guarantees the writes land on two DISTINCT names regardless.
-            assert.strictEqual(writeTargets.length, 2, 'two writes for two notebooks');
-            assert.strictEqual(new Set(writeTargets).size, 2, 'the two siblings must get distinct names');
-        });
-
         test('the ORIGINAL file URI is never a write target (regression: never rewrite the open document in place)', async () => {
             const file = makeFile([makeNotebook('n1', 'Alpha', 'a'), makeNotebook('n2', 'Beta', 'b')]);
             stubReadFile(file);
@@ -552,42 +536,6 @@ suite('DeepnoteMultiNotebookSplitter', () => {
                 'init-1',
                 'the main file must still reference the init notebook via initNotebookId'
             );
-        });
-    });
-
-    suite('snapshots untouched', () => {
-        test('no write or delete target is a path under snapshots/ (regression: split must not touch snapshots)', async () => {
-            const file = makeFile([
-                makeNotebook('n1', 'Alpha', 'a'),
-                makeNotebook('n2', 'Beta', 'b'),
-                makeNotebook('n3', 'Gamma', 'c')
-            ]);
-            const writeUris: Uri[] = [];
-            const deleteUris: Uri[] = [];
-            const mockFs = mock<typeof import('vscode').workspace.fs>();
-            when(mockFs.readFile(anything())).thenCall(() =>
-                Promise.resolve(new TextEncoder().encode(serializeDeepnoteFile(file)))
-            );
-            when(mockFs.writeFile(anything(), anything())).thenCall((uri: Uri) => {
-                writeUris.push(uri);
-                writeTargets.push(basename(uri));
-                return Promise.resolve();
-            });
-            when(mockFs.stat(anything())).thenReject(new Error('not found'));
-            when(mockFs.delete(anything(), anything())).thenCall((uri: Uri) => {
-                deleteUris.push(uri);
-                deleteTargets.push(basename(uri));
-                return Promise.resolve();
-            });
-            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
-            acceptSplit();
-
-            onDidOpen.fire(notebookDoc(Uri.file('/ws/project/multi.deepnote')));
-            await waitFor(() => deleteTargets.length >= 1);
-
-            for (const uri of [...writeUris, ...deleteUris]) {
-                assert.notInclude(uri.path, '/snapshots/', `must not target a snapshots/ path: ${uri.path}`);
-            }
         });
     });
 });

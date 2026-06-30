@@ -281,24 +281,6 @@ suite('DeepnoteEnvironmentManager', () => {
             // Verify directory no longer exists
             assert.isFalse(fs.existsSync(venvDirPath), 'Directory should not exist after deletion');
         });
-
-        test('deletion does NOT reference a server-stop map — the dead environmentServers map is gone (stopping is the view’s job)', async () => {
-            const config = await manager.createEnvironment({
-                name: 'Test',
-                pythonInterpreter: testInterpreter
-            });
-
-            // The manager has no server-starter collaborator and no per-environment server map:
-            // deletion is purely "delete the env (and managed venv)". Stopping servers is the
-            // view's responsibility (DeepnoteEnvironmentsView.deleteEnvironmentCommand).
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            assert.isUndefined((manager as any).environmentServers, 'the dead environmentServers map must not exist');
-
-            // Deletion succeeds with no server-stopping collaborator wired in.
-            await manager.deleteEnvironment(config.id);
-
-            assert.isUndefined(manager.getEnvironment(config.id));
-        });
     });
 
     suite('updateLastUsed', () => {

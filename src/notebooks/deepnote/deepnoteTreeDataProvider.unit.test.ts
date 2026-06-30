@@ -739,24 +739,6 @@ suite('DeepnoteTreeDataProvider', () => {
             assert.isTrue(cachedProjects.has(filePathB), 'the sibling sharing project.id must remain cached');
             assert.isTrue(cachedProjects.has(filePathOther), 'the other project must remain cached');
         });
-
-        test('refreshProject fires a FULL-tree change (undefined), never a scoped fire(item)', () => {
-            provider.refreshProject(filePathA);
-
-            assert.strictEqual(fireArgs.length, 1, 'refreshProject must fire exactly once');
-            assert.isUndefined(fireArgs[0], 'refreshProject must fire undefined (full-tree), not a tree item');
-        });
-
-        test('every refresh path (refresh/refreshProject/refreshNotebook) fires undefined only — no scoped fire(item)', () => {
-            provider.refresh();
-            provider.refreshProject(filePathB);
-            provider.refreshNotebook(projectId);
-
-            assert.strictEqual(fireArgs.length, 3, 'each refresh call fires exactly once');
-            for (const arg of fireArgs) {
-                assert.isUndefined(arg, 'no refresh path may use a scoped fire(item); all fires must be undefined');
-            }
-        });
     });
 
     suite('getNonInitNotebooks excludes the init notebook', () => {

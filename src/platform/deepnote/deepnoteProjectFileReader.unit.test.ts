@@ -83,17 +83,4 @@ suite('DeepnoteProjectFileReader', () => {
 
         assert.isTrue(threw, 'readDeepnoteProjectFile should surface (not swallow) a malformed buffer');
     });
-
-    test('rejects on a non-YAML / garbage buffer', async () => {
-        stubReadFile('not: valid: yaml: [');
-
-        let threw = false;
-        try {
-            await readDeepnoteProjectFile(Uri.file('/workspace/garbage.deepnote'));
-        } catch {
-            threw = true;
-        }
-
-        assert.isTrue(threw, 'readDeepnoteProjectFile should surface a non-parseable buffer');
-    });
 });

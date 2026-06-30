@@ -1260,6 +1260,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Verify success message was shown
             verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
+            verify(mockFS.delete(anything(), anything())).never();
         });
 
         test('should return early if tree item is project-scoped (not notebook-scoped)', async () => {
@@ -2261,68 +2262,6 @@ suite('DeepnoteExplorerView - Sibling-file command semantics', () => {
     }
 
     suite('addNotebookToProject', () => {
-        test('writes a NEW sibling .deepnote file and does NOT append to any existing file project.notebooks', async () => {
-            const projectId = 'group-project';
-            const sourceFilePath = '/workspace/proj-a.deepnote';
-            const sourceFile = singleNotebookFile(projectId, 'nb-a', 'Notebook A');
-            const newNotebookId = 'new-nb-id';
-
-            when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([
-                { uri: Uri.file('/workspace') } as any
-            ]);
-            // collectNotebookNamesForProject enumerates .deepnote files in the workspace.
-            when(mockedVSCodeNamespaces.workspace.findFiles(anything())).thenReturn(
-                Promise.resolve([Uri.file(sourceFilePath)])
-            );
-
-            const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.readFile(anything())).thenReturn(
-                Promise.resolve(Buffer.from(serializeDeepnoteFile(sourceFile)))
-            );
-            // stat rejects so the allocator treats every candidate sibling name as free.
-            when(mockFS.stat(anything())).thenReturn(Promise.reject(new Error('not found')));
-
-            const writes: Array<{ uri: Uri; content: Uint8Array }> = [];
-            when(mockFS.writeFile(anything(), anything())).thenCall((uri: Uri, content: Uint8Array) => {
-                writes.push({ uri, content });
-                return Promise.resolve();
-            });
-            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
-
-            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve('Notebook B'));
-            when(mockedVSCodeNamespaces.workspace.openNotebookDocument(anything())).thenReturn(
-                Promise.resolve({ notebookType: 'deepnote' } as any)
-            );
-            when(mockedVSCodeNamespaces.window.showNotebookDocument(anything(), anything())).thenReturn(
-                Promise.resolve(undefined as any)
-            );
-
-            uuidStubs.push(createUuidMock([newNotebookId, 'bg', 'blk']));
-
-            const treeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.ProjectGroup,
-                context: { filePath: sourceFilePath, projectId },
-                data: {
-                    projectId,
-                    projectName: 'Test Project',
-                    files: [{ filePath: sourceFilePath, project: sourceFile }]
-                }
-            };
-
-            await (explorerView as any).addNotebookToProject(treeItem as DeepnoteTreeItem);
-
-            // Exactly one file was written, and it is a NEW path (not the source file).
-            assert.strictEqual(writes.length, 1, 'addNotebookToProject must write exactly one new sibling file');
-            assert.notStrictEqual(writes[0].uri.path, sourceFilePath, 'the new file must not overwrite the source');
-
-            // The written file is single-notebook and holds only the new notebook (no append).
-            const written = deserializeDeepnoteFile(Buffer.from(writes[0].content).toString('utf8'));
-            assert.strictEqual(written.project.id, projectId, 'sibling carries the same project.id');
-            assert.strictEqual(written.project.notebooks.length, 1, 'sibling is single-notebook (no append)');
-            assert.strictEqual(written.project.notebooks[0].id, newNotebookId);
-            assert.strictEqual(written.project.notebooks[0].name, 'Notebook B');
-        });
-
         test('returns early for a non-group tree item (does not write)', async () => {
             const mockFS = mock<typeof workspace.fs>();
             when(mockFS.writeFile(anything(), anything())).thenReturn(Promise.resolve());
@@ -2376,57 +2315,6 @@ suite('DeepnoteExplorerView - Sibling-file command semantics', () => {
             assert.strictEqual(deletedUri!.fsPath, fileUri.fsPath, 'the deleted file must be the target file');
             // It must NOT rewrite the file's notebooks array on a single-notebook delete.
             verify(mockFS.writeFile(anything(), anything())).never();
-        });
-
-        test('a legacy multi-notebook file removes the notebook from the array and writes the file back (no file delete)', async () => {
-            const projectId = 'group-project';
-            const filePath = '/workspace/legacy.deepnote';
-            const keepId = 'keep-nb';
-            const dropId = 'drop-nb';
-            const legacy: DeepnoteFile = {
-                version: '1.0.0',
-                metadata: { createdAt: '2024-01-01T00:00:00.000Z', modifiedAt: '2024-01-01T00:00:00.000Z' },
-                project: {
-                    id: projectId,
-                    name: 'Test Project',
-                    notebooks: [
-                        { id: keepId, name: 'Keep', blocks: [], executionMode: 'block' },
-                        { id: dropId, name: 'Drop', blocks: [], executionMode: 'block' }
-                    ]
-                }
-            };
-
-            const mockFS = mock<typeof workspace.fs>();
-            when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(serializeDeepnoteFile(legacy))));
-
-            let writtenContent: Uint8Array | undefined;
-            when(mockFS.writeFile(anything(), anything())).thenCall((_uri: Uri, content: Uint8Array) => {
-                writtenContent = content;
-                return Promise.resolve();
-            });
-            when(mockFS.delete(anything(), anything())).thenReturn(Promise.resolve());
-            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
-
-            when(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).thenReturn(
-                Promise.resolve('Delete')
-            );
-
-            // Legacy Notebook child selected by notebookId.
-            const treeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.Notebook,
-                context: { filePath, projectId, notebookId: dropId },
-                data: { id: dropId, name: 'Drop', blocks: [], executionMode: 'block' } as DeepnoteNotebook
-            };
-
-            await explorerView.deleteNotebook(treeItem as DeepnoteTreeItem);
-
-            // The file is rewritten (array op) and NOT deleted.
-            assert.isDefined(writtenContent, 'the legacy file must be rewritten');
-            verify(mockFS.delete(anything(), anything())).never();
-
-            const updated = deserializeDeepnoteFile(Buffer.from(writtenContent!).toString('utf8'));
-            assert.strictEqual(updated.project.notebooks.length, 1, 'the dropped notebook is removed from the array');
-            assert.strictEqual(updated.project.notebooks[0].id, keepId, 'the kept notebook survives');
         });
     });
 

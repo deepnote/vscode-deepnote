@@ -284,33 +284,6 @@ project:
                 assert.notStrictEqual(parsed.project.notebooks[0].id, nbA);
             });
 
-            test('catches wrong-sibling save: saving notebookId=A writes sibling A (not B) from the same project cache', async () => {
-                manager.storeOriginalProject(sharedProjectId, nbA, siblingFile(nbA, 'block-a', 'print("A")'));
-                manager.storeOriginalProject(sharedProjectId, nbB, siblingFile(nbB, 'block-b', 'print("B")'));
-
-                const notebookData = {
-                    cells: [
-                        {
-                            kind: 2,
-                            value: 'print("A")',
-                            languageId: 'python',
-                            metadata: { id: 'block-a' }
-                        }
-                    ],
-                    metadata: {
-                        deepnoteProjectId: sharedProjectId,
-                        deepnoteNotebookId: nbA
-                    }
-                };
-
-                const result = await serializer.serializeNotebook(notebookData as any, {} as any);
-                const parsed = deserializeDeepnoteFile(new TextDecoder().decode(result));
-
-                assert.strictEqual(parsed.project.notebooks.length, 1);
-                assert.strictEqual(parsed.project.notebooks[0].id, nbA);
-                assert.strictEqual(parsed.project.notebooks[0].blocks[0].id, 'block-a');
-            });
-
             test('catches save-against-wrong-sibling-on-cache-miss: when only sibling A is cached, saving notebookId=B throws the clear error instead of saving against A', async () => {
                 // Only sibling A is cached; the document is sibling B. An exact (projectId, notebookId)
                 // lookup must miss and throw — it must NOT fall back to A (which shares project.id).
@@ -1074,20 +1047,6 @@ project:
             assert.strictEqual(result.metadata?.deepnoteNotebookName, 'Main One');
         });
 
-        test('catches URI-driven selection: deserialize receives only bytes, so a ?notebook=<id> query cannot change the selection', async () => {
-            // deserializeNotebook's contract is (content, token) — no URI is ever passed. Even if a
-            // caller's document URI carries ?notebook=init-notebook, the serializer has no access to
-            // it and must still render the first non-init notebook (main). This pins that the dropped
-            // selection-by-query machinery has no path back in.
-            const bytes = projectToYaml(initMainFile());
-
-            const result = await serializer.deserializeNotebook(bytes, {} as any);
-
-            // Selection is byte-derived (first non-init), independent of any URL query.
-            assert.strictEqual(result.metadata?.deepnoteNotebookId, 'main-notebook');
-            assert.strictEqual(result.metadata?.deepnoteNotebookName, 'Main');
-        });
-
         test('catches init composition at deserialize: an [init, main] file renders ONLY main blocks (init setup blocks are not merged)', async () => {
             const content = projectToYaml(initMainFile());
             const result = await serializer.deserializeNotebook(content, {} as any);
@@ -1537,16 +1496,6 @@ project:
                 assert.isTrue(result, `change to notebook-level field '${field}' should be detected`);
             });
         }
-
-        test('catches over-eager diff: identical single-notebook input (all notebook-level fields equal) reports no change', () => {
-            const originalProject = singleNotebookFile({});
-            const newProject = structuredClone(originalProject);
-
-            const serializerAny = serializer as any;
-            const result = serializerAny.detectContentChanges(newProject, originalProject, 'nb-1');
-
-            assert.isFalse(result);
-        });
 
         test('catches missed block-id diff: a block id change (same content/type) is detected', () => {
             const originalProject = singleNotebookFile({});

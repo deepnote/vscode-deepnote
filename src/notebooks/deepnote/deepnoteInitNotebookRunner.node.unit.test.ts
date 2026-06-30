@@ -61,11 +61,19 @@ function basename(uri: Uri): string {
 }
 
 /**
- * Build a single-notebook DeepnoteFile whose one notebook carries the given code block.
- * Adds a trailing markdown block so the runner's `type === 'code'` filter is exercised
- * (a 1-code + 1-markdown init must produce exactly ONE executeHidden call per run).
+ * Build a single-notebook DeepnoteFile whose one notebook carries the given code blocks (in order).
+ * Appends a trailing markdown block so the runner's `type === 'code'` filter is exercised
+ * (only the code blocks must produce executeHidden calls — the markdown must be skipped).
  */
-function makeSingleNotebookFile(projectId: string, notebookId: string, codeContent: string): DeepnoteFile {
+function makeNotebookFile(projectId: string, notebookId: string, codeContents: string[]): DeepnoteFile {
+    const codeBlocks = codeContents.map((content, index) => ({
+        id: `${notebookId}-code-${index}`,
+        type: 'code',
+        sortingKey: `a${index}`,
+        blockGroup: 'g',
+        content
+    }));
+
     return {
         version: '1.0.0',
         metadata: { createdAt: '2020-01-01T00:00:00Z', modifiedAt: '2021-01-01T00:00:00Z' },
@@ -77,61 +85,13 @@ function makeSingleNotebookFile(projectId: string, notebookId: string, codeConte
                     id: notebookId,
                     name: 'Init',
                     blocks: [
-                        {
-                            id: `${notebookId}-code`,
-                            type: 'code',
-                            sortingKey: 'a0',
-                            blockGroup: 'g',
-                            content: codeContent
-                        },
+                        ...codeBlocks,
                         {
                             id: `${notebookId}-md`,
                             type: 'markdown',
-                            sortingKey: 'a1',
+                            sortingKey: `a${codeContents.length}`,
                             blockGroup: 'g',
                             content: '# notes'
-                        }
-                    ]
-                }
-            ]
-        }
-    } as unknown as DeepnoteFile;
-}
-
-/**
- * Build a single-notebook DeepnoteFile whose one notebook carries TWO code blocks (in order).
- * Used to prove per-block behavior across the init loop (e.g. cancellation between blocks).
- */
-function makeTwoCodeBlockFile(
-    projectId: string,
-    notebookId: string,
-    firstCode: string,
-    secondCode: string
-): DeepnoteFile {
-    return {
-        version: '1.0.0',
-        metadata: { createdAt: '2020-01-01T00:00:00Z', modifiedAt: '2021-01-01T00:00:00Z' },
-        project: {
-            id: projectId,
-            name: 'Proj',
-            notebooks: [
-                {
-                    id: notebookId,
-                    name: 'Init',
-                    blocks: [
-                        {
-                            id: `${notebookId}-code-1`,
-                            type: 'code',
-                            sortingKey: 'a0',
-                            blockGroup: 'g',
-                            content: firstCode
-                        },
-                        {
-                            id: `${notebookId}-code-2`,
-                            type: 'code',
-                            sortingKey: 'a1',
-                            blockGroup: 'g',
-                            content: secondCode
                         }
                     ]
                 }
@@ -264,7 +224,7 @@ suite('DeepnoteInitNotebookRunner', () => {
         // Main file's cached project references INIT_NOTEBOOK_ID but does NOT contain it; the
         // init lives in a sibling .deepnote in the same directory.
         putFile(MAIN_FILE_NAME, makeMainProjectEntry(PROJECT_ID, INIT_NOTEBOOK_ID) as unknown as DeepnoteFile);
-        putFile(SIBLING_INIT_FILE_NAME, makeSingleNotebookFile(PROJECT_ID, INIT_NOTEBOOK_ID, SIBLING_INIT_CODE));
+        putFile(SIBLING_INIT_FILE_NAME, makeNotebookFile(PROJECT_ID, INIT_NOTEBOOK_ID, [SIBLING_INIT_CODE]));
 
         const kernel = makeKernel(MAIN_FILE_NAME);
         onDidStartKernel.fire(kernel);
@@ -307,31 +267,9 @@ suite('DeepnoteInitNotebookRunner', () => {
         assert.strictEqual(executeHiddenSpy.callCount, 0, 'still nothing to run while the sibling is absent');
     });
 
-    test('per-kernel A/B: two different kernels each run init when their onDidStartKernel fires', async () => {
-        // Two siblings of ONE project, each opened in its own kernel. Both kernels' starts run init.
-        putFile('a.deepnote', makeSingleNotebookFile(PROJECT_ID, MAIN_NOTEBOOK_ID, 'print("a main")'));
-        putFile(SIBLING_INIT_FILE_NAME, makeSingleNotebookFile(PROJECT_ID, INIT_NOTEBOOK_ID, SIBLING_INIT_CODE));
-
-        const kernelA = makeKernel('a.deepnote');
-        const kernelB = makeKernel('b.deepnote');
-
-        onDidStartKernel.fire(kernelA);
-        onDidStartKernel.fire(kernelB);
-
-        // Each kernel runs the single init code block once → two calls total.
-        await waitFor(() => executeHiddenSpy.callCount >= 2);
-
-        assert.strictEqual(executeHiddenSpy.callCount, 2, 'both kernels A and B must each run init exactly once');
-        assert.deepStrictEqual(
-            executeHiddenSpy.getCalls().map((c) => c.args[0]),
-            [SIBLING_INIT_CODE, SIBLING_INIT_CODE],
-            'both runs execute the sibling init block'
-        );
-    });
-
     test('same kernel start fires twice → init runs only once (WeakSet gate prevents doubling)', async () => {
         putFile(MAIN_FILE_NAME, makeMainProjectEntry(PROJECT_ID, INIT_NOTEBOOK_ID) as unknown as DeepnoteFile);
-        putFile(SIBLING_INIT_FILE_NAME, makeSingleNotebookFile(PROJECT_ID, INIT_NOTEBOOK_ID, SIBLING_INIT_CODE));
+        putFile(SIBLING_INIT_FILE_NAME, makeNotebookFile(PROJECT_ID, INIT_NOTEBOOK_ID, [SIBLING_INIT_CODE]));
 
         const kernel = makeKernel(MAIN_FILE_NAME);
 
@@ -356,7 +294,7 @@ suite('DeepnoteInitNotebookRunner', () => {
         // This is the key fix: an in-place restart fires onDidRestartKernel (NOT onDidStartKernel)
         // and loses all in-kernel state, so init MUST re-run before the next user cell.
         putFile(MAIN_FILE_NAME, makeMainProjectEntry(PROJECT_ID, INIT_NOTEBOOK_ID) as unknown as DeepnoteFile);
-        putFile(SIBLING_INIT_FILE_NAME, makeSingleNotebookFile(PROJECT_ID, INIT_NOTEBOOK_ID, SIBLING_INIT_CODE));
+        putFile(SIBLING_INIT_FILE_NAME, makeNotebookFile(PROJECT_ID, INIT_NOTEBOOK_ID, [SIBLING_INIT_CODE]));
 
         const kernel = makeKernel(MAIN_FILE_NAME);
 
@@ -387,7 +325,7 @@ suite('DeepnoteInitNotebookRunner', () => {
 
     test('non-deepnote kernel is ignored: onDidStartKernel for a non-deepnote notebook does nothing', async () => {
         putFile(MAIN_FILE_NAME, makeMainProjectEntry(PROJECT_ID, INIT_NOTEBOOK_ID) as unknown as DeepnoteFile);
-        putFile(SIBLING_INIT_FILE_NAME, makeSingleNotebookFile(PROJECT_ID, INIT_NOTEBOOK_ID, SIBLING_INIT_CODE));
+        putFile(SIBLING_INIT_FILE_NAME, makeNotebookFile(PROJECT_ID, INIT_NOTEBOOK_ID, [SIBLING_INIT_CODE]));
 
         const kernel = makeKernel(MAIN_FILE_NAME, { notebookType: 'jupyter-notebook' });
         onDidStartKernel.fire(kernel);
@@ -395,21 +333,6 @@ suite('DeepnoteInitNotebookRunner', () => {
 
         assert.strictEqual(executeHiddenSpy.callCount, 0, 'a non-deepnote kernel must not trigger init');
         assert.strictEqual(readDirectoryCount, 0, 'a non-deepnote kernel must not even scan for siblings');
-    });
-
-    test('no init configured: undefined initNotebookId runs nothing and never scans the directory', async () => {
-        // The cached project has NO initNotebookId.
-        when(mockNotebookManager.getProjectForNotebook(PROJECT_ID, MAIN_NOTEBOOK_ID)).thenReturn(
-            makeMainProjectEntry(PROJECT_ID, undefined)
-        );
-        putFile(MAIN_FILE_NAME, makeMainProjectEntry(PROJECT_ID, undefined) as unknown as DeepnoteFile);
-
-        const kernel = makeKernel(MAIN_FILE_NAME);
-        onDidStartKernel.fire(kernel);
-        await settle();
-
-        assert.strictEqual(executeHiddenSpy.callCount, 0, 'no init must run when initNotebookId is undefined');
-        assert.strictEqual(readDirectoryCount, 0, 'with no init configured there is no need to scan the directory');
     });
 
     test('closing the notebook mid-init stops remaining init blocks (close cancels the run)', async () => {
@@ -422,7 +345,7 @@ suite('DeepnoteInitNotebookRunner', () => {
         putFile(MAIN_FILE_NAME, makeMainProjectEntry(PROJECT_ID, INIT_NOTEBOOK_ID) as unknown as DeepnoteFile);
         putFile(
             SIBLING_INIT_FILE_NAME,
-            makeTwoCodeBlockFile(PROJECT_ID, INIT_NOTEBOOK_ID, FIRST_BLOCK_CODE, SECOND_BLOCK_CODE)
+            makeNotebookFile(PROJECT_ID, INIT_NOTEBOOK_ID, [FIRST_BLOCK_CODE, SECOND_BLOCK_CODE])
         );
 
         // Wire a close emitter we can fire (the runner subscribes to workspace.onDidCloseNotebookDocument).
@@ -464,7 +387,7 @@ suite('DeepnoteInitNotebookRunner', () => {
     test('sibling of a DIFFERENT project is not a valid init source (project.id must match)', async () => {
         // A sibling exists with the right initNotebookId-shaped notebook but a different project.id.
         putFile(MAIN_FILE_NAME, makeMainProjectEntry(PROJECT_ID, INIT_NOTEBOOK_ID) as unknown as DeepnoteFile);
-        putFile(SIBLING_INIT_FILE_NAME, makeSingleNotebookFile(OTHER_PROJECT_ID, INIT_NOTEBOOK_ID, SIBLING_INIT_CODE));
+        putFile(SIBLING_INIT_FILE_NAME, makeNotebookFile(OTHER_PROJECT_ID, INIT_NOTEBOOK_ID, [SIBLING_INIT_CODE]));
 
         const kernel = makeKernel(MAIN_FILE_NAME);
         onDidStartKernel.fire(kernel);

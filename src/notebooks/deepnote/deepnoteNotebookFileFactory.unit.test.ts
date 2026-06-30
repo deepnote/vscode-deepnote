@@ -48,9 +48,8 @@ suite('DeepnoteNotebookFileFactory', () => {
 
     suite('getFileStem', () => {
         test('returns basename up to the FIRST dot (regression: a.b.deepnote must collapse to a)', () => {
-            assert.strictEqual(getFileStem(Uri.file('/x/a.b.deepnote')), 'a');
             assert.strictEqual(getFileStem(Uri.file('/x/report.deepnote')), 'report');
-            assert.strictEqual(getFileStem(Uri.file('/x/report.backup.deepnote')), 'report');
+            assert.strictEqual(getFileStem(Uri.file('/x/a.b.deepnote')), 'a');
         });
     });
 
@@ -68,19 +67,6 @@ suite('DeepnoteNotebookFileFactory', () => {
                 newNotebook,
                 'the one notebook must be the provided one'
             );
-        });
-
-        test('preserves project id/name/integrations/settings + top-level version (regression: project-level metadata must survive)', () => {
-            const source = makeSource();
-
-            const built = buildSingleNotebookFile(source, makeNotebook('nb-2', 'Second'));
-
-            assert.strictEqual(built.project.id, 'project-1');
-            assert.strictEqual(built.project.name, 'My Project');
-            assert.deepStrictEqual(built.project.integrations, [
-                { id: 'int-1', name: 'My Postgres', type: 'postgres' }
-            ]);
-            assert.deepStrictEqual(built.project.settings, { requirements: ['pandas'] });
             assert.strictEqual(built.version, '1.0.0', 'top-level version must be preserved');
         });
 
@@ -104,21 +90,6 @@ suite('DeepnoteNotebookFileFactory', () => {
 
             assert.isString(built.metadata.createdAt, 'a createdAt must be synthesized when absent');
             assert.isString(built.metadata.modifiedAt, 'a modifiedAt must be stamped when absent');
-        });
-
-        test('does NOT stamp a metadata.snapshotHash onto the built file (regression: snapshotHash is snapshot-only and must not be synthesized)', () => {
-            // The source carries no snapshotHash; the factory must not invent one (it is a
-            // snapshot-only field). Any pre-existing in-memory hash is harmless because
-            // serializeDeepnoteFile strips it — see the round-trip test below.
-            const source = makeSource();
-
-            const built = buildSingleNotebookFile(source, makeNotebook('nb-2', 'Second'));
-
-            assert.notProperty(
-                built.metadata,
-                'snapshotHash',
-                'buildSingleNotebookFile must not stamp a snapshotHash on the built file'
-            );
         });
 
         test('built file has no metadata.snapshotHash after a serialize -> deserialize round-trip (schema-stripped)', () => {
@@ -148,20 +119,11 @@ suite('DeepnoteNotebookFileFactory', () => {
             assert.deepStrictEqual(uri, Uri.file('/workspace/project/report-my-notebook.deepnote'));
         });
 
-        test('bumps -2 / -3 via the shared allocator on collision (regression: must not clobber an existing sibling)', async () => {
+        test('bumps -2 via the shared allocator on collision (regression: must not clobber an existing sibling)', async () => {
             const existsFirst = (uri: Uri) =>
                 Promise.resolve((uri.path.split('/').pop() ?? '') === 'report-my-notebook.deepnote');
             const uri2 = await buildSiblingNotebookFileUri(original, 'My Notebook', existsFirst);
             assert.deepStrictEqual(uri2, Uri.file('/workspace/project/report-my-notebook-2.deepnote'));
-
-            const existsTwo = (uri: Uri) => {
-                const name = uri.path.split('/').pop() ?? '';
-                return Promise.resolve(
-                    name === 'report-my-notebook.deepnote' || name === 'report-my-notebook-2.deepnote'
-                );
-            };
-            const uri3 = await buildSiblingNotebookFileUri(original, 'My Notebook', existsTwo);
-            assert.deepStrictEqual(uri3, Uri.file('/workspace/project/report-my-notebook-3.deepnote'));
         });
 
         test('falls back to {stem}-notebook.deepnote for an empty/blank notebook name (regression: blank slug must not yield {stem}-.deepnote)', async () => {

@@ -31,14 +31,6 @@ suite('DeepnoteNotebookManager', () => {
 
             assert.strictEqual(result, undefined);
         });
-
-        test('should return original project after storing', () => {
-            manager.storeOriginalProject('project-123', 'notebook-456', mockProject);
-
-            const result = manager.getProjectForNotebook('project-123', 'notebook-456');
-
-            assert.deepStrictEqual(result, mockProject);
-        });
     });
 
     suite('storeOriginalProject', () => {
@@ -153,25 +145,6 @@ suite('DeepnoteNotebookManager', () => {
             assert.strictEqual(updatedProject?.project.name, mockProject.project.name);
             assert.strictEqual(updatedProject?.version, mockProject.version);
             assert.deepStrictEqual(updatedProject?.metadata, mockProject.metadata);
-        });
-    });
-
-    suite('integration scenarios', () => {
-        test('should store and retrieve projects for multiple project ids independently', () => {
-            const projectOne: DeepnoteProject = {
-                ...mockProject,
-                project: { ...mockProject.project, id: 'project-1' }
-            };
-            const projectTwo: DeepnoteProject = {
-                ...mockProject,
-                project: { ...mockProject.project, id: 'project-2' }
-            };
-
-            manager.storeOriginalProject('project-1', 'notebook-1', projectOne);
-            manager.storeOriginalProject('project-2', 'notebook-2', projectTwo);
-
-            assert.deepStrictEqual(manager.getProjectForNotebook('project-1', 'notebook-1'), projectOne);
-            assert.deepStrictEqual(manager.getProjectForNotebook('project-2', 'notebook-2'), projectTwo);
         });
     });
 

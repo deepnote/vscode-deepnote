@@ -639,10 +639,22 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         controller.controller.updateNotebookAffinity(notebook, NotebookControllerAffinity.Preferred);
 
+        // notebook.selectKernel needs a NotebookEditor (see findNotebookEditor). Passing the
+        // NotebookDocument can fail to bind the controller to the notebook, leaving it without an
+        // executable kernel so the first execution requests are silently dropped until VS Code
+        // happens to settle — observed as a multi-minute stall before the first cell runs.
+        const notebookEditor = await this.findNotebookEditor(notebook);
+
+        if (!notebookEditor) {
+            logger.warn(
+                `Could not find NotebookEditor for ${getDisplayPath(notebook.uri)}, kernel may not be selected`
+            );
+            return;
+        }
+
         await commands.executeCommand('notebook.selectKernel', {
-            notebookEditor: notebook,
+            notebookEditor,
             id: controller.connection.id,
-            // id: controller.controller.id,
             extension: JVSC_EXTENSION_ID
         });
     }

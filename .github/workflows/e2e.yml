@@ -1,0 +1,110 @@
+name: E2E
+
+# Builds the extension VSIX and runs the ExTester end-to-end suite against it. The VSIX is packaged
+# here (same as CD) rather than downloaded from CD, so this workflow is self-contained and triggers
+# on the same events as CI.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: E2E (ExTester)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # Keep ExTester's downloads (test VS Code, ChromeDriver, settings, screenshots) inside the
+      # workspace so the artifact-upload paths are predictable. Both this and .test-extensions are
+      # gitignored.
+      TEST_RESOURCES: ${{ github.workspace }}/test-resources
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          cache: 'npm'
+          node-version-file: '.nvmrc'
+
+      - name: Setup Python # interpreter the Deepnote environment is created from
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Package extension
+        run: npm run package
+
+      - name: Compile the E2E test sources
+        run: npm run compile-e2e
+
+      - name: Install Electron/Chromium runtime libraries + Xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb \
+            libatk1.0-0t64 libatk-bridge2.0-0t64 libcups2t64 libgtk-3-0t64 libgdk-pixbuf-2.0-0 \
+            libgbm1 libasound2t64 libnss3 libnspr4 libxss1 libxshmfence1 libdrm2 libxkbcommon0 \
+            libxcomposite1 libxdamage1 libxrandr2 libxfixes3 libxext6 libxrender1 libpango-1.0-0 \
+            libcairo2 libatspi2.0-0 libx11-xcb1 libxcb-dri3-0 libxtst6 libsecret-1-0 \
+            libgssapi-krb5-2 libdbus-1-3 libexpat1 python3.12-venv python3-pip
+
+      - name: Download the test VS Code + ChromeDriver
+        run: npm run setup:e2e:vscode
+
+      - name: Install the built extension into the test instance
+        run: npx extest install-vsix -f vscode-deepnote-insiders.vsix -e .test-extensions
+
+      - name: Install the Python extension into the test instance
+        run: npm run setup:e2e:deps
+
+      - name: Cache pip wheel downloads
+        # Provisioning the Deepnote environment pip-installs the toolkit dependency tree into a
+        # fresh venv on first kernel connect — the bulk of the E2E runtime. Caching pip's wheel
+        # cache makes that warm on later runs (the installs use the cache; nothing passes
+        # --no-cache-dir). The key busts when the toolkit version / install set changes; the
+        # restore-keys prefix keeps the cache warm across unrelated changes, since pip's cache is
+        # additive.
+        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-py312-${{ hashFiles('src/kernels/deepnote/types.ts', 'src/kernels/deepnote/deepnoteToolkitInstaller.node.ts') }}
+          restore-keys: |
+            pip-${{ runner.os }}-py312-
+
+      - name: Run E2E
+        # ExTester launches VS Code with --no-sandbox by default, so no AppArmor sysctl is needed.
+        # A small retry absorbs transient UI/launch flakiness (mocha already retries the test once).
+        run: |
+          attempt=1
+          max=2
+          until xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' npm run test:e2e:prebuilt; do
+            if [ "$attempt" -ge "$max" ]; then
+              echo "E2E failed after $attempt attempt(s)"
+              exit 1
+            fi
+            echo "E2E attempt $attempt failed — retrying…"
+            attempt=$((attempt + 1))
+          done
+
+      - name: Upload failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-screenshots
+          path: ${{ env.TEST_RESOURCES }}/screenshots/**/*.png
+          if-no-files-found: ignore
+          retention-days: 14

@@ -41,6 +41,7 @@ const integrationTypeLabels: Record<ConfigurableDatabaseIntegrationType, string>
     athena: l10n.t('Amazon Athena'),
     'big-query': l10n.t('Google BigQuery'),
     clickhouse: l10n.t('ClickHouse'),
+    'cloud-sql': l10n.t('Google Cloud SQL'),
     databricks: l10n.t('Databricks'),
     dremio: l10n.t('Dremio'),
     mariadb: l10n.t('MariaDB'),

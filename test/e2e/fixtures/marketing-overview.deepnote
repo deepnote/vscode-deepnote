@@ -1,0 +1,26 @@
+environment: {}
+execution: {}
+metadata:
+  createdAt: 2026-06-01T09:00:00.000Z
+  modifiedAt: 2026-06-10T10:00:00.000Z
+project:
+  id: eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee
+  name: Marketing
+  notebooks:
+    - blocks:
+        - id: blk-0014
+          blockGroup: grp-0014
+          sortingKey: "000000"
+          type: text-cell-h1
+          content: Marketing
+          metadata: {}
+        - id: blk-0015
+          blockGroup: grp-0015
+          sortingKey: "000001"
+          type: code
+          content: print("overview")
+          metadata: {}
+      executionMode: block
+      id: e-nb-overview
+      name: Overview
+version: 1.0.0

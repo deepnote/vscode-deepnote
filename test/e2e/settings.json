@@ -9,5 +9,6 @@
     "telemetry.telemetryLevel": "off",
     "update.mode": "none",
     "jupyter.kernels.trusted": true,
-    "security.workspace.trust.enabled": false
+    "security.workspace.trust.enabled": false,
+    "deepnote.askForKernelRestart": false
 }

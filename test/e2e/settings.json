@@ -1,0 +1,13 @@
+{
+    "files.simpleDialog.enable": true,
+    "window.dialogStyle": "custom",
+    "workbench.editor.enablePreview": false,
+    "workbench.startupEditor": "none",
+    "extensions.ignoreRecommendations": true,
+    "workbench.remoteIndicator.showExtensionRecommendations": false,
+    "git.autoRepositoryDetection": false,
+    "telemetry.telemetryLevel": "off",
+    "update.mode": "none",
+    "jupyter.kernels.trusted": true,
+    "security.workspace.trust.enabled": false
+}

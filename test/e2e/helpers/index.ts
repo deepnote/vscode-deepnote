@@ -5,4 +5,5 @@ export * from './fixtures';
 export * from './notebook';
 export * from './notifications';
 export * from './quickInput';
+export * from './screenshots';
 export * from './workspace';

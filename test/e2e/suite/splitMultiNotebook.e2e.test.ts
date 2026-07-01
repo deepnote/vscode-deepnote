@@ -1,0 +1,213 @@
+/**
+ * End-to-end UI test (ExTester / vscode-extension-tester) for the on-open split of a legacy
+ * multi-notebook `.deepnote` file into one single-notebook file per notebook, driven through the
+ * real VS Code UI. The `sales-analytics.deepnote` fixture holds three notebooks (Overview, Revenue,
+ * Forecast) plus one project-level BigQuery integration.
+ *
+ * The split is destructive (it deletes the original file), so it is performed once in `before`
+ * (hooks do not retry); each `it` then asserts one property of the result. Screenshots of the flow
+ * are captured into `test/e2e/screenshots/splitMultiNotebook/`.
+ *
+ * Runs without a Python kernel: splitting is purely file-structural.
+ */
+
+import { expect } from 'chai';
+import * as fs from 'fs';
+import * as path from 'path';
+import { ActivityBar, EditorView, VSBrowser, WebView } from 'vscode-extension-tester';
+
+import {
+    SUITE_TIMEOUT,
+    WORKBENCH_TIMEOUT,
+    copyFixtureToTempDir,
+    createScreenshotter,
+    dismissAllNotifications,
+    openFolderViaDialog,
+    openWorkspaceFile,
+    waitForNotification
+} from '../helpers';
+
+const FIXTURE = 'sales-analytics.deepnote';
+const SPLIT_ACTION = 'Split into separate files';
+const SPLIT_PROMPT = /contains multiple notebooks/i;
+const SPLIT_DONE = /Split into \d+ files\./i;
+
+// How long to wait while confirming a single-notebook file does NOT raise the split prompt.
+const NO_SPLIT_PROMPT_TIMEOUT = 6_000;
+
+const INTEGRATION_NAME = 'Sales BigQuery';
+
+// The three single-notebook files the split is expected to produce, each with a content marker
+// unique to its source notebook (used to prove the right blocks landed in the right file).
+const SIBLINGS: ReadonlyArray<{ file: string; notebookName: string; contentMarkers: string[] }> = [
+    {
+        file: 'sales-analytics-overview.deepnote',
+        notebookName: 'Overview',
+        contentMarkers: ['type: text-cell-h1', 'print("Overview notebook")']
+    },
+    {
+        file: 'sales-analytics-revenue.deepnote',
+        notebookName: 'Revenue',
+        contentMarkers: ['type: sql', 'SELECT region, SUM(amount)']
+    },
+    {
+        file: 'sales-analytics-forecast.deepnote',
+        notebookName: 'Forecast',
+        contentMarkers: ['print("Forecast notebook")']
+    }
+];
+
+/** Opens a named activity-bar view (best effort — only for a nicer screenshot). */
+async function showView(title: string): Promise<void> {
+    try {
+        const control = await new ActivityBar().getViewControl(title);
+        await control?.openView();
+        await VSBrowser.instance.driver.sleep(1500);
+    } catch (error) {
+        console.warn(`[split] could not open "${title}" view:`, error);
+    }
+}
+
+describe('Deepnote — splitting a legacy multi-notebook .deepnote file into single-notebook files', function () {
+    this.timeout(SUITE_TIMEOUT);
+
+    let cleanupTempDir: (() => void) | undefined;
+    let tempDir = '';
+    let promptMessage = '';
+    let outcomeMessage = '';
+    let originalRemoved = false;
+    let legacyBackupExists = false;
+
+    // Perform the split once: open the multi-notebook file, capture the prompt, accept it, capture
+    // the outcome. `before` hooks do not retry, so the destructive delete happens exactly once; the
+    // `it`s below are non-destructive assertions over the result.
+    before(async function () {
+        const driver = VSBrowser.instance.driver;
+        const screenshot = createScreenshotter(this);
+
+        const copy = copyFixtureToTempDir(FIXTURE);
+        cleanupTempDir = copy.cleanup;
+        tempDir = copy.tempDir;
+
+        await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
+
+        // Open the temp dir as the workspace root FIRST (the serializer reads snapshots relative to a
+        // workspace folder; without one, deserialization blocks on a warning that never resolves
+        // headlessly). Opening a folder reloads the window, so re-wait for the workbench.
+        await openFolderViaDialog(tempDir);
+        await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
+
+        await showView('Deepnote');
+        await screenshot('before-open-explorer');
+
+        // Open the multi-notebook file. Deserialize renders the first non-init notebook (Overview);
+        // the splitter fires on the open event and raises the split prompt.
+        await openWorkspaceFile(FIXTURE);
+        await driver.wait(
+            async () => (await new EditorView().getOpenEditorTitles()).some((title) => title.includes(FIXTURE)),
+            WORKBENCH_TIMEOUT,
+            'Deepnote notebook editor did not open'
+        );
+        await driver.sleep(2000);
+        await screenshot('multinotebook-opened');
+
+        const prompt = await waitForNotification(SPLIT_PROMPT, WORKBENCH_TIMEOUT, true);
+        promptMessage = (await prompt!.getMessage()) ?? '';
+        await screenshot('split-prompt');
+
+        await prompt!.takeAction(SPLIT_ACTION);
+
+        // The original is retired by renaming it to `<name>.deepnote.legacy` (deterministic, no OS
+        // trash backend needed); the "Failed to split..." alternative is only a safety net for a
+        // genuine filesystem error. Either way the children are written BEFORE the original is retired.
+        const outcome = await waitForNotification(/Split into \d+ files\.|Failed to split/i, WORKBENCH_TIMEOUT, true);
+        outcomeMessage = (await outcome!.getMessage()) ?? '';
+        await driver.sleep(1500);
+        await screenshot('split-outcome');
+
+        originalRemoved = !fs.existsSync(path.join(tempDir, FIXTURE));
+        legacyBackupExists = fs.existsSync(path.join(tempDir, `${FIXTURE}.legacy`));
+
+        await showView('Deepnote');
+        await driver.sleep(1500);
+        await screenshot('explorer-siblings');
+
+        await showView('Explorer');
+        await driver.sleep(1500);
+        await screenshot('file-explorer');
+    });
+
+    after(async function () {
+        await new WebView().switchBack().catch((error) => {
+            console.warn('[split] switch back from webview during cleanup:', error);
+        });
+        await new EditorView().closeAllEditors().catch((error) => {
+            console.warn('[split] close all editors during cleanup:', error);
+        });
+        try {
+            cleanupTempDir?.();
+        } catch (error) {
+            console.warn('[split] remove temp workspace dir during cleanup:', error);
+        }
+    });
+
+    it('warns that the file contains multiple notebooks and offers to split it', function () {
+        expect(promptMessage).to.match(SPLIT_PROMPT);
+        expect(promptMessage).to.contain('Split it into one file per notebook');
+    });
+
+    it('splits into one single-notebook file per notebook and retires the original as a .legacy backup', function () {
+        expect(outcomeMessage, 'split outcome notification').to.match(SPLIT_DONE);
+        expect(originalRemoved, 'original .deepnote no longer present').to.equal(true);
+        expect(legacyBackupExists, 'original retained as a .deepnote.legacy backup').to.equal(true);
+
+        for (const sibling of SIBLINGS) {
+            const siblingPath = path.join(tempDir, sibling.file);
+            expect(fs.existsSync(siblingPath), `${sibling.file} should exist`).to.equal(true);
+
+            const yaml = fs.readFileSync(siblingPath, 'utf8');
+            const notebookCount = (yaml.match(/^\s*- blocks:/gm) ?? []).length;
+            expect(notebookCount, `${sibling.file} should contain exactly one notebook`).to.equal(1);
+            expect(yaml, `${sibling.file} should hold the "${sibling.notebookName}" notebook`).to.contain(
+                `name: ${sibling.notebookName}`
+            );
+        }
+    });
+
+    it('opens each split file directly, without prompting to split again', async function () {
+        const driver = VSBrowser.instance.driver;
+
+        for (const sibling of SIBLINGS) {
+            await dismissAllNotifications();
+            await openWorkspaceFile(sibling.file);
+            await driver.wait(
+                async () =>
+                    (await new EditorView().getOpenEditorTitles()).some((title) => title.includes(sibling.file)),
+                WORKBENCH_TIMEOUT,
+                `${sibling.file} did not open`
+            );
+
+            const reprompt = await waitForNotification(SPLIT_PROMPT, NO_SPLIT_PROMPT_TIMEOUT, false);
+            expect(reprompt, `${sibling.file} is single-notebook and must not prompt to split`).to.equal(undefined);
+        }
+    });
+
+    it('preserves each source notebook’s content in its own split file', function () {
+        for (const sibling of SIBLINGS) {
+            const yaml = fs.readFileSync(path.join(tempDir, sibling.file), 'utf8');
+
+            for (const marker of sibling.contentMarkers) {
+                expect(yaml, `${sibling.file} should contain "${marker}"`).to.contain(marker);
+            }
+        }
+    });
+
+    it('carries the project integration into every split file', function () {
+        for (const sibling of SIBLINGS) {
+            const yaml = fs.readFileSync(path.join(tempDir, sibling.file), 'utf8');
+            expect(yaml, `${sibling.file} should keep the "${INTEGRATION_NAME}" integration`).to.contain(
+                `name: ${INTEGRATION_NAME}`
+            );
+        }
+    });
+});

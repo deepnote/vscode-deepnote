@@ -1,6 +1,12 @@
 import { By, InputBox, VSBrowser, Workbench } from 'vscode-extension-tester';
 
-import { DIALOG_RESOLVE_DELAY, FOLDER_OPEN_ATTEMPTS, FOLDER_RELOAD_TIMEOUT, QUICK_PICK_TIMEOUT } from './constants';
+import {
+    DIALOG_RESOLVE_DELAY,
+    FOLDER_OK_RETRY_DELAY,
+    FOLDER_OPEN_TIMEOUT,
+    QUICK_PICK_TIMEOUT,
+    RELOAD_POLL_TIMEOUT
+} from './constants';
 import { clickDialogOkButton } from './quickInput';
 
 /**
@@ -28,41 +34,39 @@ export async function openWorkspaceFile(fileName: string): Promise<void> {
 
 /**
  * Opens an absolute folder path as the workspace root via "File: Open Folder...". Opening a folder
- * reloads the VS Code window. In the simple folder dialog, Enter navigates *into* a directory rather
- * than accepting it as the workspace — the deterministic accept is the dialog's "OK" button — so we
- * type the path, click OK, and wait for the pre-reload workbench element to detach (reload started).
- * We retry the whole interaction defensively. The caller then waits for the new workbench to mount.
+ * reloads the VS Code window.
+ *
+ * In the simple folder dialog (files.simpleDialog.enable), clicking OK navigates one directory level
+ * *toward* the typed path rather than accepting it outright; only once the browser is AT the target
+ * folder does OK accept it as the workspace. So we open the dialog once, type the path, then click OK
+ * repeatedly in the SAME dialog until the pre-open workbench element detaches (reload = accepted).
+ *
+ * The earlier approach re-opened the dialog on every attempt, which reset navigation to the default
+ * directory. That converged for the first folder-open in a session but not for later ones (whose
+ * default directory is the previous, now-deleted, workspace) — so the 2nd+ folder open in a
+ * multi-suite run failed. Staying in one dialog and re-clicking OK converges regardless of the
+ * starting directory.
  */
 export async function openFolderViaDialog(folder: string): Promise<void> {
     const driver = VSBrowser.instance.driver;
+    const previousWorkbench = await driver.findElement(By.css('.monaco-workbench'));
 
-    for (let attempt = 1; attempt <= FOLDER_OPEN_ATTEMPTS; attempt++) {
-        const previousWorkbench = await driver.findElement(By.css('.monaco-workbench'));
+    await new Workbench().executeCommand('File: Open Folder...');
+    const dialog = await InputBox.create(QUICK_PICK_TIMEOUT);
+    await dialog.setText(folder);
 
-        await new Workbench().executeCommand('File: Open Folder...');
-        const dialog = await InputBox.create(QUICK_PICK_TIMEOUT);
-        await dialog.setText(folder);
+    // The simple dialog resolves the typed path asynchronously (listing the enclosing directory);
+    // wait for that listing and add a short settle before accepting.
+    await driver
+        .wait(async () => (await dialog.getQuickPicks()).length > 0, QUICK_PICK_TIMEOUT, 'dialog did not resolve path')
+        .catch((error) => {
+            console.warn('[deepnote-e2e] wait for folder dialog path listing:', error);
+        });
+    await driver.sleep(DIALOG_RESOLVE_DELAY);
 
-        // The simple dialog resolves the typed path asynchronously (listing the enclosing
-        // directory); wait for that listing and add a short settle before accepting.
-        await driver
-            .wait(
-                async () => (await dialog.getQuickPicks()).length > 0,
-                QUICK_PICK_TIMEOUT,
-                'dialog did not resolve path'
-            )
-            .catch((error) => {
-                console.warn('[deepnote-e2e] wait for folder dialog path listing:', error);
-            });
-        await driver.sleep(DIALOG_RESOLVE_DELAY);
-
-        const accepted = await clickDialogOkButton();
-        if (!accepted) {
-            await new InputBox().cancel().catch((error) => {
-                console.warn('[deepnote-e2e] cancel folder dialog:', error);
-            });
-            continue;
-        }
+    const deadline = Date.now() + FOLDER_OPEN_TIMEOUT;
+    while (Date.now() < deadline) {
+        await clickDialogOkButton();
 
         const reloaded = await driver
             .wait(async () => {
@@ -70,28 +74,23 @@ export async function openFolderViaDialog(folder: string): Promise<void> {
                     await previousWorkbench.getTagName();
 
                     return false;
-                } catch (error) {
-                    // Stale element reference means the workbench reloaded.
-                    console.debug('[deepnote-e2e] detect workbench reload via stale element (expected):', error);
-
+                } catch {
+                    // Stale element reference means the workbench reloaded (folder accepted).
                     return true;
                 }
-            }, FOLDER_RELOAD_TIMEOUT)
+            }, RELOAD_POLL_TIMEOUT)
             .then(() => true)
-            .catch((error) => {
-                console.warn('[deepnote-e2e] wait for workbench reload:', error);
-
-                return false;
-            });
+            .catch(() => false);
         if (reloaded) {
             return;
         }
 
-        // The folder did not open this time; dismiss any lingering dialog and retry.
-        await new InputBox().cancel().catch((error) => {
-            console.warn('[deepnote-e2e] cancel lingering folder dialog:', error);
-        });
+        await driver.sleep(FOLDER_OK_RETRY_DELAY);
     }
 
-    throw new Error(`Failed to open folder "${folder}" after ${FOLDER_OPEN_ATTEMPTS} attempts`);
+    await new InputBox().cancel().catch((error) => {
+        console.warn('[deepnote-e2e] cancel folder dialog:', error);
+    });
+
+    throw new Error(`Failed to open folder "${folder}": the dialog never accepted the target`);
 }

@@ -24,7 +24,7 @@ async function waitFor(condition: () => boolean, timeoutMs = waitTimeoutMs): Pro
     }
 }
 
-/** A short settle delay used to PROVE that nothing further happened (no write/delete/prompt). */
+/** A short settle delay used to PROVE that nothing further happened (no write/rename/prompt). */
 function settle(): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, 80));
 }
@@ -35,8 +35,11 @@ function basename(uri: Uri): string {
 
 /**
  * Tests for the on-demand multi-notebook splitter (§2). These exercise the splitter's
- * ORCHESTRATION (prompt gating, write/delete ORDER, env migration, dirty gate, abort-on-failure)
+ * ORCHESTRATION (prompt gating, write/rename ORDER, env migration, dirty gate, abort-on-failure)
  * plus the REAL local `allocateSiblingUri`, against the MOCKED `@deepnote/convert` `splitByNotebooks`.
+ *
+ * The original file is retired by RENAMING it to `<name>.deepnote.legacy` (not deleted): the suffix
+ * takes it out of the extension's view while keeping it on disk to restore.
  *
  * NOTE: `instanceof TabInputNotebook` is always false against the test class-proxy, so the
  * tab-close path is NOT unit-exercisable and is intentionally not asserted (see harness notes).
@@ -47,10 +50,11 @@ suite('DeepnoteMultiNotebookSplitter', () => {
     let refreshTreeCount: number;
     let envMapper: IDeepnoteNotebookEnvironmentMapper;
 
-    // Ordered log of side-effecting fs operations, so we can assert write-before-delete ORDER.
-    let callLog: Array<{ op: 'write' | 'delete'; name: string }>;
+    // Ordered log of side-effecting fs operations, so we can assert write-before-rename ORDER.
+    let callLog: Array<{ op: 'write' | 'rename'; name: string }>;
     let writeTargets: string[];
-    let deleteTargets: string[];
+    // Each retire of the original, captured as { from: <original>, to: <legacy> } basenames.
+    let renameOps: Array<{ from: string; to: string }>;
     let warnCount: number;
     // Names that the injected `exists` probe reports as already present on disk.
     let existingOnDisk: Set<string>;
@@ -104,10 +108,11 @@ suite('DeepnoteMultiNotebookSplitter', () => {
             existingOnDisk.add(name);
             return Promise.resolve();
         });
-        when(mockFs.delete(anything(), anything())).thenCall((uri: Uri) => {
-            const name = basename(uri);
-            callLog.push({ op: 'delete', name });
-            deleteTargets.push(name);
+        when(mockFs.rename(anything(), anything(), anything())).thenCall((source: Uri, target: Uri) => {
+            const from = basename(source);
+            const to = basename(target);
+            callLog.push({ op: 'rename', name: from });
+            renameOps.push({ from, to });
             return Promise.resolve();
         });
         when(mockFs.stat(anything())).thenCall((uri: Uri) => {
@@ -140,7 +145,7 @@ suite('DeepnoteMultiNotebookSplitter', () => {
         resetVSCodeMocks();
         callLog = [];
         writeTargets = [];
-        deleteTargets = [];
+        renameOps = [];
         warnCount = 0;
         refreshTreeCount = 0;
         existingOnDisk = new Set<string>();
@@ -195,7 +200,7 @@ suite('DeepnoteMultiNotebookSplitter', () => {
     }
 
     suite('prompt gating', () => {
-        test('a 3-notebook file prompts and writes/deletes NOTHING until the action is taken (regression: no silent rewrite on open)', async () => {
+        test('a 3-notebook file prompts and writes/renames NOTHING until the action is taken (regression: no silent rewrite on open)', async () => {
             const file = makeFile([
                 makeNotebook('n1', 'Alpha', 'a'),
                 makeNotebook('n2', 'Beta', 'b'),
@@ -211,7 +216,7 @@ suite('DeepnoteMultiNotebookSplitter', () => {
 
             assert.strictEqual(warnCount, 1, 'should prompt exactly once');
             assert.strictEqual(writeTargets.length, 0, 'no writeFile until the split action is taken');
-            assert.strictEqual(deleteTargets.length, 0, 'no delete until the split action is taken');
+            assert.strictEqual(renameOps.length, 0, 'no rename until the split action is taken');
         });
 
         test('a single-notebook file does NOT prompt (regression: a valid file must not be flagged)', async () => {
@@ -253,7 +258,7 @@ suite('DeepnoteMultiNotebookSplitter', () => {
     });
 
     suite('split action', () => {
-        test('writes N new files then deletes the original — delete happens AFTER the last write (ORDER, load-bearing)', async () => {
+        test('writes N new files then retires the original — the rename happens AFTER the last write (ORDER, load-bearing)', async () => {
             const file = makeFile([
                 makeNotebook('n1', 'Alpha', 'a'),
                 makeNotebook('n2', 'Beta', 'b'),
@@ -265,11 +270,11 @@ suite('DeepnoteMultiNotebookSplitter', () => {
             const originalUri = Uri.file('/ws/multi.deepnote');
             onDidOpen.fire(notebookDoc(originalUri));
 
-            await waitFor(() => deleteTargets.length >= 1);
+            await waitFor(() => renameOps.length >= 1);
 
-            // N = 3 writes, exactly one delete.
+            // N = 3 writes, exactly one rename.
             assert.strictEqual(writeTargets.length, 3, 'should write one new file per notebook (N=3)');
-            assert.strictEqual(deleteTargets.length, 1, 'should delete the original exactly once');
+            assert.strictEqual(renameOps.length, 1, 'should retire the original exactly once');
 
             // The convert mock names files {stem}-{slug}.deepnote.
             assert.deepStrictEqual(writeTargets, [
@@ -278,41 +283,80 @@ suite('DeepnoteMultiNotebookSplitter', () => {
                 'multi-gamma.deepnote'
             ]);
 
-            // ORDER: every write must come before the single delete in the call log.
-            const deleteIndex = callLog.findIndex((c) => c.op === 'delete');
+            // ORDER: every write must come before the single rename in the call log.
+            const renameIndex = callLog.findIndex((c) => c.op === 'rename');
             const lastWriteIndex = callLog.map((c) => c.op).lastIndexOf('write');
-            assert.isAbove(deleteIndex, lastWriteIndex, 'delete must happen AFTER the last write');
+            assert.isAbove(renameIndex, lastWriteIndex, 'the rename must happen AFTER the last write');
             assert.strictEqual(
                 callLog.filter((c) => c.op === 'write').length,
                 3,
-                'all three writes must precede the delete'
+                'all three writes must precede the rename'
             );
 
-            // The deleted file is the original.
-            assert.strictEqual(deleteTargets[0], 'multi.deepnote', 'the deleted file must be the original');
+            // The retired file is the original, renamed to its `.legacy` sibling.
+            assert.strictEqual(renameOps[0].from, 'multi.deepnote', 'the retired file must be the original');
+            assert.strictEqual(renameOps[0].to, 'multi.deepnote.legacy', 'the original must be renamed to .legacy');
         });
 
-        test('deletes the original with { useTrash: true } (regression: must go to trash, not hard-delete)', async () => {
+        test('retires the original by renaming it to <name>.deepnote.legacy, never deleting it (regression: keep a restorable backup)', async () => {
             const file = makeFile([makeNotebook('n1', 'Alpha', 'a'), makeNotebook('n2', 'Beta', 'b')]);
             const mockFs = mock<typeof import('vscode').workspace.fs>();
-            let deleteOptions: { useTrash?: boolean } | undefined;
+            let renameTarget: string | undefined;
+            let renameOptions: { overwrite?: boolean } | undefined;
+            let deleteCalled = false;
             when(mockFs.readFile(anything())).thenCall(() =>
                 Promise.resolve(new TextEncoder().encode(serializeDeepnoteFile(file)))
             );
             when(mockFs.writeFile(anything(), anything())).thenResolve();
             when(mockFs.stat(anything())).thenReject(new Error('not found'));
-            when(mockFs.delete(anything(), anything())).thenCall((_uri: Uri, opts: { useTrash?: boolean }) => {
-                deleteOptions = opts;
-                deleteTargets.push('deleted');
+            when(mockFs.rename(anything(), anything(), anything())).thenCall(
+                (source: Uri, target: Uri, opts: { overwrite?: boolean }) => {
+                    renameTarget = basename(target);
+                    renameOptions = opts;
+                    renameOps.push({ from: basename(source), to: basename(target) });
+                    return Promise.resolve();
+                }
+            );
+            when(mockFs.delete(anything(), anything())).thenCall(() => {
+                deleteCalled = true;
                 return Promise.resolve();
             });
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
             acceptSplit();
 
             onDidOpen.fire(notebookDoc(Uri.file('/ws/multi.deepnote')));
-            await waitFor(() => deleteTargets.length >= 1);
+            await waitFor(() => renameOps.length >= 1);
 
-            assert.deepStrictEqual(deleteOptions, { useTrash: true }, 'delete must request the trash');
+            assert.strictEqual(
+                renameTarget,
+                'multi.deepnote.legacy',
+                'the original must be renamed to <name>.deepnote.legacy'
+            );
+            assert.deepStrictEqual(
+                renameOptions,
+                { overwrite: false },
+                'the rename must not overwrite an existing backup'
+            );
+            assert.isFalse(deleteCalled, 'the original must be renamed, never deleted');
+        });
+
+        test('bumps the legacy name to .legacy-2 when <name>.deepnote.legacy already exists (regression: never clobber a prior backup)', async () => {
+            const file = makeFile([makeNotebook('n1', 'Alpha', 'a'), makeNotebook('n2', 'Beta', 'b')]);
+            stubReadFile(file);
+            acceptSplit();
+
+            // A previous split already left a backup on disk.
+            existingOnDisk.add('multi.deepnote.legacy');
+
+            onDidOpen.fire(notebookDoc(Uri.file('/ws/multi.deepnote')));
+            await waitFor(() => renameOps.length >= 1);
+
+            assert.strictEqual(renameOps[0].from, 'multi.deepnote', 'the original is the rename source');
+            assert.strictEqual(
+                renameOps[0].to,
+                'multi.deepnote.legacy-2',
+                'a taken .legacy name must be bumped to .legacy-2'
+            );
         });
 
         test('copies the original env mapping onto each new file and removes the original mapping (regression: split-time env migration)', async () => {
@@ -376,8 +420,8 @@ suite('DeepnoteMultiNotebookSplitter', () => {
         });
     });
 
-    suite('abort-before-delete on write failure (load-bearing safety)', () => {
-        test('if a child writeFile rejects, delete is NEVER called and an error is surfaced (original left intact)', async () => {
+    suite('abort-before-retire on write failure (load-bearing safety)', () => {
+        test('if a child writeFile rejects, the original is NEVER renamed and an error is surfaced (original left intact)', async () => {
             const file = makeFile([
                 makeNotebook('n1', 'Alpha', 'a'),
                 makeNotebook('n2', 'Beta', 'b'),
@@ -400,8 +444,8 @@ suite('DeepnoteMultiNotebookSplitter', () => {
             await waitFor(() => errorShown);
             await settle();
 
-            assert.strictEqual(deleteTargets.length, 0, 'delete must NEVER be called when a child write fails');
-            // The first write succeeded before the failure; the original is still present (never deleted).
+            assert.strictEqual(renameOps.length, 0, 'the original must NEVER be renamed when a child write fails');
+            // The first write succeeded before the failure; the original is still present (never retired).
             assert.isTrue(errorShown, 'an error must be surfaced on write failure');
             assert.deepStrictEqual(writeTargets, ['multi-alpha.deepnote'], 'only writes before the failure occurred');
         });
@@ -419,7 +463,7 @@ suite('DeepnoteMultiNotebookSplitter', () => {
 
             onDidOpen.fire(doc);
 
-            await waitFor(() => deleteTargets.length >= 1);
+            await waitFor(() => renameOps.length >= 1);
 
             assert.isTrue(
                 (doc as unknown as { _saved: boolean })._saved,
@@ -428,7 +472,7 @@ suite('DeepnoteMultiNotebookSplitter', () => {
             assert.strictEqual(writeTargets.length, 2, 'split proceeds after a successful save');
         });
 
-        test('if save() returns false (declined), the split ABORTS — no writeFile, no delete (regression: must not lose unsaved edits)', async () => {
+        test('if save() returns false (declined), the split ABORTS — no writeFile, no rename (regression: must not lose unsaved edits)', async () => {
             const file = makeFile([makeNotebook('n1', 'Alpha', 'a'), makeNotebook('n2', 'Beta', 'b')]);
             stubReadFile(file);
             acceptSplit();
@@ -449,7 +493,7 @@ suite('DeepnoteMultiNotebookSplitter', () => {
             await settle();
 
             assert.strictEqual(writeTargets.length, 0, 'declined save must abort before any write');
-            assert.strictEqual(deleteTargets.length, 0, 'declined save must abort before any delete');
+            assert.strictEqual(renameOps.length, 0, 'declined save must abort before any rename');
         });
     });
 
@@ -463,7 +507,7 @@ suite('DeepnoteMultiNotebookSplitter', () => {
             existingOnDisk.add('multi-alpha.deepnote');
 
             onDidOpen.fire(notebookDoc(Uri.file('/ws/multi.deepnote')));
-            await waitFor(() => deleteTargets.length >= 1);
+            await waitFor(() => renameOps.length >= 1);
 
             assert.deepStrictEqual(
                 writeTargets,
@@ -479,7 +523,7 @@ suite('DeepnoteMultiNotebookSplitter', () => {
             acceptSplit();
 
             onDidOpen.fire(notebookDoc(Uri.file('/ws/multi.deepnote')));
-            await waitFor(() => deleteTargets.length >= 1);
+            await waitFor(() => renameOps.length >= 1);
 
             assert.notInclude(writeTargets, 'multi.deepnote', 'the original file must never be written');
         });
@@ -508,15 +552,15 @@ suite('DeepnoteMultiNotebookSplitter', () => {
                 return Promise.resolve();
             });
             when(mockFs.stat(anything())).thenReject(new Error('not found'));
-            when(mockFs.delete(anything(), anything())).thenCall(() => {
-                deleteTargets.push('deleted');
+            when(mockFs.rename(anything(), anything(), anything())).thenCall((source: Uri, target: Uri) => {
+                renameOps.push({ from: basename(source), to: basename(target) });
                 return Promise.resolve();
             });
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
             acceptSplit();
 
             onDidOpen.fire(notebookDoc(Uri.file('/ws/legacy.deepnote')));
-            await waitFor(() => deleteTargets.length >= 1);
+            await waitFor(() => renameOps.length >= 1);
 
             // The mock splitByNotebooks emits the init notebook FIRST.
             assert.strictEqual(writtenFiles.length, 2, 'two files written for [init, main]');

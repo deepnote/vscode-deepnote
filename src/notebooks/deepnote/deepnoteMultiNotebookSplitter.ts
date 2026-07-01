@@ -11,10 +11,16 @@ import { getFileStem } from './deepnoteNotebookFileFactory';
 
 const SPLIT_ACTION = l10n.t('Split into separate files');
 
+/** Suffix appended to a split-away original so it no longer matches `*.deepnote` yet stays on disk. */
+const LEGACY_SUFFIX = '.legacy';
+
+/** Upper bound on `.legacy` / `.legacy-N` suffix attempts when the base name is already taken. */
+const MAX_LEGACY_ALLOCATION_ATTEMPTS = 10_000;
+
 /**
  * Detects legacy multi-notebook `.deepnote` files when they are opened and, on explicit
- * user action, splits them into one new single-notebook sibling file per notebook before
- * deleting the original. There is NO automatic rewrite on open.
+ * user action, splits them into one new single-notebook sibling file per notebook, then retires
+ * the original by renaming it to `<name>.deepnote.legacy`. There is NO automatic rewrite on open.
  *
  * The environment mapper is optional: it is undefined on the web target, where environment
  * migration is a desktop-only no-op.
@@ -132,7 +138,7 @@ export class DeepnoteMultiNotebookSplitter {
             const deepnoteFile = await readDeepnoteProjectFile(fileUri);
             const parentDir = Uri.joinPath(fileUri, '..');
 
-            // 2. Write the children: N new files, then (only after) delete the original.
+            // 2. Write the children: N new files, then (only after) retire the original.
             const entries = splitByNotebooks(deepnoteFile, getFileStem(fileUri));
             const reserved = new Set<string>();
             const newUris: Uri[] = [];
@@ -156,9 +162,11 @@ export class DeepnoteMultiNotebookSplitter {
                 }
             }
 
-            // 4. Only after all children are durably written: close the tab + delete the original.
+            // 4. Only after all children are durably written: close the tab + retire the original by
+            // renaming it to `<name>.deepnote.legacy`.
             await this.closeNotebookTab(fileUri);
-            await workspace.fs.delete(fileUri, { useTrash: true });
+            const legacyUri = await this.allocateLegacyUri(fileUri);
+            await workspace.fs.rename(fileUri, legacyUri, { overwrite: false });
 
             if (this.envMapper) {
                 await this.envMapper.removeEnvironmentForNotebook(fileUri);
@@ -178,6 +186,24 @@ export class DeepnoteMultiNotebookSplitter {
                 l10n.t('Failed to split file: {0}. The original file was left unchanged.', errorMessage)
             );
         }
+    }
+
+    /**
+     * Resolves a collision-free `<original>.legacy` (then `.legacy-2`, `.legacy-3`, …) URI next to
+     * the original file.
+     * @param fileUri The original `.deepnote` file being retired
+     */
+    private async allocateLegacyUri(fileUri: Uri): Promise<Uri> {
+        for (let attempt = 1; attempt <= MAX_LEGACY_ALLOCATION_ATTEMPTS; attempt++) {
+            const suffix = attempt === 1 ? LEGACY_SUFFIX : `${LEGACY_SUFFIX}-${attempt}`;
+            const candidateUri = fileUri.with({ path: `${fileUri.path}${suffix}` });
+
+            if (!(await this.exists(candidateUri))) {
+                return candidateUri;
+            }
+        }
+
+        throw new Error(`Unable to allocate a free "${LEGACY_SUFFIX}" filename for "${fileUri.toString()}".`);
     }
 
     private async closeNotebookTab(fileUri: Uri): Promise<void> {

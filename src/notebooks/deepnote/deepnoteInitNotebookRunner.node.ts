@@ -59,6 +59,8 @@ else:
 export class DeepnoteInitNotebookRunner implements IDeepnoteInitNotebookRunner, IExtensionSyncActivationService {
     // Kernels that have already run init in their current lifetime; entries are collected on dispose.
     private readonly initRunByKernel = new WeakSet<IKernel>();
+    // In-flight init run per kernel, so a restart can cancel a still-running start-triggered run.
+    private readonly inFlightInitByKernel = new WeakMap<IKernel, CancellationTokenSource>();
 
     constructor(
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
@@ -73,7 +75,7 @@ export class DeepnoteInitNotebookRunner implements IDeepnoteInitNotebookRunner, 
     }
 
     private async onDidStartKernel(kernel: IKernel): Promise<void> {
-        if (this.initRunByKernel.has(kernel)) {
+        if (this.initRunByKernel.has(kernel) || this.inFlightInitByKernel.has(kernel)) {
             return;
         }
 
@@ -85,6 +87,7 @@ export class DeepnoteInitNotebookRunner implements IDeepnoteInitNotebookRunner, 
 
     private async onDidRestartKernel(kernel: IKernel): Promise<void> {
         // A restart loses all in-kernel state, so re-run init unconditionally.
+        this.inFlightInitByKernel.get(kernel)?.cancel();
         await this.runInitForKernel(kernel);
         this.initRunByKernel.add(kernel);
     }
@@ -135,6 +138,7 @@ export class DeepnoteInitNotebookRunner implements IDeepnoteInitNotebookRunner, 
 
             // Cancel if the notebook is closed mid-init. Per-run state — do NOT register in `disposables`.
             const cts = new CancellationTokenSource();
+            this.inFlightInitByKernel.set(kernel, cts);
             const closeListener = workspace.onDidCloseNotebookDocument((closedNotebook) => {
                 if (closedNotebook.uri.toString() === notebook.uri.toString()) {
                     logger.info(`Notebook closed while init notebook was running, cancelling for project ${projectId}`);
@@ -152,6 +156,10 @@ export class DeepnoteInitNotebookRunner implements IDeepnoteInitNotebookRunner, 
                 }
             } finally {
                 closeListener.dispose();
+                // Only clear if a superseding restart hasn't already replaced our CTS.
+                if (this.inFlightInitByKernel.get(kernel) === cts) {
+                    this.inFlightInitByKernel.delete(kernel);
+                }
                 cts.dispose();
             }
         } catch (error) {

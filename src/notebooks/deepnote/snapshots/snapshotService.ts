@@ -214,7 +214,9 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         notebookCellExecutions.onDidCompleteQueueExecution(
             (e) => {
                 logger.debug(`[Snapshot] Queue execution complete for ${e.notebookUri}`);
-                void this.onExecutionComplete(e.notebookUri);
+                this.onExecutionComplete(e.notebookUri).catch((error) =>
+                    logger.error(`[Snapshot] onExecutionComplete failed for ${e.notebookUri}`, error)
+                );
             },
             this,
             this.disposables
@@ -821,7 +823,9 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
         const timer = setTimeout(() => {
             this.pendingSnapshotSaves.delete(notebookUri);
-            void this.performSnapshotSave(notebookUri);
+            this.performSnapshotSave(notebookUri).catch((error) =>
+                logger.error(`[Snapshot] performSnapshotSave failed for ${notebookUri}`, error)
+            );
         }, delay);
 
         this.pendingSnapshotSaves.set(notebookUri, { armedAt, timer });

@@ -341,6 +341,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         const oldServerHandle = this.projectServerHandles.get(notebookKey);
         if (oldServerHandle) {
             logger.info(`Clearing old server handle from tracking: ${oldServerHandle}`);
+            this.serverProvider.unregisterServer(oldServerHandle);
             this.projectServerHandles.delete(notebookKey);
         }
 

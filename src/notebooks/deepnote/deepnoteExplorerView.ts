@@ -13,6 +13,7 @@ import {
     getNonInitNotebooks
 } from './deepnoteTreeItem';
 import { uuidUtils } from '../../platform/common/uuid';
+import { getFilePath } from '../../platform/common/platform/fs-paths';
 import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { Commands } from '../../platform/common/constants';
 import { readDeepnoteProjectFile } from './deepnoteProjectUtils';
@@ -291,6 +292,8 @@ export class DeepnoteExplorerView {
         }
 
         try {
+            let failedCount = 0;
+
             for (const { filePath } of group.files) {
                 try {
                     const fileUri = Uri.file(filePath);
@@ -304,12 +307,20 @@ export class DeepnoteExplorerView {
 
                     await this.writeProjectFile(fileUri, projectData);
                 } catch (error) {
+                    failedCount++;
                     this.logger.error(`Failed to rename project file ${filePath}`, error);
                 }
             }
 
             this.treeDataProvider.refresh();
-            await window.showInformationMessage(l10n.t('Project renamed to: {0}', newName));
+
+            if (failedCount > 0) {
+                await window.showWarningMessage(
+                    l10n.t('Project renamed to "{0}", but {1} file(s) could not be updated.', newName, failedCount)
+                );
+            } else {
+                await window.showInformationMessage(l10n.t('Project renamed to: {0}', newName));
+            }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             await window.showErrorMessage(l10n.t('Failed to rename project: {0}', errorMessage));
@@ -838,14 +849,29 @@ export class DeepnoteExplorerView {
     }
 
     private async convertJupyterUrisToDeepnoteFiles(jupyterUris: readonly Uri[], folderUri: Uri): Promise<void> {
-        // Each Jupyter notebook becomes its own single-notebook .deepnote file.
-        for (const jupyterUri of jupyterUris) {
-            const { inputPath, outputUri, projectName } = this.deepnoteTargetForJupyterUri(jupyterUri, folderUri);
+        const failedNames: string[] = [];
 
-            await convertIpynbFileToDeepnoteFile(inputPath, {
-                outputPath: outputUri.path,
-                projectName
-            });
+        for (const jupyterUri of jupyterUris) {
+            const { inputPath, outputFileName, outputUri, projectName } = this.deepnoteTargetForJupyterUri(
+                jupyterUri,
+                folderUri
+            );
+
+            try {
+                await convertIpynbFileToDeepnoteFile(inputPath, {
+                    outputPath: getFilePath(outputUri),
+                    projectName
+                });
+            } catch (error) {
+                failedNames.push(outputFileName);
+                this.logger.error(`Failed to convert Jupyter notebook ${inputPath}`, error);
+            }
+        }
+
+        if (failedNames.length > 0) {
+            await window.showWarningMessage(
+                l10n.t('Failed to import {0} notebook(s): {1}', failedNames.length, failedNames.join(', '))
+            );
         }
     }
 
@@ -858,7 +884,7 @@ export class DeepnoteExplorerView {
         const outputFileName = `${projectName}.deepnote`;
 
         return {
-            inputPath: jupyterUri.path,
+            inputPath: getFilePath(jupyterUri),
             outputFileName,
             outputUri: Uri.joinPath(folderUri, outputFileName),
             projectName

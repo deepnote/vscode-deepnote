@@ -1,5 +1,6 @@
 import { assert } from 'chai';
 import * as fakeTimers from '@sinonjs/fake-timers';
+import * as sinon from 'sinon';
 import { anything, instance, mock, when } from 'ts-mockito';
 import { Uri } from 'vscode';
 
@@ -69,6 +70,7 @@ suite('DeepnoteServerStarter', () => {
     });
 
     teardown(async () => {
+        sinon.restore();
         if (serverStarter) {
             await serverStarter.dispose();
         }
@@ -176,9 +178,9 @@ suite('DeepnoteServerStarter', () => {
         test('REUSES the running server when the SAME notebook URI re-requests the same environment (catches redundant respawn)', async () => {
             const runtimeCore = await getRuntimeCoreMock();
 
-            // Make the running-server health probe report "running" so the reuse branch is taken.
+            // Stub the running-server health probe to report "running" so the reuse branch is taken.
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (serverStarter as any).isServerRunning = async () => true;
+            sinon.stub(serverStarter as any, 'isServerRunning').resolves(true);
 
             const first = await start(uriA);
             assert.strictEqual(runtimeCore.__getStartServerCalls().length, 1);

@@ -40,7 +40,7 @@ export function compareTreeItemsByLabel(a: DeepnoteTreeItem, b: DeepnoteTreeItem
 /**
  * Tree data provider for the Deepnote explorer view: root → `ProjectGroup` (one per `project.id`)
  * → `ProjectFile` → `Notebook` (legacy multi-notebook files only). Groups are re-derived from the
- * file-path-keyed `cachedProjects` on each read; since siblings share one `project.id`, refreshes
+ * URI-keyed `cachedProjects` on each read; since siblings share one `project.id`, refreshes
  * fire a full-tree change rather than a scoped one.
  */
 export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeItem> {
@@ -50,9 +50,9 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
     readonly onDidChangeTreeData: Event<DeepnoteTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
 
     private fileWatcher: FileSystemWatcher | undefined;
-    private cachedProjects: Map<string /* filePath */, DeepnoteProject> = new Map();
+    private cachedProjects: Map<string /* uri.toString() */, DeepnoteProject> = new Map();
     private groupItemCache: Map<string /* projectId */, DeepnoteTreeItem> = new Map();
-    private fileItemCache: Map<string /* filePath */, DeepnoteTreeItem> = new Map();
+    private fileItemCache: Map<string /* uri.toString() */, DeepnoteTreeItem> = new Map();
     private isInitialScanComplete: boolean = false;
     private initialScanPromise: Promise<void> | undefined;
     private readonly logger?: ILogger;
@@ -82,9 +82,9 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
      * Refresh a single project file. Fires a full-tree change (not a scoped one) because a file
      * change can move it between groups or alter a group's collapse state/label.
      */
-    public refreshProject(filePath: string): void {
-        this.cachedProjects.delete(filePath);
-        this.fileItemCache.delete(filePath);
+    public refreshProject(cacheKey: string): void {
+        this.cachedProjects.delete(cacheKey);
+        this.fileItemCache.delete(cacheKey);
         this._onDidChangeTreeData.fire(undefined);
     }
 
@@ -93,10 +93,10 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
      * breaking on the first match) so the whole group stays consistent.
      */
     public refreshNotebook(projectId: string): void {
-        for (const [filePath, project] of this.cachedProjects) {
+        for (const [cacheKey, project] of this.cachedProjects) {
             if (project.project.id === projectId) {
-                this.cachedProjects.delete(filePath);
-                this.fileItemCache.delete(filePath);
+                this.cachedProjects.delete(cacheKey);
+                this.fileItemCache.delete(cacheKey);
             }
         }
 
@@ -247,7 +247,8 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
     private buildProjectGroups(projectsByPath: Map<string, DeepnoteProject>): ProjectGroupData[] {
         const groupsById = new Map<string, ProjectGroupData>();
 
-        for (const [filePath, project] of projectsByPath) {
+        for (const [cacheKey, project] of projectsByPath) {
+            const filePath = Uri.parse(cacheKey).path;
             const projectId = project.project.id;
             let group = groupsById.get(projectId);
 
@@ -260,7 +261,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
                 groupsById.set(projectId, group);
             }
 
-            group.files.push({ filePath, project });
+            group.files.push({ filePath, cacheKey, project });
         }
 
         const groups = Array.from(groupsById.values());
@@ -279,7 +280,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         const group = groupItem.data as ProjectGroupData;
         const fileItems: DeepnoteTreeItem[] = [];
 
-        for (const { filePath, project } of group.files) {
+        for (const { filePath, cacheKey, project } of group.files) {
             const isLeaf = isSingleNotebookFile(project);
             const collapsibleState = isLeaf ? TreeItemCollapsibleState.None : TreeItemCollapsibleState.Collapsed;
 
@@ -288,7 +289,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
                 projectId: project.project.id
             };
 
-            let fileItem = this.fileItemCache.get(filePath);
+            let fileItem = this.fileItemCache.get(cacheKey);
 
             if (fileItem) {
                 fileItem.data = project;
@@ -296,7 +297,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
                 fileItem.updateVisualFields();
             } else {
                 fileItem = new DeepnoteTreeItem(DeepnoteTreeItemType.ProjectFile, context, project, collapsibleState);
-                this.fileItemCache.set(filePath, fileItem);
+                this.fileItemCache.set(cacheKey, fileItem);
             }
 
             fileItems.push(fileItem);
@@ -356,9 +357,9 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
     }
 
     private async loadDeepnoteProject(fileUri: Uri): Promise<DeepnoteProject | undefined> {
-        const filePath = fileUri.path;
+        const cacheKey = fileUri.toString();
 
-        const cached = this.cachedProjects.get(filePath);
+        const cached = this.cachedProjects.get(cacheKey);
 
         if (cached) {
             return cached;
@@ -368,12 +369,12 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
             const project = await readDeepnoteProjectFile(fileUri);
 
             if (project && project.project && project.project.id) {
-                this.cachedProjects.set(filePath, project);
+                this.cachedProjects.set(cacheKey, project);
 
                 return project;
             }
         } catch (error) {
-            this.logger?.error(`Failed to parse Deepnote file ${filePath}`, error);
+            this.logger?.error(`Failed to parse Deepnote file ${fileUri.path}`, error);
         }
 
         return undefined;
@@ -397,7 +398,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
                 return;
             }
 
-            this.refreshProject(uri.path);
+            this.refreshProject(uri.toString());
         });
 
         this.fileWatcher.onDidCreate((uri) => {
@@ -405,8 +406,8 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
                 return;
             }
 
-            this.cachedProjects.delete(uri.path);
-            this.fileItemCache.delete(uri.path);
+            this.cachedProjects.delete(uri.toString());
+            this.fileItemCache.delete(uri.toString());
             this._onDidChangeTreeData.fire(undefined);
         });
 
@@ -415,8 +416,8 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
                 return;
             }
 
-            this.cachedProjects.delete(uri.path);
-            this.fileItemCache.delete(uri.path);
+            this.cachedProjects.delete(uri.toString());
+            this.fileItemCache.delete(uri.toString());
             this._onDidChangeTreeData.fire(undefined);
         });
     }

@@ -27,7 +27,8 @@ export interface DeepnoteTreeItemContext {
 export interface ProjectGroupData {
     readonly projectId: string;
     readonly projectName: string;
-    readonly files: Array<{ filePath: string; project: DeepnoteProject }>;
+    // `filePath` is the native path (for `Uri.file`); `cacheKey` is the opaque `Uri.toString()` cache key.
+    readonly files: Array<{ filePath: string; cacheKey: string; project: DeepnoteProject }>;
 }
 
 /**

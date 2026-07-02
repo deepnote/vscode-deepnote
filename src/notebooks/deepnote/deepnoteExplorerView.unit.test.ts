@@ -1735,7 +1735,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 data: {
                     projectId,
                     projectName: oldProjectName,
-                    files: [{ filePath: fileUri.fsPath, project: existingProjectData }]
+                    files: [{ filePath: fileUri.fsPath, cacheKey: fileUri.toString(), project: existingProjectData }]
                 }
             };
 
@@ -1825,7 +1825,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 data: {
                     projectId,
                     projectName: currentName,
-                    files: [{ filePath: fileUri.fsPath, project: existingProjectData }]
+                    files: [{ filePath: fileUri.fsPath, cacheKey: fileUri.toString(), project: existingProjectData }]
                 }
             };
 

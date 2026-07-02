@@ -106,7 +106,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         deepnoteFileUri: Uri,
         token?: CancellationToken
     ): Promise<DeepnoteServerInfo> {
-        const fileKey = deepnoteFileUri.toString();
+        const fileKey = deepnoteFileUri.fsPath;
 
         let pendingOp = this.pendingOperations.get(fileKey);
         if (pendingOp) {
@@ -181,12 +181,11 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
     /**
      * Stop the deepnote-toolkit server for a notebook.
-     * Safe no-op when the notebook has no running server.
      */
     public async stopServer(deepnoteFileUri: Uri, token?: CancellationToken): Promise<void> {
         Cancellation.throwIfCanceled(token);
 
-        const fileKey = deepnoteFileUri.toString();
+        const fileKey = deepnoteFileUri.fsPath;
         const projectContext = this.projectContexts.get(fileKey) ?? null;
 
         if (projectContext == null) {
@@ -240,7 +239,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         deepnoteFileUri: Uri,
         token?: CancellationToken
     ): Promise<DeepnoteServerInfo> {
-        const fileKey = deepnoteFileUri.toString();
+        const fileKey = deepnoteFileUri.fsPath;
 
         Cancellation.throwIfCanceled(token);
 
@@ -317,7 +316,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         deepnoteFileUri: Uri,
         token?: CancellationToken
     ): Promise<void> {
-        const fileKey = deepnoteFileUri.toString();
+        const fileKey = deepnoteFileUri.fsPath;
 
         Cancellation.throwIfCanceled(token);
 
@@ -379,7 +378,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             return extraEnv;
         }
 
-        const fileKey = deepnoteFileUri.toString();
+        const fileKey = deepnoteFileUri.fsPath;
 
         logger.debug(
             `DeepnoteServerStarter: Injecting SQL integration env vars for ${fileKey} with environmentId ${environmentId}`

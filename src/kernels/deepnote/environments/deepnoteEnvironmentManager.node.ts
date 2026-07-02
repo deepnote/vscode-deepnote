@@ -201,10 +201,6 @@ export class DeepnoteEnvironmentManager implements IExtensionSyncActivationServi
             throw new Error(`Environment not found: ${id}`);
         }
 
-        // Note: stopping the per-notebook servers that use this environment is the view's
-        // responsibility (DeepnoteEnvironmentsView.deleteEnvironmentCommand) — it drives the
-        // stop loop from the notebook-environment mapper before this method runs.
-
         Cancellation.throwIfCanceled(token);
 
         // Only delete the virtual environment directory if it was created by us (managed venv)

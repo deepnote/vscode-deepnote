@@ -105,9 +105,6 @@ export async function resolve(specifier, context, nextResolve) {
     }
 
     // Intercept @deepnote/runtime-core - needed because the real startServer/stopServer
-    // spawn/kill real Python processes. The mock records calls and returns a fake ServerInfo
-    // (faithful to the { url, jupyterPort, lspPort, process } contract) so the extension's
-    // keying/working-directory/lifecycle logic can be tested without a real server.
     if (specifier === '@deepnote/runtime-core') {
         return {
             url: 'vscode-mock:///deepnote-runtime-core',

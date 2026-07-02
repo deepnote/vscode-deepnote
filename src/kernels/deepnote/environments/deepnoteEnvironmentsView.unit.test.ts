@@ -759,9 +759,8 @@ suite('DeepnoteEnvironmentsView', () => {
         const envId = 'env-to-delete';
         const testInterpreter: PythonEnvironment = {
             id: 'test-python-id',
-            uri: Uri.file('/usr/bin/python3.11'),
-            version: { major: 3, minor: 11, patch: 0, raw: '3.11.0' }
-        } as PythonEnvironment;
+            uri: Uri.file('/usr/bin/python3.11')
+        };
 
         const environment: DeepnoteEnvironment = {
             id: envId,

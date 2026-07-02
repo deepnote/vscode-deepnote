@@ -122,7 +122,7 @@ suite('DeepnoteServerStarter', () => {
         const interpreter: PythonEnvironment = {
             id: '/usr/bin/python3',
             uri: Uri.file('/usr/bin/python3')
-        } as PythonEnvironment;
+        };
         const venvPath = Uri.file('/venvs/env1');
         // Two notebooks in the SAME project directory but different files (sibling files).
         const uriA = Uri.file('/workspace/project/notebook-a.deepnote');
@@ -165,12 +165,12 @@ suite('DeepnoteServerStarter', () => {
             assert.strictEqual(calls[0].workingDirectory, '/workspace/project');
             assert.strictEqual(calls[1].workingDirectory, '/workspace/project');
 
-            // Two distinct projectContexts keyed by notebook.uri.toString().
+            // Two distinct projectContexts keyed by notebook.uri.fsPath.
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const contexts = (serverStarter as any).projectContexts as Map<string, unknown>;
             assert.strictEqual(contexts.size, 2, 'one project context per notebook URI');
-            assert.isTrue(contexts.has(uriA.toString()), 'context keyed by notebook A URI');
-            assert.isTrue(contexts.has(uriB.toString()), 'context keyed by notebook B URI');
+            assert.isTrue(contexts.has(uriA.fsPath), 'context keyed by notebook A URI');
+            assert.isTrue(contexts.has(uriB.fsPath), 'context keyed by notebook B URI');
         });
 
         test('REUSES the running server when the SAME notebook URI re-requests the same environment (catches redundant respawn)', async () => {
@@ -207,8 +207,8 @@ suite('DeepnoteServerStarter', () => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const contexts = (serverStarter as any).projectContexts as Map<string, { serverInfo: unknown }>;
             // A's context still exists but its server is cleared; B's server is untouched.
-            assert.strictEqual(contexts.get(uriA.toString())?.serverInfo, null, "A's server info cleared");
-            assert.isNotNull(contexts.get(uriB.toString())?.serverInfo, "B's server must remain running");
+            assert.strictEqual(contexts.get(uriA.fsPath)?.serverInfo, null, "A's server info cleared");
+            assert.isNotNull(contexts.get(uriB.fsPath)?.serverInfo, "B's server must remain running");
         });
 
         test('stopServer for a notebook with NO running server is a safe no-op (does not throw, does not call runtime-core stop)', async () => {

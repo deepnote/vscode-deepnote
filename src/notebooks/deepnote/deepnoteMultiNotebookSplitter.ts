@@ -141,11 +141,24 @@ export class DeepnoteMultiNotebookSplitter {
             const newUris: Uri[] = [];
             const encoder = new TextEncoder();
 
-            for (const entry of entries) {
-                const targetUri = await allocateSiblingUri(parentDir, entry.outputFilename, this.exists, reserved);
+            try {
+                for (const entry of entries) {
+                    const targetUri = await allocateSiblingUri(parentDir, entry.outputFilename, this.exists, reserved);
 
-                await workspace.fs.writeFile(targetUri, encoder.encode(serializeDeepnoteFile(entry.file)));
-                newUris.push(targetUri);
+                    await workspace.fs.writeFile(targetUri, encoder.encode(serializeDeepnoteFile(entry.file)));
+                    newUris.push(targetUri);
+                }
+            } catch (writeError) {
+                // Delete partial siblings: orphans left on disk would bump a retry's name allocation to a duplicate.
+                for (const uri of newUris) {
+                    await workspace.fs
+                        .delete(uri, { useTrash: false })
+                        .then(undefined, (cleanupError) =>
+                            this.logger.error(`Failed to clean up partial split file: ${uri.toString()}`, cleanupError)
+                        );
+                }
+
+                throw writeError;
             }
 
             // Migrate the environment selection onto each new file (desktop-only).

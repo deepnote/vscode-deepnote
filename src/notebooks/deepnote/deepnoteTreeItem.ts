@@ -41,10 +41,24 @@ export function getNonInitNotebooks(project: DeepnoteProject): DeepnoteNotebook[
 }
 
 /**
+ * True when a file renders as a single-notebook leaf: one non-init notebook, or an init-only file
+ * whose sole notebook is the init notebook.
+ */
+export function isSingleNotebookFile(project: DeepnoteProject): boolean {
+    const nonInit = getNonInitNotebooks(project);
+
+    if (nonInit.length === 1) {
+        return true;
+    }
+
+    return nonInit.length === 0 && (project.project.notebooks?.length ?? 0) === 1;
+}
+
+/**
  * The single notebook to render for a leaf file: first non-init notebook, falling back to the
  * first notebook when the only notebook IS the init notebook.
  */
-function resolveLeafNotebook(project: DeepnoteProject): DeepnoteNotebook | undefined {
+export function resolveLeafNotebook(project: DeepnoteProject): DeepnoteNotebook | undefined {
     const nonInit = getNonInitNotebooks(project);
 
     if (nonInit.length > 0) {
@@ -88,7 +102,7 @@ function applyVisualFields(item: DeepnoteTreeItem): void {
         const project = item.data as DeepnoteProject;
         const nonInitNotebooks = getNonInitNotebooks(project);
 
-        if (nonInitNotebooks.length === 1) {
+        if (isSingleNotebookFile(project)) {
             const notebook = resolveLeafNotebook(project);
             const blockCount = notebook?.blocks?.length ?? 0;
 

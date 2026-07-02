@@ -18,7 +18,9 @@ import {
     DeepnoteTreeItemType,
     DeepnoteTreeItemContext,
     ProjectGroupData,
-    getNonInitNotebooks
+    getNonInitNotebooks,
+    isSingleNotebookFile,
+    resolveLeafNotebook
 } from './deepnoteTreeItem';
 import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { readDeepnoteProjectFile } from './deepnoteProjectUtils';
@@ -158,6 +160,16 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
                     return fileItem;
                 }
 
+                if (fileItem.collapsibleState === TreeItemCollapsibleState.None) {
+                    const leafNotebook = resolveLeafNotebook(fileItem.data as DeepnoteProject);
+
+                    if (leafNotebook?.id === notebookId) {
+                        return fileItem;
+                    }
+
+                    continue;
+                }
+
                 const notebooks = await this.getNotebooksForProjectFile(fileItem);
                 const match = notebooks.find((notebookItem) => notebookItem.context.notebookId === notebookId);
 
@@ -268,7 +280,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         const fileItems: DeepnoteTreeItem[] = [];
 
         for (const { filePath, project } of group.files) {
-            const isLeaf = getNonInitNotebooks(project).length === 1;
+            const isLeaf = isSingleNotebookFile(project);
             const collapsibleState = isLeaf ? TreeItemCollapsibleState.None : TreeItemCollapsibleState.Collapsed;
 
             const context: DeepnoteTreeItemContext = {

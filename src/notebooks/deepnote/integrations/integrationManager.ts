@@ -130,7 +130,7 @@ export class IntegrationManager implements IIntegrationManager {
         const projectId = activeNotebook.metadata?.deepnoteProjectId;
         const notebookId = activeNotebook.metadata?.deepnoteNotebookId;
         if (!projectId || !notebookId) {
-            void window.showErrorMessage(l10n.t('Cannot determine project ID'));
+            void window.showErrorMessage(l10n.t('Cannot determine project or notebook ID'));
             return;
         }
 

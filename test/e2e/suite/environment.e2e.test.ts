@@ -7,10 +7,23 @@
  */
 import { expect } from 'chai';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
-import { By, EditorView, InputBox, VSBrowser, WebView, Workbench } from 'vscode-extension-tester';
+import {
+    ActivityBar,
+    By,
+    EditorView,
+    InputBox,
+    ModalDialog,
+    SideBarView,
+    VSBrowser,
+    WebView,
+    Workbench,
+    type ViewItem
+} from 'vscode-extension-tester';
 
 import {
+    FIRST_RUN_OUTPUT_TIMEOUT,
     KERNEL_CONNECT_TIMEOUT,
     QUICK_PICK_TIMEOUT,
     SUITE_TIMEOUT,
@@ -20,6 +33,9 @@ import {
     createScreenshotter,
     openFolderViaDialog,
     openWorkspaceFile,
+    runOnceAndAwaitOutput,
+    selectDeepnoteContextMenu,
+    selectEnvironmentForNotebook,
     waitForNotification
 } from '../helpers';
 
@@ -196,22 +212,283 @@ describe('Deepnote — splitting a file migrates its selected environment onto e
     });
 });
 
+/**
+ * The Deepnote server starter writes one PID lock file per running kernel/toolkit server at
+ * `os.tmpdir()/vscode-deepnote-locks/server-<pid>.json`, deleting it (and killing the process,
+ * SIGTERM->SIGKILL) when the server stops — including when an environment is deleted. The test's Node
+ * context shares `os.tmpdir()` with the extension host (no TMPDIR override in the E2E setup), so the
+ * lock dir is directly readable here. This is the observable, cross-platform signal a stopped
+ * out-of-process server otherwise lacks.
+ */
+const LOCK_DIR = path.join(os.tmpdir(), 'vscode-deepnote-locks');
+
+// A dedicated env name so deleting it never disturbs the shared `E2E Hello Env` other suites reuse.
+const DELETE_ENV_NAME = 'E2E Delete Env';
+// Single-notebook fixture (notebook "Overview", cell `print("overview")`).
+const G2_FIXTURE = 'marketing-overview.deepnote';
+
+// How long to wait, after the first run, for THIS server's fresh PID lock file to appear.
+const PID_APPEAR_TIMEOUT = 15_000;
+// Settle after closing the tab before checking the server is still alive.
+const CLOSE_SETTLE = 2_500;
+// How long to wait, after the env is deleted, for the closed notebook's server to actually stop.
+const STOP_AFTER_DELETE_TIMEOUT = 30_000;
+
+/** PIDs of every currently-tracked running server (parsed from the lock dir). */
+function serverPids(): number[] {
+    if (!fs.existsSync(LOCK_DIR)) {
+        return [];
+    }
+
+    return fs
+        .readdirSync(LOCK_DIR)
+        .map((file) => /^server-(\d+)\.json$/.exec(file))
+        .filter((match): match is RegExpExecArray => match !== null)
+        .map((match) => Number(match[1]));
+}
+
+/**
+ * Cross-platform liveness check. `process.kill(pid, 0)` sends no signal but performs the same
+ * existence/permission checks as a real kill: it throws `ESRCH` when the process is gone and `EPERM`
+ * when it exists but is owned by another user — so `EPERM` counts as alive.
+ */
+function isAlive(pid: number): boolean {
+    try {
+        process.kill(pid, 0);
+
+        return true;
+    } catch (error) {
+        return (error as NodeJS.ErrnoException)?.code === 'EPERM';
+    }
+}
+
+/** Opens the Deepnote view container and returns its "Environments" tree section. */
+async function getDeepnoteEnvironmentsSection() {
+    const control = await new ActivityBar().getViewControl('Deepnote');
+    await control?.openView();
+    await VSBrowser.instance.driver.sleep(1200);
+
+    const content = new SideBarView().getContent();
+    const named = await content.getSection('Environments').catch(() => undefined);
+    if (named) {
+        return named;
+    }
+
+    // Fallback: the environments tree is the second Deepnote section (Explorer is the first).
+    const sections = await content.getSections();
+
+    return sections[1] ?? sections[0];
+}
+
+/** Finds an environment row in the Environments tree by its label (which is the environment name). */
+async function findEnvironmentItem(
+    section: Awaited<ReturnType<typeof getDeepnoteEnvironmentsSection>>,
+    name: string
+): Promise<ViewItem | undefined> {
+    for (const item of await section.getVisibleItems().catch(() => [] as ViewItem[])) {
+        const label = await (item as unknown as { getLabel(): Promise<string> }).getLabel().catch(() => '');
+        if (label.trim() === name) {
+            return item;
+        }
+    }
+
+    return undefined;
+}
+
+// The custom modal ("window.dialogStyle": "custom") is DOM-rendered but ExTester's `ModalDialog`
+// page object often fails to resolve its base element for these confirmation dialogs, so cap the
+// ModalDialog attempt briefly and rely on the raw-DOM path (which is proven to work here).
+const MODAL_ATTEMPT_TIMEOUT = 10_000;
+
+/**
+ * Confirms the `{modal:true}` delete-environment dialog by clicking its `Delete` button. Tries
+ * ExTester's `ModalDialog` first (briefly), then falls back to a raw-DOM click on the custom dialog's
+ * button. Both paths verify the dialog text names the environment before clicking, and the fallback
+ * scopes to `.monaco-dialog-box` and matches the button text EXACTLY as `Delete` — so it can never
+ * click the tree's "Delete Environment" context-menu item.
+ */
+async function confirmDeleteModal(): Promise<'ModalDialog' | 'raw-DOM'> {
+    const driver = VSBrowser.instance.driver;
+
+    try {
+        const dialog = new ModalDialog();
+        await driver.wait(
+            async () => (await dialog.getMessage().catch(() => '')).includes(DELETE_ENV_NAME),
+            MODAL_ATTEMPT_TIMEOUT
+        );
+        await dialog.pushButton('Delete');
+
+        return 'ModalDialog';
+    } catch (error) {
+        console.warn('[G2] ModalDialog delete confirmation failed; falling back to raw DOM:', error);
+    }
+
+    // Wait for the confirmation dialog (identified by its message naming the env) to be present.
+    await driver.wait(
+        async () => {
+            const box = await driver.findElements(By.css('.monaco-dialog-box')).catch(() => []);
+            for (const element of box) {
+                if ((await element.getText().catch(() => '')).includes(DELETE_ENV_NAME)) {
+                    return true;
+                }
+            }
+
+            return false;
+        },
+        WORKBENCH_TIMEOUT,
+        `delete-confirmation modal for "${DELETE_ENV_NAME}" did not appear`
+    );
+
+    const button = await driver.wait(
+        async () => {
+            const selector = '.monaco-dialog-box .dialog-buttons .monaco-button, .monaco-dialog-box .monaco-button';
+            for (const element of await driver.findElements(By.css(selector)).catch(() => [])) {
+                if ((await element.getText().catch(() => '')).trim() === 'Delete') {
+                    return element;
+                }
+            }
+
+            return undefined;
+        },
+        WORKBENCH_TIMEOUT,
+        'custom delete-confirmation modal button "Delete" did not appear'
+    );
+    if (!button) {
+        throw new Error('custom delete-confirmation modal button "Delete" not found');
+    }
+    await button.click();
+
+    return 'raw-DOM';
+}
+
 describe('Deepnote — deleting an environment stops even a closed-but-running notebook’s server', function () {
     this.timeout(SUITE_TIMEOUT);
+    this.retries(0); // destructive (deletes the venv); not idempotent
 
-    // Skipped: this check needs to observe an OUT-OF-PROCESS kernel/server's lifecycle, and ExTester
-    // has no deterministic UI- or disk-observable signal that a CLOSED notebook's server has stopped.
-    // The delete-environment command only surfaces an "Environment … deleted" toast (which proves the
-    // command ran, not that a closed notebook's server stopped); the server itself is managed by
-    // @deepnote/runtime-core with no tree/status-bar/notification/file trace, and the env-view tree
-    // lists environments, not running servers. The guarantee — delete resolves ALL notebooks using the
-    // env from the persisted per-notebook mapping (INCLUDING closed ones) and calls stopServer for each
-    // — is covered directly by the unit test "one notebook is OPEN; the other is CLOSED but its server
-    // is still running" in deepnoteEnvironmentsView.unit.test.ts.
-    it.skip('stops the server of a closed notebook that used the deleted environment', function () {
-        // Intended flow: map one environment to two sibling notebooks, run a cell in each so both have
-        // running servers, close one tab, delete the environment (accept the modal), and assert BOTH
-        // servers stop — including the closed notebook's. Not drivable via ExTester: a stopped
-        // out-of-process server has no observable UI or on-disk signal (see the skip rationale above).
+    let cleanupTempDir: (() => void) | undefined;
+    let serverPid: number | undefined;
+    let modalDrivenVia: 'ModalDialog' | 'raw-DOM' | undefined;
+    let aliveWhileClosed = false;
+    let aliveAfterDelete = true;
+    let lockFileGoneAfterDelete = false;
+
+    before(async function () {
+        const driver = VSBrowser.instance.driver;
+        const screenshot = createScreenshotter(this);
+        const copy = copyFixtureToTempDir(G2_FIXTURE);
+        cleanupTempDir = copy.cleanup;
+
+        await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
+        await openFolderViaDialog(copy.tempDir);
+        await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
+
+        // Servers already running from earlier suites/tests — exclude these when isolating THIS PID.
+        const pidsBefore = serverPids();
+
+        await createEnvironment(DELETE_ENV_NAME);
+
+        await openWorkspaceFile(G2_FIXTURE);
+        await driver.wait(
+            async () => (await new EditorView().getOpenEditorTitles()).some((t) => t.includes(G2_FIXTURE)),
+            WORKBENCH_TIMEOUT,
+            `${G2_FIXTURE} did not open`
+        );
+
+        // Bind the kernel to the dedicated env, then run the single cell — this starts the server and
+        // writes its PID lock file.
+        await selectEnvironmentForNotebook(DELETE_ENV_NAME, G2_FIXTURE);
+        await runOnceAndAwaitOutput(G2_FIXTURE, 'overview', FIRST_RUN_OUTPUT_TIMEOUT);
+
+        // Isolate this run's server PID (the lock file that appeared since we started).
+        const pidDeadline = Date.now() + PID_APPEAR_TIMEOUT;
+        while (Date.now() < pidDeadline) {
+            const fresh = serverPids().filter((pid) => !pidsBefore.includes(pid));
+            if (fresh.length > 0) {
+                serverPid = fresh[0];
+                break;
+            }
+            await driver.sleep(1000);
+        }
+        console.log(
+            '[G2] serverPid=',
+            serverPid,
+            'lockDir=',
+            LOCK_DIR,
+            'lockDirExists=',
+            fs.existsSync(LOCK_DIR),
+            'pids=',
+            JSON.stringify(serverPids())
+        );
+        if (serverPid === undefined) {
+            const tmpEntries = fs.readdirSync(os.tmpdir()).filter((f) => f.includes('deepnote'));
+            console.log('[G2] no fresh PID; os.tmpdir() deepnote entries=', JSON.stringify(tmpEntries));
+        }
+        await screenshot('server-running');
+
+        // Close the notebook tab. Closing a tab does NOT stop the server (no onDidClose->stopServer),
+        // so it must still be alive here — that is the state the env-delete has to clean up.
+        await new EditorView().closeAllEditors().catch(() => undefined);
+        await driver.sleep(CLOSE_SETTLE);
+        aliveWhileClosed = serverPid !== undefined && isAlive(serverPid);
+        console.log('[G2] aliveWhileClosed=', aliveWhileClosed);
+
+        // Delete the dedicated environment via the Environments tree context menu + confirmation modal.
+        const section = await getDeepnoteEnvironmentsSection();
+        const envItem = await driver.wait(
+            async () => findEnvironmentItem(section, DELETE_ENV_NAME),
+            WORKBENCH_TIMEOUT,
+            `environment row "${DELETE_ENV_NAME}" did not appear in the Environments view`
+        );
+        await screenshot('env-row');
+
+        // The context-menu label is the command title "Delete Environment" (not a bare "Delete").
+        await selectDeepnoteContextMenu(envItem as ViewItem, 'Delete Environment');
+        await screenshot('delete-menu');
+        modalDrivenVia = await confirmDeleteModal();
+        console.log('[G2] modalDrivenVia=', modalDrivenVia);
+
+        await waitForNotification(/Environment .*deleted/i, WORKBENCH_TIMEOUT, true);
+        await screenshot('env-deleted');
+
+        // The closed notebook's server must now be stopped and its lock file removed.
+        const stopDeadline = Date.now() + STOP_AFTER_DELETE_TIMEOUT;
+        while (Date.now() < stopDeadline) {
+            if (serverPid !== undefined && !isAlive(serverPid)) {
+                aliveAfterDelete = false;
+                break;
+            }
+            await driver.sleep(1000);
+        }
+        lockFileGoneAfterDelete =
+            serverPid !== undefined && !fs.existsSync(path.join(LOCK_DIR, `server-${serverPid}.json`));
+        console.log(
+            '[G2] aliveAfterDelete=',
+            aliveAfterDelete,
+            'lockFileGone=',
+            lockFileGoneAfterDelete,
+            'pids=',
+            JSON.stringify(serverPids())
+        );
+        await screenshot('after-stop-check');
+    });
+
+    after(async function () {
+        await new WebView().switchBack().catch(() => undefined);
+        await new EditorView().closeAllEditors().catch(() => undefined);
+        try {
+            cleanupTempDir?.();
+        } catch (error) {
+            console.warn('[env-g2] cleanup:', error);
+        }
+    });
+
+    it('starts a server whose PID is tracked and survives closing the notebook tab', function () {
+        expect(serverPid, 'server PID from lock file').to.be.a('number');
+        expect(aliveWhileClosed, 'server still running after the tab was closed').to.equal(true);
+    });
+
+    it('stops that closed notebook’s server when the environment is deleted', function () {
+        expect(aliveAfterDelete, 'closed notebook server should be stopped after env delete').to.equal(false);
+        expect(lockFileGoneAfterDelete, 'server lock file removed after env delete').to.equal(true);
     });
 });

@@ -3,18 +3,16 @@ import * as os from 'os';
 import * as path from 'path';
 
 export interface FixtureCopy {
-    /** Removes the throwaway temp directory and its contents. Idempotent; safe to call more than once. */
+    /** Removes the temp directory and its contents. Idempotent. */
     cleanup: () => void;
-    /** The absolute path to the copied fixture file inside `tempDir`. */
     filePath: string;
-    /** The throwaway temp directory the fixture was copied into (suitable as a workspace folder). */
+    /** The temp directory the fixture was copied into (suitable as a workspace folder). */
     tempDir: string;
 }
 
 /**
- * Copies a fixture from `test/e2e/fixtures` into a fresh throwaway temp directory and returns the
- * paths plus a `cleanup` callback that removes the dir. Execution dirties the notebook, so working
- * on a throwaway copy keeps the committed fixture pristine and avoids save prompts.
+ * Copies a fixture into a fresh temp directory and returns the paths plus a `cleanup` callback.
+ * Working on a throwaway copy keeps the committed fixture pristine (execution dirties the notebook).
  */
 export function copyFixtureToTempDir(fixtureName: string): FixtureCopy {
     const source = path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', fixtureName);

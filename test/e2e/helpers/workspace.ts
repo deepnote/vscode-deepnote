@@ -10,12 +10,9 @@ import {
 import { clickDialogOkButton } from './quickInput';
 
 /**
- * Opens a file that lives in the currently-open workspace folder via Quick Open ("Go to File..."),
- * matching by file name. Unlike the simple Open File dialog (where Enter does not accept a typed
- * path), Quick Open reliably opens the highlighted match on confirm.
- *
- * Driving the running window directly avoids ExTester's `openResources`, which shells out to
- * `code -r <file>` (reuse-window over IPC) and silently no-ops in a sandboxed/headless instance.
+ * Opens a workspace file by name via Quick Open ("Go to File..."), which reliably opens the
+ * highlighted match on confirm. Driving the running window directly avoids ExTester's
+ * `openResources`, which shells out to `code -r` and silently no-ops when headless.
  */
 export async function openWorkspaceFile(fileName: string): Promise<void> {
     const driver = VSBrowser.instance.driver;
@@ -33,19 +30,10 @@ export async function openWorkspaceFile(fileName: string): Promise<void> {
 }
 
 /**
- * Opens an absolute folder path as the workspace root via "File: Open Folder...". Opening a folder
- * reloads the VS Code window.
- *
- * In the simple folder dialog (files.simpleDialog.enable), clicking OK navigates one directory level
- * *toward* the typed path rather than accepting it outright; only once the browser is AT the target
- * folder does OK accept it as the workspace. So we open the dialog once, type the path, then click OK
- * repeatedly in the SAME dialog until the pre-open workbench element detaches (reload = accepted).
- *
- * The earlier approach re-opened the dialog on every attempt, which reset navigation to the default
- * directory. That converged for the first folder-open in a session but not for later ones (whose
- * default directory is the previous, now-deleted, workspace) — so the 2nd+ folder open in a
- * multi-suite run failed. Staying in one dialog and re-clicking OK converges regardless of the
- * starting directory.
+ * Opens an absolute folder path as the workspace root (reloads the window). In the simple folder
+ * dialog, clicking OK navigates one level toward the typed path rather than accepting it, so we type
+ * the path once and re-click OK in the SAME dialog until the pre-open workbench detaches (= accepted).
+ * Re-opening the dialog per attempt instead would reset navigation and fail on 2nd+ opens.
  */
 export async function openFolderViaDialog(folder: string): Promise<void> {
     const driver = VSBrowser.instance.driver;
@@ -55,8 +43,7 @@ export async function openFolderViaDialog(folder: string): Promise<void> {
     const dialog = await InputBox.create(QUICK_PICK_TIMEOUT);
     await dialog.setText(folder);
 
-    // The simple dialog resolves the typed path asynchronously (listing the enclosing directory);
-    // wait for that listing and add a short settle before accepting.
+    // The simple dialog resolves the typed path asynchronously; wait for the listing, then settle.
     await driver
         .wait(async () => (await dialog.getQuickPicks()).length > 0, QUICK_PICK_TIMEOUT, 'dialog did not resolve path')
         .catch((error) => {
@@ -75,7 +62,7 @@ export async function openFolderViaDialog(folder: string): Promise<void> {
 
                     return false;
                 } catch {
-                    // Stale element reference means the workbench reloaded (folder accepted).
+                    // Stale element = workbench reloaded (folder accepted).
                     return true;
                 }
             }, RELOAD_POLL_TIMEOUT)

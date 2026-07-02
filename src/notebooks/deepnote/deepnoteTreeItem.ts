@@ -2,13 +2,8 @@ import { TreeItem, TreeItemCollapsibleState, ThemeIcon } from 'vscode';
 import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 
 /**
- * Represents different types of items in the Deepnote tree view.
- *
- * - `ProjectGroup` — a project (one per distinct `project.id`) grouping its sibling files.
- * - `ProjectFile` — a single `.deepnote` file. A file with exactly one non-init notebook is
- *   rendered as a leaf (`notebookFile`); a legacy multi-notebook file is collapsible into
- *   `Notebook` children (`projectFile`).
- * - `Notebook` — a legacy in-file notebook child of a multi-notebook `ProjectFile`.
+ * Tree item types: `ProjectGroup` (one per `project.id`) → `ProjectFile` (one `.deepnote` file,
+ * a leaf when it has a single non-init notebook) → `Notebook` (legacy multi-notebook child).
  */
 export enum DeepnoteTreeItemType {
     ProjectGroup = 'projectGroup',
@@ -36,8 +31,7 @@ export interface ProjectGroupData {
 }
 
 /**
- * Returns the notebooks of a project file that are NOT the init notebook.
- * The init notebook (referenced by `project.initNotebookId`) is excluded from every count/label.
+ * Notebooks of a project excluding the init notebook (`project.initNotebookId`).
  */
 export function getNonInitNotebooks(project: DeepnoteProject): DeepnoteNotebook[] {
     const notebooks = project.project.notebooks ?? [];
@@ -47,8 +41,8 @@ export function getNonInitNotebooks(project: DeepnoteProject): DeepnoteNotebook[
 }
 
 /**
- * Resolves the single notebook to render for a single-notebook file: the first non-init notebook,
- * falling back to the first notebook when the only notebook IS the init notebook.
+ * The single notebook to render for a leaf file: first non-init notebook, falling back to the
+ * first notebook when the only notebook IS the init notebook.
  */
 function resolveLeafNotebook(project: DeepnoteProject): DeepnoteNotebook | undefined {
     const nonInit = getNonInitNotebooks(project);
@@ -61,13 +55,9 @@ function resolveLeafNotebook(project: DeepnoteProject): DeepnoteNotebook | undef
 }
 
 /**
- * Mutates the tree item's visual fields (label, description, tooltip, icon, command, context value)
- * based on its current type and data.
- *
- * Implemented as a free function (rather than an instance method) so it can be called from the
- * constructor: in the transpiled ES-module output, calling a subclass instance method from a
- * `TreeItem` subclass constructor is not safe (the prototype is not yet fully wired), which is why
- * the original implementation inlined all rendering in the constructor body.
+ * Sets the tree item's visual fields from its type and data. A free function (not an instance
+ * method) because calling a subclass method from a `TreeItem` constructor is unsafe in the
+ * transpiled ES-module output — the prototype is not yet fully wired.
  */
 function applyVisualFields(item: DeepnoteTreeItem): void {
     if (item.type === DeepnoteTreeItemType.Loading) {
@@ -98,7 +88,6 @@ function applyVisualFields(item: DeepnoteTreeItem): void {
         const project = item.data as DeepnoteProject;
         const nonInitNotebooks = getNonInitNotebooks(project);
 
-        // A file with exactly one non-init notebook is a leaf labelled with that notebook's name.
         if (nonInitNotebooks.length === 1) {
             const notebook = resolveLeafNotebook(project);
             const blockCount = notebook?.blocks?.length ?? 0;
@@ -123,7 +112,6 @@ function applyVisualFields(item: DeepnoteTreeItem): void {
             return;
         }
 
-        // Legacy multi-notebook (or empty) file: collapsible into Notebook children.
         item.contextValue = 'projectFile';
         item.label = project.project.name || 'Untitled Project';
         item.tooltip = `Deepnote Project: ${project.project.name}\nFile: ${item.context.filePath}`;
@@ -166,9 +154,7 @@ export class DeepnoteTreeItem extends TreeItem {
     }
 
     /**
-     * Updates the tree item's visual fields (label, description, tooltip, icon, command, context
-     * value) based on current data. Call this after updating the data property to ensure the tree
-     * view reflects changes.
+     * Re-applies the visual fields; call after mutating `data` to reflect changes in the tree.
      */
     public updateVisualFields(): void {
         applyVisualFields(this);

@@ -1,12 +1,8 @@
 /**
- * End-to-end UI test (ExTester / vscode-extension-tester) for the Deepnote Explorer's project
- * grouping. Sibling `.deepnote` files that share one `project.id` must collapse into a single
- * project group; files from a different project must appear as their own separate group.
- *
- * The workspace holds three "Marketing" siblings (`marketing-overview/campaigns/metrics.deepnote`,
- * one shared `project.id`) plus an unrelated single-notebook file (`quick-notes.deepnote`). The
- * tree is read once in `before`; each `it` asserts one property. Screenshots are captured into
- * `test/e2e/screenshots/explorerGrouping/`. Runs without a Python kernel.
+ * E2E test for the Deepnote Explorer's project grouping: sibling `.deepnote` files sharing one
+ * `project.id` collapse into a single group; a file from a different project forms its own group.
+ * The workspace holds three "Marketing" siblings (one shared `project.id`) plus an unrelated file
+ * (`quick-notes.deepnote`).
  */
 
 import { expect } from 'chai';
@@ -45,7 +41,6 @@ async function labelOf(item: ViewItem): Promise<string> {
     return (item as unknown as { getLabel(): Promise<string> }).getLabel().catch(() => '');
 }
 
-/** Reads the description ("3 files" / "2 cells") of a tree item. */
 async function descriptionOf(item: ViewItem): Promise<string> {
     const description = await (item as unknown as { getDescription(): Promise<string | undefined> })
         .getDescription()
@@ -54,7 +49,6 @@ async function descriptionOf(item: ViewItem): Promise<string> {
     return description ?? '';
 }
 
-/** The Deepnote Explorer tree section (named "Explorer" inside the Deepnote view container). */
 async function getExplorerSection() {
     const content = new SideBarView().getContent();
     const named = await content.getSection('Explorer').catch(() => undefined);
@@ -62,7 +56,6 @@ async function getExplorerSection() {
     return named ?? (await content.getSections())[0];
 }
 
-/** Reads the currently-visible tree rows, classifying each as a project group or a notebook leaf. */
 async function readRows(section: Awaited<ReturnType<typeof getExplorerSection>>): Promise<TreeRow[]> {
     const rows: TreeRow[] = [];
 
@@ -93,7 +86,6 @@ describe('Deepnote — the Explorer groups sibling files by project', function (
         const driver = VSBrowser.instance.driver;
         const screenshot = createScreenshotter(this);
 
-        // Put all four files (three Marketing siblings + one unrelated project) in one workspace.
         const copy = copyFixtureToTempDir(MARKETING_FILES[0]);
         cleanupTempDir = copy.cleanup;
         for (const name of [...MARKETING_FILES.slice(1), OTHER_PROJECT_FILE]) {
@@ -107,13 +99,12 @@ describe('Deepnote — the Explorer groups sibling files by project', function (
         await openFolderViaDialog(copy.tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
-        // Open the Deepnote view container and grab its Explorer tree section.
         const control = await new ActivityBar().getViewControl('Deepnote');
         await control?.openView();
         await driver.sleep(2000);
         const section = await getExplorerSection();
 
-        // Wait for the workspace scan to surface the Marketing group.
+        // Wait for the async workspace scan to surface the Marketing group.
         await driver.wait(
             async () => (await readRows(section)).some((row) => row.label === MARKETING_GROUP && row.isGroup),
             TREE_LOAD_TIMEOUT,
@@ -121,7 +112,7 @@ describe('Deepnote — the Explorer groups sibling files by project', function (
         );
         await screenshot('explorer-groups');
 
-        // With Marketing still collapsed, record the project groups and the currently-visible leaves.
+        // Record groups and visible leaves while Marketing is still collapsed (baseline for the diff below).
         const collapsed = await readRows(section);
         groupLabels = collapsed
             .filter((row) => row.isGroup)
@@ -130,8 +121,8 @@ describe('Deepnote — the Explorer groups sibling files by project', function (
         marketingDescription = collapsed.find((row) => row.label === MARKETING_GROUP && row.isGroup)?.description ?? '';
         const leavesBefore = new Set(collapsed.filter((row) => row.isLeaf).map((row) => row.label));
 
-        // Expand Marketing; the leaves that newly appear are exactly its notebooks (avoids the
-        // library's flaky CustomTreeItem.getChildItems).
+        // Newly-appearing leaves after expanding are exactly Marketing's notebooks; avoids the
+        // library's flaky CustomTreeItem.getChildItems.
         const marketing = collapsed.find((row) => row.label === MARKETING_GROUP && row.isGroup)?.item;
         await (marketing as unknown as { expand(): Promise<void> } | undefined)?.expand();
         await driver.sleep(1000);

@@ -1,14 +1,8 @@
 /**
- * End-to-end UI test (ExTester / vscode-extension-tester) for the on-open split of a legacy
- * multi-notebook `.deepnote` file into one single-notebook file per notebook, driven through the
- * real VS Code UI. The `sales-analytics.deepnote` fixture holds three notebooks (Overview, Revenue,
- * Forecast) plus one project-level BigQuery integration.
- *
- * The split is destructive (it deletes the original file), so it is performed once in `before`
- * (hooks do not retry); each `it` then asserts one property of the result. Screenshots of the flow
- * are captured into `test/e2e/screenshots/splitMultiNotebook/`.
- *
- * Runs without a Python kernel: splitting is purely file-structural.
+ * E2E test for the on-open split of a legacy multi-notebook `.deepnote` file into one
+ * single-notebook file per notebook. The `sales-analytics.deepnote` fixture holds three notebooks
+ * (Overview, Revenue, Forecast) plus one project-level BigQuery integration. The split is
+ * destructive, so it runs once in `before` (hooks do not retry) and each `it` asserts a property.
  */
 
 import { expect } from 'chai';
@@ -37,8 +31,8 @@ const NO_SPLIT_PROMPT_TIMEOUT = 6_000;
 
 const INTEGRATION_NAME = 'Sales BigQuery';
 
-// The three single-notebook files the split is expected to produce, each with a content marker
-// unique to its source notebook (used to prove the right blocks landed in the right file).
+// The three single-notebook files the split should produce; each marker is unique to its source
+// notebook, proving the right blocks landed in the right file.
 const SIBLINGS: ReadonlyArray<{ file: string; notebookName: string; contentMarkers: string[] }> = [
     {
         file: 'sales-analytics-overview.deepnote',
@@ -78,9 +72,6 @@ describe('Deepnote — splitting a legacy multi-notebook .deepnote file into sin
     let originalRemoved = false;
     let legacyBackupExists = false;
 
-    // Perform the split once: open the multi-notebook file, capture the prompt, accept it, capture
-    // the outcome. `before` hooks do not retry, so the destructive delete happens exactly once; the
-    // `it`s below are non-destructive assertions over the result.
     before(async function () {
         const driver = VSBrowser.instance.driver;
         const screenshot = createScreenshotter(this);
@@ -91,17 +82,15 @@ describe('Deepnote — splitting a legacy multi-notebook .deepnote file into sin
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
-        // Open the temp dir as the workspace root FIRST (the serializer reads snapshots relative to a
-        // workspace folder; without one, deserialization blocks on a warning that never resolves
-        // headlessly). Opening a folder reloads the window, so re-wait for the workbench.
+        // Open the workspace folder FIRST: the serializer reads snapshots relative to it, and
+        // without one deserialization blocks on a warning that never resolves headlessly.
         await openFolderViaDialog(tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         await showView('Deepnote');
         await screenshot('before-open-explorer');
 
-        // Open the multi-notebook file. Deserialize renders the first non-init notebook (Overview);
-        // the splitter fires on the open event and raises the split prompt.
+        // Opening the multi-notebook file fires the splitter on the open event, raising the prompt.
         await openWorkspaceFile(FIXTURE);
         await driver.wait(
             async () => (await new EditorView().getOpenEditorTitles()).some((title) => title.includes(FIXTURE)),
@@ -117,9 +106,8 @@ describe('Deepnote — splitting a legacy multi-notebook .deepnote file into sin
 
         await prompt!.takeAction(SPLIT_ACTION);
 
-        // The original is retired by renaming it to `<name>.deepnote.legacy` (deterministic, no OS
-        // trash backend needed); the "Failed to split..." alternative is only a safety net for a
-        // genuine filesystem error. Either way the children are written BEFORE the original is retired.
+        // The original is retired by renaming to `<name>.deepnote.legacy` (deterministic, no OS trash
+        // needed), and only after every child is written; "Failed to split" is a filesystem-error net.
         const outcome = await waitForNotification(/Split into \d+ files\.|Failed to split/i, WORKBENCH_TIMEOUT, true);
         outcomeMessage = (await outcome!.getMessage()) ?? '';
         await driver.sleep(1500);

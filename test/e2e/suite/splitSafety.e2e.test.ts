@@ -1,16 +1,7 @@
 /**
- * End-to-end UI test (ExTester / vscode-extension-tester) for the safety behaviour around the
- * multi-notebook split prompt:
- *   - Dismissing the prompt leaves the original file untouched (no siblings, no `.legacy`).
- *
- * Two further split-safety guarantees are exercised by the splitter's unit tests rather than here,
- * because neither can be driven reliably through the notebook UI in ExTester:
- *   - Dirty-flush-before-split (an unsaved in-cell edit is saved before the split) — see the pending
- *     `it.skip` below; ExTester cannot type into a rendered notebook cell.
- *   - Write-before-retire (the original is retired only after every child is written) — a failure path
- *     that cannot be forced through the UI at all.
- *
- * Screenshots are captured into `test/e2e/screenshots/splitSafety/`. Runs without a Python kernel.
+ * E2E test for split-prompt safety: dismissing the prompt leaves the original file untouched (no
+ * siblings, no `.legacy`). The dirty-flush-before-split and write-before-retire guarantees are
+ * covered by the splitter's unit tests, since neither can be driven reliably through the ExTester UI.
  */
 
 import { expect } from 'chai';
@@ -72,7 +63,6 @@ describe('Deepnote — split-prompt safety', function () {
         expect(prompt, 'split prompt notification').to.not.equal(undefined);
         await screenshot('prompt-shown');
 
-        // Dismiss the prompt WITHOUT accepting the split.
         await prompt!.dismiss().catch((error) => console.warn('[split-safety] dismiss prompt:', error));
         await driver.sleep(2000);
         await screenshot('after-dismiss');
@@ -88,18 +78,7 @@ describe('Deepnote — split-prompt safety', function () {
         );
     });
 
-    // Skipped: this check needs an UNSAVED, identifiable edit inside a notebook cell, and
-    // ExTester/ChromeDriver cannot reliably drive typed text into one. Confirmed both WITHOUT and WITH a
-    // bound Python kernel: clicking the cell and sending keys never lands the marker text — some control
-    // keys (e.g. Enter) reach the buffer, but typed characters leak to the workbench toolbar instead of
-    // the cell's input. (VS Code's current notebook cell input is EditContext-based, which Selenium's
-    // synthetic character events do not feed.) The split prompt and the split action DO drive fine — a
-    // dismissed prompt is covered above; only the in-cell text edit does not. The guarantee itself — a
-    // dirty document is saved before the split, and the split aborts if that save fails — is covered
-    // directly by the splitter's unit tests ("dirty gate (load-bearing safety)" in
-    // deepnoteMultiNotebookSplitter.unit.test.ts).
-    it.skip('flushes an unsaved edit to disk before splitting', function () {
-        // Intended flow: open the multi-notebook file, dirty its rendered cell, accept the split, and
-        // assert the unsaved edit reached the corresponding split child file on disk.
-    });
+    // Skipped: needs typed text in a notebook cell, but VS Code's cell input is EditContext-based and
+    // Selenium's synthetic character events don't reach it. Covered by the splitter's unit tests.
+    it.skip('flushes an unsaved edit to disk before splitting', function () {});
 });

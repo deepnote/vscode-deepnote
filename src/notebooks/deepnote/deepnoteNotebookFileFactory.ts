@@ -9,9 +9,8 @@ const FALLBACK_NOTEBOOK_SLUG = 'notebook';
 const DEEPNOTE_EXTENSION = '.deepnote';
 
 /**
- * Returns the basename of a URI up to (but not including) the FIRST `.`.
+ * Returns the basename of a URI up to (but not including) the first `.`,
  * e.g. `report.backup.deepnote` → `report`.
- * @param uri The file URI
  */
 export function getFileStem(uri: Uri): string {
     const fileName = uri.path.split('/').pop() ?? '';
@@ -26,18 +25,8 @@ export function getFileStem(uri: Uri): string {
 
 /**
  * Build a new single-notebook `DeepnoteFile` from a source file and a single notebook.
- *
- * Clones `source.metadata` (or `{ createdAt: now }`), stamps `modifiedAt = now`, preserves
- * the source's top-level fields, spreads `source.project` (preserving `id`, `name`,
- * `integrations`, `settings`, and carrying `initNotebookId` forward), and sets
- * `notebooks` to the single provided notebook.
- *
- * Note: `metadata.snapshotHash` is intentionally NOT stamped — it is a snapshot-only field
- * that `serializeDeepnoteFile` strips, so stamping it on a source file is a no-op.
- *
- * @param source The source file to derive project-level metadata from
- * @param notebook The single notebook the new file should contain
- * @returns A new single-notebook `DeepnoteFile`
+ * `metadata.snapshotHash` is intentionally not stamped — it is a snapshot-only field that
+ * `serializeDeepnoteFile` strips, so stamping it on a source file is a no-op.
  */
 export function buildSingleNotebookFile(source: DeepnoteFile, notebook: DeepnoteNotebook): DeepnoteFile {
     const now = new Date().toISOString();
@@ -58,14 +47,6 @@ export function buildSingleNotebookFile(source: DeepnoteFile, notebook: Deepnote
 /**
  * Compute a collision-free sibling URI for a new notebook file, named consistently with
  * `@deepnote/convert`'s split output (`{stem}-{slug}.deepnote`).
- *
- * The desired basename is `${getFileStem(originalUri)}-${slugifyProjectName(notebookName) || 'notebook'}.deepnote`;
- * collision handling is delegated to the shared `allocateSiblingUri` from §0.
- *
- * @param originalUri The URI of the originating file (used for parent dir + stem)
- * @param notebookName The name of the notebook (slugified into the filename)
- * @param exists Injected existence probe
- * @returns A collision-free URI for the new sibling file
  */
 export async function buildSiblingNotebookFileUri(
     originalUri: Uri,

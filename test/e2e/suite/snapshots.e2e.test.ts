@@ -1,7 +1,6 @@
 /**
- * E2E (ExTester): a legacy project-scoped snapshot — filename has NO notebook-id segment — still
- * loads its saved output when the notebook is opened (backward compat for snapshots written before
- * per-notebook scoping). No Python kernel: the output comes from the snapshot sidecar, not execution.
+ * E2E (ExTester): a legacy project-scoped snapshot (filename has no notebook-id segment) still loads
+ * its saved output when the notebook is opened. Output comes from the snapshot sidecar, not execution.
  */
 import { expect } from 'chai';
 import * as fs from 'fs';
@@ -91,7 +90,7 @@ describe('Deepnote — a legacy project-scoped snapshot still loads its saved ou
 describe('Deepnote — new snapshots are notebook-scoped and do not bleed between siblings', function () {
     this.timeout(SUITE_TIMEOUT);
 
-    const ENV_NAME = 'E2E Hello Env'; // reuse the shared env so CI provisions one venv
+    const ENV_NAME = 'E2E Hello Env'; // shared env so CI provisions one venv
     const SIBLINGS = [
         { file: 'marketing-overview.deepnote', output: 'overview', notebookId: 'e-nb-overview' },
         { file: 'marketing-campaigns.deepnote', output: 'campaigns', notebookId: 'e-nb-campaigns' }
@@ -120,13 +119,8 @@ describe('Deepnote — new snapshots are notebook-scoped and do not bleed betwee
         await createEnvironment(ENV_NAME);
 
         for (const sib of SIBLINGS) {
-            // Keep exactly ONE notebook editor open per iteration. "Run All" is located with
-            // `findElements(...)[0]`, which returns the first toolbar in DOM order; with a previous
-            // sibling's editor still open that first match is the inactive editor's button, which is
-            // not interactable and would hang the run. Closing prior editors first makes the located
-            // button belong to the sibling we are about to run. The deferred snapshot write for an
-            // already-executed sibling is owned by the extension host and is unaffected by closing
-            // its editor.
+            // Keep exactly ONE editor open: "Run All" is located via `findElements(...)[0]` (first
+            // toolbar in DOM order), so a lingering prior editor's button would be picked and hang the run.
             await new EditorView().closeAllEditors().catch((error) => {
                 console.warn('[snapshots-i2] close editors before opening sibling:', error);
             });
@@ -157,11 +151,8 @@ describe('Deepnote — new snapshots are notebook-scoped and do not bleed betwee
         }
         console.log('[I2] snapshotFiles=', JSON.stringify(snapshotFiles));
 
-        // Filenames only prove per-notebook scoping of the *files*; they don't prove each file holds
-        // its OWN notebook's output. Read the actual contents so we can assert no cross-contamination
-        // (a regression could write the overview output into the campaigns snapshot while keeping a
-        // notebook-scoped filename). Prefer a `_latest` file for a notebook id, else any file with
-        // that id segment.
+        // Filenames only prove per-notebook scoping of the files; read contents to assert no
+        // cross-contamination. Prefer a `_latest` file for a notebook id, else any file with that segment.
         const pickSnapshot = (notebookId: string): string | undefined => {
             const segment = `_${notebookId}_`;
             const matches = snapshotFiles.filter((f) => f.includes(segment));
@@ -212,9 +203,8 @@ describe('Deepnote — new snapshots are notebook-scoped and do not bleed betwee
     });
 
     it('keeps each notebook-scoped snapshot holding only its own output', function () {
-        // The snapshot YAML stores the executed cell's stdout as plain text, so each notebook's
-        // marker ('overview' / 'campaigns') must appear in its own snapshot and — crucially — the
-        // sibling's marker must NOT. The `not.contain` checks are what catch cross-contamination.
+        // Each notebook's marker must appear in its own snapshot and NOT the sibling's; the
+        // `not.contain` checks are what catch cross-contamination.
         expect(overviewSnapshotContent, 'overview snapshot must not be empty').to.not.equal('');
         expect(campaignsSnapshotContent, 'campaigns snapshot must not be empty').to.not.equal('');
 

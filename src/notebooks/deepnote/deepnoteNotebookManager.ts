@@ -14,27 +14,16 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
     private readonly originalProjects = new Map<string /*projectId*/, Map<string /*notebookId*/, DeepnoteProject>>();
 
     /**
-     * Retrieves the cached project data for an exact (projectId, notebookId) pair.
-     * This performs an exact match only and never falls back to another sibling's
-     * project — it returns undefined when that precise entry is not cached.
-     * @param projectId Project identifier
-     * @param notebookId Notebook identifier within the project
-     * @returns The cached project data for that notebook, or undefined if not found
+     * Retrieves the cached project data for an exact (projectId, notebookId) pair; never falls
+     * back to another sibling's project, returning undefined when that entry is not cached.
      */
     getProjectForNotebook(projectId: string, notebookId: string): DeepnoteProject | undefined {
         return this.originalProjects.get(projectId)?.get(notebookId);
     }
 
-    /**
-     * Stores the original project data for an exact (projectId, notebookId) pair.
-     * This is used during deserialization to cache project data.
-     * @param projectId Project identifier
-     * @param notebookId Notebook identifier within the project
-     * @param project Original project data to store
-     */
+    /** Stores the original project data for an exact (projectId, notebookId) pair. */
     storeOriginalProject(projectId: string, notebookId: string, project: DeepnoteProject): void {
-        // Deep clone to prevent mutations from affecting stored state.
-        // Using structuredClone to handle circular references (e.g., in output metadata).
+        // structuredClone to prevent mutations affecting stored state and handle circular refs.
         const clonedProject = structuredClone(project);
 
         let notebookEntries = this.originalProjects.get(projectId);
@@ -48,13 +37,8 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
     }
 
     /**
-     * Updates the integrations list in the cached project data (cache-only).
-     * Iterates every cached notebook entry under the project and updates each entry's
-     * integrations.
-     *
-     * @param projectId - Project identifier
-     * @param integrations - Array of integration metadata to store in the project
-     * @returns `true` if at least one cached entry was found and updated, `false` otherwise
+     * Updates the integrations list across every cached notebook entry under the project (cache-only).
+     * @returns `true` if at least one cached entry was updated, `false` otherwise.
      */
     updateProjectIntegrations(projectId: string, integrations: ProjectIntegration[]): boolean {
         const notebookEntries = this.originalProjects.get(projectId);

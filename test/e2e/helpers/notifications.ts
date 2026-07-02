@@ -15,9 +15,8 @@ export async function dismissAllNotifications(): Promise<void> {
 }
 
 /**
- * Waits for a toast notification whose message matches `pattern`. When `required` is false a missed
- * (or auto-dismissed) notification resolves to `undefined` instead of throwing — useful for
- * transient success toasts where the authoritative gate is elsewhere.
+ * Waits for a toast notification matching `pattern`. When `required` is false a missed notification
+ * resolves to `undefined` instead of throwing.
  */
 export async function waitForNotification(
     pattern: RegExp,

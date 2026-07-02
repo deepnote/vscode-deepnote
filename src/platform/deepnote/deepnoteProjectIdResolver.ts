@@ -4,14 +4,8 @@ import { logger } from '../logging';
 import { readDeepnoteProjectFile } from './deepnoteProjectFileReader';
 
 /**
- * Resolves the Deepnote `project.id` that a given file belongs to.
- *
- * Reads and parses the `.deepnote` file at `fileUri` and returns its `project.id`.
- * I/O and parse errors are swallowed (logged) so callers can treat an unreadable or
- * malformed file as "no project".
- *
- * @param fileUri The URI of the `.deepnote` file.
- * @returns The project id, or `undefined` if it cannot be determined.
+ * Reads the `.deepnote` file at `fileUri` and returns its `project.id`.
+ * I/O and parse errors are swallowed so callers treat an unreadable file as "no project".
  */
 export async function resolveProjectIdForFile(fileUri: Uri): Promise<string | undefined> {
     try {
@@ -26,14 +20,8 @@ export async function resolveProjectIdForFile(fileUri: Uri): Promise<string | un
 }
 
 /**
- * Resolves the Deepnote `project.id` for a notebook document.
- *
- * Prefers the project id stamped on the notebook metadata (`deepnoteProjectId`);
- * when that is absent it falls back to reading the underlying file (with any query
- * and fragment stripped from the notebook URI).
- *
- * @param notebook The notebook document.
- * @returns The project id, or `undefined` if it cannot be determined.
+ * Resolves a notebook's Deepnote `project.id`, preferring the `deepnoteProjectId` metadata and
+ * falling back to reading the underlying file (query/fragment stripped from the URI).
  */
 export async function resolveProjectIdForNotebook(notebook: NotebookDocument): Promise<string | undefined> {
     const projectIdFromMetadata = notebook.metadata?.deepnoteProjectId;

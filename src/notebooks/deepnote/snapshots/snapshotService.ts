@@ -118,17 +118,10 @@ interface NotebookExecutionState {
 /** How long a written URI is considered "recent" and suppressed from file-change processing. */
 const recentWriteExpirationMs = 2000;
 
-/**
- * After execution completes, wait for outputs to settle before writing a snapshot. The timer is
- * (re)armed on each output/metadata-bearing notebook change and only flushes once this quiet
- * window elapses with no further changes.
- */
+/** Quiet window with no output/metadata change that must elapse before a deferred snapshot flushes. */
 const outputSettleQuietPeriodMs = 150;
 
-/**
- * Upper bound, measured from the first arm, on how long the deferred snapshot save can be pushed
- * out by repeated output/metadata changes. Once exceeded, the save flushes regardless.
- */
+/** Upper bound (from the first arm) on how long repeated changes can defer the snapshot save. */
 const outputSettleMaxWaitMs = 2000;
 
 /** Maximum number of snapshot files the open-time (path-free) reader inspects per workspace folder. */
@@ -459,14 +452,10 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     }
 
     /**
-     * Reads the best available snapshot for a project/notebook WITHOUT a file path.
-     *
-     * `deserializeNotebook` only receives the file bytes (no URI), so this resolver globs the
-     * workspace for snapshot files keyed on `projectId` ONLY, parses each basename with convert's
-     * pure `parseSnapshotFilename`, ranks them (notebook-scoped match first, legacy no-notebook-id
-     * entries kept as a fallback, then `latest`, then newest timestamp), and walks the ranked
-     * candidates returning the first one with real outputs. It never calls convert's path-bound
-     * disk helpers (loadLatestSnapshot/findSnapshotsForProject/loadSnapshotFile/getSnapshotPath).
+     * Reads the best available snapshot for a project/notebook WITHOUT a file path. Since
+     * `deserializeNotebook` only receives the file bytes (no URI), this globs the workspace for
+     * snapshot files keyed on `projectId` only, ranks them (notebook-scoped match, then `latest`,
+     * then newest), and returns the first with real outputs.
      */
     async readSnapshot(projectId: string, notebookId?: string): Promise<Map<string, DeepnoteOutput[]> | undefined> {
         logger.debug(`[Snapshot] readSnapshot called for projectId=${projectId}, notebookId=${notebookId}`);
@@ -482,8 +471,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
         logger.debug(`[Snapshot] Searching ${workspaceFolders.length} workspace folder(s) for snapshots`);
 
-        // Key the glob on projectId only — the percent-encoded notebook id must NOT be embedded so
-        // that legacy (no-notebook-id) snapshots are still discovered and can serve as a fallback.
+        // Key on projectId only so legacy (no-notebook-id) snapshots are still discovered as a fallback.
         const glob = `**/snapshots/*_${projectId}_*.snapshot.deepnote`;
         const candidates: Array<{ uri: Uri; notebookId?: string; timestamp: string }> = [];
 
@@ -499,8 +487,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
                     continue;
                 }
 
-                // Drop OTHER notebooks' scoped files; keep this notebook's scoped files and all
-                // legacy no-notebook-id files (the latter act as a backward-compatible fallback).
+                // Drop other notebooks' scoped files; keep this notebook's and legacy no-id files.
                 if (notebookId && parsed.notebookId && parsed.notebookId !== notebookId) {
                     continue;
                 }
@@ -517,8 +504,8 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
         candidates.sort((a, b) => this.compareSnapshotCandidates(a, b, notebookId));
 
-        // Walk the ranked candidates: skip a corrupt file or an empty-output `latest` (a block→[]
-        // mapping signals a save race) and continue; return the first candidate with real outputs.
+        // Return the first candidate with real outputs; skip corrupt files and empty-output
+        // `latest` snapshots (which signal a save race).
         for (const candidate of candidates) {
             let file: DeepnoteFile;
 
@@ -733,8 +720,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         if (state === NotebookCellExecutionState.Executing) {
             const startTime = Date.now();
 
-            // A new execution invalidates any deferred save armed by the previous run; the new
-            // run will re-arm on completion. This prevents writing a snapshot mid-execution.
+            // Cancel the previous run's deferred save so no snapshot is written mid-execution.
             this.cancelPendingSnapshotSave(notebookUri);
             this.recordCellExecutionStart(notebookUri, cellId, startTime);
         } else if (state === NotebookCellExecutionState.Idle) {
@@ -817,9 +803,8 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     }
 
     /**
-     * Arms (or re-arms) the output-settled deferred snapshot save for a notebook. The save flushes
-     * once `outputSettleQuietPeriodMs` elapses with no further output/metadata-bearing change, but
-     * never later than `outputSettleMaxWaitMs` from the first arm.
+     * Arms (or re-arms) the deferred snapshot save, flushing once outputs settle but no later than
+     * `outputSettleMaxWaitMs` from the first arm.
      */
     private armSnapshotSave(notebookUri: string): void {
         const now = Date.now();
@@ -886,8 +871,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             return;
         }
 
-        // Defer the actual write until outputs settle (see armSnapshotSave). A new execution
-        // re-entering the executing state, notebook close, or disposal cancels the pending save.
+        // Defer the write until outputs settle; a new execution, close, or disposal cancels it.
         this.armSnapshotSave(notebookUri);
     }
 
@@ -928,10 +912,8 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             return;
         }
 
-        // Fetch the cached project with an exact (projectId, notebookId) lookup. Sibling files share a
-        // project.id, so a project-only lookup can return a different sibling's project whose notebooks
-        // do not contain this notebookId — which would silently skip the snapshot write for every
-        // sibling but the first one cached.
+        // Exact (projectId, notebookId) lookup: sibling files share a project.id, so a project-only
+        // lookup could return the wrong sibling and silently skip this notebook's snapshot.
         const originalProject = this.notebookManager?.getProjectForNotebook(projectId, notebookId);
 
         if (!originalProject) {
@@ -940,9 +922,8 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             return;
         }
 
-        // Use the exact saved notebook's own URI (resolved above) so the snapshot lands in this
-        // file's sibling `snapshots/` dir. A projectId-only lookup could pick a different open
-        // sibling sharing this project.id and write the snapshot next to the wrong file.
+        // Use the saved notebook's own URI so the snapshot lands next to this file (not a sibling
+        // sharing the project.id).
         const projectUri = notebook.uri;
 
         const deepnoteNotebook = originalProject.project.notebooks?.find((nb) => nb.id === notebookId);
@@ -970,12 +951,10 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
                 snapshotNotebook.blocks = blocks as DeepnoteBlock[];
             }
 
-            // The snapshot filename is scoped by the file's snapshot notebook id (single-notebook file →
-            // its one notebook; [init, main] → the main notebook), falling back to the rendered
+            // Scope the filename by the file's snapshot notebook id, falling back to the rendered
             // notebook's metadata id for any unexpected multi-notebook shape.
             const snapshotNotebookId = resolveSnapshotNotebookId(snapshotProject) ?? notebookId;
 
-            // Detect "Run All" by checking if all code cells in the notebook were executed
             const state = this.executionStates.get(notebookUri);
             const totalCodeCells = notebook.getCells().filter((cell) => cell.kind === NotebookCellKind.Code).length;
             const isRunAll = state && state.blocksExecuted === totalCodeCells;
@@ -1012,20 +991,17 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
                 }
             }
         } catch (error) {
-            // Deferred fire-and-forget save: log and swallow so a snapshot build/write failure never
-            // becomes an unhandled rejection.
+            // Fire-and-forget save: swallow so a failure never becomes an unhandled rejection.
             logger.error(`[Snapshot] Failed to save deferred snapshot for ${notebookUri}`, error);
         } finally {
-            // Clear execution state so the next run starts fresh (even if the save above failed).
+            // Clear execution state so the next run starts fresh, even if the save above failed.
             this.clearExecutionState(notebookUri);
         }
     }
 
     /**
-     * Ranking comparator for open-time snapshot candidates (reimplemented locally from convert's
-     * `findSnapshotsForProject` ordering, since the path-bound convert helper cannot run here):
-     * the requested notebook's scoped match first, then `latest`, then newest timestamp. Legacy
-     * no-notebook-id entries are NOT dropped — they sort after the scoped match as a fallback.
+     * Ranks open-time snapshot candidates: the requested notebook's scoped match first, then
+     * `latest`, then newest timestamp. Legacy no-notebook-id entries sort after as a fallback.
      */
     private compareSnapshotCandidates(
         a: { notebookId?: string; timestamp: string },

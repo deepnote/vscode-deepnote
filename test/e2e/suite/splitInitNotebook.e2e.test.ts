@@ -1,15 +1,9 @@
 /**
- * End-to-end UI test (ExTester / vscode-extension-tester) for splitting a legacy multi-notebook
- * `.deepnote` file that declares an INIT notebook. The `etl-pipeline.deepnote` fixture holds three
- * notebooks — an init notebook ("Init", referenced by `project.initNotebookId`) plus two mains
- * ("Extract", "Transform"). Splitting must emit the init notebook as its own single-notebook sibling
- * and leave every main sibling still referencing the init notebook via `initNotebookId`.
- *
- * The split is destructive, so it runs once in `before` (hooks do not retry); each `it` asserts one
- * property of the result. Screenshots are captured into `test/e2e/screenshots/splitInitNotebook/`.
- *
- * Runs without a Python kernel: splitting is purely file-structural. (The init notebook actually
- * RUNNING in a kernel is covered separately.)
+ * E2E test for splitting a legacy multi-notebook `.deepnote` file that declares an INIT notebook.
+ * The `etl-pipeline.deepnote` fixture holds an init notebook ("Init", referenced by
+ * `project.initNotebookId`) plus two mains ("Extract", "Transform"). The split must emit the init
+ * notebook as its own sibling and leave every main sibling still referencing it via `initNotebookId`.
+ * The split is destructive, so it runs once in `before` (hooks do not retry).
  */
 
 import { expect } from 'chai';
@@ -36,13 +30,11 @@ const SPLIT_DONE = /Split into \d+ files\./i;
 // How long to wait while confirming a single-notebook file does NOT raise the split prompt.
 const NO_SPLIT_PROMPT_TIMEOUT = 6_000;
 
-// The notebook id referenced by `project.initNotebookId` in the fixture.
+// The fixture's `project.initNotebookId`; the init sibling's notebook id must equal this.
 const INIT_NOTEBOOK_ID = 'b-nb-init';
 
-// The init sibling: its single notebook IS the init notebook (id === initNotebookId).
 const INIT_SIBLING = { file: 'etl-pipeline-init.deepnote', notebookName: 'Init' };
 
-// The main siblings: each is a single-notebook file that still references the init notebook.
 const MAIN_SIBLINGS: ReadonlyArray<{ file: string; notebookName: string }> = [
     { file: 'etl-pipeline-extract.deepnote', notebookName: 'Extract' },
     { file: 'etl-pipeline-transform.deepnote', notebookName: 'Transform' }
@@ -61,7 +53,7 @@ async function showView(title: string): Promise<void> {
     }
 }
 
-/** Counts the notebooks in a serialized `.deepnote` file (each notebook entry starts with `- blocks:`). */
+/** Counts notebooks in serialized YAML; each notebook entry starts with `- blocks:`. */
 function notebookCount(yaml: string): number {
     return (yaml.match(/^\s*- blocks:/gm) ?? []).length;
 }
@@ -86,17 +78,15 @@ describe('Deepnote — splitting a legacy multi-notebook .deepnote file that has
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
-        // Open the temp dir as the workspace root FIRST (the serializer reads snapshots relative to a
-        // workspace folder; without one, deserialization blocks headlessly). Opening a folder reloads
-        // the window, so re-wait for the workbench.
+        // Open the workspace folder FIRST: the serializer reads snapshots relative to it, and
+        // without one deserialization blocks headlessly.
         await openFolderViaDialog(tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         await showView('Deepnote');
         await screenshot('before-open-explorer');
 
-        // Open the multi-notebook file. Deserialize renders the first non-init notebook (Extract);
-        // the splitter fires on the open event and raises the split prompt.
+        // Opening the multi-notebook file fires the splitter on the open event, raising the prompt.
         await openWorkspaceFile(FIXTURE);
         await driver.wait(
             async () => (await new EditorView().getOpenEditorTitles()).some((title) => title.includes(FIXTURE)),

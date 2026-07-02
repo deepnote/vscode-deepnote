@@ -1,11 +1,7 @@
 /**
- * End-to-end UI test (ExTester / vscode-extension-tester) for renaming a Deepnote project from the
- * Explorer. A project's siblings share one `project.id`; renaming the project group must fan the new
- * name out to EVERY sibling `.deepnote` file on disk — including ones that were never opened. Uses
- * the three "Marketing" siblings (one shared project.id), none of which is opened as a notebook.
- *
- * The rename runs once in `before`; each `it` asserts one property. Screenshots are captured into
- * `test/e2e/screenshots/projectRename/`. Runs without a Python kernel.
+ * E2E (ExTester): renaming a project group from the Explorer fans the new name out to EVERY sibling
+ * `.deepnote` file on disk (siblings share one `project.id`), including ones never opened. Runs
+ * without a Python kernel.
  */
 
 import { expect } from 'chai';
@@ -55,8 +51,7 @@ describe('Deepnote — renaming a project fans the new name out to every sibling
         await openFolderViaDialog(tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
-        // None of the notebooks is opened — only the tree is used, so this proves the rename reaches
-        // closed siblings on disk.
+        // Only the tree is used (no notebook opened), proving the rename reaches closed siblings on disk.
         const section = await getDeepnoteExplorerSection();
         await driver.wait(
             async () => (await readDeepnoteTreeRows(section)).some((row) => row.label === OLD_NAME && row.isGroup),

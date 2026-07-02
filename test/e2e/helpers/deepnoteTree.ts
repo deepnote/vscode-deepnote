@@ -78,9 +78,8 @@ export async function findDeepnoteLeaf(
 }
 
 /**
- * Right-clicks a tree item and invokes a context-menu command by label via raw DOM. This avoids
- * ExTester's ContextMenu model (whose lazy `.monaco-menu` re-query throws for modal-opening commands);
- * it matches the `.action-label` by exact text and clicks it with a precise mouse move+click.
+ * Right-clicks a tree item and invokes a context-menu command by label via raw DOM, avoiding
+ * ExTester's ContextMenu model (whose lazy re-query throws for modal-opening commands).
  */
 export async function selectDeepnoteContextMenu(item: ViewItem, command: string): Promise<void> {
     const driver = VSBrowser.instance.driver;

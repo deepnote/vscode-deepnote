@@ -1,12 +1,7 @@
 /**
- * End-to-end UI test (ExTester / vscode-extension-tester) for the edge case where a `.deepnote`
- * file's only notebook IS its init notebook (`project.initNotebookId` points at the sole notebook).
- * Such a file is still a single-notebook file, so opening it renders that notebook (as a fallback)
- * and does NOT raise the split prompt; the Explorer shows it with "0 notebooks" (the init notebook is
- * excluded from the count). Fixture: `bootstrap-only.deepnote` (its one notebook "Bootstrap" is the
- * init notebook).
- *
- * State is captured once in `before`; each `it` asserts one property. Runs without a Python kernel.
+ * E2E (ExTester): a `.deepnote` file whose only notebook IS its init notebook still opens as a
+ * single-notebook file (renders that notebook as a fallback, no split prompt), and the Explorer
+ * shows it with "0 notebooks" since the init notebook is excluded from the count.
  */
 
 import { expect } from 'chai';
@@ -72,9 +67,6 @@ describe('Deepnote — opening a file whose only notebook is the init notebook',
         await openFolderViaDialog(copy.tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
-        // Open the file — it should render its single (init) notebook as a fallback. Let a failed
-        // open throw so the whole suite fails loudly — otherwise the no-prompt / status-bar
-        // assertions could pass against a state that never materialized.
         await openWorkspaceFile(FIXTURE);
         await driver.wait(
             async () => (await new EditorView().getOpenEditorTitles()).some((title) => title.includes(FIXTURE)),
@@ -88,11 +80,9 @@ describe('Deepnote — opening a file whose only notebook is the init notebook',
 
         statusBarText = await readStatusBarText(NOTEBOOK_NAME);
 
-        // A single-notebook file must NOT raise the split prompt.
         const prompt = await waitForNotification(SPLIT_PROMPT, NO_SPLIT_PROMPT_TIMEOUT, false);
         splitPrompted = prompt !== undefined;
 
-        // The Explorer shows the file as a "0 notebooks" node (the init notebook is excluded).
         const section = await getDeepnoteExplorerSection();
         await driver
             .wait(async () => (await readDeepnoteTreeRows(section)).length > 0, TREE_LOAD_TIMEOUT)

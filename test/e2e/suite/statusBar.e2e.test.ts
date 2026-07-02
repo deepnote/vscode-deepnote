@@ -1,11 +1,7 @@
 /**
- * End-to-end UI test (ExTester / vscode-extension-tester) for the Deepnote notebook status-bar item.
- * When a Deepnote notebook is the active editor, the left status bar shows the active notebook's
- * name and clicking it copies the notebook's details to the clipboard; when a non-notebook editor is
- * focused the item is hidden. Fixture: `quick-notes.deepnote` (notebook "Quick Notes").
- *
- * State is captured once in `before`; each `it` asserts one property. Screenshots are captured into
- * `test/e2e/screenshots/statusBar/`. Runs without a Python kernel.
+ * E2E test for the Deepnote notebook status-bar item: when a Deepnote notebook is active the left
+ * status bar shows its name and clicking it copies the notebook details to the clipboard; when a
+ * non-notebook editor is focused the item is hidden. Fixture: `quick-notes.deepnote`.
  */
 
 import { expect } from 'chai';
@@ -30,7 +26,7 @@ const PROJECT_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const NOTEBOOK_ID = 'c-nb-main';
 const COPIED_TOAST = /Copied Deepnote notebook details to clipboard\./i;
 
-/** Finds the Deepnote status-bar item (the one whose text shows the active notebook name). */
+/** Finds the Deepnote status-bar item by the notebook name in its text. */
 async function findDeepnoteStatusItem() {
     const items = await new StatusBar().getItems().catch(() => []);
 
@@ -45,7 +41,7 @@ async function findDeepnoteStatusItem() {
     return undefined;
 }
 
-/** Reads the OS clipboard from the Electron renderer (empty string if unavailable under automation). */
+/** Reads the OS clipboard from the Electron renderer; empty string if unavailable under automation. */
 async function readClipboardViaRenderer(): Promise<string> {
     const text = await VSBrowser.instance.driver
         .executeAsyncScript(
@@ -74,14 +70,13 @@ describe('Deepnote — the active-notebook status bar item', function () {
 
         const copy = copyFixtureToTempDir(FIXTURE);
         cleanupTempDir = copy.cleanup;
-        // A scratch text file we can paste the clipboard into (a plain, non-notebook editor).
+        // A plain, non-notebook editor to paste the clipboard into (also serves the hidden-item check).
         fs.writeFileSync(path.join(copy.tempDir, SCRATCH_FILE), '');
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
         await openFolderViaDialog(copy.tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
-        // Open the notebook — the status bar item should show its name.
         await openWorkspaceFile(FIXTURE);
         await driver.wait(
             async () => (await new EditorView().getOpenEditorTitles()).some((title) => title.includes(FIXTURE)),
@@ -95,13 +90,11 @@ describe('Deepnote — the active-notebook status bar item', function () {
         itemTooltip = item ? (await item.getAttribute('aria-label').catch(() => '')) ?? '' : '';
         await screenshot('notebook-focused');
 
-        // Click the item to copy the notebook details, then confirm the toast.
         await item?.click().catch((error) => console.warn('[status] click status item:', error));
         const toast = await waitForNotification(COPIED_TOAST, WORKBENCH_TIMEOUT, false);
         copyToastShown = toast !== undefined;
 
-        // Read the clipboard: prefer the renderer's clipboard API; otherwise paste into the scratch
-        // text file (a plain, NON-notebook editor — which also serves the hidden-item check below).
+        // Prefer the renderer's clipboard API; fall back to pasting into the scratch editor below.
         clipboardText = await readClipboardViaRenderer();
 
         await openWorkspaceFile(SCRATCH_FILE);

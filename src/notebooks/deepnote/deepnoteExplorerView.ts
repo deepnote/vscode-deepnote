@@ -24,10 +24,9 @@ import { isSnapshotFile } from './snapshots/snapshotFiles';
 /**
  * Manages the Deepnote explorer tree view and related commands.
  *
- * Under single-notebook-per-file, the tree groups sibling `.deepnote` files by `project.id`.
- * Project-scoped commands (rename/delete/export project, add notebook) operate over EVERY sibling
- * file in the group; notebook-scoped commands operate on a single file (single-notebook leaf) or a
- * legacy in-file notebook child. New/duplicated notebooks become NEW SIBLING FILES via the factory.
+ * The tree groups sibling `.deepnote` files by `project.id`: project-scoped commands operate over
+ * every sibling in the group, notebook-scoped commands over a single file or legacy in-file child,
+ * and new/duplicated notebooks become new sibling files via the factory.
  */
 
 @injectable()
@@ -55,19 +54,15 @@ export class DeepnoteExplorerView {
         this.registerCommands();
     }
 
-    /**
-     * Refreshes the full Deepnote explorer tree.
-     * Exposed so callers outside the explorer (e.g. the multi-notebook splitter) can
-     * trigger a refresh without reaching into the private tree data provider.
-     */
+    /** Refreshes the full tree; exposed so outside callers (e.g. the splitter) needn't reach into the provider. */
     public refresh(): void {
         this.treeDataProvider.refresh();
     }
 
     /**
-     * Creates a new sibling `.deepnote` file containing a single new notebook, derived from a source
-     * project file, then opens it. Never appends to `project.notebooks`.
-     * @param sourceUri The URI of a sibling file used as the source for project-level metadata
+     * Creates a new sibling `.deepnote` file with a single new notebook, then opens it.
+     * Never appends to `project.notebooks`.
+     * @param sourceUri A sibling file used as the source for project-level metadata
      * @param existingNames Notebook names already in use across the project group (for uniqueness)
      * @returns Object with notebook id and name if successful, or null if aborted/failed
      */
@@ -203,11 +198,9 @@ export class DeepnoteExplorerView {
     }
 
     /**
-     * Deletes a `.deepnote` file, honouring the user's `files.enableTrash` setting exactly as VS Code's
-     * own Explorer does: move to the OS trash when enabled (recoverable), delete permanently when
-     * disabled. The OS trash is not reliably available everywhere (headless CI, containers, filesystems
-     * with no freedesktop trash spec, where the operation can hang or fail), so environments without it —
-     * including the E2E suite — set `files.enableTrash` to false and get a dependency-free permanent delete.
+     * Deletes a `.deepnote` file, honouring `files.enableTrash` like VS Code's Explorer. The OS trash
+     * isn't reliably available everywhere (headless CI, containers), so those environments set it false
+     * for a dependency-free permanent delete.
      */
     private async deleteNotebookFile(fileUri: Uri): Promise<void> {
         const useTrash = workspace.getConfiguration('files').get<boolean>('enableTrash', true);
@@ -298,7 +291,6 @@ export class DeepnoteExplorerView {
         }
 
         try {
-            // Rename each sibling .deepnote file in the project group.
             for (const { filePath } of group.files) {
                 try {
                     const fileUri = Uri.file(filePath);
@@ -418,9 +410,8 @@ export class DeepnoteExplorerView {
     }
 
     /**
-     * Resolve the notebook a notebook-scoped command targets. For a legacy `Notebook` child the
-     * `context.notebookId` selects it; for a single-notebook leaf file it is the file's only
-     * non-init notebook.
+     * Resolve the notebook a notebook-scoped command targets: `context.notebookId` for a legacy
+     * child, otherwise the file's only non-init notebook.
      */
     private resolveTargetNotebook(treeItem: DeepnoteTreeItem, projectData: DeepnoteFile): DeepnoteNotebook | undefined {
         if (treeItem.context.notebookId) {
@@ -451,9 +442,8 @@ export class DeepnoteExplorerView {
             }
 
             for (const fileUri of files) {
-                // Skip snapshot sidecars (`*.snapshot.deepnote`): they are full project clones, so
-                // their stale notebook names would otherwise pollute the uniqueness set. The tree
-                // provider filters them the same way.
+                // Skip snapshot sidecars: they are full project clones whose stale notebook names
+                // would otherwise pollute the uniqueness set.
                 if (isSnapshotFile(fileUri)) {
                     continue;
                 }
@@ -479,11 +469,7 @@ export class DeepnoteExplorerView {
         return names;
     }
 
-    /**
-     * Generates a suggested unique notebook name based on existing names in the project group.
-     * @param existingNames Names already in use across the project group
-     * @returns A unique suggested notebook name
-     */
+    /** Generates a unique suggested notebook name given the names already in use. */
     private generateSuggestedNotebookName(existingNames: Set<string>): string {
         let nextNumber = existingNames.size + 1;
         let suggestedName = `Notebook ${nextNumber}`;
@@ -532,12 +518,7 @@ export class DeepnoteExplorerView {
         };
     }
 
-    /**
-     * Prompts the user for a notebook name with validation.
-     * @param suggestedName The default suggested name
-     * @param existingNames Names already in use (rejected as duplicates)
-     * @returns The entered notebook name, or undefined if cancelled
-     */
+    /** Prompts the user for a notebook name, rejecting empty and duplicate names. */
     private async promptForNotebookName(
         suggestedName: string,
         existingNames: Set<string>
@@ -560,11 +541,7 @@ export class DeepnoteExplorerView {
         });
     }
 
-    /**
-     * Creates a new notebook with an initial empty code block.
-     * @param notebookName The name for the new notebook
-     * @returns The created notebook with a unique ID and initial block
-     */
+    /** Creates a new notebook with a fresh id and a single empty code block. */
     private createNotebookWithFirstBlock(notebookName: string): DeepnoteNotebook {
         const notebookId = uuidUtils.generateUuid();
         const firstBlock: DeepnoteBlock = {
@@ -830,8 +807,7 @@ export class DeepnoteExplorerView {
     }
 
     private async checkJupyterImportTargetsAvailable(jupyterUris: readonly Uri[], folderUri: Uri): Promise<boolean> {
-        // Each Jupyter notebook imports into its own .deepnote sibling; don't overwrite an existing
-        // file or let two selected notebooks with the same base name clobber each other.
+        // Guard against overwriting an existing file or two same-basename selections clobbering each other.
         const seenNames = new Set<string>();
 
         for (const jupyterUri of jupyterUris) {
@@ -941,7 +917,6 @@ export class DeepnoteExplorerView {
                 }
             }
 
-            // Check that each Jupyter import target is available (one .deepnote per notebook).
             if (!(await this.checkJupyterImportTargetsAvailable(jupyterUris, workspaceFolder.uri))) {
                 return;
             }
@@ -956,7 +931,6 @@ export class DeepnoteExplorerView {
                 await workspace.fs.writeFile(targetUri, content);
             }
 
-            // Convert jupyter files — each becomes its own single-notebook .deepnote file.
             await this.convertJupyterUrisToDeepnoteFiles(jupyterUris, workspaceFolder.uri);
 
             const numberOfNotebooks = jupyterUris.length + deepnoteUris.length;
@@ -1007,7 +981,6 @@ export class DeepnoteExplorerView {
         try {
             const workspaceFolder = workspace.workspaceFolders[0];
 
-            // Each Jupyter notebook becomes its own single-notebook .deepnote file.
             if (!(await this.checkJupyterImportTargetsAvailable(fileUris, workspaceFolder.uri))) {
                 return;
             }
@@ -1060,10 +1033,7 @@ export class DeepnoteExplorerView {
         }
     }
 
-    /**
-     * Exports a single notebook (single-notebook leaf file or legacy in-file notebook) to Jupyter.
-     * @param treeItem The tree item representing a notebook
-     */
+    /** Exports a single notebook (single-notebook leaf or legacy in-file notebook) to Jupyter. */
     private async exportNotebook(treeItem: DeepnoteTreeItem): Promise<void> {
         if (!this.isNotebookScoped(treeItem)) {
             return;

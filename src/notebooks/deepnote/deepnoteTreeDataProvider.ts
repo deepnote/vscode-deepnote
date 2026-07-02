@@ -36,15 +36,10 @@ export function compareTreeItemsByLabel(a: DeepnoteTreeItem, b: DeepnoteTreeItem
 }
 
 /**
- * Tree data provider for the Deepnote explorer view.
- *
- * The tree is grouped by `project.id`: root → `ProjectGroup` (one per distinct project id) →
- * `ProjectFile` (one per sibling file) → `Notebook` (legacy multi-notebook files only).
- *
- * `cachedProjects` is keyed by **file path**; the `ProjectGroup` layer is re-derived from that
- * cache on every read (group membership is "files whose `project.id` matches"). Because sibling
- * files deliberately share one `project.id`, every refresh fires a full-tree change rather than a
- * per-item scoped change.
+ * Tree data provider for the Deepnote explorer view: root → `ProjectGroup` (one per `project.id`)
+ * → `ProjectFile` → `Notebook` (legacy multi-notebook files only). Groups are re-derived from the
+ * file-path-keyed `cachedProjects` on each read; since siblings share one `project.id`, refreshes
+ * fire a full-tree change rather than a scoped one.
  */
 export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeItem> {
     private _onDidChangeTreeData: EventEmitter<DeepnoteTreeItem | undefined | null | void> = new EventEmitter<
@@ -82,10 +77,8 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
     }
 
     /**
-     * Refresh a single project file in the tree by evicting its cache entry and firing a full-tree
-     * change. A full-tree fire (not a scoped `fire(item)`) is required because adding/removing/
-     * renaming one file can move it between groups or change a group's collapse state/label.
-     * @param filePath The path to the project file to refresh
+     * Refresh a single project file. Fires a full-tree change (not a scoped one) because a file
+     * change can move it between groups or alter a group's collapse state/label.
      */
     public refreshProject(filePath: string): void {
         this.cachedProjects.delete(filePath);
@@ -94,11 +87,8 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
     }
 
     /**
-     * Refresh every sibling file of a project by evicting ALL `cachedProjects` entries whose
-     * `project.id` matches, then firing a full-tree change. Iterating all entries (never breaking
-     * on the first match) keeps the whole project group consistent when one sibling's notebook is
-     * renamed/deleted/duplicated.
-     * @param projectId The project ID whose sibling files should be refreshed
+     * Refresh every sibling file of a project. Evicts ALL matching `cachedProjects` entries (never
+     * breaking on the first match) so the whole group stays consistent.
      */
     public refreshNotebook(projectId: string): void {
         for (const [filePath, project] of this.cachedProjects) {
@@ -206,11 +196,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         }
     }
 
-    /**
-     * Build the root-level `ProjectGroup` nodes: one per distinct `project.id` across all
-     * `.deepnote` files, sorted by project name. Single-file groups are expanded; multi-file
-     * groups are collapsed.
-     */
+    /** Build the root-level `ProjectGroup` nodes; single-file groups are expanded. */
     private async getProjectGroups(): Promise<DeepnoteTreeItem[]> {
         const projectsByPath = await this.loadAllProjects();
         const groups = this.buildProjectGroups(projectsByPath);
@@ -245,10 +231,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         return groupItems;
     }
 
-    /**
-     * Group the cached file→project entries by `project.id` into `ProjectGroupData`, sorted by
-     * project name. Files within a group are sorted by file path for stable ordering.
-     */
+    /** Group file→project entries by `project.id`; files sorted by path for stable ordering. */
     private buildProjectGroups(projectsByPath: Map<string, DeepnoteProject>): ProjectGroupData[] {
         const groupsById = new Map<string, ProjectGroupData>();
 
@@ -279,10 +262,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         return groups;
     }
 
-    /**
-     * Children of a `ProjectGroup`: one `ProjectFile` per sibling file. A single-notebook file is a
-     * leaf; a legacy multi-notebook file is collapsible into its notebooks.
-     */
+    /** Children of a `ProjectGroup`: one `ProjectFile` per sibling file. */
     private async getFilesForGroup(groupItem: DeepnoteTreeItem): Promise<DeepnoteTreeItem[]> {
         const group = groupItem.data as ProjectGroupData;
         const fileItems: DeepnoteTreeItem[] = [];
@@ -315,9 +295,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         return fileItems;
     }
 
-    /**
-     * Children of a legacy multi-notebook `ProjectFile`: one `Notebook` per non-init notebook.
-     */
+    /** Children of a legacy multi-notebook `ProjectFile`: one `Notebook` per non-init notebook. */
     private async getNotebooksForProjectFile(projectItem: DeepnoteTreeItem): Promise<DeepnoteTreeItem[]> {
         const project = projectItem.data as DeepnoteProject;
         const notebooks = getNonInitNotebooks(project);
@@ -346,10 +324,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         });
     }
 
-    /**
-     * Scan every workspace folder for `.deepnote` files (skipping snapshots) and populate
-     * `cachedProjects`. Returns the file→project map used to build groups.
-     */
+    /** Scan workspace folders for `.deepnote` files (skipping snapshots) into `cachedProjects`. */
     private async loadAllProjects(): Promise<Map<string, DeepnoteProject>> {
         for (const workspaceFolder of workspace.workspaceFolders || []) {
             const pattern = new RelativePattern(workspaceFolder, '**/*.deepnote');
@@ -418,7 +393,6 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
                 return;
             }
 
-            // New file created: evict by path (no-op if absent) and do a full-tree refresh.
             this.cachedProjects.delete(uri.path);
             this.fileItemCache.delete(uri.path);
             this._onDidChangeTreeData.fire(undefined);
@@ -429,7 +403,6 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
                 return;
             }
 
-            // File deleted: evict by path and do a full-tree refresh.
             this.cachedProjects.delete(uri.path);
             this.fileItemCache.delete(uri.path);
             this._onDidChangeTreeData.fire(undefined);

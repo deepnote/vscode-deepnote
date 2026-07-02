@@ -51,19 +51,13 @@ else:
     print("There's no requirements.txt, so nothing to install.")`.trim();
 
 /**
- * Service responsible for running a project's init notebook in a kernel.
- *
- * The init notebook lives in its own sibling `.deepnote` file (referenced by the main
- * file's `project.initNotebookId`). Its setup blocks (typically pip installs) are run in
- * the notebook's kernel on kernel start, and re-run after a kernel restart (a restart loses
- * all in-kernel state). "Has the init already run" is tracked per kernel — not per project
- * or per notebook URI — so the same-environment restart case re-initializes correctly.
+ * Runs a project's init notebook (from its sibling `.deepnote` file, referenced by
+ * `project.initNotebookId`) in the kernel on start, and again on restart. Tracked per kernel — not
+ * per project/URI — so a same-environment restart re-initializes correctly.
  */
 @injectable()
 export class DeepnoteInitNotebookRunner implements IDeepnoteInitNotebookRunner, IExtensionSyncActivationService {
-    // Tracks kernels that have already run init in their current lifetime. A fresh kernel is
-    // not in the set (init runs, then it is added); a restart re-runs unconditionally and
-    // re-marks; on kernel dispose the entry is collected automatically.
+    // Kernels that have already run init in their current lifetime; entries are collected on dispose.
     private readonly initRunByKernel = new WeakSet<IKernel>();
 
     constructor(
@@ -73,8 +67,7 @@ export class DeepnoteInitNotebookRunner implements IDeepnoteInitNotebookRunner, 
     ) {}
 
     public activate(): void {
-        // A fresh kernel start runs init once (gated by the WeakSet); an in-place restart
-        // fires onDidRestartKernel (not onDidStartKernel) and must always re-run init.
+        // A restart fires onDidRestartKernel (not onDidStartKernel) and must always re-run init.
         this.kernelProvider.onDidStartKernel(this.onDidStartKernel, this, this.disposables);
         this.kernelProvider.onDidRestartKernel(this.onDidRestartKernel, this, this.disposables);
     }
@@ -86,14 +79,12 @@ export class DeepnoteInitNotebookRunner implements IDeepnoteInitNotebookRunner, 
 
         await this.runInitForKernel(kernel);
 
-        // Mark this kernel as initialized even when no valid sibling init was found — that
-        // only affects THIS kernel; a new kernel re-scans, so a later-added/fixed sibling is
-        // still picked up.
+        // Mark even when no init was found — only affects THIS kernel; a new kernel re-scans.
         this.initRunByKernel.add(kernel);
     }
 
     private async onDidRestartKernel(kernel: IKernel): Promise<void> {
-        // A restart loses all in-kernel state, so re-run init unconditionally and re-mark.
+        // A restart loses all in-kernel state, so re-run init unconditionally.
         await this.runInitForKernel(kernel);
         this.initRunByKernel.add(kernel);
     }
@@ -130,8 +121,6 @@ export class DeepnoteInitNotebookRunner implements IDeepnoteInitNotebookRunner, 
 
             const initNotebook = await this.findSiblingInitNotebook(notebook, projectId, initNotebookId);
             if (!initNotebook) {
-                // No valid sibling init found — log and skip. Do NOT permanently mark init as
-                // run beyond this kernel, so a later-added/fixed sibling is picked up next time.
                 logger.warn(
                     `No valid sibling init file found for project ${projectId} (initNotebookId ${initNotebookId}), skipping init`
                 );
@@ -144,9 +133,7 @@ export class DeepnoteInitNotebookRunner implements IDeepnoteInitNotebookRunner, 
                 }" (${initNotebookId}) for project ${projectId} in kernel for ${getDisplayPath(notebook.uri)}`
             );
 
-            // Tie the init run to the notebook's lifecycle: if the user closes the notebook
-            // mid-init, cancel so the remaining init blocks/progress stop. This is per-run state
-            // and must be cleaned up when the run finishes — do NOT register it in `disposables`.
+            // Cancel if the notebook is closed mid-init. Per-run state — do NOT register in `disposables`.
             const cts = new CancellationTokenSource();
             const closeListener = workspace.onDidCloseNotebookDocument((closedNotebook) => {
                 if (closedNotebook.uri.toString() === notebook.uri.toString()) {
@@ -174,14 +161,9 @@ export class DeepnoteInitNotebookRunner implements IDeepnoteInitNotebookRunner, 
     }
 
     /**
-     * Finds the init notebook in its sibling `.deepnote` file.
-     *
-     * Scans the directory containing `notebook.uri` for `.deepnote` files (ignoring snapshot
-     * files), parses each, and returns the single notebook of the first file that is a valid
-     * init source for this project (same `project.id`, exactly one notebook whose `id`
-     * matches `initNotebookId`).
-     *
-     * @returns The init notebook, or undefined when no valid sibling init is found.
+     * Scans sibling `.deepnote` files (skipping snapshots) and returns the single notebook of the
+     * first valid init source (same `project.id`, one notebook matching `initNotebookId`), or
+     * undefined if none.
      */
     private async findSiblingInitNotebook(
         notebook: NotebookDocument,
@@ -212,8 +194,7 @@ export class DeepnoteInitNotebookRunner implements IDeepnoteInitNotebookRunner, 
                     return candidate.project.notebooks[0];
                 }
             } catch (error) {
-                // Per-iteration error handling: a single unreadable/invalid file must not
-                // stop the scan of the rest.
+                // One unreadable/invalid file must not stop the scan of the rest.
                 logger.warn(`Failed to read candidate init file ${getDisplayPath(candidateUri)}:`, error);
             }
         }

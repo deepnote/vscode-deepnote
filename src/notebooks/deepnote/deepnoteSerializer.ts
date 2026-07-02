@@ -63,8 +63,6 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
     /**
      * Deserializes a Deepnote YAML file into VS Code notebook format.
      * Parses YAML and converts the selected notebook's blocks to cells.
-     * A .deepnote file holds a single notebook; the first non-init notebook is rendered
-     * (falling back to the init notebook only when it is the file's only notebook).
      * @param content Raw file content as bytes
      * @param token Cancellation token (unused)
      * @returns Promise resolving to notebook data
@@ -97,8 +95,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 throw new Error('Deepnote project contains no notebooks.');
             }
 
-            // A .deepnote file holds a single notebook. Render the first non-init notebook,
-            // falling back to the init notebook only when it is the only notebook in the file.
+            // A .deepnote file holds a single notebook; render it.
             const selectedNotebook = this.findDefaultNotebook(deepnoteFile);
 
             if (!selectedNotebook) {
@@ -208,8 +205,6 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             const projectId = data.metadata?.deepnoteProjectId;
             const notebookId = data.metadata?.deepnoteNotebookId;
 
-            // Resolve the target notebook from the document metadata alone. Both ids must be
-            // present; the file holds a single notebook keyed by this exact (projectId, notebookId).
             if (!projectId || !notebookId) {
                 throw new Error('Cannot determine which notebook to save');
             }
@@ -287,9 +282,8 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
             logger.debug('SerializeNotebook: Cloned blocks, computing snapshotHash');
 
-            // Compute snapshot hash from all execution-affecting factors. convert's computeSnapshotHash
-            // is synchronous; a one-time hash-value change vs the prior local impl is acceptable (the
-            // field is stripped on serialize and recomputed each save).
+            // A one-time hash-value change vs the prior local impl is acceptable: the field is
+            // stripped on serialize and recomputed each save.
             (originalProject.metadata as { snapshotHash?: string }).snapshotHash = computeSnapshotHash(originalProject);
 
             // Update modifiedAt conditionally based on snapshot mode
@@ -420,18 +414,15 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
     }
 
     /**
-     * Detects whether actual content has changed between two project versions.
-     * A .deepnote file holds a single notebook, so this compares that one notebook's
-     * notebook-level fields and block content (sources, types, and IDs) while ignoring
-     * outputs, execution metadata, and timestamps.
+     * Detects whether actual content has changed for the edited notebook: notebook-level fields
+     * and block content (sources, types, IDs), ignoring outputs, execution metadata, and timestamps.
      * @param newProject The project with potential changes
      * @param originalProject The stored original project
      * @returns true if content has changed, false otherwise
      */
     private detectContentChanges(newProject: DeepnoteFile, originalProject: DeepnoteFile, notebookId: string): boolean {
-        // Match the edited notebook by id rather than a fixed [0] slot. For a single-notebook file
-        // these coincide, but for a legacy [init, main] file the rendered/edited notebook is not at
-        // index 0, so comparing [0] (the init) would miss real edits and wrongly preserve modifiedAt.
+        // Match the edited notebook by id, not a fixed [0] slot: in a legacy [init, main] file the
+        // edited notebook isn't at index 0, so comparing [0] would miss edits and preserve modifiedAt.
         const newNotebook = newProject.project.notebooks.find((nb) => nb.id === notebookId);
         const originalNotebook = originalProject.project.notebooks.find((nb) => nb.id === notebookId);
 
@@ -474,10 +465,8 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
     }
 
     /**
-     * Finds the notebook to render: the first non-init notebook, falling back to the
-     * first notebook when the only notebook in the file is the init notebook.
-     * @param file The parsed Deepnote file
-     * @returns The notebook to render, or undefined if the file has no notebooks
+     * Finds the notebook to render: the first non-init notebook, falling back to the first
+     * notebook when the only one in the file is the init notebook.
      */
     private findDefaultNotebook(file: DeepnoteFile): DeepnoteNotebook | undefined {
         const { notebooks, initNotebookId } = file.project;

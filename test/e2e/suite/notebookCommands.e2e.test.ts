@@ -1,19 +1,10 @@
 /**
- * End-to-end UI test (ExTester / vscode-extension-tester) for the notebook-management commands that
- * create / rename / delete SIBLING `.deepnote` files, driven through the real VS Code UI. Uses the
- * three "Marketing" siblings (one shared project.id) in one workspace:
- *   - New Notebook (notebook editor / command)      -> a new single-notebook sibling file
- *   - Add Notebook (project group context menu)     -> a new single-notebook sibling file
- *   - Duplicate Notebook (leaf context menu)        -> a new sibling with a fresh copy of the notebook
- *   - Rename Notebook (leaf context menu)           -> renames the notebook INSIDE the file, not the file
- *   - Delete Notebook (leaf context menu, modal)    -> deletes the whole single-notebook file
- *
- * Because the sibling filename is derived (`{fileStem}-{slug}.deepnote`), assertions check the
- * notebook NAME inside the resulting files rather than exact filenames. Runs without a Python kernel.
- *
- * NOTE: Delete removes the whole single-notebook file, honouring `files.enableTrash` like VS Code's own
- * Explorer. The E2E settings set `files.enableTrash: false`, so the delete is permanent and needs no
- * trash-capable filesystem (the OS trash is not reliably available headless/in containers).
+ * E2E test for the notebook-management commands (New / Add / Duplicate / Rename / Delete Notebook)
+ * that create, rename, and delete sibling `.deepnote` files. Uses three "Marketing" siblings (one
+ * shared project.id) in one workspace. Since the sibling filename is derived
+ * (`{fileStem}-{slug}.deepnote`), assertions check the notebook NAME inside the files, not filenames.
+ * The E2E settings set `files.enableTrash: false`, so Delete is permanent (OS trash is unreliable
+ * headless/in containers).
  */
 
 import { expect } from 'chai';
@@ -92,12 +83,11 @@ async function readRows(section: Awaited<ReturnType<typeof getExplorerSection>>)
     return rows;
 }
 
-/** Finds the Marketing project group tree item. */
 async function findGroup(section: Awaited<ReturnType<typeof getExplorerSection>>): Promise<ViewItem | undefined> {
     return (await readRows(section)).find((row) => row.label === GROUP && row.isGroup)?.item;
 }
 
-/** Expands the Marketing group, then finds a notebook leaf by name. */
+/** Expands the Marketing group first, then finds a notebook leaf by name. */
 async function findLeaf(
     section: Awaited<ReturnType<typeof getExplorerSection>>,
     label: string
@@ -110,9 +100,8 @@ async function findLeaf(
 }
 
 /**
- * Right-clicks a tree item and invokes a context-menu command by label. Uses raw DOM (not ExTester's
- * ContextMenu model, whose lazy `.monaco-menu` re-query throws for modal-opening commands): right-click
- * the item, wait for the menu label, then click it with a precise mouse move+click.
+ * Right-clicks a tree item and invokes a context-menu command by label via raw DOM, since ExTester's
+ * ContextMenu model re-queries `.monaco-menu` lazily and throws for modal-opening commands.
  */
 async function contextSelect(item: ViewItem, command: string): Promise<void> {
     const driver = VSBrowser.instance.driver;
@@ -142,7 +131,6 @@ async function contextSelect(item: ViewItem, command: string): Promise<void> {
     await driver.actions().move({ origin: menuItem }).click().perform();
 }
 
-/** True if any `.deepnote` file in `dir` contains a notebook named `notebookName`. */
 function hasFileWithNotebookName(dir: string, notebookName: string): boolean {
     return fs
         .readdirSync(dir)
@@ -232,7 +220,6 @@ describe('Deepnote — notebook-management commands create and remove sibling fi
             hasFileWithNotebookName(tempDir, 'Overview (Copy)'),
             'a sibling file holding "Overview (Copy)"'
         ).to.equal(true);
-        // The original file is untouched.
         expect(fs.existsSync(path.join(tempDir, 'marketing-overview.deepnote')), 'original overview file').to.equal(
             true
         );
@@ -251,7 +238,6 @@ describe('Deepnote — notebook-management commands create and remove sibling fi
         const toast = await waitForNotification(/Notebook renamed to: Campaign Report/i, WORKBENCH_TIMEOUT, true);
         expect(toast, 'renamed toast').to.not.equal(undefined);
 
-        // The FILE name is unchanged; only the notebook's `name` field changed.
         const filePath = path.join(tempDir, 'marketing-campaigns.deepnote');
         expect(fs.existsSync(filePath), 'marketing-campaigns.deepnote still exists').to.equal(true);
         expect(fs.readFileSync(filePath, 'utf8'), 'notebook renamed inside the file').to.contain(
@@ -266,10 +252,8 @@ describe('Deepnote — notebook-management commands create and remove sibling fi
 
         await contextSelect(metrics!, 'Delete Notebook');
 
-        // Confirm the `{modal:true}` dialog via raw DOM (ExTester's ModalDialog matches buttons by a
-        // `title` attribute the dialog doesn't set). Guarding on the message naming "Metrics" targets the
-        // right dialog. With `files.enableTrash: false` (E2E settings) the delete is permanent, so the
-        // file is removed without needing a trash-capable filesystem.
+        // Confirm the `{modal:true}` dialog via raw DOM: ExTester's ModalDialog matches buttons by a
+        // `title` attribute the dialog doesn't set; the message guard targets the right dialog.
         await confirmModalDialog('Delete', { messageIncludes: 'Metrics' });
 
         const toast = await waitForNotification(/Notebook deleted: Metrics/i, WORKBENCH_TIMEOUT, true);

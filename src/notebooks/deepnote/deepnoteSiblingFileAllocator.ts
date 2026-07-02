@@ -1,17 +1,12 @@
 import { Uri, workspace } from 'vscode';
 
-/**
- * Upper bound on the number of `-N` suffix attempts when resolving a collision-free
- * sibling filename. Mirrors the internal cap used by `@deepnote/convert`'s splitter.
- */
+// Upper bound on `-N` suffix attempts; mirrors the cap used by `@deepnote/convert`'s splitter.
 export const MAX_SIBLING_ALLOCATION_ATTEMPTS = 10_000;
 
 const DEEPNOTE_EXTENSION = '.deepnote';
 
 /**
- * Default `exists` probe backed by `workspace.fs.stat`. A throwing stat (file not found,
- * permission error, etc.) is treated as "does not exist".
- * @param uri The URI to probe
+ * Default `exists` probe backed by `workspace.fs.stat`; a throwing stat is treated as "does not exist".
  */
 export async function deepnoteFileExists(uri: Uri): Promise<boolean> {
     try {
@@ -24,24 +19,10 @@ export async function deepnoteFileExists(uri: Uri): Promise<boolean> {
 }
 
 /**
- * Resolve a collision-free sibling URI for a desired basename in `parentDir`.
- *
- * `desiredFilename` is a full basename including the `.deepnote` extension (e.g. convert's
- * `entry.outputFilename`, or `${stem}-${slug}.deepnote`). On a clash, a numeric suffix is
- * inserted immediately before the extension: `name.deepnote` → `name-2.deepnote` →
- * `name-3.deepnote`, … The suffix is applied to the WHOLE basename before `.deepnote`
- * (not a first-dot stem), so `report.backup.deepnote` → `report.backup-2.deepnote`.
- *
- * This helper only allocates NEW URIs; it never returns an existing path. When `reserved`
- * is supplied, the chosen name is added to it before returning, so a batch that allocates
- * several names before writing any of them cannot pick the same name twice.
- *
- * @param parentDir The directory in which to allocate the sibling
- * @param desiredFilename The desired full basename (including `.deepnote` extension)
- * @param exists Injected existence probe (default backs onto `workspace.fs.stat`)
- * @param reserved Optional set of names already chosen in this batch but not yet written
- * @returns A collision-free URI under `parentDir`
- * @throws If a free name cannot be found within `MAX_SIBLING_ALLOCATION_ATTEMPTS`
+ * Resolve a collision-free sibling URI for a desired full basename (including `.deepnote`).
+ * On a clash a numeric suffix is inserted before the extension, applied to the WHOLE basename
+ * (not a first-dot stem), so `report.backup.deepnote` → `report.backup-2.deepnote`. When
+ * `reserved` is supplied, the chosen name is added to it so a batch cannot pick the same name twice.
  */
 export async function allocateSiblingUri(
     parentDir: Uri,
@@ -67,11 +48,7 @@ export async function allocateSiblingUri(
     );
 }
 
-/**
- * Split a basename into the portion before the trailing `.deepnote` extension and the
- * extension itself. Names without the extension are returned unchanged with an empty
- * extension so suffixing still appends to the whole basename.
- */
+// Names without the extension get an empty extension so suffixing still appends to the whole basename.
 function splitBasename(filename: string): { base: string; extension: string } {
     if (filename.endsWith(DEEPNOTE_EXTENSION)) {
         return {

@@ -3,6 +3,7 @@ export * from './constants';
 export * from './deepnoteEnvironment';
 export * from './deepnoteTree';
 export * from './fixtures';
+export * from './modals';
 export * from './notebook';
 export * from './notifications';
 export * from './quickInput';

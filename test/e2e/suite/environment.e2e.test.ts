@@ -14,7 +14,6 @@ import {
     By,
     EditorView,
     InputBox,
-    ModalDialog,
     SideBarView,
     VSBrowser,
     WebView,
@@ -28,6 +27,7 @@ import {
     QUICK_PICK_TIMEOUT,
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
+    confirmModalDialog,
     copyFixtureToTempDir,
     createEnvironment,
     createScreenshotter,
@@ -295,79 +295,12 @@ async function findEnvironmentItem(
     return undefined;
 }
 
-// The custom modal ("window.dialogStyle": "custom") is DOM-rendered but ExTester's `ModalDialog`
-// page object often fails to resolve its base element for these confirmation dialogs, so cap the
-// ModalDialog attempt briefly and rely on the raw-DOM path (which is proven to work here).
-const MODAL_ATTEMPT_TIMEOUT = 10_000;
-
-/**
- * Confirms the `{modal:true}` delete-environment dialog by clicking its `Delete` button. Tries
- * ExTester's `ModalDialog` first (briefly), then falls back to a raw-DOM click on the custom dialog's
- * button. Both paths verify the dialog text names the environment before clicking, and the fallback
- * scopes to `.monaco-dialog-box` and matches the button text EXACTLY as `Delete` — so it can never
- * click the tree's "Delete Environment" context-menu item.
- */
-async function confirmDeleteModal(): Promise<'ModalDialog' | 'raw-DOM'> {
-    const driver = VSBrowser.instance.driver;
-
-    try {
-        const dialog = new ModalDialog();
-        await driver.wait(
-            async () => (await dialog.getMessage().catch(() => '')).includes(DELETE_ENV_NAME),
-            MODAL_ATTEMPT_TIMEOUT
-        );
-        await dialog.pushButton('Delete');
-
-        return 'ModalDialog';
-    } catch (error) {
-        console.warn('[G2] ModalDialog delete confirmation failed; falling back to raw DOM:', error);
-    }
-
-    // Wait for the confirmation dialog (identified by its message naming the env) to be present.
-    await driver.wait(
-        async () => {
-            const box = await driver.findElements(By.css('.monaco-dialog-box')).catch(() => []);
-            for (const element of box) {
-                if ((await element.getText().catch(() => '')).includes(DELETE_ENV_NAME)) {
-                    return true;
-                }
-            }
-
-            return false;
-        },
-        WORKBENCH_TIMEOUT,
-        `delete-confirmation modal for "${DELETE_ENV_NAME}" did not appear`
-    );
-
-    const button = await driver.wait(
-        async () => {
-            const selector = '.monaco-dialog-box .dialog-buttons .monaco-button, .monaco-dialog-box .monaco-button';
-            for (const element of await driver.findElements(By.css(selector)).catch(() => [])) {
-                if ((await element.getText().catch(() => '')).trim() === 'Delete') {
-                    return element;
-                }
-            }
-
-            return undefined;
-        },
-        WORKBENCH_TIMEOUT,
-        'custom delete-confirmation modal button "Delete" did not appear'
-    );
-    if (!button) {
-        throw new Error('custom delete-confirmation modal button "Delete" not found');
-    }
-    await button.click();
-
-    return 'raw-DOM';
-}
-
 describe('Deepnote — deleting an environment stops even a closed-but-running notebook’s server', function () {
     this.timeout(SUITE_TIMEOUT);
     this.retries(0); // destructive (deletes the venv); not idempotent
 
     let cleanupTempDir: (() => void) | undefined;
     let serverPid: number | undefined;
-    let modalDrivenVia: 'ModalDialog' | 'raw-DOM' | undefined;
     let aliveWhileClosed = false;
     let aliveAfterDelete = true;
     let lockFileGoneAfterDelete = false;
@@ -444,8 +377,7 @@ describe('Deepnote — deleting an environment stops even a closed-but-running n
         // The context-menu label is the command title "Delete Environment" (not a bare "Delete").
         await selectDeepnoteContextMenu(envItem as ViewItem, 'Delete Environment');
         await screenshot('delete-menu');
-        modalDrivenVia = await confirmDeleteModal();
-        console.log('[G2] modalDrivenVia=', modalDrivenVia);
+        await confirmModalDialog('Delete', { messageIncludes: DELETE_ENV_NAME });
 
         await waitForNotification(/Environment .*deleted/i, WORKBENCH_TIMEOUT, true);
         await screenshot('env-deleted');

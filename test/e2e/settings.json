@@ -11,5 +11,6 @@
     "update.mode": "none",
     "jupyter.kernels.trusted": true,
     "security.workspace.trust.enabled": false,
-    "deepnote.askForKernelRestart": false
+    "deepnote.askForKernelRestart": false,
+    "files.enableTrash": false
 }

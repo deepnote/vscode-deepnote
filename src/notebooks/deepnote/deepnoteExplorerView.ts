@@ -29,6 +29,7 @@ import { isSnapshotFile } from './snapshots/snapshotFiles';
  * file in the group; notebook-scoped commands operate on a single file (single-notebook leaf) or a
  * legacy in-file notebook child. New/duplicated notebooks become NEW SIBLING FILES via the factory.
  */
+
 @injectable()
 export class DeepnoteExplorerView {
     private readonly treeDataProvider: DeepnoteTreeDataProvider;
@@ -179,7 +180,7 @@ export class DeepnoteExplorerView {
 
             // A single-notebook file's only non-init notebook is the file itself: delete the file.
             if (this.isSingleNotebookFile(treeItem, projectData)) {
-                await workspace.fs.delete(fileUri, { useTrash: true });
+                await this.deleteNotebookFile(fileUri);
                 this.treeDataProvider.refresh();
                 await window.showInformationMessage(l10n.t('Notebook deleted: {0}', notebookName));
 
@@ -199,6 +200,18 @@ export class DeepnoteExplorerView {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             await window.showErrorMessage(l10n.t('Failed to delete notebook: {0}', errorMessage));
         }
+    }
+
+    /**
+     * Deletes a `.deepnote` file, honouring the user's `files.enableTrash` setting exactly as VS Code's
+     * own Explorer does: move to the OS trash when enabled (recoverable), delete permanently when
+     * disabled. The OS trash is not reliably available everywhere (headless CI, containers, filesystems
+     * with no freedesktop trash spec, where the operation can hang or fail), so environments without it —
+     * including the E2E suite — set `files.enableTrash` to false and get a dependency-free permanent delete.
+     */
+    private async deleteNotebookFile(fileUri: Uri): Promise<void> {
+        const useTrash = workspace.getConfiguration('files').get<boolean>('enableTrash', true);
+        await workspace.fs.delete(fileUri, { useTrash });
     }
 
     public async duplicateNotebook(treeItem: DeepnoteTreeItem): Promise<void> {

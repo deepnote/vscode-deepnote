@@ -3,7 +3,7 @@ import { assert, expect } from 'chai';
 import esmock from 'esmock';
 import * as sinon from 'sinon';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
-import { Uri, workspace } from 'vscode';
+import { Uri, workspace, type WorkspaceConfiguration } from 'vscode';
 import { stringify as yamlStringify } from 'yaml';
 
 import { DeepnoteExplorerView } from './deepnoteExplorerView';
@@ -2279,7 +2279,13 @@ suite('DeepnoteExplorerView - Sibling-file command semantics', () => {
     });
 
     suite('deleteNotebook — single-notebook file vs legacy', () => {
-        test('a single-notebook file deletes the FILE (does not rewrite an array)', async () => {
+        function stubFilesEnableTrash(enabled: boolean): void {
+            const filesConfig = mock<WorkspaceConfiguration>();
+            when(filesConfig.get('enableTrash', anything())).thenReturn(enabled);
+            when(mockedVSCodeNamespaces.workspace.getConfiguration('files')).thenReturn(instance(filesConfig));
+        }
+
+        test('moves a single-notebook file to the OS trash when files.enableTrash is enabled', async () => {
             const projectId = 'group-project';
             const filePath = '/workspace/single.deepnote';
             const fileUri = Uri.file(filePath);
@@ -2291,16 +2297,18 @@ suite('DeepnoteExplorerView - Sibling-file command semantics', () => {
             );
 
             let deletedUri: Uri | undefined;
-            when(mockFS.delete(anything(), anything())).thenCall((uri: Uri) => {
+            let deletedWithTrash: boolean | undefined;
+            when(mockFS.delete(anything(), anything())).thenCall((uri: Uri, options?: { useTrash?: boolean }) => {
                 deletedUri = uri;
+                deletedWithTrash = options?.useTrash;
                 return Promise.resolve();
             });
             when(mockFS.writeFile(anything(), anything())).thenReturn(Promise.resolve());
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
-
             when(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).thenReturn(
                 Promise.resolve('Delete')
             );
+            stubFilesEnableTrash(true);
 
             // ProjectFile node with no notebookId => single-notebook leaf => delete the file.
             const treeItem: Partial<DeepnoteTreeItem> = {
@@ -2313,8 +2321,49 @@ suite('DeepnoteExplorerView - Sibling-file command semantics', () => {
 
             assert.isDefined(deletedUri, 'the file must be deleted for a single-notebook file');
             assert.strictEqual(deletedUri!.fsPath, fileUri.fsPath, 'the deleted file must be the target file');
+            assert.strictEqual(deletedWithTrash, true, 'delete must use the OS trash when files.enableTrash is on');
             // It must NOT rewrite the file's notebooks array on a single-notebook delete.
             verify(mockFS.writeFile(anything(), anything())).never();
+        });
+
+        test('deletes a single-notebook file permanently when files.enableTrash is disabled', async () => {
+            const projectId = 'group-project';
+            const filePath = '/workspace/single.deepnote';
+            const fileUri = Uri.file(filePath);
+            const projectData = singleNotebookFile(projectId, 'only-nb', 'Only Notebook');
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(
+                Promise.resolve(Buffer.from(serializeDeepnoteFile(projectData)))
+            );
+
+            let deletedUri: Uri | undefined;
+            let deletedWithTrash: boolean | undefined;
+            when(mockFS.delete(anything(), anything())).thenCall((uri: Uri, options?: { useTrash?: boolean }) => {
+                deletedUri = uri;
+                deletedWithTrash = options?.useTrash;
+                return Promise.resolve();
+            });
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+            when(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).thenReturn(
+                Promise.resolve('Delete')
+            );
+            // No trash-capable filesystem (the E2E suite and any such environment set this off).
+            stubFilesEnableTrash(false);
+
+            const treeItem: Partial<DeepnoteTreeItem> = {
+                type: DeepnoteTreeItemType.ProjectFile,
+                context: { filePath, projectId },
+                data: projectData
+            };
+
+            await explorerView.deleteNotebook(treeItem as DeepnoteTreeItem);
+
+            assert.strictEqual(deletedUri!.fsPath, fileUri.fsPath, 'the target file must be deleted');
+            assert.strictEqual(deletedWithTrash, false, 'delete must be permanent when files.enableTrash is off');
+            // The user's confirmed delete still succeeds: a success toast, NOT a "Failed to delete" error.
+            verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).never();
         });
     });
 

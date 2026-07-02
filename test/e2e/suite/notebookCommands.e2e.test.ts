@@ -11,8 +11,9 @@
  * Because the sibling filename is derived (`{fileStem}-{slug}.deepnote`), assertions check the
  * notebook NAME inside the resulting files rather than exact filenames. Runs without a Python kernel.
  *
- * NOTE: Delete uses VS Code's move-to-trash, so this suite must run with a trash-capable workspace
- * filesystem (e.g. TMPDIR on the home filesystem with an XDG trash dir).
+ * NOTE: Delete removes the whole single-notebook file, honouring `files.enableTrash` like VS Code's own
+ * Explorer. The E2E settings set `files.enableTrash: false`, so the delete is permanent and needs no
+ * trash-capable filesystem (the OS trash is not reliably available headless/in containers).
  */
 
 import { expect } from 'chai';
@@ -23,7 +24,6 @@ import {
     By,
     EditorView,
     InputBox,
-    ModalDialog,
     SideBarView,
     VSBrowser,
     WebElement,
@@ -35,6 +35,7 @@ import {
 import {
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
+    confirmModalDialog,
     copyFixtureToTempDir,
     createScreenshotter,
     openFolderViaDialog,
@@ -258,22 +259,18 @@ describe('Deepnote — notebook-management commands create and remove sibling fi
         );
     });
 
-    // PENDING: the delete flow works in the product (right-click -> "Delete Notebook" opens a native
-    // confirmation modal with a "Delete" button), but reliably driving the tree context menu THROUGH
-    // that modal is flaky under ExTester — the `.monaco-menu` tears itself down as the modal opens, and
-    // the leftover modal can block the window. Left as a documented manual check; the other four
-    // create/add/duplicate/rename commands are covered above.
-    it.skip('deletes the whole single-notebook file after a modal confirmation', async function () {
+    it('deletes the whole single-notebook file after a modal confirmation', async function () {
         const section = await getExplorerSection();
         const metrics = await findLeaf(section, 'Metrics');
         expect(metrics, 'Metrics leaf').to.not.equal(undefined);
 
         await contextSelect(metrics!, 'Delete Notebook');
 
-        const dialog = new ModalDialog();
-        const message = await dialog.getMessage().catch(() => '');
-        expect(message, 'delete confirmation').to.contain('Metrics');
-        await dialog.pushButton('Delete');
+        // Confirm the `{modal:true}` dialog via raw DOM (ExTester's ModalDialog matches buttons by a
+        // `title` attribute the dialog doesn't set). Guarding on the message naming "Metrics" targets the
+        // right dialog. With `files.enableTrash: false` (E2E settings) the delete is permanent, so the
+        // file is removed without needing a trash-capable filesystem.
+        await confirmModalDialog('Delete', { messageIncludes: 'Metrics' });
 
         const toast = await waitForNotification(/Notebook deleted: Metrics/i, WORKBENCH_TIMEOUT, true);
         expect(toast, 'deleted toast').to.not.equal(undefined);

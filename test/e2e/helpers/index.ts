@@ -8,4 +8,7 @@ export * from './notebook';
 export * from './notifications';
 export * from './quickInput';
 export * from './screenshots';
+export * from './statusBar';
+export * from './views';
 export * from './workspace';
+export * from './yaml';

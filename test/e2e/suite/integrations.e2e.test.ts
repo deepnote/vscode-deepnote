@@ -25,6 +25,18 @@ const WEBVIEW_READ_TIMEOUT = 15_000;
 // Empty-state text asserted to prove the panel actually opened (else the negative `not.contain`
 // below passes trivially against a blank/failed `''` read).
 const NO_INTEGRATIONS_TEXT = 'No integrations found in this project.';
+// Prior editors finish closing before reopening the target notebook.
+const EDITORS_CLOSE_DELAY = 500;
+// Freshly opened notebook paints before we refocus it.
+const NOTEBOOK_OPEN_SETTLE_DELAY = 1_500;
+// Notebook editor becomes active so the command targets it.
+const EDITOR_REFOCUS_DELAY = 500;
+// Integrations panel opens before we read its webview.
+const PANEL_OPEN_DELAY = 2_500;
+// Attach to the webview frame per read attempt.
+const WEBVIEW_FRAME_SWITCH_TIMEOUT = 6_000;
+// Pause between webview read attempts.
+const WEBVIEW_POLL_INTERVAL = 1_000;
 
 /** Opens a notebook, runs "Manage Integrations", and returns the integrations webview's text. */
 async function openIntegrationsFor(fileName: string): Promise<string> {
@@ -33,7 +45,7 @@ async function openIntegrationsFor(fileName: string): Promise<string> {
     // The integrations panel is reused, so close prior editors: "Manage Integrations" needs the
     // target notebook to be the active editor, not the still-open panel.
     await new EditorView().closeAllEditors().catch(() => undefined);
-    await driver.sleep(500);
+    await driver.sleep(EDITORS_CLOSE_DELAY);
 
     await openWorkspaceFile(fileName);
     await driver.wait(
@@ -41,12 +53,12 @@ async function openIntegrationsFor(fileName: string): Promise<string> {
         WORKBENCH_TIMEOUT,
         `${fileName} did not open`
     );
-    await driver.sleep(1500);
+    await driver.sleep(NOTEBOOK_OPEN_SETTLE_DELAY);
     await new EditorView().openEditor(fileName).catch(() => undefined);
-    await driver.sleep(500);
+    await driver.sleep(EDITOR_REFOCUS_DELAY);
 
     await new Workbench().executeCommand(MANAGE_INTEGRATIONS);
-    await driver.sleep(2500);
+    await driver.sleep(PANEL_OPEN_DELAY);
 
     // Poll the webview body until it has rendered some text.
     const deadline = Date.now() + WEBVIEW_READ_TIMEOUT;
@@ -56,7 +68,7 @@ async function openIntegrationsFor(fileName: string): Promise<string> {
         const webview = new WebView();
 
         try {
-            await webview.switchToFrame(6000);
+            await webview.switchToFrame(WEBVIEW_FRAME_SWITCH_TIMEOUT);
             const body = await webview.findWebElement(By.css('body'));
             text = (await body.getText().catch(() => '')) || text;
         } catch (error) {
@@ -69,7 +81,7 @@ async function openIntegrationsFor(fileName: string): Promise<string> {
             return text;
         }
 
-        await driver.sleep(1000);
+        await driver.sleep(WEBVIEW_POLL_INTERVAL);
     }
 
     return text;

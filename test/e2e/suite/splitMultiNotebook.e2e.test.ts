@@ -8,7 +8,7 @@
 import { expect } from 'chai';
 import * as fs from 'fs';
 import * as path from 'path';
-import { ActivityBar, EditorView, VSBrowser, WebView } from 'vscode-extension-tester';
+import { EditorView, VSBrowser, WebView } from 'vscode-extension-tester';
 
 import {
     SUITE_TIMEOUT,
@@ -16,8 +16,10 @@ import {
     copyFixtureToTempDir,
     createScreenshotter,
     dismissAllNotifications,
+    notebookCount,
     openFolderViaDialog,
     openWorkspaceFile,
+    showView,
     waitForNotification
 } from '../helpers';
 
@@ -51,17 +53,6 @@ const SIBLINGS: ReadonlyArray<{ file: string; notebookName: string; contentMarke
     }
 ];
 
-/** Opens a named activity-bar view (best effort — only for a nicer screenshot). */
-async function showView(title: string): Promise<void> {
-    try {
-        const control = await new ActivityBar().getViewControl(title);
-        await control?.openView();
-        await VSBrowser.instance.driver.sleep(1500);
-    } catch (error) {
-        console.warn(`[split] could not open "${title}" view:`, error);
-    }
-}
-
 describe('Deepnote — splitting a legacy multi-notebook .deepnote file into single-notebook files', function () {
     this.timeout(SUITE_TIMEOUT);
 
@@ -87,7 +78,7 @@ describe('Deepnote — splitting a legacy multi-notebook .deepnote file into sin
         await openFolderViaDialog(tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
-        await showView('Deepnote');
+        await showView('Deepnote', '[split]');
         await screenshot('before-open-explorer');
 
         // Opening the multi-notebook file fires the splitter on the open event, raising the prompt.
@@ -116,11 +107,11 @@ describe('Deepnote — splitting a legacy multi-notebook .deepnote file into sin
         originalRemoved = !fs.existsSync(path.join(tempDir, FIXTURE));
         legacyBackupExists = fs.existsSync(path.join(tempDir, `${FIXTURE}.legacy`));
 
-        await showView('Deepnote');
+        await showView('Deepnote', '[split]');
         await driver.sleep(1500);
         await screenshot('explorer-siblings');
 
-        await showView('Explorer');
+        await showView('Explorer', '[split]');
         await driver.sleep(1500);
         await screenshot('file-explorer');
     });
@@ -154,8 +145,7 @@ describe('Deepnote — splitting a legacy multi-notebook .deepnote file into sin
             expect(fs.existsSync(siblingPath), `${sibling.file} should exist`).to.equal(true);
 
             const yaml = fs.readFileSync(siblingPath, 'utf8');
-            const notebookCount = (yaml.match(/^\s*- blocks:/gm) ?? []).length;
-            expect(notebookCount, `${sibling.file} should contain exactly one notebook`).to.equal(1);
+            expect(notebookCount(yaml), `${sibling.file} should contain exactly one notebook`).to.equal(1);
             expect(yaml, `${sibling.file} should hold the "${sibling.notebookName}" notebook`).to.contain(
                 `name: ${sibling.notebookName}`
             );

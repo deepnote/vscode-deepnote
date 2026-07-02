@@ -4,7 +4,7 @@
  */
 
 import { expect } from 'chai';
-import { EditorView, StatusBar, VSBrowser, WebView } from 'vscode-extension-tester';
+import { EditorView, VSBrowser, WebView } from 'vscode-extension-tester';
 
 import {
     SUITE_TIMEOUT,
@@ -13,6 +13,7 @@ import {
     createScreenshotter,
     openFolderViaDialog,
     openWorkspaceFile,
+    readStatusBarText,
     waitForNotification
 } from '../helpers';
 
@@ -21,28 +22,6 @@ const NOTEBOOK_NAME = 'Quick Notes';
 const SPLIT_PROMPT = /contains multiple notebooks/i;
 
 const NO_SPLIT_PROMPT_TIMEOUT = 6_000;
-const STATUS_BAR_TIMEOUT = 10_000;
-
-/** Reads the concatenated text of all status-bar items, polling until it shows `expected`. */
-async function readStatusBarText(expected: string): Promise<string> {
-    const driver = VSBrowser.instance.driver;
-    const deadline = Date.now() + STATUS_BAR_TIMEOUT;
-    let joined = '';
-
-    while (Date.now() < deadline) {
-        const items = await new StatusBar().getItems().catch(() => [] as never[]);
-        const texts = await Promise.all(items.map((item) => item.getText().catch(() => '')));
-        joined = texts.join(' | ');
-
-        if (joined.includes(expected)) {
-            return joined;
-        }
-
-        await driver.sleep(500);
-    }
-
-    return joined;
-}
 
 describe('Deepnote — opening a plain single-notebook .deepnote file', function () {
     this.timeout(SUITE_TIMEOUT);

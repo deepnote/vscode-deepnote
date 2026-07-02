@@ -45,6 +45,8 @@ const PALETTE_SETTLE_DELAY = 1_000;
 // If no output appears within this window the combined command's auto-run was dropped, so nudge it
 // with a single "Run All". Output was cleared before the restart, so any marker seen after is fresh.
 const RESTART_RUN_START_TIMEOUT = 30_000;
+// Give the restart-and-run command's palette time to dismiss and the restart to begin before polling.
+const RESTART_COMMAND_SETTLE_DELAY = 3_000;
 
 /** Empties the active notebook's output so a later marker is provably fresh, polling until `INIT_MARKER` is gone. */
 async function clearOutputsAndConfirmMarkerGone(): Promise<void> {
@@ -165,7 +167,7 @@ describe('Deepnote — running the sibling init notebook in a main notebook kern
         await new Workbench().executeCommand(RESTART_AND_RUN_COMMAND);
 
         await confirmKernelPickerIfPresent();
-        await driver.sleep(3000);
+        await driver.sleep(RESTART_COMMAND_SETTLE_DELAY);
 
         // Nudge a single "Run All" if the combined command's auto-run was dropped; output was cleared
         // above so this still proves a fresh execution.

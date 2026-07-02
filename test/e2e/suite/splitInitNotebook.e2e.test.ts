@@ -9,7 +9,7 @@
 import { expect } from 'chai';
 import * as fs from 'fs';
 import * as path from 'path';
-import { ActivityBar, EditorView, VSBrowser, WebView } from 'vscode-extension-tester';
+import { EditorView, VSBrowser, WebView } from 'vscode-extension-tester';
 
 import {
     SUITE_TIMEOUT,
@@ -17,8 +17,10 @@ import {
     copyFixtureToTempDir,
     createScreenshotter,
     dismissAllNotifications,
+    notebookCount,
     openFolderViaDialog,
     openWorkspaceFile,
+    showView,
     waitForNotification
 } from '../helpers';
 
@@ -41,22 +43,6 @@ const MAIN_SIBLINGS: ReadonlyArray<{ file: string; notebookName: string }> = [
 ];
 
 const ALL_SIBLINGS = [INIT_SIBLING, ...MAIN_SIBLINGS];
-
-/** Opens a named activity-bar view (best effort — only for a nicer screenshot). */
-async function showView(title: string): Promise<void> {
-    try {
-        const control = await new ActivityBar().getViewControl(title);
-        await control?.openView();
-        await VSBrowser.instance.driver.sleep(1500);
-    } catch (error) {
-        console.warn(`[split-init] could not open "${title}" view:`, error);
-    }
-}
-
-/** Counts notebooks in serialized YAML; each notebook entry starts with `- blocks:`. */
-function notebookCount(yaml: string): number {
-    return (yaml.match(/^\s*- blocks:/gm) ?? []).length;
-}
 
 describe('Deepnote — splitting a legacy multi-notebook .deepnote file that has an init notebook', function () {
     this.timeout(SUITE_TIMEOUT);
@@ -83,7 +69,7 @@ describe('Deepnote — splitting a legacy multi-notebook .deepnote file that has
         await openFolderViaDialog(tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
-        await showView('Deepnote');
+        await showView('Deepnote', '[split-init]');
         await screenshot('before-open-explorer');
 
         // Opening the multi-notebook file fires the splitter on the open event, raising the prompt.
@@ -110,11 +96,11 @@ describe('Deepnote — splitting a legacy multi-notebook .deepnote file that has
         originalRemoved = !fs.existsSync(path.join(tempDir, FIXTURE));
         legacyBackupExists = fs.existsSync(path.join(tempDir, `${FIXTURE}.legacy`));
 
-        await showView('Deepnote');
+        await showView('Deepnote', '[split-init]');
         await driver.sleep(1500);
         await screenshot('explorer-siblings');
 
-        await showView('Explorer');
+        await showView('Explorer', '[split-init]');
         await driver.sleep(1500);
         await screenshot('file-explorer');
     });

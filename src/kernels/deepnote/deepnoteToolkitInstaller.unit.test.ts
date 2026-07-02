@@ -1,29 +1,24 @@
 import { assert } from 'chai';
-import { anything, instance, mock, when } from 'ts-mockito';
-import { CancellationToken, CancellationTokenSource, Uri } from 'vscode';
+import { anything, capture, instance, mock, verify, when } from 'ts-mockito';
+import { CancellationTokenSource, Uri } from 'vscode';
 
 import { DeepnoteToolkitInstaller } from './deepnoteToolkitInstaller.node';
 import { IFileSystem } from '../../platform/common/platform/types';
-import { ExecutionResult, IProcessService, IProcessServiceFactory } from '../../platform/common/process/types.node';
+import { IProcessService, IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { IExtensionContext, IOutputChannel } from '../../platform/common/types';
 
 /**
- * Regression test for SAL-105: "Hanging kernel can't be cancelled".
+ * Regression tests for SAL-105: "Hanging kernel can't be cancelled".
  *
  * Every processService.exec(...) in the toolkit installer must forward the
  * CancellationToken it was given. The token is what wires VS Code's Stop /
  * Cancel button to ProcessService.kill(pid) (see proc.node.ts), so omitting it
  * makes long-running pip installs uninterruptible.
- *
- * The process layer is hand-rolled (rather than ts-mockito) because the real
- * code calls create(undefined) / exec(...) and ts-mockito argument matchers
- * behave unreliably for interface mocks here, returning never-resolving stubs.
  */
 suite('DeepnoteToolkitInstaller - cancellation token propagation (SAL-105)', () => {
-    type ExecCall = { file: string; args: string[]; options?: { token?: CancellationToken } };
-
     let installer: DeepnoteToolkitInstaller;
-    let execCalls: ExecCall[];
+    let mockProcessService: IProcessService;
+    let mockProcessServiceFactory: IProcessServiceFactory;
     let mockOutputChannel: IOutputChannel;
     let mockContext: IExtensionContext;
     let mockFs: IFileSystem;
@@ -32,31 +27,22 @@ suite('DeepnoteToolkitInstaller - cancellation token propagation (SAL-105)', () 
     const fakePython = Uri.file('/fake/venv/bin/python');
 
     setup(() => {
-        execCalls = [];
+        mockProcessService = mock<IProcessService>();
+        mockProcessServiceFactory = mock<IProcessServiceFactory>();
         mockOutputChannel = mock<IOutputChannel>();
         mockContext = mock<IExtensionContext>();
         mockFs = mock<IFileSystem>();
 
-        when(mockOutputChannel.appendLine(anything())).thenReturn();
-
-        const fakeProcessService = {
-            exec: async (
-                file: string,
-                args: string[],
-                options?: { token?: CancellationToken }
-            ): Promise<ExecutionResult<string>> => {
-                execCalls.push({ file, args, options });
-
-                return { stdout: '', stderr: '' };
-            }
-        } as unknown as IProcessService;
-
-        const fakeProcessServiceFactory = {
-            create: async () => fakeProcessService
-        } as unknown as IProcessServiceFactory;
+        const processService = instance(mockProcessService);
+        // Prevent the ts-mockito instance from being treated as a thenable when
+        // resolved through a promise (see kernelProcess.node.unit.test.ts).
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (processService as any).then = undefined;
+        when(mockProcessServiceFactory.create(anything())).thenResolve(processService);
+        when(mockProcessService.exec(anything(), anything(), anything())).thenResolve({ stdout: '', stderr: '' });
 
         installer = new DeepnoteToolkitInstaller(
-            fakeProcessServiceFactory,
+            instance(mockProcessServiceFactory),
             instance(mockOutputChannel),
             instance(mockContext),
             instance(mockFs)
@@ -74,15 +60,15 @@ suite('DeepnoteToolkitInstaller - cancellation token propagation (SAL-105)', () 
         try {
             await installer.installAdditionalPackages(venvPath, ['some-package'], cts.token);
 
-            assert.strictEqual(execCalls.length, 1, 'exec should be called exactly once');
-
-            const call = execCalls[0];
-            assert.strictEqual(call.file, fakePython.fsPath);
-            assert.include(call.args, 'pip', 'should run a pip install');
-            assert.isDefined(call.options, 'exec options should be provided');
-            assert.strictEqual(
-                call.options!.token,
-                cts.token,
+            verify(mockProcessService.exec(anything(), anything(), anything())).once();
+            const [file, args, options] = capture(mockProcessService.exec).first();
+            assert.deepStrictEqual(
+                { file, args, options },
+                {
+                    file: fakePython.fsPath,
+                    args: ['-m', 'pip', 'install', '--upgrade', 'some-package'],
+                    options: { throwOnStdErr: false, token: cts.token }
+                },
                 'the cancellation token must be forwarded to exec so Stop can kill the process'
             );
         } finally {
@@ -96,7 +82,42 @@ suite('DeepnoteToolkitInstaller - cancellation token propagation (SAL-105)', () 
         try {
             await installer.installAdditionalPackages(venvPath, [], cts.token);
 
-            assert.strictEqual(execCalls.length, 0, 'exec should not be called for an empty package list');
+            verify(mockProcessService.exec(anything(), anything(), anything())).never();
+        } finally {
+            cts.dispose();
+        }
+    });
+
+    test('ensureVenvAndToolkit forwards the cancellation token to the toolkit version probe', async () => {
+        const cts = new CancellationTokenSource();
+
+        try {
+            when(mockProcessService.exec(anything(), anything(), anything())).thenResolve({
+                stdout: '1.2.3\n',
+                stderr: ''
+            });
+            // Kernel spec already installed, so the fast path runs the probe exec only
+            when(mockFs.exists(anything())).thenResolve(true);
+
+            const result = await installer.ensureVenvAndToolkit(
+                { uri: fakePython, id: fakePython.fsPath },
+                venvPath,
+                false,
+                cts.token
+            );
+
+            assert.strictEqual(result.toolkitVersion, '1.2.3');
+            verify(mockProcessService.exec(anything(), anything(), anything())).once();
+            const [file, args, options] = capture(mockProcessService.exec).first();
+            assert.deepStrictEqual(
+                { file, args, options },
+                {
+                    file: fakePython.fsPath,
+                    args: ['-c', 'import deepnote_toolkit; print(deepnote_toolkit.__version__)'],
+                    options: { token: cts.token }
+                },
+                'the cancellation token must be forwarded to the isToolkitInstalled probe'
+            );
         } finally {
             cts.dispose();
         }

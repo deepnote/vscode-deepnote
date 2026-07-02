@@ -6,7 +6,7 @@ import { CancellationToken, l10n, Uri, workspace } from 'vscode';
 
 import { resolvePythonExecutable } from '@deepnote/runtime-core';
 
-import { Cancellation } from '../../platform/common/cancellation';
+import { Cancellation, isCancellationError } from '../../platform/common/cancellation';
 import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
 import { IFileSystem } from '../../platform/common/platform/types';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
@@ -125,6 +125,9 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                     Cancellation.throwIfCanceled(token);
                     await this.installKernelSpec(existingVenv, venvPath, token);
                 } catch (ex) {
+                    if (isCancellationError(ex as Error)) {
+                        throw ex;
+                    }
                     logger.warn('Failed to ensure kernel spec installed', ex);
                     // Don't fail - continue with existing venv
                 }
@@ -197,6 +200,10 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                 { throwOnStdErr: false, token }
             );
 
+            // exec resolves with partial output when the token kills pip,
+            // so re-check before reporting success
+            Cancellation.throwIfCanceled(token);
+
             if (installResult.stdout) {
                 this.outputChannel.appendLine(installResult.stdout);
             }
@@ -207,6 +214,11 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             logger.info('Additional packages installed successfully');
             this.outputChannel.appendLine(l10n.t('✓ Packages installed successfully'));
         } catch (ex) {
+            if (isCancellationError(ex as Error)) {
+                logger.info('Package installation cancelled');
+                this.outputChannel.appendLine(l10n.t('Package installation cancelled'));
+                throw ex;
+            }
             logger.error('Failed to install additional packages', ex);
             this.outputChannel.appendLine(l10n.t('✗ Failed to install packages: {0}', ex));
             throw ex;
@@ -311,6 +323,12 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             // Use the shared helper method to install toolkit packages
             return await this.installToolkitPackages(venvInterpreter, venvPath, token);
         } catch (ex) {
+            // Rethrow cancellation unwrapped so upstream isCancellationError checks
+            // can suppress the error UI instead of reporting an install failure
+            if (isCancellationError(ex as Error)) {
+                throw ex;
+            }
+
             // If this is already a DeepnoteKernelError, rethrow it without wrapping
             if (ex instanceof DeepnoteVenvCreationError || ex instanceof DeepnoteToolkitInstallError) {
                 throw ex;
@@ -403,6 +421,9 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                 Cancellation.throwIfCanceled(token);
                 await this.installKernelSpec(venvInterpreter, venvPath, token);
             } catch (ex) {
+                if (isCancellationError(ex as Error)) {
+                    throw ex;
+                }
                 logger.warn('Failed to install kernel spec', ex);
                 // Don't fail the entire installation if kernel spec creation fails
             }
@@ -425,7 +446,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
 
     private async isToolkitInstalled(
         interpreter: PythonEnvironment,
-        token?: CancellationToken
+        token: CancellationToken | undefined
     ): Promise<string | undefined> {
         try {
             // Use undefined as resource to get full system environment
@@ -435,10 +456,16 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                 ['-c', 'import deepnote_toolkit; print(deepnote_toolkit.__version__)'],
                 { token }
             );
+            // exec resolves with partial output when the token kills the process,
+            // so a cancelled probe must not be reported as "toolkit missing"
+            Cancellation.throwIfCanceled(token);
             logger.info(`isToolkitInstalled result: ${result.stdout}`);
             const version = result.stdout.trim();
             return version.length > 0 ? version : undefined;
         } catch (ex) {
+            if (isCancellationError(ex as Error)) {
+                throw ex;
+            }
             logger.debug('deepnote-toolkit not found', ex);
             return undefined;
         }
@@ -485,8 +512,10 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         const kernelSpecName = this.getKernelSpecName(venvPath);
         const kernelSpecPath = Uri.joinPath(venvPath, 'share', 'jupyter', 'kernels', kernelSpecName);
 
-        // Check if kernel spec already exists
-        if (await this.fs.exists(kernelSpecPath)) {
+        // Check if kernel spec already exists. Check for kernel.json rather than the
+        // directory: a cancelled ipykernel install can leave a partially written
+        // directory, which must not short-circuit the reinstall.
+        if (await this.fs.exists(Uri.joinPath(kernelSpecPath, 'kernel.json'))) {
             logger.info(`Kernel spec already exists at ${kernelSpecPath.fsPath}`);
             return;
         }
@@ -515,6 +544,10 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             ],
             { throwOnStdErr: false, token }
         );
+
+        // exec resolves even when the token killed the process mid-write,
+        // so re-check before declaring the kernel spec installed
+        Cancellation.throwIfCanceled(token);
 
         logger.info(`Kernel spec installed successfully to ${kernelSpecPath.fsPath}`);
     }

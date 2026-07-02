@@ -100,6 +100,8 @@ describe('Deepnote — new snapshots are notebook-scoped and do not bleed betwee
     let cleanupTempDir: (() => void) | undefined;
     let tempDir = '';
     let snapshotFiles: string[] = [];
+    let overviewSnapshotContent = '';
+    let campaignsSnapshotContent = '';
 
     before(async function () {
         const driver = VSBrowser.instance.driver;
@@ -154,6 +156,26 @@ describe('Deepnote — new snapshots are notebook-scoped and do not bleed betwee
             await driver.sleep(1500);
         }
         console.log('[I2] snapshotFiles=', JSON.stringify(snapshotFiles));
+
+        // Filenames only prove per-notebook scoping of the *files*; they don't prove each file holds
+        // its OWN notebook's output. Read the actual contents so we can assert no cross-contamination
+        // (a regression could write the overview output into the campaigns snapshot while keeping a
+        // notebook-scoped filename). Prefer a `_latest` file for a notebook id, else any file with
+        // that id segment.
+        const pickSnapshot = (notebookId: string): string | undefined => {
+            const segment = `_${notebookId}_`;
+            const matches = snapshotFiles.filter((f) => f.includes(segment));
+
+            return matches.find((f) => f.includes('_latest')) ?? matches[0];
+        };
+        const readSnapshot = (notebookId: string): string => {
+            const file = pickSnapshot(notebookId);
+
+            return file ? fs.readFileSync(path.join(snapshotsDir, file), 'utf8') : '';
+        };
+
+        overviewSnapshotContent = readSnapshot('e-nb-overview');
+        campaignsSnapshotContent = readSnapshot('e-nb-campaigns');
     });
 
     after(async function () {
@@ -187,5 +209,23 @@ describe('Deepnote — new snapshots are notebook-scoped and do not bleed betwee
             overview.length > 0 && campaigns.length > 0 && overview.every((f) => !campaigns.includes(f)),
             'distinct snapshot files per notebook'
         ).to.equal(true);
+    });
+
+    it('keeps each notebook-scoped snapshot holding only its own output', function () {
+        // The snapshot YAML stores the executed cell's stdout as plain text, so each notebook's
+        // marker ('overview' / 'campaigns') must appear in its own snapshot and — crucially — the
+        // sibling's marker must NOT. The `not.contain` checks are what catch cross-contamination.
+        expect(overviewSnapshotContent, 'overview snapshot must not be empty').to.not.equal('');
+        expect(campaignsSnapshotContent, 'campaigns snapshot must not be empty').to.not.equal('');
+
+        expect(overviewSnapshotContent, 'overview snapshot holds its own output').to.contain('overview');
+        expect(overviewSnapshotContent, 'overview snapshot must not leak the sibling output').to.not.contain(
+            'campaigns'
+        );
+
+        expect(campaignsSnapshotContent, 'campaigns snapshot holds its own output').to.contain('campaigns');
+        expect(campaignsSnapshotContent, 'campaigns snapshot must not leak the sibling output').to.not.contain(
+            'overview'
+        );
     });
 });

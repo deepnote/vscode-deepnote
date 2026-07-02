@@ -75,16 +75,16 @@ describe('Deepnote — opening a plain single-notebook .deepnote file', function
         await openFolderViaDialog(copy.tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
-        // Open the single-notebook file; it should render its one notebook directly.
+        // Open the single-notebook file; it should render its one notebook directly. Let a failed
+        // open throw so the whole suite fails loudly — otherwise the no-prompt / status-bar
+        // assertions could pass against a state that never materialized.
         await openWorkspaceFile(FIXTURE);
-        editorOpened = await driver
-            .wait(
-                async () => (await new EditorView().getOpenEditorTitles()).some((title) => title.includes(FIXTURE)),
-                WORKBENCH_TIMEOUT,
-                `${FIXTURE} did not open`
-            )
-            .then(() => true)
-            .catch(() => false);
+        await driver.wait(
+            async () => (await new EditorView().getOpenEditorTitles()).some((title) => title.includes(FIXTURE)),
+            WORKBENCH_TIMEOUT,
+            `${FIXTURE} did not open`
+        );
+        editorOpened = true;
 
         await driver.sleep(2000);
         await screenshot('single-notebook-open');

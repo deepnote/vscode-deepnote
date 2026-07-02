@@ -29,6 +29,10 @@ const PLAIN_FILE = 'quick-notes.deepnote';
 const INTEGRATION_NAME = 'Sales BigQuery';
 const MANAGE_INTEGRATIONS = 'Deepnote: Manage Integrations';
 const WEBVIEW_READ_TIMEOUT = 15_000;
+// Empty-state text the integrations webview (IntegrationList.tsx) always renders for a project that
+// has no integrations. Asserting on it proves the panel actually opened for the plain notebook,
+// rather than the negative `not.contain` passing trivially against a blank/failed `''` read.
+const NO_INTEGRATIONS_TEXT = 'No integrations found in this project.';
 
 /** Opens a notebook, runs "Manage Integrations", and returns the integrations webview's text. */
 async function openIntegrationsFor(fileName: string): Promise<string> {
@@ -121,6 +125,9 @@ describe('Deepnote — the integrations UI', function () {
     it('does not list that integration for a plain notebook', async function () {
         const text = await openIntegrationsFor(PLAIN_FILE);
         await screenshot('no-integration');
+        // Positive signal that the panel actually rendered (a blank/failed read returns '', which
+        // would make the `not.contain` below pass even if the integrations UI were broken).
+        expect(text, 'integrations webview text').to.contain(NO_INTEGRATIONS_TEXT);
         expect(text, 'integrations webview text').to.not.contain(INTEGRATION_NAME);
     });
 });

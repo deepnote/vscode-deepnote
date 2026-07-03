@@ -851,7 +851,7 @@ export class DeepnoteExplorerView {
         return true;
     }
 
-    private async convertJupyterUrisToDeepnoteFiles(jupyterUris: readonly Uri[], folderUri: Uri): Promise<void> {
+    private async convertJupyterUrisToDeepnoteFiles(jupyterUris: readonly Uri[], folderUri: Uri): Promise<number> {
         const failedNames: string[] = [];
 
         for (const jupyterUri of jupyterUris) {
@@ -876,6 +876,8 @@ export class DeepnoteExplorerView {
                 l10n.t('Failed to import {0} notebook(s): {1}', failedNames.length, failedNames.join(', '))
             );
         }
+
+        return failedNames.length;
     }
 
     private deepnoteTargetForJupyterUri(
@@ -960,13 +962,13 @@ export class DeepnoteExplorerView {
                 await workspace.fs.writeFile(targetUri, content);
             }
 
-            await this.convertJupyterUrisToDeepnoteFiles(jupyterUris, workspaceFolder.uri);
+            const failedCount = await this.convertJupyterUrisToDeepnoteFiles(jupyterUris, workspaceFolder.uri);
 
-            const numberOfNotebooks = jupyterUris.length + deepnoteUris.length;
+            const numberOfNotebooks = jupyterUris.length + deepnoteUris.length - failedCount;
 
             if (numberOfNotebooks > 1) {
                 await window.showInformationMessage(l10n.t('{0} notebooks imported successfully.', numberOfNotebooks));
-            } else {
+            } else if (numberOfNotebooks === 1) {
                 await window.showInformationMessage(l10n.t('Notebook imported successfully.'));
             }
 
@@ -1014,15 +1016,15 @@ export class DeepnoteExplorerView {
                 return;
             }
 
-            await this.convertJupyterUrisToDeepnoteFiles(fileUris, workspaceFolder.uri);
+            const failedCount = await this.convertJupyterUrisToDeepnoteFiles(fileUris, workspaceFolder.uri);
 
-            const numberOfNotebooks = fileUris.length;
+            const numberOfNotebooks = fileUris.length - failedCount;
 
             if (numberOfNotebooks > 1) {
                 await window.showInformationMessage(
                     l10n.t('{0} Jupyter notebooks imported successfully.', numberOfNotebooks)
                 );
-            } else {
+            } else if (numberOfNotebooks === 1) {
                 await window.showInformationMessage(l10n.t('Jupyter notebook imported successfully.'));
             }
 

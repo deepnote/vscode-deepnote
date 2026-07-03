@@ -695,6 +695,102 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             expect(capturedMessage).to.include('2');
         });
 
+        test('reports only the succeeded count when some conversions fail', async () => {
+            // Catches: false success count (full selection) after per-file convert failures on partial import.
+            const failingModule = await esmock('./deepnoteExplorerView', {
+                '@deepnote/convert': {
+                    convertIpynbFileToDeepnoteFile: async (inputPath: string) => {
+                        if (inputPath.includes('fail')) {
+                            throw new Error('conversion failed');
+                        }
+                    }
+                }
+            });
+            const partialExplorer = new failingModule.DeepnoteExplorerView(mockContext, createMockLogger());
+
+            const workspaceFolder = { uri: Uri.file('/workspace') };
+            const sourceUris = [
+                Uri.file('/external/ok.ipynb'),
+                Uri.file('/external/fail1.ipynb'),
+                Uri.file('/external/fail2.ipynb')
+            ];
+
+            when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder as any]);
+            when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(Promise.resolve(sourceUris));
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.stat(anything())).thenReject(new Error('File not found'));
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            let infoMessage: string | undefined;
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenCall((msg: string) => {
+                infoMessage = msg;
+                return Promise.resolve(undefined);
+            });
+
+            let warningMessage: string | undefined;
+            when(mockedVSCodeNamespaces.window.showWarningMessage(anything())).thenCall((msg: string) => {
+                warningMessage = msg;
+                return Promise.resolve(undefined);
+            });
+
+            try {
+                await (partialExplorer as any).importJupyterNotebook();
+
+                // 1 succeeded → singular success string, never the full count of 3.
+                expect(infoMessage).to.exist;
+                expect(infoMessage).to.equal('Jupyter notebook imported successfully.');
+                expect(infoMessage).to.not.include('3');
+                expect(warningMessage).to.exist;
+                expect(warningMessage).to.include('2');
+            } finally {
+                esmock.purge(failingModule);
+            }
+        });
+
+        test('shows no success message when every conversion fails', async () => {
+            // Catches: false success toast when the whole import failed (pins the === 1 / > 1 guard).
+            const failingModule = await esmock('./deepnoteExplorerView', {
+                '@deepnote/convert': {
+                    convertIpynbFileToDeepnoteFile: async () => {
+                        throw new Error('conversion failed');
+                    }
+                }
+            });
+            const failedExplorer = new failingModule.DeepnoteExplorerView(mockContext, createMockLogger());
+
+            const workspaceFolder = { uri: Uri.file('/workspace') };
+            const sourceUris = [Uri.file('/external/fail1.ipynb'), Uri.file('/external/fail2.ipynb')];
+
+            when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder as any]);
+            when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(Promise.resolve(sourceUris));
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.stat(anything())).thenReject(new Error('File not found'));
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            let infoMessageShown = false;
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenCall(() => {
+                infoMessageShown = true;
+                return Promise.resolve(undefined);
+            });
+
+            let warningShown = false;
+            when(mockedVSCodeNamespaces.window.showWarningMessage(anything())).thenCall(() => {
+                warningShown = true;
+                return Promise.resolve(undefined);
+            });
+
+            try {
+                await (failedExplorer as any).importJupyterNotebook();
+
+                expect(infoMessageShown).to.be.false;
+                expect(warningShown).to.be.true;
+            } finally {
+                esmock.purge(failingModule);
+            }
+        });
+
         test('should show error if output file already exists', async () => {
             const workspaceFolder = { uri: Uri.file('/workspace') };
             const sourceUri = Uri.file('/external/existing.ipynb');

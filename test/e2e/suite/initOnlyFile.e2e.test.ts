@@ -153,7 +153,7 @@ describe('Deepnote — deleting an init-only leaf removes the whole file', funct
         await selectDeepnoteContextMenu(leaf!, 'Delete Notebook');
         await confirmModalDialog('Delete', { messageIncludes: NOTEBOOK_NAME });
 
-        const toast = await waitForNotification(/Notebook deleted: Bootstrap/i, WORKBENCH_TIMEOUT, true);
+        const toast = await waitForNotification(new RegExp(`Notebook deleted: ${NOTEBOOK_NAME}`, 'i'), WORKBENCH_TIMEOUT, true);
         expect(toast, 'deleted toast').to.not.equal(undefined);
         await screenshot('after-delete');
 

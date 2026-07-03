@@ -5,18 +5,22 @@
  */
 
 import { expect } from 'chai';
+import * as fs from 'fs';
 import { EditorView, VSBrowser, WebView } from 'vscode-extension-tester';
 
 import {
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
+    confirmModalDialog,
     copyFixtureToTempDir,
     createScreenshotter,
+    findDeepnoteLeaf,
     getDeepnoteExplorerSection,
     openFolderViaDialog,
     openWorkspaceFile,
     readDeepnoteTreeRows,
     readStatusBarText,
+    selectDeepnoteContextMenu,
     waitForNotification
 } from '../helpers';
 
@@ -25,6 +29,7 @@ const NOTEBOOK_NAME = 'Bootstrap';
 const SPLIT_PROMPT = /contains multiple notebooks/i;
 const NO_SPLIT_PROMPT_TIMEOUT = 6_000;
 const TREE_LOAD_TIMEOUT = 30_000;
+const NOTEBOOK_NOT_FOUND = /Notebook not found/i;
 
 describe('Deepnote — opening a file whose only notebook is the init notebook', function () {
     this.timeout(SUITE_TIMEOUT);
@@ -96,5 +101,70 @@ describe('Deepnote — opening a file whose only notebook is the init notebook',
 
     it('shows the file as an openable notebook leaf in the Explorer', function () {
         expect(notebookLeafShown, 'an openable notebook leaf in the Deepnote Explorer').to.equal(true);
+    });
+});
+
+/**
+ * Guards F2: notebook commands on an init-only leaf must resolve the init notebook (no "Notebook
+ * not found") and delete the FILE rather than emptying its notebooks array.
+ */
+describe('Deepnote — deleting an init-only leaf removes the whole file', function () {
+    this.timeout(SUITE_TIMEOUT);
+
+    let cleanupTempDir: (() => void) | undefined;
+    let tempDir = '';
+    let filePath = '';
+    let screenshot: (label: string) => Promise<string>;
+
+    before(async function () {
+        screenshot = createScreenshotter(this);
+
+        const copy = copyFixtureToTempDir(FIXTURE);
+        cleanupTempDir = copy.cleanup;
+        tempDir = copy.tempDir;
+        filePath = copy.filePath;
+
+        await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
+        await openFolderViaDialog(tempDir);
+        await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
+
+        const section = await getDeepnoteExplorerSection();
+        await VSBrowser.instance.driver
+            .wait(async () => (await readDeepnoteTreeRows(section)).length > 0, TREE_LOAD_TIMEOUT)
+            .catch(() => undefined);
+        await screenshot('before-delete');
+    });
+
+    after(async function () {
+        await new WebView().switchBack().catch(() => undefined);
+        await new EditorView().closeAllEditors().catch(() => undefined);
+        try {
+            cleanupTempDir?.();
+        } catch (error) {
+            console.warn('[init-only] remove temp workspace dir during cleanup:', error);
+        }
+    });
+
+    it('deletes the file (init notebook resolves, no "Notebook not found")', async function () {
+        const section = await getDeepnoteExplorerSection();
+        const leaf = await findDeepnoteLeaf(section, NOTEBOOK_NAME);
+        expect(leaf, `${NOTEBOOK_NAME} leaf`).to.not.equal(undefined);
+
+        await selectDeepnoteContextMenu(leaf!, 'Delete Notebook');
+        await confirmModalDialog('Delete', { messageIncludes: NOTEBOOK_NAME });
+
+        const toast = await waitForNotification(/Notebook deleted: Bootstrap/i, WORKBENCH_TIMEOUT, true);
+        expect(toast, 'deleted toast').to.not.equal(undefined);
+        await screenshot('after-delete');
+
+        const notFound = await waitForNotification(NOTEBOOK_NOT_FOUND, NO_SPLIT_PROMPT_TIMEOUT, false);
+        expect(notFound, 'no "Notebook not found" error').to.equal(undefined);
+
+        // The whole file is gone (deleted), not emptied to a notebook-less shell.
+        expect(fs.existsSync(filePath), 'init-only file removed from disk').to.equal(false);
+        expect(
+            (await readDeepnoteTreeRows(section)).some((row) => row.isLeaf && row.label === NOTEBOOK_NAME),
+            'the Bootstrap leaf no longer appears in the tree'
+        ).to.equal(false);
     });
 });

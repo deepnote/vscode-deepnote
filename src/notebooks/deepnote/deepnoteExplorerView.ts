@@ -10,7 +10,9 @@ import {
     DeepnoteTreeItemType,
     type DeepnoteTreeItemContext,
     type ProjectGroupData,
-    getNonInitNotebooks
+    getNonInitNotebooks,
+    isSingleNotebookFile,
+    resolveLeafNotebook
 } from './deepnoteTreeItem';
 import { uuidUtils } from '../../platform/common/uuid';
 import { getFilePath } from '../../platform/common/platform/fs-paths';
@@ -175,7 +177,7 @@ export class DeepnoteExplorerView {
             }
 
             // A single-notebook file's only non-init notebook is the file itself: delete the file.
-            if (this.isSingleNotebookFile(treeItem, projectData)) {
+            if (this.targetsSingleNotebookFile(treeItem, projectData)) {
                 await this.deleteNotebookFile(fileUri);
                 this.treeDataProvider.refresh();
                 await window.showInformationMessage(l10n.t('Notebook deleted: {0}', notebookName));
@@ -236,7 +238,7 @@ export class DeepnoteExplorerView {
             const newNotebook = this.cloneNotebook(targetNotebook, newName);
 
             // Single-notebook file: the duplicate becomes a NEW SIBLING FILE.
-            if (this.isSingleNotebookFile(treeItem, projectData)) {
+            if (this.targetsSingleNotebookFile(treeItem, projectData)) {
                 const newFile = buildSingleNotebookFile(projectData, newNotebook);
                 const targetUri = await buildSiblingNotebookFileUri(fileUri, newName, deepnoteFileExists);
 
@@ -409,27 +411,28 @@ export class DeepnoteExplorerView {
     }
 
     /**
-     * Whether the tree item targets a single-notebook file (the file holds exactly one non-init
-     * notebook), as opposed to a legacy multi-notebook file's in-file child.
-     */
-    private isSingleNotebookFile(treeItem: DeepnoteTreeItem, projectData: DeepnoteFile): boolean {
-        if (treeItem.type !== DeepnoteTreeItemType.ProjectFile) {
-            return false;
-        }
-
-        return getNonInitNotebooks(projectData).length === 1;
-    }
-
-    /**
      * Resolve the notebook a notebook-scoped command targets: `context.notebookId` for a legacy
-     * child, otherwise the file's only non-init notebook.
+     * child, otherwise the leaf file's notebook (first non-init, falling back to the init notebook
+     * for an init-only file).
      */
     private resolveTargetNotebook(treeItem: DeepnoteTreeItem, projectData: DeepnoteFile): DeepnoteNotebook | undefined {
         if (treeItem.context.notebookId) {
             return projectData.project.notebooks?.find((nb: DeepnoteNotebook) => nb.id === treeItem.context.notebookId);
         }
 
-        return getNonInitNotebooks(projectData)[0];
+        return resolveLeafNotebook(projectData);
+    }
+
+    /**
+     * Whether the tree item targets a single-notebook leaf file (one non-init notebook, or an
+     * init-only file), as opposed to a legacy multi-notebook file's in-file child.
+     */
+    private targetsSingleNotebookFile(treeItem: DeepnoteTreeItem, projectData: DeepnoteFile): boolean {
+        if (treeItem.type !== DeepnoteTreeItemType.ProjectFile) {
+            return false;
+        }
+
+        return isSingleNotebookFile(projectData);
     }
 
     /**

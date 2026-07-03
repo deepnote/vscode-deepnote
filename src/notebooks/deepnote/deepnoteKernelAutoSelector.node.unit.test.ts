@@ -289,6 +289,54 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 'ensureKernelSelected should be called with the cancellation token'
             );
         });
+
+        test('should keep the old server handle registered when the environment switch fails', async () => {
+            // Catches: a failed/cancelled switch leaving the still-selected controller on a dead
+            // (unregistered) handle, causing DeepnoteServerNotFoundError until reload.
+
+            // Arrange - old handle already tracked, no new handle registered because setup fails
+            const notebookKey = mockNotebook.uri.toString();
+            const oldServerHandle = 'old-server-handle';
+            serverHandles(selector).set(notebookKey, oldServerHandle);
+
+            const mockEnvironment = createMockEnvironment('test-env-id', 'Test Environment');
+            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).thenReturn('test-env-id');
+            when(mockEnvironmentManager.getEnvironment('test-env-id')).thenReturn(mockEnvironment);
+
+            sandbox.stub(selector, 'ensureKernelSelectedWithConfiguration').rejects(new Error('startServer failed'));
+
+            // Act
+            await assert.isRejected(
+                selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken))
+            );
+
+            // Assert - the old handle must remain registered so the selected controller keeps resolving
+            verify(mockServerProvider.unregisterServer(oldServerHandle)).never();
+        });
+
+        test('should unregister the old server handle after switching to a different environment', async () => {
+            // Arrange - old handle tracked; successful setup registers a different new handle
+            const notebookKey = mockNotebook.uri.toString();
+            const oldServerHandle = 'old-server-handle';
+            const newServerHandle = 'new-server-handle';
+            serverHandles(selector).set(notebookKey, oldServerHandle);
+
+            const mockEnvironment = createMockEnvironment('test-env-id', 'Test Environment');
+            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).thenReturn('test-env-id');
+            when(mockEnvironmentManager.getEnvironment('test-env-id')).thenReturn(mockEnvironment);
+
+            // Real setup registers a new handle for the notebook - emulate that side effect
+            sandbox.stub(selector, 'ensureKernelSelectedWithConfiguration').callsFake(async () => {
+                serverHandles(selector).set(notebookKey, newServerHandle);
+            });
+
+            // Act
+            await selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken));
+
+            // Assert - only the stale old handle is unregistered; the new one stays
+            verify(mockServerProvider.unregisterServer(oldServerHandle)).once();
+            verify(mockServerProvider.unregisterServer(newServerHandle)).never();
+        });
     });
 
     suite('pickEnvironment', () => {
@@ -559,21 +607,21 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             //    - Validates server cleanup during rebuild
             //    - Ensures old server is unregistered from provider
             //
-            // THE ACTUAL IMPLEMENTATION at deepnoteKernelAutoSelector.node.ts:269-291:
+            // THE ACTUAL IMPLEMENTATION (rebuildController):
             //
-            //   // Clear cached state
-            //   this.notebookControllers.delete(notebookKey);
-            //   this.notebookConnectionMetadata.delete(notebookKey);
+            //   // Capture the old handle; do NOT unregister it yet.
+            //   const oldServerHandle = this.projectServerHandles.get(notebookKey);
             //
-            //   // Unregister old server
-            //   const oldServerHandle = this.notebookServerHandles.get(notebookKey);
-            //   if (oldServerHandle) {
+            //   await this.ensureKernelSelectedWithConfiguration(...);
+            //
+            //   // Only after setup succeeds, and only if setup registered a different handle.
+            //   const newServerHandle = this.projectServerHandles.get(notebookKey);
+            //   if (oldServerHandle && oldServerHandle !== newServerHandle) {
             //       this.serverProvider.unregisterServer(oldServerHandle);
-            //       this.notebookServerHandles.delete(notebookKey);
             //   }
             //
-            // These operations happen BEFORE calling ensureKernelSelected() to create the new controller,
-            // ensuring clean state for the environment switch.
+            // The old handle is unregistered AFTER a guaranteed replacement, so a failed/cancelled
+            // switch never strands the still-selected controller on a dead handle.
 
             assert.ok(true, 'UT-2 is validated by existing tests and implementation (INV-9)');
         });
@@ -1033,4 +1081,11 @@ function createMockKernelSpec(name: string, displayName: string, language: strin
         executable: '/usr/bin/python3',
         argv: ['python3', '-m', 'ipykernel_launcher', '-f', '{connection_file}']
     };
+}
+
+/**
+ * Exposes the private notebook-to-server-handle map for seeding/inspection in tests.
+ */
+function serverHandles(selector: DeepnoteKernelAutoSelector): Map<string, string> {
+    return (selector as unknown as { projectServerHandles: Map<string, string> }).projectServerHandles;
 }

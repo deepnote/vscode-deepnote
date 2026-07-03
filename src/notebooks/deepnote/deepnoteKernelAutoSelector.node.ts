@@ -337,13 +337,10 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         // The controller will stay alive - it will just get updated via updateConnection()
         this.notebookConnectionMetadata.delete(notebookKey);
 
-        // Clear old server handle - new environment will register a new handle
+        // Capture the old handle now; only unregister it once the replacement is registered.
+        // Unregistering eagerly would strand the still-selected controller on a dead handle if the
+        // switch fails or is cancelled before a new server is registered.
         const oldServerHandle = this.projectServerHandles.get(notebookKey);
-        if (oldServerHandle) {
-            logger.info(`Clearing old server handle from tracking: ${oldServerHandle}`);
-            this.serverProvider.unregisterServer(oldServerHandle);
-            this.projectServerHandles.delete(notebookKey);
-        }
 
         // Stop existing LSP clients so new ones can be created with fresh environment
         // Without this, the SQL LSP client's command handlers remain registered and
@@ -363,6 +360,15 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         }
 
         await this.ensureKernelSelectedWithConfiguration(notebook, environment, notebookKey, progress, token);
+
+        // Setup succeeded. If it registered a new server handle (full setup path), drop the old one.
+        // The verified-controller early return reuses the existing handle, so nothing to clear then.
+        const newServerHandle = this.projectServerHandles.get(notebookKey);
+
+        if (oldServerHandle && oldServerHandle !== newServerHandle) {
+            logger.info(`Clearing old server handle from tracking: ${oldServerHandle}`);
+            this.serverProvider.unregisterServer(oldServerHandle);
+        }
 
         logger.info(`Controller successfully switched to new environment`);
     }

@@ -184,6 +184,22 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         return undefined;
     }
 
+    /**
+     * Return an element's parent so `TreeView.reveal` works (VS Code requires `getParent`).
+     * Notebook -> its ProjectFile; ProjectFile -> its ProjectGroup; groups/root -> undefined.
+     */
+    public getParent(element: DeepnoteTreeItem): DeepnoteTreeItem | undefined {
+        if (element.type === DeepnoteTreeItemType.Notebook) {
+            return this.fileItemCache.get(Uri.file(element.context.filePath).toString());
+        }
+
+        if (element.type === DeepnoteTreeItemType.ProjectFile) {
+            return this.groupItemCache.get(element.context.projectId);
+        }
+
+        return undefined;
+    }
+
     private createLoadingTreeItem(): DeepnoteTreeItem {
         const loadingItem = new DeepnoteTreeItem(
             DeepnoteTreeItemType.Loading,

@@ -1,7 +1,7 @@
 /**
  * E2E (ExTester): a `.deepnote` file whose only notebook IS its init notebook still opens as a
  * single-notebook file (renders that notebook as a fallback, no split prompt), and the Explorer
- * shows it with "0 notebooks" since the init notebook is excluded from the count.
+ * shows it as an openable single-notebook leaf (the init notebook is the sole notebook).
  */
 
 import { expect } from 'chai';
@@ -33,7 +33,7 @@ describe('Deepnote — opening a file whose only notebook is the init notebook',
     let editorOpened = false;
     let statusBarText = '';
     let splitPrompted = false;
-    let zeroNotebooksNodeShown = false;
+    let notebookLeafShown = false;
 
     before(async function () {
         const driver = VSBrowser.instance.driver;
@@ -66,8 +66,8 @@ describe('Deepnote — opening a file whose only notebook is the init notebook',
         await driver
             .wait(async () => (await readDeepnoteTreeRows(section)).length > 0, TREE_LOAD_TIMEOUT)
             .catch(() => undefined);
-        zeroNotebooksNodeShown = (await readDeepnoteTreeRows(section)).some((row) =>
-            /0\s+notebooks?\b/.test(row.description)
+        notebookLeafShown = (await readDeepnoteTreeRows(section)).some(
+            (row) => row.isLeaf && row.label === NOTEBOOK_NAME
         );
         await screenshot('explorer');
     });
@@ -94,7 +94,7 @@ describe('Deepnote — opening a file whose only notebook is the init notebook',
         expect(splitPrompted, 'must not raise the split prompt').to.equal(false);
     });
 
-    it('shows the file with "0 notebooks" in the Explorer (init excluded from the count)', function () {
-        expect(zeroNotebooksNodeShown, 'a "0 notebooks" node in the Deepnote Explorer').to.equal(true);
+    it('shows the file as an openable notebook leaf in the Explorer', function () {
+        expect(notebookLeafShown, 'an openable notebook leaf in the Deepnote Explorer').to.equal(true);
     });
 });

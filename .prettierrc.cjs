@@ -4,6 +4,8 @@ module.exports = {
     tabWidth: 4,
     endOfLine: 'auto',
     trailingComma: 'none',
+    plugins: ['prettier-plugin-tailwindcss'],
+    tailwindStylesheet: './src/webviews/webview-side/dataframe-renderer/tailwind.css',
     overrides: [
         {
             files: ['*.yml', '*.yaml'],

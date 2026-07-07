@@ -105,8 +105,8 @@ describe('Deepnote — opening a file whose only notebook is the init notebook',
 });
 
 /**
- * Guards F2: notebook commands on an init-only leaf must resolve the init notebook (no "Notebook
- * not found") and delete the FILE rather than emptying its notebooks array.
+ * Notebook commands on an init-only leaf must resolve the init notebook (no "Notebook not found")
+ * and delete must remove the file itself rather than emptying its notebooks array.
  */
 describe('Deepnote — deleting an init-only leaf removes the whole file', function () {
     this.timeout(SUITE_TIMEOUT);
@@ -160,7 +160,6 @@ describe('Deepnote — deleting an init-only leaf removes the whole file', funct
         const notFound = await waitForNotification(NOTEBOOK_NOT_FOUND, NO_SPLIT_PROMPT_TIMEOUT, false);
         expect(notFound, 'no "Notebook not found" error').to.equal(undefined);
 
-        // The whole file is gone (deleted), not emptied to a notebook-less shell.
         expect(fs.existsSync(filePath), 'init-only file removed from disk').to.equal(false);
         expect(
             (await readDeepnoteTreeRows(section)).some((row) => row.isLeaf && row.label === NOTEBOOK_NAME),

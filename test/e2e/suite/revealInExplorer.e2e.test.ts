@@ -1,7 +1,6 @@
 /**
- * E2E (ExTester): "Reveal in Explorer" must actually reveal the active notebook's tree leaf.
- * Guards F3 — `TreeView.reveal` needs the provider's `getParent`; without it reveal rejects and the
- * command falls back to an "Active notebook: … in project …" toast instead of selecting the leaf.
+ * E2E (ExTester): "Reveal in Explorer" must select the active notebook's tree leaf. `TreeView.reveal`
+ * needs the provider's `getParent`; without it reveal rejects and the command falls back to a toast.
  */
 
 import { expect } from 'chai';
@@ -30,7 +29,7 @@ const REVEAL_NO_ACTIVE = /No active Deepnote notebook|missing metadata/i;
 const NO_FALLBACK_TIMEOUT = 6_000;
 const SELECTION_SETTLE_DELAY = 1_500;
 
-/** Reads a tree row's `aria-selected` (the row element is the `.monaco-list-row`). */
+/** A ViewItem's root element is the `.monaco-list-row`, which carries `aria-selected`. */
 async function isSelected(item: ViewItem): Promise<boolean> {
     return (await item.getAttribute('aria-selected').catch(() => '')) === 'true';
 }
@@ -76,11 +75,9 @@ describe('Deepnote — Reveal in Explorer', function () {
         await driver.sleep(SELECTION_SETTLE_DELAY);
         await screenshot('after-reveal');
 
-        // Primary discriminator: with getParent present, reveal succeeds and this toast never appears.
         const fallback = await waitForNotification(REVEAL_FALLBACK, NO_FALLBACK_TIMEOUT, false);
         fallbackShown = fallback !== undefined;
 
-        // Guard against a vacuous pass: the command must have found an active notebook and reached reveal.
         const noActive = await waitForNotification(REVEAL_NO_ACTIVE, NO_FALLBACK_TIMEOUT, false);
         noActiveShown = noActive !== undefined;
 

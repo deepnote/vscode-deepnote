@@ -337,9 +337,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         // The controller will stay alive - it will just get updated via updateConnection()
         this.notebookConnectionMetadata.delete(notebookKey);
 
-        // Capture the old handle now; only unregister it once the replacement is registered.
-        // Unregistering eagerly would strand the still-selected controller on a dead handle if the
-        // switch fails or is cancelled before a new server is registered.
+        // Capture the old handle but don't unregister it yet: a failed or cancelled switch would
+        // strand the still-selected controller on a dead handle.
         const oldServerHandle = this.projectServerHandles.get(notebookKey);
 
         // Stop existing LSP clients so new ones can be created with fresh environment

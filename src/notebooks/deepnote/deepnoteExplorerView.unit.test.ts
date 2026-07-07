@@ -696,7 +696,6 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         });
 
         test('reports only the succeeded count when some conversions fail', async () => {
-            // Catches: false success count (full selection) after per-file convert failures on partial import.
             const failingModule = await esmock('./deepnoteExplorerView', {
                 '@deepnote/convert': {
                     convertIpynbFileToDeepnoteFile: async (inputPath: string) => {
@@ -737,7 +736,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             try {
                 await (partialExplorer as any).importJupyterNotebook();
 
-                // 1 succeeded → singular success string, never the full count of 3.
+                // One of three succeeded: singular success message, never the full selection count.
                 expect(infoMessage).to.exist;
                 expect(infoMessage).to.equal('Jupyter notebook imported successfully.');
                 expect(infoMessage).to.not.include('3');
@@ -749,7 +748,6 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         });
 
         test('shows no success message when every conversion fails', async () => {
-            // Catches: false success toast when the whole import failed (pins the === 1 / > 1 guard).
             const failingModule = await esmock('./deepnoteExplorerView', {
                 '@deepnote/convert': {
                     convertIpynbFileToDeepnoteFile: async () => {

@@ -412,8 +412,7 @@ export class DeepnoteExplorerView {
 
     /**
      * Resolve the notebook a notebook-scoped command targets: `context.notebookId` for a legacy
-     * child, otherwise the leaf file's notebook (first non-init, falling back to the init notebook
-     * for an init-only file).
+     * in-file child, otherwise the leaf file's notebook.
      */
     private resolveTargetNotebook(treeItem: DeepnoteTreeItem, projectData: DeepnoteFile): DeepnoteNotebook | undefined {
         if (treeItem.context.notebookId) {
@@ -424,8 +423,8 @@ export class DeepnoteExplorerView {
     }
 
     /**
-     * Whether the tree item targets a single-notebook leaf file (one non-init notebook, or an
-     * init-only file), as opposed to a legacy multi-notebook file's in-file child.
+     * Whether the tree item targets a single-notebook leaf file, as opposed to a legacy
+     * multi-notebook file's in-file child.
      */
     private targetsSingleNotebookFile(treeItem: DeepnoteTreeItem, projectData: DeepnoteFile): boolean {
         if (treeItem.type !== DeepnoteTreeItemType.ProjectFile) {

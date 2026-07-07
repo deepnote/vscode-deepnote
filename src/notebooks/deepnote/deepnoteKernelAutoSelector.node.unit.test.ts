@@ -291,9 +291,6 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         });
 
         test('should keep the old server handle registered when the environment switch fails', async () => {
-            // Catches: a failed/cancelled switch leaving the still-selected controller on a dead
-            // (unregistered) handle, causing DeepnoteServerNotFoundError until reload.
-
             // Arrange - old handle already tracked, no new handle registered because setup fails
             const notebookKey = mockNotebook.uri.toString();
             const oldServerHandle = 'old-server-handle';
@@ -607,21 +604,8 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             //    - Validates server cleanup during rebuild
             //    - Ensures old server is unregistered from provider
             //
-            // THE ACTUAL IMPLEMENTATION (rebuildController):
-            //
-            //   // Capture the old handle; do NOT unregister it yet.
-            //   const oldServerHandle = this.projectServerHandles.get(notebookKey);
-            //
-            //   await this.ensureKernelSelectedWithConfiguration(...);
-            //
-            //   // Only after setup succeeds, and only if setup registered a different handle.
-            //   const newServerHandle = this.projectServerHandles.get(notebookKey);
-            //   if (oldServerHandle && oldServerHandle !== newServerHandle) {
-            //       this.serverProvider.unregisterServer(oldServerHandle);
-            //   }
-            //
-            // The old handle is unregistered AFTER a guaranteed replacement, so a failed/cancelled
-            // switch never strands the still-selected controller on a dead handle.
+            // rebuildController unregisters the old server handle only AFTER setup registers a
+            // replacement, so a failed/cancelled switch never strands the controller on a dead handle.
 
             assert.ok(true, 'UT-2 is validated by existing tests and implementation (INV-9)');
         });

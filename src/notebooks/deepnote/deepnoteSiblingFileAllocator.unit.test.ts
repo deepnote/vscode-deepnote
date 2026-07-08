@@ -10,9 +10,9 @@ import { allocateSiblingUri, MAX_SIBLING_ALLOCATION_ATTEMPTS } from './deepnoteS
 suite('DeepnoteSiblingFileAllocator (allocateSiblingUri)', () => {
     const parentDir = Uri.file('/workspace/project');
 
-    /** Build an `exists` probe that reports the given set of basenames (within parentDir) as present. */
-    function existsFor(existingBasenames: string[]): (uri: Uri) => Promise<boolean> {
-        const present = new Set(existingBasenames);
+    /** Build an `exists` probe that reports the given set of filenames (within parentDir) as present. */
+    function existsFor(existingFilenames: string[]): (uri: Uri) => Promise<boolean> {
+        const present = new Set(existingFilenames);
 
         return (uri: Uri) => Promise.resolve(present.has(uri.path.split('/').pop() ?? ''));
     }

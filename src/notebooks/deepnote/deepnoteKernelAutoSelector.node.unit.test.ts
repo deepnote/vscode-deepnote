@@ -604,7 +604,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             //    - Validates server cleanup during rebuild
             //    - Ensures old server is unregistered from provider
             //
-            // rebuildController unregisters the old server handle only AFTER setup registers a
+            // rebuildController drops the old server handle only AFTER setup registers a
             // replacement, so a failed/cancelled switch never strands the controller on a dead handle.
 
             assert.ok(true, 'UT-2 is validated by existing tests and implementation (INV-9)');

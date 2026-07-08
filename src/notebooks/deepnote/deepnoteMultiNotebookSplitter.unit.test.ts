@@ -46,7 +46,7 @@ suite('DeepnoteMultiNotebookSplitter', () => {
     // Ordered log of side-effecting fs operations, so we can assert write-before-rename ORDER.
     let callLog: Array<{ op: 'write' | 'rename'; name: string }>;
     let writeTargets: string[];
-    // Each retire of the original, captured as { from: <original>, to: <legacy> } basenames.
+    // Each retire of the original, captured as { from: <original>, to: <legacy> } filenames.
     let renameOps: Array<{ from: string; to: string }>;
     let warnCount: number;
     // Names that the injected `exists` probe reports as already present on disk.

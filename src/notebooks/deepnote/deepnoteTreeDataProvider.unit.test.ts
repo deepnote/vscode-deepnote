@@ -866,7 +866,7 @@ suite('DeepnoteTreeDataProvider', () => {
                 version: '1.0.0'
             };
 
-            seed([['/workspace/initmain.deepnote', initPlusMain]]);
+            seed([['/workspace/init-main.deepnote', initPlusMain]]);
 
             const group = (await getGroupItems()).find((item) => item.type === DeepnoteTreeItemType.ProjectGroup);
             const files = await provider.getChildren(group);

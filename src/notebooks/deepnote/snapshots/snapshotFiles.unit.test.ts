@@ -154,7 +154,7 @@ suite('snapshotFiles', () => {
         });
 
         test('should normalize accented characters to ASCII', () => {
-            assert.strictEqual(slugifyProjectName('Café Résumé'), 'cafe-resume');
+            assert.strictEqual(slugifyProjectName('Café Cliché'), 'cafe-cliche');
         });
 
         test('should collapse multiple spaces into single hyphen', () => {

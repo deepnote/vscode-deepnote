@@ -95,7 +95,6 @@ export class IntegrationManager implements IIntegrationManager {
             return;
         }
 
-        // Get the project and notebook IDs from the notebook metadata
         const projectId = activeNotebook.metadata?.deepnoteProjectId;
         const notebookId = activeNotebook.metadata?.deepnoteNotebookId;
         if (!projectId || !notebookId) {

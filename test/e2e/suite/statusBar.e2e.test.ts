@@ -1,7 +1,6 @@
 /**
- * E2E test for the Deepnote notebook status-bar item: when a Deepnote notebook is active the left
- * status bar shows its name and clicking it copies the notebook details to the clipboard; when a
- * non-notebook editor is focused the item is hidden. Fixture: `quick-notes.deepnote`.
+ * E2E (ExTester): the status-bar item shows the active Deepnote notebook's name, copies its details
+ * to the clipboard on click, and hides for a non-notebook editor. Fixture: `quick-notes.deepnote`.
  */
 
 import { expect } from 'chai';

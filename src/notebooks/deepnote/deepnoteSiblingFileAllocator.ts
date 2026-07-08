@@ -19,10 +19,8 @@ export async function deepnoteFileExists(uri: Uri): Promise<boolean> {
 }
 
 /**
- * Resolve a collision-free sibling URI for a desired full basename (including `.deepnote`).
- * On a clash a numeric suffix is inserted before the extension, applied to the WHOLE basename
- * (not a first-dot stem), so `report.backup.deepnote` → `report.backup-2.deepnote`. When
- * `reserved` is supplied, the chosen name is added to it so a batch cannot pick the same name twice.
+ * Resolve a collision-free sibling URI for a full `.deepnote` basename. On a clash a numeric suffix
+ * goes before the extension (`a.backup.deepnote` → `a.backup-2.deepnote`); `reserved` blocks batch reuse.
  */
 export async function allocateSiblingUri(
     parentDir: Uri,

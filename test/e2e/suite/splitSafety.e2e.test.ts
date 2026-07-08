@@ -1,7 +1,6 @@
 /**
- * E2E test for split-prompt safety: dismissing the prompt leaves the original file untouched (no
- * siblings, no `.legacy`). The dirty-flush-before-split and write-before-retire guarantees are
- * covered by the splitter's unit tests, since neither can be driven reliably through the ExTester UI.
+ * E2E (ExTester): dismissing the split prompt leaves the original file untouched (no siblings, no
+ * `.legacy`). Flush-before-split and write-before-retire are covered by the splitter's unit tests.
  */
 
 import { expect } from 'chai';

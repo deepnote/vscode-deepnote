@@ -1,7 +1,6 @@
 /**
- * E2E: `DeepnoteFileChangeWatcher` reloads an open notebook when its `.deepnote` is edited externally on
- * disk. It syncs cells (replaceCells), not notebook metadata, so the observable is the rendered cell
- * source. No kernel.
+ * E2E (ExTester): `DeepnoteFileChangeWatcher` reloads an open notebook on external `.deepnote` edits.
+ * It syncs cells (replaceCells), not metadata, so the observable is the rendered cell source. No kernel.
  */
 
 import { expect } from 'chai';
@@ -79,9 +78,8 @@ describe('Deepnote — the file watcher reloads an open notebook when its .deepn
         const driver = VSBrowser.instance.driver;
         const screenshot = createScreenshotter(this);
 
-        // Read the cell source from the notebook overlay. Virtualized rows keep the source out of the
-        // overlay root innerText, so also gather `.view-line`/`.code-cell-row` text, and normalize
-        // Monaco's NBSP (U+00A0) so a plain space matches.
+        // Read cell source from the overlay: virtualized rows keep it out of innerText, so also gather
+        // `.view-line`/`.code-cell-row` text and normalize Monaco's NBSP (U+00A0) so a plain space matches.
         const overlayText = async (): Promise<string> => {
             const raw = (await driver.executeScript(() => {
                 const overlay = document.querySelector('.notebookOverlay') as HTMLElement | null;
@@ -143,9 +141,8 @@ describe('Deepnote — the file watcher reloads an open notebook when its .deepn
     });
 });
 
-// The snapshot-output-update arm: a `*.snapshot.deepnote` appearing on disk for an already-open notebook
-// makes the watcher apply the snapshot's saved output to the open cell (replaceCells fallback, no kernel).
-// VS Code has no notion of Deepnote snapshots, so this is unambiguously the extension's behaviour.
+// Snapshot-output-update arm: a `*.snapshot.deepnote` appearing for an already-open notebook makes the
+// watcher apply its saved output to the open cell (replaceCells, no kernel — unambiguously the extension).
 const SNAPSHOT_FIXTURE = 'legacy-snapshot-demo.deepnote';
 const SNAPSHOT = 'legacy-snapshot-demo_ffffffff-ffff-4fff-8fff-ffffffffffff_latest.snapshot.deepnote';
 const SNAPSHOT_MARKER = 'SNAPSHOT_OUTPUT_MARKER';

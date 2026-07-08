@@ -12,12 +12,9 @@ export function isSnapshotFile(uri: Uri): boolean {
 }
 
 /**
- * Extracts the project ID from a snapshot file URI.
- *
- * Snapshot filenames follow the notebook-scoped form
- * `${slug}_${projectId}_${encodedNotebookId}_${variant}.snapshot.deepnote` or the legacy
- * project-scoped form `${slug}_${projectId}_${variant}.snapshot.deepnote`. Both are handled
- * by convert's `parseSnapshotFilename` (which also decodes the percent-encoded notebook id).
+ * Extracts the project ID from a snapshot file URI. Handles the notebook-scoped
+ * `${slug}_${projectId}_${encodedNotebookId}_${variant}` and legacy project-scoped
+ * `${slug}_${projectId}_${variant}` forms via convert's `parseSnapshotFilename`.
  * @returns The project ID, or undefined if the URI is not a valid snapshot file
  */
 export function extractProjectIdFromSnapshotUri(uri: Uri): string | undefined {

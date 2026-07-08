@@ -1,8 +1,6 @@
 /**
- * E2E test for the on-open split of a legacy multi-notebook `.deepnote` file into one
- * single-notebook file per notebook. The `sales-analytics.deepnote` fixture holds three notebooks
- * (Overview, Revenue, Forecast) plus one project-level BigQuery integration. The split is
- * destructive, so it runs once in `before` (hooks do not retry) and each `it` asserts a property.
+ * E2E (ExTester): the on-open split of the multi-notebook `sales-analytics.deepnote` (Overview,
+ * Revenue, Forecast + a project BigQuery integration) into one single-notebook file per notebook.
  */
 
 import { expect } from 'chai';

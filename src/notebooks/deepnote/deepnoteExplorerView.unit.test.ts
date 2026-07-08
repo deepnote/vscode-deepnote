@@ -447,10 +447,8 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
     });
 
     suite('importNotebook', () => {
-        // `convertIpynbFileToDeepnoteFile` does real node:fs I/O, so stub just that one
-        // @deepnote/convert export (all other exports stay the real implementation) while the
-        // import flow is exercised. This mocks the side-effecting function where it matters,
-        // instead of reimplementing the whole package.
+        // Stub only `convertIpynbFileToDeepnoteFile` (real node:fs I/O); all other @deepnote/convert
+        // exports stay real, so the import flow runs without reimplementing the package.
         let importModule: typeof import('./deepnoteExplorerView');
 
         setup(async () => {
@@ -2318,9 +2316,8 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
     });
 });
 
-// Sibling-file command semantics (§7): project-group operations span every sibling file; new/
-// duplicate notebooks become NEW sibling files (never appended); single-notebook deletes remove
-// the FILE; name uniqueness is collected across the whole group.
+// Project-group operations span every sibling file: new/duplicate notebooks become NEW sibling
+// files (never appended), single-notebook deletes remove the FILE, name uniqueness spans the group.
 suite('DeepnoteExplorerView - Sibling-file command semantics', () => {
     let explorerView: DeepnoteExplorerView;
     let mockContext: IExtensionContext;

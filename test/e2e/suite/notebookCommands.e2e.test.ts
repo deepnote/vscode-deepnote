@@ -1,10 +1,6 @@
 /**
- * E2E test for the notebook-management commands (New / Add / Duplicate / Rename / Delete Notebook)
- * that create, rename, and delete sibling `.deepnote` files. Uses three "Marketing" siblings (one
- * shared project.id) in one workspace. Since the sibling filename is derived
- * (`{fileStem}-{slug}.deepnote`), assertions check the notebook NAME inside the files, not filenames.
- * The E2E settings set `files.enableTrash: false`, so Delete is permanent (OS trash is unreliable
- * headless/in containers).
+ * E2E (ExTester): New/Add/Duplicate/Rename/Delete commands create, rename, and delete sibling
+ * `.deepnote` files; filenames are derived, so assertions check the notebook NAME. Delete is permanent.
  */
 
 import { expect } from 'chai';

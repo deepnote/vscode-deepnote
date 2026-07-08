@@ -267,23 +267,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         if (event.notebook.notebookType !== DEEPNOTE_NOTEBOOK_TYPE) {
             return;
         }
-
-        // const notebookKey = event.notebook.uri.toString();
-
-        // // If the Deepnote controller for this notebook was deselected, try to reselect it
-        // // Since controllers are now protected from disposal, this should rarely happen
-        // if (!event.selected) {
-        //     const ourController = this.notebookControllers.get(notebookKey);
-        //     if (ourController && ourController.id === event.controller.id) {
-        //         logger.warn(
-        //             `Deepnote controller was unexpectedly deselected for ${getDisplayPath(
-        //                 event.notebook.uri
-        //             )}. Reselecting...`
-        //         );
-        //         // Reselect the controller
-        //         ourController.controller.updateNotebookAffinity(event.notebook, NotebookControllerAffinity.Preferred);
-        //     }
-        // }
     }
 
     private onDidCloseNotebook(notebook: NotebookDocument) {
@@ -482,7 +465,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             handle: createDeepnoteServerConfigHandle(configuration.id, notebook.uri)
         };
 
-        // Register the server with the provider (one server per NOTEBOOK)
         this.serverProvider.registerServer(serverProviderHandle.handle, serverInfo);
         this.projectServerHandles.set(notebookKey, serverProviderHandle.handle);
 

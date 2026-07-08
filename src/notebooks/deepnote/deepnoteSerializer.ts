@@ -282,8 +282,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
             logger.debug('SerializeNotebook: Cloned blocks, computing snapshotHash');
 
-            // A one-time hash-value change vs the prior local impl is acceptable: the field is
-            // stripped on serialize and recomputed each save.
+            // snapshotHash is transient: stripped on serialize and recomputed here each save.
             (originalProject.metadata as { snapshotHash?: string }).snapshotHash = computeSnapshotHash(originalProject);
 
             // Update modifiedAt conditionally based on snapshot mode
@@ -451,7 +450,6 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             const newBlock = newBlocks[i];
             const originalBlock = originalBlocks[i];
 
-            // Compare content and type (the things that matter for actual changes)
             if (
                 newBlock.content !== originalBlock.content ||
                 newBlock.type !== originalBlock.type ||

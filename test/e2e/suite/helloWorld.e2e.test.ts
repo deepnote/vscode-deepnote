@@ -1,7 +1,6 @@
 /**
- * E2E (ExTester): the full Deepnote happy path through the real VS Code UI — open a one-notebook
- * file, create + select an environment (connects the kernel), run the cell, assert its stdout.
- * Requires the Python extension and a discoverable interpreter; the first kernel start can take minutes.
+ * E2E (ExTester): the full Deepnote happy path — open a one-notebook file, create + select an
+ * environment (connects the kernel), run the cell, assert its stdout. Needs the Python extension + interpreter.
  */
 
 import { expect } from 'chai';

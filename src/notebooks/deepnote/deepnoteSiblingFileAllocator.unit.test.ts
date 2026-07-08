@@ -4,10 +4,7 @@ import { Uri } from 'vscode';
 import { allocateSiblingUri, MAX_SIBLING_ALLOCATION_ATTEMPTS } from './deepnoteSiblingFileAllocator';
 
 /**
- * Tests for the shared, collision-safe sibling-file allocator (§0).
- *
- * The allocator is the SINGLE filesystem-aware filename-allocation code path shared by the
- * splitter (§2) and the notebook file factory (§3). These tests exercise the REAL allocator
+ * Tests the shared, collision-safe sibling-file allocator (used by the splitter and file factory)
  * against an INJECTED `exists` probe, so no `workspace.fs` mocking is needed.
  */
 suite('DeepnoteSiblingFileAllocator (allocateSiblingUri)', () => {

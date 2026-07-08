@@ -348,11 +348,8 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             return;
         }
 
-        // Look up original project blocks for fallback block ID resolution with an exact
-        // (projectId, notebookId) lookup. Sibling files share a project.id, so a project-only
-        // lookup can return a different sibling's project whose notebooks do not contain this
-        // notebookId — leaving originalBlocks undefined and silently skipping the metadata-lost
-        // block-id recovery below. Mirrors the exact-lookup guard in snapshotService.ts.
+        // Exact (projectId, notebookId) lookup: sibling files share a project.id, so a project-only
+        // lookup could return a different sibling and silently skip the block-id recovery below.
         const originalProject = notebookId
             ? this.notebookManager.getProjectForNotebook(projectId, notebookId)
             : undefined;

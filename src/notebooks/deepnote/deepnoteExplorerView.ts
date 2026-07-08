@@ -25,11 +25,8 @@ import { deepnoteFileExists } from './deepnoteSiblingFileAllocator';
 import { isSnapshotFile } from './snapshots/snapshotFiles';
 
 /**
- * Manages the Deepnote explorer tree view and related commands.
- *
- * The tree groups sibling `.deepnote` files by `project.id`: project-scoped commands operate over
- * every sibling in the group, notebook-scoped commands over a single file or legacy in-file child,
- * and new/duplicated notebooks become new sibling files via the factory.
+ * Manages the Deepnote explorer tree view and its commands. Sibling `.deepnote` files are grouped
+ * by `project.id`; project-scoped commands span the group, notebook-scoped ones a single leaf/child.
  */
 
 @injectable()

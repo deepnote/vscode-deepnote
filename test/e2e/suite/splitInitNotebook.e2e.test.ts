@@ -1,9 +1,6 @@
 /**
- * E2E test for splitting a legacy multi-notebook `.deepnote` file that declares an INIT notebook.
- * The `etl-pipeline.deepnote` fixture holds an init notebook ("Init", referenced by
- * `project.initNotebookId`) plus two mains ("Extract", "Transform"). The split must emit the init
- * notebook as its own sibling and leave every main sibling still referencing it via `initNotebookId`.
- * The split is destructive, so it runs once in `before` (hooks do not retry).
+ * E2E (ExTester): splitting the multi-notebook `etl-pipeline.deepnote` (init "Init" + mains "Extract"/
+ * "Transform") emits the init notebook as its own sibling; every main keeps referencing it via initNotebookId.
  */
 
 import { expect } from 'chai';

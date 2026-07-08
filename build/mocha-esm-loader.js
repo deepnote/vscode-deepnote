@@ -352,9 +352,8 @@ export async function load(url, context, nextLoad) {
             };
         }
 
-        // Handle @deepnote/runtime-core mock - needed because the real startServer/stopServer
-        // spawn/kill real Python processes. The mock keeps a shared call log so tests can
-        // assert how many servers were started/stopped and with which working directories.
+        // Mock @deepnote/runtime-core: the real startServer/stopServer spawn/kill Python processes.
+        // The mock logs start/stop calls so tests can assert counts and working directories.
         if (moduleName === 'deepnote-runtime-core') {
             return {
                 format: 'module',

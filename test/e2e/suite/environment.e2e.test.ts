@@ -1,7 +1,6 @@
 /**
- * E2E (ExTester): splitting a multi-notebook file that had a selected environment migrates it onto
- * every split child. Signal: the `.vscode/deepnote.json` sidecar (projectId -> environmentId), which
- * we delete after the split so opening a child regenerates it solely from the migrated mapping.
+ * E2E (ExTester): splitting a multi-notebook file migrates its selected environment onto every child.
+ * Signal: the `.vscode/deepnote.json` sidecar, deleted post-split so a child regenerates it from the migration.
  */
 import { expect } from 'chai';
 import * as fs from 'fs';
@@ -198,10 +197,8 @@ describe('Deepnote — splitting a file migrates its selected environment onto e
     });
 });
 
-// The Deepnote server starter writes one PID lock file per running server at
-// `os.tmpdir()/vscode-deepnote-locks/server-<pid>.json`, deleted (and the process killed) when the
-// server stops. The test's Node context shares `os.tmpdir()` with the extension host, so it reads the
-// lock dir directly — the observable cross-platform signal a stopped out-of-process server otherwise lacks.
+// The server starter writes/deletes one PID lock file per running server under this dir. The test
+// shares os.tmpdir() with the extension host, so reading the dir is the only cross-process stop signal.
 const LOCK_DIR = path.join(os.tmpdir(), 'vscode-deepnote-locks');
 
 // A dedicated env name so deleting it never disturbs the shared `E2E Hello Env` other suites reuse.

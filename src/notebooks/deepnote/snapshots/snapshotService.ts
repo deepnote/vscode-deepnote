@@ -454,10 +454,8 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     }
 
     /**
-     * Reads the best available snapshot for a project/notebook WITHOUT a file path. Since
-     * `deserializeNotebook` only receives the file bytes (no URI), this globs the workspace for
-     * snapshot files keyed on `projectId` only, ranks them (notebook-scoped match, then `latest`,
-     * then newest), and returns the first with real outputs.
+     * Reads the best snapshot for a project/notebook WITHOUT a path (`deserializeNotebook` gets only
+     * bytes): globs the workspace by `projectId`, ranks notebook-scoped → `latest` → newest outputs.
      */
     async readSnapshot(projectId: string, notebookId?: string): Promise<Map<string, DeepnoteOutput[]> | undefined> {
         logger.debug(`[Snapshot] readSnapshot called for projectId=${projectId}, notebookId=${notebookId}`);

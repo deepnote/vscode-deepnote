@@ -148,9 +148,8 @@ suite('DeepnoteNotebookManager', () => {
         });
     });
 
-    // Two sibling .deepnote files of ONE project share project.id but each holds a
-    // different single notebook. These tests pin the load-bearing new semantics:
-    // nested (projectId, notebookId) storage with an exact, no-fallback lookup.
+    // Two sibling .deepnote files of one project share project.id but hold different single notebooks.
+    // These pin the nested (projectId, notebookId) storage with an exact, no-fallback lookup.
     suite('nested sibling storage', () => {
         const projectId = 'shared-project-id';
         const nbA = 'notebook-A';
@@ -188,9 +187,8 @@ suite('DeepnoteNotebookManager', () => {
         test('getProjectForNotebook is exact: returns undefined for an uncached notebook even though a sibling IS cached (NO fallback)', () => {
             manager.storeOriginalProject(projectId, nbA, siblingProject(nbA, 'Sibling A'));
 
-            // A different notebook of the SAME project is cached, but the requested one is not.
-            // The exact lookup must NOT fall back to the sibling — this is the key anti-regression
-            // (a save path relies on it to never write against the wrong sibling's project).
+            // The exact lookup must NOT fall back to a cached sibling of the same project — a save
+            // path relies on this to never write against the wrong sibling's project.
             const result = manager.getProjectForNotebook(projectId, 'not-cached');
 
             assert.strictEqual(result, undefined);

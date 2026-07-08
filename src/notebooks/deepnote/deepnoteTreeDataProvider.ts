@@ -38,10 +38,8 @@ export function compareTreeItemsByLabel(a: DeepnoteTreeItem, b: DeepnoteTreeItem
 }
 
 /**
- * Tree data provider for the Deepnote explorer view: root → `ProjectGroup` (one per `project.id`)
- * → `ProjectFile` → `Notebook` (legacy multi-notebook files only). Groups are re-derived from the
- * URI-keyed `cachedProjects` on each read; since siblings share one `project.id`, refreshes
- * fire a full-tree change rather than a scoped one.
+ * Explorer tree: root → `ProjectGroup` (per `project.id`) → `ProjectFile` → `Notebook` (legacy only).
+ * Groups re-derive from the URI-keyed `cachedProjects` per read, so refreshes fire a full-tree change.
  */
 export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeItem> {
     private _onDidChangeTreeData: EventEmitter<DeepnoteTreeItem | undefined | null | void> = new EventEmitter<

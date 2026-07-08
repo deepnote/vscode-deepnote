@@ -28,10 +28,8 @@ const MAIN_FILE_BLOCK_CODE = 'print("this is a main-file block, not init")';
 const waitTimeoutMs = 5000;
 const waitIntervalMs = 5;
 
-// The runner adds a kernel to its WeakSet only AFTER runInitForKernel fully returns, which
-// includes a ~1000ms "init complete" display delay (INIT_COMPLETE_DISPLAY_DELAY_MS in the
-// runner). Tests that fire a *second* start for the same kernel must wait past this so the
-// gate has actually been set; we use a margin above the production delay.
+// A kernel is WeakSet-marked only after runInitForKernel returns, past the runner's ~1000ms
+// display delay (INIT_COMPLETE_DISPLAY_DELAY_MS); a second start for the same kernel must wait past it.
 const INIT_COMPLETE_DISPLAY_DELAY_MS = 1000;
 const RUN_FULLY_SETTLED_MS = INIT_COMPLETE_DISPLAY_DELAY_MS + 300;
 
@@ -291,8 +289,8 @@ suite('DeepnoteInitNotebookRunner', () => {
     });
 
     test('RESTART re-runs init even though the kernel already ran it (onDidRestartKernel is unconditional)', async () => {
-        // This is the key fix: an in-place restart fires onDidRestartKernel (NOT onDidStartKernel)
-        // and loses all in-kernel state, so init MUST re-run before the next user cell.
+        // An in-place restart fires onDidRestartKernel (NOT onDidStartKernel) and loses all
+        // in-kernel state, so init MUST re-run before the next user cell.
         putFile(MAIN_FILE_NAME, makeMainProjectEntry(PROJECT_ID, INIT_NOTEBOOK_ID) as unknown as DeepnoteFile);
         putFile(SIBLING_INIT_FILE_NAME, makeNotebookFile(PROJECT_ID, INIT_NOTEBOOK_ID, [SIBLING_INIT_CODE]));
 
@@ -336,9 +334,8 @@ suite('DeepnoteInitNotebookRunner', () => {
     });
 
     test('closing the notebook mid-init stops remaining init blocks (close cancels the run)', async () => {
-        // Regression for a lifecycle cancellation bug: runInitForKernel must pass a token tied to
-        // notebook close into executeInitNotebook, so closing the notebook while init is running
-        // stops the remaining blocks. Without that token BOTH blocks run regardless of close.
+        // runInitForKernel must pass a close-tied token into executeInitNotebook, so closing the
+        // notebook mid-init stops remaining blocks. Without it, both blocks run regardless of close.
         const FIRST_BLOCK_CODE = 'pip install first-init-package';
         const SECOND_BLOCK_CODE = 'pip install second-init-package';
 

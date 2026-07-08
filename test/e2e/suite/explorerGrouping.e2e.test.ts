@@ -1,8 +1,6 @@
 /**
- * E2E test for the Deepnote Explorer's project grouping: sibling `.deepnote` files sharing one
- * `project.id` collapse into a single group; a file from a different project forms its own group.
- * The workspace holds three "Marketing" siblings (one shared `project.id`) plus an unrelated file
- * (`quick-notes.deepnote`).
+ * E2E (ExTester): the Explorer groups sibling `.deepnote` files by `project.id` — three "Marketing"
+ * siblings collapse into one group; the unrelated `quick-notes.deepnote` forms its own.
  */
 
 import { expect } from 'chai';

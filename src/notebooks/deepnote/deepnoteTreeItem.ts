@@ -70,9 +70,8 @@ export function resolveLeafNotebook(project: DeepnoteProject): DeepnoteNotebook 
 }
 
 /**
- * Sets the tree item's visual fields from its type and data. A free function (not an instance
- * method) because calling a subclass method from a `TreeItem` constructor is unsafe in the
- * transpiled ES-module output — the prototype is not yet fully wired.
+ * Sets the item's visual fields from its type/data. A free function, not a method: calling a
+ * subclass method from a `TreeItem` constructor is unsafe in transpiled ES-module output.
  */
 function applyVisualFields(item: DeepnoteTreeItem): void {
     if (item.type === DeepnoteTreeItemType.Loading) {

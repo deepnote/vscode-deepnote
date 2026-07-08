@@ -4,14 +4,8 @@ import { Uri } from 'vscode';
 import { createDeepnoteServerConfigHandle } from './deepnoteServerUtils.node';
 
 /**
- * Unit tests for createDeepnoteServerConfigHandle.
- *
- * The handle is the producer/consumer match invariant for per-notebook servers: the kernel
- * selector PRODUCES it and two consumers (clearControllerForEnvironment,
- * disposeKernelsUsingEnvironment) COMPARE against `serverProviderHandle.handle`. If the formula
- * or its inputs ever drift between the producer and a consumer, the compared handle no longer
- * matches and the deletion/clear silently fails. These tests pin the exact format and the
- * per-notebook uniqueness/byte-stability the contract relies on.
+ * The handle is a producer/consumer match invariant: if its formula drifts between the kernel
+ * selector (producer) and the clear/dispose consumers, handles stop matching and cleanup silently no-ops.
  */
 suite('DeepnoteServerUtils - createDeepnoteServerConfigHandle', () => {
     test('two different notebook URIs produce DIFFERENT handles (catches sibling collision)', () => {

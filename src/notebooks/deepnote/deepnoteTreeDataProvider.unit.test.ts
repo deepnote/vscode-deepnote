@@ -682,8 +682,8 @@ suite('DeepnoteTreeDataProvider', () => {
         });
     });
 
-    // Load-bearing: sibling files share one project.id, so refresh must rebuild the whole grouped
-    // subtree rather than patch a single cached item. These assert the §7 grouping-safe semantics.
+    // Sibling files share one project.id, so refresh must rebuild the whole grouped subtree
+    // rather than patch a single cached item.
     suite('grouping-safe refresh semantics', () => {
         const projectId = 'shared-project-id';
         const otherProjectId = 'other-project-id';
@@ -765,17 +765,11 @@ suite('DeepnoteTreeDataProvider', () => {
         });
     });
 
-    // If feasible with the test mocks: build the grouped tree from a seeded cache and assert the
-    // node types/contextValues/labels for grouping, single-notebook leaf vs legacy collapsible, and
-    // init exclusion.
     suite('getChildren groups siblings and distinguishes leaf vs legacy files', () => {
         const projectId = 'group-project';
 
-        // Seed the file→project cache and call the private group builder directly. We invoke
-        // `getProjectGroups()`/`getChildren(groupItem)` rather than the root `getChildren()` because
-        // the root branch short-circuits to `[]` when `workspace.workspaceFolders` is unset (the
-        // tree test deliberately avoids ts-mockito); `loadAllProjects` then iterates an empty
-        // folder list and simply returns the pre-seeded cache, so grouping is exercised faithfully.
+        // Invoke getProjectGroups()/getChildren(groupItem) directly rather than the root getChildren(),
+        // which short-circuits to [] when workspace.workspaceFolders is unset; the seeded cache drives grouping.
         function seed(entries: Array<[string, DeepnoteProject]>): void {
             const cachedProjects = (provider as any).cachedProjects as Map<string, DeepnoteProject>;
             for (const [filePath, project] of entries) {

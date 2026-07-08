@@ -34,15 +34,8 @@ function basename(uri: Uri): string {
 }
 
 /**
- * Tests for the on-demand multi-notebook splitter (§2). These exercise the splitter's
- * ORCHESTRATION (prompt gating, write/rename ORDER, env migration, dirty gate, abort-on-failure)
- * plus the REAL local `allocateSiblingUri`, against the MOCKED `@deepnote/convert` `splitByNotebooks`.
- *
- * The original file is retired by RENAMING it to `<name>.deepnote.legacy` (not deleted): the suffix
- * takes it out of the extension's view while keeping it on disk to restore.
- *
- * NOTE: `instanceof TabInputNotebook` is always false against the test class-proxy, so the
- * tab-close path is NOT unit-exercisable and is intentionally not asserted (see harness notes).
+ * Splitter orchestration (prompt gating, write/rename order, env migration, dirty gate, abort) with
+ * the real `allocateSiblingUri` and a mocked `splitByNotebooks`; the original is retired by rename to `.legacy`.
  */
 suite('DeepnoteMultiNotebookSplitter', () => {
     let splitter: DeepnoteMultiNotebookSplitter;

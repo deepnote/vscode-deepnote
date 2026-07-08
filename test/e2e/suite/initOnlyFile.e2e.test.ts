@@ -1,7 +1,6 @@
 /**
- * E2E (ExTester): a `.deepnote` file whose only notebook IS its init notebook still opens as a
- * single-notebook file (renders that notebook as a fallback, no split prompt), and the Explorer
- * shows it as an openable single-notebook leaf (the init notebook is the sole notebook).
+ * E2E (ExTester): a `.deepnote` whose only notebook IS its init notebook opens directly as a
+ * single-notebook file (no split prompt) and shows as an openable leaf in the Explorer.
  */
 
 import { expect } from 'chai';

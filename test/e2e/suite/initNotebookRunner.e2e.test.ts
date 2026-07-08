@@ -1,7 +1,6 @@
 /**
- * E2E (ExTester): when a main notebook's kernel starts, the extension runs the sibling init
- * notebook's code blocks (hidden) so their definitions land in the main kernel. Requires a
- * discoverable Python interpreter; the first kernel start can take a few minutes.
+ * E2E (ExTester): when a main notebook's kernel starts, the extension runs the sibling init notebook's
+ * code blocks (hidden) so their definitions land in the main kernel. Needs a discoverable interpreter.
  */
 
 import { expect } from 'chai';

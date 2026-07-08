@@ -306,8 +306,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
                     // mapper state BEFORE any entries are removed, so the list is complete.
                     const uris = this.notebookEnvironmentMapper.getNotebooksUsingEnvironment(environmentId);
 
-                    // Stop each notebook's server. Per-notebook keying means this stops the
-                    // server even for notebooks that are currently closed but still running.
+                    // Stop each notebook's server (per-notebook keying reaches closed-but-running ones too).
                     // stopServer is a safe no-op when a notebook has no running server.
                     for (const uri of uris) {
                         try {
@@ -320,7 +319,6 @@ export class DeepnoteEnvironmentsView implements Disposable {
                     // Dispose kernels from any open notebooks using this environment
                     await this.disposeKernelsUsingEnvironment(environmentId);
 
-                    // Now remove the mapper entries and delete the environment/venv
                     for (const uri of uris) {
                         await this.notebookEnvironmentMapper.removeEnvironmentForNotebook(uri);
                     }

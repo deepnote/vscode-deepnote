@@ -3,10 +3,8 @@ import { By, VSBrowser } from 'vscode-extension-tester';
 import { WORKBENCH_TIMEOUT } from './constants';
 
 /**
- * Confirms a VS Code `{modal:true}` message dialog by clicking the button matching `label` exactly,
- * driving the raw `.monaco-dialog-box` because ExTester's `ModalDialog` attaches unreliably. When
- * `messageIncludes` is given, waits for the matching dialog first so the button match can't hit a
- * same-named control elsewhere (e.g. a tree "Delete …" menu item).
+ * Confirms a `{modal:true}` dialog by clicking the button matching `label`, driving the raw
+ * `.monaco-dialog-box` (ExTester's `ModalDialog` attaches unreliably); `messageIncludes` disambiguates.
  */
 export async function confirmModalDialog(label: string, options?: { messageIncludes?: string }): Promise<void> {
     const driver = VSBrowser.instance.driver;

@@ -6,9 +6,8 @@ import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { buildSiblingNotebookFileUri, buildSingleNotebookFile, getFileStem } from './deepnoteNotebookFileFactory';
 
 /**
- * Tests for the notebook file factory (§3): the "new notebook" / "duplicate notebook" flows
- * build a sibling FILE (never an extra notebook appended into one file). Uses the REAL
- * `@deepnote/blocks` serializer for the snapshot-hash round-trip assertion.
+ * The "new notebook" / "duplicate notebook" flows build a sibling FILE (never an extra notebook
+ * appended into one file). Uses the REAL `@deepnote/blocks` serializer for the round-trip assertion.
  */
 suite('DeepnoteNotebookFileFactory', () => {
     function makeNotebook(id: string, name: string): DeepnoteNotebook {

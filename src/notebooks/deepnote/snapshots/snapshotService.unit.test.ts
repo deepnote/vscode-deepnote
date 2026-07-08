@@ -756,10 +756,8 @@ project:
         }
 
         /**
-         * Stub findFiles to return the given URIs and readFile to dispatch bytes per-URI by fsPath.
-         * ts-mockito's single-arg matcher returns one value for every call, so per-URI content must
-         * be dispatched explicitly — otherwise every candidate would read identical bytes and the
-         * "which file won" assertions would be meaningless.
+         * Dispatches readFile bytes per-URI by fsPath: ts-mockito's single-arg matcher returns one value
+         * for every call, so without this every candidate reads identical bytes and "which file won" is moot.
          */
         function stubSnapshotFiles(filesByUri: Array<{ uri: Uri; yaml: string }>): void {
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
@@ -943,9 +941,8 @@ project:
             // relies on (armedAt = Date.now(); the quiet/max-wait delays are real setTimeout calls).
             clock = fakeTimers.install();
 
-            // Replace the flush so the only thing under test is *whether/when* it is invoked — never
-            // real file I/O. The arm timer reads this.performSnapshotSave at fire time, so stubbing
-            // the instance property is observed by the already-armed timer.
+            // Stub the flush so the test observes only whether/when it fires, never real I/O. The armed
+            // timer reads this.performSnapshotSave at fire time, so stubbing the instance property works.
             performSaveStub = sinon.stub(serviceAny, 'performSnapshotSave').resolves();
         });
 
@@ -1585,9 +1582,8 @@ project:
 
                 await testServiceAny.performSnapshotSave(targetBUri);
 
-                // The snapshot dir is derived from projectUri's parent. With the fix, projectUri is
-                // notebook B's OWN uri (folder /bar), not sibling A's (/foo). The pre-fix projectId-only
-                // lookup would have passed A's uri here (A is enumerated first).
+                // The snapshot dir derives from projectUri's parent, so projectUri must be notebook B's
+                // OWN uri (/bar), not sibling A's (/foo) — even though A shares the id and enumerates first.
                 assert.isTrue(buildSnapshotPathSpy.called, 'buildSnapshotPath should be called');
                 const projectUriArg = buildSnapshotPathSpy.firstCall.args[0].projectUri as Uri;
                 assert.strictEqual(

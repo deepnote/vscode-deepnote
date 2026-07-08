@@ -1,7 +1,6 @@
 /**
- * E2E (ExTester): renaming a project group from the Explorer fans the new name out to EVERY sibling
- * `.deepnote` file on disk (siblings share one `project.id`), including ones never opened. Runs
- * without a Python kernel.
+ * E2E (ExTester): renaming a project group in the Explorer fans the new name out to EVERY sibling
+ * `.deepnote` on disk (siblings share one `project.id`), including ones never opened.
  */
 
 import { expect } from 'chai';

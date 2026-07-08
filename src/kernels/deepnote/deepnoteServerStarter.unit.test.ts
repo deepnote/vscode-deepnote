@@ -2,13 +2,13 @@ import { assert } from 'chai';
 import * as fakeTimers from '@sinonjs/fake-timers';
 import * as sinon from 'sinon';
 import { anything, instance, mock, when } from 'ts-mockito';
-import { Uri } from 'vscode';
+import { CancellationError, CancellationToken, Uri } from 'vscode';
 
 import { DeepnoteAgentSkillsManager } from './deepnoteAgentSkillsManager.node';
 import { DeepnoteServerStarter } from './deepnoteServerStarter.node';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
-import { IAsyncDisposableRegistry, IOutputChannel } from '../../platform/common/types';
-import { IDeepnoteToolkitInstaller } from './types';
+import { IAsyncDisposableRegistry, IDisposable, IOutputChannel } from '../../platform/common/types';
+import { DeepnoteServerInfo, IDeepnoteToolkitInstaller } from './types';
 import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 
@@ -27,6 +27,36 @@ async function getRuntimeCoreMock(): Promise<RuntimeCoreMockHelpers> {
     return (await import('@deepnote/runtime-core')) as unknown as RuntimeCoreMockHelpers;
 }
 
+type PendingOperation =
+    | { type: 'start'; promise: Promise<DeepnoteServerInfo> }
+    | { type: 'stop'; promise: Promise<void> };
+
+interface ProjectContext {
+    environmentId: string;
+    serverInfo: DeepnoteServerInfo | null;
+}
+
+/**
+ * Structural mirror of DeepnoteServerStarter's private surface (deepnoteServerStarter.node.ts).
+ * `internals` is the single typed seam for reaching private state in these tests.
+ */
+interface DeepnoteServerStarterInternals {
+    readonly disposablesByFile: Map<string, IDisposable[]>;
+    readonly pendingOperations: Map<string, PendingOperation>;
+    readonly projectContexts: Map<string, ProjectContext>;
+    readonly serverOutputByFile: Map<string, { stdout: string; stderr: string }>;
+    gatherSqlIntegrationEnvVars(
+        deepnoteFileUri: Uri,
+        environmentId: string,
+        token?: CancellationToken
+    ): Promise<Record<string, string>>;
+    isServerRunning(serverInfo: DeepnoteServerInfo): Promise<boolean>;
+}
+
+function internals(starter: DeepnoteServerStarter): DeepnoteServerStarterInternals {
+    return starter as unknown as DeepnoteServerStarterInternals;
+}
+
 /**
  * Unit tests for DeepnoteServerStarter.
  *
@@ -42,11 +72,6 @@ suite('DeepnoteServerStarter', () => {
     let mockOutputChannel: IOutputChannel;
     let mockAsyncRegistry: IAsyncDisposableRegistry;
     let mockSqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider;
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const getPrivateMethod = (obj: any, methodName: string) => {
-        return obj[methodName].bind(obj);
-    };
 
     setup(() => {
         mockProcessServiceFactory = mock<IProcessServiceFactory>();
@@ -87,9 +112,10 @@ suite('DeepnoteServerStarter', () => {
                 instance(mockAsyncRegistry)
             );
 
-            const gatherEnvVars = getPrivateMethod(starterWithoutSql, 'gatherSqlIntegrationEnvVars');
-            const { Uri } = await import('vscode');
-            const result = await gatherEnvVars(Uri.file('/test/file.deepnote'), 'env1');
+            const result = await internals(starterWithoutSql).gatherSqlIntegrationEnvVars(
+                Uri.file('/test/file.deepnote'),
+                'env1'
+            );
 
             assert.deepStrictEqual(result, {});
 
@@ -97,8 +123,6 @@ suite('DeepnoteServerStarter', () => {
         });
 
         test('should return empty object when provider rejects with cancellation error', async () => {
-            const { CancellationError, Uri } = await import('vscode');
-
             const cancelledProvider = mock<ISqlIntegrationEnvVarsProvider>();
             when(cancelledProvider.getEnvironmentVariables(anything(), anything())).thenReject(new CancellationError());
 
@@ -111,8 +135,10 @@ suite('DeepnoteServerStarter', () => {
                 instance(cancelledProvider)
             );
 
-            const gatherEnvVars = getPrivateMethod(starterWithCancelledSql, 'gatherSqlIntegrationEnvVars');
-            const result = await gatherEnvVars(Uri.file('/test/file.deepnote'), 'env1');
+            const result = await internals(starterWithCancelledSql).gatherSqlIntegrationEnvVars(
+                Uri.file('/test/file.deepnote'),
+                'env1'
+            );
 
             assert.deepStrictEqual(result, {});
 
@@ -168,8 +194,7 @@ suite('DeepnoteServerStarter', () => {
             assert.strictEqual(calls[1].workingDirectory, '/workspace/project');
 
             // Two distinct projectContexts keyed by notebook.uri.fsPath.
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const contexts = (serverStarter as any).projectContexts as Map<string, unknown>;
+            const contexts = internals(serverStarter).projectContexts;
             assert.strictEqual(contexts.size, 2, 'one project context per notebook URI');
             assert.isTrue(contexts.has(uriA.fsPath), 'context keyed by notebook A URI');
             assert.isTrue(contexts.has(uriB.fsPath), 'context keyed by notebook B URI');
@@ -179,8 +204,7 @@ suite('DeepnoteServerStarter', () => {
             const runtimeCore = await getRuntimeCoreMock();
 
             // Stub the running-server health probe to report "running" so the reuse branch is taken.
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            sinon.stub(serverStarter as any, 'isServerRunning').resolves(true);
+            sinon.stub(internals(serverStarter), 'isServerRunning').resolves(true);
 
             const first = await start(uriA);
             assert.strictEqual(runtimeCore.__getStartServerCalls().length, 1);
@@ -206,8 +230,7 @@ suite('DeepnoteServerStarter', () => {
             // runtime-core stopServer invoked exactly once (only A's process was alive and stopped).
             assert.strictEqual(runtimeCore.__getStopServerCalls().length, 1, 'only notebook A server stopped');
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const contexts = (serverStarter as any).projectContexts as Map<string, { serverInfo: unknown }>;
+            const contexts = internals(serverStarter).projectContexts;
             // A's context still exists but its server is cleared; B's server is untouched.
             assert.strictEqual(contexts.get(uriA.fsPath)?.serverInfo, null, "A's server info cleared");
             assert.isNotNull(contexts.get(uriB.fsPath)?.serverInfo, "B's server must remain running");
@@ -241,8 +264,7 @@ suite('DeepnoteServerStarter', () => {
         test('should clear all internal state', async () => {
             await serverStarter.dispose();
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const starter = serverStarter as any;
+            const starter = internals(serverStarter);
             assert.strictEqual(starter.disposablesByFile.size, 0);
             assert.strictEqual(starter.pendingOperations.size, 0);
             assert.strictEqual(starter.projectContexts.size, 0);
@@ -250,8 +272,7 @@ suite('DeepnoteServerStarter', () => {
         });
 
         test('should wait for in-flight pending operations before completing', async () => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const starter = serverStarter as any;
+            const starter = internals(serverStarter);
 
             let resolveDeferred!: () => void;
             const deferred = new Promise<void>((resolve) => {

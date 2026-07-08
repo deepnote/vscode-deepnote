@@ -21,6 +21,18 @@ import {
     buildServiceAccountIntegration
 } from './federatedAuth/federatedAuthTestHelpers';
 
+/**
+ * Structural mirror of IntegrationWebviewProvider's private surface (integrationWebview.ts).
+ * `internals` is the single typed seam this test uses to drive the private update method.
+ */
+interface IntegrationWebviewProviderInternals {
+    updateProjectIntegrationsList(): Promise<void>;
+}
+
+function internals(provider: IntegrationWebviewProvider): IntegrationWebviewProviderInternals {
+    return provider as unknown as IntegrationWebviewProviderInternals;
+}
+
 interface CapturedMessage {
     type: string;
     integrations?: Array<{ id: string; tokenStatus?: string }>;
@@ -441,8 +453,7 @@ suite('IntegrationWebviewProvider', () => {
             // `show()` sets `projectId` + the integrations map; then drive the private update method.
             await show(provider, singleIntegrationMap('pg-1', buildPostgresIntegration({ id: 'pg-1' })));
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (provider as any).updateProjectIntegrationsList();
+            await internals(provider).updateProjectIntegrationsList();
         }
 
         test('updates the cached project integrations via notebookManager.updateProjectIntegrations', async () => {

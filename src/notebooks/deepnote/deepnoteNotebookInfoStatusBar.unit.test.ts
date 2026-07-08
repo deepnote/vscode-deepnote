@@ -1,13 +1,18 @@
 import { assert, expect } from 'chai';
 import { anything, capture, verify, when } from 'ts-mockito';
-import { Uri } from 'vscode';
+import {
+    EventEmitter,
+    NotebookDocument,
+    NotebookDocumentChangeEvent,
+    NotebookEditor,
+    StatusBarItem,
+    Uri
+} from 'vscode';
 
 import { DeepnoteNotebookInfoStatusBar } from './deepnoteNotebookInfoStatusBar';
 import { Commands } from '../../platform/common/constants';
 import { mockedVSCode, mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import type { IDisposableRegistry } from '../../platform/common/types';
-
-const EventEmitter = (mockedVSCode as any).EventEmitter;
 
 /**
  * Minimal fake StatusBarItem that records the fields the status bar sets so tests can assert on them.
@@ -44,26 +49,44 @@ function createFakeStatusBarItem(): FakeStatusBarItem {
 /**
  * Build a fake NotebookDocument with the Deepnote metadata the status bar reads.
  */
-function makeNotebook(options: { notebookType?: string; metadata?: Record<string, unknown>; uri?: Uri }): any {
+function makeNotebook(options: {
+    notebookType?: string;
+    metadata?: Record<string, unknown>;
+    uri?: Uri;
+}): NotebookDocument {
     return {
         notebookType: options.notebookType ?? 'deepnote',
         metadata: options.metadata ?? {},
         uri: options.uri ?? Uri.file('/workspace/proj.deepnote')
-    };
+    } as unknown as NotebookDocument;
+}
+
+/**
+ * Wrap a notebook in the minimal NotebookEditor the status bar reads (`editor.notebook`).
+ */
+function editorFor(notebook: NotebookDocument): NotebookEditor {
+    return { notebook } as unknown as NotebookEditor;
+}
+
+/**
+ * Build a document-change event for a notebook; the status bar only inspects `event.notebook`.
+ */
+function docChangeFor(notebook: NotebookDocument): NotebookDocumentChangeEvent {
+    return { notebook, metadata: undefined, contentChanges: [], cellChanges: [] };
 }
 
 suite('DeepnoteNotebookInfoStatusBar', () => {
     let statusBar: DeepnoteNotebookInfoStatusBar;
     let fakeItem: FakeStatusBarItem;
     let disposableRegistry: IDisposableRegistry;
-    let activeEditorEmitter: any;
-    let docChangeEmitter: any;
+    let activeEditorEmitter: EventEmitter<NotebookEditor | undefined>;
+    let docChangeEmitter: EventEmitter<NotebookDocumentChangeEvent>;
 
     setup(() => {
         resetVSCodeMocks();
 
         fakeItem = createFakeStatusBarItem();
-        disposableRegistry = [] as unknown as IDisposableRegistry;
+        disposableRegistry = [];
 
         // Real emitters drive the active-editor / document-change subscriptions; the status bar
         // subscribes through `.event` (which honours thisArg + the disposables array it passes).
@@ -71,7 +94,7 @@ suite('DeepnoteNotebookInfoStatusBar', () => {
         docChangeEmitter = new EventEmitter();
 
         when(mockedVSCodeNamespaces.window.createStatusBarItem(anything(), anything(), anything())).thenReturn(
-            fakeItem as any
+            fakeItem as unknown as StatusBarItem
         );
         when(mockedVSCodeNamespaces.window.onDidChangeActiveNotebookEditor).thenReturn(activeEditorEmitter.event);
         when(mockedVSCodeNamespaces.workspace.onDidChangeNotebookDocument).thenReturn(docChangeEmitter.event);
@@ -89,9 +112,9 @@ suite('DeepnoteNotebookInfoStatusBar', () => {
     });
 
     test('shows "$(notebook) <name>" for an active deepnote notebook (name from metadata.deepnoteNotebookName)', () => {
-        when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
-            notebook: makeNotebook({ metadata: { deepnoteNotebookName: 'My Analysis' } })
-        } as any);
+        when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(
+            editorFor(makeNotebook({ metadata: { deepnoteNotebookName: 'My Analysis' } }))
+        );
 
         statusBar.activate();
 
@@ -101,9 +124,9 @@ suite('DeepnoteNotebookInfoStatusBar', () => {
     });
 
     test('HIDES the status bar for a non-deepnote active editor', () => {
-        when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
-            notebook: makeNotebook({ notebookType: 'jupyter-notebook', metadata: { deepnoteNotebookName: 'X' } })
-        } as any);
+        when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(
+            editorFor(makeNotebook({ notebookType: 'jupyter-notebook', metadata: { deepnoteNotebookName: 'X' } }))
+        );
 
         statusBar.activate();
 
@@ -116,8 +139,8 @@ suite('DeepnoteNotebookInfoStatusBar', () => {
         assert.isFalse(fakeItem.visible, 'initially hidden with no active editor');
 
         // Now a deepnote notebook becomes active and the active-editor event fires.
-        const editor = { notebook: makeNotebook({ metadata: { deepnoteNotebookName: 'Switched In' } }) };
-        when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(editor as any);
+        const editor = editorFor(makeNotebook({ metadata: { deepnoteNotebookName: 'Switched In' } }));
+        when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(editor);
         activeEditorEmitter.fire(editor);
 
         assert.isTrue(fakeItem.visible, 'becomes visible after the active editor switches to a deepnote notebook');
@@ -126,13 +149,13 @@ suite('DeepnoteNotebookInfoStatusBar', () => {
 
     test('updates on a document change to the ACTIVE notebook (renaming reflects in the status bar)', () => {
         const notebook = makeNotebook({ metadata: { deepnoteNotebookName: 'Before' } });
-        when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({ notebook } as any);
+        when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(editorFor(notebook));
         statusBar.activate();
         assert.strictEqual(fakeItem.text, '$(notebook) Before');
 
         // Mutate the active notebook's metadata and fire a change for THAT notebook.
         notebook.metadata.deepnoteNotebookName = 'After';
-        docChangeEmitter.fire({ notebook });
+        docChangeEmitter.fire(docChangeFor(notebook));
 
         assert.strictEqual(fakeItem.text, '$(notebook) After', 'a change to the active notebook must refresh the text');
     });
@@ -143,21 +166,21 @@ suite('DeepnoteNotebookInfoStatusBar', () => {
             metadata: { deepnoteNotebookName: 'Other' },
             uri: Uri.file('/o.deepnote')
         });
-        when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({ notebook: activeNotebook } as any);
+        when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(editorFor(activeNotebook));
         statusBar.activate();
         assert.strictEqual(fakeItem.text, '$(notebook) Active');
 
         // A change event for a different notebook must be ignored.
         otherNotebook.metadata.deepnoteNotebookName = 'Other Changed';
-        docChangeEmitter.fire({ notebook: otherNotebook });
+        docChangeEmitter.fire(docChangeFor(otherNotebook));
 
         assert.strictEqual(fakeItem.text, '$(notebook) Active', 'a non-active notebook change must not alter the bar');
     });
 
     test('CopyNotebookDetails writes the expected multi-line details (name, ids, project, version, URI) to the clipboard', async () => {
         const uri = Uri.file('/workspace/my-proj.deepnote');
-        const editor = {
-            notebook: makeNotebook({
+        const editor = editorFor(
+            makeNotebook({
                 uri,
                 metadata: {
                     deepnoteNotebookName: 'NB Name',
@@ -167,13 +190,13 @@ suite('DeepnoteNotebookInfoStatusBar', () => {
                     deepnoteVersion: '1.0.0'
                 }
             })
-        };
-        when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(editor as any);
+        );
+        when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(editor);
 
         statusBar.activate();
 
         // Invoke the command handler registered against Commands.CopyNotebookDetails.
-        const [, handler] = capture(mockedVSCodeNamespaces.commands.registerCommand).first() as any;
+        const [, handler] = capture(mockedVSCodeNamespaces.commands.registerCommand).first();
         await handler();
 
         const clipboardText = await mockedVSCode.env!.clipboard.readText();
@@ -194,7 +217,7 @@ suite('DeepnoteNotebookInfoStatusBar', () => {
 
         statusBar.activate();
 
-        const [, handler] = capture(mockedVSCodeNamespaces.commands.registerCommand).first() as any;
+        const [, handler] = capture(mockedVSCodeNamespaces.commands.registerCommand).first();
         await handler();
 
         verify(mockedVSCodeNamespaces.window.showWarningMessage(anything())).once();

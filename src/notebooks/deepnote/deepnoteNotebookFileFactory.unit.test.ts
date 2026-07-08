@@ -20,10 +20,11 @@ suite('DeepnoteNotebookFileFactory', () => {
                     type: 'code',
                     sortingKey: 'a0',
                     blockGroup: 'g1',
-                    content: 'print(1)'
+                    content: 'print(1)',
+                    metadata: {}
                 }
             ]
-        } as unknown as DeepnoteNotebook;
+        };
     }
 
     function makeSource(overrides?: Partial<DeepnoteFile['metadata']>): DeepnoteFile {
@@ -42,7 +43,7 @@ suite('DeepnoteNotebookFileFactory', () => {
                 settings: { requirements: ['pandas'] },
                 notebooks: [makeNotebook('nb-1', 'First')]
             }
-        } as unknown as DeepnoteFile;
+        };
     }
 
     suite('getFileStem', () => {

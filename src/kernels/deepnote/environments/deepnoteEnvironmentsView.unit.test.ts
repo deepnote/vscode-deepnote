@@ -797,11 +797,11 @@ suite('DeepnoteEnvironmentsView', () => {
             ]);
 
             // Only the OPEN notebook is present in workspace.notebookDocuments — the other is closed.
-            const openNotebookDoc = {
-                uri: openNotebookUri,
-                notebookType: 'deepnote',
-                isClosed: false
-            } as any;
+            const mockOpenNotebookDoc = mock<NotebookDocument>();
+            when(mockOpenNotebookDoc.uri).thenReturn(openNotebookUri);
+            when(mockOpenNotebookDoc.notebookType).thenReturn('deepnote');
+            when(mockOpenNotebookDoc.isClosed).thenReturn(false);
+            const openNotebookDoc = instance(mockOpenNotebookDoc);
             when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([openNotebookDoc]);
             when(mockKernelProvider.get(openNotebookDoc)).thenReturn(undefined);
 

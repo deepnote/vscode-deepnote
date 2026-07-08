@@ -44,7 +44,7 @@ suite('DeepnoteProjectIdResolver', () => {
         if (value instanceof Error) {
             when(mockFs.readFile(anything())).thenReject(value);
         } else {
-            when(mockFs.readFile(anything())).thenResolve(new TextEncoder().encode(value) as never);
+            when(mockFs.readFile(anything())).thenReturn(Promise.resolve(new TextEncoder().encode(value)));
         }
 
         when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));

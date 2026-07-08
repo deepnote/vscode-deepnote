@@ -1,7 +1,7 @@
 import { deserializeDeepnoteFile, serializeDeepnoteFile, type DeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import { anything, instance, mock, when } from 'ts-mockito';
-import { EventEmitter, NotebookDocument, Uri } from 'vscode';
+import { EventEmitter, FileType, NotebookDocument, TabGroups, Uri } from 'vscode';
 
 import type { IDeepnoteNotebookEnvironmentMapper } from '../../kernels/deepnote/types';
 import type { ILogger } from '../../platform/logging/types';
@@ -67,8 +67,8 @@ suite('DeepnoteMultiNotebookSplitter', () => {
         return {
             id,
             name,
-            blocks: [{ id: `${id}-b`, type: 'code', sortingKey: 'a0', blockGroup: 'g', content }]
-        } as unknown as DeepnoteFile['project']['notebooks'][number];
+            blocks: [{ id: `${id}-b`, type: 'code', sortingKey: 'a0', blockGroup: 'g', content, metadata: {} }]
+        };
     }
 
     function makeFile(notebooks: DeepnoteFile['project']['notebooks'], initNotebookId?: string): DeepnoteFile {
@@ -81,7 +81,7 @@ suite('DeepnoteMultiNotebookSplitter', () => {
                 ...(initNotebookId ? { initNotebookId } : {}),
                 notebooks
             }
-        } as unknown as DeepnoteFile;
+        };
     }
 
     /** Wire `workspace.fs.readFile` to return the serialized bytes of `file` for any URI. */
@@ -110,7 +110,7 @@ suite('DeepnoteMultiNotebookSplitter', () => {
         });
         when(mockFs.stat(anything())).thenCall((uri: Uri) => {
             if (existingOnDisk.has(basename(uri))) {
-                return Promise.resolve({} as never);
+                return Promise.resolve({ type: FileType.File, ctime: 0, mtime: 0, size: 0 });
             }
             return Promise.reject(new Error('not found'));
         });
@@ -118,7 +118,10 @@ suite('DeepnoteMultiNotebookSplitter', () => {
     }
 
     /** Build a NotebookDocument stub for the given file URI. */
-    function notebookDoc(fileUri: Uri, opts?: { isDirty?: boolean; saveResult?: boolean }): NotebookDocument {
+    function notebookDoc(
+        fileUri: Uri,
+        opts?: { isDirty?: boolean; saveResult?: boolean }
+    ): NotebookDocument & { readonly _saved: boolean } {
         let saved = false;
         return {
             uri: fileUri,
@@ -131,7 +134,7 @@ suite('DeepnoteMultiNotebookSplitter', () => {
             get _saved() {
                 return saved;
             }
-        } as unknown as NotebookDocument;
+        } as unknown as NotebookDocument & { readonly _saved: boolean };
     }
 
     setup(() => {
@@ -149,7 +152,7 @@ suite('DeepnoteMultiNotebookSplitter', () => {
         when(mockedVSCodeNamespaces.workspace.onDidOpenNotebookDocument).thenReturn(onDidOpen.event);
 
         // Empty tab groups: closeNotebookTab iterates harmlessly (instanceof TabInputNotebook is false anyway).
-        when(mockedVSCodeNamespaces.window.tabGroups).thenReturn({ all: [] } as never);
+        when(mockedVSCodeNamespaces.window.tabGroups).thenReturn({ all: [] } as unknown as TabGroups);
 
         // Count split prompts; default resolves to "dismiss" — individual tests opt into accepting.
         when(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything())).thenCall(() => {
@@ -458,10 +461,7 @@ suite('DeepnoteMultiNotebookSplitter', () => {
 
             await waitFor(() => renameOps.length >= 1);
 
-            assert.isTrue(
-                (doc as unknown as { _saved: boolean })._saved,
-                'document.save() must be called for a dirty doc'
-            );
+            assert.isTrue(doc._saved, 'document.save() must be called for a dirty doc');
             assert.strictEqual(writeTargets.length, 2, 'split proceeds after a successful save');
         });
 

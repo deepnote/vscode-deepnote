@@ -6,6 +6,20 @@ import { DeepnoteTreeItem, DeepnoteTreeItemType, getNonInitNotebooks } from './d
 import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 
 /**
+ * Structural mirror of DeepnoteTreeDataProvider's private surface (deepnoteTreeDataProvider.ts).
+ * `internals` is the single typed seam these tests use to reach private caches and helpers.
+ */
+interface DeepnoteTreeDataProviderInternals {
+    readonly cachedProjects: Map<string, DeepnoteProject>;
+    readonly fileItemCache: Map<string, DeepnoteTreeItem>;
+    getProjectGroups(): Promise<DeepnoteTreeItem[]>;
+}
+
+function internals(provider: DeepnoteTreeDataProvider): DeepnoteTreeDataProviderInternals {
+    return provider as unknown as DeepnoteTreeDataProviderInternals;
+}
+
+/**
  * Build a single-notebook DeepnoteProject (whole-file shape) for a given project/notebook id.
  */
 function makeSingleNotebookProject(
@@ -351,8 +365,8 @@ suite('DeepnoteTreeDataProvider', () => {
         test('should support selective refresh of a specific project', async () => {
             // Verify that refreshProject method exists and doesn't throw
             assert.doesNotThrow(() => {
-                if (typeof (provider as any).refreshProject === 'function') {
-                    void (provider as any).refreshProject('/workspace/project.deepnote');
+                if (typeof provider.refreshProject === 'function') {
+                    void provider.refreshProject('/workspace/project.deepnote');
                 }
             });
         });
@@ -360,15 +374,15 @@ suite('DeepnoteTreeDataProvider', () => {
         test('should support selective refresh of notebooks for a project', async () => {
             // Verify that refreshNotebook method exists and doesn't throw
             assert.doesNotThrow(() => {
-                if (typeof (provider as any).refreshNotebook === 'function') {
-                    void (provider as any).refreshNotebook('project-123');
+                if (typeof provider.refreshNotebook === 'function') {
+                    void provider.refreshNotebook('project-123');
                 }
             });
         });
 
         test('should update visual fields when project data changes', async () => {
             // Access the file-item cache (keyed by file path)
-            const fileItemCache = (provider as any).fileItemCache as Map<string, DeepnoteTreeItem>;
+            const fileItemCache = internals(provider).fileItemCache;
 
             // Create initial legacy multi-notebook project (2 notebooks → projectFile node)
             const filePath = '/workspace/test-project.deepnote';
@@ -463,8 +477,8 @@ suite('DeepnoteTreeDataProvider', () => {
 
         test('should clear both caches when file is deleted', () => {
             // Access private caches
-            const cachedProjects = (provider as any).cachedProjects as Map<string, DeepnoteProject>;
-            const fileItemCache = (provider as any).fileItemCache as Map<string, DeepnoteTreeItem>;
+            const cachedProjects = internals(provider).cachedProjects;
+            const fileItemCache = internals(provider).fileItemCache;
 
             // Add entries to both caches (both keyed by file path)
             const filePath = '/workspace/test-project.deepnote';
@@ -696,7 +710,7 @@ suite('DeepnoteTreeDataProvider', () => {
 
         setup(() => {
             // Seed two sibling files sharing one project.id plus a third file of a DIFFERENT project.
-            cachedProjects = (provider as any).cachedProjects as Map<string, DeepnoteProject>;
+            cachedProjects = internals(provider).cachedProjects;
             cachedProjects.set(filePathA, makeSingleNotebookProject(projectId, 'nb-a'));
             cachedProjects.set(filePathB, makeSingleNotebookProject(projectId, 'nb-b'));
             cachedProjects.set(filePathOther, makeSingleNotebookProject(otherProjectId, 'nb-other'));
@@ -771,14 +785,14 @@ suite('DeepnoteTreeDataProvider', () => {
         // Invoke getProjectGroups()/getChildren(groupItem) directly rather than the root getChildren(),
         // which short-circuits to [] when workspace.workspaceFolders is unset; the seeded cache drives grouping.
         function seed(entries: Array<[string, DeepnoteProject]>): void {
-            const cachedProjects = (provider as any).cachedProjects as Map<string, DeepnoteProject>;
+            const cachedProjects = internals(provider).cachedProjects;
             for (const [filePath, project] of entries) {
                 cachedProjects.set(filePath, project);
             }
         }
 
         async function getGroupItems(): Promise<DeepnoteTreeItem[]> {
-            return (provider as any).getProjectGroups() as Promise<DeepnoteTreeItem[]>;
+            return internals(provider).getProjectGroups();
         }
 
         test('two siblings sharing one project.id collapse into ONE ProjectGroup', async () => {

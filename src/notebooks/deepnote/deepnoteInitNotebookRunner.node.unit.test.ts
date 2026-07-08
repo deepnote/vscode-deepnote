@@ -4,9 +4,9 @@ import * as sinon from 'sinon';
 import { anything, instance, mock, when } from 'ts-mockito';
 import { EventEmitter, FileType, NotebookDocument, Uri } from 'vscode';
 
-import { IKernel, IKernelProvider } from '../../kernels/types';
+import { IKernel, IKernelProvider, INotebookKernelExecution } from '../../kernels/types';
 import { IDisposableRegistry } from '../../platform/common/types';
-import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
+import type { DeepnoteNotebook, DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteInitNotebookRunner } from './deepnoteInitNotebookRunner.node';
@@ -64,12 +64,13 @@ function basename(uri: Uri): string {
  * (only the code blocks must produce executeHidden calls — the markdown must be skipped).
  */
 function makeNotebookFile(projectId: string, notebookId: string, codeContents: string[]): DeepnoteFile {
-    const codeBlocks = codeContents.map((content, index) => ({
+    const codeBlocks = codeContents.map((content, index): DeepnoteNotebook['blocks'][number] => ({
         id: `${notebookId}-code-${index}`,
         type: 'code',
         sortingKey: `a${index}`,
         blockGroup: 'g',
-        content
+        content,
+        metadata: {}
     }));
 
     return {
@@ -89,13 +90,14 @@ function makeNotebookFile(projectId: string, notebookId: string, codeContents: s
                             type: 'markdown',
                             sortingKey: `a${codeContents.length}`,
                             blockGroup: 'g',
-                            content: '# notes'
+                            content: '# notes',
+                            metadata: {}
                         }
                     ]
                 }
             ]
         }
-    } as unknown as DeepnoteFile;
+    };
 }
 
 /** The cached project entry the manager returns for `getProjectForNotebook` (carries initNotebookId). */
@@ -112,12 +114,19 @@ function makeMainProjectEntry(projectId: string, initNotebookId: string | undefi
                     id: MAIN_NOTEBOOK_ID,
                     name: 'Main',
                     blocks: [
-                        { id: 'main-b', type: 'code', sortingKey: 'a0', blockGroup: 'g', content: MAIN_FILE_BLOCK_CODE }
+                        {
+                            id: 'main-b',
+                            type: 'code',
+                            sortingKey: 'a0',
+                            blockGroup: 'g',
+                            content: MAIN_FILE_BLOCK_CODE,
+                            metadata: {}
+                        }
                     ]
                 }
             ]
         }
-    } as unknown as DeepnoteProject;
+    };
 }
 
 suite('DeepnoteInitNotebookRunner', () => {
@@ -176,12 +185,12 @@ suite('DeepnoteInitNotebookRunner', () => {
 
         // get(notebook) must return a kernel — the runner re-fetches it inside executeInitNotebookImpl.
         // Return any non-undefined kernel; the impl only uses it to call getKernelExecution.
-        when(mockKernelProvider.get(anything())).thenReturn({} as unknown as IKernel);
+        when(mockKernelProvider.get(anything())).thenReturn(instance(mock<IKernel>()));
 
         executeHiddenSpy = sinon.stub().callsFake(() => Promise.resolve([]));
         when(mockKernelProvider.getKernelExecution(anything())).thenReturn({
             executeHidden: executeHiddenSpy
-        } as never);
+        } as unknown as INotebookKernelExecution);
 
         // Default cached project: has an init notebook configured.
         when(mockNotebookManager.getProjectForNotebook(PROJECT_ID, MAIN_NOTEBOOK_ID)).thenReturn(
@@ -221,7 +230,7 @@ suite('DeepnoteInitNotebookRunner', () => {
     test('runs init from the SIBLING file (not the main file) — post-migration the init is not in main.project.notebooks', async () => {
         // Main file's cached project references INIT_NOTEBOOK_ID but does NOT contain it; the
         // init lives in a sibling .deepnote in the same directory.
-        putFile(MAIN_FILE_NAME, makeMainProjectEntry(PROJECT_ID, INIT_NOTEBOOK_ID) as unknown as DeepnoteFile);
+        putFile(MAIN_FILE_NAME, makeMainProjectEntry(PROJECT_ID, INIT_NOTEBOOK_ID));
         putFile(SIBLING_INIT_FILE_NAME, makeNotebookFile(PROJECT_ID, INIT_NOTEBOOK_ID, [SIBLING_INIT_CODE]));
 
         const kernel = makeKernel(MAIN_FILE_NAME);
@@ -245,7 +254,7 @@ suite('DeepnoteInitNotebookRunner', () => {
 
     test('missing sibling → logged and NOT permanently marked: a later NEW kernel re-scans the directory', async () => {
         // initNotebookId is configured, but NO valid sibling exists on disk (only the main file).
-        putFile(MAIN_FILE_NAME, makeMainProjectEntry(PROJECT_ID, INIT_NOTEBOOK_ID) as unknown as DeepnoteFile);
+        putFile(MAIN_FILE_NAME, makeMainProjectEntry(PROJECT_ID, INIT_NOTEBOOK_ID));
 
         const kernelA = makeKernel(MAIN_FILE_NAME);
         onDidStartKernel.fire(kernelA);
@@ -266,7 +275,7 @@ suite('DeepnoteInitNotebookRunner', () => {
     });
 
     test('same kernel start fires twice → init runs only once (WeakSet gate prevents doubling)', async () => {
-        putFile(MAIN_FILE_NAME, makeMainProjectEntry(PROJECT_ID, INIT_NOTEBOOK_ID) as unknown as DeepnoteFile);
+        putFile(MAIN_FILE_NAME, makeMainProjectEntry(PROJECT_ID, INIT_NOTEBOOK_ID));
         putFile(SIBLING_INIT_FILE_NAME, makeNotebookFile(PROJECT_ID, INIT_NOTEBOOK_ID, [SIBLING_INIT_CODE]));
 
         const kernel = makeKernel(MAIN_FILE_NAME);
@@ -291,7 +300,7 @@ suite('DeepnoteInitNotebookRunner', () => {
     test('RESTART re-runs init even though the kernel already ran it (onDidRestartKernel is unconditional)', async () => {
         // An in-place restart fires onDidRestartKernel (NOT onDidStartKernel) and loses all
         // in-kernel state, so init MUST re-run before the next user cell.
-        putFile(MAIN_FILE_NAME, makeMainProjectEntry(PROJECT_ID, INIT_NOTEBOOK_ID) as unknown as DeepnoteFile);
+        putFile(MAIN_FILE_NAME, makeMainProjectEntry(PROJECT_ID, INIT_NOTEBOOK_ID));
         putFile(SIBLING_INIT_FILE_NAME, makeNotebookFile(PROJECT_ID, INIT_NOTEBOOK_ID, [SIBLING_INIT_CODE]));
 
         const kernel = makeKernel(MAIN_FILE_NAME);
@@ -322,7 +331,7 @@ suite('DeepnoteInitNotebookRunner', () => {
     });
 
     test('non-deepnote kernel is ignored: onDidStartKernel for a non-deepnote notebook does nothing', async () => {
-        putFile(MAIN_FILE_NAME, makeMainProjectEntry(PROJECT_ID, INIT_NOTEBOOK_ID) as unknown as DeepnoteFile);
+        putFile(MAIN_FILE_NAME, makeMainProjectEntry(PROJECT_ID, INIT_NOTEBOOK_ID));
         putFile(SIBLING_INIT_FILE_NAME, makeNotebookFile(PROJECT_ID, INIT_NOTEBOOK_ID, [SIBLING_INIT_CODE]));
 
         const kernel = makeKernel(MAIN_FILE_NAME, { notebookType: 'jupyter-notebook' });
@@ -339,7 +348,7 @@ suite('DeepnoteInitNotebookRunner', () => {
         const FIRST_BLOCK_CODE = 'pip install first-init-package';
         const SECOND_BLOCK_CODE = 'pip install second-init-package';
 
-        putFile(MAIN_FILE_NAME, makeMainProjectEntry(PROJECT_ID, INIT_NOTEBOOK_ID) as unknown as DeepnoteFile);
+        putFile(MAIN_FILE_NAME, makeMainProjectEntry(PROJECT_ID, INIT_NOTEBOOK_ID));
         putFile(
             SIBLING_INIT_FILE_NAME,
             makeNotebookFile(PROJECT_ID, INIT_NOTEBOOK_ID, [FIRST_BLOCK_CODE, SECOND_BLOCK_CODE])
@@ -383,7 +392,7 @@ suite('DeepnoteInitNotebookRunner', () => {
 
     test('sibling of a DIFFERENT project is not a valid init source (project.id must match)', async () => {
         // A sibling exists with the right initNotebookId-shaped notebook but a different project.id.
-        putFile(MAIN_FILE_NAME, makeMainProjectEntry(PROJECT_ID, INIT_NOTEBOOK_ID) as unknown as DeepnoteFile);
+        putFile(MAIN_FILE_NAME, makeMainProjectEntry(PROJECT_ID, INIT_NOTEBOOK_ID));
         putFile(SIBLING_INIT_FILE_NAME, makeNotebookFile(OTHER_PROJECT_ID, INIT_NOTEBOOK_ID, [SIBLING_INIT_CODE]));
 
         const kernel = makeKernel(MAIN_FILE_NAME);

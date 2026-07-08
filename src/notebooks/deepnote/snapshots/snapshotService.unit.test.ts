@@ -2,21 +2,78 @@ import * as fakeTimers from '@sinonjs/fake-timers';
 import { assert } from 'chai';
 import * as sinon from 'sinon';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
-import { FileType, NotebookCellKind, Uri, WorkspaceConfiguration, WorkspaceFolder } from 'vscode';
+import {
+    FileType,
+    NotebookCell,
+    NotebookCellKind,
+    NotebookDocument,
+    NotebookDocumentCellChange,
+    NotebookDocumentChangeEvent,
+    TextDocument,
+    Uri,
+    WorkspaceConfiguration,
+    WorkspaceFolder
+} from 'vscode';
 
-import type { DeepnoteBlock, DeepnoteFile, ExecutableBlock } from '@deepnote/blocks';
+import type { DeepnoteBlock, DeepnoteFile, ExecutableBlock, ExecutionError } from '@deepnote/blocks';
 
 import { NotebookCellExecutionState } from '../../../platform/notebooks/cellExecutionStateService';
 import { IEnvironmentCapture } from './environmentCapture.node';
 import { SnapshotService } from './snapshotService';
 import type { DeepnoteOutput } from '../../../platform/deepnote/deepnoteTypes';
+import { IDeepnoteNotebookManager } from '../../types';
 import { IDisposableRegistry } from '../../../platform/common/types';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 
+/**
+ * Structural mirror of SnapshotService's private surface (snapshotService.ts).
+ * `internals` is the single typed seam these tests use to reach private methods.
+ */
+interface SnapshotServiceInternals {
+    armSnapshotSave(notebookUri: string): void;
+    buildSnapshotPath(args: {
+        notebookId?: string;
+        projectId: string;
+        projectName: string;
+        projectUri: Uri;
+        variant: string;
+    }): Uri;
+    cancelPendingSnapshotSave(notebookUri: string): void;
+    createSnapshot(
+        projectUri: Uri,
+        projectId: string,
+        projectName: string,
+        projectData: DeepnoteFile,
+        notebookId?: string,
+        notebookUri?: string
+    ): Promise<Uri | undefined>;
+    handleCellExecutionStateChange(cell: NotebookCell, state: NotebookCellExecutionState): void;
+    handleNotebookDocumentChange(event: NotebookDocumentChangeEvent): void;
+    performSnapshotSave(notebookUri: string): Promise<void>;
+    recordCellExecutionEnd(
+        notebookUri: string,
+        cellId: string,
+        endTime: number,
+        success: boolean,
+        error?: ExecutionError
+    ): void;
+    recordCellExecutionStart(notebookUri: string, cellId: string, startTime: number): void;
+    updateLatestSnapshot(
+        projectUri: Uri,
+        projectId: string,
+        projectName: string,
+        projectData: DeepnoteFile,
+        notebookId?: string,
+        notebookUri?: string
+    ): Promise<Uri | undefined>;
+}
+
+function internals(service: SnapshotService): SnapshotServiceInternals {
+    return service as unknown as SnapshotServiceInternals;
+}
+
 suite('SnapshotService', () => {
     let service: SnapshotService;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let serviceAny: any;
     let mockEnvironmentCapture: IEnvironmentCapture;
     let mockDisposables: IDisposableRegistry;
 
@@ -25,7 +82,6 @@ suite('SnapshotService', () => {
         mockEnvironmentCapture = mock<IEnvironmentCapture>();
         mockDisposables = [];
         service = new SnapshotService(instance(mockEnvironmentCapture), mockDisposables);
-        serviceAny = service;
     });
 
     function createProjectData(projectId = 'test-project-id-123', projectName = 'My Project'): DeepnoteFile {
@@ -64,7 +120,12 @@ suite('SnapshotService', () => {
             const projectId = 'e132b172-b114-410e-8331-011517db664f';
             const projectName = 'My Project';
 
-            const result = serviceAny.buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest' });
+            const result = internals(service).buildSnapshotPath({
+                projectUri,
+                projectId,
+                projectName,
+                variant: 'latest'
+            });
 
             assert.include(result.fsPath, 'snapshots');
             assert.include(result.fsPath, 'my-project');
@@ -79,7 +140,12 @@ suite('SnapshotService', () => {
             const projectName = 'My Project';
             const timestamp = '2025-12-11T10-31-48';
 
-            const result = serviceAny.buildSnapshotPath({ projectUri, projectId, projectName, variant: timestamp });
+            const result = internals(service).buildSnapshotPath({
+                projectUri,
+                projectId,
+                projectName,
+                variant: timestamp
+            });
 
             assert.include(result.fsPath, 'snapshots');
             assert.include(result.fsPath, 'my-project');
@@ -93,7 +159,12 @@ suite('SnapshotService', () => {
             const projectId = 'abc-123';
             const projectName = 'Customer Churn ML Playbook!';
 
-            const result = serviceAny.buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest' });
+            const result = internals(service).buildSnapshotPath({
+                projectUri,
+                projectId,
+                projectName,
+                variant: 'latest'
+            });
 
             assert.include(result.fsPath, 'customer-churn-ml-playbook');
             assert.notInclude(result.fsPath, '!');
@@ -105,7 +176,12 @@ suite('SnapshotService', () => {
             const projectId = 'abc-123';
             const projectName = 'Test@#$%Project';
 
-            const result = serviceAny.buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest' });
+            const result = internals(service).buildSnapshotPath({
+                projectUri,
+                projectId,
+                projectName,
+                variant: 'latest'
+            });
 
             // convert's slugifyProjectName collapses a run of special characters to a single hyphen.
             assert.include(result.fsPath, 'test-project');
@@ -117,7 +193,7 @@ suite('SnapshotService', () => {
             const projectName = 'My Project';
             const notebookId = 'notebook-1';
 
-            const result = serviceAny.buildSnapshotPath({
+            const result = internals(service).buildSnapshotPath({
                 projectUri,
                 projectId,
                 projectName,
@@ -133,7 +209,12 @@ suite('SnapshotService', () => {
             const projectId = 'abc-123';
             const projectName = 'My   Project   Name';
 
-            const result = serviceAny.buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest' });
+            const result = internals(service).buildSnapshotPath({
+                projectUri,
+                projectId,
+                projectName,
+                variant: 'latest'
+            });
 
             assert.include(result.fsPath, 'my-project-name');
             assert.notInclude(result.fsPath, '--');
@@ -145,7 +226,7 @@ suite('SnapshotService', () => {
             const projectName = '';
 
             assert.throws(
-                () => serviceAny.buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest' }),
+                () => internals(service).buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest' }),
                 'Project name cannot be empty or contain only special characters'
             );
         });
@@ -156,7 +237,7 @@ suite('SnapshotService', () => {
             const projectName = '@#$%^&*()';
 
             assert.throws(
-                () => serviceAny.buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest' }),
+                () => internals(service).buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest' }),
                 'Project name cannot be empty or contain only special characters'
             );
         });
@@ -167,7 +248,7 @@ suite('SnapshotService', () => {
             const projectName = '   ';
 
             assert.throws(
-                () => serviceAny.buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest' }),
+                () => internals(service).buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest' }),
                 'Project name cannot be empty or contain only special characters'
             );
         });
@@ -943,7 +1024,7 @@ project:
 
             // Stub the flush so the test observes only whether/when it fires, never real I/O. The armed
             // timer reads this.performSnapshotSave at fire time, so stubbing the instance property works.
-            performSaveStub = sinon.stub(serviceAny, 'performSnapshotSave').resolves();
+            performSaveStub = sinon.stub(internals(service), 'performSnapshotSave').resolves();
         });
 
         teardown(() => {
@@ -953,16 +1034,18 @@ project:
 
         /** Drives the same "output/metadata changed" event the service listens to while a save is pending. */
         function fireOutputChange(): void {
-            serviceAny.handleNotebookDocumentChange({
-                notebook: { uri: Uri.parse(notebookUri) },
-                cellChanges: [{ outputs: [] }],
-                contentChanges: [],
-                metadata: undefined
-            });
+            const notebook = mock<NotebookDocument>();
+            when(notebook.uri).thenReturn(Uri.parse(notebookUri));
+
+            const event = mock<NotebookDocumentChangeEvent>();
+            when(event.notebook).thenReturn(instance(notebook));
+            when(event.cellChanges).thenReturn([{ outputs: [] } as unknown as NotebookDocumentCellChange]);
+
+            internals(service).handleNotebookDocumentChange(instance(event));
         }
 
         test('does NOT save immediately when execution completes — only after the quiet period elapses (catches writing a snapshot before outputs settle)', () => {
-            serviceAny.armSnapshotSave(notebookUri);
+            internals(service).armSnapshotSave(notebookUri);
 
             // Just before the quiet window closes: nothing flushed yet.
             clock.tick(149);
@@ -974,7 +1057,7 @@ project:
         });
 
         test('re-arms (delays) the save when an output change arrives within the quiet window (catches flushing mid-output-stream)', () => {
-            serviceAny.armSnapshotSave(notebookUri);
+            internals(service).armSnapshotSave(notebookUri);
 
             clock.tick(100);
             assert.isFalse(performSaveStub.called);
@@ -992,7 +1075,7 @@ project:
         });
 
         test('forces a flush at the max-wait bound even under continuous output changes (catches an unbounded deferral starving the save)', () => {
-            serviceAny.armSnapshotSave(notebookUri);
+            internals(service).armSnapshotSave(notebookUri);
 
             // Hammer an output change every 100ms; each one would reset the 150ms quiet window, but the
             // 2000ms max-wait measured from the first arm must force a flush regardless.
@@ -1006,30 +1089,33 @@ project:
         });
 
         test('cancels a pending save when a cell re-enters the executing state (catches writing a stale snapshot mid re-execution)', () => {
-            serviceAny.armSnapshotSave(notebookUri);
+            internals(service).armSnapshotSave(notebookUri);
 
             clock.tick(100);
 
             // Drive the real cell-state handler: an Executing transition must cancel the armed save
             // (otherwise a snapshot from the *previous* run would be written during the new run).
-            const cell = {
-                notebook: { uri: Uri.parse(notebookUri) },
-                metadata: { id: 'cell-1' }
-            };
-            serviceAny.handleCellExecutionStateChange(cell, NotebookCellExecutionState.Executing);
+            const cellNotebook = mock<NotebookDocument>();
+            when(cellNotebook.uri).thenReturn(Uri.parse(notebookUri));
+
+            const cell = mock<NotebookCell>();
+            when(cell.notebook).thenReturn(instance(cellNotebook));
+            when(cell.metadata).thenReturn({ id: 'cell-1' });
+
+            internals(service).handleCellExecutionStateChange(instance(cell), NotebookCellExecutionState.Executing);
 
             clock.tick(1000);
             assert.isFalse(performSaveStub.called, 're-execution must cancel the pending deferred save');
         });
 
         test('cancels a pending save when the notebook is closed (catches a flush firing after the document is gone)', () => {
-            serviceAny.armSnapshotSave(notebookUri);
+            internals(service).armSnapshotSave(notebookUri);
 
             clock.tick(100);
 
             // The close handler registered in activate() cancels the pending save via this primitive;
             // once cancelled the timer must never flush even after the full quiet/max-wait window.
-            serviceAny.cancelPendingSnapshotSave(notebookUri);
+            internals(service).cancelPendingSnapshotSave(notebookUri);
 
             clock.tick(2000);
             assert.isFalse(performSaveStub.called, 'closing the notebook must cancel the pending deferred save');
@@ -1084,7 +1170,9 @@ project:
 
             const mockFs = mock<typeof import('vscode').workspace.fs>();
             // Directory exists
-            when(mockFs.stat(anything())).thenResolve({ type: FileType.Directory } as any);
+            when(mockFs.stat(anything())).thenReturn(
+                Promise.resolve({ type: FileType.Directory, ctime: 0, mtime: 0, size: 0 })
+            );
             // Return same content as existing
             const existingYaml = `
 metadata:
@@ -1118,7 +1206,9 @@ project:
             const projectData = createProjectData();
 
             const mockFs = mock<typeof import('vscode').workspace.fs>();
-            when(mockFs.stat(anything())).thenResolve({ type: FileType.Directory } as any);
+            when(mockFs.stat(anything())).thenReturn(
+                Promise.resolve({ type: FileType.Directory, ctime: 0, mtime: 0, size: 0 })
+            );
             when(mockFs.readFile(anything())).thenReject(new Error('ENOENT'));
             when(mockFs.writeFile(anything(), anything())).thenReject(new Error('Write failed'));
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
@@ -1132,7 +1222,9 @@ project:
             const projectData = createProjectData();
 
             const mockFs = mock<typeof import('vscode').workspace.fs>();
-            when(mockFs.stat(anything())).thenResolve({ type: FileType.Directory } as any);
+            when(mockFs.stat(anything())).thenReturn(
+                Promise.resolve({ type: FileType.Directory, ctime: 0, mtime: 0, size: 0 })
+            );
             when(mockFs.readFile(anything())).thenReject(new Error('ENOENT'));
 
             let writeCallCount = 0;
@@ -1155,7 +1247,7 @@ project:
         });
     });
 
-    // Metadata tracking tests (now using serviceAny for private methods)
+    // Metadata tracking tests (private methods reached via internals())
     suite('execution metadata tracking', () => {
         const notebookUri = 'file:///path/to/notebook.deepnote';
         const cellId = 'cell-123';
@@ -1164,7 +1256,7 @@ project:
             test('should record cell execution start time', () => {
                 const startTime = Date.now();
 
-                serviceAny.recordCellExecutionStart(notebookUri, cellId, startTime);
+                internals(service).recordCellExecutionStart(notebookUri, cellId, startTime);
 
                 const metadata = service.getBlockExecutionMetadata(notebookUri, cellId);
                 assert.isDefined(metadata);
@@ -1175,7 +1267,7 @@ project:
             test('should initialize notebook execution state', () => {
                 const startTime = Date.now();
 
-                serviceAny.recordCellExecutionStart(notebookUri, cellId, startTime);
+                internals(service).recordCellExecutionStart(notebookUri, cellId, startTime);
 
                 const executionMetadata = service.getExecutionMetadata(notebookUri);
                 // Should not have execution metadata yet since no cells have completed
@@ -1185,8 +1277,8 @@ project:
             test('should handle multiple cells in same notebook', () => {
                 const startTime = Date.now();
 
-                serviceAny.recordCellExecutionStart(notebookUri, 'cell-1', startTime);
-                serviceAny.recordCellExecutionStart(notebookUri, 'cell-2', startTime + 1000);
+                internals(service).recordCellExecutionStart(notebookUri, 'cell-1', startTime);
+                internals(service).recordCellExecutionStart(notebookUri, 'cell-2', startTime + 1000);
 
                 const metadata1 = service.getBlockExecutionMetadata(notebookUri, 'cell-1');
                 const metadata2 = service.getBlockExecutionMetadata(notebookUri, 'cell-2');
@@ -1202,8 +1294,8 @@ project:
                 const startTime = Date.now();
                 const endTime = startTime + 1000;
 
-                serviceAny.recordCellExecutionStart(notebookUri, cellId, startTime);
-                serviceAny.recordCellExecutionEnd(notebookUri, cellId, endTime, true);
+                internals(service).recordCellExecutionStart(notebookUri, cellId, startTime);
+                internals(service).recordCellExecutionEnd(notebookUri, cellId, endTime, true);
 
                 const metadata = service.getBlockExecutionMetadata(notebookUri, cellId);
                 assert.isDefined(metadata);
@@ -1215,8 +1307,8 @@ project:
                 const startTime = Date.now();
                 const endTime = startTime + 1000;
 
-                serviceAny.recordCellExecutionStart(notebookUri, cellId, startTime);
-                serviceAny.recordCellExecutionEnd(notebookUri, cellId, endTime, true);
+                internals(service).recordCellExecutionStart(notebookUri, cellId, startTime);
+                internals(service).recordCellExecutionEnd(notebookUri, cellId, endTime, true);
 
                 const executionMetadata = service.getExecutionMetadata(notebookUri);
                 assert.isDefined(executionMetadata);
@@ -1230,8 +1322,8 @@ project:
                 const startTime = Date.now();
                 const endTime = startTime + 1000;
 
-                serviceAny.recordCellExecutionStart(notebookUri, cellId, startTime);
-                serviceAny.recordCellExecutionEnd(notebookUri, cellId, endTime, false);
+                internals(service).recordCellExecutionStart(notebookUri, cellId, startTime);
+                internals(service).recordCellExecutionEnd(notebookUri, cellId, endTime, false);
 
                 const executionMetadata = service.getExecutionMetadata(notebookUri);
                 assert.isDefined(executionMetadata);
@@ -1246,8 +1338,8 @@ project:
                 const endTime = startTime + 1000;
                 const error = { name: 'TypeError', message: 'undefined is not a function' };
 
-                serviceAny.recordCellExecutionStart(notebookUri, cellId, startTime);
-                serviceAny.recordCellExecutionEnd(notebookUri, cellId, endTime, false, error);
+                internals(service).recordCellExecutionStart(notebookUri, cellId, startTime);
+                internals(service).recordCellExecutionEnd(notebookUri, cellId, endTime, false, error);
 
                 const executionMetadata = service.getExecutionMetadata(notebookUri);
                 assert.isDefined(executionMetadata);
@@ -1260,14 +1352,14 @@ project:
                 const startTime = Date.now();
 
                 // Execute 3 cells: 2 successful, 1 failed
-                serviceAny.recordCellExecutionStart(notebookUri, 'cell-1', startTime);
-                serviceAny.recordCellExecutionEnd(notebookUri, 'cell-1', startTime + 100, true);
+                internals(service).recordCellExecutionStart(notebookUri, 'cell-1', startTime);
+                internals(service).recordCellExecutionEnd(notebookUri, 'cell-1', startTime + 100, true);
 
-                serviceAny.recordCellExecutionStart(notebookUri, 'cell-2', startTime + 200);
-                serviceAny.recordCellExecutionEnd(notebookUri, 'cell-2', startTime + 300, true);
+                internals(service).recordCellExecutionStart(notebookUri, 'cell-2', startTime + 200);
+                internals(service).recordCellExecutionEnd(notebookUri, 'cell-2', startTime + 300, true);
 
-                serviceAny.recordCellExecutionStart(notebookUri, 'cell-3', startTime + 400);
-                serviceAny.recordCellExecutionEnd(notebookUri, 'cell-3', startTime + 500, false);
+                internals(service).recordCellExecutionStart(notebookUri, 'cell-3', startTime + 400);
+                internals(service).recordCellExecutionEnd(notebookUri, 'cell-3', startTime + 500, false);
 
                 const executionMetadata = service.getExecutionMetadata(notebookUri);
                 assert.isDefined(executionMetadata);
@@ -1281,8 +1373,8 @@ project:
                 const startTime = Date.now();
                 const endTime = startTime + 5000;
 
-                serviceAny.recordCellExecutionStart(notebookUri, cellId, startTime);
-                serviceAny.recordCellExecutionEnd(notebookUri, cellId, endTime, true);
+                internals(service).recordCellExecutionStart(notebookUri, cellId, startTime);
+                internals(service).recordCellExecutionEnd(notebookUri, cellId, endTime, true);
 
                 const executionMetadata = service.getExecutionMetadata(notebookUri);
                 assert.isDefined(executionMetadata);
@@ -1299,7 +1391,7 @@ project:
 
             test('should return undefined if no cells have been executed', () => {
                 const startTime = Date.now();
-                serviceAny.recordCellExecutionStart(notebookUri, cellId, startTime);
+                internals(service).recordCellExecutionStart(notebookUri, cellId, startTime);
 
                 const metadata = service.getExecutionMetadata(notebookUri);
                 assert.isUndefined(metadata);
@@ -1307,8 +1399,8 @@ project:
 
             test('should include ISO timestamps', () => {
                 const startTime = Date.now();
-                serviceAny.recordCellExecutionStart(notebookUri, cellId, startTime);
-                serviceAny.recordCellExecutionEnd(notebookUri, cellId, startTime + 1000, true);
+                internals(service).recordCellExecutionStart(notebookUri, cellId, startTime);
+                internals(service).recordCellExecutionEnd(notebookUri, cellId, startTime + 1000, true);
 
                 const metadata = service.getExecutionMetadata(notebookUri);
                 assert.isDefined(metadata);
@@ -1328,7 +1420,7 @@ project:
 
             test('should return undefined for unknown cell', () => {
                 const startTime = Date.now();
-                serviceAny.recordCellExecutionStart(notebookUri, cellId, startTime);
+                internals(service).recordCellExecutionStart(notebookUri, cellId, startTime);
 
                 const metadata = service.getBlockExecutionMetadata(notebookUri, 'unknown-cell');
                 assert.isUndefined(metadata);
@@ -1338,8 +1430,8 @@ project:
         suite('clearExecutionState', () => {
             test('should clear all state for a notebook', () => {
                 const startTime = Date.now();
-                serviceAny.recordCellExecutionStart(notebookUri, cellId, startTime);
-                serviceAny.recordCellExecutionEnd(notebookUri, cellId, startTime + 1000, true);
+                internals(service).recordCellExecutionStart(notebookUri, cellId, startTime);
+                internals(service).recordCellExecutionEnd(notebookUri, cellId, startTime + 1000, true);
 
                 service.clearExecutionState(notebookUri);
 
@@ -1354,11 +1446,11 @@ project:
                 const startTime = Date.now();
                 const otherNotebookUri = 'file:///other/notebook.deepnote';
 
-                serviceAny.recordCellExecutionStart(notebookUri, cellId, startTime);
-                serviceAny.recordCellExecutionEnd(notebookUri, cellId, startTime + 1000, true);
+                internals(service).recordCellExecutionStart(notebookUri, cellId, startTime);
+                internals(service).recordCellExecutionEnd(notebookUri, cellId, startTime + 1000, true);
 
-                serviceAny.recordCellExecutionStart(otherNotebookUri, 'other-cell', startTime);
-                serviceAny.recordCellExecutionEnd(otherNotebookUri, 'other-cell', startTime + 1000, true);
+                internals(service).recordCellExecutionStart(otherNotebookUri, 'other-cell', startTime);
+                internals(service).recordCellExecutionEnd(otherNotebookUri, 'other-cell', startTime + 1000, true);
 
                 service.clearExecutionState(notebookUri);
 
@@ -1377,11 +1469,11 @@ project:
                 const startTime = Date.now();
 
                 // Execute cells in different notebooks
-                serviceAny.recordCellExecutionStart(notebook1, 'cell-1', startTime);
-                serviceAny.recordCellExecutionEnd(notebook1, 'cell-1', startTime + 100, true);
+                internals(service).recordCellExecutionStart(notebook1, 'cell-1', startTime);
+                internals(service).recordCellExecutionEnd(notebook1, 'cell-1', startTime + 100, true);
 
-                serviceAny.recordCellExecutionStart(notebook2, 'cell-2', startTime);
-                serviceAny.recordCellExecutionEnd(notebook2, 'cell-2', startTime + 200, false);
+                internals(service).recordCellExecutionStart(notebook2, 'cell-2', startTime);
+                internals(service).recordCellExecutionEnd(notebook2, 'cell-2', startTime + 200, false);
 
                 const metadata1 = service.getExecutionMetadata(notebook1);
                 const metadata2 = service.getExecutionMetadata(notebook2);
@@ -1399,6 +1491,45 @@ project:
         });
 
         suite('Run All auto-detection', () => {
+            function mockCell(options: {
+                id: string;
+                kind?: NotebookCellKind;
+                languageId?: string;
+                source?: string;
+            }): NotebookCell {
+                const { id, kind = NotebookCellKind.Code, languageId = 'python', source = 'print(1)' } = options;
+
+                const document = mock<TextDocument>();
+                when(document.getText()).thenReturn(source);
+                when(document.languageId).thenReturn(languageId);
+
+                const cell = mock<NotebookCell>();
+                when(cell.kind).thenReturn(kind);
+                when(cell.document).thenReturn(instance(document));
+                when(cell.metadata).thenReturn({ id });
+                when(cell.outputs).thenReturn([]);
+                when(cell.executionSummary).thenReturn({ success: true });
+
+                return instance(cell);
+            }
+
+            function mockNotebookDoc(options: {
+                cells: NotebookCell[];
+                notebookId: string;
+                projectId: string;
+                uri: Uri;
+            }): NotebookDocument {
+                const { cells, notebookId, projectId, uri } = options;
+
+                const doc = mock<NotebookDocument>();
+                when(doc.uri).thenReturn(uri);
+                when(doc.notebookType).thenReturn('deepnote');
+                when(doc.metadata).thenReturn({ deepnoteProjectId: projectId, deepnoteNotebookId: notebookId });
+                when(doc.getCells()).thenReturn(cells);
+
+                return instance(doc);
+            }
+
             test('should detect Run All when all code cells are executed', async () => {
                 // Set up mocks
                 const mockConfig = mock<WorkspaceConfiguration>();
@@ -1409,45 +1540,24 @@ project:
                 const notebookId = 'test-notebook-id';
 
                 // Create mock cells - 3 code cells and 1 markdown
-                const mockCodeCell1 = {
-                    kind: NotebookCellKind.Code,
-                    document: { getText: () => 'print(1)', languageId: 'python' },
-                    metadata: { id: 'cell-1' },
-                    outputs: [],
-                    executionSummary: { success: true }
-                };
-                const mockCodeCell2 = {
-                    kind: NotebookCellKind.Code,
-                    document: { getText: () => 'print(2)', languageId: 'python' },
-                    metadata: { id: 'cell-2' },
-                    outputs: [],
-                    executionSummary: { success: true }
-                };
-                const mockCodeCell3 = {
-                    kind: NotebookCellKind.Code,
-                    document: { getText: () => 'print(3)', languageId: 'python' },
-                    metadata: { id: 'cell-3' },
-                    outputs: [],
-                    executionSummary: { success: true }
-                };
-                const mockMarkdownCell = {
-                    kind: NotebookCellKind.Markup,
-                    document: { getText: () => '# Title', languageId: 'markdown' },
-                    metadata: { id: 'cell-md' },
-                    outputs: []
-                };
-
-                const mockNotebook = {
+                const mockNotebook = mockNotebookDoc({
                     uri: Uri.parse(notebookUri),
-                    notebookType: 'deepnote',
-                    metadata: {
-                        deepnoteProjectId: projectId,
-                        deepnoteNotebookId: notebookId
-                    },
-                    getCells: () => [mockCodeCell1, mockCodeCell2, mockMarkdownCell, mockCodeCell3]
-                };
+                    projectId,
+                    notebookId,
+                    cells: [
+                        mockCell({ id: 'cell-1', source: 'print(1)' }),
+                        mockCell({ id: 'cell-2', source: 'print(2)' }),
+                        mockCell({
+                            id: 'cell-md',
+                            kind: NotebookCellKind.Markup,
+                            languageId: 'markdown',
+                            source: '# Title'
+                        }),
+                        mockCell({ id: 'cell-3', source: 'print(3)' })
+                    ]
+                });
 
-                when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([mockNotebook as any]);
+                when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([mockNotebook]);
 
                 // Create mock notebook manager with original project
                 const originalProject: DeepnoteFile = {
@@ -1466,34 +1576,34 @@ project:
                     }
                 };
 
-                const mockNotebookManager = {
-                    getProjectForNotebook: sinon.stub().returns(originalProject)
-                };
+                const mockNotebookManager = mock<IDeepnoteNotebookManager>();
+                when(mockNotebookManager.getProjectForNotebook(anything(), anything())).thenReturn(originalProject);
 
                 // Create a new service with the mock notebook manager
                 const testService = new SnapshotService(
                     instance(mockEnvironmentCapture),
                     mockDisposables,
-                    mockNotebookManager as any
+                    instance(mockNotebookManager)
                 );
-                const testServiceAny = testService as any;
 
                 // Record execution for all 3 code cells
                 const startTime = Date.now();
-                testServiceAny.recordCellExecutionStart(notebookUri, 'cell-1', startTime);
-                testServiceAny.recordCellExecutionEnd(notebookUri, 'cell-1', startTime + 100, true);
-                testServiceAny.recordCellExecutionStart(notebookUri, 'cell-2', startTime + 200);
-                testServiceAny.recordCellExecutionEnd(notebookUri, 'cell-2', startTime + 300, true);
-                testServiceAny.recordCellExecutionStart(notebookUri, 'cell-3', startTime + 400);
-                testServiceAny.recordCellExecutionEnd(notebookUri, 'cell-3', startTime + 500, true);
+                internals(testService).recordCellExecutionStart(notebookUri, 'cell-1', startTime);
+                internals(testService).recordCellExecutionEnd(notebookUri, 'cell-1', startTime + 100, true);
+                internals(testService).recordCellExecutionStart(notebookUri, 'cell-2', startTime + 200);
+                internals(testService).recordCellExecutionEnd(notebookUri, 'cell-2', startTime + 300, true);
+                internals(testService).recordCellExecutionStart(notebookUri, 'cell-3', startTime + 400);
+                internals(testService).recordCellExecutionEnd(notebookUri, 'cell-3', startTime + 500, true);
 
                 // Spy on createSnapshot and updateLatestSnapshot
-                const createSnapshotSpy = sinon.spy(testServiceAny, 'createSnapshot');
-                const updateLatestSnapshotSpy = sinon.spy(testServiceAny, 'updateLatestSnapshot');
+                const createSnapshotSpy = sinon.spy(internals(testService), 'createSnapshot');
+                const updateLatestSnapshotSpy = sinon.spy(internals(testService), 'updateLatestSnapshot');
 
                 // Mock file system operations for snapshot creation
                 const mockFs = mock<typeof import('vscode').workspace.fs>();
-                when(mockFs.stat(anything())).thenResolve({ type: FileType.Directory } as any);
+                when(mockFs.stat(anything())).thenReturn(
+                    Promise.resolve({ type: FileType.Directory, ctime: 0, mtime: 0, size: 0 })
+                );
                 when(mockFs.readFile(anything())).thenReject(new Error('ENOENT'));
                 when(mockFs.writeFile(anything(), anything())).thenResolve();
                 when(mockFs.copy(anything(), anything(), anything())).thenResolve();
@@ -1501,7 +1611,7 @@ project:
 
                 // onExecutionComplete arms a deferred (output-settled) save; invoke the flush body
                 // directly to assert the Run-All-vs-partial routing without waiting on the timer.
-                await testServiceAny.performSnapshotSave(notebookUri);
+                await internals(testService).performSnapshotSave(notebookUri);
 
                 // ASSERT: createSnapshot should be called (full snapshot, not just latest)
                 assert.isTrue(
@@ -1524,28 +1634,21 @@ project:
                 const siblingAUri = 'file:///workspace/foo/a.deepnote';
                 const targetBUri = 'file:///workspace/bar/b.deepnote';
 
-                const makeCell = (id: string) => ({
-                    kind: NotebookCellKind.Code,
-                    document: { getText: () => 'print(1)', languageId: 'python' },
-                    metadata: { id },
-                    outputs: [],
-                    executionSummary: { success: true }
-                });
-                const siblingA = {
+                const siblingA = mockNotebookDoc({
                     uri: Uri.parse(siblingAUri),
-                    notebookType: 'deepnote',
-                    metadata: { deepnoteProjectId: sharedProjectId, deepnoteNotebookId: 'notebook-a' },
-                    getCells: () => [makeCell('cell-a')]
-                };
-                const notebookB = {
+                    projectId: sharedProjectId,
+                    notebookId: 'notebook-a',
+                    cells: [mockCell({ id: 'cell-a' })]
+                });
+                const notebookB = mockNotebookDoc({
                     uri: Uri.parse(targetBUri),
-                    notebookType: 'deepnote',
-                    metadata: { deepnoteProjectId: sharedProjectId, deepnoteNotebookId: 'notebook-b' },
-                    getCells: () => [makeCell('cell-b')]
-                };
+                    projectId: sharedProjectId,
+                    notebookId: 'notebook-b',
+                    cells: [mockCell({ id: 'cell-b' })]
+                });
 
                 // Sibling A is enumerated FIRST — a projectId-only lookup would pick A's folder.
-                when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([siblingA, notebookB] as any);
+                when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([siblingA, notebookB]);
 
                 const originalProject: DeepnoteFile = {
                     metadata: { createdAt: '2025-01-01T00:00:00Z' },
@@ -1556,36 +1659,36 @@ project:
                         notebooks: [{ id: 'notebook-b', name: 'Notebook B', blocks: [] }]
                     }
                 };
-                const mockNotebookManager = {
-                    getProjectForNotebook: sinon.stub().returns(originalProject)
-                };
+                const mockNotebookManager = mock<IDeepnoteNotebookManager>();
+                when(mockNotebookManager.getProjectForNotebook(anything(), anything())).thenReturn(originalProject);
 
                 const testService = new SnapshotService(
                     instance(mockEnvironmentCapture),
                     mockDisposables,
-                    mockNotebookManager as any
+                    instance(mockNotebookManager)
                 );
-                const testServiceAny = testService as any;
 
                 const startTime = Date.now();
-                testServiceAny.recordCellExecutionStart(targetBUri, 'cell-b', startTime);
-                testServiceAny.recordCellExecutionEnd(targetBUri, 'cell-b', startTime + 100, true);
+                internals(testService).recordCellExecutionStart(targetBUri, 'cell-b', startTime);
+                internals(testService).recordCellExecutionEnd(targetBUri, 'cell-b', startTime + 100, true);
 
                 const mockFs = mock<typeof import('vscode').workspace.fs>();
-                when(mockFs.stat(anything())).thenResolve({ type: FileType.Directory } as any);
+                when(mockFs.stat(anything())).thenReturn(
+                    Promise.resolve({ type: FileType.Directory, ctime: 0, mtime: 0, size: 0 })
+                );
                 when(mockFs.readFile(anything())).thenReject(new Error('ENOENT'));
                 when(mockFs.writeFile(anything(), anything())).thenResolve();
                 when(mockFs.copy(anything(), anything(), anything())).thenResolve();
                 when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
 
-                const buildSnapshotPathSpy = sinon.spy(testServiceAny, 'buildSnapshotPath');
+                const buildSnapshotPathSpy = sinon.spy(internals(testService), 'buildSnapshotPath');
 
-                await testServiceAny.performSnapshotSave(targetBUri);
+                await internals(testService).performSnapshotSave(targetBUri);
 
                 // The snapshot dir derives from projectUri's parent, so projectUri must be notebook B's
                 // OWN uri (/bar), not sibling A's (/foo) — even though A shares the id and enumerates first.
                 assert.isTrue(buildSnapshotPathSpy.called, 'buildSnapshotPath should be called');
-                const projectUriArg = buildSnapshotPathSpy.firstCall.args[0].projectUri as Uri;
+                const projectUriArg = buildSnapshotPathSpy.firstCall.args[0].projectUri;
                 assert.strictEqual(
                     projectUriArg.toString(),
                     Uri.parse(targetBUri).toString(),

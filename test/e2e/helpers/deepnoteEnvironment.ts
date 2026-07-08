@@ -12,13 +12,16 @@ import {
 import { dismissAllNotifications, waitForNotification } from './notifications';
 import { tryOpenInputBox } from './quickInput';
 
+// Command palette labels (category + title) the way `Workbench.executeCommand` matches them.
 const CREATE_ENV_COMMAND = 'Deepnote: Create Environment';
 const SELECT_ENV_COMMAND = 'Deepnote: Select Environment for Notebook';
 
 /**
  * Drives `deepnote.environments.create`: pick interpreter -> name -> skip packages -> skip
- * description. Retries when interpreter discovery isn't ready yet, and treats "already exists" as
- * success so a leftover environment is reused.
+ * description. Retries when the Python extension has not finished discovering an interpreter yet
+ * (the command shows an error and returns instead of opening a quick pick). Idempotent — the
+ * "already exists" guard is treated as success so a leftover environment from a previous/retried run
+ * is reused rather than colliding.
  */
 export async function createEnvironment(name: string): Promise<void> {
     const driver = VSBrowser.instance.driver;
@@ -27,7 +30,8 @@ export async function createEnvironment(name: string): Promise<void> {
     for (let attempt = 1; attempt <= MAX_CREATE_ATTEMPTS; attempt++) {
         await new Workbench().executeCommand(CREATE_ENV_COMMAND);
 
-        // No interpreter discovered yet: the command shows a notification and returns instead.
+        // Either the interpreter quick pick opens, or (no interpreter discovered yet) the command
+        // shows a "No Python interpreters found" notification and returns.
         const interpreterPick = await tryOpenInputBox(INTERPRETER_PROMPT_TIMEOUT);
         if (!interpreterPick) {
             await dismissAllNotifications();
@@ -58,14 +62,22 @@ export async function createEnvironment(name: string): Promise<void> {
         await nameBox.setText(name);
         await nameBox.confirm();
 
-        // On an existing name the command short-circuits after the name prompt with no further
-        // inputs, so only drive the optional prompts when the packages box actually appears.
+        // On an existing name the create command short-circuits after the name prompt with an
+        // "already exists" notification and opens no further inputs, so only drive the optional
+        // prompts when the packages box actually appears. This keeps the documented idempotent
+        // retry path working: a leftover environment is reused rather than failing the test on a
+        // timed-out InputBox that never opens.
         const packagesBox = await tryOpenInputBox(OPTIONAL_PROMPT_TIMEOUT);
         if (packagesBox) {
+            // Packages (optional) — leave empty.
             await packagesBox.confirm();
+
+            // Description (optional) — leave empty.
             await (await InputBox.create()).confirm();
         }
 
+        // Treat both the success toast and the "already exists" guard as success: a leftover
+        // environment from a previous/retried run is fine — it will be selected next.
         await waitForNotification(/created successfully|already exists/i, ENV_CREATED_TIMEOUT, false);
         return;
     }
@@ -78,22 +90,25 @@ export async function createEnvironment(name: string): Promise<void> {
 }
 
 /**
- * Drives `deepnote.environments.selectForNotebook`, which rebuilds and selects the notebook's kernel
- * controller (provisioning the venv + toolkit) — the "wait for the kernel to connect" step.
+ * Drives `deepnote.environments.selectForNotebook`. Selecting the environment rebuilds and
+ * explicitly selects the notebook's kernel controller (provisioning the venv + toolkit), which is
+ * what "wait for the kernel to connect" means in this extension.
  */
 export async function selectEnvironmentForNotebook(name: string, notebookFileName: string): Promise<void> {
     const driver = VSBrowser.instance.driver;
 
-    // The command requires an active `deepnote` notebook.
+    // The command requires an active `deepnote` notebook — make sure it's focused.
     await new EditorView().openEditor(notebookFileName);
 
-    // Clear toasts that can overlap the quick pick and intercept clicks.
+    // Clear the "select an environment" prompt and any other toasts; they can overlap the quick pick
+    // and intercept clicks.
     await dismissAllNotifications();
 
     await new Workbench().executeCommand(SELECT_ENV_COMMAND);
 
     const environmentPick = await InputBox.create(QUICK_PICK_TIMEOUT);
-    // Accept with Enter rather than clicking the row, whose description `<p>` can intercept a click.
+    // Filter to the environment by name and accept with Enter rather than clicking the row: the
+    // quick-pick row contains a description `<p>` that can intercept a positional click.
     await environmentPick.setText(name);
     await driver.wait(
         async () => (await environmentPick.getQuickPicks()).length > 0,
@@ -102,6 +117,7 @@ export async function selectEnvironmentForNotebook(name: string, notebookFileNam
     );
     await environmentPick.confirm();
 
-    // Best-effort: the authoritative gate is the rendered output, so a missed toast must not fail.
+    // Best-effort wait for the "switched successfully" toast; the authoritative gate is the rendered
+    // output, so a missed (auto-dismissed) toast must not fail the test.
     await waitForNotification(/switched successfully/i, KERNEL_CONNECT_TIMEOUT, false);
 }

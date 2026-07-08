@@ -528,7 +528,11 @@ export class DeepnoteExplorerView {
         };
     }
 
-    /** Prompts the user for a notebook name, rejecting empty and duplicate names. */
+    /**
+     * Prompts the user for a notebook name with validation
+     * @param suggestedName The default suggested name
+     * @returns The entered notebook name, or undefined if cancelled
+     */
     private async promptForNotebookName(
         suggestedName: string,
         existingNames: Set<string>
@@ -551,7 +555,11 @@ export class DeepnoteExplorerView {
         });
     }
 
-    /** Creates a new notebook with a fresh id and a single empty code block. */
+    /**
+     * Creates a new notebook with an initial empty code block
+     * @param notebookName The name for the new notebook
+     * @returns The created notebook with a unique ID and initial block
+     */
     private createNotebookWithFirstBlock(notebookName: string): DeepnoteNotebook {
         const notebookId = uuidUtils.generateUuid();
         const firstBlock: DeepnoteBlock = {

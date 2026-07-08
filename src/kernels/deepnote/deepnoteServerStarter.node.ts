@@ -93,9 +93,8 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
     }
 
     /**
-     * Start a server for a notebook.
-     * The server is keyed by the notebook URI, so each notebook gets its own server.
-     * Serializes concurrent operations on the same notebook to prevent race conditions.
+     * Start a server for a kernel environment.
+     * Serializes concurrent operations on the same environment to prevent race conditions.
      */
     public async startServer(
         interpreter: PythonEnvironment,
@@ -180,7 +179,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
     }
 
     /**
-     * Stop the deepnote-toolkit server for a notebook.
+     * Stop the deepnote-toolkit server for a kernel environment.
      */
     public async stopServer(deepnoteFileUri: Uri, token?: CancellationToken): Promise<void> {
         Cancellation.throwIfCanceled(token);

@@ -10,9 +10,12 @@ import {
 import { clickDialogOkButton } from './quickInput';
 
 /**
- * Opens a workspace file by name via Quick Open ("Go to File..."), which reliably opens the
- * highlighted match on confirm. Driving the running window directly avoids ExTester's
- * `openResources`, which shells out to `code -r` and silently no-ops when headless.
+ * Opens a file that lives in the currently-open workspace folder via Quick Open ("Go to File..."),
+ * matching by file name. Unlike the simple Open File dialog (where Enter does not accept a typed
+ * path), Quick Open reliably opens the highlighted match on confirm.
+ *
+ * Driving the running window directly avoids ExTester's `openResources`, which shells out to
+ * `code -r <file>` (reuse-window over IPC) and silently no-ops in a sandboxed/headless instance.
  */
 export async function openWorkspaceFile(fileName: string): Promise<void> {
     const driver = VSBrowser.instance.driver;

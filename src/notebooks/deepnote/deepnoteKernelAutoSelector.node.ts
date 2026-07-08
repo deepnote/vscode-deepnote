@@ -67,11 +67,11 @@ const NOTEBOOK_EDITOR_RETRY_DELAY_MS = 100;
  */
 @injectable()
 export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, IExtensionSyncActivationService {
-    // Track connection metadata per NOTEBOOK (keyed by notebook.uri.toString()) for reuse
+    // Track connection metadata per NOTEBOOK for reuse
     private readonly notebookConnectionMetadata = new Map<string, DeepnoteKernelConnectionMetadata>();
-    // Track registered controllers per NOTEBOOK (keyed by notebook.uri.toString()) - one controller per notebook
+    // Track registered controllers per NOTEBOOK (full URI with query) - one controller per notebook
     private readonly notebookControllers = new Map<string, IVSCodeNotebookController>();
-    // Track environment for each notebook (keyed by notebook.uri.toString())
+    // Track environment for each notebook
     private readonly notebookEnvironmentsIds = new Map<string, string>();
     // Track per-notebook placeholder controllers for notebooks without configured environments
     private readonly placeholderControllers = new Map<string, NotebookController>();

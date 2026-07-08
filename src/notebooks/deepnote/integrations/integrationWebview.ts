@@ -771,7 +771,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             `IntegrationWebviewProvider: Updating project ${this.projectId} with ${projectIntegrations.length} integrations`
         );
 
-        // Update the cached project entries; each notebook persists its own integrations on save.
+        // Update the project in the notebook manager
         const success = this.notebookManager.updateProjectIntegrations(this.projectId, projectIntegrations);
 
         if (!success) {

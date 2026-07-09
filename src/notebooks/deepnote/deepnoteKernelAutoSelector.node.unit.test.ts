@@ -3,6 +3,7 @@ import * as sinon from 'sinon';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { DeepnoteKernelAutoSelector } from './deepnoteKernelAutoSelector.node';
 import { createMockChildProcess } from '../../kernels/deepnote/deepnoteTestHelpers.node';
+import { ServerHandleRegistry } from '../../kernels/deepnote/deepnoteServerHandleRegistry.node';
 import {
     IDeepnoteEnvironmentManager,
     IDeepnoteLspClientManager,
@@ -27,6 +28,7 @@ import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock
 
 suite('DeepnoteKernelAutoSelector - rebuildController', () => {
     let selector: DeepnoteKernelAutoSelector;
+    let registry: ServerHandleRegistry;
     let mockDisposableRegistry: IDisposableRegistry;
     let mockControllerRegistration: IControllerRegistration;
     let mockPythonExtensionChecker: IPythonExtensionChecker;
@@ -118,6 +120,8 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             mockLoadingController
         );
 
+        registry = new ServerHandleRegistry();
+
         // Create selector instance
         selector = new DeepnoteKernelAutoSelector(
             instance(mockDisposableRegistry),
@@ -135,7 +139,8 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             instance(mockServerStarter),
             instance(mockNotebookEnvironmentMapper),
             instance(mockOutputChannel),
-            instance(mockToolkitInstaller)
+            instance(mockToolkitInstaller),
+            registry
         );
     });
 
@@ -294,7 +299,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             // Arrange - old handle already tracked, no new handle registered because setup fails
             const notebookKey = mockNotebook.uri.toString();
             const oldServerHandle = 'old-server-handle';
-            serverHandles(selector).set(notebookKey, oldServerHandle);
+            registry.set(notebookKey, oldServerHandle);
 
             const mockEnvironment = createMockEnvironment('test-env-id', 'Test Environment');
             when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).thenReturn('test-env-id');
@@ -316,7 +321,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             const notebookKey = mockNotebook.uri.toString();
             const oldServerHandle = 'old-server-handle';
             const newServerHandle = 'new-server-handle';
-            serverHandles(selector).set(notebookKey, oldServerHandle);
+            registry.set(notebookKey, oldServerHandle);
 
             const mockEnvironment = createMockEnvironment('test-env-id', 'Test Environment');
             when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).thenReturn('test-env-id');
@@ -324,7 +329,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
             // Real setup registers a new handle for the notebook - emulate that side effect
             sandbox.stub(selector, 'ensureKernelSelectedWithConfiguration').callsFake(async () => {
-                serverHandles(selector).set(notebookKey, newServerHandle);
+                registry.set(notebookKey, newServerHandle);
             });
 
             // Act
@@ -333,6 +338,13 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             // Assert - only the stale old handle is unregistered; the new one stays
             verify(mockServerProvider.unregisterServer(oldServerHandle)).once();
             verify(mockServerProvider.unregisterServer(newServerHandle)).never();
+
+            // Assert - the registry ends up tracking the new handle, not the stale one
+            assert.strictEqual(
+                registry.get(notebookKey),
+                newServerHandle,
+                'registry should track the new handle after a successful switch'
+            );
         });
     });
 
@@ -1065,11 +1077,4 @@ function createMockKernelSpec(name: string, displayName: string, language: strin
         executable: '/usr/bin/python3',
         argv: ['python3', '-m', 'ipykernel_launcher', '-f', '{connection_file}']
     };
-}
-
-/**
- * Exposes the private notebook-to-server-handle map for seeding/inspection in tests.
- */
-function serverHandles(selector: DeepnoteKernelAutoSelector): Map<string, string> {
-    return (selector as unknown as { projectServerHandles: Map<string, string> }).projectServerHandles;
 }

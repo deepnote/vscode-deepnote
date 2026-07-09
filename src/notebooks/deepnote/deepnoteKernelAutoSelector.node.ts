@@ -32,7 +32,8 @@ import {
     IDeepnoteNotebookEnvironmentMapper,
     IDeepnoteServerProvider,
     IDeepnoteServerStarter,
-    IDeepnoteToolkitInstaller
+    IDeepnoteToolkitInstaller,
+    IServerHandleRegistry
 } from '../../kernels/deepnote/types';
 import { createJupyterConnectionInfo } from '../../kernels/jupyter/jupyterUtils';
 import { JupyterLabHelper } from '../../kernels/jupyter/session/jupyterLabHelper';
@@ -75,8 +76,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     private readonly notebookEnvironmentsIds = new Map<string, string>();
     // Track per-notebook placeholder controllers for notebooks without configured environments
     private readonly placeholderControllers = new Map<string, NotebookController>();
-    // Track server handles per NOTEBOOK (keyed by notebook.uri.toString()) - one server per notebook
-    private readonly projectServerHandles = new Map<string, string>();
 
     constructor(
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
@@ -97,7 +96,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         @inject(IDeepnoteNotebookEnvironmentMapper)
         private readonly notebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper,
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel,
-        @inject(IDeepnoteToolkitInstaller) private readonly toolkitInstaller: IDeepnoteToolkitInstaller
+        @inject(IDeepnoteToolkitInstaller) private readonly toolkitInstaller: IDeepnoteToolkitInstaller,
+        @inject(IServerHandleRegistry) private readonly serverHandleRegistry: IServerHandleRegistry
     ) {}
 
     public activate() {
@@ -322,7 +322,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         // Capture the old handle but don't unregister it yet: a failed or cancelled switch would
         // strand the still-selected controller on a dead handle.
-        const oldServerHandle = this.projectServerHandles.get(notebookKey);
+        const oldServerHandle = this.serverHandleRegistry.get(notebookKey);
 
         // Stop existing LSP clients so new ones can be created with fresh environment
         // Without this, the SQL LSP client's command handlers remain registered and
@@ -345,7 +345,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         // Setup succeeded. If it registered a new server handle (full setup path), drop the old one.
         // The verified-controller early return reuses the existing handle, so nothing to clear then.
-        const newServerHandle = this.projectServerHandles.get(notebookKey);
+        const newServerHandle = this.serverHandleRegistry.get(notebookKey);
 
         if (oldServerHandle && oldServerHandle !== newServerHandle) {
             logger.info(`Clearing old server handle from tracking: ${oldServerHandle}`);
@@ -466,7 +466,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         };
 
         this.serverProvider.registerServer(serverProviderHandle.handle, serverInfo);
-        this.projectServerHandles.set(notebookKey, serverProviderHandle.handle);
+        this.serverHandleRegistry.set(notebookKey, serverProviderHandle.handle);
 
         const lspInterpreterUri = this.getVenvInterpreterUri(configuration.venvPath);
 

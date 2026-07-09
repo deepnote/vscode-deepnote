@@ -15,10 +15,11 @@ import {
     WorkspaceFolder
 } from 'vscode';
 
-import type { DeepnoteBlock, DeepnoteFile, ExecutableBlock, ExecutionError } from '@deepnote/blocks';
+import type { DeepnoteBlock, DeepnoteFile, Environment, ExecutableBlock } from '@deepnote/blocks';
 
 import { NotebookCellExecutionState } from '../../../platform/notebooks/cellExecutionStateService';
 import { IEnvironmentCapture } from './environmentCapture.node';
+import { ExecutionMetadataTracker } from './executionMetadataTracker';
 import { buildSnapshotPath } from './snapshotFiles';
 import { SnapshotService } from './snapshotService';
 import { InvalidProjectNameError } from '../../../platform/errors/invalidProjectNameError';
@@ -37,14 +38,6 @@ interface SnapshotServiceInternals {
     handleCellExecutionStateChange(cell: NotebookCell, state: NotebookCellExecutionState): void;
     handleNotebookDocumentChange(event: NotebookDocumentChangeEvent): void;
     performSnapshotSave(notebookUri: string): Promise<void>;
-    recordCellExecutionEnd(
-        notebookUri: string,
-        cellId: string,
-        endTime: number,
-        success: boolean,
-        error?: ExecutionError
-    ): void;
-    recordCellExecutionStart(notebookUri: string, cellId: string, startTime: number): void;
     updateLatestSnapshot(
         projectUri: Uri,
         projectId: string,
@@ -63,12 +56,14 @@ suite('SnapshotService', () => {
     let service: SnapshotService;
     let mockEnvironmentCapture: IEnvironmentCapture;
     let mockDisposables: IDisposableRegistry;
+    let tracker: ExecutionMetadataTracker;
 
     setup(() => {
         resetVSCodeMocks();
         mockEnvironmentCapture = mock<IEnvironmentCapture>();
         mockDisposables = [];
-        service = new SnapshotService(instance(mockEnvironmentCapture), mockDisposables);
+        tracker = new ExecutionMetadataTracker();
+        service = new SnapshotService(instance(mockEnvironmentCapture), mockDisposables, undefined, tracker);
     });
 
     function createProjectData(projectId = 'test-project-id-123', projectName = 'My Project'): DeepnoteFile {
@@ -1292,7 +1287,7 @@ project:
             test('should record cell execution start time', () => {
                 const startTime = Date.now();
 
-                internals(service).recordCellExecutionStart(notebookUri, cellId, startTime);
+                tracker.recordCellExecutionStart(notebookUri, cellId, startTime);
 
                 const metadata = service.getBlockExecutionMetadata(notebookUri, cellId);
                 assert.isDefined(metadata);
@@ -1303,7 +1298,7 @@ project:
             test('should initialize notebook execution state', () => {
                 const startTime = Date.now();
 
-                internals(service).recordCellExecutionStart(notebookUri, cellId, startTime);
+                tracker.recordCellExecutionStart(notebookUri, cellId, startTime);
 
                 const executionMetadata = service.getExecutionMetadata(notebookUri);
                 // Should not have execution metadata yet since no cells have completed
@@ -1313,8 +1308,8 @@ project:
             test('should handle multiple cells in same notebook', () => {
                 const startTime = Date.now();
 
-                internals(service).recordCellExecutionStart(notebookUri, 'cell-1', startTime);
-                internals(service).recordCellExecutionStart(notebookUri, 'cell-2', startTime + 1000);
+                tracker.recordCellExecutionStart(notebookUri, 'cell-1', startTime);
+                tracker.recordCellExecutionStart(notebookUri, 'cell-2', startTime + 1000);
 
                 const metadata1 = service.getBlockExecutionMetadata(notebookUri, 'cell-1');
                 const metadata2 = service.getBlockExecutionMetadata(notebookUri, 'cell-2');
@@ -1330,8 +1325,8 @@ project:
                 const startTime = Date.now();
                 const endTime = startTime + 1000;
 
-                internals(service).recordCellExecutionStart(notebookUri, cellId, startTime);
-                internals(service).recordCellExecutionEnd(notebookUri, cellId, endTime, true);
+                tracker.recordCellExecutionStart(notebookUri, cellId, startTime);
+                tracker.recordCellExecutionEnd(notebookUri, cellId, endTime, true);
 
                 const metadata = service.getBlockExecutionMetadata(notebookUri, cellId);
                 assert.isDefined(metadata);
@@ -1343,8 +1338,8 @@ project:
                 const startTime = Date.now();
                 const endTime = startTime + 1000;
 
-                internals(service).recordCellExecutionStart(notebookUri, cellId, startTime);
-                internals(service).recordCellExecutionEnd(notebookUri, cellId, endTime, true);
+                tracker.recordCellExecutionStart(notebookUri, cellId, startTime);
+                tracker.recordCellExecutionEnd(notebookUri, cellId, endTime, true);
 
                 const executionMetadata = service.getExecutionMetadata(notebookUri);
                 assert.isDefined(executionMetadata);
@@ -1358,8 +1353,8 @@ project:
                 const startTime = Date.now();
                 const endTime = startTime + 1000;
 
-                internals(service).recordCellExecutionStart(notebookUri, cellId, startTime);
-                internals(service).recordCellExecutionEnd(notebookUri, cellId, endTime, false);
+                tracker.recordCellExecutionStart(notebookUri, cellId, startTime);
+                tracker.recordCellExecutionEnd(notebookUri, cellId, endTime, false);
 
                 const executionMetadata = service.getExecutionMetadata(notebookUri);
                 assert.isDefined(executionMetadata);
@@ -1374,8 +1369,8 @@ project:
                 const endTime = startTime + 1000;
                 const error = { name: 'TypeError', message: 'undefined is not a function' };
 
-                internals(service).recordCellExecutionStart(notebookUri, cellId, startTime);
-                internals(service).recordCellExecutionEnd(notebookUri, cellId, endTime, false, error);
+                tracker.recordCellExecutionStart(notebookUri, cellId, startTime);
+                tracker.recordCellExecutionEnd(notebookUri, cellId, endTime, false, error);
 
                 const executionMetadata = service.getExecutionMetadata(notebookUri);
                 assert.isDefined(executionMetadata);
@@ -1388,14 +1383,14 @@ project:
                 const startTime = Date.now();
 
                 // Execute 3 cells: 2 successful, 1 failed
-                internals(service).recordCellExecutionStart(notebookUri, 'cell-1', startTime);
-                internals(service).recordCellExecutionEnd(notebookUri, 'cell-1', startTime + 100, true);
+                tracker.recordCellExecutionStart(notebookUri, 'cell-1', startTime);
+                tracker.recordCellExecutionEnd(notebookUri, 'cell-1', startTime + 100, true);
 
-                internals(service).recordCellExecutionStart(notebookUri, 'cell-2', startTime + 200);
-                internals(service).recordCellExecutionEnd(notebookUri, 'cell-2', startTime + 300, true);
+                tracker.recordCellExecutionStart(notebookUri, 'cell-2', startTime + 200);
+                tracker.recordCellExecutionEnd(notebookUri, 'cell-2', startTime + 300, true);
 
-                internals(service).recordCellExecutionStart(notebookUri, 'cell-3', startTime + 400);
-                internals(service).recordCellExecutionEnd(notebookUri, 'cell-3', startTime + 500, false);
+                tracker.recordCellExecutionStart(notebookUri, 'cell-3', startTime + 400);
+                tracker.recordCellExecutionEnd(notebookUri, 'cell-3', startTime + 500, false);
 
                 const executionMetadata = service.getExecutionMetadata(notebookUri);
                 assert.isDefined(executionMetadata);
@@ -1409,8 +1404,8 @@ project:
                 const startTime = Date.now();
                 const endTime = startTime + 5000;
 
-                internals(service).recordCellExecutionStart(notebookUri, cellId, startTime);
-                internals(service).recordCellExecutionEnd(notebookUri, cellId, endTime, true);
+                tracker.recordCellExecutionStart(notebookUri, cellId, startTime);
+                tracker.recordCellExecutionEnd(notebookUri, cellId, endTime, true);
 
                 const executionMetadata = service.getExecutionMetadata(notebookUri);
                 assert.isDefined(executionMetadata);
@@ -1427,7 +1422,7 @@ project:
 
             test('should return undefined if no cells have been executed', () => {
                 const startTime = Date.now();
-                internals(service).recordCellExecutionStart(notebookUri, cellId, startTime);
+                tracker.recordCellExecutionStart(notebookUri, cellId, startTime);
 
                 const metadata = service.getExecutionMetadata(notebookUri);
                 assert.isUndefined(metadata);
@@ -1435,8 +1430,8 @@ project:
 
             test('should include ISO timestamps', () => {
                 const startTime = Date.now();
-                internals(service).recordCellExecutionStart(notebookUri, cellId, startTime);
-                internals(service).recordCellExecutionEnd(notebookUri, cellId, startTime + 1000, true);
+                tracker.recordCellExecutionStart(notebookUri, cellId, startTime);
+                tracker.recordCellExecutionEnd(notebookUri, cellId, startTime + 1000, true);
 
                 const metadata = service.getExecutionMetadata(notebookUri);
                 assert.isDefined(metadata);
@@ -1456,7 +1451,7 @@ project:
 
             test('should return undefined for unknown cell', () => {
                 const startTime = Date.now();
-                internals(service).recordCellExecutionStart(notebookUri, cellId, startTime);
+                tracker.recordCellExecutionStart(notebookUri, cellId, startTime);
 
                 const metadata = service.getBlockExecutionMetadata(notebookUri, 'unknown-cell');
                 assert.isUndefined(metadata);
@@ -1466,8 +1461,8 @@ project:
         suite('clearExecutionState', () => {
             test('should clear all state for a notebook', () => {
                 const startTime = Date.now();
-                internals(service).recordCellExecutionStart(notebookUri, cellId, startTime);
-                internals(service).recordCellExecutionEnd(notebookUri, cellId, startTime + 1000, true);
+                tracker.recordCellExecutionStart(notebookUri, cellId, startTime);
+                tracker.recordCellExecutionEnd(notebookUri, cellId, startTime + 1000, true);
 
                 service.clearExecutionState(notebookUri);
 
@@ -1482,11 +1477,11 @@ project:
                 const startTime = Date.now();
                 const otherNotebookUri = 'file:///other/notebook.deepnote';
 
-                internals(service).recordCellExecutionStart(notebookUri, cellId, startTime);
-                internals(service).recordCellExecutionEnd(notebookUri, cellId, startTime + 1000, true);
+                tracker.recordCellExecutionStart(notebookUri, cellId, startTime);
+                tracker.recordCellExecutionEnd(notebookUri, cellId, startTime + 1000, true);
 
-                internals(service).recordCellExecutionStart(otherNotebookUri, 'other-cell', startTime);
-                internals(service).recordCellExecutionEnd(otherNotebookUri, 'other-cell', startTime + 1000, true);
+                tracker.recordCellExecutionStart(otherNotebookUri, 'other-cell', startTime);
+                tracker.recordCellExecutionEnd(otherNotebookUri, 'other-cell', startTime + 1000, true);
 
                 service.clearExecutionState(notebookUri);
 
@@ -1495,6 +1490,71 @@ project:
 
                 // Second notebook should still have state
                 assert.isDefined(service.getExecutionMetadata(otherNotebookUri));
+            });
+
+            // Execution state is split across two owners — the tracker (cell metadata) and the service's
+            // own environment map. Clearing must wipe BOTH; a half-clear would leak a stale environment
+            // from the previous session into the next snapshot.
+            test('clears the captured environment as well as the tracker metadata', async () => {
+                const notebook = mock<NotebookDocument>();
+                when(notebook.uri).thenReturn(Uri.parse(notebookUri));
+                when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([instance(notebook)]);
+
+                const capturedEnvironment: Environment = {
+                    hash: 'sha256:abc',
+                    packages: {},
+                    platform: 'linux-x64',
+                    python: { environment: 'venv', version: '3.12.0' }
+                };
+                when(mockEnvironmentCapture.captureEnvironment(anything())).thenResolve(capturedEnvironment);
+
+                // Populate both sides: capture the environment and record a completed cell.
+                await service.captureEnvironmentBeforeExecution(notebookUri);
+                const startTime = Date.now();
+                tracker.recordCellExecutionStart(notebookUri, cellId, startTime);
+                tracker.recordCellExecutionEnd(notebookUri, cellId, startTime + 100, true);
+
+                assert.isDefined(service.getExecutionMetadata(notebookUri));
+                assert.deepStrictEqual(await service.getEnvironmentMetadata(notebookUri), capturedEnvironment);
+
+                service.clearExecutionState(notebookUri);
+
+                assert.isUndefined(service.getExecutionMetadata(notebookUri));
+                assert.isUndefined(service.getBlockExecutionMetadata(notebookUri, cellId));
+                // The environment side must be gone too — not a stale hit from the pre-clear capture.
+                assert.isUndefined(await service.getEnvironmentMetadata(notebookUri));
+            });
+        });
+
+        suite('default tracker (no injected tracker)', () => {
+            test('records and reads metadata through an internally-created tracker', () => {
+                // Construct WITHOUT the optional tracker: the constructor must default one, otherwise
+                // every this.tracker.* call below would dereference undefined.
+                const defaultService = new SnapshotService(instance(mockEnvironmentCapture), mockDisposables);
+
+                const cellNotebook = mock<NotebookDocument>();
+                when(cellNotebook.uri).thenReturn(Uri.parse(notebookUri));
+
+                const cell = mock<NotebookCell>();
+                when(cell.notebook).thenReturn(instance(cellNotebook));
+                when(cell.metadata).thenReturn({ id: cellId });
+                when(cell.executionSummary).thenReturn({ success: true });
+
+                // Drive a full start->end cycle through the real handler that delegates to the tracker.
+                internals(defaultService).handleCellExecutionStateChange(
+                    instance(cell),
+                    NotebookCellExecutionState.Executing
+                );
+                internals(defaultService).handleCellExecutionStateChange(
+                    instance(cell),
+                    NotebookCellExecutionState.Idle
+                );
+
+                const metadata = defaultService.getExecutionMetadata(notebookUri);
+                assert.isDefined(metadata);
+                assert.strictEqual(metadata!.summary!.blocksExecuted, 1);
+                assert.strictEqual(metadata!.summary!.blocksSucceeded, 1);
+                assert.isDefined(defaultService.getBlockExecutionMetadata(notebookUri, cellId));
             });
         });
 
@@ -1505,11 +1565,11 @@ project:
                 const startTime = Date.now();
 
                 // Execute cells in different notebooks
-                internals(service).recordCellExecutionStart(notebook1, 'cell-1', startTime);
-                internals(service).recordCellExecutionEnd(notebook1, 'cell-1', startTime + 100, true);
+                tracker.recordCellExecutionStart(notebook1, 'cell-1', startTime);
+                tracker.recordCellExecutionEnd(notebook1, 'cell-1', startTime + 100, true);
 
-                internals(service).recordCellExecutionStart(notebook2, 'cell-2', startTime);
-                internals(service).recordCellExecutionEnd(notebook2, 'cell-2', startTime + 200, false);
+                tracker.recordCellExecutionStart(notebook2, 'cell-2', startTime);
+                tracker.recordCellExecutionEnd(notebook2, 'cell-2', startTime + 200, false);
 
                 const metadata1 = service.getExecutionMetadata(notebook1);
                 const metadata2 = service.getExecutionMetadata(notebook2);
@@ -1619,17 +1679,18 @@ project:
                 const testService = new SnapshotService(
                     instance(mockEnvironmentCapture),
                     mockDisposables,
-                    instance(mockNotebookManager)
+                    instance(mockNotebookManager),
+                    tracker
                 );
 
                 // Record execution for all 3 code cells
                 const startTime = Date.now();
-                internals(testService).recordCellExecutionStart(notebookUri, 'cell-1', startTime);
-                internals(testService).recordCellExecutionEnd(notebookUri, 'cell-1', startTime + 100, true);
-                internals(testService).recordCellExecutionStart(notebookUri, 'cell-2', startTime + 200);
-                internals(testService).recordCellExecutionEnd(notebookUri, 'cell-2', startTime + 300, true);
-                internals(testService).recordCellExecutionStart(notebookUri, 'cell-3', startTime + 400);
-                internals(testService).recordCellExecutionEnd(notebookUri, 'cell-3', startTime + 500, true);
+                tracker.recordCellExecutionStart(notebookUri, 'cell-1', startTime);
+                tracker.recordCellExecutionEnd(notebookUri, 'cell-1', startTime + 100, true);
+                tracker.recordCellExecutionStart(notebookUri, 'cell-2', startTime + 200);
+                tracker.recordCellExecutionEnd(notebookUri, 'cell-2', startTime + 300, true);
+                tracker.recordCellExecutionStart(notebookUri, 'cell-3', startTime + 400);
+                tracker.recordCellExecutionEnd(notebookUri, 'cell-3', startTime + 500, true);
 
                 // Spy on createSnapshot and updateLatestSnapshot
                 const createSnapshotSpy = sinon.spy(testService, 'createSnapshot');
@@ -1701,12 +1762,13 @@ project:
                 const testService = new SnapshotService(
                     instance(mockEnvironmentCapture),
                     mockDisposables,
-                    instance(mockNotebookManager)
+                    instance(mockNotebookManager),
+                    tracker
                 );
 
                 const startTime = Date.now();
-                internals(testService).recordCellExecutionStart(targetBUri, 'cell-b', startTime);
-                internals(testService).recordCellExecutionEnd(targetBUri, 'cell-b', startTime + 100, true);
+                tracker.recordCellExecutionStart(targetBUri, 'cell-b', startTime);
+                tracker.recordCellExecutionEnd(targetBUri, 'cell-b', startTime + 100, true);
 
                 const mockFs = mock<typeof import('vscode').workspace.fs>();
                 when(mockFs.stat(anything())).thenReturn(
@@ -1738,12 +1800,115 @@ project:
                     'snapshot must not land in a sibling directory that merely shares the project id'
                 );
             });
+
+            // getExecutedBlockCount returns undefined (not 0) for a notebook the tracker never saw. The
+            // Run-All predicate must treat undefined as "not Run-All"; collapsing it to 0 would make a
+            // zero-code-cell notebook (0 === 0) falsely take the full-snapshot path.
+            test('treats an untracked notebook as a partial run, never Run-All', async () => {
+                const mockConfig = mock<WorkspaceConfiguration>();
+                when(mockConfig.get<boolean>('snapshots.enabled', true)).thenReturn(true);
+                when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote')).thenReturn(instance(mockConfig));
+
+                const projectId = 'test-project-id';
+                const notebookId = 'test-notebook-id';
+
+                // A markdown-only notebook (zero code cells) whose URI was never recorded in the tracker.
+                const mockNotebook = mockNotebookDoc({
+                    uri: Uri.parse(notebookUri),
+                    projectId,
+                    notebookId,
+                    cells: [
+                        mockCell({
+                            id: 'cell-md',
+                            kind: NotebookCellKind.Markup,
+                            languageId: 'markdown',
+                            source: '# Title'
+                        })
+                    ]
+                });
+                when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([mockNotebook]);
+
+                const originalProject: DeepnoteFile = {
+                    metadata: { createdAt: '2025-01-01T00:00:00Z' },
+                    version: '1.0.0',
+                    project: {
+                        id: projectId,
+                        name: 'Test Project',
+                        notebooks: [{ id: notebookId, name: 'Test Notebook', blocks: [] }]
+                    }
+                };
+                const mockNotebookManager = mock<IDeepnoteNotebookManager>();
+                when(mockNotebookManager.getProjectForNotebook(anything(), anything())).thenReturn(originalProject);
+
+                const testService = new SnapshotService(
+                    instance(mockEnvironmentCapture),
+                    mockDisposables,
+                    instance(mockNotebookManager),
+                    tracker
+                );
+
+                const createSnapshotSpy = sinon.spy(testService, 'createSnapshot');
+                const updateLatestSnapshotSpy = sinon.spy(internals(testService), 'updateLatestSnapshot');
+
+                const mockFs = mock<typeof import('vscode').workspace.fs>();
+                when(mockFs.stat(anything())).thenReturn(
+                    Promise.resolve({ type: FileType.Directory, ctime: 0, mtime: 0, size: 0 })
+                );
+                when(mockFs.readFile(anything())).thenReject(new Error('ENOENT'));
+                when(mockFs.writeFile(anything(), anything())).thenResolve();
+                when(mockFs.copy(anything(), anything(), anything())).thenResolve();
+                when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
+
+                await internals(testService).performSnapshotSave(notebookUri);
+
+                assert.isFalse(createSnapshotSpy.called, 'an untracked notebook must not take the Run-All path');
+                assert.isTrue(
+                    updateLatestSnapshotSpy.calledOnce,
+                    'an untracked notebook must take the partial-run (latest-only) path'
+                );
+            });
         });
 
         suite('captureEnvironmentBeforeExecution', () => {
             test('should not throw for valid notebook URI', async () => {
                 await service.captureEnvironmentBeforeExecution(notebookUri);
                 // Should complete without error
+            });
+
+            test('seeds startedAt at capture time, not the first recorded cell start', async () => {
+                const captureBefore = Date.now();
+                await service.captureEnvironmentBeforeExecution(notebookUri);
+                const captureAfter = Date.now();
+
+                // A cell that starts long after capture must not move the session start.
+                const laterCellStart = captureAfter + 60_000;
+                tracker.recordCellExecutionStart(notebookUri, 'cell-1', laterCellStart);
+                tracker.recordCellExecutionEnd(notebookUri, 'cell-1', laterCellStart + 100, true);
+
+                const metadata = service.getExecutionMetadata(notebookUri);
+                assert.isDefined(metadata);
+
+                const startedAtMs = new Date(metadata!.startedAt!).getTime();
+                assert.isAtLeast(startedAtMs, captureBefore);
+                assert.isAtMost(startedAtMs, captureAfter);
+                assert.notStrictEqual(startedAtMs, laterCellStart);
+            });
+
+            test('a second capture does not reset the session startedAt (ensureExecutionState is idempotent)', async () => {
+                await service.captureEnvironmentBeforeExecution(notebookUri);
+
+                // Record a completed cell so the seeded startedAt becomes observable via the summary.
+                const firstStart = Date.now();
+                tracker.recordCellExecutionStart(notebookUri, cellId, firstStart);
+                tracker.recordCellExecutionEnd(notebookUri, cellId, firstStart + 100, true);
+
+                const seededStartedAt = service.getExecutionMetadata(notebookUri)!.startedAt;
+
+                // A second capture (e.g. a re-run before the state is cleared) must not re-seed the
+                // session; ensureExecutionState is a no-op once state exists.
+                await service.captureEnvironmentBeforeExecution(notebookUri);
+
+                assert.strictEqual(service.getExecutionMetadata(notebookUri)!.startedAt, seededStartedAt);
             });
         });
 

@@ -5,8 +5,7 @@ import {
     type DeepnoteBlock,
     type DeepnoteFile,
     type Environment,
-    type Execution,
-    type ExecutionError
+    type Execution
 } from '@deepnote/blocks';
 import {
     countBlocksWithOutputs,
@@ -41,6 +40,7 @@ import {
 import { IDeepnoteNotebookManager } from '../../types';
 import { DeepnoteDataConverter } from '../deepnoteDataConverter';
 import { IEnvironmentCapture } from './environmentCapture.node';
+import { ExecutionMetadataTracker, type BlockExecutionMetadata } from './executionMetadataTracker';
 import { buildSnapshotPath } from './snapshotFiles';
 
 /**
@@ -62,56 +62,22 @@ export interface ISnapshotMetadataService {
     clearExecutionState(notebookUri: string): void;
 }
 
-/**
- * Block-level execution metadata.
- */
-export interface BlockExecutionMetadata {
-    /** SHA-256 hash of block source code (prefixed with "sha256:") */
-    contentHash: string;
-
-    /** ISO 8601 timestamp when block execution started */
-    executionStartedAt?: string;
-
-    /** ISO 8601 timestamp when block execution completed */
-    executionFinishedAt?: string;
-}
+// Re-exported for the module's public surface; the type now lives with the tracker that owns it.
+export type { BlockExecutionMetadata };
 
 /**
- * Internal state tracking for a notebook execution session.
+ * Per-notebook environment-capture state owned by the service. The cell-execution concern
+ * (counters, timings, per-cell metadata) lives in ExecutionMetadataTracker.
  */
-interface NotebookExecutionState {
-    /** Number of blocks executed so far */
-    blocksExecuted: number;
-
-    /** Number of blocks that failed */
-    blocksFailed: number;
-
-    /** Number of blocks that succeeded */
-    blocksSucceeded: number;
-
+interface EnvironmentCaptureState {
     /** Promise that resolves when environment capture completes */
     capturePromise?: Promise<void>;
-
-    /** Per-cell execution metadata, keyed by cell ID */
-    cellMetadata: Map<string, BlockExecutionMetadata>;
 
     /** Cached environment metadata */
     environment?: Environment;
 
     /** Whether environment has been captured for this session */
     environmentCaptured: boolean;
-
-    /** Top-level error if any */
-    error?: { name?: string; message?: string; traceback?: string[] };
-
-    /** ISO 8601 timestamp when last cell finished executing */
-    finishedAt?: string;
-
-    /** ISO 8601 timestamp when first cell started executing */
-    startedAt: string;
-
-    /** Total duration in milliseconds */
-    totalDurationMs: number;
 }
 
 /** How long a written URI is considered "recent" and suppressed from file-change processing. */
@@ -149,7 +115,7 @@ function generateTimestamp(): string {
 @injectable()
 export class SnapshotService implements ISnapshotMetadataService, IExtensionSyncActivationService {
     private readonly converter = new DeepnoteDataConverter();
-    private readonly executionStates = new Map<string, NotebookExecutionState>();
+    private readonly environmentStates = new Map<string, EnvironmentCaptureState>();
     private readonly fileWrittenCallbacks: ((uri: Uri) => void)[] = [];
     private readonly pendingSnapshotSaves = new Map<
         string,
@@ -157,12 +123,16 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     >();
     private readonly recentlyWrittenTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private readonly recentlyWrittenUris = new Set<string>();
+    private readonly tracker: ExecutionMetadataTracker;
 
     constructor(
         @inject(IEnvironmentCapture) private readonly environmentCapture: IEnvironmentCapture,
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
-        @inject(IDeepnoteNotebookManager) @optional() private readonly notebookManager?: IDeepnoteNotebookManager
-    ) {}
+        @inject(IDeepnoteNotebookManager) @optional() private readonly notebookManager?: IDeepnoteNotebookManager,
+        @inject(ExecutionMetadataTracker) @optional() tracker?: ExecutionMetadataTracker
+    ) {
+        this.tracker = tracker ?? new ExecutionMetadataTracker();
+    }
 
     activate(): void {
         logger.info('[Snapshot] SnapshotService activated');
@@ -225,7 +195,10 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     async captureEnvironmentBeforeExecution(notebookUri: string): Promise<void> {
         logger.info(`[Snapshot] captureEnvironmentBeforeExecution called for ${notebookUri}`);
 
-        const state = this.getOrCreateExecutionState(notebookUri, Date.now());
+        // Seed the session start at capture time so `startedAt` reflects capture, not the first cell.
+        this.tracker.ensureExecutionState(notebookUri, Date.now());
+
+        const state = this.getOrCreateEnvironmentState(notebookUri);
 
         // If capture is already in progress, wait for it
         if (state.capturePromise) {
@@ -240,7 +213,8 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     }
 
     clearExecutionState(notebookUri: string): void {
-        this.executionStates.delete(notebookUri);
+        this.tracker.clear(notebookUri);
+        this.environmentStates.delete(notebookUri);
 
         logger.trace(`[Snapshot] Cleared execution state for ${notebookUri}`);
     }
@@ -330,23 +304,17 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     }
 
     getBlockExecutionMetadata(notebookUri: string, cellId: string): BlockExecutionMetadata | undefined {
-        const state = this.executionStates.get(notebookUri);
-
-        if (!state) {
-            return;
-        }
-
-        return state.cellMetadata.get(cellId);
+        return this.tracker.getBlockExecutionMetadata(notebookUri, cellId);
     }
 
     async getEnvironmentMetadata(notebookUri: string): Promise<Environment | undefined> {
-        const state = this.executionStates.get(notebookUri);
+        const state = this.environmentStates.get(notebookUri);
 
         logger.info(`[Snapshot] getEnvironmentMetadata for ${notebookUri}`);
         logger.info(Boolean(state) ? '[Snapshot] State exists.' : '[Snapshot] No state found.');
 
         if (!state) {
-            logger.info(`[Snapshot] Available URIs: ${Array.from(this.executionStates.keys()).join(', ')}`);
+            logger.info(`[Snapshot] Available URIs: ${Array.from(this.environmentStates.keys()).join(', ')}`);
 
             return;
         }
@@ -375,34 +343,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     }
 
     getExecutionMetadata(notebookUri: string): Execution | undefined {
-        const state = this.executionStates.get(notebookUri);
-
-        if (!state) {
-            return;
-        }
-
-        // Don't return execution metadata if no cells have been executed
-        if (state.blocksExecuted === 0) {
-            return;
-        }
-
-        const execution: Execution = {
-            finishedAt: state.finishedAt || state.startedAt,
-            startedAt: state.startedAt,
-            summary: {
-                blocksExecuted: state.blocksExecuted,
-                blocksFailed: state.blocksFailed,
-                blocksSucceeded: state.blocksSucceeded,
-                totalDurationMs: state.totalDurationMs
-            },
-            triggeredBy: 'user'
-        };
-
-        if (state.error) {
-            execution.error = state.error;
-        }
-
-        return execution;
+        return this.tracker.getExecutionMetadata(notebookUri);
     }
 
     isSnapshotsEnabled(): boolean {
@@ -574,7 +515,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     private async captureEnvironmentForNotebook(notebookUri: string): Promise<void> {
         logger.info(`[Snapshot] captureEnvironmentForNotebook called for ${notebookUri}`);
 
-        const state = this.executionStates.get(notebookUri);
+        const state = this.environmentStates.get(notebookUri);
 
         if (!state) {
             logger.info(`[Snapshot] Skipping capture: no state found`);
@@ -658,21 +599,14 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         };
     }
 
-    private getOrCreateExecutionState(notebookUri: string, startTime: number): NotebookExecutionState {
-        let state = this.executionStates.get(notebookUri);
+    private getOrCreateEnvironmentState(notebookUri: string): EnvironmentCaptureState {
+        let state = this.environmentStates.get(notebookUri);
 
         if (!state) {
             state = {
-                blocksFailed: 0,
-                blocksExecuted: 0,
-                blocksSucceeded: 0,
-                cellMetadata: new Map(),
-                environmentCaptured: false,
-                startedAt: new Date(startTime).toISOString(),
-                totalDurationMs: 0
+                environmentCaptured: false
             };
-            this.executionStates.set(notebookUri, state);
-            logger.trace(`[Snapshot] Created new execution state for ${notebookUri}`);
+            this.environmentStates.set(notebookUri, state);
         }
 
         return state;
@@ -691,14 +625,14 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
             // Cancel the previous run's deferred save so no snapshot is written mid-execution.
             this.cancelPendingSnapshotSave(notebookUri);
-            this.recordCellExecutionStart(notebookUri, cellId, startTime);
+            this.tracker.recordCellExecutionStart(notebookUri, cellId, startTime);
         } else if (state === NotebookCellExecutionState.Idle) {
             const endTime = Date.now();
             const executionSummary = cell.executionSummary;
             const actualEndTime = executionSummary?.timing?.endTime || endTime;
             const success = executionSummary?.success !== false;
 
-            this.recordCellExecutionEnd(notebookUri, cellId, actualEndTime, success);
+            this.tracker.recordCellExecutionEnd(notebookUri, cellId, actualEndTime, success);
         }
     }
 
@@ -720,33 +654,13 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     }
 
     /**
-     * Checks if there are any cells with pending execution state changes.
-     * Returns true if any tracked cell started execution but hasn't finished yet.
-     */
-    private hasPendingCellStateChanges(notebookUri: string): boolean {
-        const state = this.executionStates.get(notebookUri);
-
-        if (!state) {
-            return false;
-        }
-
-        for (const metadata of state.cellMetadata.values()) {
-            if (metadata.executionStartedAt && !metadata.executionFinishedAt) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
      * Waits for pending cell state change events to be processed.
      * Uses an event-driven approach with a fallback timeout.
      */
     private waitForPendingCellStateChanges(notebookUri: string, timeoutMs: number): Promise<void> {
         return new Promise((resolve) => {
             // If no pending changes, resolve immediately
-            if (!this.hasPendingCellStateChanges(notebookUri)) {
+            if (!this.tracker.hasPendingCellStateChanges(notebookUri)) {
                 resolve();
 
                 return;
@@ -756,7 +670,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             const disposable = notebookCellExecutions.onDidChangeNotebookCellExecutionState((e) => {
                 if (e.cell.notebook.uri.toString() === notebookUri && e.state === NotebookCellExecutionState.Idle) {
                     // Check if all pending cells are now complete
-                    if (!this.hasPendingCellStateChanges(notebookUri)) {
+                    if (!this.tracker.hasPendingCellStateChanges(notebookUri)) {
                         disposable.dispose();
                         resolve();
                     }
@@ -926,9 +840,11 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             // notebook's metadata id for any unexpected multi-notebook shape.
             const snapshotNotebookId = resolveSnapshotNotebookId(snapshotProject) ?? notebookId;
 
-            const state = this.executionStates.get(notebookUri);
+            const executedBlockCount = this.tracker.getExecutedBlockCount(notebookUri);
             const totalCodeCells = notebook.getCells().filter((cell) => cell.kind === NotebookCellKind.Code).length;
-            const isRunAll = state && state.blocksExecuted === totalCodeCells;
+            // Keep `undefined` (untracked) distinct from a real count so the predicate doesn't flip for
+            // an untracked notebook with zero code cells.
+            const isRunAll = executedBlockCount !== undefined && executedBlockCount === totalCodeCells;
 
             if (isRunAll) {
                 logger.debug(`[Snapshot] Creating full snapshot (Run All mode)`);
@@ -1079,63 +995,6 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         const content = new TextEncoder().encode(yamlString);
 
         return { latestPath, content };
-    }
-
-    private recordCellExecutionEnd(
-        notebookUri: string,
-        cellId: string,
-        endTime: number,
-        success: boolean,
-        error?: ExecutionError
-    ): void {
-        const state = this.executionStates.get(notebookUri);
-
-        if (!state) {
-            logger.warn(`[Snapshot] No execution state found for notebook ${notebookUri}`);
-
-            return;
-        }
-
-        const isoTimestamp = new Date(endTime).toISOString();
-        const cellMetadata = state.cellMetadata.get(cellId);
-
-        if (cellMetadata) {
-            cellMetadata.executionFinishedAt = isoTimestamp;
-        }
-
-        state.blocksExecuted++;
-
-        if (success) {
-            state.blocksSucceeded++;
-        } else {
-            state.blocksFailed++;
-
-            if (error) {
-                state.error = error;
-            }
-        }
-
-        state.finishedAt = isoTimestamp;
-
-        const startMs = new Date(state.startedAt).getTime();
-
-        state.totalDurationMs = endTime - startMs;
-
-        logger.trace(`[Snapshot] Cell ${cellId} execution ended at ${isoTimestamp} (success: ${success})`);
-    }
-
-    private recordCellExecutionStart(notebookUri: string, cellId: string, startTime: number): void {
-        const state = this.getOrCreateExecutionState(notebookUri, startTime);
-        const isoTimestamp = new Date(startTime).toISOString();
-        const cellMetadata = state.cellMetadata.get(cellId) || { contentHash: '' };
-
-        cellMetadata.executionStartedAt = isoTimestamp;
-
-        delete cellMetadata.executionFinishedAt;
-
-        state.cellMetadata.set(cellId, cellMetadata);
-
-        logger.trace(`[Snapshot] Cell ${cellId} execution started at ${isoTimestamp}`);
     }
 
     private trackWrittenUri(uri: Uri): void {

@@ -58,7 +58,6 @@ interface DeepnoteExplorerViewInternals {
     readonly extensionContext: IExtensionContext;
     readonly treeDataProvider: DeepnoteTreeDataProvider;
     addNotebookToProject(treeItem: DeepnoteTreeItem): Promise<void>;
-    collectNotebookNamesForProject(projectId: string, excludeName?: string): Promise<Set<string>>;
     exportNotebook(treeItem: DeepnoteTreeItem): Promise<void>;
     importJupyterNotebook(): Promise<void>;
     importNotebook(): Promise<void>;
@@ -2552,7 +2551,7 @@ suite('DeepnoteExplorerView - Sibling-file command semantics', () => {
             );
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
 
-            const names: Set<string> = await internals(explorerView).collectNotebookNamesForProject(projectId);
+            const names: Set<string> = await explorerView.collectNotebookNamesForProject(projectId);
 
             // Names from BOTH siblings of the group; init excluded; other project excluded.
             assert.isTrue(names.has('Alpha'), 'name from sibling A must be collected');
@@ -2576,7 +2575,7 @@ suite('DeepnoteExplorerView - Sibling-file command semantics', () => {
             when(mockFS.readFile(anything())).thenReturn(Promise.resolve(Buffer.from(serializeDeepnoteFile(fileA))));
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
 
-            const names: Set<string> = await internals(explorerView).collectNotebookNamesForProject(projectId, 'Alpha');
+            const names: Set<string> = await explorerView.collectNotebookNamesForProject(projectId, 'Alpha');
 
             assert.isFalse(names.has('Alpha'), 'the excluded current name must not be in the set');
             assert.strictEqual(names.size, 0);
@@ -2608,7 +2607,7 @@ suite('DeepnoteExplorerView - Sibling-file command semantics', () => {
             );
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
 
-            const names: Set<string> = await internals(explorerView).collectNotebookNamesForProject(projectId);
+            const names: Set<string> = await explorerView.collectNotebookNamesForProject(projectId);
 
             assert.isTrue(names.has('Alpha'), 'the real sibling name must be collected');
             assert.isFalse(

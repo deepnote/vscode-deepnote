@@ -60,6 +60,54 @@ export class DeepnoteExplorerView {
     }
 
     /**
+     * Collect the names of every non-init notebook across all sibling files of a project group,
+     * for cross-group name uniqueness in rename/new/duplicate flows.
+     * @param projectId The project group's id
+     * @param excludeName Optional name to exclude (e.g. the notebook's current name when renaming)
+     */
+    public async collectNotebookNamesForProject(projectId: string, excludeName?: string): Promise<Set<string>> {
+        const names = new Set<string>();
+
+        for (const workspaceFolder of workspace.workspaceFolders || []) {
+            let files: Uri[];
+
+            try {
+                files = await workspace.findFiles(new RelativePattern(workspaceFolder, '**/*.deepnote'));
+            } catch (error) {
+                this.logger.error('Failed to enumerate .deepnote files for name collection', error);
+
+                continue;
+            }
+
+            for (const fileUri of files) {
+                // Skip snapshot sidecars: they are full project clones whose stale notebook names
+                // would otherwise pollute the uniqueness set.
+                if (isSnapshotFile(fileUri)) {
+                    continue;
+                }
+
+                try {
+                    const projectData = await readDeepnoteProjectFile(fileUri);
+
+                    if (projectData?.project?.id !== projectId) {
+                        continue;
+                    }
+
+                    for (const notebook of getNonInitNotebooks(projectData)) {
+                        if (notebook.name && notebook.name !== excludeName) {
+                            names.add(notebook.name);
+                        }
+                    }
+                } catch (error) {
+                    this.logger.error(`Failed to read ${fileUri.path} for name collection`, error);
+                }
+            }
+        }
+
+        return names;
+    }
+
+    /**
      * Creates a new sibling `.deepnote` file with a single new notebook, then opens it.
      * Never appends to `project.notebooks`.
      * @param sourceUri A sibling file used as the source for project-level metadata
@@ -429,54 +477,6 @@ export class DeepnoteExplorerView {
         }
 
         return isSingleNotebookFile(projectData);
-    }
-
-    /**
-     * Collect the names of every non-init notebook across all sibling files of a project group,
-     * for cross-group name uniqueness in rename/new/duplicate flows.
-     * @param projectId The project group's id
-     * @param excludeName Optional name to exclude (e.g. the notebook's current name when renaming)
-     */
-    private async collectNotebookNamesForProject(projectId: string, excludeName?: string): Promise<Set<string>> {
-        const names = new Set<string>();
-
-        for (const workspaceFolder of workspace.workspaceFolders || []) {
-            let files: Uri[];
-
-            try {
-                files = await workspace.findFiles(new RelativePattern(workspaceFolder, '**/*.deepnote'));
-            } catch (error) {
-                this.logger.error('Failed to enumerate .deepnote files for name collection', error);
-
-                continue;
-            }
-
-            for (const fileUri of files) {
-                // Skip snapshot sidecars: they are full project clones whose stale notebook names
-                // would otherwise pollute the uniqueness set.
-                if (isSnapshotFile(fileUri)) {
-                    continue;
-                }
-
-                try {
-                    const projectData = await readDeepnoteProjectFile(fileUri);
-
-                    if (projectData?.project?.id !== projectId) {
-                        continue;
-                    }
-
-                    for (const notebook of getNonInitNotebooks(projectData)) {
-                        if (notebook.name && notebook.name !== excludeName) {
-                            names.add(notebook.name);
-                        }
-                    }
-                } catch (error) {
-                    this.logger.error(`Failed to read ${fileUri.path} for name collection`, error);
-                }
-            }
-        }
-
-        return names;
     }
 
     /** Generates a unique suggested notebook name given the names already in use. */

@@ -1,9 +1,15 @@
 import { assert } from 'chai';
-import { l10n } from 'vscode';
+import { l10n, ThemeIcon } from 'vscode';
 
 import { DeepnoteTreeDataProvider, compareTreeItemsByLabel } from './deepnoteTreeDataProvider';
-import { DeepnoteTreeItem, DeepnoteTreeItemType, getNonInitNotebooks } from './deepnoteTreeItem';
-import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
+import {
+    applyVisualFields,
+    DeepnoteTreeItem,
+    DeepnoteTreeItemType,
+    getNonInitNotebooks,
+    ProjectGroupData
+} from './deepnoteTreeItem';
+import type { DeepnoteNotebook, DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 
 /**
  * Structural mirror of DeepnoteTreeDataProvider's private surface (deepnoteTreeDataProvider.ts).
@@ -11,7 +17,6 @@ import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
  */
 interface DeepnoteTreeDataProviderInternals {
     readonly cachedProjects: Map<string, DeepnoteProject>;
-    readonly fileItemCache: Map<string, DeepnoteTreeItem>;
     getProjectGroups(): Promise<DeepnoteTreeItem[]>;
 }
 
@@ -380,11 +385,8 @@ suite('DeepnoteTreeDataProvider', () => {
             });
         });
 
-        test('should update visual fields when project data changes', async () => {
-            // Access the file-item cache (keyed by file path)
-            const fileItemCache = internals(provider).fileItemCache;
-
-            // Create initial legacy multi-notebook project (2 notebooks → projectFile node)
+        test('applyVisualFields reflects the renamed project and new notebook count on a project-file item', () => {
+            // A legacy multi-notebook project (2 notebooks) renders as a projectFile node.
             const filePath = '/workspace/test-project.deepnote';
             const initialProject: DeepnoteProject = {
                 metadata: {
@@ -415,22 +417,21 @@ suite('DeepnoteTreeDataProvider', () => {
                 version: '1.0.0'
             };
 
-            const mockTreeItem = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.ProjectFile,
-                {
-                    filePath: filePath,
-                    projectId: 'project-123'
-                },
-                initialProject,
-                1
-            );
-            fileItemCache.set(filePath, mockTreeItem);
+            // applyVisualFields only reads type/data/context and writes the visual fields, so a minimal
+            // shape suffices. DeepnoteTreeItem is deliberately not constructed: the mocha ESM loader drops
+            // new.target, so subclass prototype methods (updateVisualFields) are unavailable on instances.
+            const item = {
+                type: DeepnoteTreeItemType.ProjectFile,
+                context: { filePath, projectId: 'project-123' },
+                data: initialProject
+            } as unknown as DeepnoteTreeItem;
 
-            // Verify initial state
-            assert.strictEqual(mockTreeItem.label, 'Original Name');
-            assert.strictEqual(mockTreeItem.description, '2 notebooks');
+            applyVisualFields(item);
 
-            // Update the project data (simulating rename and adding a notebook)
+            assert.strictEqual(item.label, 'Original Name');
+            assert.strictEqual(item.description, '2 notebooks');
+
+            // Rename the project and add a third notebook, then re-derive the visual fields.
             const updatedProject: DeepnoteProject = {
                 ...initialProject,
                 project: {
@@ -449,64 +450,108 @@ suite('DeepnoteTreeDataProvider', () => {
                 }
             };
 
-            mockTreeItem.data = updatedProject;
-            // Call updateVisualFields if it is available (in the VS Code test mock the subclass
-            // method may not be exposed on the proxied TreeItem); otherwise update fields manually.
-            if (typeof mockTreeItem.updateVisualFields === 'function') {
-                mockTreeItem.updateVisualFields();
-            } else {
-                mockTreeItem.label = updatedProject.project.name || 'Untitled Project';
-                mockTreeItem.tooltip = `Deepnote Project: ${updatedProject.project.name}\nFile: ${mockTreeItem.context.filePath}`;
-                const notebookCount = updatedProject.project.notebooks?.length || 0;
-                mockTreeItem.description = `${notebookCount} notebook${notebookCount !== 1 ? 's' : ''}`;
-            }
+            item.data = updatedProject;
+            applyVisualFields(item);
 
-            // Verify visual fields were updated
-            assert.strictEqual(mockTreeItem.label, 'Renamed Project', 'Label should reflect new project name');
-            assert.strictEqual(
-                mockTreeItem.description,
-                '3 notebooks',
-                'Description should reflect new notebook count'
-            );
-            assert.include(
-                mockTreeItem.tooltip as string,
-                'Renamed Project',
-                'Tooltip should include new project name'
-            );
+            assert.strictEqual(item.label, 'Renamed Project', 'Label should reflect new project name');
+            assert.strictEqual(item.description, '3 notebooks', 'Description should reflect new notebook count');
+            assert.include(item.tooltip as string, 'Renamed Project', 'Tooltip should include new project name');
+        });
+    });
+
+    // Direct per-type coverage of applyVisualFields (the ProjectFile legacy-collapsible branch is
+    // covered by the re-derivation test above). DeepnoteTreeItem is deliberately NOT constructed: the
+    // mocha ESM loader drops new.target, so subclass methods are unavailable on instances built here;
+    // applyVisualFields only reads type/context/data and writes the visual fields, so a minimal shape
+    // suffices.
+    suite('applyVisualFields per DeepnoteTreeItemType branch', () => {
+        // Reads a ThemeIcon's id without a cast; a non-ThemeIcon iconPath (string/Uri) yields undefined.
+        function iconId(item: DeepnoteTreeItem): string | undefined {
+            return item.iconPath instanceof ThemeIcon ? item.iconPath.id : undefined;
+        }
+
+        function makeItem(
+            type: DeepnoteTreeItemType,
+            context: { filePath: string; projectId: string; notebookId?: string },
+            data: DeepnoteProject | DeepnoteNotebook | ProjectGroupData | null
+        ): DeepnoteTreeItem {
+            return { type, context, data } as unknown as DeepnoteTreeItem;
+        }
+
+        test('Loading → spinner icon and a non-clickable loading label', () => {
+            const item = makeItem(DeepnoteTreeItemType.Loading, { filePath: '', projectId: '' }, null);
+
+            applyVisualFields(item);
+
+            assert.strictEqual(item.contextValue, 'loading');
+            assert.strictEqual(item.label, 'Loading…');
+            assert.strictEqual(item.tooltip, 'Loading…');
+            assert.strictEqual(item.description, '');
+            assert.strictEqual(iconId(item), 'loading~spin');
         });
 
-        test('should clear both caches when file is deleted', () => {
-            // Access private caches
-            const cachedProjects = internals(provider).cachedProjects;
-            const fileItemCache = internals(provider).fileItemCache;
+        test('ProjectGroup → folder icon, pluralized file count, and no open command', () => {
+            const group: ProjectGroupData = {
+                projectId: 'group-1',
+                projectName: 'My Group',
+                files: [
+                    { filePath: '/a.deepnote', cacheKey: 'a', project: makeSingleNotebookProject('group-1', 'nb-a') },
+                    { filePath: '/b.deepnote', cacheKey: 'b', project: makeSingleNotebookProject('group-1', 'nb-b') }
+                ]
+            };
+            const item = makeItem(DeepnoteTreeItemType.ProjectGroup, { filePath: '', projectId: 'group-1' }, group);
 
-            // Add entries to both caches (both keyed by file path)
-            const filePath = '/workspace/test-project.deepnote';
+            applyVisualFields(item);
 
-            cachedProjects.set(filePath, mockProject);
-            const mockTreeItem = new DeepnoteTreeItem(
+            assert.strictEqual(item.contextValue, 'projectGroup');
+            assert.strictEqual(item.label, 'My Group');
+            assert.strictEqual(item.tooltip, 'Deepnote Project: My Group');
+            assert.strictEqual(item.description, '2 files');
+            assert.strictEqual(iconId(item), 'folder');
+            assert.isUndefined(item.command, 'a project group is a container, not directly openable');
+        });
+
+        test('ProjectFile single-notebook leaf → notebook icon and an open command carrying the leaf notebook id', () => {
+            const project = makeSingleNotebookProject('proj-1', 'nb-1', 'Leaf Project');
+            const item = makeItem(
                 DeepnoteTreeItemType.ProjectFile,
-                {
-                    filePath: filePath,
-                    projectId: 'project-123'
-                },
-                mockProject,
-                1
+                { filePath: '/leaf.deepnote', projectId: 'proj-1' },
+                project
             );
-            fileItemCache.set(filePath, mockTreeItem);
 
-            // Verify both caches have the entry
-            assert.isTrue(cachedProjects.has(filePath), 'cachedProjects should have entry before deletion');
-            assert.isTrue(fileItemCache.has(filePath), 'fileItemCache should have entry before deletion');
+            applyVisualFields(item);
 
-            // Simulate file deletion by calling the internal cleanup logic
-            // (we can't easily trigger the file watcher in unit tests)
-            cachedProjects.delete(filePath);
-            fileItemCache.delete(filePath);
+            assert.strictEqual(item.contextValue, 'notebookFile');
+            assert.strictEqual(item.label, 'Notebook nb-1');
+            assert.strictEqual(item.description, '0 cells');
+            assert.strictEqual(iconId(item), 'notebook');
+            assert.strictEqual(item.command?.command, 'deepnote.openNotebook');
+            assert.deepStrictEqual(item.command?.arguments, [
+                { filePath: '/leaf.deepnote', projectId: 'proj-1', notebookId: 'nb-1' }
+            ]);
+        });
 
-            // Verify both caches have been cleared
-            assert.isFalse(cachedProjects.has(filePath), 'cachedProjects should not have entry after deletion');
-            assert.isFalse(fileItemCache.has(filePath), 'fileItemCache should not have entry after deletion');
+        test('Notebook → file-code icon and an open command reusing the item context by reference', () => {
+            const notebook: DeepnoteNotebook = {
+                id: 'nb-42',
+                name: 'Child Notebook',
+                blocks: [{ blockGroup: 'g', id: 'b1', content: '', sortingKey: 'a0', metadata: {}, type: 'code' }],
+                executionMode: 'block',
+                isModule: false
+            };
+            const context = { filePath: '/legacy.deepnote', projectId: 'proj-9', notebookId: 'nb-42' };
+            const item = makeItem(DeepnoteTreeItemType.Notebook, context, notebook);
+
+            applyVisualFields(item);
+
+            assert.strictEqual(item.contextValue, 'notebook');
+            assert.strictEqual(item.label, 'Child Notebook');
+            assert.strictEqual(item.description, '1 cell');
+            assert.include(item.tooltip as string, 'Execution Mode: block');
+            assert.strictEqual(iconId(item), 'file-code');
+            assert.strictEqual(item.command?.command, 'deepnote.openNotebook');
+            // The Notebook branch passes item.context straight through (contrast the leaf's fresh object).
+            assert.strictEqual(item.command?.arguments?.[0], context);
         });
     });
 

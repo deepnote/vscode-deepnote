@@ -10,11 +10,9 @@ import {
 } from '@deepnote/blocks';
 import {
     countBlocksWithOutputs,
-    generateSnapshotFilename,
     hasOutputs,
     parseSnapshotFilename,
-    resolveSnapshotNotebookId,
-    slugifyProjectName
+    resolveSnapshotNotebookId
 } from '@deepnote/convert';
 import fastDeepEqual from 'fast-deep-equal';
 import { inject, injectable, optional } from 'inversify';
@@ -43,6 +41,7 @@ import {
 import { IDeepnoteNotebookManager } from '../../types';
 import { DeepnoteDataConverter } from '../deepnoteDataConverter';
 import { IEnvironmentCapture } from './environmentCapture.node';
+import { buildSnapshotPath } from './snapshotFiles';
 
 /**
  * Platform-layer interface for snapshot metadata service.
@@ -271,7 +270,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
         const { latestPath, content } = prepared;
         const timestamp = generateTimestamp();
-        const timestampedPath = this.buildSnapshotPath({
+        const timestampedPath = buildSnapshotPath({
             projectUri,
             projectId,
             projectName,
@@ -570,36 +569,6 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
      */
     wasRecentlyWritten(uri: Uri): boolean {
         return this.recentlyWrittenUris.has(uri.toString());
-    }
-
-    private buildSnapshotPath({
-        notebookId,
-        projectId,
-        projectName,
-        projectUri,
-        variant
-    }: {
-        notebookId?: string;
-        projectId: string;
-        projectName: string;
-        projectUri: Uri;
-        variant: 'latest' | string;
-    }): Uri {
-        const parentDir = Uri.joinPath(projectUri, '..');
-
-        if (projectName.trim().length <= 0) {
-            throw new InvalidProjectNameError();
-        }
-
-        const slug = slugifyProjectName(projectName);
-
-        if (!slug) {
-            throw new InvalidProjectNameError();
-        }
-
-        const filename = generateSnapshotFilename({ slug, projectId, notebookId, timestamp: variant });
-
-        return Uri.joinPath(parentDir, 'snapshots', filename);
     }
 
     private async captureEnvironmentForNotebook(notebookUri: string): Promise<void> {
@@ -1060,7 +1029,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         let latestPath: Uri;
 
         try {
-            latestPath = this.buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest', notebookId });
+            latestPath = buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest', notebookId });
         } catch (error) {
             if (error instanceof InvalidProjectNameError) {
                 logger.warn('[Snapshot] Skipping snapshots due to invalid project name', error);

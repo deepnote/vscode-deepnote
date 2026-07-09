@@ -19,7 +19,9 @@ import type { DeepnoteBlock, DeepnoteFile, ExecutableBlock, ExecutionError } fro
 
 import { NotebookCellExecutionState } from '../../../platform/notebooks/cellExecutionStateService';
 import { IEnvironmentCapture } from './environmentCapture.node';
+import { buildSnapshotPath } from './snapshotFiles';
 import { SnapshotService } from './snapshotService';
+import { InvalidProjectNameError } from '../../../platform/errors/invalidProjectNameError';
 import type { DeepnoteOutput } from '../../../platform/deepnote/deepnoteTypes';
 import { IDeepnoteNotebookManager } from '../../types';
 import { IDisposableRegistry } from '../../../platform/common/types';
@@ -31,22 +33,7 @@ import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-m
  */
 interface SnapshotServiceInternals {
     armSnapshotSave(notebookUri: string): void;
-    buildSnapshotPath(args: {
-        notebookId?: string;
-        projectId: string;
-        projectName: string;
-        projectUri: Uri;
-        variant: string;
-    }): Uri;
     cancelPendingSnapshotSave(notebookUri: string): void;
-    createSnapshot(
-        projectUri: Uri,
-        projectId: string,
-        projectName: string,
-        projectData: DeepnoteFile,
-        notebookId?: string,
-        notebookUri?: string
-    ): Promise<Uri | undefined>;
     handleCellExecutionStateChange(cell: NotebookCell, state: NotebookCellExecutionState): void;
     handleNotebookDocumentChange(event: NotebookDocumentChangeEvent): void;
     performSnapshotSave(notebookUri: string): Promise<void>;
@@ -120,7 +107,7 @@ suite('SnapshotService', () => {
             const projectId = 'e132b172-b114-410e-8331-011517db664f';
             const projectName = 'My Project';
 
-            const result = internals(service).buildSnapshotPath({
+            const result = buildSnapshotPath({
                 projectUri,
                 projectId,
                 projectName,
@@ -140,7 +127,7 @@ suite('SnapshotService', () => {
             const projectName = 'My Project';
             const timestamp = '2025-12-11T10-31-48';
 
-            const result = internals(service).buildSnapshotPath({
+            const result = buildSnapshotPath({
                 projectUri,
                 projectId,
                 projectName,
@@ -159,7 +146,7 @@ suite('SnapshotService', () => {
             const projectId = 'abc-123';
             const projectName = 'Customer Churn ML Playbook!';
 
-            const result = internals(service).buildSnapshotPath({
+            const result = buildSnapshotPath({
                 projectUri,
                 projectId,
                 projectName,
@@ -176,7 +163,7 @@ suite('SnapshotService', () => {
             const projectId = 'abc-123';
             const projectName = 'Test@#$%Project';
 
-            const result = internals(service).buildSnapshotPath({
+            const result = buildSnapshotPath({
                 projectUri,
                 projectId,
                 projectName,
@@ -193,7 +180,7 @@ suite('SnapshotService', () => {
             const projectName = 'My Project';
             const notebookId = 'notebook-1';
 
-            const result = internals(service).buildSnapshotPath({
+            const result = buildSnapshotPath({
                 projectUri,
                 projectId,
                 projectName,
@@ -209,7 +196,7 @@ suite('SnapshotService', () => {
             const projectId = 'abc-123';
             const projectName = 'My   Project   Name';
 
-            const result = internals(service).buildSnapshotPath({
+            const result = buildSnapshotPath({
                 projectUri,
                 projectId,
                 projectName,
@@ -226,7 +213,7 @@ suite('SnapshotService', () => {
             const projectName = '';
 
             assert.throws(
-                () => internals(service).buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest' }),
+                () => buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest' }),
                 'Project name cannot be empty or contain only special characters'
             );
         });
@@ -237,7 +224,7 @@ suite('SnapshotService', () => {
             const projectName = '@#$%^&*()';
 
             assert.throws(
-                () => internals(service).buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest' }),
+                () => buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest' }),
                 'Project name cannot be empty or contain only special characters'
             );
         });
@@ -248,9 +235,45 @@ suite('SnapshotService', () => {
             const projectName = '   ';
 
             assert.throws(
-                () => internals(service).buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest' }),
+                () => buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest' }),
                 'Project name cannot be empty or contain only special characters'
             );
+        });
+
+        // performSnapshotSave catches this failure with `error instanceof InvalidProjectNameError` to
+        // skip snapshots gracefully; a generic Error with the same message would defeat that catch, so
+        // pin the TYPE (not just the message) at BOTH throw sites — the empty-name guard here...
+        test('throws an InvalidProjectNameError instance (not a generic Error) for an empty name', () => {
+            const projectUri = Uri.file('/path/to/file.deepnote');
+            const projectId = 'abc-123';
+
+            assert.throws(
+                () => buildSnapshotPath({ projectUri, projectId, projectName: '', variant: 'latest' }),
+                InvalidProjectNameError
+            );
+        });
+
+        // ...and the slug-empties-to-nothing guard, which passes the trim check but fails slugification.
+        test('throws an InvalidProjectNameError instance when the name slugifies to empty', () => {
+            const projectUri = Uri.file('/path/to/file.deepnote');
+            const projectId = 'abc-123';
+
+            assert.throws(
+                () => buildSnapshotPath({ projectUri, projectId, projectName: '@#$', variant: 'latest' }),
+                InvalidProjectNameError
+            );
+        });
+
+        // Complements the notebook-id-bearing shape above: with no notebookId the projectId must abut
+        // the variant directly, with no notebook segment leaking between them.
+        test('builds the legacy (no notebookId) filename shape with the projectId immediately before the variant', () => {
+            const projectUri = Uri.file('/path/to/my-project.deepnote');
+            const projectId = 'e132b172-b114-410e-8331-011517db664f';
+            const projectName = 'My Project';
+
+            const result = buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest' });
+
+            assert.include(result.fsPath, `${projectId}_latest.snapshot.deepnote`);
         });
     });
 
@@ -1120,6 +1143,19 @@ project:
             clock.tick(2000);
             assert.isFalse(performSaveStub.called, 'closing the notebook must cancel the pending deferred save');
         });
+
+        test('does NOT arm a deferred save when an output change arrives with no save pending (guards the pending-save precondition)', () => {
+            // No prior armSnapshotSave: pendingSnapshotSaves is empty, so handleNotebookDocumentChange
+            // must ignore even an output-bearing change rather than arming a fresh deferred save.
+            fireOutputChange();
+
+            // Well past the max-wait bound: had the change armed a save, it would have flushed by now.
+            clock.tick(3000);
+            assert.isFalse(
+                performSaveStub.called,
+                'an output change with no pending save must not arm a deferred save'
+            );
+        });
     });
 
     suite('createSnapshot', () => {
@@ -1596,7 +1632,7 @@ project:
                 internals(testService).recordCellExecutionEnd(notebookUri, 'cell-3', startTime + 500, true);
 
                 // Spy on createSnapshot and updateLatestSnapshot
-                const createSnapshotSpy = sinon.spy(internals(testService), 'createSnapshot');
+                const createSnapshotSpy = sinon.spy(testService, 'createSnapshot');
                 const updateLatestSnapshotSpy = sinon.spy(internals(testService), 'updateLatestSnapshot');
 
                 // Mock file system operations for snapshot creation
@@ -1677,22 +1713,29 @@ project:
                     Promise.resolve({ type: FileType.Directory, ctime: 0, mtime: 0, size: 0 })
                 );
                 when(mockFs.readFile(anything())).thenReject(new Error('ENOENT'));
-                when(mockFs.writeFile(anything(), anything())).thenResolve();
+                let writtenSnapshotUri: Uri | undefined;
+                when(mockFs.writeFile(anything(), anything())).thenCall((uri: Uri) => {
+                    writtenSnapshotUri = writtenSnapshotUri ?? uri;
+
+                    return Promise.resolve();
+                });
                 when(mockFs.copy(anything(), anything(), anything())).thenResolve();
                 when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
 
-                const buildSnapshotPathSpy = sinon.spy(internals(testService), 'buildSnapshotPath');
-
                 await internals(testService).performSnapshotSave(targetBUri);
 
-                // The snapshot dir derives from projectUri's parent, so projectUri must be notebook B's
-                // OWN uri (/bar), not sibling A's (/foo) — even though A shares the id and enumerates first.
-                assert.isTrue(buildSnapshotPathSpy.called, 'buildSnapshotPath should be called');
-                const projectUriArg = buildSnapshotPathSpy.firstCall.args[0].projectUri;
-                assert.strictEqual(
-                    projectUriArg.toString(),
-                    Uri.parse(targetBUri).toString(),
-                    'snapshot must be built from the saved notebook own uri, not a sibling sharing the project id'
+                // The snapshot dir derives from projectUri's parent, so the snapshot must land in notebook B's
+                // OWN folder (/bar/snapshots), not sibling A's (/foo) — even though A shares the id and enumerates first.
+                assert.isDefined(writtenSnapshotUri, 'a snapshot file must be written');
+                assert.include(
+                    writtenSnapshotUri!.path,
+                    '/workspace/bar/snapshots/',
+                    'snapshot must be written under the saved notebook own directory, not a sibling sharing the project id'
+                );
+                assert.notInclude(
+                    writtenSnapshotUri!.path,
+                    '/workspace/foo/',
+                    'snapshot must not land in a sibling directory that merely shares the project id'
                 );
             });
         });

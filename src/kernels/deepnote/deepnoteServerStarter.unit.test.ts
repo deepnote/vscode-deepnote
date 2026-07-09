@@ -248,6 +248,37 @@ suite('DeepnoteServerStarter', () => {
                 'stopping a notebook with no server must not invoke runtime-core stopServer'
             );
         });
+
+        test('forwards the SQL integration provider env vars into the started server', async () => {
+            const runtimeCore = await getRuntimeCoreMock();
+
+            // The injected provider yields env vars for this notebook; they must reach runtime-core's start.
+            when(mockSqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({ FOO: 'bar' });
+
+            await start(uriA);
+
+            const calls = runtimeCore.__getStartServerCalls();
+            assert.strictEqual(calls.length, 1, 'the server must be started once');
+            assert.strictEqual(calls[0].env?.FOO, 'bar', 'SQL integration env vars must be forwarded to startServer');
+        });
+
+        test('does NOT leak one notebook SQL env vars into a sibling whose provider yields none', async () => {
+            const runtimeCore = await getRuntimeCoreMock();
+
+            // The provider is keyed by notebook URI: it yields env vars for A but nothing for its sibling B.
+            when(mockSqlIntegrationEnvVars.getEnvironmentVariables(uriA, anything())).thenResolve({ FOO: 'bar' });
+            when(mockSqlIntegrationEnvVars.getEnvironmentVariables(uriB, anything())).thenResolve({});
+
+            await start(uriA);
+            await start(uriB);
+
+            const calls = runtimeCore.__getStartServerCalls();
+            assert.strictEqual(calls.length, 2, 'each sibling notebook spawns its own server');
+
+            // env is gathered per start() call, so A's vars must not carry over into B's server.
+            assert.strictEqual(calls[0].env?.FOO, 'bar', "notebook A's server receives A's SQL env vars");
+            assert.notProperty(calls[1].env ?? {}, 'FOO', "notebook B's server must NOT inherit A's SQL env vars");
+        });
     });
 
     suite('dispose', () => {

@@ -1,8 +1,40 @@
-import { parseSnapshotFilename } from '@deepnote/convert';
+import { generateSnapshotFilename, parseSnapshotFilename, slugifyProjectName } from '@deepnote/convert';
 import { Uri } from 'vscode';
+
+import { InvalidProjectNameError } from '../../../platform/errors/invalidProjectNameError';
 
 /** File suffix for snapshot files */
 export const SNAPSHOT_FILE_SUFFIX = '.snapshot.deepnote';
+
+export function buildSnapshotPath({
+    notebookId,
+    projectId,
+    projectName,
+    projectUri,
+    variant
+}: {
+    notebookId?: string;
+    projectId: string;
+    projectName: string;
+    projectUri: Uri;
+    variant: 'latest' | string;
+}): Uri {
+    const parentDir = Uri.joinPath(projectUri, '..');
+
+    if (projectName.trim().length <= 0) {
+        throw new InvalidProjectNameError();
+    }
+
+    const slug = slugifyProjectName(projectName);
+
+    if (!slug) {
+        throw new InvalidProjectNameError();
+    }
+
+    const filename = generateSnapshotFilename({ slug, projectId, notebookId, timestamp: variant });
+
+    return Uri.joinPath(parentDir, 'snapshots', filename);
+}
 
 /**
  * Checks if a URI represents a snapshot file

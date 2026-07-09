@@ -73,7 +73,7 @@ export function resolveLeafNotebook(project: DeepnoteProject): DeepnoteNotebook 
  * Sets the item's visual fields from its type/data. A free function, not a method: calling a
  * subclass method from a `TreeItem` constructor is unsafe in transpiled ES-module output.
  */
-function applyVisualFields(item: DeepnoteTreeItem): void {
+export function applyVisualFields(item: DeepnoteTreeItem): void {
     if (item.type === DeepnoteTreeItemType.Loading) {
         item.contextValue = 'loading';
         item.label = 'Loading…';

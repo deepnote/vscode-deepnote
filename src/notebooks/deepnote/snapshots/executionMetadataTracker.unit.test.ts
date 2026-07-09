@@ -57,9 +57,12 @@ suite('ExecutionMetadataTracker', () => {
 
             const metadata = tracker.getExecutionMetadata(notebookUri);
             assert.isDefined(metadata);
-            assert.strictEqual(metadata!.summary!.blocksExecuted, 2);
-            assert.strictEqual(metadata!.summary!.blocksSucceeded, 1);
-            assert.strictEqual(metadata!.summary!.blocksFailed, 1);
+            assert.deepStrictEqual(metadata!.summary, {
+                blocksExecuted: 2,
+                blocksFailed: 1,
+                blocksSucceeded: 1,
+                totalDurationMs: 300
+            });
             assert.strictEqual(metadata!.error!.name, 'ValueError');
         });
 
@@ -82,8 +85,12 @@ suite('ExecutionMetadataTracker', () => {
 
             const metadata = tracker.getExecutionMetadata(notebookUri);
             assert.isDefined(metadata);
-            assert.strictEqual(metadata!.summary!.blocksExecuted, 1);
-            assert.strictEqual(metadata!.summary!.blocksSucceeded, 1);
+            assert.deepStrictEqual(metadata!.summary, {
+                blocksExecuted: 1,
+                blocksFailed: 0,
+                blocksSucceeded: 1,
+                totalDurationMs: 100
+            });
             // No per-cell start was recorded, so there is no block metadata for it.
             assert.isUndefined(tracker.getBlockExecutionMetadata(notebookUri, cellId));
         });
@@ -103,8 +110,12 @@ suite('ExecutionMetadataTracker', () => {
 
             const metadata = tracker.getExecutionMetadata(notebookUri);
             assert.isDefined(metadata);
-            assert.strictEqual(metadata!.summary!.blocksFailed, 1);
-            assert.strictEqual(metadata!.summary!.blocksSucceeded, 0);
+            assert.deepStrictEqual(metadata!.summary, {
+                blocksExecuted: 1,
+                blocksFailed: 1,
+                blocksSucceeded: 0,
+                totalDurationMs: 100
+            });
             // A failure reported without an ExecutionError must not synthesize an error field.
             assert.isUndefined(metadata!.error);
         });

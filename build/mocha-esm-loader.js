@@ -13,6 +13,7 @@ const projectRoot = path.join(__dirname, '..');
 const projectOutUrl = pathToFileURL(path.join(projectRoot, 'out')).href + '/';
 const vscodeMockPath = pathToFileURL(path.join(projectRoot, 'out/test/vscode-mock.js')).href;
 const telemetryMockPath = pathToFileURL(path.join(projectRoot, 'out/test/mocks/vsc/telemetryReporter.js')).href;
+const runtimeCoreMockPath = pathToFileURL(path.join(projectRoot, 'out/test/mocks/deepnoteRuntimeCore.js')).href;
 
 // Mock source for @vscode/python-extension - used in multiple places
 const PYTHON_EXTENSION_MOCK = `
@@ -104,10 +105,12 @@ export async function resolve(specifier, context, nextResolve) {
         };
     }
 
-    // Intercept @deepnote/runtime-core - needed because the real startServer/stopServer
+    // Intercept @deepnote/runtime-core - the real startServer/stopServer spawn/kill Python
+    // processes. Resolves to the compiled typed mock (src/test/mocks/deepnoteRuntimeCore.ts)
+    // so the code under test and tests importing its __ helpers share one module instance.
     if (specifier === '@deepnote/runtime-core') {
         return {
-            url: 'vscode-mock:///deepnote-runtime-core',
+            url: runtimeCoreMockPath,
             shortCircuit: true
         };
     }
@@ -347,59 +350,6 @@ export async function load(url, context, nextLoad) {
                 source: `
                     import { vscMockTelemetryReporter } from '${telemetryMockPath}';
                     export default vscMockTelemetryReporter;
-                `,
-                shortCircuit: true
-            };
-        }
-
-        // Mock @deepnote/runtime-core: the real startServer/stopServer spawn/kill Python processes.
-        // The mock logs start/stop calls so tests can assert counts and working directories.
-        if (moduleName === 'deepnote-runtime-core') {
-            return {
-                format: 'module',
-                source: `
-                    const startServerCalls = [];
-                    const stopServerCalls = [];
-                    let nextServerId = 0;
-                    let startServerImpl = null;
-
-                    const makeFakeProcess = (id) => ({
-                        pid: 40000 + id,
-                        stdout: { on() {}, off() {} },
-                        stderr: { on() {}, off() {} },
-                        kill() {}
-                    });
-
-                    export const startServer = async (options) => {
-                        startServerCalls.push(options);
-                        if (startServerImpl) {
-                            return startServerImpl(options);
-                        }
-                        const id = nextServerId++;
-                        return {
-                            url: 'http://127.0.0.1:' + (50000 + id),
-                            jupyterPort: 50000 + id,
-                            lspPort: 51000 + id,
-                            process: makeFakeProcess(id)
-                        };
-                    };
-
-                    export const stopServer = async (info) => {
-                        stopServerCalls.push(info);
-                    };
-
-                    // Test-only helpers (prefixed with __ to signal they are not part of the real API).
-                    export const __getStartServerCalls = () => startServerCalls;
-                    export const __getStopServerCalls = () => stopServerCalls;
-                    export const __setStartServerImpl = (impl) => {
-                        startServerImpl = impl;
-                    };
-                    export const __resetRuntimeCoreMock = () => {
-                        startServerCalls.length = 0;
-                        stopServerCalls.length = 0;
-                        nextServerId = 0;
-                        startServerImpl = null;
-                    };
                 `,
                 shortCircuit: true
             };

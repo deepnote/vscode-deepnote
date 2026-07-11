@@ -11,21 +11,11 @@ import { IAsyncDisposableRegistry, IDisposable, IOutputChannel } from '../../pla
 import { DeepnoteServerInfo, IDeepnoteToolkitInstaller } from './types';
 import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
-
-/**
- * Accessor for the @deepnote/runtime-core mock's test-only helpers (see build/mocha-esm-loader.js).
- * The real .d.ts does not declare these, so we reach them through a dynamic import + cast.
- */
-interface RuntimeCoreMockHelpers {
-    __getStartServerCalls(): Array<{ workingDirectory: string; pythonEnv: string; env?: Record<string, string> }>;
-    __getStopServerCalls(): unknown[];
-    __setStartServerImpl(impl: ((options: unknown) => Promise<unknown>) | null): void;
-    __resetRuntimeCoreMock(): void;
-}
-
-async function getRuntimeCoreMock(): Promise<RuntimeCoreMockHelpers> {
-    return (await import('@deepnote/runtime-core')) as unknown as RuntimeCoreMockHelpers;
-}
+import {
+    __getStartServerCalls,
+    __getStopServerCalls,
+    __resetRuntimeCoreMock
+} from '../../test/mocks/deepnoteRuntimeCore';
 
 type PendingOperation =
     | { type: 'start'; promise: Promise<DeepnoteServerInfo> }
@@ -159,9 +149,8 @@ suite('DeepnoteServerStarter', () => {
         const start = (notebookUri: Uri, environmentId = 'env1') =>
             serverStarter.startServer(interpreter, venvPath, true, [], environmentId, notebookUri);
 
-        setup(async () => {
-            const runtimeCore = await getRuntimeCoreMock();
-            runtimeCore.__resetRuntimeCoreMock();
+        setup(() => {
+            __resetRuntimeCoreMock();
 
             // The toolkit install step runs before runtime-core's startServer; stub it so the
             // start path reaches startServer. (Un-stubbed ts-mockito methods return null.)
@@ -176,13 +165,11 @@ suite('DeepnoteServerStarter', () => {
         });
 
         test('starts SEPARATE servers for two different notebook URIs in the same dir (catches cross-sibling server reuse)', async () => {
-            const runtimeCore = await getRuntimeCoreMock();
-
             const infoA = await start(uriA);
             const infoB = await start(uriB);
 
             // runtime-core startServer must be invoked once per notebook — NOT reused across siblings.
-            const calls = runtimeCore.__getStartServerCalls();
+            const calls = __getStartServerCalls();
             assert.strictEqual(calls.length, 2, 'each distinct notebook URI must spawn its own server process');
 
             // The two servers are distinct (distinct map entries / distinct ServerInfo).
@@ -201,18 +188,16 @@ suite('DeepnoteServerStarter', () => {
         });
 
         test('REUSES the running server when the SAME notebook URI re-requests the same environment (catches redundant respawn)', async () => {
-            const runtimeCore = await getRuntimeCoreMock();
-
             // Stub the running-server health probe to report "running" so the reuse branch is taken.
             sinon.stub(internals(serverStarter), 'isServerRunning').resolves(true);
 
             const first = await start(uriA);
-            assert.strictEqual(runtimeCore.__getStartServerCalls().length, 1);
+            assert.strictEqual(__getStartServerCalls().length, 1);
 
             const second = await start(uriA);
 
             assert.strictEqual(
-                runtimeCore.__getStartServerCalls().length,
+                __getStartServerCalls().length,
                 1,
                 'a second start for the same notebook+environment must reuse the server, not respawn'
             );
@@ -220,15 +205,13 @@ suite('DeepnoteServerStarter', () => {
         });
 
         test('stopServer(uriA) tears down ONLY notebook A; B keeps running (catches cross-notebook teardown)', async () => {
-            const runtimeCore = await getRuntimeCoreMock();
-
             await start(uriA);
             await start(uriB);
 
             await serverStarter.stopServer(uriA);
 
             // runtime-core stopServer invoked exactly once (only A's process was alive and stopped).
-            assert.strictEqual(runtimeCore.__getStopServerCalls().length, 1, 'only notebook A server stopped');
+            assert.strictEqual(__getStopServerCalls().length, 1, 'only notebook A server stopped');
 
             const contexts = internals(serverStarter).projectContexts;
             // A's context still exists but its server is cleared; B's server is untouched.
@@ -237,34 +220,28 @@ suite('DeepnoteServerStarter', () => {
         });
 
         test('stopServer for a notebook with NO running server is a safe no-op (does not throw, does not call runtime-core stop)', async () => {
-            const runtimeCore = await getRuntimeCoreMock();
-
             // Never started anything for this URI.
             await serverStarter.stopServer(Uri.file('/workspace/project/never-started.deepnote'));
 
             assert.strictEqual(
-                runtimeCore.__getStopServerCalls().length,
+                __getStopServerCalls().length,
                 0,
                 'stopping a notebook with no server must not invoke runtime-core stopServer'
             );
         });
 
         test('forwards the SQL integration provider env vars into the started server', async () => {
-            const runtimeCore = await getRuntimeCoreMock();
-
             // The injected provider yields env vars for this notebook; they must reach runtime-core's start.
             when(mockSqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({ FOO: 'bar' });
 
             await start(uriA);
 
-            const calls = runtimeCore.__getStartServerCalls();
+            const calls = __getStartServerCalls();
             assert.strictEqual(calls.length, 1, 'the server must be started once');
             assert.strictEqual(calls[0].env?.FOO, 'bar', 'SQL integration env vars must be forwarded to startServer');
         });
 
         test('does NOT leak one notebook SQL env vars into a sibling whose provider yields none', async () => {
-            const runtimeCore = await getRuntimeCoreMock();
-
             // The provider is keyed by notebook URI: it yields env vars for A but nothing for its sibling B.
             when(mockSqlIntegrationEnvVars.getEnvironmentVariables(uriA, anything())).thenResolve({ FOO: 'bar' });
             when(mockSqlIntegrationEnvVars.getEnvironmentVariables(uriB, anything())).thenResolve({});
@@ -272,7 +249,7 @@ suite('DeepnoteServerStarter', () => {
             await start(uriA);
             await start(uriB);
 
-            const calls = runtimeCore.__getStartServerCalls();
+            const calls = __getStartServerCalls();
             assert.strictEqual(calls.length, 2, 'each sibling notebook spawns its own server');
 
             // env is gathered per start() call, so A's vars must not carry over into B's server.

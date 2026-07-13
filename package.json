@@ -2709,7 +2709,7 @@
         "@nteract/transform-plotly": "^7.0.0",
         "@nteract/transform-vega": "^7.0.6",
         "@nteract/transforms": "^3.2.0",
-        "@vscode/extension-telemetry": "^0.7.7",
+        "@vscode/extension-telemetry": "^1.5.2",
         "@vscode/jupyter-ipywidgets7": "^2.0.4",
         "@vscode/jupyter-ipywidgets8": "^1.0.9",
         "@vscode/python-extension": "^1.0.4",

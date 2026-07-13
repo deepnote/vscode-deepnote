@@ -1,4 +1,5 @@
 import assert from 'assert';
+import type { DeepnoteFile } from '@deepnote/blocks';
 import { instance, mock, when } from 'ts-mockito';
 import { CancellationTokenSource, EventEmitter, NotebookDocument, Uri } from 'vscode';
 
@@ -7,13 +8,12 @@ import { SqlIntegrationEnvironmentVariablesProvider } from './sqlIntegrationEnvi
 import { IIntegrationStorage, IPlatformDeepnoteNotebookManager, IPlatformNotebookEditorProvider } from './types';
 import { DATAFRAME_SQL_INTEGRATION_ID } from './integrationTypes';
 import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
-import type { DeepnoteProject } from '../../deepnote/deepnoteTypes';
 
-/** Create a minimal `DeepnoteProject` for tests. */
+/** Create a minimal `DeepnoteFile` for tests. */
 function createMockProject(
     projectId: string,
     integrations: Array<{ id: string; name: string; type: string }> = []
-): DeepnoteProject {
+): DeepnoteFile {
     return {
         metadata: {
             createdAt: '2023-01-01T00:00:00Z',

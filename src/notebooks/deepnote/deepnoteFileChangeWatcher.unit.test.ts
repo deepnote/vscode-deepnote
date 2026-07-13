@@ -1,3 +1,4 @@
+import type { DeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import * as sinon from 'sinon';
 import { anything, instance, mock, when } from 'ts-mockito';
@@ -5,7 +6,7 @@ import { Disposable, EventEmitter, FileSystemWatcher, NotebookCellKind, Notebook
 
 import type { IControllerRegistration } from '../controllers/types';
 import type { IDisposableRegistry } from '../../platform/common/types';
-import type { DeepnoteOutput, DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
+import type { DeepnoteOutput } from '../../platform/deepnote/deepnoteTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteFileChangeWatcher } from './deepnoteFileChangeWatcher';
@@ -1058,7 +1059,7 @@ project:
                         }
                     ]
                 }
-            } as DeepnoteProject);
+            } as DeepnoteFile);
 
             // Re-create the watcher with the mocked manager
             const fallbackDisposables: IDisposableRegistry = [];

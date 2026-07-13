@@ -1,3 +1,4 @@
+import type { DeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import { l10n, ThemeIcon } from 'vscode';
 
@@ -10,14 +11,14 @@ import {
     getNonInitNotebooks,
     ProjectGroupData
 } from './deepnoteTreeItem';
-import type { DeepnoteNotebook, DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
+import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 
 /**
  * Structural mirror of DeepnoteTreeDataProvider's private surface (deepnoteTreeDataProvider.ts).
  * `internals` is the single typed seam these tests use to reach private caches and helpers.
  */
 interface DeepnoteTreeDataProviderInternals {
-    readonly cachedProjects: Map<string, DeepnoteProject>;
+    readonly cachedProjects: Map<string, DeepnoteFile>;
     getProjectGroups(): Promise<DeepnoteTreeItem[]>;
 }
 
@@ -26,13 +27,9 @@ function internals(provider: DeepnoteTreeDataProvider): DeepnoteTreeDataProvider
 }
 
 /**
- * Build a single-notebook DeepnoteProject (whole-file shape) for a given project/notebook id.
+ * Build a single-notebook DeepnoteFile (whole-file shape) for a given project/notebook id.
  */
-function makeSingleNotebookProject(
-    projectId: string,
-    notebookId: string,
-    projectName = 'Test Project'
-): DeepnoteProject {
+function makeSingleNotebookProject(projectId: string, notebookId: string, projectName = 'Test Project'): DeepnoteFile {
     return {
         metadata: { createdAt: '2023-01-01T00:00:00Z', modifiedAt: '2023-01-02T00:00:00Z' },
         project: {
@@ -56,7 +53,7 @@ function makeSingleNotebookProject(
 suite('DeepnoteTreeDataProvider', () => {
     let provider: DeepnoteTreeDataProvider;
 
-    const mockProject: DeepnoteProject = {
+    const mockProject: DeepnoteFile = {
         metadata: {
             createdAt: '2023-01-01T00:00:00Z',
             modifiedAt: '2023-01-02T00:00:00Z'
@@ -389,7 +386,7 @@ suite('DeepnoteTreeDataProvider', () => {
         test('applyVisualFields reflects the renamed project and new notebook count on a project-file item', () => {
             // A legacy multi-notebook project (2 notebooks) renders as a projectFile node.
             const filePath = '/workspace/test-project.deepnote';
-            const initialProject: DeepnoteProject = {
+            const initialProject: DeepnoteFile = {
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-01T00:00:00Z'
@@ -432,7 +429,7 @@ suite('DeepnoteTreeDataProvider', () => {
             assert.strictEqual(item.description, '2 notebooks');
 
             // Rename the project and add a third notebook, then re-derive the visual fields.
-            const updatedProject: DeepnoteProject = {
+            const updatedProject: DeepnoteFile = {
                 ...initialProject,
                 project: {
                     ...initialProject.project,
@@ -558,7 +555,7 @@ suite('DeepnoteTreeDataProvider', () => {
     suite('alphabetical sorting', () => {
         test('compareTreeItemsByLabel should sort items alphabetically (case-insensitive)', () => {
             // Test the comparator function in isolation
-            const mockProjects: DeepnoteProject[] = [
+            const mockProjects: DeepnoteFile[] = [
                 {
                     metadata: {
                         createdAt: '2023-01-01T00:00:00Z',
@@ -627,7 +624,7 @@ suite('DeepnoteTreeDataProvider', () => {
 
         test('should sort notebooks alphabetically by name within a project', async () => {
             // Create a project with unsorted notebooks
-            const mockProjectWithNotebooks: DeepnoteProject = {
+            const mockProjectWithNotebooks: DeepnoteFile = {
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -683,7 +680,7 @@ suite('DeepnoteTreeDataProvider', () => {
 
         test('should sort notebooks case-insensitively', async () => {
             // Create a project with notebooks having different cases
-            const mockProjectWithNotebooks: DeepnoteProject = {
+            const mockProjectWithNotebooks: DeepnoteFile = {
                 metadata: {
                     createdAt: '2023-01-01T00:00:00Z',
                     modifiedAt: '2023-01-02T00:00:00Z'
@@ -747,7 +744,7 @@ suite('DeepnoteTreeDataProvider', () => {
         const filePathB = '/workspace/proj-b.deepnote';
         const filePathOther = '/workspace/other.deepnote';
 
-        let cachedProjects: Map<string, DeepnoteProject>;
+        let cachedProjects: Map<string, DeepnoteFile>;
         let fireArgs: Array<DeepnoteTreeItem | undefined | null | void>;
 
         setup(() => {
@@ -799,7 +796,7 @@ suite('DeepnoteTreeDataProvider', () => {
 
     suite('getNonInitNotebooks excludes the init notebook', () => {
         test('the init notebook (project.initNotebookId) is excluded from the file notebook list', () => {
-            const project: DeepnoteProject = {
+            const project: DeepnoteFile = {
                 metadata: { createdAt: '2023-01-01T00:00:00Z', modifiedAt: '2023-01-02T00:00:00Z' },
                 project: {
                     id: 'project-with-init',
@@ -826,7 +823,7 @@ suite('DeepnoteTreeDataProvider', () => {
 
         // Invoke getProjectGroups()/getChildren(groupItem) directly rather than the root getChildren(),
         // which short-circuits to [] when workspace.workspaceFolders is unset; the seeded cache drives grouping.
-        function seed(entries: Array<[string, DeepnoteProject]>): void {
+        function seed(entries: Array<[string, DeepnoteFile]>): void {
             const cachedProjects = internals(provider).cachedProjects;
             for (const [filePath, project] of entries) {
                 cachedProjects.set(filePath, project);
@@ -853,7 +850,7 @@ suite('DeepnoteTreeDataProvider', () => {
         });
 
         test('a single-notebook file renders as a notebookFile leaf; a legacy multi-notebook file is collapsible', async () => {
-            const legacyMulti: DeepnoteProject = {
+            const legacyMulti: DeepnoteFile = {
                 metadata: { createdAt: '2023-01-01T00:00:00Z', modifiedAt: '2023-01-02T00:00:00Z' },
                 project: {
                     id: projectId,
@@ -867,7 +864,7 @@ suite('DeepnoteTreeDataProvider', () => {
                 version: '1.0.0'
             };
 
-            const singleFile: [string, DeepnoteProject] = [
+            const singleFile: [string, DeepnoteFile] = [
                 '/workspace/single.deepnote',
                 makeSingleNotebookProject(projectId, 'only-nb', 'Grouped')
             ];
@@ -909,7 +906,7 @@ suite('DeepnoteTreeDataProvider', () => {
         });
 
         test('the init notebook is excluded from a file group/leaf — an init+main file renders as a single-notebook leaf', async () => {
-            const initPlusMain: DeepnoteProject = {
+            const initPlusMain: DeepnoteFile = {
                 metadata: { createdAt: '2023-01-01T00:00:00Z', modifiedAt: '2023-01-02T00:00:00Z' },
                 project: {
                     id: projectId,

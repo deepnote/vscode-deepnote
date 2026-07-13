@@ -12,6 +12,7 @@ import {
     commands,
     l10n
 } from 'vscode';
+import type { DeepnoteFile } from '@deepnote/blocks';
 
 import {
     DeepnoteTreeItem,
@@ -23,7 +24,7 @@ import {
     resolveLeafNotebook
 } from './deepnoteTreeItem';
 import { readDeepnoteProjectFile } from '../../platform/deepnote/deepnoteProjectFileReader';
-import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
+import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { ILogger } from '../../platform/logging/types';
 import { isSnapshotFile, SNAPSHOT_FILE_SUFFIX } from './snapshots/snapshotFiles';
 
@@ -48,7 +49,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
     readonly onDidChangeTreeData: Event<DeepnoteTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
 
     private fileWatcher: FileSystemWatcher | undefined;
-    private cachedProjects: Map<string /* uri.toString() */, DeepnoteProject> = new Map();
+    private cachedProjects: Map<string /* uri.toString() */, DeepnoteFile> = new Map();
     private groupItemCache: Map<string /* projectId */, DeepnoteTreeItem> = new Map();
     private fileItemCache: Map<string /* uri.toString() */, DeepnoteTreeItem> = new Map();
     private isInitialScanComplete: boolean = false;
@@ -258,7 +259,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
     }
 
     /** Group file→project entries by `project.id`; files sorted by path for stable ordering. */
-    private buildProjectGroups(projectsByPath: Map<string, DeepnoteProject>): ProjectGroupData[] {
+    private buildProjectGroups(projectsByPath: Map<string, DeepnoteFile>): ProjectGroupData[] {
         const groupsById = new Map<string, ProjectGroupData>();
 
         for (const [cacheKey, project] of projectsByPath) {
@@ -363,7 +364,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
     }
 
     /** Scan workspace folders for `.deepnote` files (skipping snapshots) into `cachedProjects`. */
-    private async loadAllProjects(): Promise<Map<string, DeepnoteProject>> {
+    private async loadAllProjects(): Promise<Map<string, DeepnoteFile>> {
         for (const workspaceFolder of workspace.workspaceFolders || []) {
             const pattern = new RelativePattern(workspaceFolder, '**/*.deepnote');
             const files = await workspace.findFiles(pattern);
@@ -381,7 +382,7 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
         return this.cachedProjects;
     }
 
-    private async loadDeepnoteProject(fileUri: Uri): Promise<DeepnoteProject | undefined> {
+    private async loadDeepnoteProject(fileUri: Uri): Promise<DeepnoteFile | undefined> {
         const cacheKey = fileUri.toString();
 
         const cached = this.cachedProjects.get(cacheKey);

@@ -1,13 +1,13 @@
+import type { DeepnoteFile } from '@deepnote/blocks';
 import * as assert from 'assert';
 
 import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
-import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 import { ProjectIntegration } from '../types';
 
 suite('DeepnoteNotebookManager', () => {
     let manager: DeepnoteNotebookManager;
 
-    const mockProject: DeepnoteProject = {
+    const mockProject: DeepnoteFile = {
         metadata: {
             createdAt: '2023-01-01T00:00:00Z',
             modifiedAt: '2023-01-02T00:00:00Z'
@@ -43,7 +43,7 @@ suite('DeepnoteNotebookManager', () => {
         });
 
         test('should overwrite existing project data', () => {
-            const updatedProject: DeepnoteProject = {
+            const updatedProject: DeepnoteFile = {
                 ...mockProject,
                 project: {
                     ...mockProject.project,
@@ -78,7 +78,7 @@ suite('DeepnoteNotebookManager', () => {
         });
 
         test('should replace existing integrations list and return true', () => {
-            const projectWithIntegrations: DeepnoteProject = {
+            const projectWithIntegrations: DeepnoteFile = {
                 ...mockProject,
                 project: {
                     ...mockProject.project,
@@ -102,7 +102,7 @@ suite('DeepnoteNotebookManager', () => {
         });
 
         test('should handle empty integrations array and return true', () => {
-            const projectWithIntegrations: DeepnoteProject = {
+            const projectWithIntegrations: DeepnoteFile = {
                 ...mockProject,
                 project: {
                     ...mockProject.project,
@@ -156,7 +156,7 @@ suite('DeepnoteNotebookManager', () => {
         const nbB = 'notebook-B';
 
         // A project (whole DeepnoteFile) for one sibling: same projectId, distinct notebook.
-        function siblingProject(notebookId: string, notebookName: string): DeepnoteProject {
+        function siblingProject(notebookId: string, notebookName: string): DeepnoteFile {
             return {
                 ...mockProject,
                 project: {

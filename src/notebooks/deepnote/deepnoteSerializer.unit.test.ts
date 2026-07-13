@@ -63,7 +63,7 @@ suite('DeepnoteNotebookSerializer', () => {
     });
 
     /**
-     * Helper function to convert a DeepnoteProject object with version to YAML format
+     * Helper function to convert a DeepnoteFile object with version to YAML format
      */
     function projectToYaml(projectData: DeepnoteFile): Uint8Array {
         const yamlString = serializeDeepnoteFile(projectData);

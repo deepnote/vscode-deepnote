@@ -1,12 +1,6 @@
 import { DeepnoteFile } from '@deepnote/blocks';
 
 /**
- * Alias for DeepnoteFile for backward compatibility.
- * @deprecated Use DeepnoteFile instead.
- */
-export type DeepnoteProject = DeepnoteFile;
-
-/**
  * Represents a single notebook within a Deepnote project.
  * Extracted from DeepnoteFile['project']['notebooks'][number].
  */

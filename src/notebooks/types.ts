@@ -4,7 +4,7 @@
 import { NotebookDocument, NotebookEditor, Uri, type Event } from 'vscode';
 import { Resource } from '../platform/common/types';
 import type { EnvironmentPath } from '@vscode/python-extension';
-import { DeepnoteProject } from '../platform/deepnote/deepnoteTypes';
+import type { DeepnoteFile } from '@deepnote/blocks';
 import { ConfigurableDatabaseIntegrationType } from '../platform/notebooks/deepnote/integrationTypes';
 
 export interface IEmbedNotebookEditorProvider {
@@ -41,8 +41,8 @@ export interface IDeepnoteNotebookManager {
      * Returns the cached project for an exact (projectId, notebookId) pair, or undefined.
      * Exact match only — never falls back to another sibling. The save path uses this.
      */
-    getProjectForNotebook(projectId: string, notebookId: string): DeepnoteProject | undefined;
-    storeOriginalProject(projectId: string, notebookId: string, project: DeepnoteProject): void;
+    getProjectForNotebook(projectId: string, notebookId: string): DeepnoteFile | undefined;
+    storeOriginalProject(projectId: string, notebookId: string, project: DeepnoteFile): void;
 
     /**
      * Updates the integrations list in the cached project data (cache-only).

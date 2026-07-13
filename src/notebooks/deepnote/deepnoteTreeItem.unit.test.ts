@@ -1,11 +1,12 @@
+import type { DeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import { TreeItemCollapsibleState, ThemeIcon } from 'vscode';
 
 import { DeepnoteTreeItem, DeepnoteTreeItemType, DeepnoteTreeItemContext } from './deepnoteTreeItem';
-import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
+import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 
 suite('DeepnoteTreeItem', () => {
-    const mockProject: DeepnoteProject = {
+    const mockProject: DeepnoteFile = {
         metadata: {
             createdAt: '2023-01-01T00:00:00Z',
             modifiedAt: '2023-01-02T00:00:00Z'
@@ -137,7 +138,7 @@ suite('DeepnoteTreeItem', () => {
         });
 
         test('should handle project with multiple notebooks', () => {
-            const projectWithMultipleNotebooks: DeepnoteProject = {
+            const projectWithMultipleNotebooks: DeepnoteFile = {
                 ...mockProject,
                 project: {
                     ...mockProject.project,

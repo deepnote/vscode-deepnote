@@ -1,7 +1,7 @@
 import { injectable } from 'inversify';
+import type { DeepnoteFile } from '@deepnote/blocks';
 
 import { IDeepnoteNotebookManager, ProjectIntegration } from '../types';
-import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 
 /**
  * Centralized manager for tracking Deepnote notebook selections and project state.
@@ -11,25 +11,25 @@ import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
     // Cached originals are keyed by projectId, then by notebookId, so sibling files
     // that share a single project.id do not clobber each other's cached project data.
-    private readonly originalProjects = new Map<string /*projectId*/, Map<string /*notebookId*/, DeepnoteProject>>();
+    private readonly originalProjects = new Map<string /*projectId*/, Map<string /*notebookId*/, DeepnoteFile>>();
 
     /**
      * Retrieves the cached project data for an exact (projectId, notebookId) pair; never falls
      * back to another sibling's project, returning undefined when that entry is not cached.
      */
-    getProjectForNotebook(projectId: string, notebookId: string): DeepnoteProject | undefined {
+    getProjectForNotebook(projectId: string, notebookId: string): DeepnoteFile | undefined {
         return this.originalProjects.get(projectId)?.get(notebookId);
     }
 
     /** Stores the original project data for an exact (projectId, notebookId) pair. */
-    storeOriginalProject(projectId: string, notebookId: string, project: DeepnoteProject): void {
+    storeOriginalProject(projectId: string, notebookId: string, project: DeepnoteFile): void {
         // structuredClone to prevent mutations affecting stored state and handle circular refs.
         const clonedProject = structuredClone(project);
 
         let notebookEntries = this.originalProjects.get(projectId);
 
         if (!notebookEntries) {
-            notebookEntries = new Map<string, DeepnoteProject>();
+            notebookEntries = new Map<string, DeepnoteFile>();
             this.originalProjects.set(projectId, notebookEntries);
         }
 

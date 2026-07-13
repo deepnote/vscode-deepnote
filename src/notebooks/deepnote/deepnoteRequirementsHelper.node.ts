@@ -1,8 +1,8 @@
 import { inject, injectable } from 'inversify';
 import { workspace, CancellationToken, window, Uri, l10n } from 'vscode';
 import * as fs from 'fs';
+import type { DeepnoteFile } from '@deepnote/blocks';
 
-import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 import { ILogger } from '../../platform/logging/types';
 import { IPersistentStateFactory } from '../../platform/common/types';
 import { Cancellation } from '../../platform/common/cancellation';
@@ -11,7 +11,7 @@ const DONT_ASK_OVERWRITE_REQUIREMENTS_KEY = 'DEEPNOTE_DONT_ASK_OVERWRITE_REQUIRE
 
 export const IDeepnoteRequirementsHelper = Symbol('IDeepnoteRequirementsHelper');
 export interface IDeepnoteRequirementsHelper {
-    createRequirementsFile(project: DeepnoteProject, token: CancellationToken): Promise<void>;
+    createRequirementsFile(project: DeepnoteFile, token: CancellationToken): Promise<void>;
 }
 
 /**
@@ -29,7 +29,7 @@ export class DeepnoteRequirementsHelper implements IDeepnoteRequirementsHelper {
      * @param project The Deepnote project data containing requirements in settings
      * @param token Cancellation token to abort the operation if needed
      */
-    async createRequirementsFile(project: DeepnoteProject, token: CancellationToken): Promise<void> {
+    async createRequirementsFile(project: DeepnoteFile, token: CancellationToken): Promise<void> {
         try {
             Cancellation.throwIfCanceled(token);
 

@@ -6,7 +6,7 @@ import { EventEmitter, FileType, NotebookDocument, Uri } from 'vscode';
 
 import { IKernel, IKernelProvider, INotebookKernelExecution } from '../../kernels/types';
 import { IDisposableRegistry } from '../../platform/common/types';
-import type { DeepnoteNotebook, DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
+import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteInitNotebookRunner } from './deepnoteInitNotebookRunner.node';
@@ -101,7 +101,7 @@ function makeNotebookFile(projectId: string, notebookId: string, codeContents: s
 }
 
 /** The cached project entry the manager returns for `getProjectForNotebook` (carries initNotebookId). */
-function makeMainProjectEntry(projectId: string, initNotebookId: string | undefined): DeepnoteProject {
+function makeMainProjectEntry(projectId: string, initNotebookId: string | undefined): DeepnoteFile {
     return {
         version: '1.0.0',
         metadata: { createdAt: '2020-01-01T00:00:00Z', modifiedAt: '2021-01-01T00:00:00Z' },

@@ -19,6 +19,7 @@ import { IDisposableRegistry } from '../../platform/common/types';
 import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
+import { getNotebookKey } from './deepnoteProjectUtils';
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
 import { extractProjectIdFromSnapshotUri, isSnapshotFile } from './snapshots/snapshotFiles';
 import { SnapshotService } from './snapshots/snapshotService';
@@ -214,7 +215,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         );
 
         for (const notebook of affectedNotebooks) {
-            const nbKey = notebook.uri.toString();
+            const nbKey = getNotebookKey(notebook.uri);
             // main-file-sync always replaces any pending operation
             this.pendingOperations.set(nbKey, { type: 'main-file-sync' });
             void this.drainQueue(nbKey, notebook, uri);
@@ -231,7 +232,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         );
 
         for (const notebook of affectedNotebooks) {
-            const nbKey = notebook.uri.toString();
+            const nbKey = getNotebookKey(notebook.uri);
             const pending = this.pendingOperations.get(nbKey);
             // Don't replace a pending main-file-sync
             if (pending?.type === 'main-file-sync') {

@@ -13,6 +13,7 @@ import {
 } from 'vscode';
 
 import { logger } from '../../platform/logging';
+import { getNotebookKey } from '../../platform/deepnote/deepnoteProjectUtils';
 import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { DEEPNOTE_NOTEBOOK_TYPE } from '../../kernels/deepnote/types';
 import { IKernel, IKernelProvider } from '../../kernels/types';
@@ -140,7 +141,7 @@ export class DeepnoteInitNotebookRunner implements IDeepnoteInitNotebookRunner, 
             const cts = new CancellationTokenSource();
             this.inFlightInitByKernel.set(kernel, cts);
             const closeListener = workspace.onDidCloseNotebookDocument((closedNotebook) => {
-                if (closedNotebook.uri.toString() === notebook.uri.toString()) {
+                if (getNotebookKey(closedNotebook.uri) === getNotebookKey(notebook.uri)) {
                     logger.info(`Notebook closed while init notebook was running, cancelling for project ${projectId}`);
                     cts.cancel();
                 }

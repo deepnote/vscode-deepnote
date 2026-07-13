@@ -3,7 +3,7 @@ import { IServerHandleRegistry } from './types';
 
 /**
  * Tracks the Deepnote server handle registered for each notebook.
- * One server handle per notebook, keyed by notebook.uri.toString().
+ * One server handle per notebook, keyed by getNotebookKey().
  */
 @injectable()
 export class ServerHandleRegistry implements IServerHandleRegistry {

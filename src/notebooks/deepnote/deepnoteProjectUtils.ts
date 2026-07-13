@@ -1,6 +1,7 @@
 // Re-export the platform-layer reader so there is a single source of truth for
 // reading and parsing `.deepnote` files (see src/platform/deepnote/deepnoteProjectFileReader.ts).
 export { readDeepnoteProjectFile } from '../../platform/deepnote/deepnoteProjectFileReader';
+export { getNotebookKey } from '../../platform/deepnote/deepnoteProjectUtils';
 
 /**
  * Compute a hash of the requirements to detect changes.

@@ -56,7 +56,7 @@ import { logger } from '../../platform/logging';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { IControllerRegistration, IVSCodeNotebookController } from '../controllers/types';
 import { IDeepnoteNotebookManager } from '../types';
-import { computeRequirementsHash } from './deepnoteProjectUtils';
+import { computeRequirementsHash, getNotebookKey } from './deepnoteProjectUtils';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
 
 // Constants for NotebookEditor retry logic
@@ -280,7 +280,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         logger.info(`Deepnote notebook closed: ${getDisplayPath(notebook.uri)}`);
 
         // Clean up placeholder controller if it exists
-        const notebookKey = notebook.uri.toString();
+        const notebookKey = getNotebookKey(notebook.uri);
         const placeholder = this.placeholderControllers.get(notebookKey);
 
         if (placeholder) {
@@ -301,7 +301,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         progress: { report(value: { message?: string; increment?: number }): void },
         token: CancellationToken
     ): Promise<void> {
-        const notebookKey = notebook.uri.toString();
+        const notebookKey = getNotebookKey(notebook.uri);
 
         logger.info(`Switching controller environment for ${getDisplayPath(notebook.uri)}`);
 
@@ -361,7 +361,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         token: CancellationToken
     ): Promise<boolean> {
         // notebookKey uniquely identifies THIS NOTEBOOK - the same identity the controller/server use
-        const notebookKey = notebook.uri.toString();
+        const notebookKey = getNotebookKey(notebook.uri);
 
         const environmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(notebook.uri);
 
@@ -534,7 +534,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             kernelSpec,
             baseUrl: serverInfo.url,
             id: controllerId,
-            projectFilePath: notebook.uri.toString(),
+            projectFilePath: getNotebookKey(notebook.uri),
             serverProviderHandle,
             serverInfo,
             environmentName: configuration.name,
@@ -693,7 +693,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     ): Promise<boolean> {
         Cancellation.throwIfCanceled(token);
 
-        const notebookKey = notebook.uri.toString();
+        const notebookKey = getNotebookKey(notebook.uri);
 
         const existingEnvironmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(notebook.uri);
 
@@ -876,7 +876,9 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
      */
     private async findNotebookEditor(notebook: NotebookDocument): Promise<NotebookEditor | undefined> {
         // Try to find immediately
-        let editor = window.visibleNotebookEditors.find((e) => e.notebook.uri.toString() === notebook.uri.toString());
+        let editor = window.visibleNotebookEditors.find(
+            (e) => getNotebookKey(e.notebook.uri) === getNotebookKey(notebook.uri)
+        );
 
         if (editor) {
             return editor;
@@ -886,7 +888,9 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         for (let i = 0; i < NOTEBOOK_EDITOR_RETRY_COUNT; i++) {
             await new Promise((resolve) => setTimeout(resolve, NOTEBOOK_EDITOR_RETRY_DELAY_MS));
 
-            editor = window.visibleNotebookEditors.find((e) => e.notebook.uri.toString() === notebook.uri.toString());
+            editor = window.visibleNotebookEditors.find(
+                (e) => getNotebookKey(e.notebook.uri) === getNotebookKey(notebook.uri)
+            );
 
             if (editor) {
                 return editor;
@@ -1068,7 +1072,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
      * The placeholder's executeHandler shows the environment picker when user tries to run cells.
      */
     private createPlaceholderController(notebook: NotebookDocument): NotebookController {
-        const notebookKey = notebook.uri.toString();
+        const notebookKey = getNotebookKey(notebook.uri);
 
         // Check if we already have one
         const existing = this.placeholderControllers.get(notebookKey);
@@ -1097,7 +1101,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             // Create a cancellation token that cancels when the notebook is closed
             const cts = new CancellationTokenSource();
             const closeListener = workspace.onDidCloseNotebookDocument((closedDoc) => {
-                if (closedDoc.uri.toString() === doc.uri.toString()) {
+                if (getNotebookKey(closedDoc.uri) === getNotebookKey(doc.uri)) {
                     logger.info(`Notebook closed during environment setup, cancelling operation`);
                     cts.cancel();
                 }
@@ -1113,7 +1117,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 }
 
                 // Environment is now configured, execute the cells through the kernel
-                const docNotebookKey = doc.uri.toString();
+                const docNotebookKey = getNotebookKey(doc.uri);
                 const realController = this.notebookControllers.get(docNotebookKey);
 
                 if (!realController) {

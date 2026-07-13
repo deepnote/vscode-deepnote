@@ -14,6 +14,7 @@ import {
 } from 'vscode';
 import { ILogger } from '../../platform/logging/types';
 import { formatInputBlockCellContent, getInputBlockLanguage } from './inputBlockContentFormatter';
+import { getNotebookKey } from './deepnoteProjectUtils';
 
 /**
  * Protects readonly input blocks from being edited by reverting changes.
@@ -142,7 +143,7 @@ export class DeepnoteInputBlockEditProtection implements Disposable {
                 continue;
             }
 
-            const notebookUriStr = cell.notebook.uri.toString();
+            const notebookUriStr = getNotebookKey(cell.notebook.uri);
             if (!editsByNotebook.has(notebookUriStr)) {
                 editsByNotebook.set(notebookUriStr, { uri: cell.notebook.uri, edits: [] });
             }

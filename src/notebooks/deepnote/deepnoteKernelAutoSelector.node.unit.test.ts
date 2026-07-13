@@ -23,7 +23,7 @@ import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
 import { NotebookDocument, Uri, NotebookController, CancellationToken } from 'vscode';
 import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnoteEnvironment';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
-import { computeRequirementsHash } from './deepnoteProjectUtils';
+import { computeRequirementsHash, getNotebookKey } from './deepnoteProjectUtils';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 
 suite('DeepnoteKernelAutoSelector - rebuildController', () => {
@@ -297,7 +297,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
         test('should keep the old server handle registered when the environment switch fails', async () => {
             // Arrange - old handle already tracked, no new handle registered because setup fails
-            const notebookKey = mockNotebook.uri.toString();
+            const notebookKey = getNotebookKey(mockNotebook.uri);
             const oldServerHandle = 'old-server-handle';
             registry.set(notebookKey, oldServerHandle);
 
@@ -318,7 +318,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
         test('should unregister the old server handle after switching to a different environment', async () => {
             // Arrange - old handle tracked; successful setup registers a different new handle
-            const notebookKey = mockNotebook.uri.toString();
+            const notebookKey = getNotebookKey(mockNotebook.uri);
             const oldServerHandle = 'old-server-handle';
             const newServerHandle = 'new-server-handle';
             registry.set(notebookKey, oldServerHandle);
@@ -443,7 +443,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
         test('should return true and call ensureKernelSelectedWithConfiguration when environment is found', async () => {
             // Arrange
-            const notebookKey = mockNotebook.uri.toString();
+            const notebookKey = getNotebookKey(mockNotebook.uri);
             const environmentId = 'test-env-id';
             const mockEnvironment = createMockEnvironment(environmentId, 'Test Environment');
 

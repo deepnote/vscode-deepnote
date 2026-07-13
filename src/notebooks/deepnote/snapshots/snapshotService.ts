@@ -31,6 +31,7 @@ import { Utils } from 'vscode-uri';
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
 import { IDisposableRegistry } from '../../../platform/common/types';
 import type { DeepnoteOutput } from '../../../platform/deepnote/deepnoteTypes';
+import { getNotebookKey } from '../../../platform/deepnote/deepnoteProjectUtils';
 import { InvalidProjectNameError } from '../../../platform/errors/invalidProjectNameError';
 import { logger } from '../../../platform/logging';
 import {
@@ -154,7 +155,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
         workspace.onDidCloseNotebookDocument(
             (notebook) => {
-                const notebookUri = notebook.uri.toString();
+                const notebookUri = getNotebookKey(notebook.uri);
 
                 this.cancelPendingSnapshotSave(notebookUri);
                 this.clearExecutionState(notebookUri);
@@ -530,7 +531,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         }
 
         try {
-            const notebook = workspace.notebookDocuments.find((n) => n.uri.toString() === notebookUri);
+            const notebook = workspace.notebookDocuments.find((n) => getNotebookKey(n.uri) === notebookUri);
 
             if (!notebook) {
                 logger.info(`[Snapshot] Could not find notebook document for ${notebookUri}`);
@@ -613,7 +614,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     }
 
     private handleCellExecutionStateChange(cell: NotebookCell, state: NotebookCellExecutionState): void {
-        const notebookUri = cell.notebook.uri.toString();
+        const notebookUri = getNotebookKey(cell.notebook.uri);
         const cellId = cell.metadata?.id as string | undefined;
 
         if (!cellId) {
@@ -668,7 +669,10 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
             // Set up a one-time listener for cell state changes
             const disposable = notebookCellExecutions.onDidChangeNotebookCellExecutionState((e) => {
-                if (e.cell.notebook.uri.toString() === notebookUri && e.state === NotebookCellExecutionState.Idle) {
+                if (
+                    getNotebookKey(e.cell.notebook.uri) === notebookUri &&
+                    e.state === NotebookCellExecutionState.Idle
+                ) {
                     // Check if all pending cells are now complete
                     if (!this.tracker.hasPendingCellStateChanges(notebookUri)) {
                         disposable.dispose();
@@ -724,7 +728,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     }
 
     private handleNotebookDocumentChange(event: NotebookDocumentChangeEvent): void {
-        const notebookUri = event.notebook.uri.toString();
+        const notebookUri = getNotebookKey(event.notebook.uri);
 
         // Only matters while a save is pending; re-arm the settle timer when outputs/metadata change.
         if (!this.pendingSnapshotSaves.has(notebookUri)) {
@@ -773,7 +777,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             return;
         }
 
-        const notebook = workspace.notebookDocuments.find((n) => n.uri.toString() === notebookUri);
+        const notebook = workspace.notebookDocuments.find((n) => getNotebookKey(n.uri) === notebookUri);
 
         if (!notebook) {
             logger.warn(`[Snapshot] Could not find notebook document for ${notebookUri}`);

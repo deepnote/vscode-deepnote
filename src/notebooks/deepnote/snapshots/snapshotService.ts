@@ -1,5 +1,4 @@
 import {
-    deserializeDeepnoteFile,
     isExecutableBlock,
     serializeDeepnoteFile,
     type DeepnoteBlock,
@@ -31,6 +30,7 @@ import { Utils } from 'vscode-uri';
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
 import { IDisposableRegistry } from '../../../platform/common/types';
 import type { DeepnoteOutput } from '../../../platform/deepnote/deepnoteTypes';
+import { readDeepnoteProjectFile } from '../../../platform/deepnote/deepnoteProjectFileReader';
 import { getNotebookKey } from '../../../platform/deepnote/deepnoteProjectUtils';
 import { InvalidProjectNameError } from '../../../platform/errors/invalidProjectNameError';
 import { logger } from '../../../platform/logging';
@@ -451,10 +451,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             let file: DeepnoteFile;
 
             try {
-                const content = await workspace.fs.readFile(candidate.uri);
-                const contentString = new TextDecoder('utf-8').decode(content);
-
-                file = deserializeDeepnoteFile(contentString);
+                file = await readDeepnoteProjectFile(candidate.uri);
             } catch (error) {
                 logger.warn(
                     `[Snapshot] Failed to read/parse snapshot candidate: ${Utils.basename(candidate.uri)}`,
@@ -639,9 +636,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
     private async hasSnapshotChanges(latestPath: Uri, projectData: DeepnoteFile): Promise<boolean> {
         try {
-            const existingContent = await workspace.fs.readFile(latestPath);
-            const existingString = new TextDecoder('utf-8').decode(existingContent);
-            const existingData = deserializeDeepnoteFile(existingString);
+            const existingData = await readDeepnoteProjectFile(latestPath);
 
             const existingProject = this.getComparableProjectContent(existingData);
             const newProject = this.getComparableProjectContent(projectData);

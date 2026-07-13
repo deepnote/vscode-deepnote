@@ -30,6 +30,7 @@ import {
     createScreenshotter,
     openFolderViaDialog,
     openWorkspaceFile,
+    assertNotNull,
     runOnceAndAwaitOutput,
     selectDeepnoteContextMenu,
     selectEnvironmentForNotebook,
@@ -135,7 +136,7 @@ describe('Deepnote — splitting a file migrates its selected environment onto e
         }
         await screenshot('split-prompt');
 
-        await prompt!.takeAction(SPLIT_ACTION);
+        await assertNotNull(prompt, 'split prompt notification').takeAction(SPLIT_ACTION);
         await waitForNotification(SPLIT_DONE, WORKBENCH_TIMEOUT, true);
         await driver.sleep(2500);
         await screenshot('split-done');

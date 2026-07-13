@@ -17,6 +17,7 @@ import {
     notebookCount,
     openFolderViaDialog,
     openWorkspaceFile,
+    assertNotNull,
     showView,
     waitForNotification
 } from '../helpers';
@@ -89,16 +90,22 @@ describe('Deepnote — splitting a legacy multi-notebook .deepnote file into sin
         await driver.sleep(2000);
         await screenshot('multinotebook-opened');
 
-        const prompt = await waitForNotification(SPLIT_PROMPT, WORKBENCH_TIMEOUT, true);
-        promptMessage = (await prompt!.getMessage()) ?? '';
+        const prompt = assertNotNull(
+            await waitForNotification(SPLIT_PROMPT, WORKBENCH_TIMEOUT, true),
+            'split prompt notification'
+        );
+        promptMessage = (await prompt.getMessage()) ?? '';
         await screenshot('split-prompt');
 
-        await prompt!.takeAction(SPLIT_ACTION);
+        await prompt.takeAction(SPLIT_ACTION);
 
         // The original is retired by renaming to `<name>.deepnote.legacy` (deterministic, no OS trash
         // needed), and only after every child is written; "Failed to split" is a filesystem-error net.
-        const outcome = await waitForNotification(/Split into \d+ files\.|Failed to split/i, WORKBENCH_TIMEOUT, true);
-        outcomeMessage = (await outcome!.getMessage()) ?? '';
+        const outcome = assertNotNull(
+            await waitForNotification(/Split into \d+ files\.|Failed to split/i, WORKBENCH_TIMEOUT, true),
+            'split outcome notification'
+        );
+        outcomeMessage = (await outcome.getMessage()) ?? '';
         await driver.sleep(1500);
         await screenshot('split-outcome');
 

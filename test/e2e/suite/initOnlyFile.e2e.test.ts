@@ -19,6 +19,7 @@ import {
     openWorkspaceFile,
     readDeepnoteTreeRows,
     readStatusBarText,
+    assertNotNull,
     selectDeepnoteContextMenu,
     waitForNotification
 } from '../helpers';
@@ -146,13 +147,16 @@ describe('Deepnote — deleting an init-only leaf removes the whole file', funct
 
     it('deletes the file (init notebook resolves, no "Notebook not found")', async function () {
         const section = await getDeepnoteExplorerSection();
-        const leaf = await findDeepnoteLeaf(section, NOTEBOOK_NAME);
-        expect(leaf, `${NOTEBOOK_NAME} leaf`).to.not.equal(undefined);
+        const leaf = assertNotNull(await findDeepnoteLeaf(section, NOTEBOOK_NAME), `${NOTEBOOK_NAME} leaf`);
 
-        await selectDeepnoteContextMenu(leaf!, 'Delete Notebook');
+        await selectDeepnoteContextMenu(leaf, 'Delete Notebook');
         await confirmModalDialog('Delete', { messageIncludes: NOTEBOOK_NAME });
 
-        const toast = await waitForNotification(new RegExp(`Notebook deleted: ${NOTEBOOK_NAME}`, 'i'), WORKBENCH_TIMEOUT, true);
+        const toast = await waitForNotification(
+            new RegExp(`Notebook deleted: ${NOTEBOOK_NAME}`, 'i'),
+            WORKBENCH_TIMEOUT,
+            true
+        );
         expect(toast, 'deleted toast').to.not.equal(undefined);
         await screenshot('after-delete');
 

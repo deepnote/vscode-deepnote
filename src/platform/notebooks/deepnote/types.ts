@@ -1,8 +1,8 @@
 import { CancellationToken, Event, NotebookDocument, Uri } from 'vscode';
 import { IDisposable, Resource } from '../../common/types';
 import { EnvironmentVariables } from '../../common/variables/types';
-import { DeepnoteProject } from '../../deepnote/deepnoteTypes';
 import { ConfigurableDatabaseIntegrationConfig } from './integrationTypes';
+import { DeepnoteFile } from '@deepnote/blocks';
 
 /**
  * Settings for select input blocks
@@ -120,5 +120,5 @@ export interface IPlatformDeepnoteNotebookManager {
      * that precise entry is not cached. Performs an exact match only and never falls back to
      * another sibling's project.
      */
-    getProjectForNotebook(projectId: string, notebookId: string): DeepnoteProject | undefined;
+    getProjectForNotebook(projectId: string, notebookId: string): DeepnoteFile | undefined;
 }

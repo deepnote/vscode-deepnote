@@ -27,6 +27,7 @@ import {
     createScreenshotter,
     openFolderViaDialog,
     openWorkspaceFile,
+    assertNotNull,
     waitForNotification
 } from '../helpers';
 
@@ -190,10 +191,9 @@ describe('Deepnote — notebook-management commands create and remove sibling fi
 
     it('creates a new sibling file via "Add Notebook" on the project group', async function () {
         const section = await getExplorerSection();
-        const group = await findGroup(section);
-        expect(group, 'Marketing group tree item').to.not.equal(undefined);
+        const group = assertNotNull(await findGroup(section), 'Marketing group tree item');
 
-        await contextSelect(group!, 'Add Notebook');
+        await contextSelect(group, 'Add Notebook');
         const input = await InputBox.create(WORKBENCH_TIMEOUT);
         await input.setText('Extra');
         await input.confirm();
@@ -205,10 +205,9 @@ describe('Deepnote — notebook-management commands create and remove sibling fi
 
     it('duplicates a notebook into a new sibling file', async function () {
         const section = await getExplorerSection();
-        const overview = await findLeaf(section, 'Overview');
-        expect(overview, 'Overview leaf').to.not.equal(undefined);
+        const overview = assertNotNull(await findLeaf(section, 'Overview'), 'Overview leaf');
 
-        await contextSelect(overview!, 'Duplicate Notebook');
+        await contextSelect(overview, 'Duplicate Notebook');
 
         const toast = await waitForNotification(/Notebook duplicated: Overview \(Copy\)/i, WORKBENCH_TIMEOUT, true);
         expect(toast, 'duplicated toast').to.not.equal(undefined);
@@ -223,10 +222,9 @@ describe('Deepnote — notebook-management commands create and remove sibling fi
 
     it('renames the notebook inside the file, not the file', async function () {
         const section = await getExplorerSection();
-        const campaigns = await findLeaf(section, 'Campaigns');
-        expect(campaigns, 'Campaigns leaf').to.not.equal(undefined);
+        const campaigns = assertNotNull(await findLeaf(section, 'Campaigns'), 'Campaigns leaf');
 
-        await contextSelect(campaigns!, 'Rename Notebook');
+        await contextSelect(campaigns, 'Rename Notebook');
         const input = await InputBox.create(WORKBENCH_TIMEOUT);
         await input.setText('Campaign Report');
         await input.confirm();
@@ -243,10 +241,9 @@ describe('Deepnote — notebook-management commands create and remove sibling fi
 
     it('deletes the whole single-notebook file after a modal confirmation', async function () {
         const section = await getExplorerSection();
-        const metrics = await findLeaf(section, 'Metrics');
-        expect(metrics, 'Metrics leaf').to.not.equal(undefined);
+        const metrics = assertNotNull(await findLeaf(section, 'Metrics'), 'Metrics leaf');
 
-        await contextSelect(metrics!, 'Delete Notebook');
+        await contextSelect(metrics, 'Delete Notebook');
 
         // Confirm the `{modal:true}` dialog via raw DOM: ExTester's ModalDialog matches buttons by a
         // `title` attribute the dialog doesn't set; the message guard targets the right dialog.

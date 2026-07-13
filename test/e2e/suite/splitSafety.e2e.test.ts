@@ -15,6 +15,7 @@ import {
     createScreenshotter,
     openFolderViaDialog,
     openWorkspaceFile,
+    assertNotNull,
     waitForNotification
 } from '../helpers';
 
@@ -58,11 +59,13 @@ describe('Deepnote — split-prompt safety', function () {
             `${DISMISS_FIXTURE} did not open`
         );
 
-        const prompt = await waitForNotification(SPLIT_PROMPT, WORKBENCH_TIMEOUT, true);
-        expect(prompt, 'split prompt notification').to.not.equal(undefined);
+        const prompt = assertNotNull(
+            await waitForNotification(SPLIT_PROMPT, WORKBENCH_TIMEOUT, true),
+            'split prompt notification'
+        );
         await screenshot('prompt-shown');
 
-        await prompt!.dismiss().catch((error) => console.warn('[split-safety] dismiss prompt:', error));
+        await prompt.dismiss().catch((error) => console.warn('[split-safety] dismiss prompt:', error));
         await driver.sleep(2000);
         await screenshot('after-dismiss');
 

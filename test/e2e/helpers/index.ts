@@ -1,4 +1,5 @@
 // Barrel re-export so suites can `import { … } from '../helpers'`.
+export * from './assertions';
 export * from './constants';
 export * from './deepnoteEnvironment';
 export * from './deepnoteTree';

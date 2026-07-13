@@ -17,7 +17,7 @@ import { uuidUtils } from '../../platform/common/uuid';
 import { getFilePath } from '../../platform/common/platform/fs-paths';
 import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { Commands } from '../../platform/common/constants';
-import { readDeepnoteProjectFile } from './deepnoteProjectUtils';
+import { readDeepnoteProjectFile } from '../../platform/deepnote/deepnoteProjectFileReader';
 import { ILogger } from '../../platform/logging/types';
 import { buildSingleNotebookFile, buildSiblingNotebookFileUri } from './deepnoteNotebookFileFactory';
 import { deepnoteFileExists } from './deepnoteSiblingFileAllocator';

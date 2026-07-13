@@ -22,8 +22,8 @@ import {
     isSingleNotebookFile,
     resolveLeafNotebook
 } from './deepnoteTreeItem';
+import { readDeepnoteProjectFile } from '../../platform/deepnote/deepnoteProjectFileReader';
 import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
-import { readDeepnoteProjectFile } from './deepnoteProjectUtils';
 import { ILogger } from '../../platform/logging/types';
 import { isSnapshotFile, SNAPSHOT_FILE_SUFFIX } from './snapshots/snapshotFiles';
 

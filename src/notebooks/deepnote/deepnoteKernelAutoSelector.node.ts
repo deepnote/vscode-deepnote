@@ -56,7 +56,8 @@ import { logger } from '../../platform/logging';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { IControllerRegistration, IVSCodeNotebookController } from '../controllers/types';
 import { IDeepnoteNotebookManager } from '../types';
-import { computeRequirementsHash, getNotebookKey } from './deepnoteProjectUtils';
+import { getNotebookKey } from '../../platform/deepnote/deepnoteProjectUtils';
+import { computeRequirementsHash } from './deepnoteProjectUtils';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
 
 // Constants for NotebookEditor retry logic

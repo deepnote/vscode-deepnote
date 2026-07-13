@@ -23,7 +23,8 @@ import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
 import { NotebookDocument, Uri, NotebookController, CancellationToken } from 'vscode';
 import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnoteEnvironment';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
-import { computeRequirementsHash, getNotebookKey } from './deepnoteProjectUtils';
+import { getNotebookKey } from '../../platform/deepnote/deepnoteProjectUtils';
+import { computeRequirementsHash } from './deepnoteProjectUtils';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 
 suite('DeepnoteKernelAutoSelector - rebuildController', () => {

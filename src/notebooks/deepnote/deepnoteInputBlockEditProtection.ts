@@ -14,7 +14,7 @@ import {
 } from 'vscode';
 import { ILogger } from '../../platform/logging/types';
 import { formatInputBlockCellContent, getInputBlockLanguage } from './inputBlockContentFormatter';
-import { getNotebookKey } from './deepnoteProjectUtils';
+import { getNotebookKey } from '../../platform/deepnote/deepnoteProjectUtils';
 
 /**
  * Protects readonly input blocks from being edited by reverting changes.

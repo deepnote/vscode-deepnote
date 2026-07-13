@@ -19,7 +19,7 @@ import { IDisposableRegistry } from '../../platform/common/types';
 import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
-import { getNotebookKey } from './deepnoteProjectUtils';
+import { getNotebookKey } from '../../platform/deepnote/deepnoteProjectUtils';
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
 import { extractProjectIdFromSnapshotUri, isSnapshotFile } from './snapshots/snapshotFiles';
 import { SnapshotService } from './snapshots/snapshotService';

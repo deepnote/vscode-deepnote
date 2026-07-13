@@ -5,7 +5,7 @@ import { isSingleNotebookDeepnoteFile, splitByNotebooks } from '@deepnote/conver
 import { ILogger } from '../../platform/logging/types';
 import type { IDeepnoteNotebookEnvironmentMapper } from '../../kernels/deepnote/types';
 import { DEEPNOTE_NOTEBOOK_TYPE } from '../../kernels/deepnote/types';
-import { readDeepnoteProjectFile } from './deepnoteProjectUtils';
+import { readDeepnoteProjectFile } from '../../platform/deepnote/deepnoteProjectFileReader';
 import { allocateSiblingUri } from './deepnoteSiblingFileAllocator';
 import { getFileStem } from './deepnoteNotebookFileFactory';
 

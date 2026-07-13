@@ -147,7 +147,7 @@ suite('SnapshotService', () => {
             }
         };
         const notebookManager = mock<IDeepnoteNotebookManager>();
-        when(notebookManager.getProjectForNotebook(anything(), anything())).thenReturn(originalProject);
+        when(notebookManager.getProjectForNotebook(projectId, notebookId)).thenReturn(originalProject);
 
         // Record the single code cell as executed so the flush takes the Run-All (timestamped) branch.
         const startTime = Date.now();
@@ -1792,7 +1792,7 @@ project:
                 };
 
                 const mockNotebookManager = mock<IDeepnoteNotebookManager>();
-                when(mockNotebookManager.getProjectForNotebook(anything(), anything())).thenReturn(originalProject);
+                when(mockNotebookManager.getProjectForNotebook(projectId, notebookId)).thenReturn(originalProject);
 
                 // Create a new service with the mock notebook manager
                 const testService = new SnapshotService(
@@ -1870,7 +1870,9 @@ project:
                     }
                 };
                 const mockNotebookManager = mock<IDeepnoteNotebookManager>();
-                when(mockNotebookManager.getProjectForNotebook(anything(), anything())).thenReturn(originalProject);
+                when(mockNotebookManager.getProjectForNotebook(sharedProjectId, 'notebook-b')).thenReturn(
+                    originalProject
+                );
 
                 const testService = new SnapshotService(
                     instance(mockEnvironmentCapture),
@@ -1940,7 +1942,7 @@ project:
                     }
                 };
                 const mockNotebookManager = mock<IDeepnoteNotebookManager>();
-                when(mockNotebookManager.getProjectForNotebook(anything(), anything())).thenReturn(originalProject);
+                when(mockNotebookManager.getProjectForNotebook(projectId, notebookId)).thenReturn(originalProject);
 
                 const testService = new SnapshotService(
                     instance(mockEnvironmentCapture),

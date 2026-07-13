@@ -49,7 +49,7 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
 
         for (const [notebookId, project] of notebookEntries) {
             const updatedProject = structuredClone(project);
-            updatedProject.project.integrations = integrations;
+            updatedProject.project.integrations = structuredClone(integrations);
 
             notebookEntries.set(notebookId, updatedProject);
         }

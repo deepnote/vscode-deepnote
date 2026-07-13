@@ -210,5 +210,26 @@ suite('DeepnoteNotebookManager', () => {
             assert.deepStrictEqual(manager.getProjectForNotebook(projectId, nbA)?.project.integrations, integrations);
             assert.deepStrictEqual(manager.getProjectForNotebook(projectId, nbB)?.project.integrations, integrations);
         });
+
+        test('updateProjectIntegrations deep-clones integrations so cached siblings are isolated from the caller and each other', () => {
+            manager.storeOriginalProject(projectId, nbA, siblingProject(nbA, 'Sibling A'));
+            manager.storeOriginalProject(projectId, nbB, siblingProject(nbB, 'Sibling B'));
+
+            const pg: ProjectIntegration = { id: 'int-1', name: 'PostgreSQL', type: 'pgsql' };
+            const integrations: ProjectIntegration[] = [pg];
+
+            manager.updateProjectIntegrations(projectId, integrations);
+
+            // Mutating the caller-owned array and its contents after the call must not leak into the cache.
+            pg.name = 'MUTATED';
+            integrations.push({ id: 'int-2', name: 'BigQuery', type: 'big-query' });
+
+            const cachedA = manager.getProjectForNotebook(projectId, nbA)?.project.integrations;
+            const cachedB = manager.getProjectForNotebook(projectId, nbB)?.project.integrations;
+
+            assert.deepStrictEqual(cachedA, [{ id: 'int-1', name: 'PostgreSQL', type: 'pgsql' }]);
+            // Each sibling holds its own array instance rather than a shared reference.
+            assert.notStrictEqual(cachedA, cachedB);
+        });
     });
 });

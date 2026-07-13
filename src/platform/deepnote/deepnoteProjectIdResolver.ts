@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { NotebookDocument, Uri } from 'vscode';
 
 import { logger } from '../logging';
@@ -26,8 +27,10 @@ export async function resolveProjectIdForFile(fileUri: Uri): Promise<string | un
 export async function resolveProjectIdForNotebook(notebook: NotebookDocument): Promise<string | undefined> {
     const projectIdFromMetadata = notebook.metadata?.deepnoteProjectId;
 
-    if (typeof projectIdFromMetadata === 'string' && projectIdFromMetadata) {
-        return projectIdFromMetadata;
+    const projectIdFromMetadataResult = z.string().min(1).safeParse(projectIdFromMetadata);
+
+    if (projectIdFromMetadataResult.success) {
+        return projectIdFromMetadataResult.data;
     }
 
     const fileUri = notebook.uri.with({ query: '', fragment: '' });

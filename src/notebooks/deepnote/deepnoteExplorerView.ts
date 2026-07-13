@@ -9,7 +9,6 @@ import {
     type DeepnoteTreeItem,
     DeepnoteTreeItemType,
     type DeepnoteTreeItemContext,
-    type ProjectGroupData,
     getNonInitNotebooks,
     isSingleNotebookFile,
     resolveLeafNotebook
@@ -143,7 +142,7 @@ export class DeepnoteExplorerView {
     }
 
     public async renameNotebook(treeItem: DeepnoteTreeItem): Promise<void> {
-        if (!this.isNotebookScoped(treeItem)) {
+        if (!this.itemIsNotebookScoped(treeItem)) {
             return;
         }
 
@@ -187,7 +186,7 @@ export class DeepnoteExplorerView {
     }
 
     public async deleteNotebook(treeItem: DeepnoteTreeItem): Promise<void> {
-        if (!this.isNotebookScoped(treeItem)) {
+        if (!this.itemIsNotebookScoped(treeItem)) {
             return;
         }
 
@@ -222,7 +221,7 @@ export class DeepnoteExplorerView {
             }
 
             // A single-notebook file's only non-init notebook is the file itself: delete the file.
-            if (this.targetsSingleNotebookFile(treeItem, projectData)) {
+            if (this.itemIsSingleNotebookFile(treeItem, projectData)) {
                 await this.deleteNotebookFile(fileUri);
                 this.treeDataProvider.refresh();
                 await window.showInformationMessage(l10n.t('Notebook deleted: {0}', notebookName));
@@ -256,7 +255,7 @@ export class DeepnoteExplorerView {
     }
 
     public async duplicateNotebook(treeItem: DeepnoteTreeItem): Promise<void> {
-        if (!this.isNotebookScoped(treeItem)) {
+        if (!this.itemIsNotebookScoped(treeItem)) {
             return;
         }
 
@@ -283,7 +282,7 @@ export class DeepnoteExplorerView {
             const newNotebook = this.cloneNotebook(targetNotebook, newName);
 
             // Single-notebook file: the duplicate becomes a NEW SIBLING FILE.
-            if (this.targetsSingleNotebookFile(treeItem, projectData)) {
+            if (this.itemIsSingleNotebookFile(treeItem, projectData)) {
                 const newFile = buildSingleNotebookFile(projectData, newNotebook);
                 const targetUri = await buildSiblingNotebookFileUri(fileUri, newName, deepnoteFileExists);
 
@@ -315,11 +314,11 @@ export class DeepnoteExplorerView {
     }
 
     public async renameProject(treeItem: DeepnoteTreeItem): Promise<void> {
-        if (treeItem.type !== DeepnoteTreeItemType.ProjectGroup) {
+        if (treeItem.extra.type !== DeepnoteTreeItemType.ProjectGroup) {
             return;
         }
 
-        const group = treeItem.data as ProjectGroupData;
+        const group = treeItem.extra.data;
         const currentName = group.projectName;
 
         const newName = await window.showInputBox({
@@ -451,8 +450,11 @@ export class DeepnoteExplorerView {
      * Whether a tree item is notebook-scoped: a single-notebook leaf file (`ProjectFile`) or a
      * legacy in-file notebook child (`Notebook`).
      */
-    private isNotebookScoped(treeItem: DeepnoteTreeItem): boolean {
-        return treeItem.type === DeepnoteTreeItemType.ProjectFile || treeItem.type === DeepnoteTreeItemType.Notebook;
+    private itemIsNotebookScoped(treeItem: DeepnoteTreeItem): boolean {
+        return (
+            treeItem.extra.type === DeepnoteTreeItemType.ProjectFile ||
+            treeItem.extra.type === DeepnoteTreeItemType.Notebook
+        );
     }
 
     /**
@@ -471,8 +473,8 @@ export class DeepnoteExplorerView {
      * Whether the tree item targets a single-notebook leaf file, as opposed to a legacy
      * multi-notebook file's in-file child.
      */
-    private targetsSingleNotebookFile(treeItem: DeepnoteTreeItem, projectData: DeepnoteFile): boolean {
-        if (treeItem.type !== DeepnoteTreeItemType.ProjectFile) {
+    private itemIsSingleNotebookFile(treeItem: DeepnoteTreeItem, projectData: DeepnoteFile): boolean {
+        if (treeItem.extra.type !== DeepnoteTreeItemType.ProjectFile) {
             return false;
         }
 
@@ -635,7 +637,7 @@ export class DeepnoteExplorerView {
     }
 
     private async openFile(treeItem: DeepnoteTreeItem): Promise<void> {
-        if (treeItem.type !== DeepnoteTreeItemType.ProjectFile) {
+        if (treeItem.extra.type !== DeepnoteTreeItemType.ProjectFile) {
             return;
         }
 
@@ -1041,11 +1043,11 @@ export class DeepnoteExplorerView {
     }
 
     private async addNotebookToProject(treeItem: DeepnoteTreeItem): Promise<void> {
-        if (treeItem.type !== DeepnoteTreeItemType.ProjectGroup) {
+        if (treeItem.extra.type !== DeepnoteTreeItemType.ProjectGroup) {
             return;
         }
 
-        const group = treeItem.data as ProjectGroupData;
+        const group = treeItem.extra.data;
         const sourceFile = group.files[0];
 
         if (!sourceFile) {
@@ -1070,7 +1072,7 @@ export class DeepnoteExplorerView {
 
     /** Exports a single notebook (single-notebook leaf or legacy in-file notebook) to Jupyter. */
     private async exportNotebook(treeItem: DeepnoteTreeItem): Promise<void> {
-        if (!this.isNotebookScoped(treeItem)) {
+        if (!this.itemIsNotebookScoped(treeItem)) {
             return;
         }
 

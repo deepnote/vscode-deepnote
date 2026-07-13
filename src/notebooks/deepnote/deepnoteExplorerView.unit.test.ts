@@ -20,7 +20,6 @@ import { DeepnoteExplorerView } from './deepnoteExplorerView';
 import { DeepnoteTreeItem, DeepnoteTreeItemType, type DeepnoteTreeItemContext } from './deepnoteTreeItem';
 import { Commands } from '../../platform/common/constants';
 import type { IExtensionContext } from '../../platform/common/types';
-import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { ILogger } from '../../platform/logging/types';
 import * as uuidModule from '../../platform/common/uuid';
@@ -185,7 +184,7 @@ suite('DeepnoteExplorerView', () => {
     suite('openFile', () => {
         test('should handle non-project file items', async () => {
             const mockTreeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.Notebook, // Not ProjectFile
+                extra: { type: DeepnoteTreeItemType.Notebook, data: null! }, // Not ProjectFile
                 context: { filePath: '/test/path', projectId: 'test-project-id' }
             };
 
@@ -200,7 +199,7 @@ suite('DeepnoteExplorerView', () => {
 
         test('should handle project file items', async () => {
             const mockTreeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.ProjectFile,
+                extra: { type: DeepnoteTreeItemType.ProjectFile, data: null! },
                 context: { filePath: '/test/path/project.deepnote', projectId: 'test-project-id' }
             };
 
@@ -1155,17 +1154,19 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Create mock tree item
             const mockTreeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.Notebook,
+                extra: {
+                    type: DeepnoteTreeItemType.Notebook,
+                    data: {
+                        id: notebookId,
+                        name: oldName,
+                        blocks: [],
+                        executionMode: 'block'
+                    }
+                },
                 context: {
                     filePath: fileUri.fsPath,
                     projectId: projectId,
                     notebookId: notebookId
-                },
-                data: {
-                    id: notebookId,
-                    name: oldName,
-                    blocks: [],
-                    executionMode: 'block'
                 }
             };
 
@@ -1198,7 +1199,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
         test('should return early if tree item is project-scoped (not notebook-scoped)', async () => {
             const mockTreeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.ProjectGroup,
+                extra: { type: DeepnoteTreeItemType.ProjectGroup, data: null! },
                 context: {
                     filePath: '/workspace/test-project.deepnote',
                     projectId: 'test-project-id'
@@ -1256,18 +1257,20 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Create mock tree item
             const mockTreeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.Notebook,
+                extra: {
+                    type: DeepnoteTreeItemType.Notebook,
+                    data: {
+                        id: notebookId,
+                        name: currentName,
+                        blocks: [],
+                        executionMode: 'block'
+                    }
+                },
                 context: {
                     filePath: fileUri.fsPath,
                     projectId: projectId,
                     notebookId: notebookId
-                },
-                data: {
-                    id: notebookId,
-                    name: currentName,
-                    blocks: [],
-                    executionMode: 'block'
-                } as DeepnoteNotebook
+                }
             };
 
             // Execute the method
@@ -1344,18 +1347,20 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Create mock tree item
             const mockTreeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.Notebook,
+                extra: {
+                    type: DeepnoteTreeItemType.Notebook,
+                    data: {
+                        id: notebookToDeleteId,
+                        name: notebookToDeleteName,
+                        blocks: [],
+                        executionMode: 'block'
+                    }
+                },
                 context: {
                     filePath: fileUri.fsPath,
                     projectId: projectId,
                     notebookId: notebookToDeleteId
-                },
-                data: {
-                    id: notebookToDeleteId,
-                    name: notebookToDeleteName,
-                    blocks: [],
-                    executionMode: 'block'
-                } as DeepnoteNotebook
+                }
             };
 
             // Execute the method
@@ -1386,7 +1391,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
         test('should return early if tree item is project-scoped (not notebook-scoped)', async () => {
             const mockTreeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.ProjectGroup,
+                extra: { type: DeepnoteTreeItemType.ProjectGroup, data: null! },
                 context: {
                     filePath: '/workspace/test-project.deepnote',
                     projectId: 'test-project-id'
@@ -1440,18 +1445,20 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Create mock tree item
             const mockTreeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.Notebook,
+                extra: {
+                    type: DeepnoteTreeItemType.Notebook,
+                    data: {
+                        id: notebookId,
+                        name: notebookName,
+                        blocks: [],
+                        executionMode: 'block'
+                    }
+                },
                 context: {
                     filePath: fileUri.fsPath,
                     projectId: projectId,
                     notebookId: notebookId
-                },
-                data: {
-                    id: notebookId,
-                    name: notebookName,
-                    blocks: [],
-                    executionMode: 'block'
-                } as DeepnoteNotebook
+                }
             };
 
             // Execute the method
@@ -1536,18 +1543,20 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Create mock tree item
             const mockTreeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.Notebook,
+                extra: {
+                    type: DeepnoteTreeItemType.Notebook,
+                    data: {
+                        id: originalNotebookId,
+                        name: originalName,
+                        blocks: existingProjectData.project.notebooks[0].blocks,
+                        executionMode: 'block'
+                    }
+                },
                 context: {
                     filePath: fileUri.fsPath,
                     projectId: projectId,
                     notebookId: originalNotebookId
-                },
-                data: {
-                    id: originalNotebookId,
-                    name: originalName,
-                    blocks: existingProjectData.project.notebooks[0].blocks,
-                    executionMode: 'block'
-                } as DeepnoteNotebook
+                }
             };
 
             // Execute the method
@@ -1591,7 +1600,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
         test('should return early if tree item is project-scoped (not notebook-scoped)', async () => {
             const mockTreeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.ProjectGroup,
+                extra: { type: DeepnoteTreeItemType.ProjectGroup, data: null! },
                 context: {
                     filePath: '/workspace/test-project.deepnote',
                     projectId: 'test-project-id'
@@ -1647,18 +1656,20 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Create mock tree item
             const mockTreeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.Notebook,
+                extra: {
+                    type: DeepnoteTreeItemType.Notebook,
+                    data: {
+                        id: nonExistentNotebookId,
+                        name: 'Non-existent Notebook',
+                        blocks: [],
+                        executionMode: 'block'
+                    }
+                },
                 context: {
                     filePath: fileUri.fsPath,
                     projectId: projectId,
                     notebookId: nonExistentNotebookId
-                },
-                data: {
-                    id: nonExistentNotebookId,
-                    name: 'Non-existent Notebook',
-                    blocks: [],
-                    executionMode: 'block'
-                } as DeepnoteNotebook
+                }
             };
 
             // Execute the method
@@ -1707,13 +1718,12 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             };
 
             const mockTreeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.Notebook,
+                extra: { type: DeepnoteTreeItemType.Notebook, data: projectData.project.notebooks[0] },
                 context: {
                     filePath: '/workspace/test-project.deepnote',
                     projectId: 'test-project-id',
                     notebookId: 'original-notebook-id'
-                },
-                data: projectData.project.notebooks[0]
+                }
             };
 
             // Mock file system
@@ -1847,15 +1857,19 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Create mock project group tree item (project-scoped commands operate on the group)
             const mockTreeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.ProjectGroup,
+                extra: {
+                    type: DeepnoteTreeItemType.ProjectGroup,
+                    data: {
+                        projectId,
+                        projectName: oldProjectName,
+                        files: [
+                            { filePath: fileUri.fsPath, cacheKey: fileUri.toString(), project: existingProjectData }
+                        ]
+                    }
+                },
                 context: {
                     filePath: fileUri.fsPath,
                     projectId: projectId
-                },
-                data: {
-                    projectId,
-                    projectName: oldProjectName,
-                    files: [{ filePath: fileUri.fsPath, cacheKey: fileUri.toString(), project: existingProjectData }]
                 }
             };
 
@@ -1885,7 +1899,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
         test('should return early if tree item type is not a project group', async () => {
             const mockTreeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.Notebook,
+                extra: { type: DeepnoteTreeItemType.Notebook, data: null! },
                 context: {
                     filePath: '/workspace/test-project.deepnote',
                     projectId: 'test-project-id',
@@ -1937,15 +1951,19 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Create mock project group tree item
             const mockTreeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.ProjectGroup,
+                extra: {
+                    type: DeepnoteTreeItemType.ProjectGroup,
+                    data: {
+                        projectId,
+                        projectName: currentName,
+                        files: [
+                            { filePath: fileUri.fsPath, cacheKey: fileUri.toString(), project: existingProjectData }
+                        ]
+                    }
+                },
                 context: {
                     filePath: fileUri.fsPath,
                     projectId: projectId
-                },
-                data: {
-                    projectId,
-                    projectName: currentName,
-                    files: [{ filePath: fileUri.fsPath, cacheKey: fileUri.toString(), project: existingProjectData }]
                 }
             };
 
@@ -1978,7 +1996,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             );
 
             const treeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.Notebook,
+                extra: { type: DeepnoteTreeItemType.Notebook, data: null! },
                 context: {
                     filePath: '/test/project.deepnote',
                     projectId: 'project-id',
@@ -2020,7 +2038,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(Promise.resolve(undefined));
 
             const treeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.Notebook,
+                extra: { type: DeepnoteTreeItemType.Notebook, data: null! },
                 context: {
                     filePath: '/test/project.deepnote',
                     projectId: 'project-id',
@@ -2051,7 +2069,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
 
             const treeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.Notebook,
+                extra: { type: DeepnoteTreeItemType.Notebook, data: null! },
                 context: {
                     filePath: '/test/project.deepnote',
                     projectId: 'project-id',
@@ -2110,7 +2128,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Notebook tree item with specific notebookId
             const treeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.Notebook,
+                extra: { type: DeepnoteTreeItemType.Notebook, data: null! },
                 context: {
                     filePath: '/test/project.deepnote',
                     projectId: 'project-id',
@@ -2158,7 +2176,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
             // Notebook tree item with non-existent notebookId
             const treeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.Notebook,
+                extra: { type: DeepnoteTreeItemType.Notebook, data: null! },
                 context: {
                     filePath: '/test/project.deepnote',
                     projectId: 'project-id',
@@ -2207,7 +2225,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             when(mockFS.writeFile(anything(), anything())).thenReject(new Error('Permission denied'));
 
             const treeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.Notebook,
+                extra: { type: DeepnoteTreeItemType.Notebook, data: null! },
                 context: {
                     filePath: '/test/project.deepnote',
                     projectId: 'project-id',
@@ -2255,7 +2273,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             );
 
             const treeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.Notebook,
+                extra: { type: DeepnoteTreeItemType.Notebook, data: null! },
                 context: {
                     filePath: '/test/project.deepnote',
                     projectId: 'project-id',
@@ -2314,7 +2332,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             });
 
             const treeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.Notebook,
+                extra: { type: DeepnoteTreeItemType.Notebook, data: null! },
                 context: {
                     filePath: '/test/project.deepnote',
                     projectId: 'project-id',
@@ -2375,7 +2393,7 @@ suite('DeepnoteExplorerView - Sibling-file command semantics', () => {
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
 
             const treeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.Notebook,
+                extra: { type: DeepnoteTreeItemType.Notebook, data: null! },
                 context: { filePath: '/workspace/x.deepnote', projectId: 'p' }
             };
 
@@ -2419,9 +2437,8 @@ suite('DeepnoteExplorerView - Sibling-file command semantics', () => {
 
             // ProjectFile node with no notebookId => single-notebook leaf => delete the file.
             const treeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.ProjectFile,
-                context: { filePath, projectId },
-                data: projectData
+                extra: { type: DeepnoteTreeItemType.ProjectFile, data: projectData },
+                context: { filePath, projectId }
             };
 
             await explorerView.deleteNotebook(treeItem as DeepnoteTreeItem);
@@ -2459,9 +2476,8 @@ suite('DeepnoteExplorerView - Sibling-file command semantics', () => {
             stubFilesEnableTrash(false);
 
             const treeItem: Partial<DeepnoteTreeItem> = {
-                type: DeepnoteTreeItemType.ProjectFile,
-                context: { filePath, projectId },
-                data: projectData
+                extra: { type: DeepnoteTreeItemType.ProjectFile, data: projectData },
+                context: { filePath, projectId }
             };
 
             await explorerView.deleteNotebook(treeItem as DeepnoteTreeItem);

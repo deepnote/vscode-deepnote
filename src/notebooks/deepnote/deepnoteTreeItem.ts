@@ -1,5 +1,6 @@
 import { TreeItem, TreeItemCollapsibleState, ThemeIcon } from 'vscode';
-import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
+import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
+import { DeepnoteFile } from '@deepnote/blocks';
 
 /**
  * Tree item types: `ProjectGroup` (one per `project.id`) → `ProjectFile` (one `.deepnote` file,
@@ -28,13 +29,19 @@ export interface ProjectGroupData {
     readonly projectId: string;
     readonly projectName: string;
     // `filePath` is the native path (for `Uri.file`); `cacheKey` is the opaque `Uri.toString()` cache key.
-    readonly files: Array<{ filePath: string; cacheKey: string; project: DeepnoteProject }>;
+    readonly files: Array<{ filePath: string; cacheKey: string; project: DeepnoteFile }>;
 }
+
+export type DeepnoteTreeItemExtra =
+    | { type: DeepnoteTreeItemType.Loading; data: null }
+    | { type: DeepnoteTreeItemType.ProjectGroup; data: ProjectGroupData }
+    | { type: DeepnoteTreeItemType.ProjectFile; data: DeepnoteFile }
+    | { type: DeepnoteTreeItemType.Notebook; data: DeepnoteNotebook };
 
 /**
  * Notebooks of a project excluding the init notebook (`project.initNotebookId`).
  */
-export function getNonInitNotebooks(project: DeepnoteProject): DeepnoteNotebook[] {
+export function getNonInitNotebooks(project: DeepnoteFile): DeepnoteNotebook[] {
     const notebooks = project.project.notebooks ?? [];
     const initNotebookId = project.project.initNotebookId;
 
@@ -45,7 +52,7 @@ export function getNonInitNotebooks(project: DeepnoteProject): DeepnoteNotebook[
  * True when a file renders as a single-notebook leaf: one non-init notebook, or an init-only file
  * whose sole notebook is the init notebook.
  */
-export function isSingleNotebookFile(project: DeepnoteProject): boolean {
+export function isSingleNotebookFile(project: DeepnoteFile): boolean {
     const nonInit = getNonInitNotebooks(project);
 
     if (nonInit.length === 1) {
@@ -59,7 +66,7 @@ export function isSingleNotebookFile(project: DeepnoteProject): boolean {
  * The single notebook to render for a leaf file: first non-init notebook, falling back to the
  * first notebook when the only notebook IS the init notebook.
  */
-export function resolveLeafNotebook(project: DeepnoteProject): DeepnoteNotebook | undefined {
+export function resolveLeafNotebook(project: DeepnoteFile): DeepnoteNotebook | undefined {
     const nonInit = getNonInitNotebooks(project);
 
     if (nonInit.length > 0) {
@@ -70,11 +77,34 @@ export function resolveLeafNotebook(project: DeepnoteProject): DeepnoteNotebook 
 }
 
 /**
+ * Tree item representing a Deepnote project group, project file, or in-file notebook in the
+ * explorer view.
+ */
+export class DeepnoteTreeItem extends TreeItem {
+    constructor(
+        public readonly context: DeepnoteTreeItemContext,
+        public extra: DeepnoteTreeItemExtra,
+        collapsibleState: TreeItemCollapsibleState
+    ) {
+        super('', collapsibleState);
+
+        applyVisualFields(this);
+    }
+
+    /**
+     * Re-applies the visual fields; call after mutating `extra.data` to reflect changes in the tree.
+     */
+    public updateVisualFields(): void {
+        applyVisualFields(this);
+    }
+}
+
+/**
  * Sets the item's visual fields from its type/data. A free function, not a method: calling a
  * subclass method from a `TreeItem` constructor is unsafe in transpiled ES-module output.
  */
 export function applyVisualFields(item: DeepnoteTreeItem): void {
-    if (item.type === DeepnoteTreeItemType.Loading) {
+    if (item.extra.type === DeepnoteTreeItemType.Loading) {
         item.contextValue = 'loading';
         item.label = 'Loading…';
         item.tooltip = 'Loading…';
@@ -84,8 +114,8 @@ export function applyVisualFields(item: DeepnoteTreeItem): void {
         return;
     }
 
-    if (item.type === DeepnoteTreeItemType.ProjectGroup) {
-        const group = item.data as ProjectGroupData;
+    if (item.extra.type === DeepnoteTreeItemType.ProjectGroup) {
+        const group = item.extra.data;
         const fileCount = group.files?.length ?? 0;
 
         item.contextValue = 'projectGroup';
@@ -98,8 +128,8 @@ export function applyVisualFields(item: DeepnoteTreeItem): void {
         return;
     }
 
-    if (item.type === DeepnoteTreeItemType.ProjectFile) {
-        const project = item.data as DeepnoteProject;
+    if (item.extra.type === DeepnoteTreeItemType.ProjectFile) {
+        const project = item.extra.data;
         const nonInitNotebooks = getNonInitNotebooks(project);
 
         if (isSingleNotebookFile(project)) {
@@ -136,7 +166,7 @@ export function applyVisualFields(item: DeepnoteTreeItem): void {
         return;
     }
 
-    const notebook = item.data as DeepnoteNotebook;
+    const notebook = item.extra.data;
     const blockCount = notebook.blocks?.length ?? 0;
 
     item.contextValue = 'notebook';
@@ -149,28 +179,4 @@ export function applyVisualFields(item: DeepnoteTreeItem): void {
         title: 'Open Notebook',
         arguments: [item.context]
     };
-}
-
-/**
- * Tree item representing a Deepnote project group, project file, or in-file notebook in the
- * explorer view.
- */
-export class DeepnoteTreeItem extends TreeItem {
-    constructor(
-        public readonly type: DeepnoteTreeItemType,
-        public readonly context: DeepnoteTreeItemContext,
-        public data: DeepnoteProject | DeepnoteNotebook | ProjectGroupData | null,
-        collapsibleState: TreeItemCollapsibleState
-    ) {
-        super('', collapsibleState);
-
-        applyVisualFields(this);
-    }
-
-    /**
-     * Re-applies the visual fields; call after mutating `data` to reflect changes in the tree.
-     */
-    public updateVisualFields(): void {
-        applyVisualFields(this);
-    }
 }

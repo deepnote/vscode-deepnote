@@ -5,6 +5,7 @@ import { DeepnoteTreeDataProvider, compareTreeItemsByLabel } from './deepnoteTre
 import {
     applyVisualFields,
     DeepnoteTreeItem,
+    DeepnoteTreeItemExtra,
     DeepnoteTreeItemType,
     getNonInitNotebooks,
     ProjectGroupData
@@ -163,12 +164,11 @@ suite('DeepnoteTreeDataProvider', () => {
         test('should return array when called with project item parent', async () => {
             // Create a mock project item
             const mockProjectItem = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.ProjectFile,
                 {
                     filePath: '/workspace/project.deepnote',
                     projectId: 'project-123'
                 },
-                mockProject,
+                { type: DeepnoteTreeItemType.ProjectFile, data: mockProject },
                 1 // TreeItemCollapsibleState.Collapsed
             );
 
@@ -180,14 +180,16 @@ suite('DeepnoteTreeDataProvider', () => {
     suite('getTreeItem', () => {
         test('should return the same tree item', () => {
             const mockItem = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.Notebook,
                 { filePath: '/test', projectId: 'project-1', notebookId: 'notebook-1' },
                 {
-                    id: 'notebook-1',
-                    name: 'Test Notebook',
-                    blocks: [],
-                    executionMode: 'block',
-                    isModule: false
+                    type: DeepnoteTreeItemType.Notebook,
+                    data: {
+                        id: 'notebook-1',
+                        name: 'Test Notebook',
+                        blocks: [],
+                        executionMode: 'block',
+                        isModule: false
+                    }
                 },
                 0 // TreeItemCollapsibleState.None
             );
@@ -288,13 +290,12 @@ suite('DeepnoteTreeDataProvider', () => {
         test('should not show loading for child elements', async () => {
             // Create a mock project item
             const mockProjectItem = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.ProjectFile,
                 {
                     filePath: '/workspace/project.deepnote',
                     projectId: 'project-123'
                 },
-                mockProject,
-                1
+                { type: DeepnoteTreeItemType.ProjectFile, data: mockProject },
+                1 // TreeItemCollapsibleState.Collapsed
             );
 
             // Getting children of a project exercises the non-loading code path
@@ -302,7 +303,7 @@ suite('DeepnoteTreeDataProvider', () => {
             assert.isArray(children);
 
             // Verify no loading items are present
-            const hasLoadingType = children.some((child) => child.type === DeepnoteTreeItemType.Loading);
+            const hasLoadingType = children.some((child) => child.extra.type === DeepnoteTreeItemType.Loading);
             assert.isFalse(hasLoadingType, 'Children should not contain any loading type items');
 
             // Also verify no loading labels
@@ -421,9 +422,8 @@ suite('DeepnoteTreeDataProvider', () => {
             // shape suffices. DeepnoteTreeItem is deliberately not constructed: the mocha ESM loader drops
             // new.target, so subclass prototype methods (updateVisualFields) are unavailable on instances.
             const item = {
-                type: DeepnoteTreeItemType.ProjectFile,
                 context: { filePath, projectId: 'project-123' },
-                data: initialProject
+                extra: { type: DeepnoteTreeItemType.ProjectFile, data: initialProject }
             } as unknown as DeepnoteTreeItem;
 
             applyVisualFields(item);
@@ -450,7 +450,7 @@ suite('DeepnoteTreeDataProvider', () => {
                 }
             };
 
-            item.data = updatedProject;
+            item.extra.data = updatedProject;
             applyVisualFields(item);
 
             assert.strictEqual(item.label, 'Renamed Project', 'Label should reflect new project name');
@@ -473,9 +473,9 @@ suite('DeepnoteTreeDataProvider', () => {
         function makeItem(
             type: DeepnoteTreeItemType,
             context: { filePath: string; projectId: string; notebookId?: string },
-            data: DeepnoteProject | DeepnoteNotebook | ProjectGroupData | null
+            data: DeepnoteTreeItemExtra['data']
         ): DeepnoteTreeItem {
-            return { type, context, data } as unknown as DeepnoteTreeItem;
+            return { context, extra: { type, data } } as unknown as DeepnoteTreeItem;
         }
 
         test('Loading → spinner icon and a non-clickable loading label', () => {
@@ -604,12 +604,11 @@ suite('DeepnoteTreeDataProvider', () => {
             const treeItems = mockProjects.map(
                 (project) =>
                     new DeepnoteTreeItem(
-                        DeepnoteTreeItemType.ProjectFile,
                         {
                             filePath: `/workspace/${project.project.name}.deepnote`,
                             projectId: project.project.id
                         },
-                        project,
+                        { type: DeepnoteTreeItemType.ProjectFile, data: project },
                         0
                     )
             );
@@ -665,12 +664,11 @@ suite('DeepnoteTreeDataProvider', () => {
             };
 
             const mockProjectItem = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.ProjectFile,
                 {
                     filePath: '/workspace/project.deepnote',
                     projectId: 'project-123'
                 },
-                mockProjectWithNotebooks,
+                { type: DeepnoteTreeItemType.ProjectFile, data: mockProjectWithNotebooks },
                 1
             );
 
@@ -722,12 +720,11 @@ suite('DeepnoteTreeDataProvider', () => {
             };
 
             const mockProjectItem = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.ProjectFile,
                 {
                     filePath: '/workspace/project.deepnote',
                     projectId: 'project-123'
                 },
-                mockProjectWithNotebooks,
+                { type: DeepnoteTreeItemType.ProjectFile, data: mockProjectWithNotebooks },
                 1
             );
 
@@ -846,7 +843,9 @@ suite('DeepnoteTreeDataProvider', () => {
                 ['/workspace/b.deepnote', makeSingleNotebookProject(projectId, 'nb-b', 'Grouped')]
             ]);
 
-            const groups = (await getGroupItems()).filter((item) => item.type === DeepnoteTreeItemType.ProjectGroup);
+            const groups = (await getGroupItems()).filter(
+                (item) => item.extra.type === DeepnoteTreeItemType.ProjectGroup
+            );
 
             assert.strictEqual(groups.length, 1, 'both siblings must roll up into a single ProjectGroup');
             assert.strictEqual(groups[0].context.projectId, projectId);
@@ -875,7 +874,7 @@ suite('DeepnoteTreeDataProvider', () => {
 
             seed([singleFile, ['/workspace/legacy.deepnote', legacyMulti]]);
 
-            const group = (await getGroupItems()).find((item) => item.type === DeepnoteTreeItemType.ProjectGroup);
+            const group = (await getGroupItems()).find((item) => item.extra.type === DeepnoteTreeItemType.ProjectGroup);
             assert.isDefined(group, 'a ProjectGroup must exist');
 
             const files = await provider.getChildren(group);
@@ -904,7 +903,7 @@ suite('DeepnoteTreeDataProvider', () => {
             const notebooks = await provider.getChildren(legacy);
             assert.strictEqual(notebooks.length, 2, 'legacy file expands into its notebooks');
             assert.isTrue(
-                notebooks.every((n) => n.type === DeepnoteTreeItemType.Notebook),
+                notebooks.every((n) => n.extra.type === DeepnoteTreeItemType.Notebook),
                 'legacy children are Notebook items'
             );
         });
@@ -927,7 +926,7 @@ suite('DeepnoteTreeDataProvider', () => {
 
             seed([['/workspace/init-main.deepnote', initPlusMain]]);
 
-            const group = (await getGroupItems()).find((item) => item.type === DeepnoteTreeItemType.ProjectGroup);
+            const group = (await getGroupItems()).find((item) => item.extra.type === DeepnoteTreeItemType.ProjectGroup);
             const files = await provider.getChildren(group);
 
             assert.strictEqual(files.length, 1, 'one file in the group');

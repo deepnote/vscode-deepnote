@@ -108,11 +108,11 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
 
     public async getChildren(element?: DeepnoteTreeItem): Promise<DeepnoteTreeItem[]> {
         if (element) {
-            if (element.type === DeepnoteTreeItemType.ProjectGroup) {
+            if (element.extra.type === DeepnoteTreeItemType.ProjectGroup) {
                 return this.getFilesForGroup(element);
             }
 
-            if (element.type === DeepnoteTreeItemType.ProjectFile) {
+            if (element.extra.type === DeepnoteTreeItemType.ProjectFile) {
                 return this.getNotebooksForProjectFile(element);
             }
 
@@ -158,8 +158,11 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
                     return fileItem;
                 }
 
-                if (fileItem.collapsibleState === TreeItemCollapsibleState.None) {
-                    const leafNotebook = resolveLeafNotebook(fileItem.data as DeepnoteProject);
+                if (
+                    fileItem.collapsibleState === TreeItemCollapsibleState.None &&
+                    fileItem.extra.type === DeepnoteTreeItemType.ProjectFile
+                ) {
+                    const leafNotebook = resolveLeafNotebook(fileItem.extra.data);
 
                     if (leafNotebook?.id === notebookId) {
                         return fileItem;
@@ -186,11 +189,11 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
      * Return an element's parent from the item caches; `TreeView.reveal` requires `getParent`.
      */
     public getParent(element: DeepnoteTreeItem): DeepnoteTreeItem | undefined {
-        if (element.type === DeepnoteTreeItemType.Notebook) {
+        if (element.extra.type === DeepnoteTreeItemType.Notebook) {
             return this.fileItemCache.get(Uri.file(element.context.filePath).toString());
         }
 
-        if (element.type === DeepnoteTreeItemType.ProjectFile) {
+        if (element.extra.type === DeepnoteTreeItemType.ProjectFile) {
             return this.groupItemCache.get(element.context.projectId);
         }
 
@@ -199,9 +202,8 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
 
     private createLoadingTreeItem(): DeepnoteTreeItem {
         const loadingItem = new DeepnoteTreeItem(
-            DeepnoteTreeItemType.Loading,
             { filePath: '', projectId: '' },
-            null,
+            { type: DeepnoteTreeItemType.Loading, data: null },
             TreeItemCollapsibleState.None
         );
         loadingItem.label = l10n.t('Scanning for Deepnote projects...');
@@ -234,15 +236,14 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
 
             let groupItem = this.groupItemCache.get(group.projectId);
 
-            if (groupItem) {
-                groupItem.data = group;
+            if (groupItem?.extra.type === DeepnoteTreeItemType.ProjectGroup) {
+                groupItem.extra.data = group;
                 groupItem.collapsibleState = collapsibleState;
                 groupItem.updateVisualFields();
             } else {
                 groupItem = new DeepnoteTreeItem(
-                    DeepnoteTreeItemType.ProjectGroup,
                     { filePath: group.files[0]?.filePath ?? '', projectId: group.projectId },
-                    group,
+                    { type: DeepnoteTreeItemType.ProjectGroup, data: group },
                     collapsibleState
                 );
                 this.groupItemCache.set(group.projectId, groupItem);
@@ -290,7 +291,11 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
 
     /** Children of a `ProjectGroup`: one `ProjectFile` per sibling file. */
     private async getFilesForGroup(groupItem: DeepnoteTreeItem): Promise<DeepnoteTreeItem[]> {
-        const group = groupItem.data as ProjectGroupData;
+        if (groupItem.extra.type !== DeepnoteTreeItemType.ProjectGroup) {
+            return [];
+        }
+
+        const group = groupItem.extra.data;
         const fileItems: DeepnoteTreeItem[] = [];
 
         for (const { filePath, cacheKey, project } of group.files) {
@@ -304,12 +309,16 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
 
             let fileItem = this.fileItemCache.get(cacheKey);
 
-            if (fileItem) {
-                fileItem.data = project;
+            if (fileItem?.extra.type === DeepnoteTreeItemType.ProjectFile) {
+                fileItem.extra.data = project;
                 fileItem.collapsibleState = collapsibleState;
                 fileItem.updateVisualFields();
             } else {
-                fileItem = new DeepnoteTreeItem(DeepnoteTreeItemType.ProjectFile, context, project, collapsibleState);
+                fileItem = new DeepnoteTreeItem(
+                    context,
+                    { type: DeepnoteTreeItemType.ProjectFile, data: project },
+                    collapsibleState
+                );
                 this.fileItemCache.set(cacheKey, fileItem);
             }
 
@@ -323,7 +332,11 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
 
     /** Children of a legacy multi-notebook `ProjectFile`: one `Notebook` per non-init notebook. */
     private async getNotebooksForProjectFile(projectItem: DeepnoteTreeItem): Promise<DeepnoteTreeItem[]> {
-        const project = projectItem.data as DeepnoteProject;
+        if (projectItem.extra.type !== DeepnoteTreeItemType.ProjectFile) {
+            return [];
+        }
+
+        const project = projectItem.extra.data;
         const notebooks = getNonInitNotebooks(project);
 
         // Sort notebooks alphabetically by name (case-insensitive)
@@ -342,9 +355,8 @@ export class DeepnoteTreeDataProvider implements TreeDataProvider<DeepnoteTreeIt
             };
 
             return new DeepnoteTreeItem(
-                DeepnoteTreeItemType.Notebook,
                 context,
-                notebook,
+                { type: DeepnoteTreeItemType.Notebook, data: notebook },
                 TreeItemCollapsibleState.None
             );
         });

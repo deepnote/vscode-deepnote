@@ -1,4 +1,6 @@
-/** Counts notebooks in serialized `.deepnote` YAML; each notebook entry starts with `- blocks:`. */
+import { deserializeDeepnoteFile } from '@deepnote/blocks';
+
+/** Counts notebooks in a serialized `.deepnote` file by parsing it with the canonical schema. */
 export function notebookCount(yaml: string): number {
-    return (yaml.match(/^\s*- blocks:/gm) ?? []).length;
+    return deserializeDeepnoteFile(yaml).project.notebooks.length;
 }

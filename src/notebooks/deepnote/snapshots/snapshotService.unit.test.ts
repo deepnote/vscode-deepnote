@@ -3,6 +3,7 @@ import { assert } from 'chai';
 import * as sinon from 'sinon';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
 import {
+    EventEmitter,
     FileType,
     NotebookCell,
     NotebookCellKind,
@@ -17,7 +18,10 @@ import {
 
 import type { DeepnoteBlock, DeepnoteFile, Environment, ExecutableBlock } from '@deepnote/blocks';
 
-import { NotebookCellExecutionState } from '../../../platform/notebooks/cellExecutionStateService';
+import {
+    NotebookCellExecutionState,
+    notebookCellExecutions
+} from '../../../platform/notebooks/cellExecutionStateService';
 import { IEnvironmentCapture } from './environmentCapture.node';
 import { ExecutionMetadataTracker } from './executionMetadataTracker';
 import { buildSnapshotPath } from './snapshotFiles';
@@ -27,30 +31,6 @@ import type { DeepnoteOutput } from '../../../platform/deepnote/deepnoteTypes';
 import { IDeepnoteNotebookManager } from '../../types';
 import { IDisposableRegistry } from '../../../platform/common/types';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
-
-/**
- * Structural mirror of SnapshotService's private surface (snapshotService.ts).
- * `internals` is the single typed seam these tests use to reach private methods.
- */
-interface SnapshotServiceInternals {
-    armSnapshotSave(notebookUri: string): void;
-    cancelPendingSnapshotSave(notebookUri: string): void;
-    handleCellExecutionStateChange(cell: NotebookCell, state: NotebookCellExecutionState): void;
-    handleNotebookDocumentChange(event: NotebookDocumentChangeEvent): void;
-    performSnapshotSave(notebookUri: string): Promise<void>;
-    updateLatestSnapshot(
-        projectUri: Uri,
-        projectId: string,
-        projectName: string,
-        projectData: DeepnoteFile,
-        notebookId?: string,
-        notebookUri?: string
-    ): Promise<Uri | undefined>;
-}
-
-function internals(service: SnapshotService): SnapshotServiceInternals {
-    return service as unknown as SnapshotServiceInternals;
-}
 
 suite('SnapshotService', () => {
     let service: SnapshotService;
@@ -65,6 +45,127 @@ suite('SnapshotService', () => {
         tracker = new ExecutionMetadataTracker();
         service = new SnapshotService(instance(mockEnvironmentCapture), mockDisposables, undefined, tracker);
     });
+
+    teardown(() => {
+        // activate() subscribes to the module-singleton execution emitters; without disposal those
+        // subscriptions leak across tests and receive later tests' fired events.
+        mockDisposables.forEach((d) => d.dispose());
+        mockDisposables.length = 0;
+    });
+
+    /** The URI of the notebook the activated-service fixture registers and records as executed. */
+    const activatedServiceNotebookUri = 'file:///workspace/notebook.deepnote';
+
+    function mockCell(options: {
+        id: string;
+        kind?: NotebookCellKind;
+        languageId?: string;
+        source?: string;
+    }): NotebookCell {
+        const { id, kind = NotebookCellKind.Code, languageId = 'python', source = 'print(1)' } = options;
+
+        const document = mock<TextDocument>();
+        when(document.getText()).thenReturn(source);
+        when(document.languageId).thenReturn(languageId);
+
+        const cell = mock<NotebookCell>();
+        when(cell.kind).thenReturn(kind);
+        when(cell.document).thenReturn(instance(document));
+        when(cell.metadata).thenReturn({ id });
+        when(cell.outputs).thenReturn([]);
+        when(cell.executionSummary).thenReturn({ success: true });
+
+        return instance(cell);
+    }
+
+    function mockNotebookDoc(options: {
+        cells: NotebookCell[];
+        notebookId: string;
+        projectId: string;
+        uri: Uri;
+    }): NotebookDocument {
+        const { cells, notebookId, projectId, uri } = options;
+
+        const doc = mock<NotebookDocument>();
+        when(doc.uri).thenReturn(uri);
+        when(doc.notebookType).thenReturn('deepnote');
+        when(doc.metadata).thenReturn({ deepnoteProjectId: projectId, deepnoteNotebookId: notebookId });
+        when(doc.getCells()).thenReturn(cells);
+
+        return instance(doc);
+    }
+
+    /**
+     * Installs suite-owned notebook change/close emitters onto the workspace mock so activate()'s
+     * subscriptions resolve to events the test can fire (resetVSCodeMocks leaves these unstubbed).
+     */
+    function installNotebookDocumentEmitters(): {
+        changeEmitter: EventEmitter<NotebookDocumentChangeEvent>;
+        closeEmitter: EventEmitter<NotebookDocument>;
+    } {
+        const changeEmitter = new EventEmitter<NotebookDocumentChangeEvent>();
+        const closeEmitter = new EventEmitter<NotebookDocument>();
+
+        when(mockedVSCodeNamespaces.workspace.onDidChangeNotebookDocument).thenReturn(changeEmitter.event);
+        when(mockedVSCodeNamespaces.workspace.onDidCloseNotebookDocument).thenReturn(closeEmitter.event);
+
+        return { changeEmitter, closeEmitter };
+    }
+
+    /**
+     * Builds and activates a SnapshotService wired end-to-end so a deferred flush reaches the public
+     * createSnapshot seam: snapshots enabled, one executed code cell (the Run-All branch), the notebook
+     * open in the workspace, a manager returning its project, and suite-owned change/close emitters.
+     */
+    function buildActivatedSnapshotService(): {
+        changeEmitter: EventEmitter<NotebookDocumentChangeEvent>;
+        closeEmitter: EventEmitter<NotebookDocument>;
+        service: SnapshotService;
+    } {
+        const projectId = 'fixture-project-id';
+        const notebookId = 'fixture-notebook-id';
+
+        const notebookDoc = mockNotebookDoc({
+            uri: Uri.parse(activatedServiceNotebookUri),
+            projectId,
+            notebookId,
+            cells: [mockCell({ id: 'cell-1' })]
+        });
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebookDoc]);
+
+        const config = mock<WorkspaceConfiguration>();
+        when(config.get<boolean>('snapshots.enabled', true)).thenReturn(true);
+        when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote')).thenReturn(instance(config));
+
+        const originalProject: DeepnoteFile = {
+            metadata: { createdAt: '2025-01-01T00:00:00Z' },
+            version: '1.0.0',
+            project: {
+                id: projectId,
+                name: 'Fixture Project',
+                notebooks: [{ id: notebookId, name: 'Fixture Notebook', blocks: [] }]
+            }
+        };
+        const notebookManager = mock<IDeepnoteNotebookManager>();
+        when(notebookManager.getProjectForNotebook(anything(), anything())).thenReturn(originalProject);
+
+        // Record the single code cell as executed so the flush takes the Run-All (timestamped) branch.
+        const startTime = Date.now();
+        tracker.recordCellExecutionStart(activatedServiceNotebookUri, 'cell-1', startTime);
+        tracker.recordCellExecutionEnd(activatedServiceNotebookUri, 'cell-1', startTime + 100, true);
+
+        const { changeEmitter, closeEmitter } = installNotebookDocumentEmitters();
+
+        const built = new SnapshotService(
+            instance(mockEnvironmentCapture),
+            mockDisposables,
+            instance(notebookManager),
+            tracker
+        );
+        built.activate();
+
+        return { changeEmitter, closeEmitter, service: built };
+    }
 
     function createProjectData(projectId = 'test-project-id-123', projectName = 'My Project'): DeepnoteFile {
         return {
@@ -1031,24 +1132,36 @@ project:
     });
 
     suite('deferred snapshot save timing', () => {
-        const notebookUri = 'file:///workspace/notebook.deepnote';
+        const notebookUri = activatedServiceNotebookUri;
         let clock: fakeTimers.InstalledClock;
-        let performSaveStub: sinon.SinonStub;
+        let changeEmitter: EventEmitter<NotebookDocumentChangeEvent>;
+        let closeEmitter: EventEmitter<NotebookDocument>;
+        let flush: sinon.SinonStub;
 
         setup(() => {
             // install() patches Date.now AND setTimeout/clearTimeout, both of which armSnapshotSave
             // relies on (armedAt = Date.now(); the quiet/max-wait delays are real setTimeout calls).
             clock = fakeTimers.install();
 
-            // Stub the flush so the test observes only whether/when it fires, never real I/O. The armed
-            // timer reads this.performSnapshotSave at fire time, so stubbing the instance property works.
-            performSaveStub = sinon.stub(internals(service), 'performSnapshotSave').resolves();
+            const built = buildActivatedSnapshotService();
+            changeEmitter = built.changeEmitter;
+            closeEmitter = built.closeEmitter;
+
+            // Observe the flush at the public createSnapshot seam: the fixture's executed code cell
+            // routes the deferred save down the Run-All branch, so a flush means createSnapshot ran.
+            flush = sinon.stub(built.service, 'createSnapshot').resolves(undefined);
         });
 
         teardown(() => {
             clock.uninstall();
-            performSaveStub.restore();
+            flush.restore();
         });
+
+        /** Fires the real queue-completion event and lets onExecutionComplete arm the deferred save. */
+        async function arm(): Promise<void> {
+            notebookCellExecutions.notifyQueueComplete(notebookUri);
+            await clock.tickAsync(0);
+        }
 
         /** Drives the same "output/metadata changed" event the service listens to while a save is pending. */
         function fireOutputChange(): void {
@@ -1059,59 +1172,59 @@ project:
             when(event.notebook).thenReturn(instance(notebook));
             when(event.cellChanges).thenReturn([{ outputs: [] } as unknown as NotebookDocumentCellChange]);
 
-            internals(service).handleNotebookDocumentChange(instance(event));
+            changeEmitter.fire(instance(event));
         }
 
-        test('does NOT save immediately when execution completes — only after the quiet period elapses (catches writing a snapshot before outputs settle)', () => {
-            internals(service).armSnapshotSave(notebookUri);
+        test('does NOT save immediately when execution completes — only after the quiet period elapses (catches writing a snapshot before outputs settle)', async () => {
+            await arm();
 
             // Just before the quiet window closes: nothing flushed yet.
-            clock.tick(149);
-            assert.isFalse(performSaveStub.called, 'save must not flush before the quiet period elapses');
+            await clock.tickAsync(149);
+            assert.isFalse(flush.called, 'save must not flush before the quiet period elapses');
 
             // Crossing the quiet window with no further changes flushes exactly once.
-            clock.tick(1);
-            assert.isTrue(performSaveStub.calledOnce, 'save must flush once the quiet period elapses');
+            await clock.tickAsync(1);
+            assert.isTrue(flush.calledOnce, 'save must flush once the quiet period elapses');
         });
 
-        test('re-arms (delays) the save when an output change arrives within the quiet window (catches flushing mid-output-stream)', () => {
-            internals(service).armSnapshotSave(notebookUri);
+        test('re-arms (delays) the save when an output change arrives within the quiet window (catches flushing mid-output-stream)', async () => {
+            await arm();
 
-            clock.tick(100);
-            assert.isFalse(performSaveStub.called);
+            await clock.tickAsync(100);
+            assert.isFalse(flush.called);
 
             // An output change at t=100 resets the 150ms quiet window.
             fireOutputChange();
 
             // t=200: would have fired under the original arm (100+? ) but the re-arm pushed it out.
-            clock.tick(100);
-            assert.isFalse(performSaveStub.called, 'an in-window change must re-arm and delay the save');
+            await clock.tickAsync(100);
+            assert.isFalse(flush.called, 'an in-window change must re-arm and delay the save');
 
             // t=250: 150ms after the re-arm — now it flushes.
-            clock.tick(50);
-            assert.isTrue(performSaveStub.calledOnce, 'save flushes one quiet period after the last change');
+            await clock.tickAsync(50);
+            assert.isTrue(flush.calledOnce, 'save flushes one quiet period after the last change');
         });
 
-        test('forces a flush at the max-wait bound even under continuous output changes (catches an unbounded deferral starving the save)', () => {
-            internals(service).armSnapshotSave(notebookUri);
+        test('forces a flush at the max-wait bound even under continuous output changes (catches an unbounded deferral starving the save)', async () => {
+            await arm();
 
             // Hammer an output change every 100ms; each one would reset the 150ms quiet window, but the
             // 2000ms max-wait measured from the first arm must force a flush regardless.
             for (let elapsed = 0; elapsed < 2000; elapsed += 100) {
-                clock.tick(100);
+                await clock.tickAsync(100);
                 fireOutputChange();
             }
 
             // By t=2000 the max-wait bound has forced exactly one flush despite the continuous churn.
-            assert.isTrue(performSaveStub.called, 'max-wait must force a flush under continuous changes');
+            assert.isTrue(flush.called, 'max-wait must force a flush under continuous changes');
         });
 
-        test('cancels a pending save when a cell re-enters the executing state (catches writing a stale snapshot mid re-execution)', () => {
-            internals(service).armSnapshotSave(notebookUri);
+        test('cancels a pending save when a cell re-enters the executing state (catches writing a stale snapshot mid re-execution)', async () => {
+            await arm();
 
-            clock.tick(100);
+            await clock.tickAsync(100);
 
-            // Drive the real cell-state handler: an Executing transition must cancel the armed save
+            // Drive the real cell-state event: an Executing transition must cancel the armed save
             // (otherwise a snapshot from the *previous* run would be written during the new run).
             const cellNotebook = mock<NotebookDocument>();
             when(cellNotebook.uri).thenReturn(Uri.parse(notebookUri));
@@ -1120,36 +1233,36 @@ project:
             when(cell.notebook).thenReturn(instance(cellNotebook));
             when(cell.metadata).thenReturn({ id: 'cell-1' });
 
-            internals(service).handleCellExecutionStateChange(instance(cell), NotebookCellExecutionState.Executing);
+            notebookCellExecutions.changeCellState(instance(cell), NotebookCellExecutionState.Executing);
 
-            clock.tick(1000);
-            assert.isFalse(performSaveStub.called, 're-execution must cancel the pending deferred save');
+            await clock.tickAsync(1000);
+            assert.isFalse(flush.called, 're-execution must cancel the pending deferred save');
         });
 
-        test('cancels a pending save when the notebook is closed (catches a flush firing after the document is gone)', () => {
-            internals(service).armSnapshotSave(notebookUri);
+        test('cancels a pending save when the notebook is closed (catches a flush firing after the document is gone)', async () => {
+            await arm();
 
-            clock.tick(100);
+            await clock.tickAsync(100);
 
-            // The close handler registered in activate() cancels the pending save via this primitive;
-            // once cancelled the timer must never flush even after the full quiet/max-wait window.
-            internals(service).cancelPendingSnapshotSave(notebookUri);
+            // The close handler registered in activate() cancels the pending save; once cancelled the
+            // timer must never flush even after the full quiet/max-wait window.
+            const closedDoc = mock<NotebookDocument>();
+            when(closedDoc.uri).thenReturn(Uri.parse(notebookUri));
 
-            clock.tick(2000);
-            assert.isFalse(performSaveStub.called, 'closing the notebook must cancel the pending deferred save');
+            closeEmitter.fire(instance(closedDoc));
+
+            await clock.tickAsync(2000);
+            assert.isFalse(flush.called, 'closing the notebook must cancel the pending deferred save');
         });
 
-        test('does NOT arm a deferred save when an output change arrives with no save pending (guards the pending-save precondition)', () => {
-            // No prior armSnapshotSave: pendingSnapshotSaves is empty, so handleNotebookDocumentChange
+        test('does NOT arm a deferred save when an output change arrives with no save pending (guards the pending-save precondition)', async () => {
+            // No prior queue completion: pendingSnapshotSaves is empty, so handleNotebookDocumentChange
             // must ignore even an output-bearing change rather than arming a fresh deferred save.
             fireOutputChange();
 
             // Well past the max-wait bound: had the change armed a save, it would have flushed by now.
-            clock.tick(3000);
-            assert.isFalse(
-                performSaveStub.called,
-                'an output change with no pending save must not arm a deferred save'
-            );
+            await clock.tickAsync(3000);
+            assert.isFalse(flush.called, 'an output change with no pending save must not arm a deferred save');
         });
     });
 
@@ -1278,7 +1391,7 @@ project:
         });
     });
 
-    // Metadata tracking tests (private methods reached via internals())
+    // Metadata tracking tests drive the injected tracker directly and observe it through public getters.
     suite('execution metadata tracking', () => {
         const notebookUri = 'file:///path/to/notebook.deepnote';
         const cellId = 'cell-123';
@@ -1531,6 +1644,8 @@ project:
                 // Construct WITHOUT the optional tracker: the constructor must default one, otherwise
                 // every this.tracker.* call below would dereference undefined.
                 const defaultService = new SnapshotService(instance(mockEnvironmentCapture), mockDisposables);
+                installNotebookDocumentEmitters();
+                defaultService.activate();
 
                 const cellNotebook = mock<NotebookDocument>();
                 when(cellNotebook.uri).thenReturn(Uri.parse(notebookUri));
@@ -1540,15 +1655,9 @@ project:
                 when(cell.metadata).thenReturn({ id: cellId });
                 when(cell.executionSummary).thenReturn({ success: true });
 
-                // Drive a full start->end cycle through the real handler that delegates to the tracker.
-                internals(defaultService).handleCellExecutionStateChange(
-                    instance(cell),
-                    NotebookCellExecutionState.Executing
-                );
-                internals(defaultService).handleCellExecutionStateChange(
-                    instance(cell),
-                    NotebookCellExecutionState.Idle
-                );
+                // Drive a full start->end cycle through the real cell-state events activate() subscribes to.
+                notebookCellExecutions.changeCellState(instance(cell), NotebookCellExecutionState.Executing);
+                notebookCellExecutions.changeCellState(instance(cell), NotebookCellExecutionState.Idle);
 
                 const metadata = defaultService.getExecutionMetadata(notebookUri);
                 assert.isDefined(metadata);
@@ -1587,43 +1696,53 @@ project:
         });
 
         suite('Run All auto-detection', () => {
-            function mockCell(options: {
-                id: string;
-                kind?: NotebookCellKind;
-                languageId?: string;
-                source?: string;
-            }): NotebookCell {
-                const { id, kind = NotebookCellKind.Code, languageId = 'python', source = 'print(1)' } = options;
+            let clock: fakeTimers.InstalledClock;
 
-                const document = mock<TextDocument>();
-                when(document.getText()).thenReturn(source);
-                when(document.languageId).thenReturn(languageId);
+            setup(() => {
+                clock = fakeTimers.install();
+                installNotebookDocumentEmitters();
+            });
 
-                const cell = mock<NotebookCell>();
-                when(cell.kind).thenReturn(kind);
-                when(cell.document).thenReturn(instance(document));
-                when(cell.metadata).thenReturn({ id });
-                when(cell.outputs).thenReturn([]);
-                when(cell.executionSummary).thenReturn({ success: true });
+            teardown(() => {
+                clock.uninstall();
+            });
 
-                return instance(cell);
+            /** Records writeFile URIs so a save's write shape (timestamped vs latest) is observable. */
+            function captureSnapshotWrites(): Uri[] {
+                const writtenUris: Uri[] = [];
+                const mockFs = mock<typeof import('vscode').workspace.fs>();
+
+                when(mockFs.stat(anything())).thenReturn(
+                    Promise.resolve({ type: FileType.Directory, ctime: 0, mtime: 0, size: 0 })
+                );
+                when(mockFs.readFile(anything())).thenReject(new Error('ENOENT'));
+                when(mockFs.writeFile(anything(), anything())).thenCall((uri: Uri) => {
+                    writtenUris.push(uri);
+
+                    return Promise.resolve();
+                });
+                when(mockFs.copy(anything(), anything(), anything())).thenResolve();
+                when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
+
+                return writtenUris;
             }
 
-            function mockNotebookDoc(options: {
-                cells: NotebookCell[];
-                notebookId: string;
-                projectId: string;
-                uri: Uri;
-            }): NotebookDocument {
-                const { cells, notebookId, projectId, uri } = options;
+            /** Fires queue completion and advances past the quiet window so the deferred save flushes. */
+            async function flushDeferredSave(uri: string): Promise<void> {
+                notebookCellExecutions.notifyQueueComplete(uri);
+                await clock.tickAsync(0);
+                await clock.tickAsync(150);
+            }
 
-                const doc = mock<NotebookDocument>();
-                when(doc.uri).thenReturn(uri);
-                when(doc.notebookType).thenReturn('deepnote');
-                when(doc.metadata).thenReturn({ deepnoteProjectId: projectId, deepnoteNotebookId: notebookId });
-                when(doc.getCells()).thenReturn(cells);
+            // Run-All writes a timestamped snapshot (…_<stamp>.snapshot.deepnote) then copies it to the
+            // latest pointer; a partial run writes only …_latest.snapshot.deepnote. The written-URI shape
+            // alone distinguishes the two branches.
+            function wroteTimestampedSnapshot(uris: Uri[]): boolean {
+                return uris.some((u) => u.path.endsWith('.snapshot.deepnote') && !u.path.includes('_latest'));
+            }
 
-                return instance(doc);
+            function wroteLatestSnapshot(uris: Uri[]): boolean {
+                return uris.some((u) => u.path.includes('_latest.snapshot.deepnote'));
             }
 
             test('should detect Run All when all code cells are executed', async () => {
@@ -1692,32 +1811,26 @@ project:
                 tracker.recordCellExecutionStart(notebookUri, 'cell-3', startTime + 400);
                 tracker.recordCellExecutionEnd(notebookUri, 'cell-3', startTime + 500, true);
 
-                // Spy on createSnapshot and updateLatestSnapshot
-                const createSnapshotSpy = sinon.spy(testService, 'createSnapshot');
-                const updateLatestSnapshotSpy = sinon.spy(internals(testService), 'updateLatestSnapshot');
+                const writtenUris = captureSnapshotWrites();
 
-                // Mock file system operations for snapshot creation
-                const mockFs = mock<typeof import('vscode').workspace.fs>();
-                when(mockFs.stat(anything())).thenReturn(
-                    Promise.resolve({ type: FileType.Directory, ctime: 0, mtime: 0, size: 0 })
-                );
-                when(mockFs.readFile(anything())).thenReject(new Error('ENOENT'));
-                when(mockFs.writeFile(anything(), anything())).thenResolve();
-                when(mockFs.copy(anything(), anything(), anything())).thenResolve();
-                when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
+                // onExecutionComplete arms a deferred (output-settled) save; drive it through the real
+                // queue-completion event and the settle window to assert the Run-All-vs-partial routing.
+                testService.activate();
+                await flushDeferredSave(notebookUri);
 
-                // onExecutionComplete arms a deferred (output-settled) save; invoke the flush body
-                // directly to assert the Run-All-vs-partial routing without waiting on the timer.
-                await internals(testService).performSnapshotSave(notebookUri);
-
-                // ASSERT: createSnapshot should be called (full snapshot, not just latest)
+                // Run-All writes a timestamped snapshot (and copies to latest), never a latest-only write.
                 assert.isTrue(
-                    createSnapshotSpy.calledOnce,
-                    'createSnapshot should be called when all code cells are executed'
+                    wroteTimestampedSnapshot(writtenUris),
+                    'a timestamped snapshot should be written when all code cells are executed'
                 );
                 assert.isFalse(
-                    updateLatestSnapshotSpy.called,
-                    'updateLatestSnapshot should NOT be called when all code cells are executed'
+                    wroteLatestSnapshot(writtenUris),
+                    'a latest-only snapshot must NOT be written when all code cells are executed'
+                );
+                assert.strictEqual(
+                    writtenUris.length,
+                    1,
+                    'exactly one snapshot write — the deferred save must not double-flush'
                 );
             });
 
@@ -1770,32 +1883,21 @@ project:
                 tracker.recordCellExecutionStart(targetBUri, 'cell-b', startTime);
                 tracker.recordCellExecutionEnd(targetBUri, 'cell-b', startTime + 100, true);
 
-                const mockFs = mock<typeof import('vscode').workspace.fs>();
-                when(mockFs.stat(anything())).thenReturn(
-                    Promise.resolve({ type: FileType.Directory, ctime: 0, mtime: 0, size: 0 })
-                );
-                when(mockFs.readFile(anything())).thenReject(new Error('ENOENT'));
-                let writtenSnapshotUri: Uri | undefined;
-                when(mockFs.writeFile(anything(), anything())).thenCall((uri: Uri) => {
-                    writtenSnapshotUri = writtenSnapshotUri ?? uri;
+                const writtenUris = captureSnapshotWrites();
 
-                    return Promise.resolve();
-                });
-                when(mockFs.copy(anything(), anything(), anything())).thenResolve();
-                when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
-
-                await internals(testService).performSnapshotSave(targetBUri);
+                testService.activate();
+                await flushDeferredSave(targetBUri);
 
                 // The snapshot dir derives from projectUri's parent, so the snapshot must land in notebook B's
                 // OWN folder (/bar/snapshots), not sibling A's (/foo) — even though A shares the id and enumerates first.
-                assert.isDefined(writtenSnapshotUri, 'a snapshot file must be written');
+                assert.isAtLeast(writtenUris.length, 1, 'a snapshot file must be written');
                 assert.include(
-                    writtenSnapshotUri!.path,
+                    writtenUris[0].path,
                     '/workspace/bar/snapshots/',
                     'snapshot must be written under the saved notebook own directory, not a sibling sharing the project id'
                 );
                 assert.notInclude(
-                    writtenSnapshotUri!.path,
+                    writtenUris[0].path,
                     '/workspace/foo/',
                     'snapshot must not land in a sibling directory that merely shares the project id'
                 );
@@ -1847,23 +1949,17 @@ project:
                     tracker
                 );
 
-                const createSnapshotSpy = sinon.spy(testService, 'createSnapshot');
-                const updateLatestSnapshotSpy = sinon.spy(internals(testService), 'updateLatestSnapshot');
+                const writtenUris = captureSnapshotWrites();
 
-                const mockFs = mock<typeof import('vscode').workspace.fs>();
-                when(mockFs.stat(anything())).thenReturn(
-                    Promise.resolve({ type: FileType.Directory, ctime: 0, mtime: 0, size: 0 })
+                testService.activate();
+                await flushDeferredSave(notebookUri);
+
+                assert.isFalse(
+                    wroteTimestampedSnapshot(writtenUris),
+                    'an untracked notebook must not take the Run-All (timestamped) path'
                 );
-                when(mockFs.readFile(anything())).thenReject(new Error('ENOENT'));
-                when(mockFs.writeFile(anything(), anything())).thenResolve();
-                when(mockFs.copy(anything(), anything(), anything())).thenResolve();
-                when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
-
-                await internals(testService).performSnapshotSave(notebookUri);
-
-                assert.isFalse(createSnapshotSpy.called, 'an untracked notebook must not take the Run-All path');
                 assert.isTrue(
-                    updateLatestSnapshotSpy.calledOnce,
+                    wroteLatestSnapshot(writtenUris),
                     'an untracked notebook must take the partial-run (latest-only) path'
                 );
             });

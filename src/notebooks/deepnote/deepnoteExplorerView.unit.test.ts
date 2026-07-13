@@ -17,8 +17,8 @@ import {
 import { stringify as yamlStringify } from 'yaml';
 
 import { DeepnoteExplorerView } from './deepnoteExplorerView';
-import { DeepnoteTreeDataProvider } from './deepnoteTreeDataProvider';
 import { DeepnoteTreeItem, DeepnoteTreeItemType, type DeepnoteTreeItemContext } from './deepnoteTreeItem';
+import { Commands } from '../../platform/common/constants';
 import type { IExtensionContext } from '../../platform/common/types';
 import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
@@ -50,26 +50,31 @@ function createUuidMock(uuids: string[]): sinon.SinonStub {
     return stub;
 }
 
-/**
- * Structural mirror of DeepnoteExplorerView's private surface (deepnoteExplorerView.ts).
- * `internals` is the single typed seam for reaching private state/methods in these tests.
- */
-interface DeepnoteExplorerViewInternals {
-    readonly extensionContext: IExtensionContext;
-    readonly treeDataProvider: DeepnoteTreeDataProvider;
-    addNotebookToProject(treeItem: DeepnoteTreeItem): Promise<void>;
-    exportNotebook(treeItem: DeepnoteTreeItem): Promise<void>;
-    importJupyterNotebook(): Promise<void>;
-    importNotebook(): Promise<void>;
-    newProject(): Promise<void>;
-    openFile(treeItem: DeepnoteTreeItem): Promise<void>;
-    openNotebook(context: DeepnoteTreeItemContext): Promise<void>;
-    refreshExplorer(): void;
-    revealActiveNotebook(): Promise<void>;
+// Command handlers registered by activate() via commands.registerCommand, captured so a test can
+// invoke a private handler through its real registration instead of a private-surface mirror.
+const commandHandlers = new Map<string, (...args: unknown[]) => unknown>();
+
+// Records every command registration into `commandHandlers`. Install AFTER resetVSCodeMocks()
+// (which regenerates the commands mock) and BEFORE the activate() whose handlers a test invokes.
+function captureCommandHandlers(): void {
+    commandHandlers.clear();
+    when(mockedVSCodeNamespaces.commands.registerCommand(anything(), anything())).thenCall(
+        (id: string, cb: (...args: unknown[]) => unknown) => {
+            commandHandlers.set(id, cb);
+
+            return { dispose: () => undefined };
+        }
+    );
 }
 
-function internals(view: DeepnoteExplorerView): DeepnoteExplorerViewInternals {
-    return view as unknown as DeepnoteExplorerViewInternals;
+function handlerFor(id: string): (...args: unknown[]) => unknown {
+    const handler = commandHandlers.get(id);
+
+    if (!handler) {
+        throw new Error(`No handler captured for command '${id}'; call activate() after captureCommandHandlers().`);
+    }
+
+    return handler;
 }
 
 function makeExtensionContext(): IExtensionContext {
@@ -117,35 +122,19 @@ suite('DeepnoteExplorerView', () => {
     let mockLogger: ILogger;
 
     setup(() => {
+        resetVSCodeMocks();
+        captureCommandHandlers();
+
         mockExtensionContext = makeExtensionContext();
 
         mockLogger = createMockLogger();
         explorerView = new DeepnoteExplorerView(mockExtensionContext, mockLogger);
+        explorerView.activate();
     });
 
     suite('constructor', () => {
         test('should create instance with extension context', () => {
             assert.isDefined(explorerView);
-        });
-
-        test('should initialize with proper dependencies', () => {
-            // Verify that internal components are accessible
-            assert.isDefined(internals(explorerView).extensionContext);
-            assert.strictEqual(internals(explorerView).extensionContext, mockExtensionContext);
-        });
-    });
-
-    suite('activate', () => {
-        test('should attempt to activate without errors', () => {
-            // This test verifies the activate method can be called
-            try {
-                explorerView.activate();
-                // If we get here, activation succeeded
-                assert.isTrue(true, 'activate() completed successfully');
-            } catch (error) {
-                // Expected in test environment without full VS Code API
-                assert.isString(error.message, 'activate() method exists and attempts initialization');
-            }
         });
     });
 
@@ -161,7 +150,7 @@ suite('DeepnoteExplorerView', () => {
 
             // This should not throw an error - method should handle gracefully
             try {
-                await internals(explorerView).openNotebook(contextWithoutId);
+                await handlerFor(Commands.OpenDeepnoteNotebook)(contextWithoutId);
                 assert.isTrue(true, 'openNotebook handled undefined notebookId gracefully');
             } catch (error) {
                 // Expected in test environment
@@ -171,7 +160,7 @@ suite('DeepnoteExplorerView', () => {
 
         test('should handle valid context', async () => {
             try {
-                await internals(explorerView).openNotebook(mockContext);
+                await handlerFor(Commands.OpenDeepnoteNotebook)(mockContext);
                 assert.isTrue(true, 'openNotebook handled valid context');
             } catch (error) {
                 // Expected in test environment without VS Code APIs
@@ -184,7 +173,7 @@ suite('DeepnoteExplorerView', () => {
             // The actual URI creation is tested through integration, but we can verify
             // that the method exists and processes the context correctly
             try {
-                await internals(explorerView).openNotebook(mockContext);
+                await handlerFor(Commands.OpenDeepnoteNotebook)(mockContext);
                 assert.isTrue(true, 'openNotebook uses base file URI approach');
             } catch (error) {
                 // Expected in test environment - the method should exist and attempt to process
@@ -201,7 +190,7 @@ suite('DeepnoteExplorerView', () => {
             };
 
             try {
-                await internals(explorerView).openFile(mockTreeItem as DeepnoteTreeItem);
+                await handlerFor(Commands.OpenDeepnoteFile)(mockTreeItem as DeepnoteTreeItem);
                 assert.isTrue(true, 'openFile handled non-project file gracefully');
             } catch (error) {
                 // Expected in test environment
@@ -216,7 +205,7 @@ suite('DeepnoteExplorerView', () => {
             };
 
             try {
-                await internals(explorerView).openFile(mockTreeItem as DeepnoteTreeItem);
+                await handlerFor(Commands.OpenDeepnoteFile)(mockTreeItem as DeepnoteTreeItem);
                 assert.isTrue(true, 'openFile handled project file');
             } catch (error) {
                 // Expected in test environment
@@ -228,7 +217,7 @@ suite('DeepnoteExplorerView', () => {
     suite('revealActiveNotebook', () => {
         test('should handle missing active notebook editor', async () => {
             try {
-                await internals(explorerView).revealActiveNotebook();
+                await handlerFor(Commands.RevealInDeepnoteExplorer)();
                 assert.isTrue(true, 'revealActiveNotebook handled missing editor gracefully');
             } catch (error) {
                 // Expected in test environment
@@ -240,43 +229,12 @@ suite('DeepnoteExplorerView', () => {
     suite('refreshExplorer', () => {
         test('should call refresh method', () => {
             try {
-                internals(explorerView).refreshExplorer();
+                handlerFor(Commands.RefreshDeepnoteExplorer)();
                 assert.isTrue(true, 'refreshExplorer method exists and can be called');
             } catch (error) {
                 // Expected in test environment
                 assert.isString(error.message, 'refreshExplorer method exists');
             }
-        });
-    });
-
-    suite('integration scenarios', () => {
-        test('should handle multiple explorer view instances', () => {
-            const context1 = makeExtensionContext();
-            const context2 = makeExtensionContext();
-
-            const logger1 = createMockLogger();
-            const logger2 = createMockLogger();
-            const view1 = new DeepnoteExplorerView(context1, logger1);
-            const view2 = new DeepnoteExplorerView(context2, logger2);
-
-            // Verify each view has its own context
-            assert.strictEqual(internals(view1).extensionContext, context1);
-            assert.strictEqual(internals(view2).extensionContext, context2);
-            assert.notStrictEqual(internals(view1).extensionContext, internals(view2).extensionContext);
-
-            // Verify views are independent instances
-            assert.notStrictEqual(view1, view2);
-        });
-
-        test('should maintain component references', () => {
-            // Verify that internal components exist
-            assert.isDefined(internals(explorerView).extensionContext);
-
-            // After construction, some components should be initialized
-            const hasTreeDataProvider = internals(explorerView).treeDataProvider !== undefined;
-
-            // At least one component should be defined after construction
-            assert.isTrue(hasTreeDataProvider, 'Components are being initialized');
         });
     });
 });
@@ -290,12 +248,14 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
     setup(() => {
         sandbox = sinon.createSandbox();
         resetVSCodeMocks();
+        captureCommandHandlers();
         uuidStubs = [];
 
         mockContext = makeExtensionContext();
 
         const mockLogger = createMockLogger();
         explorerView = new DeepnoteExplorerView(mockContext, mockLogger);
+        explorerView.activate();
     });
 
     teardown(() => {
@@ -348,7 +308,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 return Promise.resolve();
             });
 
-            await internals(explorerView).newProject();
+            await handlerFor(Commands.NewProject)();
 
             // Verify file was written
             expect(capturedUri).to.exist;
@@ -397,7 +357,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 Promise.resolve(stubNotebookEditor())
             );
 
-            await internals(explorerView).newProject();
+            await handlerFor(Commands.NewProject)();
 
             expect(capturedUri).to.exist;
             expect(capturedUri!.path).to.include(expectedFileName);
@@ -421,7 +381,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 return Promise.resolve();
             });
 
-            await internals(explorerView).newProject();
+            await handlerFor(Commands.NewProject)();
 
             expect(showInfoCalled).to.be.true;
             expect(executeCommandCalled).to.be.true;
@@ -437,7 +397,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 return Promise.resolve(undefined);
             });
 
-            await internals(explorerView).newProject();
+            await handlerFor(Commands.NewProject)();
 
             expect(validationFunction).to.exist;
             const result = validationFunction!('');
@@ -461,7 +421,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 return Promise.resolve(undefined);
             });
 
-            await internals(explorerView).newProject();
+            await handlerFor(Commands.NewProject)();
 
             expect(errorShown).to.be.true;
         });
@@ -487,7 +447,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 return Promise.resolve(undefined);
             });
 
-            await internals(explorerView).newProject();
+            await handlerFor(Commands.NewProject)();
 
             expect(errorMessage).to.exist;
             expect(errorMessage).to.include('Permission denied');
@@ -506,7 +466,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             });
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
 
-            await internals(explorerView).newProject();
+            await handlerFor(Commands.NewProject)();
 
             expect(writeFileCalled).to.be.false;
         });
@@ -522,6 +482,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 '@deepnote/convert': { convertIpynbFileToDeepnoteFile: async () => {} }
             });
             explorerView = new importModule.DeepnoteExplorerView(mockContext, createMockLogger());
+            explorerView.activate();
         });
 
         teardown(() => {
@@ -550,7 +511,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 Promise.resolve(undefined)
             );
 
-            await internals(explorerView).importNotebook();
+            await handlerFor(Commands.ImportNotebook)();
 
             expect(capturedUri).to.exist;
             expect(capturedUri!.path).to.include('test.deepnote');
@@ -573,7 +534,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 return Promise.resolve(undefined);
             });
 
-            await internals(explorerView).importNotebook();
+            await handlerFor(Commands.ImportNotebook)();
 
             // Verify success message was shown (indicating convert was called successfully)
             expect(infoMessageShown).to.be.true;
@@ -601,7 +562,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 return Promise.resolve(undefined);
             });
 
-            await internals(explorerView).importNotebook();
+            await handlerFor(Commands.ImportNotebook)();
 
             expect(capturedMessage).to.exist;
             expect(capturedMessage).to.include('2');
@@ -630,7 +591,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 return Promise.resolve(undefined);
             });
 
-            await internals(explorerView).importNotebook();
+            await handlerFor(Commands.ImportNotebook)();
 
             expect(errorShown).to.be.true;
             expect(writeFileCalled).to.be.false;
@@ -650,7 +611,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             // Test is simplified - the mock convert function succeeds by default
             // To properly test error handling, we would need to modify the mock in vscode-mock.ts
             // For now, we'll just verify the method completes without throwing
-            await internals(explorerView).importNotebook();
+            await handlerFor(Commands.ImportNotebook)();
         });
 
         test('should return early if user cancels dialog', async () => {
@@ -667,7 +628,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             });
             when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
 
-            await internals(explorerView).importNotebook();
+            await handlerFor(Commands.ImportNotebook)();
 
             expect(writeFileCalled).to.be.false;
         });
@@ -690,7 +651,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 return Promise.resolve();
             });
 
-            await internals(explorerView).importNotebook();
+            await handlerFor(Commands.ImportNotebook)();
 
             expect(showInfoCalled).to.be.true;
             expect(executeCommandCalled).to.be.true;
@@ -707,6 +668,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 '@deepnote/convert': { convertIpynbFileToDeepnoteFile: async () => {} }
             });
             explorerView = new importModule.DeepnoteExplorerView(mockContext, createMockLogger());
+            explorerView.activate();
         });
 
         teardown(() => {
@@ -730,7 +692,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 return Promise.resolve(undefined);
             });
 
-            await internals(explorerView).importJupyterNotebook();
+            await handlerFor(Commands.ImportJupyterNotebook)();
 
             // Verify success message was shown (indicating convert was called successfully)
             expect(infoMessageShown).to.be.true;
@@ -753,7 +715,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 return Promise.resolve(undefined);
             });
 
-            await internals(explorerView).importJupyterNotebook();
+            await handlerFor(Commands.ImportJupyterNotebook)();
 
             expect(capturedMessage).to.exist;
             expect(capturedMessage).to.include('2');
@@ -770,6 +732,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 }
             });
             const partialExplorer = new failingModule.DeepnoteExplorerView(mockContext, createMockLogger());
+            partialExplorer.activate();
 
             const workspaceFolder = makeWorkspaceFolder(Uri.file('/workspace'));
             const sourceUris = [
@@ -798,7 +761,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             });
 
             try {
-                await internals(partialExplorer).importJupyterNotebook();
+                await handlerFor(Commands.ImportJupyterNotebook)();
 
                 // One of three succeeded: singular success message, never the full selection count.
                 expect(infoMessage).to.exist;
@@ -820,6 +783,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 }
             });
             const failedExplorer = new failingModule.DeepnoteExplorerView(mockContext, createMockLogger());
+            failedExplorer.activate();
 
             const workspaceFolder = makeWorkspaceFolder(Uri.file('/workspace'));
             const sourceUris = [Uri.file('/external/fail1.ipynb'), Uri.file('/external/fail2.ipynb')];
@@ -844,7 +808,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             });
 
             try {
-                await internals(failedExplorer).importJupyterNotebook();
+                await handlerFor(Commands.ImportJupyterNotebook)();
 
                 expect(infoMessageShown).to.be.false;
                 expect(warningShown).to.be.true;
@@ -870,7 +834,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 return Promise.resolve(undefined);
             });
 
-            await internals(explorerView).importJupyterNotebook();
+            await handlerFor(Commands.ImportJupyterNotebook)();
 
             expect(errorShown).to.be.true;
         });
@@ -889,7 +853,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             // Test is simplified - the mock convert function succeeds by default
             // To properly test error handling, we would need to modify the mock in vscode-mock.ts
             // For now, we'll just verify the method completes without throwing
-            await internals(explorerView).importJupyterNotebook();
+            await handlerFor(Commands.ImportJupyterNotebook)();
         });
 
         test('should return early if user cancels dialog', async () => {
@@ -904,7 +868,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 return Promise.resolve(undefined);
             });
 
-            await internals(explorerView).importJupyterNotebook();
+            await handlerFor(Commands.ImportJupyterNotebook)();
 
             // Verify no success message was shown (indicating convert was not called)
             expect(infoMessageShown).to.be.false;
@@ -928,7 +892,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 return Promise.resolve();
             });
 
-            await internals(explorerView).importJupyterNotebook();
+            await handlerFor(Commands.ImportJupyterNotebook)();
 
             expect(showInfoCalled).to.be.true;
             expect(executeCommandCalled).to.be.true;
@@ -951,7 +915,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 return Promise.resolve(undefined);
             });
 
-            await internals(explorerView).importJupyterNotebook();
+            await handlerFor(Commands.ImportJupyterNotebook)();
 
             // Verify success message was shown (indicating convert was called successfully)
             expect(infoMessageShown).to.be.true;
@@ -2022,7 +1986,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 }
             };
 
-            await internals(explorerView).exportNotebook(treeItem as DeepnoteTreeItem);
+            await handlerFor(Commands.ExportNotebook)(treeItem as DeepnoteTreeItem);
 
             // Verify no file operations occurred
             verify(mockFS.writeFile(anything(), anything())).never();
@@ -2064,7 +2028,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 }
             };
 
-            await internals(explorerView).exportNotebook(treeItem as DeepnoteTreeItem);
+            await handlerFor(Commands.ExportNotebook)(treeItem as DeepnoteTreeItem);
 
             // Verify no file was written
             verify(mockFS.writeFile(anything(), anything())).never();
@@ -2095,7 +2059,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 }
             };
 
-            await internals(explorerView).exportNotebook(treeItem as DeepnoteTreeItem);
+            await handlerFor(Commands.ExportNotebook)(treeItem as DeepnoteTreeItem);
 
             // Verify error message was shown
             verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
@@ -2154,7 +2118,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 }
             };
 
-            await internals(explorerView).exportNotebook(treeItem as DeepnoteTreeItem);
+            await handlerFor(Commands.ExportNotebook)(treeItem as DeepnoteTreeItem);
 
             // Verify only one notebook was exported
             assert.strictEqual(writeCount, 1);
@@ -2202,7 +2166,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 }
             };
 
-            await internals(explorerView).exportNotebook(treeItem as DeepnoteTreeItem);
+            await handlerFor(Commands.ExportNotebook)(treeItem as DeepnoteTreeItem);
 
             // Verify error message was shown
             verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
@@ -2251,7 +2215,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 }
             };
 
-            await internals(explorerView).exportNotebook(treeItem as DeepnoteTreeItem);
+            await handlerFor(Commands.ExportNotebook)(treeItem as DeepnoteTreeItem);
 
             // Verify error message was shown
             verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
@@ -2299,7 +2263,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 }
             };
 
-            await internals(explorerView).exportNotebook(treeItem as DeepnoteTreeItem);
+            await handlerFor(Commands.ExportNotebook)(treeItem as DeepnoteTreeItem);
 
             // Verify warning message was shown about file existing
             verify(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).once();
@@ -2358,7 +2322,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                 }
             };
 
-            await internals(explorerView).exportNotebook(treeItem as DeepnoteTreeItem);
+            await handlerFor(Commands.ExportNotebook)(treeItem as DeepnoteTreeItem);
 
             // Verify file was written after user confirmed overwrite
             assert.strictEqual(writeCount, 1);
@@ -2377,10 +2341,12 @@ suite('DeepnoteExplorerView - Sibling-file command semantics', () => {
     setup(() => {
         sandbox = sinon.createSandbox();
         resetVSCodeMocks();
+        captureCommandHandlers();
         uuidStubs = [];
 
         mockContext = makeExtensionContext();
         explorerView = new DeepnoteExplorerView(mockContext, createMockLogger());
+        explorerView.activate();
     });
 
     teardown(() => {
@@ -2413,7 +2379,7 @@ suite('DeepnoteExplorerView - Sibling-file command semantics', () => {
                 context: { filePath: '/workspace/x.deepnote', projectId: 'p' }
             };
 
-            await internals(explorerView).addNotebookToProject(treeItem as DeepnoteTreeItem);
+            await handlerFor(Commands.AddNotebookToProject)(treeItem as DeepnoteTreeItem);
 
             verify(mockFS.writeFile(anything(), anything())).never();
         });

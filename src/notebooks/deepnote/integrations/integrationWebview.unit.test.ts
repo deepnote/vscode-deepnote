@@ -21,18 +21,6 @@ import {
     buildServiceAccountIntegration
 } from './federatedAuth/federatedAuthTestHelpers';
 
-/**
- * Structural mirror of IntegrationWebviewProvider's private surface (integrationWebview.ts).
- * `internals` is the single typed seam this test uses to drive the private update method.
- */
-interface IntegrationWebviewProviderInternals {
-    updateProjectIntegrationsList(): Promise<void>;
-}
-
-function internals(provider: IntegrationWebviewProvider): IntegrationWebviewProviderInternals {
-    return provider as unknown as IntegrationWebviewProviderInternals;
-}
-
 interface CapturedMessage {
     type: string;
     integrations?: Array<{ id: string; tokenStatus?: string }>;
@@ -448,12 +436,15 @@ suite('IntegrationWebviewProvider', () => {
         assert.isEmpty(updateMessages, 'no `update` postMessage should be issued after the panel disposes mid-update');
     });
 
-    suite('updateProjectIntegrationsList: cache-only update', () => {
+    suite('project integrations list update (via save message)', () => {
         async function callUpdateProjectIntegrationsList(provider: IntegrationWebviewProvider): Promise<void> {
-            // `show()` sets `projectId` + the integrations map; then drive the private update method.
-            await show(provider, singleIntegrationMap('pg-1', buildPostgresIntegration({ id: 'pg-1' })));
+            when(integrationStorage.save(anything())).thenResolve();
 
-            await internals(provider).updateProjectIntegrationsList();
+            const pgConfig = buildPostgresIntegration({ id: 'pg-1' });
+            // `show()` seeds projectId + the integrations map; the `save` message drives the cache update through the real handler.
+            await show(provider, singleIntegrationMap('pg-1', pgConfig));
+
+            await fakePanel.onDidReceiveMessage({ type: 'save', integrationId: 'pg-1', config: pgConfig });
         }
 
         test('updates the cached project integrations via notebookManager.updateProjectIntegrations', async () => {

@@ -84,7 +84,7 @@ import { DeepnoteKernelAutoSelector } from './deepnote/deepnoteKernelAutoSelecto
 import { DeepnoteServerProvider } from '../kernels/deepnote/deepnoteServerProvider.node';
 import { ServerHandleRegistry } from '../kernels/deepnote/deepnoteServerHandleRegistry.node';
 import { DeepnoteLspClientManager } from '../kernels/deepnote/deepnoteLspClientManager.node';
-import { DeepnoteInitNotebookRunner, IDeepnoteInitNotebookRunner } from './deepnote/deepnoteInitNotebookRunner.node';
+import { DeepnoteInitNotebookRunner } from './deepnote/deepnoteInitNotebookRunner.node';
 import { DeepnoteRequirementsHelper, IDeepnoteRequirementsHelper } from './deepnote/deepnoteRequirementsHelper.node';
 import { DeepnoteEnvironmentManager } from '../kernels/deepnote/environments/deepnoteEnvironmentManager.node';
 import { DeepnoteEnvironmentStorage } from '../kernels/deepnote/environments/deepnoteEnvironmentStorage.node';
@@ -248,8 +248,10 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addBinding(IDeepnoteKernelAutoSelector, IExtensionSyncActivationService);
     serviceManager.addSingleton<IDeepnoteLspClientManager>(IDeepnoteLspClientManager, DeepnoteLspClientManager);
     serviceManager.addBinding(IDeepnoteLspClientManager, IExtensionSyncActivationService);
-    serviceManager.addSingleton<IDeepnoteInitNotebookRunner>(IDeepnoteInitNotebookRunner, DeepnoteInitNotebookRunner);
-    serviceManager.addBinding(IDeepnoteInitNotebookRunner, IExtensionSyncActivationService);
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        DeepnoteInitNotebookRunner
+    );
     serviceManager.addSingleton<IDeepnoteRequirementsHelper>(IDeepnoteRequirementsHelper, DeepnoteRequirementsHelper);
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,

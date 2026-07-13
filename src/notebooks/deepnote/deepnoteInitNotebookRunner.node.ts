@@ -57,7 +57,7 @@ else:
  * per project/URI — so a same-environment restart re-initializes correctly.
  */
 @injectable()
-export class DeepnoteInitNotebookRunner implements IDeepnoteInitNotebookRunner, IExtensionSyncActivationService {
+export class DeepnoteInitNotebookRunner implements IExtensionSyncActivationService {
     // Kernels that have already run init in their current lifetime; entries are collected on dispose.
     private readonly initRunByKernel = new WeakSet<IKernel>();
     // In-flight init run per kernel, so a restart can cancel a still-running start-triggered run.
@@ -398,9 +398,4 @@ export class DeepnoteInitNotebookRunner implements IDeepnoteInitNotebookRunner, 
             throw error;
         }
     }
-}
-
-export const IDeepnoteInitNotebookRunner = Symbol('IDeepnoteInitNotebookRunner');
-export interface IDeepnoteInitNotebookRunner {
-    activate(): void;
 }

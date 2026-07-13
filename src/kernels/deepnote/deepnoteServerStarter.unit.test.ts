@@ -43,9 +43,6 @@ suite('DeepnoteServerStarter', () => {
     let mockAsyncRegistry: IAsyncDisposableRegistry;
     let mockSqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider;
 
-    const start = (notebookUri: Uri, environmentId = 'env1') =>
-        serverStarter.startServer(interpreter, venvPath, true, [], environmentId, notebookUri);
-
     setup(() => {
         __resetRuntimeCoreMock();
 
@@ -111,7 +108,7 @@ suite('DeepnoteServerStarter', () => {
                 new CancellationError()
             );
 
-            await start(uriA);
+            await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriA);
 
             assert.deepStrictEqual(
                 __getStartServerCalls().map((c) => c.env),
@@ -122,7 +119,7 @@ suite('DeepnoteServerStarter', () => {
         test('forwards the SQL integration provider env vars into the started server', async () => {
             when(mockSqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({ FOO: 'bar' });
 
-            await start(uriA);
+            await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriA);
 
             assert.deepStrictEqual(
                 __getStartServerCalls().map((c) => c.env),
@@ -135,8 +132,8 @@ suite('DeepnoteServerStarter', () => {
             when(mockSqlIntegrationEnvVars.getEnvironmentVariables(uriA, anything())).thenResolve({ FOO: 'bar' });
             when(mockSqlIntegrationEnvVars.getEnvironmentVariables(uriB, anything())).thenResolve({});
 
-            await start(uriA);
-            await start(uriB);
+            await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriA);
+            await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriB);
 
             assert.deepStrictEqual(
                 __getStartServerCalls().map((c) => c.env),
@@ -148,8 +145,8 @@ suite('DeepnoteServerStarter', () => {
 
     suite('per-notebook keying (startServer/stopServer)', () => {
         test('starts SEPARATE servers for two different notebook URIs in the same dir (catches cross-sibling server reuse)', async () => {
-            const infoA = await start(uriA);
-            const infoB = await start(uriB);
+            const infoA = await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriA);
+            const infoB = await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriB);
 
             // runtime-core startServer must be invoked once per notebook — NOT reused across siblings.
             const calls = __getStartServerCalls();
@@ -167,8 +164,8 @@ suite('DeepnoteServerStarter', () => {
             // Simulate a live server: the health probe (GET {url}/api) succeeds.
             const fetchStub = sinon.stub(globalThis, 'fetch').resolves(new Response());
 
-            const first = await start(uriA);
-            const second = await start(uriA);
+            const first = await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriA);
+            const second = await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriA);
 
             assert.strictEqual(
                 __getStartServerCalls().length,
@@ -186,16 +183,16 @@ suite('DeepnoteServerStarter', () => {
             // Health probes report "running" for everything; a stopped notebook must still respawn.
             sinon.stub(globalThis, 'fetch').resolves(new Response());
 
-            await start(uriA);
+            await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriA);
             await serverStarter.stopServer(uriA);
-            await start(uriA);
+            await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriA);
 
             assert.strictEqual(__getStartServerCalls().length, 2, 'restart after stop must spawn a new server');
         });
 
         test('stopServer(uriA) tears down ONLY notebook A; B keeps running (catches cross-notebook teardown)', async () => {
-            const infoA = await start(uriA);
-            await start(uriB);
+            const infoA = await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriA);
+            await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriB);
 
             await serverStarter.stopServer(uriA);
 
@@ -216,8 +213,8 @@ suite('DeepnoteServerStarter', () => {
 
     suite('dispose', () => {
         test('stops every running server; a second dispose is a no-op', async () => {
-            const infoA = await start(uriA);
-            const infoB = await start(uriB);
+            const infoA = await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriA);
+            const infoB = await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriB);
 
             await serverStarter.dispose();
             await serverStarter.dispose();
@@ -225,9 +222,18 @@ suite('DeepnoteServerStarter', () => {
             assert.deepStrictEqual(__getStopServerCalls(), [infoA, infoB], 'each server stopped exactly once');
         });
 
-        test('waits for an in-flight start operation before completing', async () => {
-            const clock = fakeTimers.install();
-            try {
+        suite('with fake timers', () => {
+            let clock: fakeTimers.InstalledClock;
+
+            setup(() => {
+                clock = fakeTimers.install();
+            });
+
+            teardown(() => {
+                clock.uninstall();
+            });
+
+            test('waits for an in-flight start operation before completing', async () => {
                 // Park the start mid-flight: its SQL env-var gathering resolves only via releaseStart.
                 let releaseStart!: () => void;
                 when(mockSqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenReturn(
@@ -236,7 +242,7 @@ suite('DeepnoteServerStarter', () => {
                     })
                 );
 
-                const startPromise = start(uriA);
+                const startPromise = serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriA);
 
                 let disposeResolved = false;
                 const disposePromise = serverStarter.dispose().then(() => {
@@ -255,9 +261,7 @@ suite('DeepnoteServerStarter', () => {
                 await disposePromise;
 
                 assert.deepStrictEqual(__getStopServerCalls(), [info], 'dispose must stop the server it waited for');
-            } finally {
-                clock.uninstall();
-            }
+            });
         });
     });
 });

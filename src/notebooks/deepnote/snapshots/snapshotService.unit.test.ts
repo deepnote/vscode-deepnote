@@ -97,7 +97,7 @@ suite('SnapshotService', () => {
 
     /**
      * Installs suite-owned notebook change/close emitters onto the workspace mock so activate()'s
-     * subscriptions resolve to events the test can fire (resetVSCodeMocks leaves these unstubbed).
+     * subscriptions resolve to events the test can fire (resetVSCodeMocks does not stub these).
      */
     function installNotebookDocumentEmitters(): {
         changeEmitter: EventEmitter<NotebookDocumentChangeEvent>;

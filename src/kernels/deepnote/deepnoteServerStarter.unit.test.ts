@@ -60,7 +60,7 @@ suite('DeepnoteServerStarter', () => {
         when(mockOutputChannel.appendLine(anything())).thenReturn();
 
         // The toolkit install step runs before runtime-core's startServer; stub it so the
-        // start path reaches startServer. (Un-stubbed ts-mockito methods return null.)
+        // start path reaches startServer. (ts-mockito methods that are not stubbed return null.)
         when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything(), anything())).thenResolve({
             pythonInterpreter: interpreter,
             toolkitVersion: '1.0.0'

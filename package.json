@@ -1649,6 +1649,12 @@
                     "description": "When enabled, outputs are saved to separate snapshot files in a 'snapshots' folder instead of the main .deepnote file.",
                     "scope": "resource"
                 },
+                "deepnote.integrations.envFile.enabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "When enabled, integration credentials are also loaded from a '.deepnote.env.yaml' file (with 'env:' references resolved against '.env' and environment variables) next to the .deepnote file or at the workspace root.",
+                    "scope": "resource"
+                },
                 "deepnote.experiments.enabled": {
                     "type": "boolean",
                     "default": true,
@@ -2703,6 +2709,7 @@
         "clsx": "^2.1.1",
         "cross-fetch": "^3.1.5",
         "d3-format": "^3.1.0",
+        "dotenv": "^17.2.3",
         "encoding": "^0.1.13",
         "express": "^5.2.1",
         "fast-deep-equal": "^2.0.1",

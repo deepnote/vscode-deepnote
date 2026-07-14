@@ -3,6 +3,7 @@ import { IDisposable, Resource } from '../../common/types';
 import { EnvironmentVariables } from '../../common/variables/types';
 import { ConfigurableDatabaseIntegrationConfig } from './integrationTypes';
 import { DeepnoteFile } from '@deepnote/blocks';
+import { DatabaseIntegrationConfig, ValidationIssue } from '@deepnote/database-integrations';
 
 /**
  * Settings for select input blocks
@@ -96,6 +97,19 @@ export interface ISqlIntegrationEnvVarsProvider {
      * Get environment variables for SQL integrations used in the given notebook.
      */
     getEnvironmentVariables(resource: Resource, token?: CancellationToken): Promise<EnvironmentVariables>;
+}
+
+export const IIntegrationsFileConfigProvider = Symbol('IIntegrationsFileConfigProvider');
+export interface IIntegrationsFileConfigProvider {
+    /**
+     * Loads integration configs from a `.deepnote.env.yaml` file located next to the given `.deepnote`
+     * project file (or at the workspace-folder root), resolving `env:` references against a sibling
+     * `.env` file and `process.env`. Returns the accepted configs plus any validation issues; a missing
+     * file yields an empty result and this never throws.
+     */
+    getConfigsForFile(
+        deepnoteFileUri: Uri
+    ): Promise<{ configs: DatabaseIntegrationConfig[]; issues: ValidationIssue[] }>;
 }
 
 /**

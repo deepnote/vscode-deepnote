@@ -1,4 +1,4 @@
-import { inject, injectable } from 'inversify';
+import { inject, injectable, optional } from 'inversify';
 import { CancellationToken, Event, EventEmitter } from 'vscode';
 
 import {
@@ -10,8 +10,10 @@ import {
 
 import { IDisposableRegistry, Resource } from '../../common/types';
 import { EnvironmentVariables } from '../../common/variables/types';
+import { notebookPathToDeepnoteProjectFilePath } from '../../deepnote/deepnoteProjectUtils';
 import { logger } from '../../logging';
 import {
+    IIntegrationsFileConfigProvider,
     IIntegrationStorage,
     ISqlIntegrationEnvVarsProvider,
     IPlatformNotebookEditorProvider,
@@ -49,7 +51,10 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
         @inject(IPlatformNotebookEditorProvider)
         private readonly notebookEditorProvider: IPlatformNotebookEditorProvider,
         @inject(IPlatformDeepnoteNotebookManager) private readonly notebookManager: IPlatformDeepnoteNotebookManager,
-        @inject(IDisposableRegistry) disposables: IDisposableRegistry
+        @inject(IDisposableRegistry) disposables: IDisposableRegistry,
+        @inject(IIntegrationsFileConfigProvider)
+        @optional()
+        private readonly fileConfigProvider?: IIntegrationsFileConfigProvider
     ) {
         logger.info('SqlIntegrationEnvironmentVariablesProvider: Constructor called - provider is being instantiated');
         // Dispose emitter when extension deactivates
@@ -111,19 +116,81 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
             `SqlIntegrationEnvironmentVariablesProvider: Found ${projectIntegrations.length} integrations in project`
         );
 
-        const configResults = await Promise.allSettled(
-            projectIntegrations.map((integration) => this.integrationStorage.getIntegrationConfig(integration.id))
+        // Load integration configs from the `.deepnote.env.yaml` file (CLI parity) when the file source is
+        // available. Isolated in try/catch so a file-source failure degrades to SecretStorage + DuckDB and
+        // never rejects the whole method (unchanged behavior when the provider is absent, e.g. on web).
+        let fileConfigs: DatabaseIntegrationConfig[] = [];
+        if (this.fileConfigProvider) {
+            try {
+                const result = await this.fileConfigProvider.getConfigsForFile(
+                    notebookPathToDeepnoteProjectFilePath(notebook.uri)
+                );
+                fileConfigs = result.configs;
+                result.issues.forEach((issue) => {
+                    logger.warn(
+                        `SqlIntegrationEnvironmentVariablesProvider: integrations file issue ${issue.code} at '${issue.path}': ${issue.message}`
+                    );
+                });
+            } catch (error) {
+                logger.error(
+                    'SqlIntegrationEnvironmentVariablesProvider: file integrations source failed; falling back to SecretStorage',
+                    error
+                );
+            }
+        }
+
+        // Merge the two sources. The file wins on id conflicts; SecretStorage is the fallback for project
+        // integrations absent from the file; file-only integrations are injected additively (matches the CLI).
+        const fileConfigsById = new Map(fileConfigs.map((config) => [config.id, config]));
+        const consumedFileIds = new Set<string>();
+
+        // Read from SecretStorage only the project integrations the file did not provide, preserving the
+        // existing Promise.allSettled + per-item error handling.
+        const secretStorageIds = projectIntegrations
+            .map((integration) => integration.id)
+            .filter((id) => !fileConfigsById.has(id));
+        const secretStorageResults = await Promise.allSettled(
+            secretStorageIds.map((id) => this.integrationStorage.getIntegrationConfig(id))
         );
-        const allConfigs: Array<DatabaseIntegrationConfig> = configResults.flatMap((result, index) => {
+        const secretStorageConfigsById = new Map<string, DatabaseIntegrationConfig>();
+        secretStorageResults.forEach((result, index) => {
+            const id = secretStorageIds[index];
             if (result.status === 'fulfilled') {
-                return result.value ? [result.value] : [];
+                if (result.value) {
+                    secretStorageConfigsById.set(id, result.value);
+                }
+
+                return;
             }
             logger.error(
-                `SqlIntegrationEnvironmentVariablesProvider: Failed to load integration config ${projectIntegrations[index].id}`,
+                `SqlIntegrationEnvironmentVariablesProvider: Failed to load integration config ${id}`,
                 result.reason
             );
-            return [];
         });
+
+        // Resolve each project integration in declared order: file config wins, else the SecretStorage fallback.
+        const allConfigs: Array<DatabaseIntegrationConfig> = [];
+        for (const integration of projectIntegrations) {
+            const fileConfig = fileConfigsById.get(integration.id);
+            if (fileConfig) {
+                consumedFileIds.add(integration.id);
+                allConfigs.push(fileConfig);
+
+                continue;
+            }
+            const secretStorageConfig = secretStorageConfigsById.get(integration.id);
+            if (secretStorageConfig) {
+                allConfigs.push(secretStorageConfig);
+            }
+        }
+
+        // Append file-only integrations (not declared in project.integrations) additively. Iterate the
+        // deduped map so both merge paths share one dedup source (guards against duplicate file ids).
+        for (const fileConfig of fileConfigsById.values()) {
+            if (!consumedFileIds.has(fileConfig.id)) {
+                allConfigs.push(fileConfig);
+            }
+        }
 
         // Skip federated-auth integrations: tokens are fetched per-cell via per-cell codegen in `FederatedAuthSqlBlockCodeGenerator`, not baked into kernel env.
         const projectIntegrationConfigs: Array<DatabaseIntegrationConfig> = [];

@@ -1,12 +1,17 @@
 import assert from 'assert';
 import type { DeepnoteFile } from '@deepnote/blocks';
-import { instance, mock, when } from 'ts-mockito';
+import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { CancellationTokenSource, EventEmitter, NotebookDocument, Uri } from 'vscode';
 
 import { IDisposableRegistry } from '../../common/types';
 import { SqlIntegrationEnvironmentVariablesProvider } from './sqlIntegrationEnvironmentVariablesProvider';
-import { IIntegrationStorage, IPlatformDeepnoteNotebookManager, IPlatformNotebookEditorProvider } from './types';
-import { DATAFRAME_SQL_INTEGRATION_ID } from './integrationTypes';
+import {
+    IIntegrationsFileConfigProvider,
+    IIntegrationStorage,
+    IPlatformDeepnoteNotebookManager,
+    IPlatformNotebookEditorProvider
+} from './types';
+import { ConfigurableDatabaseIntegrationConfig, DATAFRAME_SQL_INTEGRATION_ID } from './integrationTypes';
 import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
 
 /** Create a minimal `DeepnoteFile` for tests. */
@@ -434,6 +439,172 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                     'URL should contain application=Deepnote_Workspaces parameter'
                 );
             });
+        });
+    });
+
+    suite('File config source (.deepnote.env.yaml) merge', () => {
+        const notebookUri = Uri.file('/ws/project.deepnote');
+        const duckDbEnvVar = `SQL_${DATAFRAME_SQL_INTEGRATION_ID.toUpperCase().replace(/-/g, '_')}`;
+        let fileConfigProvider: IIntegrationsFileConfigProvider;
+        let providerWithFile: SqlIntegrationEnvironmentVariablesProvider;
+
+        /** A non-federated, non-reserved pgsql config whose host is embedded in the generated connection URL. */
+        function pgConfig(id: string, host: string): ConfigurableDatabaseIntegrationConfig {
+            return {
+                id,
+                name: id,
+                type: 'pgsql',
+                metadata: {
+                    host,
+                    port: '5432',
+                    database: 'db',
+                    user: 'u',
+                    password: 'p',
+                    sslEnabled: false
+                }
+            };
+        }
+
+        function stubNotebookWithProject(project: DeepnoteFile): void {
+            const notebook = mock<NotebookDocument>();
+            when(notebook.uri).thenReturn(notebookUri);
+            when(notebook.metadata).thenReturn({
+                deepnoteProjectId: 'project-123',
+                deepnoteNotebookId: 'notebook-123'
+            });
+            when(notebookEditorProvider.findAssociatedNotebookDocument(notebookUri)).thenReturn(instance(notebook));
+            when(notebookManager.getProjectForNotebook('project-123', 'notebook-123')).thenReturn(project);
+        }
+
+        setup(() => {
+            fileConfigProvider = mock<IIntegrationsFileConfigProvider>();
+            providerWithFile = new SqlIntegrationEnvironmentVariablesProvider(
+                instance(integrationStorage),
+                instance(notebookEditorProvider),
+                instance(notebookManager),
+                disposables,
+                instance(fileConfigProvider)
+            );
+        });
+
+        test('Merges file config with SecretStorage config: both are included', async () => {
+            stubNotebookWithProject(
+                createMockProject('project-123', [
+                    { id: 'file-db', name: 'file-db', type: 'pgsql' },
+                    { id: 'secret-db', name: 'secret-db', type: 'pgsql' }
+                ])
+            );
+            when(fileConfigProvider.getConfigsForFile(anything())).thenResolve({
+                configs: [pgConfig('file-db', 'from-file.example.com')],
+                issues: []
+            });
+            when(integrationStorage.getIntegrationConfig('secret-db')).thenResolve(
+                pgConfig('secret-db', 'from-secret.example.com')
+            );
+
+            const result = await providerWithFile.getEnvironmentVariables(notebookUri);
+
+            assert.ok(result['SQL_FILE_DB'], 'File-sourced integration env var should be present');
+            assert.ok(result['SQL_SECRET_DB'], 'SecretStorage-sourced integration env var should be present');
+            assert.ok(
+                JSON.parse(result['SQL_FILE_DB']!).url.includes('from-file.example.com'),
+                'File config connection details should be used for the file-sourced integration'
+            );
+            assert.ok(
+                JSON.parse(result['SQL_SECRET_DB']!).url.includes('from-secret.example.com'),
+                'SecretStorage config connection details should be used for the SecretStorage-only integration'
+            );
+        });
+
+        test('File wins on id conflict: file config used and SecretStorage is not queried for that id', async () => {
+            stubNotebookWithProject(
+                createMockProject('project-123', [
+                    { id: 'shared-db', name: 'shared-db', type: 'pgsql' },
+                    { id: 'secret-only', name: 'secret-only', type: 'pgsql' }
+                ])
+            );
+            when(fileConfigProvider.getConfigsForFile(anything())).thenResolve({
+                configs: [pgConfig('shared-db', 'from-file.example.com')],
+                issues: []
+            });
+            // Stubbed with a different host to prove the file wins; the provider must never consult it for `shared-db`.
+            when(integrationStorage.getIntegrationConfig('shared-db')).thenResolve(
+                pgConfig('shared-db', 'from-secret.example.com')
+            );
+            when(integrationStorage.getIntegrationConfig('secret-only')).thenResolve(
+                pgConfig('secret-only', 'secret-only.example.com')
+            );
+
+            const result = await providerWithFile.getEnvironmentVariables(notebookUri);
+
+            const sharedUrl = JSON.parse(result['SQL_SHARED_DB']!).url as string;
+            assert.ok(sharedUrl.includes('from-file.example.com'), 'File config host should win the conflict');
+            assert.ok(!sharedUrl.includes('from-secret.example.com'), 'SecretStorage host must not be used');
+            assert.ok(result['SQL_SECRET_ONLY'], 'SecretStorage-only integration should still be resolved');
+
+            // The conflicting id must never hit SecretStorage; the SecretStorage-only id must be queried exactly once.
+            verify(integrationStorage.getIntegrationConfig('shared-db')).never();
+            verify(integrationStorage.getIntegrationConfig('secret-only')).once();
+        });
+
+        test('File-only integration (absent from project.integrations) is injected additively', async () => {
+            stubNotebookWithProject(createMockProject('project-123', []));
+            when(fileConfigProvider.getConfigsForFile(anything())).thenResolve({
+                configs: [pgConfig('file-only', 'file-only.example.com')],
+                issues: []
+            });
+
+            const result = await providerWithFile.getEnvironmentVariables(notebookUri);
+
+            assert.ok(result['SQL_FILE_ONLY'], 'File-only integration env var should be present');
+            assert.ok(
+                JSON.parse(result['SQL_FILE_ONLY']!).url.includes('file-only.example.com'),
+                'File-only integration should use its file config'
+            );
+        });
+
+        test('File provider absent: behavior is SecretStorage-only (unchanged)', async () => {
+            const providerWithoutFile = new SqlIntegrationEnvironmentVariablesProvider(
+                instance(integrationStorage),
+                instance(notebookEditorProvider),
+                instance(notebookManager),
+                disposables,
+                undefined
+            );
+            stubNotebookWithProject(
+                createMockProject('project-123', [{ id: 'secret-db', name: 'secret-db', type: 'pgsql' }])
+            );
+            when(integrationStorage.getIntegrationConfig('secret-db')).thenResolve(
+                pgConfig('secret-db', 'from-secret.example.com')
+            );
+
+            const result = await providerWithoutFile.getEnvironmentVariables(notebookUri);
+
+            assert.ok(result['SQL_SECRET_DB'], 'SecretStorage integration should be resolved without a file provider');
+            assert.ok(
+                JSON.parse(result['SQL_SECRET_DB']!).url.includes('from-secret.example.com'),
+                'SecretStorage config should be used'
+            );
+            assert.ok(result[duckDbEnvVar], 'DuckDB integration should always be included');
+            verify(integrationStorage.getIntegrationConfig('secret-db')).once();
+        });
+
+        test('File source throws: degrades to SecretStorage + DuckDB without rejecting', async () => {
+            stubNotebookWithProject(
+                createMockProject('project-123', [{ id: 'secret-db', name: 'secret-db', type: 'pgsql' }])
+            );
+            when(fileConfigProvider.getConfigsForFile(anything())).thenReject(new Error('boom'));
+            when(integrationStorage.getIntegrationConfig('secret-db')).thenResolve(
+                pgConfig('secret-db', 'from-secret.example.com')
+            );
+
+            const result = await providerWithFile.getEnvironmentVariables(notebookUri);
+
+            assert.ok(
+                result['SQL_SECRET_DB'],
+                'SecretStorage integration should still be resolved when the file source throws'
+            );
+            assert.ok(result[duckDbEnvVar], 'DuckDB integration should still be included when the file source throws');
         });
     });
 

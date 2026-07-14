@@ -17,6 +17,7 @@ import { uuidUtils } from '../../platform/common/uuid';
 import { getFilePath } from '../../platform/common/platform/fs-paths';
 import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { Commands } from '../../platform/common/constants';
+import { flushNotebookDocumentIfDirty } from '../../platform/deepnote/deepnoteDocumentFlush';
 import { readDeepnoteProjectFile } from '../../platform/deepnote/deepnoteProjectFileReader';
 import { ILogger } from '../../platform/logging/types';
 import { buildSingleNotebookFile, buildSiblingNotebookFileUri } from './deepnoteNotebookFileFactory';
@@ -173,9 +174,28 @@ export class DeepnoteExplorerView {
                 return;
             }
 
-            targetNotebook.name = newName;
+            // Flush the open document and re-read before rewriting, so we serialize the user's live cell
+            // edits instead of clobbering them via the watcher reload; abort if the save is declined.
+            if (!(await flushNotebookDocumentIfDirty(fileUri))) {
+                await window.showErrorMessage(
+                    l10n.t('Could not save "{0}" before renaming. The notebook was left unchanged.', currentName)
+                );
 
-            await this.writeProjectFile(fileUri, projectData);
+                return;
+            }
+
+            const freshData = await readDeepnoteProjectFile(fileUri);
+            const freshTarget = this.resolveTargetNotebook(treeItem, freshData);
+
+            if (!freshTarget) {
+                await window.showErrorMessage(l10n.t('Notebook not found'));
+
+                return;
+            }
+
+            freshTarget.name = newName;
+
+            await this.writeProjectFile(fileUri, freshData);
 
             this.treeDataProvider.refreshNotebook(treeItem.context.projectId);
             await window.showInformationMessage(l10n.t('Notebook renamed to: {0}', newName));
@@ -338,6 +358,23 @@ export class DeepnoteExplorerView {
         }
 
         try {
+            // Flush open siblings with unsaved edits first, so the disk read-modify-write below can't
+            // clobber live cell edits via the watcher reload; abort the whole rename if a save fails.
+            for (const { filePath } of group.files) {
+                const fileUri = Uri.file(filePath);
+
+                if (!(await flushNotebookDocumentIfDirty(fileUri))) {
+                    await window.showErrorMessage(
+                        l10n.t(
+                            'Could not save "{0}" before renaming. The project was left unchanged.',
+                            fileUri.path.split('/').pop() ?? filePath
+                        )
+                    );
+
+                    return;
+                }
+            }
+
             let failedCount = 0;
 
             for (const { filePath } of group.files) {

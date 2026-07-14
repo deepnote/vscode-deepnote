@@ -44,6 +44,7 @@ import { DeepnoteActivationService } from './deepnote/deepnoteActivationService'
 import { DeepnoteNotebookManager } from './deepnote/deepnoteNotebookManager';
 import { IDeepnoteNotebookManager } from './types';
 import { IntegrationStorage } from '../platform/notebooks/deepnote/integrationStorage';
+import { IntegrationsFileConfigProvider } from '../platform/notebooks/deepnote/integrationsFileConfigProvider.node';
 import { IntegrationDetector } from './deepnote/integrations/integrationDetector';
 import { IntegrationManager } from './deepnote/integrations/integrationManager';
 import { IntegrationWebviewProvider } from './deepnote/integrations/integrationWebview';
@@ -61,6 +62,7 @@ import { FederatedAuthOrphanedTokenCleaner } from './deepnote/integrations/feder
 import { FederatedAuthSqlBlockCodeGenerator } from './deepnote/integrations/federatedAuth/federatedAuthSqlBlockCodeGenerator.node';
 import { FederatedAuthTokenStorage } from './deepnote/integrations/federatedAuth/federatedAuthTokenStorage.node';
 import {
+    IIntegrationsFileConfigProvider,
     IPlatformNotebookEditorProvider,
     IPlatformDeepnoteNotebookManager
 } from '../platform/notebooks/deepnote/types';
@@ -101,6 +103,7 @@ import { DeepnoteCellCopyHandler } from './deepnote/deepnoteCellCopyHandler';
 import { DeepnoteEnvironmentTreeDataProvider } from '../kernels/deepnote/environments/deepnoteEnvironmentTreeDataProvider.node';
 import { OpenInDeepnoteHandler } from './deepnote/openInDeepnoteHandler.node';
 import { IntegrationKernelRestartHandler } from './deepnote/integrations/integrationKernelRestartHandler';
+import { IntegrationsEnvFileWatcher } from './deepnote/integrations/integrationsEnvFileWatcher.node';
 import { ISnapshotMetadataService, SnapshotService } from './deepnote/snapshots/snapshotService';
 import { EnvironmentCapture, IEnvironmentCapture } from './deepnote/snapshots/environmentCapture.node';
 import { DeepnoteFileChangeWatcher } from './deepnote/deepnoteFileChangeWatcher';
@@ -234,6 +237,14 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
         IntegrationKernelRestartHandler
+    );
+    serviceManager.addSingleton<IIntegrationsFileConfigProvider>(
+        IIntegrationsFileConfigProvider,
+        IntegrationsFileConfigProvider
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        IntegrationsEnvFileWatcher
     );
 
     // Deepnote kernel services

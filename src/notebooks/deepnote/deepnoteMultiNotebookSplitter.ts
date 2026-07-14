@@ -95,7 +95,9 @@ export class DeepnoteMultiNotebookSplitter {
             this.promptedUris.add(uriKey);
 
             const selection = await window.showWarningMessage(
-                l10n.t('This .deepnote file contains multiple notebooks. Split it into one file per notebook?'),
+                l10n.t(
+                    'Multiple notebooks in one .deepnote file is a legacy layout, now being replaced by one file per notebook. Split it?'
+                ),
                 SPLIT_ACTION
             );
 

@@ -20,7 +20,7 @@ import {
 } from '../helpers';
 
 const DISMISS_FIXTURE = 'sales-analytics.deepnote';
-const SPLIT_PROMPT = /contains multiple notebooks/i;
+const SPLIT_PROMPT = /multiple notebooks/i;
 
 describe('Deepnote — split-prompt safety', function () {
     this.timeout(SUITE_TIMEOUT);

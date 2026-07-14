@@ -26,7 +26,7 @@ import {
 
 const FIXTURE = 'bootstrap-only.deepnote';
 const NOTEBOOK_NAME = 'Bootstrap';
-const SPLIT_PROMPT = /contains multiple notebooks/i;
+const SPLIT_PROMPT = /multiple notebooks/i;
 const NO_SPLIT_PROMPT_TIMEOUT = 6_000;
 const TREE_LOAD_TIMEOUT = 30_000;
 const NOTEBOOK_NOT_FOUND = /Notebook not found/i;

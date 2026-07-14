@@ -15,7 +15,8 @@ import {
 } from './deepnoteTestHelpers';
 
 const SPLIT_ACTION = 'Split into separate files';
-const PROMPT_MESSAGE = 'This .deepnote file contains multiple notebooks. Split it into one file per notebook?';
+const PROMPT_MESSAGE =
+    'Multiple notebooks in one .deepnote file is a legacy layout, now being replaced by one file per notebook. Split it?';
 
 const waitTimeoutMs = 4000;
 const waitIntervalMs = 10;

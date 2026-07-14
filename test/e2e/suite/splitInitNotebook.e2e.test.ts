@@ -24,7 +24,7 @@ import {
 
 const FIXTURE = 'etl-pipeline.deepnote';
 const SPLIT_ACTION = 'Split into separate files';
-const SPLIT_PROMPT = /contains multiple notebooks/i;
+const SPLIT_PROMPT = /multiple notebooks/i;
 const SPLIT_DONE = /Split into \d+ files\./i;
 
 // How long to wait while confirming a single-notebook file does NOT raise the split prompt.
@@ -125,7 +125,7 @@ describe('Deepnote — splitting a legacy multi-notebook .deepnote file that has
 
     it('warns that the file contains multiple notebooks and offers to split it', function () {
         expect(promptMessage).to.match(SPLIT_PROMPT);
-        expect(promptMessage).to.contain('Split it into one file per notebook');
+        expect(promptMessage).to.contain('one file per notebook');
     });
 
     it('splits into one file per notebook (init + mains) and retires the original as a .legacy backup', function () {

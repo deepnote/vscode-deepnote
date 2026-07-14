@@ -8,6 +8,7 @@ import {
 } from '@deepnote/blocks';
 import {
     countBlocksWithOutputs,
+    encodeNotebookIdForFilename,
     hasOutputs,
     parseSnapshotFilename,
     resolveSnapshotNotebookId
@@ -22,6 +23,7 @@ import {
     NotebookDocumentChangeEvent,
     RelativePattern,
     Uri,
+    WorkspaceFolder,
     window,
     workspace
 } from 'vscode';
@@ -412,81 +414,36 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
         logger.debug(`[Snapshot] Searching ${workspaceFolders.length} workspace folder(s) for snapshots`);
 
-        // Key on projectId only so legacy (no-notebook-id) snapshots are still discovered as a fallback.
-        const glob = `**/snapshots/*_${projectId}_*.snapshot.deepnote`;
-        const candidates: Array<{ uri: Uri; notebookId?: string; timestamp: string }> = [];
+        // Pass (a): this notebook's OWN scoped files, globbed + capped on their own so a noisy sibling
+        // sharing the project.id can't truncate this notebook's `latest` before ranking.
+        if (notebookId) {
+            const scopedGlob = `**/snapshots/*_${projectId}_${encodeNotebookIdForFilename(
+                notebookId
+            )}_*.snapshot.deepnote`;
+            const notebookScopedSnapshotOutputs = await this.findSnapshotOutputs(
+                workspaceFolders,
+                scopedGlob,
+                projectId,
+                notebookId,
+                (parsed) => parsed.notebookId === notebookId
+            );
 
-        for (const folder of workspaceFolders) {
-            const pattern = new RelativePattern(folder, glob);
-            const files = await workspace.findFiles(pattern, null, maxSnapshotFilesPerFolder);
-
-            for (const uri of files) {
-                const basename = Utils.basename(uri);
-                const parsed = parseSnapshotFilename(basename);
-
-                if (!parsed || parsed.projectId !== projectId) {
-                    continue;
-                }
-
-                // Drop other notebooks' scoped files; keep this notebook's and legacy no-id files.
-                if (notebookId && parsed.notebookId && parsed.notebookId !== notebookId) {
-                    continue;
-                }
-
-                candidates.push({ uri, notebookId: parsed.notebookId, timestamp: parsed.timestamp });
+            if (notebookScopedSnapshotOutputs != null && notebookScopedSnapshotOutputs.size > 0) {
+                return notebookScopedSnapshotOutputs;
             }
         }
 
-        if (candidates.length === 0) {
-            logger.debug(`[Snapshot] No snapshot files found for project ${projectId}`);
+        // Pass (b): legacy project-wide, no-notebook-id files (backward compat), used only when the
+        // notebook-scoped pass found nothing. Reproduces the pre-scoping discovery exactly.
+        const legacyGlob = `**/snapshots/*_${projectId}_*.snapshot.deepnote`;
 
-            return;
-        }
-
-        candidates.sort((a, b) => this.compareSnapshotCandidates(a, b, notebookId));
-
-        // Return the first candidate with real outputs; skip corrupt files and empty-output
-        // `latest` snapshots (which signal a save race).
-        for (const candidate of candidates) {
-            let file: DeepnoteFile;
-
-            try {
-                file = await readDeepnoteProjectFile(candidate.uri);
-            } catch (error) {
-                logger.warn(
-                    `[Snapshot] Failed to read/parse snapshot candidate: ${Utils.basename(candidate.uri)}`,
-                    error
-                );
-
-                continue;
-            }
-
-            if (candidate.timestamp === 'latest' && countBlocksWithOutputs(file) === 0) {
-                logger.debug(
-                    `[Snapshot] Skipping empty-output latest snapshot (possible save race): ${Utils.basename(
-                        candidate.uri
-                    )}`
-                );
-
-                continue;
-            }
-
-            if (!hasOutputs(file)) {
-                logger.debug(
-                    `[Snapshot] Snapshot candidate has no outputs, trying next: ${Utils.basename(candidate.uri)}`
-                );
-
-                continue;
-            }
-
-            logger.debug(`[Snapshot] Using snapshot: ${Utils.basename(candidate.uri)}`);
-
-            return this.extractOutputsFromFile(file);
-        }
-
-        logger.debug(`[Snapshot] No snapshot candidate with real outputs found for project ${projectId}`);
-
-        return;
+        return this.findSnapshotOutputs(
+            workspaceFolders,
+            legacyGlob,
+            projectId,
+            notebookId,
+            (parsed) => !notebookId || parsed.notebookId === undefined
+        );
     }
 
     stripOutputsFromBlocks(blocks: DeepnoteBlock[]): DeepnoteBlock[] {
@@ -931,6 +888,88 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         logger.debug(`[Snapshot] Extracted ${outputsMap.size} block outputs from ${totalBlocks} total blocks`);
 
         return outputsMap;
+    }
+
+    /**
+     * Globs one snapshot family, caps it per folder, then ranks and safe-restores the best candidate
+     * with real outputs. `keep` narrows the parsed files (this notebook's scoped set, or legacy no-id
+     * files) so the per-folder cap applies to that family alone — a sibling flood can't truncate it.
+     */
+    private async findSnapshotOutputs(
+        workspaceFolders: readonly WorkspaceFolder[],
+        glob: string,
+        projectId: string,
+        notebookId: string | undefined,
+        keep: (parsed: { notebookId?: string; timestamp: string }) => boolean
+    ): Promise<Map<string, DeepnoteOutput[]> | undefined> {
+        const candidates: Array<{ uri: Uri; notebookId?: string; timestamp: string }> = [];
+
+        for (const folder of workspaceFolders) {
+            const pattern = new RelativePattern(folder, glob);
+            const files = await workspace.findFiles(pattern, null, maxSnapshotFilesPerFolder);
+
+            for (const uri of files) {
+                const basename = Utils.basename(uri);
+                const parsed = parseSnapshotFilename(basename);
+
+                if (!parsed || parsed.projectId !== projectId || !keep(parsed)) {
+                    continue;
+                }
+
+                candidates.push({ uri, notebookId: parsed.notebookId, timestamp: parsed.timestamp });
+            }
+        }
+
+        if (candidates.length === 0) {
+            logger.debug(`[Snapshot] No snapshot files found for project ${projectId}`);
+
+            return;
+        }
+
+        candidates.sort((a, b) => this.compareSnapshotCandidates(a, b, notebookId));
+
+        // Return the first candidate with real outputs; skip corrupt files and empty-output
+        // `latest` snapshots (which signal a save race).
+        for (const candidate of candidates) {
+            let file: DeepnoteFile;
+
+            try {
+                file = await readDeepnoteProjectFile(candidate.uri);
+            } catch (error) {
+                logger.warn(
+                    `[Snapshot] Failed to read/parse snapshot candidate: ${Utils.basename(candidate.uri)}`,
+                    error
+                );
+
+                continue;
+            }
+
+            if (candidate.timestamp === 'latest' && countBlocksWithOutputs(file) === 0) {
+                logger.debug(
+                    `[Snapshot] Skipping empty-output latest snapshot (possible save race): ${Utils.basename(
+                        candidate.uri
+                    )}`
+                );
+
+                continue;
+            }
+
+            if (!hasOutputs(file)) {
+                logger.debug(
+                    `[Snapshot] Snapshot candidate has no outputs, trying next: ${Utils.basename(candidate.uri)}`
+                );
+
+                continue;
+            }
+
+            logger.debug(`[Snapshot] Using snapshot: ${Utils.basename(candidate.uri)}`);
+
+            return this.extractOutputsFromFile(file);
+        }
+
+        logger.debug(`[Snapshot] No snapshot candidate with real outputs found for project ${projectId}`);
+
+        return;
     }
 
     private async prepareSnapshotData(

@@ -12,8 +12,7 @@ import {
     NotebookDocumentChangeEvent,
     TextDocument,
     Uri,
-    WorkspaceConfiguration,
-    WorkspaceFolder
+    WorkspaceConfiguration
 } from 'vscode';
 
 import type { DeepnoteBlock, DeepnoteFile, Environment, ExecutableBlock } from '@deepnote/blocks';
@@ -31,6 +30,13 @@ import type { DeepnoteOutput } from '../../../platform/deepnote/deepnoteTypes';
 import { IDeepnoteNotebookManager } from '../../types';
 import { IDisposableRegistry } from '../../../platform/common/types';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
+import {
+    createDeepnoteBlock,
+    createDeepnoteFile,
+    createDeepnoteNotebook,
+    createDeepnoteProject,
+    createWorkspaceFolder
+} from '../deepnoteTestHelpers';
 
 suite('SnapshotService', () => {
     let service: SnapshotService;
@@ -168,33 +174,27 @@ suite('SnapshotService', () => {
     }
 
     function createProjectData(projectId = 'test-project-id-123', projectName = 'My Project'): DeepnoteFile {
-        return {
-            metadata: {
-                createdAt: '2025-01-01T00:00:00Z'
-            },
-            version: '1.0.0',
-            project: {
+        return createDeepnoteFile({
+            metadata: { createdAt: '2025-01-01T00:00:00Z' },
+            project: createDeepnoteProject({
                 id: projectId,
                 name: projectName,
                 notebooks: [
-                    {
+                    createDeepnoteNotebook({
                         id: 'notebook-1',
                         name: 'Notebook 1',
                         blocks: [
-                            {
+                            createDeepnoteBlock({
                                 id: 'block-1',
-                                type: 'code',
                                 blockGroup: '1',
-                                metadata: {},
-                                sortingKey: 'a0',
                                 content: 'print(1)',
                                 outputs: [{ output_type: 'stream', text: '1' }]
-                            }
+                            })
                         ]
-                    }
+                    })
                 ]
-            }
-        };
+            })
+        });
     }
 
     suite('buildSnapshotPath', () => {
@@ -737,11 +737,7 @@ suite('SnapshotService', () => {
         });
 
         test('should find and parse latest snapshot file', async () => {
-            const workspaceFolder: WorkspaceFolder = {
-                uri: Uri.file('/workspace'),
-                name: 'workspace',
-                index: 0
-            };
+            const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
 
             const snapshotUri = Uri.file(`/workspace/snapshots/project_${projectId}_latest.snapshot.deepnote`);
@@ -787,11 +783,7 @@ project:
         });
 
         test('should return undefined when no snapshot files found', async () => {
-            const workspaceFolder: WorkspaceFolder = {
-                uri: Uri.file('/workspace'),
-                name: 'workspace',
-                index: 0
-            };
+            const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
             when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything())).thenResolve([] as any);
 
@@ -801,11 +793,7 @@ project:
         });
 
         test('should fall back to most recent timestamped snapshot when no latest exists', async () => {
-            const workspaceFolder: WorkspaceFolder = {
-                uri: Uri.file('/workspace'),
-                name: 'workspace',
-                index: 0
-            };
+            const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
 
             const timestampedUri1 = Uri.file(
@@ -851,11 +839,7 @@ project:
         });
 
         test('should return undefined when the only snapshot file read fails', async () => {
-            const workspaceFolder: WorkspaceFolder = {
-                uri: Uri.file('/workspace'),
-                name: 'workspace',
-                index: 0
-            };
+            const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
 
             const snapshotUri = Uri.file(`/workspace/snapshots/project_${projectId}_latest.snapshot.deepnote`);
@@ -875,11 +859,7 @@ project:
         });
 
         test('should return undefined when the only snapshot candidate has no outputs', async () => {
-            const workspaceFolder: WorkspaceFolder = {
-                uri: Uri.file('/workspace'),
-                name: 'workspace',
-                index: 0
-            };
+            const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
 
             const snapshotUri = Uri.file(`/workspace/snapshots/project_${projectId}_latest.snapshot.deepnote`);
@@ -924,11 +904,7 @@ project:
         const notebookId = '11111111-2222-3333-4444-555555555555';
         const otherNotebookId = '99999999-8888-7777-6666-555555555555';
 
-        const workspaceFolder: WorkspaceFolder = {
-            uri: Uri.file('/workspace'),
-            name: 'workspace',
-            index: 0
-        };
+        const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
 
         /** A snapshot whose single block carries one stream output tagged with `marker`. */
         function snapshotYamlWithOutput(marker: string): string {
@@ -1057,11 +1033,7 @@ project:
     suite('readSnapshot safe restore', () => {
         const projectId = 'e132b172-b114-410e-8331-011517db664f';
 
-        const workspaceFolder: WorkspaceFolder = {
-            uri: Uri.file('/workspace'),
-            name: 'workspace',
-            index: 0
-        };
+        const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
 
         function snapshotYaml(blockContent: string, outputsYaml: string): string {
             return `

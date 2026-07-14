@@ -56,7 +56,7 @@ import { logger } from '../../platform/logging';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { IControllerRegistration, IVSCodeNotebookController } from '../controllers/types';
 import { IDeepnoteNotebookManager } from '../types';
-import { getNotebookKey } from '../../platform/deepnote/deepnoteProjectUtils';
+import { getNotebookKey, notebookPathToDeepnoteProjectFilePath } from '../../platform/deepnote/deepnoteProjectUtils';
 import { computeRequirementsHash } from './deepnoteProjectUtils';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
 
@@ -354,6 +354,60 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         }
 
         logger.info(`Controller successfully switched to new environment`);
+    }
+
+    /**
+     * Restart the toolkit server for a notebook so kernel env vars are re-gathered. The toolkit server
+     * captures its environment at spawn time, so a plain kernel.restart() would keep the stale env — a full
+     * respawn is required. Modeled on rebuildController, with two additions: (1) stop the server so the next
+     * start respawns it, and (2) also clear the cached environment id so the same-environment early-return in
+     * ensureKernelSelectedWithConfiguration is bypassed and startServer actually re-runs.
+     */
+    public async restartServerForNotebook(notebook: NotebookDocument, token: CancellationToken): Promise<void> {
+        const notebookKey = getNotebookKey(notebook.uri);
+        const deepnoteFileUri = notebookPathToDeepnoteProjectFilePath(notebook.uri);
+
+        logger.info(`Restarting Deepnote server for ${getDisplayPath(notebook.uri)} to re-gather integration env vars`);
+
+        // Resolve the environment BEFORE stopping anything: if it's gone (e.g. deleted from the Environments
+        // view while the mapping/kernel persist), bail without killing the running server so the notebook isn't
+        // stranded with a dead server.
+        const environmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(notebook.uri);
+        const environment = environmentId ? this.environmentManager.getEnvironment(environmentId) : undefined;
+
+        if (environment == null) {
+            await this.notebookEnvironmentMapper.removeEnvironmentForNotebook(notebook.uri);
+            logger.error(`No environment found for notebook ${getDisplayPath(notebook.uri)}; cannot restart server`);
+
+            return;
+        }
+
+        // Capture the old handle but don't unregister it yet: a failed restart would strand the
+        // still-selected controller on a dead handle.
+        const oldServerHandle = this.serverHandleRegistry.get(notebookKey);
+
+        // Env is captured at server spawn, so a full respawn is required.
+        await this.serverStarter.stopServer(deepnoteFileUri, token);
+        await this.lspClientManager.stopLspClients(notebook.uri, token);
+
+        // rebuildController only clears connection metadata; we ALSO clear the environment id so the
+        // same-environment early-return in ensureKernelSelectedWithConfiguration is bypassed and startServer
+        // re-runs. Keep the controller object (addOrUpdate → updateConnection reuses it, avoiding DISPOSED errors).
+        this.notebookConnectionMetadata.delete(notebookKey);
+        this.notebookEnvironmentsIds.delete(notebookKey);
+
+        // The watcher's own withProgress shows the spinner; this method just re-runs kernel selection.
+        const progress = { report: () => {} };
+        await this.ensureKernelSelectedWithConfiguration(notebook, environment, notebookKey, progress, token);
+
+        // If a new server handle was registered (full setup path), drop the old one.
+        const newServerHandle = this.serverHandleRegistry.get(notebookKey);
+
+        if (oldServerHandle && oldServerHandle !== newServerHandle) {
+            this.serverProvider.unregisterServer(oldServerHandle);
+        }
+
+        logger.info(`Deepnote server restarted for ${getDisplayPath(notebook.uri)}`);
     }
 
     public async ensureKernelSelected(

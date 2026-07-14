@@ -108,6 +108,10 @@ export class DeepnoteMultiNotebookSplitter {
     }
 
     private async splitFile(fileUri: Uri): Promise<void> {
+        // Compensations for each applied step, unwound in reverse on any failure so the split is all-or-nothing.
+        const rollbacks: Array<() => Thenable<void>> = [];
+        let renamed = false;
+
         try {
             // Flush the open document first, then re-read from disk.
             const openDocument = workspace.notebookDocuments.find(
@@ -134,6 +138,8 @@ export class DeepnoteMultiNotebookSplitter {
 
             const deepnoteFile = await readDeepnoteProjectFile(fileUri);
             const parentDir = Uri.joinPath(fileUri, '..');
+            const envMapper = this.envMapper;
+            const originalEnv = envMapper?.getEnvironmentForNotebook(fileUri);
 
             // Write all children before retiring the original (see step below).
             const entries = splitByNotebooks(deepnoteFile, getFileStem(fileUri));
@@ -141,34 +147,21 @@ export class DeepnoteMultiNotebookSplitter {
             const newUris: Uri[] = [];
             const encoder = new TextEncoder();
 
-            try {
-                for (const entry of entries) {
-                    const targetUri = await allocateSiblingUri(parentDir, entry.outputFilename, this.exists, reserved);
+            for (const entry of entries) {
+                const targetUri = await allocateSiblingUri(parentDir, entry.outputFilename, this.exists, reserved);
 
-                    await workspace.fs.writeFile(targetUri, encoder.encode(serializeDeepnoteFile(entry.file)));
-                    newUris.push(targetUri);
-                }
-            } catch (writeError) {
-                // Delete partial siblings: orphans left on disk would bump a retry's name allocation to a duplicate.
-                for (const uri of newUris) {
-                    await workspace.fs
-                        .delete(uri, { useTrash: false })
-                        .then(undefined, (cleanupError) =>
-                            this.logger.error(`Failed to clean up partial split file: ${uri.toString()}`, cleanupError)
-                        );
-                }
-
-                throw writeError;
+                await workspace.fs.writeFile(targetUri, encoder.encode(serializeDeepnoteFile(entry.file)));
+                newUris.push(targetUri);
+                // Undo this write on a later failure: an orphaned sibling would bump a retry's name to a duplicate.
+                rollbacks.push(() => workspace.fs.delete(targetUri, { useTrash: false }));
             }
 
             // Migrate the environment selection onto each new file (desktop-only).
-            if (this.envMapper) {
-                const env = this.envMapper.getEnvironmentForNotebook(fileUri);
-
-                if (env) {
-                    for (const newUri of newUris) {
-                        await this.envMapper.setEnvironmentForNotebook(newUri, env);
-                    }
+            if (envMapper && originalEnv) {
+                for (const newUri of newUris) {
+                    // Register the revert BEFORE the set: the mapper mutates memory before the persist that can reject.
+                    rollbacks.push(() => envMapper.removeEnvironmentForNotebook(newUri));
+                    await envMapper.setEnvironmentForNotebook(newUri, originalEnv);
                 }
             }
 
@@ -176,24 +169,70 @@ export class DeepnoteMultiNotebookSplitter {
             await this.closeNotebookTab(fileUri);
             const legacyUri = await this.allocateLegacyUri(fileUri);
             await workspace.fs.rename(fileUri, legacyUri, { overwrite: false });
+            renamed = true;
+            rollbacks.push(() => workspace.fs.rename(legacyUri, fileUri, { overwrite: false }));
 
-            if (this.envMapper) {
-                await this.envMapper.removeEnvironmentForNotebook(fileUri);
+            if (envMapper) {
+                // Restore the original mapping on rollback before removing it here.
+                if (originalEnv) {
+                    rollbacks.push(() => envMapper.setEnvironmentForNotebook(fileUri, originalEnv));
+                }
+
+                await envMapper.removeEnvironmentForNotebook(fileUri);
             }
 
             this.refreshTree();
 
             await window.showInformationMessage(l10n.t('Split into {0} files.', newUris.length));
         } catch (error) {
-            // Any write failure leaves the original intact; a re-run re-derives the rest via the allocator.
+            // Unwind every applied step so the original is left as it was found (or an honest message if it can't be).
             this.logger.error(`Failed to split Deepnote file: ${fileUri.toString()}`, error);
 
+            const restored = await this.runRollback(rollbacks);
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
-            await window.showErrorMessage(
-                l10n.t('Failed to split file: {0}. The original file was left unchanged.', errorMessage)
+            await window.showErrorMessage(this.describeSplitFailure({ errorMessage, renamed, restored }));
+        }
+    }
+
+    /** Unwinds applied steps in reverse; resolves to `true` only if every compensation succeeded. */
+    private async runRollback(rollbacks: Array<() => Thenable<void>>): Promise<boolean> {
+        let restored = true;
+
+        for (let index = rollbacks.length - 1; index >= 0; index--) {
+            try {
+                await rollbacks[index]();
+            } catch (rollbackError) {
+                restored = false;
+                this.logger.error('Failed to roll back a Deepnote split step', rollbackError);
+            }
+        }
+
+        return restored;
+    }
+
+    /** Derives the failure message from state so "unchanged" is never claimed for a file that was moved. */
+    private describeSplitFailure({
+        errorMessage,
+        renamed,
+        restored
+    }: {
+        errorMessage: string;
+        renamed: boolean;
+        restored: boolean;
+    }): string {
+        if (!restored) {
+            return l10n.t(
+                'Failed to split file: {0}. Automatic cleanup did not fully complete; check the folder for stray ".deepnote" or ".legacy" files.',
+                errorMessage
             );
         }
+
+        if (renamed) {
+            return l10n.t('Failed to split file: {0}. The original file was restored.', errorMessage);
+        }
+
+        return l10n.t('Failed to split file: {0}. The original file was left unchanged.', errorMessage);
     }
 
     /** Resolves a collision-free `<original>.legacy` (then `.legacy-2`, …) URI next to the original. */

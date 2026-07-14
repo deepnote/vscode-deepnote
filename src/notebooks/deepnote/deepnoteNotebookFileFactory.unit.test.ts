@@ -4,6 +4,12 @@ import { Uri } from 'vscode';
 
 import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { buildSiblingNotebookFileUri, buildSingleNotebookFile, getFileStem } from './deepnoteNotebookFileFactory';
+import {
+    createDeepnoteBlock,
+    createDeepnoteFile,
+    createDeepnoteNotebook,
+    createDeepnoteProject
+} from './deepnoteTestHelpers';
 
 /**
  * The "new notebook" / "duplicate notebook" flows build a sibling FILE (never an extra notebook
@@ -11,39 +17,25 @@ import { buildSiblingNotebookFileUri, buildSingleNotebookFile, getFileStem } fro
  */
 suite('DeepnoteNotebookFileFactory', () => {
     function makeNotebook(id: string, name: string): DeepnoteNotebook {
-        return {
+        return createDeepnoteNotebook({
             id,
             name,
-            blocks: [
-                {
-                    id: `${id}-block`,
-                    type: 'code',
-                    sortingKey: 'a0',
-                    blockGroup: 'g1',
-                    content: 'print(1)',
-                    metadata: {}
-                }
-            ]
-        };
+            blocks: [createDeepnoteBlock({ id: `${id}-block`, blockGroup: 'g1', content: 'print(1)' })]
+        });
     }
 
     function makeSource(overrides?: Partial<DeepnoteFile['metadata']>): DeepnoteFile {
-        return {
-            version: '1.0.0',
-            metadata: {
-                createdAt: '2020-01-01T00:00:00Z',
-                modifiedAt: '2021-01-01T00:00:00Z',
-                ...overrides
-            },
-            project: {
+        return createDeepnoteFile({
+            metadata: { createdAt: '2020-01-01T00:00:00Z', modifiedAt: '2021-01-01T00:00:00Z', ...overrides },
+            project: createDeepnoteProject({
                 id: 'project-1',
                 name: 'My Project',
                 initNotebookId: 'init-notebook',
                 integrations: [{ id: 'int-1', name: 'My Postgres', type: 'postgres' }],
                 settings: { requirements: ['pandas'] },
                 notebooks: [makeNotebook('nb-1', 'First')]
-            }
-        };
+            })
+        });
     }
 
     suite('getFileStem', () => {

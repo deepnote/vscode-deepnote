@@ -6,10 +6,15 @@ import { EventEmitter, FileType, NotebookDocument, Uri } from 'vscode';
 
 import { IKernel, IKernelProvider, INotebookKernelExecution } from '../../kernels/types';
 import { IDisposableRegistry } from '../../platform/common/types';
-import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteInitNotebookRunner } from './deepnoteInitNotebookRunner.node';
+import {
+    createDeepnoteBlock,
+    createDeepnoteFile,
+    createDeepnoteNotebook,
+    createDeepnoteProject
+} from './deepnoteTestHelpers';
 
 const PROJECT_ID = '11111111-1111-1111-1111-111111111111';
 const OTHER_PROJECT_ID = '22222222-2222-2222-2222-222222222222';
@@ -64,69 +69,51 @@ function basename(uri: Uri): string {
  * (only the code blocks must produce executeHidden calls — the markdown must be skipped).
  */
 function makeNotebookFile(projectId: string, notebookId: string, codeContents: string[]): DeepnoteFile {
-    const codeBlocks = codeContents.map((content, index): DeepnoteNotebook['blocks'][number] => ({
-        id: `${notebookId}-code-${index}`,
-        type: 'code',
-        sortingKey: `a${index}`,
-        blockGroup: 'g',
-        content,
-        metadata: {}
-    }));
-
-    return {
-        version: '1.0.0',
+    return createDeepnoteFile({
         metadata: { createdAt: '2020-01-01T00:00:00Z', modifiedAt: '2021-01-01T00:00:00Z' },
-        project: {
+        project: createDeepnoteProject({
             id: projectId,
             name: 'Proj',
             notebooks: [
-                {
+                createDeepnoteNotebook({
                     id: notebookId,
                     name: 'Init',
                     blocks: [
-                        ...codeBlocks,
+                        ...codeContents.map((content, i) =>
+                            createDeepnoteBlock({ id: `${notebookId}-code-${i}`, sortingKey: `a${i}`, content })
+                        ),
                         {
                             id: `${notebookId}-md`,
                             type: 'markdown',
-                            sortingKey: `a${codeContents.length}`,
                             blockGroup: 'g',
+                            sortingKey: `a${codeContents.length}`,
                             content: '# notes',
                             metadata: {}
                         }
                     ]
-                }
+                })
             ]
-        }
-    };
+        })
+    });
 }
 
 /** The cached project entry the manager returns for `getProjectForNotebook` (carries initNotebookId). */
 function makeMainProjectEntry(projectId: string, initNotebookId: string | undefined): DeepnoteFile {
-    return {
-        version: '1.0.0',
+    return createDeepnoteFile({
         metadata: { createdAt: '2020-01-01T00:00:00Z', modifiedAt: '2021-01-01T00:00:00Z' },
-        project: {
+        project: createDeepnoteProject({
             id: projectId,
             name: 'Proj',
             ...(initNotebookId ? { initNotebookId } : {}),
             notebooks: [
-                {
+                createDeepnoteNotebook({
                     id: MAIN_NOTEBOOK_ID,
                     name: 'Main',
-                    blocks: [
-                        {
-                            id: 'main-b',
-                            type: 'code',
-                            sortingKey: 'a0',
-                            blockGroup: 'g',
-                            content: MAIN_FILE_BLOCK_CODE,
-                            metadata: {}
-                        }
-                    ]
-                }
+                    blocks: [createDeepnoteBlock({ id: 'main-b', content: MAIN_FILE_BLOCK_CODE })]
+                })
             ]
-        }
-    };
+        })
+    });
 }
 
 suite('DeepnoteInitNotebookRunner', () => {

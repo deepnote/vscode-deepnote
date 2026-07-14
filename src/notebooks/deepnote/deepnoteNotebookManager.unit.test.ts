@@ -2,24 +2,16 @@ import type { DeepnoteFile } from '@deepnote/blocks';
 import * as assert from 'assert';
 
 import { DeepnoteNotebookManager } from './deepnoteNotebookManager';
+import { createDeepnoteFile, createDeepnoteNotebook, createDeepnoteProject } from './deepnoteTestHelpers';
 import { ProjectIntegration } from '../types';
 
 suite('DeepnoteNotebookManager', () => {
     let manager: DeepnoteNotebookManager;
 
-    const mockProject: DeepnoteFile = {
-        metadata: {
-            createdAt: '2023-01-01T00:00:00Z',
-            modifiedAt: '2023-01-02T00:00:00Z'
-        },
-        project: {
-            id: 'project-123',
-            name: 'Test Project',
-            notebooks: [],
-            settings: {}
-        },
-        version: '1.0.0'
-    };
+    const mockProject: DeepnoteFile = createDeepnoteFile({
+        metadata: { createdAt: '2023-01-01T00:00:00Z', modifiedAt: '2023-01-02T00:00:00Z' },
+        project: createDeepnoteProject({ id: 'project-123', notebooks: [], settings: {} })
+    });
 
     setup(() => {
         manager = new DeepnoteNotebookManager();
@@ -157,20 +149,14 @@ suite('DeepnoteNotebookManager', () => {
 
         // A project (whole DeepnoteFile) for one sibling: same projectId, distinct notebook.
         function siblingProject(notebookId: string, notebookName: string): DeepnoteFile {
-            return {
-                ...mockProject,
-                project: {
-                    ...mockProject.project,
+            return createDeepnoteFile({
+                metadata: { createdAt: '2023-01-01T00:00:00Z', modifiedAt: '2023-01-02T00:00:00Z' },
+                project: createDeepnoteProject({
                     id: projectId,
-                    notebooks: [
-                        {
-                            id: notebookId,
-                            name: notebookName,
-                            blocks: []
-                        }
-                    ]
-                }
-            };
+                    settings: {},
+                    notebooks: [createDeepnoteNotebook({ id: notebookId, name: notebookName })]
+                })
+            });
         }
 
         test('stores two siblings of the same project without clobbering each other', () => {

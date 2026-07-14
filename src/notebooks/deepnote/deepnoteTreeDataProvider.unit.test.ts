@@ -2,6 +2,7 @@ import type { DeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import { l10n, ThemeIcon } from 'vscode';
 
+import { createDeepnoteFile, createDeepnoteNotebook, createDeepnoteProject } from './deepnoteTestHelpers';
 import { DeepnoteTreeDataProvider, compareTreeItemsByLabel } from './deepnoteTreeDataProvider';
 import {
     applyVisualFields,
@@ -30,24 +31,22 @@ function internals(provider: DeepnoteTreeDataProvider): DeepnoteTreeDataProvider
  * Build a single-notebook DeepnoteFile (whole-file shape) for a given project/notebook id.
  */
 function makeSingleNotebookProject(projectId: string, notebookId: string, projectName = 'Test Project'): DeepnoteFile {
-    return {
+    return createDeepnoteFile({
         metadata: { createdAt: '2023-01-01T00:00:00Z', modifiedAt: '2023-01-02T00:00:00Z' },
-        project: {
+        project: createDeepnoteProject({
             id: projectId,
             name: projectName,
+            settings: {},
             notebooks: [
-                {
+                createDeepnoteNotebook({
                     id: notebookId,
                     name: `Notebook ${notebookId}`,
-                    blocks: [],
                     executionMode: 'block',
                     isModule: false
-                }
-            ],
-            settings: {}
-        },
-        version: '1.0.0'
-    };
+                })
+            ]
+        })
+    });
 }
 
 suite('DeepnoteTreeDataProvider', () => {

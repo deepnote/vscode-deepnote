@@ -135,6 +135,15 @@ function hasFileWithNotebookName(dir: string, notebookName: string): boolean {
         .some((file) => fs.readFileSync(path.join(dir, file), 'utf8').includes(`name: ${notebookName}`));
 }
 
+function listDeepnoteFiles(dir: string): string[] {
+    return fs.readdirSync(dir).filter((file) => file.endsWith('.deepnote'));
+}
+
+/** True when the group's notebook leaves are visible, i.e. the group is expanded (not collapsed). */
+async function groupIsExpanded(section: Awaited<ReturnType<typeof getExplorerSection>>): Promise<boolean> {
+    return (await readRows(section)).some((row) => row.isLeaf);
+}
+
 describe('Deepnote — notebook-management commands create and remove sibling files', function () {
     this.timeout(SUITE_TIMEOUT);
 
@@ -187,11 +196,25 @@ describe('Deepnote — notebook-management commands create and remove sibling fi
         const toast = await waitForNotification(/Created new notebook: Analysis/i, WORKBENCH_TIMEOUT, true);
         expect(toast, 'created toast').to.not.equal(undefined);
         expect(hasFileWithNotebookName(tempDir, 'Analysis'), 'a sibling file holding "Analysis"').to.equal(true);
+
+        // The new file is named from the project ("Marketing" → `marketing-analysis.deepnote`), NOT from
+        // the active file's stem (`marketing-overview`) — otherwise the filename accumulates other names.
+        expect(
+            listDeepnoteFiles(tempDir),
+            'new sibling must be marketing-analysis.deepnote, not marketing-overview-analysis.deepnote'
+        ).to.include('marketing-analysis.deepnote');
     });
 
-    it('creates a new sibling file via "Add Notebook" on the project group', async function () {
+    it('creates a new sibling file via "Add Notebook" named from the project name', async function () {
         const section = await getExplorerSection();
         const group = assertNotNull(await findGroup(section), 'Marketing group tree item');
+
+        // Expand the multi-file group first: "Add Notebook" must keep the group usable/expanded, not
+        // send the whole tree back through a loading rebuild. (The scoped-vs-full refresh that prevents
+        // a collapse is asserted deterministically in the DeepnoteExplorerView unit tests — VS Code
+        // restores group-level expansion by id, so the teardown is a transient the UI can't reliably show.)
+        await (group as unknown as { expand(): Promise<void> }).expand().catch(() => undefined);
+        await VSBrowser.instance.driver.sleep(800);
 
         await contextSelect(group, 'Add Notebook');
         const input = await InputBox.create(WORKBENCH_TIMEOUT);
@@ -201,6 +224,18 @@ describe('Deepnote — notebook-management commands create and remove sibling fi
         const toast = await waitForNotification(/Created new notebook: Extra/i, WORKBENCH_TIMEOUT, true);
         expect(toast, 'created toast').to.not.equal(undefined);
         expect(hasFileWithNotebookName(tempDir, 'Extra'), 'a sibling file holding "Extra"').to.equal(true);
+
+        // The filename is `{projectSlug}-{notebookSlug}` from the project name ("Marketing" →
+        // `marketing-extra.deepnote`), never a compound of a sibling's stem (`marketing-analysis-extra`).
+        const files = listDeepnoteFiles(tempDir);
+        expect(files, 'new sibling is named from the project name').to.include('marketing-extra.deepnote');
+        expect(
+            files.filter((file) => /-extra\.deepnote$/.test(file)),
+            'exactly one "-extra" sibling, with no accumulated notebook names'
+        ).to.deep.equal(['marketing-extra.deepnote']);
+
+        // The group is still present and browsable after the add (not stuck on a loading node).
+        expect(await groupIsExpanded(section), 'group leaves remain visible after Add Notebook').to.equal(true);
     });
 
     it('duplicates a notebook into a new sibling file', async function () {

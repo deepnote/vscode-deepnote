@@ -102,28 +102,52 @@ suite('DeepnoteNotebookFileFactory', () => {
     });
 
     suite('buildSiblingNotebookFileUri', () => {
-        const original = Uri.file('/workspace/project/report.deepnote');
         const neverExists = () => Promise.resolve(false);
 
-        test('produces {stem}-{slug}.deepnote (regression: must match convert split naming)', async () => {
-            const uri = await buildSiblingNotebookFileUri(original, 'My Notebook', neverExists);
+        test('produces {projectSlug}-{notebookSlug}.deepnote next to the source (regression: match snapshot slug convention)', async () => {
+            const uri = await buildSiblingNotebookFileUri(
+                Uri.file('/workspace/project/report.deepnote'),
+                'My Project',
+                'My Notebook',
+                neverExists
+            );
 
-            assert.deepStrictEqual(uri, Uri.file('/workspace/project/report-my-notebook.deepnote'));
+            assert.deepStrictEqual(uri, Uri.file('/workspace/project/my-project-my-notebook.deepnote'));
+        });
+
+        test('derives the stem from the project name, IGNORING the source filename (regression: filename must not compound with other notebooks)', async () => {
+            // Even when the source is a split sibling `marketing-overview.deepnote`, the new file is named
+            // from the project ("Marketing") → `marketing-extra.deepnote`, NOT `marketing-overview-extra`.
+            const uri = await buildSiblingNotebookFileUri(
+                Uri.file('/workspace/project/marketing-overview.deepnote'),
+                'Marketing',
+                'Extra',
+                neverExists
+            );
+
+            assert.deepStrictEqual(uri, Uri.file('/workspace/project/marketing-extra.deepnote'));
         });
 
         test('bumps -2 via the shared allocator on collision (regression: must not clobber an existing sibling)', async () => {
             const existsFirst = (uri: Uri) =>
-                Promise.resolve((uri.path.split('/').pop() ?? '') === 'report-my-notebook.deepnote');
-            const uri2 = await buildSiblingNotebookFileUri(original, 'My Notebook', existsFirst);
-            assert.deepStrictEqual(uri2, Uri.file('/workspace/project/report-my-notebook-2.deepnote'));
+                Promise.resolve((uri.path.split('/').pop() ?? '') === 'my-project-my-notebook.deepnote');
+            const uri2 = await buildSiblingNotebookFileUri(
+                Uri.file('/workspace/project/report.deepnote'),
+                'My Project',
+                'My Notebook',
+                existsFirst
+            );
+            assert.deepStrictEqual(uri2, Uri.file('/workspace/project/my-project-my-notebook-2.deepnote'));
         });
 
-        test('falls back to {stem}-notebook.deepnote for an empty/blank notebook name (regression: blank slug must not yield {stem}-.deepnote)', async () => {
-            const emptyName = await buildSiblingNotebookFileUri(original, '', neverExists);
-            assert.deepStrictEqual(emptyName, Uri.file('/workspace/project/report-notebook.deepnote'));
+        test('falls back to a constant slug for a blank project or notebook name (regression: no leading/trailing dash-only stem)', async () => {
+            const original = Uri.file('/workspace/project/report.deepnote');
 
-            const blankName = await buildSiblingNotebookFileUri(original, '   ', neverExists);
-            assert.deepStrictEqual(blankName, Uri.file('/workspace/project/report-notebook.deepnote'));
+            const blankNotebook = await buildSiblingNotebookFileUri(original, 'My Project', '   ', neverExists);
+            assert.deepStrictEqual(blankNotebook, Uri.file('/workspace/project/my-project-notebook.deepnote'));
+
+            const blankProject = await buildSiblingNotebookFileUri(original, '   ', 'My Notebook', neverExists);
+            assert.deepStrictEqual(blankProject, Uri.file('/workspace/project/project-my-notebook.deepnote'));
         });
     });
 });

@@ -6,6 +6,7 @@ import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { allocateSiblingUri } from './deepnoteSiblingFileAllocator';
 
 const FALLBACK_NOTEBOOK_SLUG = 'notebook';
+const FALLBACK_PROJECT_SLUG = 'project';
 const DEEPNOTE_EXTENSION = '.deepnote';
 
 /**
@@ -45,17 +46,21 @@ export function buildSingleNotebookFile(source: DeepnoteFile, notebook: Deepnote
 }
 
 /**
- * Compute a collision-free sibling URI for a new notebook file, named consistently with
- * `@deepnote/convert`'s split output (`{stem}-{slug}.deepnote`).
+ * Compute a collision-free sibling URI for a new notebook file: `{projectSlug}-{notebookSlug}.deepnote`,
+ * placed alongside `originalUri`. The stem is derived from the project NAME (never from a sibling
+ * filename), so it stays stable no matter which sibling seeds the add and can never accumulate other
+ * notebooks' names. Matches the `slugifyProjectName(project.name)` convention used for snapshot filenames.
  */
 export async function buildSiblingNotebookFileUri(
     originalUri: Uri,
+    projectName: string,
     notebookName: string,
     exists: (uri: Uri) => Promise<boolean>
 ): Promise<Uri> {
     const parentDir = Uri.joinPath(originalUri, '..');
-    const slug = slugifyProjectName(notebookName) || FALLBACK_NOTEBOOK_SLUG;
-    const desiredFilename = `${getFileStem(originalUri)}-${slug}${DEEPNOTE_EXTENSION}`;
+    const projectSlug = slugifyProjectName(projectName) || FALLBACK_PROJECT_SLUG;
+    const notebookSlug = slugifyProjectName(notebookName) || FALLBACK_NOTEBOOK_SLUG;
+    const desiredFilename = `${projectSlug}-${notebookSlug}${DEEPNOTE_EXTENSION}`;
 
     return allocateSiblingUri(parentDir, desiredFilename, exists);
 }

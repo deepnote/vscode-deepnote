@@ -135,7 +135,12 @@ export class DeepnoteExplorerView {
 
         const newNotebook = this.createNotebookWithFirstBlock(notebookName);
         const newFile = buildSingleNotebookFile(sourceProject, newNotebook);
-        const targetUri = await buildSiblingNotebookFileUri(sourceUri, notebookName, deepnoteFileExists);
+        const targetUri = await buildSiblingNotebookFileUri(
+            sourceUri,
+            sourceProject.project.name,
+            notebookName,
+            deepnoteFileExists
+        );
 
         await this.writeAndOpenNotebookFile(targetUri, newFile);
 
@@ -304,10 +309,15 @@ export class DeepnoteExplorerView {
             // Single-notebook file: the duplicate becomes a NEW SIBLING FILE.
             if (this.itemIsSingleNotebookFile(treeItem, projectData)) {
                 const newFile = buildSingleNotebookFile(projectData, newNotebook);
-                const targetUri = await buildSiblingNotebookFileUri(fileUri, newName, deepnoteFileExists);
+                const targetUri = await buildSiblingNotebookFileUri(
+                    fileUri,
+                    projectData.project.name,
+                    newName,
+                    deepnoteFileExists
+                );
 
                 await this.writeAndOpenNotebookFile(targetUri, newFile);
-                this.treeDataProvider.refresh();
+                this.treeDataProvider.refreshNotebook(treeItem.context.projectId);
                 await window.showInformationMessage(l10n.t('Notebook duplicated: {0}', newName));
 
                 return;
@@ -854,7 +864,13 @@ export class DeepnoteExplorerView {
             const result = await this.createNotebookSiblingFile(fileUri, existingNames);
 
             if (result) {
-                this.treeDataProvider.refresh();
+                // Scoped refresh preserves expanded groups; a full `refresh()` would collapse the tree.
+                if (projectId) {
+                    this.treeDataProvider.refreshNotebook(projectId);
+                } else {
+                    this.treeDataProvider.refresh();
+                }
+
                 await window.showInformationMessage(l10n.t('Created new notebook: {0}', result.name));
             }
         } catch (error) {
@@ -1098,7 +1114,9 @@ export class DeepnoteExplorerView {
             const result = await this.createNotebookSiblingFile(Uri.file(sourceFile.filePath), existingNames);
 
             if (result) {
-                this.treeDataProvider.refresh();
+                // Scoped refresh (not `refresh()`): a full refresh resets the initial-scan flag, tearing the
+                // whole tree down to a loading node and collapsing every expanded group.
+                this.treeDataProvider.refreshNotebook(treeItem.context.projectId);
                 await window.showInformationMessage(l10n.t('Created new notebook: {0}', result.name));
             }
         } catch (error) {

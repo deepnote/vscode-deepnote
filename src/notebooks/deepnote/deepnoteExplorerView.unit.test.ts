@@ -2397,6 +2397,75 @@ suite('DeepnoteExplorerView - Sibling-file command semantics', () => {
 
             verify(mockFS.writeFile(anything(), anything())).never();
         });
+
+        test('refreshes the group SCOPED (refreshNotebook), never a full refresh (regression: a full refresh tears the tree down to a loading node and collapses expanded groups)', async () => {
+            const projectId = 'group-project';
+            // Source filename deliberately differs from the project slug, to prove the new name is derived
+            // from the project ("Test Project"), not from this file's name.
+            const sourcePath = '/workspace/proj-overview.deepnote';
+            const sourceUri = Uri.file(sourcePath);
+            const sourceProject = singleNotebookFile(projectId, 'nb-overview', 'Overview');
+
+            when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([
+                createWorkspaceFolder(Uri.file('/workspace'))
+            ]);
+            when(mockedVSCodeNamespaces.workspace.findFiles(anything())).thenReturn(Promise.resolve([sourceUri]));
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(
+                Promise.resolve(Buffer.from(serializeDeepnoteFile(sourceProject)))
+            );
+            when(mockFS.stat(anything())).thenReturn(Promise.reject(new Error('not found')));
+
+            let writtenUri: Uri | undefined;
+            when(mockFS.writeFile(anything(), anything())).thenCall((uri: Uri) => {
+                writtenUri = uri;
+                return Promise.resolve();
+            });
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve('Extra'));
+            when(mockedVSCodeNamespaces.workspace.openNotebookDocument(anything())).thenReturn(
+                Promise.resolve(makeNotebookDocument())
+            );
+            when(mockedVSCodeNamespaces.window.showNotebookDocument(anything(), anything())).thenReturn(
+                Promise.resolve(stubNotebookEditor())
+            );
+            uuidStubs.push(createUuidMock(['new-nb', 'new-group', 'new-block']));
+
+            const provider = (
+                explorerView as unknown as {
+                    treeDataProvider: { refresh: () => void; refreshNotebook: (id: string) => void };
+                }
+            ).treeDataProvider;
+            const refreshSpy = sandbox.stub(provider, 'refresh');
+            const refreshNotebookSpy = sandbox.stub(provider, 'refreshNotebook');
+
+            const treeItem: Partial<DeepnoteTreeItem> = {
+                extra: {
+                    type: DeepnoteTreeItemType.ProjectGroup,
+                    data: {
+                        projectId,
+                        projectName: 'Test Project',
+                        files: [{ filePath: sourcePath, cacheKey: sourceUri.toString(), project: sourceProject }]
+                    }
+                },
+                context: { filePath: sourcePath, projectId }
+            };
+
+            await handlerFor(Commands.AddNotebookToProject)(treeItem as DeepnoteTreeItem);
+
+            assert.isTrue(
+                refreshNotebookSpy.calledOnceWithExactly(projectId),
+                'must refresh the group scoped, by project id'
+            );
+            assert.isTrue(refreshSpy.notCalled, 'must NOT trigger a full refresh (which collapses the tree)');
+
+            // Bug 1 through the whole flow: the new sibling is named `{projectSlug}-{notebookSlug}` from the
+            // project name ("Test Project" → `test-project-extra.deepnote`), never compounding the source
+            // file's stem (`proj-overview-extra.deepnote`).
+            assert.strictEqual(writtenUri?.path.split('/').pop() ?? '', 'test-project-extra.deepnote');
+        });
     });
 
     suite('deleteNotebook — single-notebook file vs legacy', () => {

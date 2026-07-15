@@ -507,7 +507,7 @@ suite('DeepnoteTreeDataProvider', () => {
             assert.isUndefined(item.command, 'a project group is a container, not directly openable');
         });
 
-        test('ProjectFile single-notebook leaf → notebook icon and an open command carrying the leaf notebook id', () => {
+        test('ProjectFile single-notebook leaf → file-code icon and an open command carrying the leaf notebook id', () => {
             const project = makeSingleNotebookProject('proj-1', 'nb-1', 'Leaf Project');
             const item = makeItem(
                 DeepnoteTreeItemType.ProjectFile,
@@ -520,7 +520,7 @@ suite('DeepnoteTreeDataProvider', () => {
             assert.strictEqual(item.contextValue, 'notebookFile');
             assert.strictEqual(item.label, 'Notebook nb-1');
             assert.strictEqual(item.description, '0 cells');
-            assert.strictEqual(iconId(item), 'notebook');
+            assert.strictEqual(iconId(item), 'file-code');
             assert.strictEqual(item.command?.command, 'deepnote.openNotebook');
             assert.deepStrictEqual(item.command?.arguments, [
                 { filePath: '/leaf.deepnote', projectId: 'proj-1', notebookId: 'nb-1' }

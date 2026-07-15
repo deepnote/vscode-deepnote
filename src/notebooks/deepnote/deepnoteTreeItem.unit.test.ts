@@ -126,12 +126,15 @@ suite('DeepnoteTreeItem', () => {
             assert.strictEqual(item.extra.type, DeepnoteTreeItemType.ProjectFile);
             assert.strictEqual(item.collapsibleState, TreeItemCollapsibleState.Collapsed);
             assert.strictEqual(item.contextValue, 'projectFile');
-            assert.strictEqual(item.tooltip, 'Deepnote Project: Test Project\nFile: /workspace/my-project.deepnote');
+            assert.strictEqual(
+                item.tooltip,
+                'Deepnote Project: Test Project (legacy)\nFile: /workspace/my-project.deepnote'
+            );
             assert.strictEqual(item.description, '2 notebooks');
 
-            // Should have notebook icon for project files
+            // Legacy multi-notebook files use the book (collection) icon
             assert.instanceOf(item.iconPath, ThemeIcon);
-            assert.strictEqual((item.iconPath as ThemeIcon).id, 'notebook');
+            assert.strictEqual((item.iconPath as ThemeIcon).id, 'book');
 
             // Should not have command for project files
             assert.isUndefined(item.command);
@@ -443,7 +446,7 @@ suite('DeepnoteTreeItem', () => {
     });
 
     suite('icon configuration', () => {
-        test('should use notebook icon for project files', () => {
+        test('should use the book icon for a legacy multi-notebook project file', () => {
             const context: DeepnoteTreeItemContext = {
                 filePath: '/test/project.deepnote',
                 projectId: 'project-123'
@@ -456,7 +459,27 @@ suite('DeepnoteTreeItem', () => {
             );
 
             assert.instanceOf(item.iconPath, ThemeIcon);
-            assert.strictEqual((item.iconPath as ThemeIcon).id, 'notebook');
+            assert.strictEqual((item.iconPath as ThemeIcon).id, 'book');
+        });
+
+        test('should use the file-code icon for a single-notebook project file (matches its notebook children)', () => {
+            const singleNotebookProject: DeepnoteFile = {
+                ...mockProject,
+                project: { ...mockProject.project, notebooks: [mockProject.project.notebooks[0]] }
+            };
+            const context: DeepnoteTreeItemContext = {
+                filePath: '/test/single.deepnote',
+                projectId: 'project-123'
+            };
+
+            const item = new DeepnoteTreeItem(
+                context,
+                { type: DeepnoteTreeItemType.ProjectFile, data: singleNotebookProject },
+                TreeItemCollapsibleState.None
+            );
+
+            assert.instanceOf(item.iconPath, ThemeIcon);
+            assert.strictEqual((item.iconPath as ThemeIcon).id, 'file-code');
         });
 
         test('should use file-code icon for notebooks', () => {
@@ -500,7 +523,7 @@ suite('DeepnoteTreeItem', () => {
 
             assert.strictEqual(
                 projectItem.tooltip,
-                'Deepnote Project: My Amazing Project\nFile: /test/amazing-project.deepnote'
+                'Deepnote Project: My Amazing Project (legacy)\nFile: /test/amazing-project.deepnote'
             );
         });
 

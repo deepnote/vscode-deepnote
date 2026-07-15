@@ -22,11 +22,16 @@ suite('IntegrationsEnvFileWatcher', () => {
 
     const workspaceRoot = Uri.file('/ws');
 
-    // Sentinel token handed to the restart body by window.withProgress, so tests can assert it is forwarded.
-    const progressToken = {
-        isCancellationRequested: false,
-        onCancellationRequested: () => ({ dispose: () => {} })
-    } as unknown as CancellationToken;
+    /** A fully-typed CancellationToken with the given cancellation state (no force cast). */
+    function cancellationToken(isCancellationRequested: boolean): CancellationToken {
+        const token = mock<CancellationToken>();
+        when(token.isCancellationRequested).thenReturn(isCancellationRequested);
+
+        return instance(token);
+    }
+
+    // Token handed to the restart body by window.withProgress, so tests can assert what it forwards.
+    const progressToken = cancellationToken(false);
 
     function createMockNotebook(uri: Uri, notebookType: string = DEEPNOTE_NOTEBOOK_TYPE): NotebookDocument {
         const notebook = mock<NotebookDocument>();
@@ -178,10 +183,7 @@ suite('IntegrationsEnvFileWatcher', () => {
         acceptRestart();
         when(kernelAutoSelector.restartServerForNotebook(anything(), anything())).thenResolve();
 
-        const cancelledToken = {
-            isCancellationRequested: true,
-            onCancellationRequested: () => ({ dispose: () => {} })
-        } as unknown as CancellationToken;
+        const cancelledToken = cancellationToken(true);
         when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall((_options, callback) =>
             callback({ report: () => {} }, cancelledToken)
         );

@@ -1,34 +1,6 @@
 /**
- * End-to-end UI test driven by ExTester (vscode-extension-tester).
- *
- * It proves the `.deepnote.env.yaml` -> `env:` -> dotenv -> integration -> kernel-injection path end to
- * end through the *real* VS Code UI:
- *   1. open a one-notebook `.deepnote` file declaring a single `pgsql` integration ("Prod Postgres")
- *      whose only cell prints `os.environ.get('PROD_POSTGRES_HOST')`
- *   2. write `.deepnote.env.yaml` (the integration's `host` = `env:DEMO_DB_HOST`) and `.env`
- *      (`DEMO_DB_HOST=injected-host.example.com`) into the temp workspace
- *   3. create a Deepnote environment + select it for the notebook (builds and connects the kernel)
- *   4. run the cell and assert the rendered output contains `injected-host.example.com`
- *
- * Why the cell reads `PROD_POSTGRES_HOST` (not `DEMO_DB_HOST`): integration env vars are derived from the
- * integration *name* — `convertToEnvironmentVariableName('Prod Postgres')` + `_HOST` = `PROD_POSTGRES_HOST`
- * (via `@deepnote/database-integrations`' `getEnvironmentVariablesForIntegrations`). The file config is
- * loaded by `IntegrationsFileConfigProvider`, merged in `SqlIntegrationEnvironmentVariablesProvider`, and
- * gathered by the toolkit server at spawn — so a rendered `PROD_POSTGRES_HOST` exercises exactly this path.
- *
- * Why the `.env` key is the DISTINCT name `DEMO_DB_HOST`: the extension's pre-existing `.env` support
- * (`customEnvironmentVariablesProvider`) injects `.env` keys *directly* into the kernel, so a cell reading
- * `DEMO_DB_HOST` would pass even if this feature did nothing. `DEMO_DB_HOST` only becomes
- * `PROD_POSTGRES_HOST` by being resolved *through* the `.deepnote.env.yaml` `env:` ref — so asserting on
- * `PROD_POSTGRES_HOST` isolates the new file-config path from that direct `.env` injection.
- *
- * The reusable interaction helpers live in `test/e2e/helpers/`; this file is only the suite wiring.
- *
- * Prerequisites (same as helloWorld.e2e.test.ts):
- *   - The Python extension (`ms-python.python`) must be installed in the test instance
- *     (`npm run setup:e2e:deps`) and at least one Python interpreter must be discoverable.
- *   - Creating the environment provisions a venv and the Deepnote toolkit, which needs network
- *     access; the first kernel start can take a few minutes.
+ * ExTester E2E for `.deepnote.env.yaml` integration injection: writes a `.deepnote.env.yaml` + `.env`, opens the
+ * notebook, runs a cell printing `PROD_POSTGRES_HOST`, and asserts it resolves to the `.env` value (see consts below).
  */
 
 import { expect } from 'chai';
@@ -70,7 +42,8 @@ const INTEGRATIONS_ENV_YAML = `integrations:
 `;
 
 // `.env`: dotenv source for the `env:DEMO_DB_HOST` ref above. Deliberately a DISTINCT key from the printed
-// `PROD_POSTGRES_HOST` so the assertion cannot be satisfied by direct `.env` injection (see file header).
+// `PROD_POSTGRES_HOST`, so a passing assertion can only come from the `.yaml` `env:` resolution — not the
+// extension's direct `.env` injection (which would set `DEMO_DB_HOST`, a key the cell never reads).
 const DOTENV_CONTENT = 'DEMO_DB_HOST=injected-host.example.com\n';
 
 describe('Deepnote E2E — inject integration env var from `.deepnote.env.yaml`', function () {
@@ -98,12 +71,7 @@ describe('Deepnote E2E — inject integration env var from `.deepnote.env.yaml`'
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
-        // Open the temp directory as a workspace folder FIRST. The Deepnote serializer reads a
-        // "snapshot" during deserialization and, with no workspace folder open, blocks on a
-        // `showWarningMessage('Cannot read snapshot: No workspace folders found.')` that never
-        // resolves headlessly — leaving the notebook blank. A workspace folder also provides the
-        // requirements.txt path the kernel auto-selector needs. (Opening a folder reloads the
-        // window, so we re-wait for the workbench afterwards.)
+        // Open the folder as the workspace FIRST (the serializer's snapshot read blocks headlessly without one), then re-wait for the workbench after the reload.
         await openFolderViaDialog(tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 

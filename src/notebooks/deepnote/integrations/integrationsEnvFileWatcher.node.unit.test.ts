@@ -2,10 +2,13 @@ import { assert } from 'chai';
 import { CancellationToken, Disposable, NotebookDocument, Uri } from 'vscode';
 import { anything, capture, instance, mock, verify, when } from 'ts-mockito';
 
-import { DEEPNOTE_NOTEBOOK_TYPE, IDeepnoteKernelAutoSelector } from '../../../kernels/deepnote/types';
+import {
+    DEEPNOTE_NOTEBOOK_TYPE,
+    IDeepnoteKernelAutoSelector,
+    IDeepnoteServerStarter
+} from '../../../kernels/deepnote/types';
 import { DataScience } from '../../../platform/common/utils/localize';
 import { IDisposable } from '../../../platform/common/types';
-import { IKernel, IKernelProvider } from '../../../kernels/types';
 import { IntegrationsEnvFileWatcher } from './integrationsEnvFileWatcher.node';
 import { createDeferred } from '../../../platform/common/utils/async';
 import { dispose } from '../../../platform/common/utils/lifecycle';
@@ -15,7 +18,7 @@ import { notebookPathToDeepnoteProjectFilePath } from '../../../platform/deepnot
 suite('IntegrationsEnvFileWatcher', () => {
     let watcher: IntegrationsEnvFileWatcher;
     let kernelAutoSelector: IDeepnoteKernelAutoSelector;
-    let kernelProvider: IKernelProvider;
+    let serverStarter: IDeepnoteServerStarter;
     let disposables: IDisposable[];
 
     const workspaceRoot = Uri.file('/ws');
@@ -32,14 +35,6 @@ suite('IntegrationsEnvFileWatcher', () => {
         when(notebook.uri).thenReturn(uri);
 
         return instance(notebook);
-    }
-
-    /** Returns the ts-mockito control object; callers wrap it with `instance()`. */
-    function mkKernel(opts: { startedAtLeastOnce?: boolean } = {}): IKernel {
-        const kernel = mock<IKernel>();
-        when(kernel.startedAtLeastOnce).thenReturn(opts.startedAtLeastOnce ?? true);
-
-        return kernel;
     }
 
     /** The dir fsPath the watcher derives from a notebook uri (dir-then-root: the `.deepnote` file's dir). */
@@ -62,14 +57,14 @@ suite('IntegrationsEnvFileWatcher', () => {
         disposables = [new Disposable(() => resetVSCodeMocks())];
 
         kernelAutoSelector = mock<IDeepnoteKernelAutoSelector>();
-        kernelProvider = mock<IKernelProvider>();
+        serverStarter = mock<IDeepnoteServerStarter>();
 
         // Run the restart body inline and forward the sentinel cancellation token.
         when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall((_options, callback) =>
             callback({ report: () => {} }, progressToken)
         );
 
-        watcher = new IntegrationsEnvFileWatcher(instance(kernelAutoSelector), instance(kernelProvider), disposables);
+        watcher = new IntegrationsEnvFileWatcher(instance(kernelAutoSelector), instance(serverStarter), disposables);
     });
 
     teardown(() => {
@@ -84,8 +79,7 @@ suite('IntegrationsEnvFileWatcher', () => {
         const notebookB = createMockNotebook(uriB);
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebookA, notebookB]);
-        when(kernelProvider.get(notebookA)).thenReturn(instance(mkKernel({ startedAtLeastOnce: true })));
-        when(kernelProvider.get(notebookB)).thenReturn(instance(mkKernel({ startedAtLeastOnce: true })));
+        when(serverStarter.isServerRunningForFile(anything())).thenReturn(true);
         acceptRestart();
         when(kernelAutoSelector.restartServerForNotebook(anything(), anything())).thenResolve();
 
@@ -104,7 +98,7 @@ suite('IntegrationsEnvFileWatcher', () => {
         const notebook = createMockNotebook(uri);
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(kernelProvider.get(notebook)).thenReturn(instance(mkKernel({ startedAtLeastOnce: true })));
+        when(serverStarter.isServerRunningForFile(anything())).thenReturn(true);
         when(mockedVSCodeNamespaces.workspace.getWorkspaceFolder(anything())).thenReturn({
             uri: workspaceRoot
         } as never);
@@ -117,24 +111,17 @@ suite('IntegrationsEnvFileWatcher', () => {
         verify(kernelAutoSelector.restartServerForNotebook(notebook, anything())).once();
     });
 
-    (
-        [
-            ['the notebook has no kernel', () => undefined],
-            ['the kernel has never started', () => instance(mkKernel({ startedAtLeastOnce: false }))]
-        ] as const
-    ).forEach(([label, buildKernel]) => {
-        test(`shows no prompt and does not restart when ${label}`, async () => {
-            const uri = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
-            const notebook = createMockNotebook(uri);
+    test('shows no prompt and does not restart when no server is running', async () => {
+        const uri = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
+        const notebook = createMockNotebook(uri);
 
-            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-            when(kernelProvider.get(notebook)).thenReturn(buildKernel());
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+        when(serverStarter.isServerRunningForFile(anything())).thenReturn(false);
 
-            await watcher.handleChangedDirs(new Set([deepnoteDirOf(uri)]));
+        await watcher.handleChangedDirs(new Set([deepnoteDirOf(uri)]));
 
-            verify(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything())).never();
-            verify(kernelAutoSelector.restartServerForNotebook(anything(), anything())).never();
-        });
+        verify(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything())).never();
+        verify(kernelAutoSelector.restartServerForNotebook(anything(), anything())).never();
     });
 
     test('shows no prompt when the changed dir matches no open Deepnote notebook', async () => {
@@ -142,7 +129,7 @@ suite('IntegrationsEnvFileWatcher', () => {
         const notebook = createMockNotebook(uri);
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(kernelProvider.get(notebook)).thenReturn(instance(mkKernel({ startedAtLeastOnce: true })));
+        when(serverStarter.isServerRunningForFile(anything())).thenReturn(true);
 
         // An unrelated dir changed - the notebook's dir and workspace root are not in the set.
         await watcher.handleChangedDirs(new Set([Uri.file('/some/other/dir').fsPath]));
@@ -156,7 +143,7 @@ suite('IntegrationsEnvFileWatcher', () => {
         const notebook = createMockNotebook(uri, 'jupyter-notebook');
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(kernelProvider.get(notebook)).thenReturn(instance(mkKernel({ startedAtLeastOnce: true })));
+        when(serverStarter.isServerRunningForFile(anything())).thenReturn(true);
 
         await watcher.handleChangedDirs(new Set([deepnoteDirOf(uri)]));
 
@@ -164,12 +151,12 @@ suite('IntegrationsEnvFileWatcher', () => {
         verify(kernelAutoSelector.restartServerForNotebook(anything(), anything())).never();
     });
 
-    test('accepting Restart restarts the server once, forwarding the withProgress token', async () => {
+    test('accepting Restart restarts the server once, atomically (non-cancellable token)', async () => {
         const uri = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
         const notebook = createMockNotebook(uri);
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(kernelProvider.get(notebook)).thenReturn(instance(mkKernel({ startedAtLeastOnce: true })));
+        when(serverStarter.isServerRunningForFile(anything())).thenReturn(true);
         acceptRestart();
         when(kernelAutoSelector.restartServerForNotebook(anything(), anything())).thenResolve();
 
@@ -179,7 +166,34 @@ suite('IntegrationsEnvFileWatcher', () => {
 
         const [nbArg, tokenArg] = capture(kernelAutoSelector.restartServerForNotebook).last();
         assert.strictEqual(nbArg, notebook, 'should restart the affected notebook');
-        assert.strictEqual(tokenArg, progressToken, 'should forward the withProgress cancellation token');
+        assert.notStrictEqual(tokenArg, progressToken, 'must not forward the cancellable withProgress token');
+        assert.strictEqual(
+            tokenArg.isCancellationRequested,
+            false,
+            'restart runs atomically, not cancellable mid-flight'
+        );
+    });
+
+    test('does not restart once cancellation is requested', async () => {
+        const uri = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
+        const notebook = createMockNotebook(uri);
+
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+        when(serverStarter.isServerRunningForFile(anything())).thenReturn(true);
+        acceptRestart();
+        when(kernelAutoSelector.restartServerForNotebook(anything(), anything())).thenResolve();
+
+        const cancelledToken = {
+            isCancellationRequested: true,
+            onCancellationRequested: () => ({ dispose: () => {} })
+        } as unknown as CancellationToken;
+        when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall((_options, callback) =>
+            callback({ report: () => {} }, cancelledToken)
+        );
+
+        await watcher.handleChangedDirs(new Set([deepnoteDirOf(uri)]));
+
+        verify(kernelAutoSelector.restartServerForNotebook(anything(), anything())).never();
     });
 
     test('declining the prompt does not restart the server', async () => {
@@ -187,7 +201,7 @@ suite('IntegrationsEnvFileWatcher', () => {
         const notebook = createMockNotebook(uri);
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(kernelProvider.get(notebook)).thenReturn(instance(mkKernel({ startedAtLeastOnce: true })));
+        when(serverStarter.isServerRunningForFile(anything())).thenReturn(true);
         // Default reset already resolves undefined; be explicit that the user dismissed the prompt.
         when(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything())).thenResolve(
             undefined as never
@@ -204,7 +218,7 @@ suite('IntegrationsEnvFileWatcher', () => {
         const notebook = createMockNotebook(uri);
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(kernelProvider.get(notebook)).thenReturn(instance(mkKernel({ startedAtLeastOnce: true })));
+        when(serverStarter.isServerRunningForFile(anything())).thenReturn(true);
         acceptRestart();
 
         // Keep the first restart in-flight (isRestarting stays true) until released.
@@ -229,7 +243,7 @@ suite('IntegrationsEnvFileWatcher', () => {
         const notebook = createMockNotebook(uri);
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(kernelProvider.get(notebook)).thenReturn(instance(mkKernel({ startedAtLeastOnce: true })));
+        when(serverStarter.isServerRunningForFile(anything())).thenReturn(true);
         when(kernelAutoSelector.restartServerForNotebook(anything(), anything())).thenResolve();
 
         // Two overlapping prompts; control their resolution order via deferreds.

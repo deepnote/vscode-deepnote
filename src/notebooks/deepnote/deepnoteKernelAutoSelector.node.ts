@@ -390,6 +390,12 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         await this.serverStarter.stopServer(deepnoteFileUri, token);
         await this.lspClientManager.stopLspClients(notebook.uri, token);
 
+        // updateConnection won't dispose the kernel (same id/env), so it would stay bound to the killed server.
+        const staleKernel = this.kernelProvider.get(notebook);
+        if (staleKernel) {
+            await staleKernel.dispose();
+        }
+
         // rebuildController only clears connection metadata; we ALSO clear the environment id so the
         // same-environment early-return in ensureKernelSelectedWithConfiguration is bypassed and startServer
         // re-runs. Keep the controller object (addOrUpdate → updateConnection reuses it, avoiding DISPOSED errors).

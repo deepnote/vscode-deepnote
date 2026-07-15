@@ -179,6 +179,9 @@ export interface IDeepnoteServerStarter {
     // stopServer(environmentId: string, token?: vscode.CancellationToken): Promise<void>;
     stopServer(deepnoteFileUri: vscode.Uri, token?: vscode.CancellationToken): Promise<void>;
 
+    /** Whether a toolkit server is currently running for the given `.deepnote` file (env already captured at spawn). */
+    isServerRunningForFile(deepnoteFileUri: vscode.Uri): boolean;
+
     /**
      * Disposes all server processes and resources.
      * Called when the extension is deactivated.

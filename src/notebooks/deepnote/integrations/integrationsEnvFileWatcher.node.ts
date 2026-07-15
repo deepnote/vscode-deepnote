@@ -1,5 +1,14 @@
 import { inject, injectable } from 'inversify';
-import { NotebookDocument, ProgressLocation, RelativePattern, Uri, l10n, window, workspace } from 'vscode';
+import {
+    CancellationToken,
+    NotebookDocument,
+    ProgressLocation,
+    RelativePattern,
+    Uri,
+    l10n,
+    window,
+    workspace
+} from 'vscode';
 import { DEFAULT_ENV_FILE, DEFAULT_INTEGRATIONS_FILE } from '@deepnote/database-integrations';
 
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
@@ -7,14 +16,23 @@ import { IDisposableRegistry } from '../../../platform/common/types';
 import { DataScience } from '../../../platform/common/utils/localize';
 import { notebookPathToDeepnoteProjectFilePath } from '../../../platform/deepnote/deepnoteProjectUtils';
 import { logger } from '../../../platform/logging';
-import { DEEPNOTE_NOTEBOOK_TYPE, IDeepnoteKernelAutoSelector } from '../../../kernels/deepnote/types';
-import { IKernelProvider } from '../../../kernels/types';
+import {
+    DEEPNOTE_NOTEBOOK_TYPE,
+    IDeepnoteKernelAutoSelector,
+    IDeepnoteServerStarter
+} from '../../../kernels/deepnote/types';
 
 /** Trailing-edge debounce so a burst of edits (e.g. .env and .deepnote.env.yaml both saved) is handled once. */
 const debounceTimeInMilliseconds = 500;
 
 /** Integration env files whose changes require respawning the toolkit server. */
 const watchedEnvFileNames = [DEFAULT_INTEGRATIONS_FILE, DEFAULT_ENV_FILE];
+
+/** Sentinel replacing the unavailable `CancellationToken.None`: a restart, once started, runs to completion. */
+const nonCancellableToken: CancellationToken = {
+    isCancellationRequested: false,
+    onCancellationRequested: () => ({ dispose() {} })
+};
 
 /**
  * Watches the integration env files (`.deepnote.env.yaml` / `.env`) next to open Deepnote notebooks and in
@@ -38,7 +56,7 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
 
     constructor(
         @inject(IDeepnoteKernelAutoSelector) private readonly kernelAutoSelector: IDeepnoteKernelAutoSelector,
-        @inject(IKernelProvider) private readonly kernelProvider: IKernelProvider,
+        @inject(IDeepnoteServerStarter) private readonly serverStarter: IDeepnoteServerStarter,
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry
     ) {}
 
@@ -132,12 +150,12 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
                 continue;
             }
 
-            const kernel = this.kernelProvider.get(notebook);
-            if (!kernel || !kernel.startedAtLeastOnce) {
+            const deepnoteFileUri = notebookPathToDeepnoteProjectFilePath(notebook.uri);
+            // The server captures env at spawn — before the kernel ever executes — so gate on the server, not the kernel.
+            if (!this.serverStarter.isServerRunningForFile(deepnoteFileUri)) {
                 continue;
             }
 
-            const deepnoteFileUri = notebookPathToDeepnoteProjectFilePath(notebook.uri);
             const deepnoteDir = Uri.joinPath(deepnoteFileUri, '..').fsPath;
             const workspaceRoot = workspace.getWorkspaceFolder(notebook.uri)?.uri.fsPath;
 
@@ -187,8 +205,12 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
                 },
                 async (_progress, token) => {
                     for (const notebook of notebooks) {
+                        if (token.isCancellationRequested) {
+                            break;
+                        }
                         try {
-                            await this.kernelAutoSelector.restartServerForNotebook(notebook, token);
+                            // Run stop+start atomically: a mid-restart cancel would strand the notebook on a killed server.
+                            await this.kernelAutoSelector.restartServerForNotebook(notebook, nonCancellableToken);
                         } catch (error) {
                             logger.error(
                                 `IntegrationsEnvFileWatcher: Failed to restart server for ${notebook.uri.toString()}`,

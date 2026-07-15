@@ -362,10 +362,16 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             when(mockServerStarter.stopServer(anything(), anything())).thenResolve();
             when(mockLspClientManager.stopLspClients(anything(), anything())).thenResolve();
 
+            const mockKernel = mock<IKernel>();
+            when(mockKernel.dispose()).thenResolve();
+            when(mockKernelProvider.get(mockNotebook)).thenReturn(instance(mockKernel));
+
             const ensureStub = sandbox.stub(selector, 'ensureKernelSelectedWithConfiguration').resolves();
 
             // Act
             await selector.restartServerForNotebook(mockNotebook, instance(mockCancellationToken));
+
+            verify(mockKernel.dispose()).once();
 
             // Assert - server stopped with the .deepnote file uri (query/fragment stripped) and the token
             verify(mockServerStarter.stopServer(anything(), anything())).once();

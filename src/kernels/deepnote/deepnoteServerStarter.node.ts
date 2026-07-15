@@ -92,6 +92,10 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         });
     }
 
+    public isServerRunningForFile(deepnoteFileUri: Uri): boolean {
+        return this.projectContexts.get(deepnoteFileUri.fsPath)?.serverInfo != null;
+    }
+
     /**
      * Start a server for a kernel environment.
      * Serializes concurrent operations on the same environment to prevent race conditions.

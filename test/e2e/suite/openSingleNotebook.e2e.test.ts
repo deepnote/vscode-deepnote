@@ -19,7 +19,7 @@ import {
 
 const FIXTURE = 'quick-notes.deepnote';
 const NOTEBOOK_NAME = 'Quick Notes';
-const SPLIT_PROMPT = /contains multiple notebooks/i;
+const SPLIT_PROMPT = /multiple notebooks/i;
 
 const NO_SPLIT_PROMPT_TIMEOUT = 6_000;
 

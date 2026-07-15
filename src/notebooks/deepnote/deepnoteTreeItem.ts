@@ -140,7 +140,7 @@ export function applyVisualFields(item: DeepnoteTreeItem): void {
             item.label = notebook?.name || 'Untitled Notebook';
             item.tooltip = `Notebook: ${notebook?.name ?? ''}\nFile: ${item.context.filePath}`;
             item.description = `${blockCount} cell${blockCount !== 1 ? 's' : ''}`;
-            item.iconPath = new ThemeIcon('notebook');
+            item.iconPath = new ThemeIcon('file-code');
             item.command = {
                 command: 'deepnote.openNotebook',
                 title: 'Open Notebook',
@@ -158,9 +158,9 @@ export function applyVisualFields(item: DeepnoteTreeItem): void {
 
         item.contextValue = 'projectFile';
         item.label = project.project.name || 'Untitled Project';
-        item.tooltip = `Deepnote Project: ${project.project.name}\nFile: ${item.context.filePath}`;
+        item.tooltip = `Deepnote Project: ${project.project.name} (legacy)\nFile: ${item.context.filePath}`;
         item.description = `${nonInitNotebooks.length} notebook${nonInitNotebooks.length !== 1 ? 's' : ''}`;
-        item.iconPath = new ThemeIcon('notebook');
+        item.iconPath = new ThemeIcon('book');
         item.command = undefined;
 
         return;

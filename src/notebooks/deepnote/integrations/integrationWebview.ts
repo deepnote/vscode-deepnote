@@ -9,6 +9,7 @@ import * as localize from '../../../platform/common/utils/localize';
 import { logger } from '../../../platform/logging';
 import { LocalizedMessages, SharedMessages } from '../../../messageTypes';
 import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
+import { persistProjectIntegrations } from './projectIntegrationsWriter';
 import { IFederatedAuthTokenStorage, IIntegrationStorage, IIntegrationWebviewProvider } from './types';
 import {
     ConfigurableDatabaseIntegrationConfig,
@@ -771,8 +772,9 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             `IntegrationWebviewProvider: Updating project ${this.projectId} with ${projectIntegrations.length} integrations`
         );
 
-        // Update the project in the notebook manager
-        const success = this.notebookManager.updateProjectIntegrations(this.projectId, projectIntegrations);
+        // Apply the list to every sibling .deepnote file on disk (open or closed) and the in-memory
+        // cache, so integration ownership no longer depends on which siblings happen to be open.
+        const success = await persistProjectIntegrations(this.notebookManager, this.projectId, projectIntegrations);
 
         if (!success) {
             logger.error(

@@ -11,12 +11,13 @@ import {
     type InputBoxOptions,
     type NotebookDocument,
     type NotebookEditor,
-    type WorkspaceConfiguration,
-    type WorkspaceFolder
+    type WorkspaceConfiguration
 } from 'vscode';
 import { stringify as yamlStringify } from 'yaml';
 
 import { DeepnoteExplorerView } from './deepnoteExplorerView';
+import { DeepnoteTreeDataProvider } from './deepnoteTreeDataProvider';
+import { createWorkspaceFolder } from './deepnoteTestHelpers';
 import { DeepnoteTreeItem, DeepnoteTreeItemType, type DeepnoteTreeItemContext } from './deepnoteTreeItem';
 import { Commands } from '../../platform/common/constants';
 import type { IExtensionContext } from '../../platform/common/types';
@@ -80,10 +81,6 @@ function makeExtensionContext(): IExtensionContext {
     return { subscriptions: [] } as unknown as IExtensionContext;
 }
 
-function makeWorkspaceFolder(uri: Uri): WorkspaceFolder {
-    return { uri, name: uri.path.split('/').pop() ?? '', index: 0 };
-}
-
 function makeNotebookDocument(): NotebookDocument {
     return {
         uri: Uri.parse('file:///test/notebook.deepnote'),
@@ -127,7 +124,11 @@ suite('DeepnoteExplorerView', () => {
         mockExtensionContext = makeExtensionContext();
 
         mockLogger = createMockLogger();
-        explorerView = new DeepnoteExplorerView(mockExtensionContext, mockLogger);
+        explorerView = new DeepnoteExplorerView(
+            mockExtensionContext,
+            mockLogger,
+            new DeepnoteTreeDataProvider(mockLogger)
+        );
         explorerView.activate();
     });
 
@@ -253,7 +254,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         mockContext = makeExtensionContext();
 
         const mockLogger = createMockLogger();
-        explorerView = new DeepnoteExplorerView(mockContext, mockLogger);
+        explorerView = new DeepnoteExplorerView(mockContext, mockLogger, new DeepnoteTreeDataProvider(mockLogger));
         explorerView.activate();
     });
 
@@ -268,7 +269,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         test('should create a new project with valid input', async () => {
             const projectName = 'My Test Project';
             const sanitizedFileName = 'my-test-project.deepnote';
-            const workspaceFolder = makeWorkspaceFolder(Uri.file('/workspace'));
+            const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
             const projectId = 'test-project-id';
             const notebookId = 'test-notebook-id';
             const blockId = 'test-block-id';
@@ -332,7 +333,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         test('should sanitize project name for filename', async () => {
             const projectName = 'My Project!@# 123';
             const expectedFileName = 'my-project----123.deepnote'; // Each special char becomes a dash
-            const workspaceFolder = makeWorkspaceFolder(Uri.file('/workspace'));
+            const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
 
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
             when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(projectName));
@@ -387,7 +388,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         });
 
         test('should validate empty project name', async () => {
-            const workspaceFolder = makeWorkspaceFolder(Uri.file('/workspace'));
+            const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
 
             let validationFunction: InputBoxOptions['validateInput'];
@@ -405,7 +406,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
         test('should show error if file already exists', async () => {
             const projectName = 'Existing Project';
-            const workspaceFolder = makeWorkspaceFolder(Uri.file('/workspace'));
+            const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
 
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
             when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(projectName));
@@ -427,7 +428,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
 
         test('should handle file write errors', async () => {
             const projectName = 'Test Project';
-            const workspaceFolder = makeWorkspaceFolder(Uri.file('/workspace'));
+            const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
 
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
             when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(projectName));
@@ -453,7 +454,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         });
 
         test('should return early if user cancels input', async () => {
-            const workspaceFolder = makeWorkspaceFolder(Uri.file('/workspace'));
+            const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
             when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(undefined));
 
@@ -480,7 +481,11 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             importModule = await esmock('./deepnoteExplorerView', {
                 '@deepnote/convert': { convertIpynbFileToDeepnoteFile: async () => {} }
             });
-            explorerView = new importModule.DeepnoteExplorerView(mockContext, createMockLogger());
+            explorerView = new importModule.DeepnoteExplorerView(
+                mockContext,
+                createMockLogger(),
+                new DeepnoteTreeDataProvider(createMockLogger())
+            );
             explorerView.activate();
         });
 
@@ -489,7 +494,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         });
 
         test('should import deepnote files', async () => {
-            const workspaceFolder = makeWorkspaceFolder(Uri.file('/workspace'));
+            const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
             const sourceUri = Uri.file('/external/test.deepnote');
             const fileContent = Buffer.from('test content');
 
@@ -517,7 +522,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         });
 
         test('should import and convert jupyter files', async () => {
-            const workspaceFolder = makeWorkspaceFolder(Uri.file('/workspace'));
+            const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
             const sourceUri = Uri.file('/external/my-notebook.ipynb');
 
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
@@ -540,7 +545,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         });
 
         test('should import multiple files', async () => {
-            const workspaceFolder = makeWorkspaceFolder(Uri.file('/workspace'));
+            const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
             const deepnoteUri = Uri.file('/external/test1.deepnote');
             const jupyterUri = Uri.file('/external/test2.ipynb');
 
@@ -568,7 +573,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         });
 
         test('should show error if file already exists', async () => {
-            const workspaceFolder = makeWorkspaceFolder(Uri.file('/workspace'));
+            const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
             const sourceUri = Uri.file('/external/existing.deepnote');
 
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
@@ -597,7 +602,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         });
 
         test('should handle import errors', async () => {
-            const workspaceFolder = makeWorkspaceFolder(Uri.file('/workspace'));
+            const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
             const sourceUri = Uri.file('/external/test.ipynb');
 
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
@@ -614,7 +619,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         });
 
         test('should return early if user cancels dialog', async () => {
-            const workspaceFolder = makeWorkspaceFolder(Uri.file('/workspace'));
+            const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
 
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
             when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(Promise.resolve(undefined));
@@ -666,7 +671,11 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             importModule = await esmock('./deepnoteExplorerView', {
                 '@deepnote/convert': { convertIpynbFileToDeepnoteFile: async () => {} }
             });
-            explorerView = new importModule.DeepnoteExplorerView(mockContext, createMockLogger());
+            explorerView = new importModule.DeepnoteExplorerView(
+                mockContext,
+                createMockLogger(),
+                new DeepnoteTreeDataProvider(createMockLogger())
+            );
             explorerView.activate();
         });
 
@@ -675,7 +684,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         });
 
         test('should import jupyter notebook with correct naming', async () => {
-            const workspaceFolder = makeWorkspaceFolder(Uri.file('/workspace'));
+            const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
             const sourceUri = Uri.file('/external/my-analysis.ipynb');
 
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
@@ -698,7 +707,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         });
 
         test('should import multiple jupyter notebooks', async () => {
-            const workspaceFolder = makeWorkspaceFolder(Uri.file('/workspace'));
+            const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
             const sourceUris = [Uri.file('/external/notebook1.ipynb'), Uri.file('/external/notebook2.ipynb')];
 
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
@@ -730,10 +739,14 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                     }
                 }
             });
-            const partialExplorer = new failingModule.DeepnoteExplorerView(mockContext, createMockLogger());
+            const partialExplorer = new failingModule.DeepnoteExplorerView(
+                mockContext,
+                createMockLogger(),
+                new DeepnoteTreeDataProvider(createMockLogger())
+            );
             partialExplorer.activate();
 
-            const workspaceFolder = makeWorkspaceFolder(Uri.file('/workspace'));
+            const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
             const sourceUris = [
                 Uri.file('/external/ok.ipynb'),
                 Uri.file('/external/fail1.ipynb'),
@@ -781,10 +794,14 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                     }
                 }
             });
-            const failedExplorer = new failingModule.DeepnoteExplorerView(mockContext, createMockLogger());
+            const failedExplorer = new failingModule.DeepnoteExplorerView(
+                mockContext,
+                createMockLogger(),
+                new DeepnoteTreeDataProvider(createMockLogger())
+            );
             failedExplorer.activate();
 
-            const workspaceFolder = makeWorkspaceFolder(Uri.file('/workspace'));
+            const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
             const sourceUris = [Uri.file('/external/fail1.ipynb'), Uri.file('/external/fail2.ipynb')];
 
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
@@ -817,7 +834,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         });
 
         test('should show error if output file already exists', async () => {
-            const workspaceFolder = makeWorkspaceFolder(Uri.file('/workspace'));
+            const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
             const sourceUri = Uri.file('/external/existing.ipynb');
 
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
@@ -839,7 +856,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         });
 
         test('should handle conversion errors', async () => {
-            const workspaceFolder = makeWorkspaceFolder(Uri.file('/workspace'));
+            const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
             const sourceUri = Uri.file('/external/test.ipynb');
 
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
@@ -856,7 +873,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         });
 
         test('should return early if user cancels dialog', async () => {
-            const workspaceFolder = makeWorkspaceFolder(Uri.file('/workspace'));
+            const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
 
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
             when(mockedVSCodeNamespaces.window.showOpenDialog(anything())).thenReturn(Promise.resolve(undefined));
@@ -898,7 +915,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         });
 
         test('should remove .ipynb extension case-insensitively', async () => {
-            const workspaceFolder = makeWorkspaceFolder(Uri.file('/workspace'));
+            const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
             const sourceUri = Uri.file('/external/notebook.IPYNB');
 
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
@@ -2363,7 +2380,11 @@ suite('DeepnoteExplorerView - Sibling-file command semantics', () => {
         uuidStubs = [];
 
         mockContext = makeExtensionContext();
-        explorerView = new DeepnoteExplorerView(mockContext, createMockLogger());
+        explorerView = new DeepnoteExplorerView(
+            mockContext,
+            createMockLogger(),
+            new DeepnoteTreeDataProvider(createMockLogger())
+        );
         explorerView.activate();
     });
 
@@ -2400,6 +2421,69 @@ suite('DeepnoteExplorerView - Sibling-file command semantics', () => {
             await handlerFor(Commands.AddNotebookToProject)(treeItem as DeepnoteTreeItem);
 
             verify(mockFS.writeFile(anything(), anything())).never();
+        });
+
+        test('refreshes the group SCOPED (refreshNotebook), never a full refresh (regression: a full refresh tears the tree down to a loading node and collapses expanded groups)', async () => {
+            const projectId = 'group-project';
+            // Source filename deliberately differs from the project slug, to prove the new name is derived
+            // from the project ("Test Project"), not from this file's name.
+            const sourcePath = '/workspace/proj-overview.deepnote';
+            const sourceUri = Uri.file(sourcePath);
+            const sourceProject = singleNotebookFile(projectId, 'nb-overview', 'Overview');
+
+            when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([
+                createWorkspaceFolder(Uri.file('/workspace'))
+            ]);
+            when(mockedVSCodeNamespaces.workspace.findFiles(anything())).thenReturn(Promise.resolve([sourceUri]));
+
+            const mockFS = mock<typeof workspace.fs>();
+            when(mockFS.readFile(anything())).thenReturn(
+                Promise.resolve(Buffer.from(serializeDeepnoteFile(sourceProject)))
+            );
+            when(mockFS.stat(anything())).thenReturn(Promise.reject(new Error('not found')));
+
+            let writtenUri: Uri | undefined;
+            when(mockFS.writeFile(anything(), anything())).thenCall((uri: Uri) => {
+                writtenUri = uri;
+                return Promise.resolve();
+            });
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFS));
+
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve('Extra'));
+            when(mockedVSCodeNamespaces.workspace.openNotebookDocument(anything())).thenReturn(
+                Promise.resolve(makeNotebookDocument())
+            );
+            when(mockedVSCodeNamespaces.window.showNotebookDocument(anything(), anything())).thenReturn(
+                Promise.resolve(stubNotebookEditor())
+            );
+            uuidStubs.push(createUuidMock(['new-nb', 'new-group', 'new-block']));
+
+            const mockProvider = mock<DeepnoteTreeDataProvider>();
+            explorerView = new DeepnoteExplorerView(mockContext, createMockLogger(), instance(mockProvider));
+            explorerView.activate();
+
+            const treeItem: Partial<DeepnoteTreeItem> = {
+                extra: {
+                    type: DeepnoteTreeItemType.ProjectGroup,
+                    data: {
+                        projectId,
+                        projectName: 'Test Project',
+                        files: [{ filePath: sourcePath, cacheKey: sourceUri.toString(), project: sourceProject }]
+                    }
+                },
+                context: { filePath: sourcePath, projectId }
+            };
+
+            await handlerFor(Commands.AddNotebookToProject)(treeItem as DeepnoteTreeItem);
+
+            // Group scoped (by project id), never a full refresh (which collapses the tree).
+            verify(mockProvider.refreshNotebook(projectId)).once();
+            verify(mockProvider.refresh()).never();
+
+            // Bug 1 through the whole flow: the new sibling is named `{projectSlug}-{notebookSlug}` from the
+            // project name ("Test Project" → `test-project-extra.deepnote`), never compounding the source
+            // file's stem (`proj-overview-extra.deepnote`).
+            assert.strictEqual(writtenUri?.path.split('/').pop() ?? '', 'test-project-extra.deepnote');
         });
     });
 
@@ -2515,7 +2599,7 @@ suite('DeepnoteExplorerView - Sibling-file command semantics', () => {
             const fileOther = singleNotebookFile(otherProjectId, 'nb-o', 'ShouldNotAppear');
 
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([
-                makeWorkspaceFolder(Uri.file('/workspace'))
+                createWorkspaceFolder(Uri.file('/workspace'))
             ]);
             when(mockedVSCodeNamespaces.workspace.findFiles(anything())).thenReturn(
                 Promise.resolve([Uri.file(pathA), Uri.file(pathB), Uri.file(pathOther)])
@@ -2549,7 +2633,7 @@ suite('DeepnoteExplorerView - Sibling-file command semantics', () => {
             const fileA = singleNotebookFile(projectId, 'nb-a', 'Alpha');
 
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([
-                makeWorkspaceFolder(Uri.file('/workspace'))
+                createWorkspaceFolder(Uri.file('/workspace'))
             ]);
             when(mockedVSCodeNamespaces.workspace.findFiles(anything())).thenReturn(Promise.resolve([Uri.file(pathA)]));
 
@@ -2573,7 +2657,7 @@ suite('DeepnoteExplorerView - Sibling-file command semantics', () => {
             const snapshotFile = singleNotebookFile(projectId, 'nb-stale', 'StaleSnapshotName');
 
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([
-                makeWorkspaceFolder(Uri.file('/workspace'))
+                createWorkspaceFolder(Uri.file('/workspace'))
             ]);
             when(mockedVSCodeNamespaces.workspace.findFiles(anything())).thenReturn(
                 Promise.resolve([Uri.file(pathA), Uri.file(snapshotPath)])

@@ -7,9 +7,16 @@ import type { IDeepnoteNotebookEnvironmentMapper } from '../../kernels/deepnote/
 import type { ILogger } from '../../platform/logging/types';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { DeepnoteMultiNotebookSplitter } from './deepnoteMultiNotebookSplitter';
+import {
+    createDeepnoteBlock,
+    createDeepnoteFile,
+    createDeepnoteNotebook,
+    createDeepnoteProject
+} from './deepnoteTestHelpers';
 
 const SPLIT_ACTION = 'Split into separate files';
-const PROMPT_MESSAGE = 'This .deepnote file contains multiple notebooks. Split it into one file per notebook?';
+const PROMPT_MESSAGE =
+    'Multiple notebooks in one .deepnote file is a legacy layout, now being replaced by one file per notebook. Split it?';
 
 const waitTimeoutMs = 4000;
 const waitIntervalMs = 10;
@@ -53,6 +60,8 @@ suite('DeepnoteMultiNotebookSplitter', () => {
     let existingOnDisk: Set<string>;
     // If set, writing a file with this basename rejects (to test abort-on-failure).
     let failWriteFor: string | undefined;
+    // Filenames passed to workspace.fs.delete (rollback cleanup), in call order.
+    let deleteTargets: string[];
 
     const logger: ILogger = {
         error: () => undefined,
@@ -64,24 +73,19 @@ suite('DeepnoteMultiNotebookSplitter', () => {
     } as unknown as ILogger;
 
     function makeNotebook(id: string, name: string, content: string): DeepnoteFile['project']['notebooks'][number] {
-        return {
-            id,
-            name,
-            blocks: [{ id: `${id}-b`, type: 'code', sortingKey: 'a0', blockGroup: 'g', content, metadata: {} }]
-        };
+        return createDeepnoteNotebook({ id, name, blocks: [createDeepnoteBlock({ id: `${id}-b`, content })] });
     }
 
     function makeFile(notebooks: DeepnoteFile['project']['notebooks'], initNotebookId?: string): DeepnoteFile {
-        return {
-            version: '1.0.0',
+        return createDeepnoteFile({
             metadata: { createdAt: '2020-01-01T00:00:00Z', modifiedAt: '2021-01-01T00:00:00Z' },
-            project: {
+            project: createDeepnoteProject({
                 id: 'project-1',
                 name: 'Proj',
-                ...(initNotebookId ? { initNotebookId } : {}),
-                notebooks
-            }
-        };
+                notebooks,
+                ...(initNotebookId ? { initNotebookId } : {})
+            })
+        });
     }
 
     /** Wire `workspace.fs.readFile` to return the serialized bytes of `file` for any URI. */
@@ -106,6 +110,13 @@ suite('DeepnoteMultiNotebookSplitter', () => {
             const to = basename(target);
             callLog.push({ op: 'rename', name: from });
             renameOps.push({ from, to });
+            return Promise.resolve();
+        });
+        when(mockFs.delete(anything(), anything())).thenCall((uri: Uri) => {
+            const name = basename(uri);
+            deleteTargets.push(name);
+            // A rolled-back write frees the name so a retry reuses the base (no `-2`).
+            existingOnDisk.delete(name);
             return Promise.resolve();
         });
         when(mockFs.stat(anything())).thenCall((uri: Uri) => {
@@ -146,6 +157,7 @@ suite('DeepnoteMultiNotebookSplitter', () => {
         refreshTreeCount = 0;
         existingOnDisk = new Set<string>();
         failWriteFor = undefined;
+        deleteTargets = [];
 
         // Re-stub the open-notebook event with our own emitter so tests can fire opens.
         onDidOpen = new EventEmitter<NotebookDocument>();
@@ -444,6 +456,114 @@ suite('DeepnoteMultiNotebookSplitter', () => {
             // The first write succeeded before the failure; the original is still present (never retired).
             assert.isTrue(errorShown, 'an error must be surfaced on write failure');
             assert.deepStrictEqual(writeTargets, ['multi-alpha.deepnote'], 'only writes before the failure occurred');
+        });
+    });
+
+    suite('rollback on late failure (compensating cleanup)', () => {
+        /** Capture the exact message passed to window.showErrorMessage. */
+        function captureErrorMessage(): { get: () => string | undefined } {
+            let message: string | undefined;
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenCall((msg: string) => {
+                message = msg;
+                return Promise.resolve(undefined);
+            });
+
+            return { get: () => message };
+        }
+
+        /**
+         * Build and activate a splitter wired to a fresh env mapper (so a test can inject env-set/remove
+         * failures) and a private open-event emitter (so the fire below targets exactly this splitter).
+         */
+        function makeEnvSplitter(opts: { env: string | undefined; failSetFor?: string; failRemoveFor?: string }): {
+            emitter: EventEmitter<NotebookDocument>;
+            splitter: DeepnoteMultiNotebookSplitter;
+            setCalls: string[];
+            removeCalls: string[];
+        } {
+            const setCalls: string[] = [];
+            const removeCalls: string[] = [];
+            const envMock = mock<IDeepnoteNotebookEnvironmentMapper>();
+            when(envMock.getEnvironmentForNotebook(anything())).thenReturn(opts.env);
+            when(envMock.setEnvironmentForNotebook(anything(), anything())).thenCall((uri: Uri, env: string) => {
+                const name = basename(uri);
+                if (opts.failSetFor && name === opts.failSetFor) {
+                    return Promise.reject(new Error(`set env failed for ${name}`));
+                }
+                setCalls.push(`${name}=${env}`);
+                return Promise.resolve();
+            });
+            when(envMock.removeEnvironmentForNotebook(anything())).thenCall((uri: Uri) => {
+                const name = basename(uri);
+                if (opts.failRemoveFor && name === opts.failRemoveFor) {
+                    return Promise.reject(new Error(`remove env failed for ${name}`));
+                }
+                removeCalls.push(name);
+                return Promise.resolve();
+            });
+
+            const emitter = new EventEmitter<NotebookDocument>();
+            when(mockedVSCodeNamespaces.workspace.onDidOpenNotebookDocument).thenReturn(emitter.event);
+
+            const envSplitter = new DeepnoteMultiNotebookSplitter(
+                instance(envMock),
+                () => {
+                    refreshTreeCount++;
+                },
+                logger,
+                (uri: Uri) => Promise.resolve(existingOnDisk.has(basename(uri)))
+            );
+            envSplitter.activate();
+
+            return { emitter, splitter: envSplitter, setCalls, removeCalls };
+        }
+
+        test('a failure after the rename rolls the original back into place and reports it restored', async () => {
+            const file = makeFile([makeNotebook('n1', 'Alpha', 'a'), makeNotebook('n2', 'Beta', 'b')]);
+            stubReadFile(file);
+            acceptSplit();
+            const errors = captureErrorMessage();
+
+            // The rename succeeds, then removing the original's env mapping (the post-rename step) fails.
+            const {
+                emitter,
+                splitter: envSplitter,
+                setCalls,
+                removeCalls
+            } = makeEnvSplitter({
+                env: 'env-xyz',
+                failRemoveFor: 'multi.deepnote'
+            });
+
+            emitter.fire(notebookDoc(Uri.file('/ws/multi.deepnote')));
+
+            await waitFor(() => errors.get() !== undefined);
+            await settle();
+
+            // The forward rename happened, and the rollback renamed the original back.
+            assert.deepStrictEqual(renameOps, [
+                { from: 'multi.deepnote', to: 'multi.deepnote.legacy' },
+                { from: 'multi.deepnote.legacy', to: 'multi.deepnote' }
+            ]);
+            assert.deepStrictEqual(
+                deleteTargets.slice().sort(),
+                ['multi-alpha.deepnote', 'multi-beta.deepnote'],
+                'the new siblings are still cleaned up'
+            );
+            // The original mapping is restored via a compensating set (its forward removal had failed).
+            assert.include(setCalls, 'multi.deepnote=env-xyz', 'the original env mapping must be restored on rollback');
+            assert.deepStrictEqual(
+                removeCalls.slice().sort(),
+                ['multi-alpha.deepnote', 'multi-beta.deepnote'],
+                'the sibling env sets are reverted'
+            );
+            assert.strictEqual(
+                errors.get(),
+                'Failed to split file: remove env failed for multi.deepnote. The original file was restored.'
+            );
+
+            envSplitter.dispose();
+            emitter.dispose();
         });
     });
 

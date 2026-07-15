@@ -2,6 +2,7 @@ import type { DeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import { l10n, ThemeIcon } from 'vscode';
 
+import { createDeepnoteFile, createDeepnoteNotebook, createDeepnoteProject } from './deepnoteTestHelpers';
 import { DeepnoteTreeDataProvider, compareTreeItemsByLabel } from './deepnoteTreeDataProvider';
 import {
     applyVisualFields,
@@ -30,24 +31,22 @@ function internals(provider: DeepnoteTreeDataProvider): DeepnoteTreeDataProvider
  * Build a single-notebook DeepnoteFile (whole-file shape) for a given project/notebook id.
  */
 function makeSingleNotebookProject(projectId: string, notebookId: string, projectName = 'Test Project'): DeepnoteFile {
-    return {
+    return createDeepnoteFile({
         metadata: { createdAt: '2023-01-01T00:00:00Z', modifiedAt: '2023-01-02T00:00:00Z' },
-        project: {
+        project: createDeepnoteProject({
             id: projectId,
             name: projectName,
+            settings: {},
             notebooks: [
-                {
+                createDeepnoteNotebook({
                     id: notebookId,
                     name: `Notebook ${notebookId}`,
-                    blocks: [],
                     executionMode: 'block',
                     isModule: false
-                }
-            ],
-            settings: {}
-        },
-        version: '1.0.0'
-    };
+                })
+            ]
+        })
+    });
 }
 
 suite('DeepnoteTreeDataProvider', () => {
@@ -508,7 +507,7 @@ suite('DeepnoteTreeDataProvider', () => {
             assert.isUndefined(item.command, 'a project group is a container, not directly openable');
         });
 
-        test('ProjectFile single-notebook leaf → notebook icon and an open command carrying the leaf notebook id', () => {
+        test('ProjectFile single-notebook leaf → file-code icon and an open command carrying the leaf notebook id', () => {
             const project = makeSingleNotebookProject('proj-1', 'nb-1', 'Leaf Project');
             const item = makeItem(
                 DeepnoteTreeItemType.ProjectFile,
@@ -521,7 +520,7 @@ suite('DeepnoteTreeDataProvider', () => {
             assert.strictEqual(item.contextValue, 'notebookFile');
             assert.strictEqual(item.label, 'Notebook nb-1');
             assert.strictEqual(item.description, '0 cells');
-            assert.strictEqual(iconId(item), 'notebook');
+            assert.strictEqual(iconId(item), 'file-code');
             assert.strictEqual(item.command?.command, 'deepnote.openNotebook');
             assert.deepStrictEqual(item.command?.arguments, [
                 { filePath: '/leaf.deepnote', projectId: 'proj-1', notebookId: 'nb-1' }

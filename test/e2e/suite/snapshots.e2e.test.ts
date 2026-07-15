@@ -24,7 +24,7 @@ import {
 const FIXTURE = 'legacy-snapshot-demo.deepnote';
 const SNAPSHOT = 'legacy-snapshot-demo_ffffffff-ffff-4fff-8fff-ffffffffffff_latest.snapshot.deepnote';
 const MARKER = 'SNAPSHOT_OUTPUT_MARKER';
-const SPLIT_PROMPT = /contains multiple notebooks/i;
+const SPLIT_PROMPT = /multiple notebooks/i;
 const OUTPUT_TIMEOUT = 30_000;
 
 describe('Deepnote — a legacy project-scoped snapshot still loads its saved output', function () {

@@ -8,6 +8,7 @@ import { IDeepnoteNotebookEnvironmentMapper } from '../../kernels/deepnote/types
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
 import { DeepnoteExplorerView } from './deepnoteExplorerView';
+import { DeepnoteTreeDataProvider } from './deepnoteTreeDataProvider';
 import { DeepnoteMultiNotebookSplitter } from './deepnoteMultiNotebookSplitter';
 import { deepnoteFileExists } from './deepnoteSiblingFileAllocator';
 import { IIntegrationManager } from './integrations/types';
@@ -53,7 +54,11 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
      */
     public activate() {
         this.serializer = new DeepnoteNotebookSerializer(this.notebookManager, this.snapshotService);
-        this.explorerView = new DeepnoteExplorerView(this.extensionContext, this.logger);
+        this.explorerView = new DeepnoteExplorerView(
+            this.extensionContext,
+            this.logger,
+            new DeepnoteTreeDataProvider(this.logger)
+        );
         this.editProtection = new DeepnoteInputBlockEditProtection(this.logger);
         this.snapshotsEnabled = this.isSnapshotsEnabled();
 

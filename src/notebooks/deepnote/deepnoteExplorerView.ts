@@ -17,6 +17,7 @@ import { uuidUtils } from '../../platform/common/uuid';
 import { getFilePath } from '../../platform/common/platform/fs-paths';
 import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { Commands } from '../../platform/common/constants';
+import { flushNotebookDocumentIfDirty } from '../../platform/deepnote/deepnoteDocumentFlush';
 import { readDeepnoteProjectFile } from '../../platform/deepnote/deepnoteProjectFileReader';
 import { ILogger } from '../../platform/logging/types';
 import { buildSingleNotebookFile, buildSiblingNotebookFileUri } from './deepnoteNotebookFileFactory';
@@ -30,16 +31,13 @@ import { isSnapshotFile } from './snapshots/snapshotFiles';
 
 @injectable()
 export class DeepnoteExplorerView {
-    private readonly treeDataProvider: DeepnoteTreeDataProvider;
-
     private treeView: TreeView<DeepnoteTreeItem>;
 
     constructor(
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
-        @inject(ILogger) private readonly logger: ILogger
-    ) {
-        this.treeDataProvider = new DeepnoteTreeDataProvider(logger);
-    }
+        @inject(ILogger) private readonly logger: ILogger,
+        private readonly treeDataProvider: DeepnoteTreeDataProvider
+    ) {}
 
     public activate(): void {
         this.treeView = window.createTreeView('deepnoteExplorer', {
@@ -134,7 +132,12 @@ export class DeepnoteExplorerView {
 
         const newNotebook = this.createNotebookWithFirstBlock(notebookName);
         const newFile = buildSingleNotebookFile(sourceProject, newNotebook);
-        const targetUri = await buildSiblingNotebookFileUri(sourceUri, notebookName, deepnoteFileExists);
+        const targetUri = await buildSiblingNotebookFileUri(
+            sourceUri,
+            sourceProject.project.name,
+            notebookName,
+            deepnoteFileExists
+        );
 
         await this.writeAndOpenNotebookFile(targetUri, newFile);
 
@@ -173,9 +176,28 @@ export class DeepnoteExplorerView {
                 return;
             }
 
-            targetNotebook.name = newName;
+            // Flush the open document and re-read before rewriting, so we serialize the user's live cell
+            // edits instead of clobbering them via the watcher reload; abort if the save is declined.
+            if (!(await flushNotebookDocumentIfDirty(fileUri))) {
+                await window.showErrorMessage(
+                    l10n.t('Could not save "{0}" before renaming. The notebook was left unchanged.', currentName)
+                );
 
-            await this.writeProjectFile(fileUri, projectData);
+                return;
+            }
+
+            const freshData = await readDeepnoteProjectFile(fileUri);
+            const freshTarget = this.resolveTargetNotebook(treeItem, freshData);
+
+            if (!freshTarget) {
+                await window.showErrorMessage(l10n.t('Notebook not found'));
+
+                return;
+            }
+
+            freshTarget.name = newName;
+
+            await this.writeProjectFile(fileUri, freshData);
 
             this.treeDataProvider.refreshNotebook(treeItem.context.projectId);
             await window.showInformationMessage(l10n.t('Notebook renamed to: {0}', newName));
@@ -284,10 +306,15 @@ export class DeepnoteExplorerView {
             // Single-notebook file: the duplicate becomes a NEW SIBLING FILE.
             if (this.itemIsSingleNotebookFile(treeItem, projectData)) {
                 const newFile = buildSingleNotebookFile(projectData, newNotebook);
-                const targetUri = await buildSiblingNotebookFileUri(fileUri, newName, deepnoteFileExists);
+                const targetUri = await buildSiblingNotebookFileUri(
+                    fileUri,
+                    projectData.project.name,
+                    newName,
+                    deepnoteFileExists
+                );
 
                 await this.writeAndOpenNotebookFile(targetUri, newFile);
-                this.treeDataProvider.refresh();
+                this.treeDataProvider.refreshNotebook(treeItem.context.projectId);
                 await window.showInformationMessage(l10n.t('Notebook duplicated: {0}', newName));
 
                 return;
@@ -338,6 +365,23 @@ export class DeepnoteExplorerView {
         }
 
         try {
+            // Flush open siblings with unsaved edits first, so the disk read-modify-write below can't
+            // clobber live cell edits via the watcher reload; abort the whole rename if a save fails.
+            for (const { filePath } of group.files) {
+                const fileUri = Uri.file(filePath);
+
+                if (!(await flushNotebookDocumentIfDirty(fileUri))) {
+                    await window.showErrorMessage(
+                        l10n.t(
+                            'Could not save "{0}" before renaming. The project was left unchanged.',
+                            fileUri.path.split('/').pop() ?? filePath
+                        )
+                    );
+
+                    return;
+                }
+            }
+
             let failedCount = 0;
 
             for (const { filePath } of group.files) {
@@ -817,7 +861,13 @@ export class DeepnoteExplorerView {
             const result = await this.createNotebookSiblingFile(fileUri, existingNames);
 
             if (result) {
-                this.treeDataProvider.refresh();
+                // Scoped refresh preserves expanded groups; a full `refresh()` would collapse the tree.
+                if (projectId) {
+                    this.treeDataProvider.refreshNotebook(projectId);
+                } else {
+                    this.treeDataProvider.refresh();
+                }
+
                 await window.showInformationMessage(l10n.t('Created new notebook: {0}', result.name));
             }
         } catch (error) {
@@ -1061,7 +1111,9 @@ export class DeepnoteExplorerView {
             const result = await this.createNotebookSiblingFile(Uri.file(sourceFile.filePath), existingNames);
 
             if (result) {
-                this.treeDataProvider.refresh();
+                // Scoped refresh (not `refresh()`): a full refresh resets the initial-scan flag, tearing the
+                // whole tree down to a loading node and collapsing every expanded group.
+                this.treeDataProvider.refreshNotebook(treeItem.context.projectId);
                 await window.showInformationMessage(l10n.t('Created new notebook: {0}', result.name));
             }
         } catch (error) {

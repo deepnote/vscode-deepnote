@@ -1,12 +1,14 @@
 /**
  * E2E (ExTester): renaming a project group in the Explorer fans the new name out to EVERY sibling
- * `.deepnote` on disk (siblings share one `project.id`), including ones never opened.
+ * `.deepnote` on disk (siblings share one `project.id`), including ones never opened — and saves an
+ * open, DIRTY sibling first so its unsaved cell edits survive instead of being clobbered by the
+ * file-watcher reload the rewrite triggers.
  */
 
 import { expect } from 'chai';
 import * as fs from 'fs';
 import * as path from 'path';
-import { EditorView, InputBox, VSBrowser, WebView, type ViewItem } from 'vscode-extension-tester';
+import { By, EditorView, InputBox, VSBrowser, WebView, type ViewItem } from 'vscode-extension-tester';
 
 import {
     SUITE_TIMEOUT,
@@ -16,15 +18,58 @@ import {
     findDeepnoteGroup,
     getDeepnoteExplorerSection,
     openFolderViaDialog,
+    openWorkspaceFile,
     readDeepnoteTreeRows,
     selectDeepnoteContextMenu,
     waitForNotification
 } from '../helpers';
 
-const MARKETING_FILES = ['marketing-overview.deepnote', 'marketing-campaigns.deepnote', 'marketing-metrics.deepnote'];
+const DIRTIED_FILE = 'marketing-overview.deepnote' as const;
+const MARKETING_FILES = [DIRTIED_FILE, 'marketing-campaigns.deepnote', 'marketing-metrics.deepnote'] as const;
 const OLD_NAME = 'Marketing';
 const NEW_NAME = 'Growth';
+const DIRTY_MARKER = 'zzdirtyeditzz';
 const TREE_LOAD_TIMEOUT = 30_000;
+
+/**
+ * Opens {@link DIRTIED_FILE} and types {@link DIRTY_MARKER} into its first code cell WITHOUT saving,
+ * leaving the notebook document dirty. Resolves once the edit has registered in the cell overlay.
+ */
+async function leaveUnsavedCellEdit(): Promise<void> {
+    const driver = VSBrowser.instance.driver;
+
+    await openWorkspaceFile(DIRTIED_FILE);
+
+    // Focus the first CODE cell's Monaco editor by clicking its visible source line (markdown cells
+    // render without an editor, so scope to code rows), then type a marker into the focused input.
+    const line = await driver.wait(
+        async () => (await driver.findElements(By.css('.notebookOverlay .code-cell-row .view-line')))[0],
+        WORKBENCH_TIMEOUT,
+        'the notebook code cell did not render'
+    );
+    await line.click();
+    await driver.sleep(400);
+    await driver.switchTo().activeElement().sendKeys(DIRTY_MARKER);
+
+    // Confirm the edit landed (the cell now shows the marker) before we rename, so a focus/typing
+    // miss fails here with a clear message instead of masquerading as a lost-edit regression later.
+    await driver.wait(
+        async () => {
+            const text = await driver.executeScript<string>(() => {
+                const parts: string[] = [];
+                document
+                    .querySelectorAll('.notebookOverlay .code-cell-row .view-line')
+                    .forEach((el) => parts.push((el as HTMLElement).textContent ?? ''));
+
+                return parts.join('\n');
+            });
+
+            return text.includes(DIRTY_MARKER);
+        },
+        WORKBENCH_TIMEOUT,
+        `the unsaved cell edit "${DIRTY_MARKER}" did not register`
+    );
+}
 
 describe('Deepnote — renaming a project fans the new name out to every sibling file', function () {
     this.timeout(SUITE_TIMEOUT);
@@ -50,8 +95,7 @@ describe('Deepnote — renaming a project fans the new name out to every sibling
         await openFolderViaDialog(tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
-        // Only the tree is used (no notebook opened), proving the rename reaches closed siblings on disk.
-        const section = await getDeepnoteExplorerSection();
+        let section = await getDeepnoteExplorerSection();
         await driver.wait(
             async () => (await readDeepnoteTreeRows(section)).some((row) => row.label === OLD_NAME && row.isGroup),
             TREE_LOAD_TIMEOUT,
@@ -59,12 +103,16 @@ describe('Deepnote — renaming a project fans the new name out to every sibling
         );
         await screenshot('before-rename');
 
+        await leaveUnsavedCellEdit();
+
+        // Opening the notebook moved focus to the editor; re-open the Explorer before driving the tree.
+        section = await getDeepnoteExplorerSection();
         const group = await findDeepnoteGroup(section, OLD_NAME);
         if (!group) {
             throw new Error(`"${OLD_NAME}" project group not found`);
         }
 
-        await selectDeepnoteContextMenu(group as ViewItem, 'Rename Project');
+        await selectDeepnoteContextMenu(group, 'Rename Project');
         const input = await InputBox.create(WORKBENCH_TIMEOUT);
         await input.setText(NEW_NAME);
         await input.confirm();
@@ -103,5 +151,14 @@ describe('Deepnote — renaming a project fans the new name out to every sibling
 
     it('relabels the project group in the Explorer', function () {
         expect(groupLabelAfter, 'group label after rename').to.equal(NEW_NAME);
+    });
+
+    it('saves an open, dirty sibling before renaming instead of discarding the edit', function () {
+        const dirtied = fileContents[MARKETING_FILES.indexOf(DIRTIED_FILE)];
+
+        // Flushed to disk first: the unsaved marker survived instead of being clobbered by the reload.
+        expect(dirtied, 'the unsaved cell edit was saved before the rename rewrite').to.contain(DIRTY_MARKER);
+        // ...and the dirtied sibling still received the new project name.
+        expect(dirtied, 'the dirtied sibling still received the new project name').to.contain(`name: ${NEW_NAME}`);
     });
 });

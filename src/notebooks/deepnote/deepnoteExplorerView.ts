@@ -31,16 +31,13 @@ import { isSnapshotFile } from './snapshots/snapshotFiles';
 
 @injectable()
 export class DeepnoteExplorerView {
-    private readonly treeDataProvider: DeepnoteTreeDataProvider;
-
     private treeView: TreeView<DeepnoteTreeItem>;
 
     constructor(
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
-        @inject(ILogger) private readonly logger: ILogger
-    ) {
-        this.treeDataProvider = new DeepnoteTreeDataProvider(logger);
-    }
+        @inject(ILogger) private readonly logger: ILogger,
+        private readonly treeDataProvider: DeepnoteTreeDataProvider
+    ) {}
 
     public activate(): void {
         this.treeView = window.createTreeView('deepnoteExplorer', {

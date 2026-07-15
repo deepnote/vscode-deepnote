@@ -16,6 +16,7 @@ import {
 import { stringify as yamlStringify } from 'yaml';
 
 import { DeepnoteExplorerView } from './deepnoteExplorerView';
+import { DeepnoteTreeDataProvider } from './deepnoteTreeDataProvider';
 import { createWorkspaceFolder } from './deepnoteTestHelpers';
 import { DeepnoteTreeItem, DeepnoteTreeItemType, type DeepnoteTreeItemContext } from './deepnoteTreeItem';
 import { Commands } from '../../platform/common/constants';
@@ -123,7 +124,11 @@ suite('DeepnoteExplorerView', () => {
         mockExtensionContext = makeExtensionContext();
 
         mockLogger = createMockLogger();
-        explorerView = new DeepnoteExplorerView(mockExtensionContext, mockLogger);
+        explorerView = new DeepnoteExplorerView(
+            mockExtensionContext,
+            mockLogger,
+            new DeepnoteTreeDataProvider(mockLogger)
+        );
         explorerView.activate();
     });
 
@@ -249,7 +254,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         mockContext = makeExtensionContext();
 
         const mockLogger = createMockLogger();
-        explorerView = new DeepnoteExplorerView(mockContext, mockLogger);
+        explorerView = new DeepnoteExplorerView(mockContext, mockLogger, new DeepnoteTreeDataProvider(mockLogger));
         explorerView.activate();
     });
 
@@ -476,7 +481,11 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             importModule = await esmock('./deepnoteExplorerView', {
                 '@deepnote/convert': { convertIpynbFileToDeepnoteFile: async () => {} }
             });
-            explorerView = new importModule.DeepnoteExplorerView(mockContext, createMockLogger());
+            explorerView = new importModule.DeepnoteExplorerView(
+                mockContext,
+                createMockLogger(),
+                new DeepnoteTreeDataProvider(createMockLogger())
+            );
             explorerView.activate();
         });
 
@@ -662,7 +671,11 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             importModule = await esmock('./deepnoteExplorerView', {
                 '@deepnote/convert': { convertIpynbFileToDeepnoteFile: async () => {} }
             });
-            explorerView = new importModule.DeepnoteExplorerView(mockContext, createMockLogger());
+            explorerView = new importModule.DeepnoteExplorerView(
+                mockContext,
+                createMockLogger(),
+                new DeepnoteTreeDataProvider(createMockLogger())
+            );
             explorerView.activate();
         });
 
@@ -726,7 +739,11 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                     }
                 }
             });
-            const partialExplorer = new failingModule.DeepnoteExplorerView(mockContext, createMockLogger());
+            const partialExplorer = new failingModule.DeepnoteExplorerView(
+                mockContext,
+                createMockLogger(),
+                new DeepnoteTreeDataProvider(createMockLogger())
+            );
             partialExplorer.activate();
 
             const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
@@ -777,7 +794,11 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
                     }
                 }
             });
-            const failedExplorer = new failingModule.DeepnoteExplorerView(mockContext, createMockLogger());
+            const failedExplorer = new failingModule.DeepnoteExplorerView(
+                mockContext,
+                createMockLogger(),
+                new DeepnoteTreeDataProvider(createMockLogger())
+            );
             failedExplorer.activate();
 
             const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
@@ -2359,7 +2380,11 @@ suite('DeepnoteExplorerView - Sibling-file command semantics', () => {
         uuidStubs = [];
 
         mockContext = makeExtensionContext();
-        explorerView = new DeepnoteExplorerView(mockContext, createMockLogger());
+        explorerView = new DeepnoteExplorerView(
+            mockContext,
+            createMockLogger(),
+            new DeepnoteTreeDataProvider(createMockLogger())
+        );
         explorerView.activate();
     });
 
@@ -2433,13 +2458,9 @@ suite('DeepnoteExplorerView - Sibling-file command semantics', () => {
             );
             uuidStubs.push(createUuidMock(['new-nb', 'new-group', 'new-block']));
 
-            const provider = (
-                explorerView as unknown as {
-                    treeDataProvider: { refresh: () => void; refreshNotebook: (id: string) => void };
-                }
-            ).treeDataProvider;
-            const refreshSpy = sandbox.stub(provider, 'refresh');
-            const refreshNotebookSpy = sandbox.stub(provider, 'refreshNotebook');
+            const mockProvider = mock<DeepnoteTreeDataProvider>();
+            explorerView = new DeepnoteExplorerView(mockContext, createMockLogger(), instance(mockProvider));
+            explorerView.activate();
 
             const treeItem: Partial<DeepnoteTreeItem> = {
                 extra: {
@@ -2455,11 +2476,9 @@ suite('DeepnoteExplorerView - Sibling-file command semantics', () => {
 
             await handlerFor(Commands.AddNotebookToProject)(treeItem as DeepnoteTreeItem);
 
-            assert.isTrue(
-                refreshNotebookSpy.calledOnceWithExactly(projectId),
-                'must refresh the group scoped, by project id'
-            );
-            assert.isTrue(refreshSpy.notCalled, 'must NOT trigger a full refresh (which collapses the tree)');
+            // Group scoped (by project id), never a full refresh (which collapses the tree).
+            verify(mockProvider.refreshNotebook(projectId)).once();
+            verify(mockProvider.refresh()).never();
 
             // Bug 1 through the whole flow: the new sibling is named `{projectSlug}-{notebookSlug}` from the
             // project name ("Test Project" → `test-project-extra.deepnote`), never compounding the source

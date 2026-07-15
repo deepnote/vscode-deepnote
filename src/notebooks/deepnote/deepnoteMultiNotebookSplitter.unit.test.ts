@@ -60,7 +60,7 @@ suite('DeepnoteMultiNotebookSplitter', () => {
     let existingOnDisk: Set<string>;
     // If set, writing a file with this basename rejects (to test abort-on-failure).
     let failWriteFor: string | undefined;
-    // Basenames passed to workspace.fs.delete (rollback cleanup), in call order.
+    // Filenames passed to workspace.fs.delete (rollback cleanup), in call order.
     let deleteTargets: string[];
 
     const logger: ILogger = {

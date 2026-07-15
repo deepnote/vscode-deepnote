@@ -48,9 +48,6 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
     /** Dirs (fsPath) that saw an env-file event during the current debounce window. */
     private readonly changedDirs = new Set<string>();
     private debounceTimer: ReturnType<typeof setTimeout> | undefined;
-    private isRestarting = false;
-    /** Monotonic sequence so a newer change supersedes a still-open prompt. */
-    private promptSeq = 0;
     /** Dirs (fsPath) already covered by a watcher, to avoid duplicate watchers. */
     private readonly watchedDirs = new Set<string>();
 
@@ -91,47 +88,21 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
     }
 
     /**
-     * Core decision logic, called on the debounce trailing edge. Public so it can be unit-tested without
-     * real filesystem events: find affected running kernels, prompt once, and restart on confirmation.
+     * Core decision logic, called on the debounce trailing edge. Public so it can be unit-tested without real
+     * filesystem events. Intentionally unguarded against overlapping prompts/restarts: it is a user action, so
+     * a stale or missed prompt is simply re-triggered by the next save or a manual restart.
      */
     public async handleChangedDirs(changedDirs: Set<string>): Promise<void> {
-        // A restart is already running; its fresh respawn will read the latest config, and a second prompt
-        // would stack. Skip.
-        if (this.isRestarting) {
-            logger.debug('IntegrationsEnvFileWatcher: Restart already in progress, ignoring env file change');
-
-            return;
-        }
-
         const affectedNotebooks = this.findAffectedNotebooks(changedDirs);
-
-        // No affected running kernel: the loader is stateless, so the next start reads fresh config anyway.
         if (affectedNotebooks.length === 0) {
-            logger.info('IntegrationsEnvFileWatcher: No affected running kernels, no restart prompt needed');
-
             return;
         }
-
-        // Capture the sequence before showing the prompt so a newer change can supersede this one.
-        const seq = ++this.promptSeq;
 
         const selection = await window.showInformationMessage(
             l10n.t('Integration environment file changed. Restart to apply the new values?'),
             DataScience.restartKernelMessageYes
         );
-
         if (selection !== DataScience.restartKernelMessageYes) {
-            return;
-        }
-
-        // A newer env-file change opened a newer prompt while this one was pending; let the newer one win.
-        if (seq !== this.promptSeq) {
-            logger.info('IntegrationsEnvFileWatcher: Env file prompt superseded by a newer change, skipping restart');
-
-            return;
-        }
-
-        if (this.isRestarting) {
             return;
         }
 
@@ -192,37 +163,31 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
         }, debounceTimeInMilliseconds);
     }
 
-    /** Respawn the toolkit server for each affected notebook, guarded by isRestarting and per-notebook try/catch. */
+    /** Respawn the toolkit server for each affected notebook (per-notebook try/catch; cancellable between notebooks). */
     private async restartNotebooks(notebooks: NotebookDocument[]): Promise<void> {
-        this.isRestarting = true;
-
-        try {
-            await window.withProgress(
-                {
-                    location: ProgressLocation.Notification,
-                    title: l10n.t('Restarting Deepnote server...'),
-                    cancellable: true
-                },
-                async (_progress, token) => {
-                    for (const notebook of notebooks) {
-                        if (token.isCancellationRequested) {
-                            break;
-                        }
-                        try {
-                            // Run stop+start atomically: a mid-restart cancel would strand the notebook on a killed server.
-                            await this.kernelAutoSelector.restartServerForNotebook(notebook, nonCancellableToken);
-                        } catch (error) {
-                            logger.error(
-                                `IntegrationsEnvFileWatcher: Failed to restart server for ${notebook.uri.toString()}`,
-                                error
-                            );
-                        }
+        await window.withProgress(
+            {
+                location: ProgressLocation.Notification,
+                title: l10n.t('Restarting Deepnote server...'),
+                cancellable: true
+            },
+            async (_progress, token) => {
+                for (const notebook of notebooks) {
+                    if (token.isCancellationRequested) {
+                        break;
+                    }
+                    try {
+                        // Run stop+start atomically: a mid-restart cancel would strand the notebook on a killed server.
+                        await this.kernelAutoSelector.restartServerForNotebook(notebook, nonCancellableToken);
+                    } catch (error) {
+                        logger.error(
+                            `IntegrationsEnvFileWatcher: Failed to restart server for ${notebook.uri.toString()}`,
+                            error
+                        );
                     }
                 }
-            );
-        } finally {
-            this.isRestarting = false;
-        }
+            }
+        );
     }
 
     /** Create change/create/delete watchers for the env files in a dir, deduped by dir fsPath. */

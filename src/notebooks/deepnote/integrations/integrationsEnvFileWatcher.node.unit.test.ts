@@ -10,7 +10,6 @@ import {
 import { DataScience } from '../../../platform/common/utils/localize';
 import { IDisposable } from '../../../platform/common/types';
 import { IntegrationsEnvFileWatcher } from './integrationsEnvFileWatcher.node';
-import { createDeferred } from '../../../platform/common/utils/async';
 import { dispose } from '../../../platform/common/utils/lifecycle';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 import { notebookPathToDeepnoteProjectFilePath } from '../../../platform/deepnote/deepnoteProjectUtils';
@@ -46,10 +45,6 @@ suite('IntegrationsEnvFileWatcher', () => {
         when(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything())).thenResolve(
             DataScience.restartKernelMessageYes as unknown as undefined
         );
-    }
-
-    function settle(): Promise<void> {
-        return new Promise((resolve) => setTimeout(resolve, 10));
     }
 
     setup(() => {
@@ -211,64 +206,5 @@ suite('IntegrationsEnvFileWatcher', () => {
 
         verify(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything())).once();
         verify(kernelAutoSelector.restartServerForNotebook(anything(), anything())).never();
-    });
-
-    test('isRestarting guard: a second change mid-restart shows no new prompt and no second restart', async () => {
-        const uri = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
-        const notebook = createMockNotebook(uri);
-
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(serverStarter.isServerRunningForFile(anything())).thenReturn(true);
-        acceptRestart();
-
-        // Keep the first restart in-flight (isRestarting stays true) until released.
-        const restartGate = createDeferred<void>();
-        when(kernelAutoSelector.restartServerForNotebook(anything(), anything())).thenReturn(restartGate.promise);
-
-        const first = watcher.handleChangedDirs(new Set([deepnoteDirOf(uri)]));
-        await settle(); // let the first call reach the in-flight restart (isRestarting = true)
-
-        // A second change arrives mid-restart: the guard must short-circuit it before prompting.
-        await watcher.handleChangedDirs(new Set([deepnoteDirOf(uri)]));
-
-        verify(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything())).once();
-        verify(kernelAutoSelector.restartServerForNotebook(anything(), anything())).once();
-
-        restartGate.resolve();
-        await first;
-    });
-
-    test('supersede: an older prompt resolved after a newer change does not restart', async () => {
-        const uri = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
-        const notebook = createMockNotebook(uri);
-
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(serverStarter.isServerRunningForFile(anything())).thenReturn(true);
-        when(kernelAutoSelector.restartServerForNotebook(anything(), anything())).thenResolve();
-
-        // Two overlapping prompts; control their resolution order via deferreds.
-        const prompt1 = createDeferred<string>();
-        const prompt2 = createDeferred<string>();
-        when(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything()))
-            .thenReturn(prompt1.promise as never)
-            .thenReturn(prompt2.promise as never);
-
-        const first = watcher.handleChangedDirs(new Set([deepnoteDirOf(uri)]));
-        await settle(); // first prompt open (promptSeq = 1)
-        const second = watcher.handleChangedDirs(new Set([deepnoteDirOf(uri)]));
-        await settle(); // second prompt open (promptSeq = 2)
-
-        // Resolve the OLDER prompt first: it is stale (seq 1 !== promptSeq 2) → must not restart.
-        prompt1.resolve(DataScience.restartKernelMessageYes);
-        await settle();
-
-        verify(kernelAutoSelector.restartServerForNotebook(anything(), anything())).never();
-
-        // Resolve the NEWER prompt: it is current → restart runs exactly once.
-        prompt2.resolve(DataScience.restartKernelMessageYes);
-        await Promise.all([first, second]);
-
-        verify(kernelAutoSelector.restartServerForNotebook(anything(), anything())).once();
-        verify(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything())).twice();
     });
 });

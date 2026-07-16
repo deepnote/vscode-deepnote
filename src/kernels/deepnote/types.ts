@@ -179,9 +179,6 @@ export interface IDeepnoteServerStarter {
     // stopServer(environmentId: string, token?: vscode.CancellationToken): Promise<void>;
     stopServer(deepnoteFileUri: vscode.Uri, token?: vscode.CancellationToken): Promise<void>;
 
-    /** Whether a toolkit server is currently running for the given `.deepnote` file (env already captured at spawn). */
-    isServerRunningForFile(deepnoteFileUri: vscode.Uri): boolean;
-
     /**
      * Disposes all server processes and resources.
      * Called when the extension is deactivated.
@@ -275,15 +272,6 @@ export interface IDeepnoteKernelAutoSelector {
         progress: { report(value: { message?: string; increment?: number }): void },
         token: vscode.CancellationToken
     ): Promise<void>;
-
-    /**
-     * Restart the toolkit server for a notebook so kernel env vars are re-gathered (the toolkit server
-     * captures env at spawn). Stops the server, invalidates cached connection + environment state so
-     * kernel selection performs a full re-setup — bypassing the same-environment early-return in
-     * ensureKernelSelectedWithConfiguration — then re-runs selection (→ startServer →
-     * gatherSqlIntegrationEnvVars). Used when the integrations env file (.deepnote.env.yaml/.env) changes.
-     */
-    restartServerForNotebook(notebook: vscode.NotebookDocument, token: vscode.CancellationToken): Promise<void>;
 }
 
 export const IDeepnoteEnvironmentManager = Symbol('IDeepnoteEnvironmentManager');

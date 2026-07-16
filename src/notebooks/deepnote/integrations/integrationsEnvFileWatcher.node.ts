@@ -1,46 +1,26 @@
 import { inject, injectable } from 'inversify';
-import {
-    CancellationToken,
-    NotebookDocument,
-    ProgressLocation,
-    RelativePattern,
-    Uri,
-    l10n,
-    window,
-    workspace
-} from 'vscode';
+import { NotebookDocument, RelativePattern, Uri, workspace } from 'vscode';
 import { DEFAULT_ENV_FILE, DEFAULT_INTEGRATIONS_FILE } from '@deepnote/database-integrations';
 
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
 import { IDisposableRegistry } from '../../../platform/common/types';
-import { DataScience } from '../../../platform/common/utils/localize';
 import { notebookPathToDeepnoteProjectFilePath } from '../../../platform/deepnote/deepnoteProjectUtils';
 import { logger } from '../../../platform/logging';
-import {
-    DEEPNOTE_NOTEBOOK_TYPE,
-    IDeepnoteKernelAutoSelector,
-    IDeepnoteServerStarter
-} from '../../../kernels/deepnote/types';
+import { DEEPNOTE_NOTEBOOK_TYPE } from '../../../kernels/deepnote/types';
+import { IIntegrationEnvLiveRefresher } from './types';
 
 /** Trailing-edge debounce so a burst of edits (e.g. .env and .deepnote.env.yaml both saved) is handled once. */
 const debounceTimeInMilliseconds = 500;
 
-/** Integration env files whose changes require respawning the toolkit server. */
+/** Integration env files whose changes trigger a live env refresh. */
 const watchedEnvFileNames = [DEFAULT_INTEGRATIONS_FILE, DEFAULT_ENV_FILE];
-
-/** Sentinel replacing the unavailable `CancellationToken.None`: a restart, once started, runs to completion. */
-const nonCancellableToken: CancellationToken = {
-    isCancellationRequested: false,
-    onCancellationRequested: () => ({ dispose() {} })
-};
 
 /**
  * Watches the integration env files (`.deepnote.env.yaml` / `.env`) next to open Deepnote notebooks and in
- * workspace-folder roots. When one changes and a running kernel is affected, it prompts to restart the
- * toolkit server so the new values are picked up — the server captures its environment at spawn, so a plain
- * kernel.restart() is insufficient (see {@link IDeepnoteKernelAutoSelector.restartServerForNotebook}).
+ * workspace-folder roots. When one changes, it live-refreshes the integration environment in the affected
+ * notebooks' kernels (via {@link IIntegrationEnvLiveRefresher}) so the new values are picked up without a restart.
  *
- * Node-only sibling of IntegrationKernelRestartHandler / FederatedAuthKernelRestartBridge. Unlike those, it
+ * Node-only sibling of IntegrationEnvRefreshHandler / FederatedAuthKernelRestartBridge. Unlike those, it
  * does not gate on SQL cells: an env change can affect any cell.
  */
 @injectable()
@@ -52,8 +32,7 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
     private readonly watchedDirs = new Set<string>();
 
     constructor(
-        @inject(IDeepnoteKernelAutoSelector) private readonly kernelAutoSelector: IDeepnoteKernelAutoSelector,
-        @inject(IDeepnoteServerStarter) private readonly serverStarter: IDeepnoteServerStarter,
+        @inject(IIntegrationEnvLiveRefresher) private readonly liveRefresher: IIntegrationEnvLiveRefresher,
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry
     ) {}
 
@@ -89,32 +68,20 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
 
     /**
      * Core decision logic, called on the debounce trailing edge. Public so it can be unit-tested without real
-     * filesystem events. Intentionally unguarded against overlapping prompts/restarts: it is a user action, so
-     * a stale or missed prompt is simply re-triggered by the next save or a manual restart.
+     * filesystem events.
      */
     public async handleChangedDirs(changedDirs: Set<string>): Promise<void> {
-        const affectedNotebooks = this.findAffectedNotebooks(changedDirs);
-        if (affectedNotebooks.length === 0) {
+        const affected = this.findAffectedNotebooks(changedDirs);
+        if (affected.length === 0) {
             return;
         }
 
-        const selection = await window.showInformationMessage(
-            l10n.t('Integration environment file changed. Restart to apply the new values?'),
-            DataScience.restartKernelMessageYes
-        );
-        if (selection !== DataScience.restartKernelMessageYes) {
-            return;
-        }
-
-        await this.restartNotebooks(affectedNotebooks);
+        await this.liveRefresher.refresh(affected);
     }
 
-    /**
-     * Resolve the open Deepnote notebooks with a started kernel whose .deepnote dir OR workspace-folder root
-     * (dir-then-root) saw a change, deduped to one representative notebook per unique .deepnote server.
-     */
+    /** Open Deepnote notebooks whose .deepnote dir OR workspace-folder root (dir-then-root) saw a change. */
     private findAffectedNotebooks(changedDirs: Set<string>): NotebookDocument[] {
-        const byServer = new Map<string, NotebookDocument>();
+        const affected: NotebookDocument[] = [];
 
         for (const notebook of workspace.notebookDocuments) {
             if (notebook.notebookType !== DEEPNOTE_NOTEBOOK_TYPE) {
@@ -122,27 +89,15 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
             }
 
             const deepnoteFileUri = notebookPathToDeepnoteProjectFilePath(notebook.uri);
-            // The server captures env at spawn — before the kernel ever executes — so gate on the server, not the kernel.
-            if (!this.serverStarter.isServerRunningForFile(deepnoteFileUri)) {
-                continue;
-            }
-
             const deepnoteDir = Uri.joinPath(deepnoteFileUri, '..').fsPath;
             const workspaceRoot = workspace.getWorkspaceFolder(notebook.uri)?.uri.fsPath;
 
-            const affected = changedDirs.has(deepnoteDir) || (workspaceRoot != null && changedDirs.has(workspaceRoot));
-            if (!affected) {
-                continue;
-            }
-
-            // One toolkit server is shared across a .deepnote file's notebook views — dedup by its fsPath.
-            const serverKey = deepnoteFileUri.fsPath;
-            if (!byServer.has(serverKey)) {
-                byServer.set(serverKey, notebook);
+            if (changedDirs.has(deepnoteDir) || (workspaceRoot != null && changedDirs.has(workspaceRoot))) {
+                affected.push(notebook);
             }
         }
 
-        return [...byServer.values()];
+        return affected;
     }
 
     /** File-watcher callback: accumulate the changed dir and (re)arm the debounce timer. */
@@ -161,33 +116,6 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
                 logger.error('IntegrationsEnvFileWatcher: Failed to handle env file change', error)
             );
         }, debounceTimeInMilliseconds);
-    }
-
-    /** Respawn the toolkit server for each affected notebook (per-notebook try/catch; cancellable between notebooks). */
-    private async restartNotebooks(notebooks: NotebookDocument[]): Promise<void> {
-        await window.withProgress(
-            {
-                location: ProgressLocation.Notification,
-                title: l10n.t('Restarting Deepnote server...'),
-                cancellable: true
-            },
-            async (_progress, token) => {
-                for (const notebook of notebooks) {
-                    if (token.isCancellationRequested) {
-                        break;
-                    }
-                    try {
-                        // Run stop+start atomically: a mid-restart cancel would strand the notebook on a killed server.
-                        await this.kernelAutoSelector.restartServerForNotebook(notebook, nonCancellableToken);
-                    } catch (error) {
-                        logger.error(
-                            `IntegrationsEnvFileWatcher: Failed to restart server for ${notebook.uri.toString()}`,
-                            error
-                        );
-                    }
-                }
-            }
-        );
     }
 
     /** Create change/create/delete watchers for the env files in a dir, deduped by dir fsPath. */

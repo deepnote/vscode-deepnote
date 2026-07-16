@@ -1,14 +1,10 @@
 import { assert } from 'chai';
-import { CancellationToken, Disposable, NotebookDocument, Uri } from 'vscode';
+import { Disposable, NotebookDocument, Uri } from 'vscode';
 import { anything, capture, instance, mock, verify, when } from 'ts-mockito';
 
-import {
-    DEEPNOTE_NOTEBOOK_TYPE,
-    IDeepnoteKernelAutoSelector,
-    IDeepnoteServerStarter
-} from '../../../kernels/deepnote/types';
-import { DataScience } from '../../../platform/common/utils/localize';
+import { DEEPNOTE_NOTEBOOK_TYPE } from '../../../kernels/deepnote/types';
 import { IDisposable } from '../../../platform/common/types';
+import { IIntegrationEnvLiveRefresher } from './types';
 import { IntegrationsEnvFileWatcher } from './integrationsEnvFileWatcher.node';
 import { dispose } from '../../../platform/common/utils/lifecycle';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
@@ -16,22 +12,10 @@ import { notebookPathToDeepnoteProjectFilePath } from '../../../platform/deepnot
 
 suite('IntegrationsEnvFileWatcher', () => {
     let watcher: IntegrationsEnvFileWatcher;
-    let kernelAutoSelector: IDeepnoteKernelAutoSelector;
-    let serverStarter: IDeepnoteServerStarter;
+    let liveRefresher: IIntegrationEnvLiveRefresher;
     let disposables: IDisposable[];
 
     const workspaceRoot = Uri.file('/ws');
-
-    /** A fully-typed CancellationToken with the given cancellation state (no force cast). */
-    function cancellationToken(isCancellationRequested: boolean): CancellationToken {
-        const token = mock<CancellationToken>();
-        when(token.isCancellationRequested).thenReturn(isCancellationRequested);
-
-        return instance(token);
-    }
-
-    // Token handed to the restart body by window.withProgress, so tests can assert what it forwards.
-    const progressToken = cancellationToken(false);
 
     function createMockNotebook(uri: Uri, notebookType: string = DEEPNOTE_NOTEBOOK_TYPE): NotebookDocument {
         const notebook = mock<NotebookDocument>();
@@ -41,55 +25,39 @@ suite('IntegrationsEnvFileWatcher', () => {
         return instance(notebook);
     }
 
-    /** The dir fsPath the watcher derives from a notebook uri (dir-then-root: the `.deepnote` file's dir). */
+    /** The dir fsPath the watcher derives from a notebook uri (the `.deepnote` file's dir). */
     function deepnoteDirOf(uri: Uri): string {
         return Uri.joinPath(notebookPathToDeepnoteProjectFilePath(uri), '..').fsPath;
-    }
-
-    function acceptRestart(): void {
-        when(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything())).thenResolve(
-            DataScience.restartKernelMessageYes as unknown as undefined
-        );
     }
 
     setup(() => {
         resetVSCodeMocks();
         disposables = [new Disposable(() => resetVSCodeMocks())];
 
-        kernelAutoSelector = mock<IDeepnoteKernelAutoSelector>();
-        serverStarter = mock<IDeepnoteServerStarter>();
+        liveRefresher = mock<IIntegrationEnvLiveRefresher>();
+        when(liveRefresher.refresh(anything())).thenResolve();
 
-        // Run the restart body inline and forward the sentinel cancellation token.
-        when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall((_options, callback) =>
-            callback({ report: () => {} }, progressToken)
-        );
-
-        watcher = new IntegrationsEnvFileWatcher(instance(kernelAutoSelector), instance(serverStarter), disposables);
+        watcher = new IntegrationsEnvFileWatcher(instance(liveRefresher), disposables);
     });
 
     teardown(() => {
         disposables = dispose(disposables);
     });
 
-    test('deduplicates by .deepnote file: two notebook views of one project restart the server once', async () => {
-        // Two open views of the SAME .deepnote file (differ only by notebook query) share one toolkit server.
+    test('refreshes every notebook view whose .deepnote dir changed (no dedup; the refresher gates each kernel)', async () => {
+        // Two open views of the SAME .deepnote file (differ only by notebook query) — both are refreshed.
         const uriA = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
         const uriB = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-b' });
         const notebookA = createMockNotebook(uriA);
         const notebookB = createMockNotebook(uriB);
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebookA, notebookB]);
-        when(serverStarter.isServerRunningForFile(anything())).thenReturn(true);
-        acceptRestart();
-        when(kernelAutoSelector.restartServerForNotebook(anything(), anything())).thenResolve();
 
         await watcher.handleChangedDirs(new Set([deepnoteDirOf(uriA)]));
 
-        verify(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything())).once();
-        verify(kernelAutoSelector.restartServerForNotebook(anything(), anything())).once();
-        // The first view encountered represents the shared server.
-        verify(kernelAutoSelector.restartServerForNotebook(notebookA, anything())).once();
-        verify(kernelAutoSelector.restartServerForNotebook(notebookB, anything())).never();
+        verify(liveRefresher.refresh(anything())).once();
+        const [refreshed] = capture(liveRefresher.refresh).last();
+        assert.deepStrictEqual([...refreshed], [notebookA, notebookB]);
     });
 
     test('resolves affected notebooks via the workspace-folder root (dir-then-root fallback)', async () => {
@@ -98,44 +66,28 @@ suite('IntegrationsEnvFileWatcher', () => {
         const notebook = createMockNotebook(uri);
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(serverStarter.isServerRunningForFile(anything())).thenReturn(true);
         when(mockedVSCodeNamespaces.workspace.getWorkspaceFolder(anything())).thenReturn({
             uri: workspaceRoot
         } as never);
-        acceptRestart();
-        when(kernelAutoSelector.restartServerForNotebook(anything(), anything())).thenResolve();
 
         // changedDirs = workspace root, NOT the .deepnote dir (/ws/nested/deep).
         await watcher.handleChangedDirs(new Set([workspaceRoot.fsPath]));
 
-        verify(kernelAutoSelector.restartServerForNotebook(notebook, anything())).once();
+        verify(liveRefresher.refresh(anything())).once();
+        const [refreshed] = capture(liveRefresher.refresh).last();
+        assert.deepStrictEqual([...refreshed], [notebook]);
     });
 
-    test('shows no prompt and does not restart when no server is running', async () => {
+    test('does not refresh when the changed dir matches no open Deepnote notebook', async () => {
         const uri = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
         const notebook = createMockNotebook(uri);
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(serverStarter.isServerRunningForFile(anything())).thenReturn(false);
-
-        await watcher.handleChangedDirs(new Set([deepnoteDirOf(uri)]));
-
-        verify(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything())).never();
-        verify(kernelAutoSelector.restartServerForNotebook(anything(), anything())).never();
-    });
-
-    test('shows no prompt when the changed dir matches no open Deepnote notebook', async () => {
-        const uri = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
-        const notebook = createMockNotebook(uri);
-
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(serverStarter.isServerRunningForFile(anything())).thenReturn(true);
 
         // An unrelated dir changed - the notebook's dir and workspace root are not in the set.
         await watcher.handleChangedDirs(new Set([Uri.file('/some/other/dir').fsPath]));
 
-        verify(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything())).never();
-        verify(kernelAutoSelector.restartServerForNotebook(anything(), anything())).never();
+        verify(liveRefresher.refresh(anything())).never();
     });
 
     test('ignores non-Deepnote notebooks even when their dir changed', async () => {
@@ -143,70 +95,9 @@ suite('IntegrationsEnvFileWatcher', () => {
         const notebook = createMockNotebook(uri, 'jupyter-notebook');
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(serverStarter.isServerRunningForFile(anything())).thenReturn(true);
 
         await watcher.handleChangedDirs(new Set([deepnoteDirOf(uri)]));
 
-        verify(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything())).never();
-        verify(kernelAutoSelector.restartServerForNotebook(anything(), anything())).never();
-    });
-
-    test('accepting Restart restarts the server once, atomically (non-cancellable token)', async () => {
-        const uri = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
-        const notebook = createMockNotebook(uri);
-
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(serverStarter.isServerRunningForFile(anything())).thenReturn(true);
-        acceptRestart();
-        when(kernelAutoSelector.restartServerForNotebook(anything(), anything())).thenResolve();
-
-        await watcher.handleChangedDirs(new Set([deepnoteDirOf(uri)]));
-
-        verify(kernelAutoSelector.restartServerForNotebook(anything(), anything())).once();
-
-        const [nbArg, tokenArg] = capture(kernelAutoSelector.restartServerForNotebook).last();
-        assert.strictEqual(nbArg, notebook, 'should restart the affected notebook');
-        assert.notStrictEqual(tokenArg, progressToken, 'must not forward the cancellable withProgress token');
-        assert.strictEqual(
-            tokenArg.isCancellationRequested,
-            false,
-            'restart runs atomically, not cancellable mid-flight'
-        );
-    });
-
-    test('does not restart once cancellation is requested', async () => {
-        const uri = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
-        const notebook = createMockNotebook(uri);
-
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(serverStarter.isServerRunningForFile(anything())).thenReturn(true);
-        acceptRestart();
-        when(kernelAutoSelector.restartServerForNotebook(anything(), anything())).thenResolve();
-
-        const cancelledToken = cancellationToken(true);
-        when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall((_options, callback) =>
-            callback({ report: () => {} }, cancelledToken)
-        );
-
-        await watcher.handleChangedDirs(new Set([deepnoteDirOf(uri)]));
-
-        verify(kernelAutoSelector.restartServerForNotebook(anything(), anything())).never();
-    });
-
-    test('declining the prompt does not restart the server', async () => {
-        const uri = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
-        const notebook = createMockNotebook(uri);
-
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(serverStarter.isServerRunningForFile(anything())).thenReturn(true);
-        // Default reset already resolves undefined; be explicit that the user dismissed the prompt.
-        when(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything())).thenResolve(
-            undefined as never
-        );
-
-        await watcher.handleChangedDirs(new Set([deepnoteDirOf(uri)]));
-
-        verify(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything())).once();
-        verify(kernelAutoSelector.restartServerForNotebook(anything(), anything())).never();
+        verify(liveRefresher.refresh(anything())).never();
     });
 });

@@ -1,6 +1,6 @@
 import { assert } from 'chai';
 import * as sinon from 'sinon';
-import { anything, capture, instance, mock, verify, when } from 'ts-mockito';
+import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { DeepnoteKernelAutoSelector } from './deepnoteKernelAutoSelector.node';
 import { createMockChildProcess } from '../../kernels/deepnote/deepnoteTestHelpers.node';
 import { ServerHandleRegistry } from '../../kernels/deepnote/deepnoteServerHandleRegistry.node';
@@ -346,128 +346,6 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 newServerHandle,
                 'registry should track the new handle after a successful switch'
             );
-        });
-    });
-
-    suite('restartServerForNotebook', () => {
-        test('stops the server and LSP clients, then re-runs kernel selection for the environment', async () => {
-            // Arrange
-            const environmentId = 'test-env-id';
-            const mockEnvironment = createMockEnvironment(environmentId, 'Test Environment');
-            const notebookKey = getNotebookKey(mockNotebook.uri);
-            const deepnoteFileUri = mockNotebook.uri.with({ query: '', fragment: '' });
-
-            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).thenReturn(environmentId);
-            when(mockEnvironmentManager.getEnvironment(environmentId)).thenReturn(mockEnvironment);
-            when(mockServerStarter.stopServer(anything(), anything())).thenResolve();
-            when(mockLspClientManager.stopLspClients(anything(), anything())).thenResolve();
-
-            const mockKernel = mock<IKernel>();
-            when(mockKernel.dispose()).thenResolve();
-            when(mockKernelProvider.get(mockNotebook)).thenReturn(instance(mockKernel));
-
-            const ensureStub = sandbox.stub(selector, 'ensureKernelSelectedWithConfiguration').resolves();
-
-            // Act
-            await selector.restartServerForNotebook(mockNotebook, instance(mockCancellationToken));
-
-            verify(mockKernel.dispose()).once();
-
-            // Assert - server stopped with the .deepnote file uri (query/fragment stripped) and the token
-            verify(mockServerStarter.stopServer(anything(), anything())).once();
-            const [stopServerUri, stopServerToken] = capture(mockServerStarter.stopServer).last();
-            assert.strictEqual(
-                stopServerUri.toString(),
-                deepnoteFileUri.toString(),
-                'stopServer gets the .deepnote uri'
-            );
-            assert.strictEqual(stopServerToken, instance(mockCancellationToken), 'stopServer gets the token');
-
-            // Assert - LSP clients stopped with the full notebook uri and the token
-            verify(mockLspClientManager.stopLspClients(anything(), anything())).once();
-            const [lspUri, lspToken] = capture(mockLspClientManager.stopLspClients).last();
-            assert.strictEqual(lspUri.toString(), mockNotebook.uri.toString(), 'stopLspClients gets the notebook uri');
-            assert.strictEqual(lspToken, instance(mockCancellationToken), 'stopLspClients gets the token');
-
-            // Assert - kernel selection re-run with the resolved environment
-            assert.strictEqual(ensureStub.calledOnce, true, 'ensureKernelSelectedWithConfiguration should run');
-            assert.strictEqual(ensureStub.firstCall.args[0], mockNotebook, 'first arg is the notebook');
-            assert.strictEqual(ensureStub.firstCall.args[1], mockEnvironment, 'second arg is the environment');
-            assert.strictEqual(ensureStub.firstCall.args[2], notebookKey, 'third arg is the notebookKey');
-            assert.strictEqual(ensureStub.firstCall.args[4], instance(mockCancellationToken), 'fifth arg is the token');
-        });
-
-        test('removes the mapping and returns without stopping the server when no environment is configured', async () => {
-            // Arrange - no environment mapped for the notebook
-            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).thenReturn(undefined);
-            when(mockNotebookEnvironmentMapper.removeEnvironmentForNotebook(anything())).thenResolve();
-            when(mockServerStarter.stopServer(anything(), anything())).thenResolve();
-            when(mockLspClientManager.stopLspClients(anything(), anything())).thenResolve();
-
-            const ensureStub = sandbox.stub(selector, 'ensureKernelSelectedWithConfiguration').resolves();
-
-            // Act
-            await selector.restartServerForNotebook(mockNotebook, instance(mockCancellationToken));
-
-            // Assert - the environment is resolved BEFORE stopping, so a missing environment bails without
-            // killing the running server (the notebook is not stranded with a dead server).
-            verify(mockServerStarter.stopServer(anything(), anything())).never();
-            verify(mockLspClientManager.stopLspClients(anything(), anything())).never();
-            // The stale mapping is cleared and kernel selection is NOT re-run
-            verify(mockNotebookEnvironmentMapper.removeEnvironmentForNotebook(anything())).once();
-            assert.strictEqual(ensureStub.called, false, 'must not re-run kernel selection without an environment');
-        });
-
-        test('unregisters the stale server handle after a successful restart registers a new one', async () => {
-            // Arrange - old handle tracked; a successful restart registers a different handle
-            const notebookKey = getNotebookKey(mockNotebook.uri);
-            const oldServerHandle = 'old-server-handle';
-            const newServerHandle = 'new-server-handle';
-            registry.set(notebookKey, oldServerHandle);
-
-            const environmentId = 'test-env-id';
-            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).thenReturn(environmentId);
-            when(mockEnvironmentManager.getEnvironment(environmentId)).thenReturn(
-                createMockEnvironment(environmentId, 'Test Environment')
-            );
-            when(mockServerStarter.stopServer(anything(), anything())).thenResolve();
-            when(mockLspClientManager.stopLspClients(anything(), anything())).thenResolve();
-
-            sandbox.stub(selector, 'ensureKernelSelectedWithConfiguration').callsFake(async () => {
-                registry.set(notebookKey, newServerHandle);
-            });
-
-            // Act
-            await selector.restartServerForNotebook(mockNotebook, instance(mockCancellationToken));
-
-            // Assert - only the stale handle is unregistered; the new one stays
-            verify(mockServerProvider.unregisterServer(oldServerHandle)).once();
-            verify(mockServerProvider.unregisterServer(newServerHandle)).never();
-            assert.strictEqual(registry.get(notebookKey), newServerHandle, 'registry tracks the new handle');
-        });
-
-        test('keeps the server handle when the restart reuses it (no new handle registered)', async () => {
-            // Arrange - old handle tracked; restart reuses it (registry unchanged by kernel selection)
-            const notebookKey = getNotebookKey(mockNotebook.uri);
-            const reusedServerHandle = 'reused-server-handle';
-            registry.set(notebookKey, reusedServerHandle);
-
-            const environmentId = 'test-env-id';
-            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).thenReturn(environmentId);
-            when(mockEnvironmentManager.getEnvironment(environmentId)).thenReturn(
-                createMockEnvironment(environmentId, 'Test Environment')
-            );
-            when(mockServerStarter.stopServer(anything(), anything())).thenResolve();
-            when(mockLspClientManager.stopLspClients(anything(), anything())).thenResolve();
-
-            sandbox.stub(selector, 'ensureKernelSelectedWithConfiguration').resolves();
-
-            // Act
-            await selector.restartServerForNotebook(mockNotebook, instance(mockCancellationToken));
-
-            // Assert - nothing is unregistered and the handle is preserved
-            verify(mockServerProvider.unregisterServer(anything())).never();
-            assert.strictEqual(registry.get(notebookKey), reusedServerHandle, 'registry keeps the reused handle');
         });
     });
 

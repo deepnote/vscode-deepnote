@@ -104,7 +104,7 @@ import { SqlIntegrationStartupCodeProvider } from './deepnote/integrations/sqlIn
 import { DeepnoteCellCopyHandler } from './deepnote/deepnoteCellCopyHandler';
 import { DeepnoteEnvironmentTreeDataProvider } from '../kernels/deepnote/environments/deepnoteEnvironmentTreeDataProvider.node';
 import { OpenInDeepnoteHandler } from './deepnote/openInDeepnoteHandler.node';
-import { IntegrationKernelRestartHandler } from './deepnote/integrations/integrationKernelRestartHandler';
+import { IntegrationEnvRefreshHandler } from './deepnote/integrations/integrationEnvRefreshHandler';
 import { IntegrationsEnvFileWatcher } from './deepnote/integrations/integrationsEnvFileWatcher.node';
 import { IntegrationEnvLiveRefresher } from './deepnote/integrations/integrationEnvLiveRefresher.node';
 import { IntegrationsEnvVarsEndpoint } from './deepnote/integrations/integrationsEnvVarsEndpoint.node';
@@ -240,7 +240,7 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     );
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
-        IntegrationKernelRestartHandler
+        IntegrationEnvRefreshHandler
     );
     serviceManager.addSingleton<IIntegrationsFileConfigProvider>(
         IIntegrationsFileConfigProvider,

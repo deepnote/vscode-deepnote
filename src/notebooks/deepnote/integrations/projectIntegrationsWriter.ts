@@ -36,7 +36,7 @@ export async function persistProjectIntegrations(
     // Refresh the cache first so live env/kernel behavior stays correct even if a disk write fails.
     notebookManager.updateProjectIntegrations(projectId, integrations);
 
-    // findFiles only covers open folders, so write the active file explicitly (folderless / out-of-workspace).
+    // findFiles only covers open folders, so write the active file explicitly (no open folder / out-of-workspace).
     const activeOutcome = await writeIntegrationsToFile({ fileUri: activeFileUri, projectId, integrations });
 
     const visited = new Set<string>([activeFileUri.toString()]);

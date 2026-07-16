@@ -18,36 +18,50 @@ const PROJECT_ID = 'project-1';
 
 const NEW_INTEGRATIONS: ProjectIntegration[] = [{ id: 'int-new', name: 'New BigQuery', type: 'big-query' }];
 
-/**
- * Wires `workspace.workspaceFolders`, `findFiles`, and `workspace.fs` so `persistProjectIntegrations`
- * discovers exactly `files` on disk. `readFile` is dispatched by URI path; every `writeFile` is parsed
- * back into the returned `writes` map (keyed by fsPath) so a test can assert what landed on disk.
- */
-function stubWorkspace(files: Array<{ uri: Uri; file: DeepnoteFile }>): { writes: Map<string, DeepnoteFile> } {
-    when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([createWorkspaceFolder(Uri.file('/ws'))]);
-    when(mockedVSCodeNamespaces.workspace.findFiles(anything())).thenReturn(
-        Promise.resolve(files.map((entry) => entry.uri))
+function projectFile(notebookId: string): DeepnoteFile {
+    return createDeepnoteFile({
+        metadata: { createdAt: '2020-01-01T00:00:00Z', modifiedAt: '2021-01-01T00:00:00Z' },
+        project: createDeepnoteProject({
+            id: PROJECT_ID,
+            name: 'Proj',
+            notebooks: [
+                createDeepnoteNotebook({
+                    id: notebookId,
+                    blocks: [createDeepnoteBlock({ id: `${notebookId}-b`, content: notebookId })]
+                })
+            ]
+        })
+    });
+}
+
+/** Wires workspace.fs/findFiles; `discovered` is decoupled from the active file to model out-of-folder writes. */
+function stubWorkspace(opts: {
+    onDisk: Array<{ uri: Uri; file: DeepnoteFile }>;
+    discovered: Uri[];
+    hasWorkspaceFolder?: boolean;
+    failWriteFor?: Set<string>;
+}): { writes: Map<string, DeepnoteFile> } {
+    when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn(
+        opts.hasWorkspaceFolder === false ? undefined : [createWorkspaceFolder(Uri.file('/ws'))]
     );
+    when(mockedVSCodeNamespaces.workspace.findFiles(anything())).thenReturn(Promise.resolve(opts.discovered));
 
-    const byPath = new Map<string, DeepnoteFile>();
-
-    for (const entry of files) {
-        byPath.set(entry.uri.fsPath, entry.file);
-    }
-
+    const byPath = new Map(opts.onDisk.map((entry) => [entry.uri.fsPath, entry.file] as const));
     const writes = new Map<string, DeepnoteFile>();
     const mockFs = mock<typeof workspace.fs>();
 
     when(mockFs.readFile(anything())).thenCall((uri: Uri) => {
         const file = byPath.get(uri.fsPath);
 
-        if (!file) {
-            return Promise.reject(new Error(`no readFile stub for ${uri.fsPath}`));
-        }
-
-        return Promise.resolve(new TextEncoder().encode(serializeDeepnoteFile(file)));
+        return file
+            ? Promise.resolve(new TextEncoder().encode(serializeDeepnoteFile(file)))
+            : Promise.reject(new Error(`no readFile stub for ${uri.fsPath}`));
     });
     when(mockFs.writeFile(anything(), anything())).thenCall((uri: Uri, bytes: Uint8Array) => {
+        if (opts.failWriteFor?.has(uri.fsPath)) {
+            return Promise.reject(new Error(`write failed for ${uri.fsPath}`));
+        }
+
         writes.set(uri.fsPath, deserializeDeepnoteFile(new TextDecoder().decode(bytes)));
 
         return Promise.resolve();
@@ -58,63 +72,120 @@ function stubWorkspace(files: Array<{ uri: Uri; file: DeepnoteFile }>): { writes
 }
 
 suite('persistProjectIntegrations', () => {
-    let mockManager: IDeepnoteNotebookManager;
     let managerInstance: IDeepnoteNotebookManager;
 
     setup(() => {
         resetVSCodeMocks();
 
-        mockManager = mock<IDeepnoteNotebookManager>();
+        const mockManager = mock<IDeepnoteNotebookManager>();
         when(mockManager.updateProjectIntegrations(anything(), anything())).thenReturn(true);
         managerInstance = instance(mockManager);
     });
 
-    test('writes the new integrations into BOTH an open and a closed sibling of the project (disk-driven, not open-state driven)', async () => {
-        // The two siblings share one project.id; the helper is disk-driven, so an OPEN sibling (its
-        // cache entry refreshed) and a CLOSED one (cache-only path used to miss it) get identical writes.
-        const openUri = Uri.file('/ws/open.deepnote');
-        const closedUri = Uri.file('/ws/closed.deepnote');
-        const { writes } = stubWorkspace([
-            {
-                uri: openUri,
-                file: createDeepnoteFile({
-                    metadata: { createdAt: '2020-01-01T00:00:00Z', modifiedAt: '2021-01-01T00:00:00Z' },
-                    project: createDeepnoteProject({
-                        id: PROJECT_ID,
-                        name: 'Proj',
-                        notebooks: [
-                            createDeepnoteNotebook({
-                                id: 'nb-open',
-                                blocks: [createDeepnoteBlock({ id: 'nb-open-b', content: 'open' })]
-                            })
-                        ]
-                    })
-                })
-            },
-            {
-                uri: closedUri,
-                file: createDeepnoteFile({
-                    metadata: { createdAt: '2020-01-01T00:00:00Z', modifiedAt: '2021-01-01T00:00:00Z' },
-                    project: createDeepnoteProject({
-                        id: PROJECT_ID,
-                        name: 'Proj',
-                        notebooks: [
-                            createDeepnoteNotebook({
-                                id: 'nb-closed',
-                                blocks: [createDeepnoteBlock({ id: 'nb-closed-b', content: 'closed' })]
-                            })
-                        ]
-                    })
-                })
-            }
-        ]);
+    test('writes the active file AND every discovered sibling of the project (disk-driven, not open-state driven)', async () => {
+        const activeUri = Uri.file('/ws/active.deepnote');
+        const siblingUri = Uri.file('/ws/sibling.deepnote');
+        const { writes } = stubWorkspace({
+            onDisk: [
+                { uri: activeUri, file: projectFile('nb-active') },
+                { uri: siblingUri, file: projectFile('nb-sibling') }
+            ],
+            discovered: [activeUri, siblingUri]
+        });
 
-        const result = await persistProjectIntegrations(managerInstance, PROJECT_ID, NEW_INTEGRATIONS);
+        const result = await persistProjectIntegrations({
+            notebookManager: managerInstance,
+            projectId: PROJECT_ID,
+            integrations: NEW_INTEGRATIONS,
+            activeFileUri: activeUri
+        });
 
-        assert.isTrue(result, 'should report success when files were written');
-        assert.isTrue(writes.has(openUri.fsPath), 'the open sibling must be written');
-        assert.isTrue(writes.has(closedUri.fsPath), 'the closed sibling must be written');
-        assert.deepStrictEqual(writes.get(openUri.fsPath)!.project.integrations, NEW_INTEGRATIONS);
-        assert.deepStrictEqual(writes.get(closedUri.fsPath)!.project.integrations, NEW_INTEGRATIONS);
+        assert.deepStrictEqual(result, { activePersisted: true, siblingsFailed: 0 });
+        assert.deepStrictEqual(writes.get(activeUri.fsPath)!.project.integrations, NEW_INTEGRATIONS);
+        assert.deepStrictEqual(writes.get(siblingUri.fsPath)!.project.integrations, NEW_INTEGRATIONS);
+    });
+
+    test('no workspace folder: still writes the ACTIVE file and reports activePersisted (regression: cache-only success wrote nothing to disk)', async () => {
+        const activeUri = Uri.file('/loose/foo.deepnote');
+        const { writes } = stubWorkspace({
+            onDisk: [{ uri: activeUri, file: projectFile('nb-active') }],
+            discovered: [],
+            hasWorkspaceFolder: false
+        });
+
+        const result = await persistProjectIntegrations({
+            notebookManager: managerInstance,
+            projectId: PROJECT_ID,
+            integrations: NEW_INTEGRATIONS,
+            activeFileUri: activeUri
+        });
+
+        assert.isTrue(result.activePersisted, 'the active file must be written even with no workspace folder');
+        assert.deepStrictEqual(writes.get(activeUri.fsPath)!.project.integrations, NEW_INTEGRATIONS);
+    });
+
+    test('active file outside every workspace folder is still written (findFiles never returns it)', async () => {
+        const activeUri = Uri.file('/other/foo.deepnote');
+        const wsSibling = Uri.file('/ws/sibling.deepnote');
+        const { writes } = stubWorkspace({
+            onDisk: [
+                { uri: activeUri, file: projectFile('nb-active') },
+                { uri: wsSibling, file: projectFile('nb-ws') }
+            ],
+            discovered: [wsSibling]
+        });
+
+        const result = await persistProjectIntegrations({
+            notebookManager: managerInstance,
+            projectId: PROJECT_ID,
+            integrations: NEW_INTEGRATIONS,
+            activeFileUri: activeUri
+        });
+
+        assert.isTrue(result.activePersisted);
+        assert.isTrue(writes.has(activeUri.fsPath), 'the active file outside the folder must be written');
+    });
+
+    test('a sibling whose write rejects yields siblingsFailed=1 while activePersisted stays true', async () => {
+        const activeUri = Uri.file('/ws/active.deepnote');
+        const badSibling = Uri.file('/ws/bad.deepnote');
+        const { writes } = stubWorkspace({
+            onDisk: [
+                { uri: activeUri, file: projectFile('nb-active') },
+                { uri: badSibling, file: projectFile('nb-bad') }
+            ],
+            discovered: [activeUri, badSibling],
+            failWriteFor: new Set([badSibling.fsPath])
+        });
+
+        const result = await persistProjectIntegrations({
+            notebookManager: managerInstance,
+            projectId: PROJECT_ID,
+            integrations: NEW_INTEGRATIONS,
+            activeFileUri: activeUri
+        });
+
+        assert.deepStrictEqual(result, { activePersisted: true, siblingsFailed: 1 });
+        assert.isTrue(writes.has(activeUri.fsPath));
+        assert.isFalse(writes.has(badSibling.fsPath));
+    });
+
+    test('a failed ACTIVE-file write reports activePersisted=false (regression: no false success)', async () => {
+        const activeUri = Uri.file('/ws/active.deepnote');
+        const { writes } = stubWorkspace({
+            onDisk: [{ uri: activeUri, file: projectFile('nb-active') }],
+            discovered: [activeUri],
+            failWriteFor: new Set([activeUri.fsPath])
+        });
+
+        const result = await persistProjectIntegrations({
+            notebookManager: managerInstance,
+            projectId: PROJECT_ID,
+            integrations: NEW_INTEGRATIONS,
+            activeFileUri: activeUri
+        });
+
+        assert.isFalse(result.activePersisted, 'a failed active-file write must NOT report success');
+        assert.isFalse(writes.has(activeUri.fsPath));
     });
 });

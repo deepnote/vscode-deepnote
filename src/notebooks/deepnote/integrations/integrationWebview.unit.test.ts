@@ -169,7 +169,7 @@ suite('IntegrationWebviewProvider', () => {
     }
 
     async function show(provider: IntegrationWebviewProvider, integrations: Map<string, IntegrationWithStatus>) {
-        await provider.show(PROJECT_ID, integrations);
+        await provider.show(PROJECT_ID, integrations, Uri.file('/ws/active.deepnote'));
     }
 
     function lastUpdate(): CapturedMessage {

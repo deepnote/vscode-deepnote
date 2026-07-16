@@ -11,7 +11,7 @@ import { DeepnoteServerStarter } from './deepnoteServerStarter.node';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { IAsyncDisposableRegistry, IOutputChannel } from '../../platform/common/types';
 import { IDeepnoteToolkitInstaller } from './types';
-import { IIntegrationsEnvVarsEndpoint } from '../../notebooks/deepnote/integrations/types';
+import { IUserpodApiEndpoints } from '../../notebooks/deepnote/integrations/types';
 import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import {
@@ -303,7 +303,7 @@ suite('DeepnoteServerStarter', () => {
          * whose `baseUrl` getter yields `endpointBaseUrl`. Tracked for disposal.
          */
         function createStarterWithEndpoint(endpointBaseUrl: string | undefined): DeepnoteServerStarter {
-            const endpoint: IIntegrationsEnvVarsEndpoint = { baseUrl: endpointBaseUrl, authToken: 'endpoint-token' };
+            const endpoint: IUserpodApiEndpoints = { baseUrl: endpointBaseUrl, authToken: 'endpoint-token' };
             const starter = new DeepnoteServerStarter(
                 instance(mockProcessServiceFactory),
                 instance(mockToolkitInstaller),

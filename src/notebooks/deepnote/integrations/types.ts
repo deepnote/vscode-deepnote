@@ -50,8 +50,8 @@ export interface IIntegrationEnvLiveRefresher {
     refresh(notebooks: readonly NotebookDocument[]): Promise<void>;
 }
 
-export const IIntegrationsEnvVarsEndpoint = Symbol('IIntegrationsEnvVarsEndpoint');
-export interface IIntegrationsEnvVarsEndpoint {
+export const IUserpodApiEndpoints = Symbol('IUserpodApiEndpoints');
+export interface IUserpodApiEndpoints {
     /** Loopback base URL the toolkit fetches integration env vars from; `undefined` until the server is listening. */
     readonly baseUrl: string | undefined;
 

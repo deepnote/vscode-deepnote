@@ -12,7 +12,7 @@ import { CancellationToken, l10n, Uri } from 'vscode';
 
 import { startServer, stopServer } from '@deepnote/runtime-core';
 
-import { IIntegrationsEnvVarsEndpoint } from '../../notebooks/deepnote/integrations/types';
+import { IUserpodApiEndpoints } from '../../notebooks/deepnote/integrations/types';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { Cancellation } from '../../platform/common/cancellation';
 import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
@@ -80,9 +80,9 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         @inject(ISqlIntegrationEnvVarsProvider)
         @optional()
         private readonly sqlIntegrationEnvVars?: ISqlIntegrationEnvVarsProvider,
-        @inject(IIntegrationsEnvVarsEndpoint)
+        @inject(IUserpodApiEndpoints)
         @optional()
-        private readonly integrationsEnvVarsEndpoint?: IIntegrationsEnvVarsEndpoint
+        private readonly userpodApiEndpoints?: IUserpodApiEndpoints
     ) {
         asyncRegistry.push(this);
     }
@@ -405,7 +405,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
     // Skipped unless the endpoint is up and the file has a project id — else the toolkit raises on an unreachable URL.
     private async applyIntegrationEndpointEnv(extraEnv: Record<string, string>, deepnoteFileUri: Uri): Promise<void> {
-        const endpoint = this.integrationsEnvVarsEndpoint;
+        const endpoint = this.userpodApiEndpoints;
         const baseUrl = endpoint?.baseUrl;
 
         if (!endpoint || !baseUrl) {

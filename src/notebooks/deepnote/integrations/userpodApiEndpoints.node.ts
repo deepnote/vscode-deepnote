@@ -10,14 +10,14 @@ import { IDisposableRegistry } from '../../../platform/common/types';
 import { generateUuid } from '../../../platform/common/uuid';
 import { logger } from '../../../platform/logging';
 import { ISqlIntegrationEnvVarsProvider } from '../../../platform/notebooks/deepnote/types';
-import { IIntegrationsEnvVarsEndpoint } from './types';
+import { IUserpodApiEndpoints } from './types';
 
-/** Loopback endpoint the toolkit's `set_integration_env()` fetches integration env vars from (as `[{name,value}]`). */
+/** Loopback host for the toolkit's `userpod-api` calls; currently serves integration env vars for `set_integration_env()` (as `[{name,value}]`). */
 @injectable()
-export class IntegrationsEnvVarsEndpoint implements IIntegrationsEnvVarsEndpoint, IExtensionSyncActivationService {
+export class UserpodApiEndpoints implements IUserpodApiEndpoints, IExtensionSyncActivationService {
     private readonly authTokenValue = generateUuid();
     private server: http.Server | undefined;
-    private startedBaseUrl: string | undefined;
+    private serverBaseUrl: string | undefined;
 
     constructor(
         @inject(ISqlIntegrationEnvVarsProvider)
@@ -30,12 +30,12 @@ export class IntegrationsEnvVarsEndpoint implements IIntegrationsEnvVarsEndpoint
     }
 
     public get baseUrl(): string | undefined {
-        return this.startedBaseUrl;
+        return this.serverBaseUrl;
     }
 
     public activate(): void {
         this.start().catch((err) =>
-            logger.error('IntegrationsEnvVarsEndpoint: Failed to start integration env vars endpoint', err)
+            logger.error('UserpodApiEndpoints: Failed to start integration env vars endpoint', err)
         );
     }
 
@@ -67,8 +67,8 @@ export class IntegrationsEnvVarsEndpoint implements IIntegrationsEnvVarsEndpoint
 
                 res.json(payload);
             } catch (err) {
-                logger.error('IntegrationsEnvVarsEndpoint: Failed to resolve integration environment variables', err);
-                res.status(500).json([]);
+                logger.error('UserpodApiEndpoints: Failed to resolve integration environment variables', err);
+                res.status(500).send('Failed to resolve integration environment variables');
             }
         });
 
@@ -100,8 +100,8 @@ export class IntegrationsEnvVarsEndpoint implements IIntegrationsEnvVarsEndpoint
             server.once('listening', onListening);
         });
 
-        this.startedBaseUrl = `http://127.0.0.1:${port}`;
-        logger.info(`IntegrationsEnvVarsEndpoint: Listening on ${this.startedBaseUrl}`);
+        this.serverBaseUrl = `http://127.0.0.1:${port}`;
+        logger.info(`UserpodApiEndpoints: Listening on ${this.serverBaseUrl}`);
     }
 
     private stop(): void {
@@ -110,11 +110,9 @@ export class IntegrationsEnvVarsEndpoint implements IIntegrationsEnvVarsEndpoint
             return;
         }
         this.server = undefined;
-        this.startedBaseUrl = undefined;
+        this.serverBaseUrl = undefined;
 
-        if (typeof (server as { closeAllConnections?: () => void }).closeAllConnections === 'function') {
-            (server as { closeAllConnections: () => void }).closeAllConnections();
-        }
+        server.closeAllConnections();
         server.close();
     }
 }

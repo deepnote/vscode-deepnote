@@ -7,10 +7,10 @@ import { IDisposable } from '../../../platform/common/types';
 import { dispose } from '../../../platform/common/utils/lifecycle';
 import { ISqlIntegrationEnvVarsProvider } from '../../../platform/notebooks/deepnote/types';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
-import { IntegrationsEnvVarsEndpoint } from './integrationsEnvVarsEndpoint.node';
+import { UserpodApiEndpoints } from './userpodApiEndpoints.node';
 
-suite('IntegrationsEnvVarsEndpoint', () => {
-    let endpoint: IntegrationsEnvVarsEndpoint;
+suite('UserpodApiEndpoints', () => {
+    let endpoint: UserpodApiEndpoints;
     let provider: ISqlIntegrationEnvVarsProvider;
     let disposables: IDisposable[];
 
@@ -19,7 +19,7 @@ suite('IntegrationsEnvVarsEndpoint', () => {
         disposables = [new Disposable(() => resetVSCodeMocks())];
         provider = mock<ISqlIntegrationEnvVarsProvider>();
 
-        endpoint = new IntegrationsEnvVarsEndpoint(instance(provider), disposables);
+        endpoint = new UserpodApiEndpoints(instance(provider), disposables);
     });
 
     teardown(() => {
@@ -45,7 +45,7 @@ suite('IntegrationsEnvVarsEndpoint', () => {
         const start = Date.now();
         while (endpoint.baseUrl === undefined) {
             if (Date.now() - start > timeoutMs) {
-                throw new Error('IntegrationsEnvVarsEndpoint did not start listening in time');
+                throw new Error('UserpodApiEndpoints did not start listening in time');
             }
             await new Promise((resolve) => setTimeout(resolve, 10));
         }
@@ -141,7 +141,7 @@ suite('IntegrationsEnvVarsEndpoint', () => {
         verify(provider.getEnvironmentVariables(anything())).never();
     });
 
-    test('responds 500 with an empty array when the provider rejects', async () => {
+    test('responds 500 when the provider rejects', async () => {
         const notebook = createMockNotebook('project-1', Uri.file('/ws/app.deepnote'));
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
         when(provider.getEnvironmentVariables(anything())).thenReject(new Error('resolution failed'));
@@ -152,7 +152,6 @@ suite('IntegrationsEnvVarsEndpoint', () => {
         const response = await authedFetch(envVarsUrl(baseUrl, 'project-1'));
 
         assert.strictEqual(response.status, 500);
-        assert.deepStrictEqual(await response.json(), []);
     });
 
     test('responds 401 and never queries the provider when the bearer token is missing or wrong', async () => {

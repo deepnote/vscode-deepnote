@@ -12,6 +12,7 @@ import { CancellationToken, l10n, Uri } from 'vscode';
 
 import { startServer, stopServer } from '@deepnote/runtime-core';
 
+import { IIntegrationsEnvVarsEndpoint } from '../../notebooks/deepnote/integrations/types';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { Cancellation } from '../../platform/common/cancellation';
 import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
@@ -19,6 +20,7 @@ import { IProcessServiceFactory } from '../../platform/common/process/types.node
 import { IAsyncDisposableRegistry, IDisposable, IOutputChannel } from '../../platform/common/types';
 import { sleep } from '../../platform/common/utils/async';
 import { generateUuid } from '../../platform/common/uuid';
+import { resolveProjectIdForFile } from '../../platform/deepnote/deepnoteProjectIdResolver';
 import { DeepnoteServerStartupError } from '../../platform/errors/deepnoteKernelErrors';
 import { logger } from '../../platform/logging';
 import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
@@ -77,7 +79,10 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         @inject(IAsyncDisposableRegistry) asyncRegistry: IAsyncDisposableRegistry,
         @inject(ISqlIntegrationEnvVarsProvider)
         @optional()
-        private readonly sqlIntegrationEnvVars?: ISqlIntegrationEnvVarsProvider
+        private readonly sqlIntegrationEnvVars?: ISqlIntegrationEnvVarsProvider,
+        @inject(IIntegrationsEnvVarsEndpoint)
+        @optional()
+        private readonly integrationsEnvVarsEndpoint?: IIntegrationsEnvVarsEndpoint
     ) {
         asyncRegistry.push(this);
     }
@@ -266,6 +271,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         this.outputChannel.appendLine(l10n.t('Starting Deepnote server...'));
 
         const extraEnv = await this.gatherSqlIntegrationEnvVars(deepnoteFileUri, environmentId, token);
+        await this.applyIntegrationEndpointEnv(extraEnv, deepnoteFileUri);
 
         // Initialize output tracking for error reporting
         this.serverOutputByFile.set(fileKey, { stdout: '', stderr: '' });
@@ -399,6 +405,32 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         }
 
         return extraEnv;
+    }
+
+    /**
+     * Point the deepnote-toolkit at the loopback integration endpoint so it fetches integration env vars in
+     * detached "direct mode" at kernel start and on every live refresh. Only enabled when the endpoint is
+     * listening and the file resolves to a project id; otherwise the toolkit raises on an unreachable webapp URL.
+     */
+    private async applyIntegrationEndpointEnv(extraEnv: Record<string, string>, deepnoteFileUri: Uri): Promise<void> {
+        const baseUrl = this.integrationsEnvVarsEndpoint?.baseUrl;
+
+        if (!baseUrl) {
+            return;
+        }
+
+        const projectId = await resolveProjectIdForFile(deepnoteFileUri);
+
+        if (!projectId) {
+            return;
+        }
+
+        extraEnv['DEEPNOTE_RUNTIME__ENV_INTEGRATION_ENABLED'] = 'true';
+        extraEnv['DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE'] = 'true';
+        extraEnv['DEEPNOTE_RUNTIME__WEBAPP_URL'] = baseUrl;
+        // Legacy DEEPNOTE_PROJECT_ID (not DEEPNOTE_RUNTIME__PROJECT_ID): maps to runtime.project_id and satisfies
+        // set_notebook_path's `has_env("DEEPNOTE_PROJECT_ID")` check, avoiding a session-name parse.
+        extraEnv['DEEPNOTE_PROJECT_ID'] = projectId;
     }
 
     /**

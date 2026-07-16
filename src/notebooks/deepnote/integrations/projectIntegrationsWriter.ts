@@ -93,6 +93,11 @@ async function writeIntegrationsToFile(params: WriteIntegrationsToFileParams): P
 
         projectData = await readDeepnoteProjectFile(fileUri);
 
+        // The flush may have saved a stale open document, swapping the on-disk project; re-validate before writing.
+        if (projectData?.project?.id !== projectId) {
+            return 'skipped';
+        }
+
         // Rewrite ONLY integrations; every other field round-trips from disk, so saved cells are untouched.
         projectData.project.integrations = integrations;
 

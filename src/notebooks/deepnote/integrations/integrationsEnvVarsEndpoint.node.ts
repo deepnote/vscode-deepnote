@@ -12,12 +12,7 @@ import { logger } from '../../../platform/logging';
 import { ISqlIntegrationEnvVarsProvider } from '../../../platform/notebooks/deepnote/types';
 import { IIntegrationsEnvVarsEndpoint } from './types';
 
-/**
- * Loopback HTTP endpoint the Deepnote toolkit reads integration environment variables from. The toolkit's
- * `set_integration_env()` GETs `/userpod-api/:projectId/integrations/environment-variables` at kernel start
- * (and again on every live refresh) and applies the returned `[{ name, value }]` array to the kernel process.
- * Bound to `127.0.0.1` only, so no auth is needed.
- */
+/** Loopback endpoint the toolkit's `set_integration_env()` fetches integration env vars from (as `[{name,value}]`). */
 @injectable()
 export class IntegrationsEnvVarsEndpoint implements IIntegrationsEnvVarsEndpoint, IExtensionSyncActivationService {
     private readonly authTokenValue = generateUuid();
@@ -39,7 +34,6 @@ export class IntegrationsEnvVarsEndpoint implements IIntegrationsEnvVarsEndpoint
     }
 
     public activate(): void {
-        // Start listening at activation so the endpoint is ready before any kernel (and the toolkit) starts.
         this.start().catch((err) =>
             logger.error('IntegrationsEnvVarsEndpoint: Failed to start integration env vars endpoint', err)
         );
@@ -81,13 +75,11 @@ export class IntegrationsEnvVarsEndpoint implements IIntegrationsEnvVarsEndpoint
         const server = http.createServer(app);
         this.server = server;
 
-        // Tear the server down on extension shutdown.
         this.disposables.push({ dispose: () => this.stop() });
 
         server.listen(0, '127.0.0.1');
 
         const port = await new Promise<number>((resolve, reject) => {
-            // Forward-declared with `let` so each handler can `removeListener` the other (avoids use-before-define).
             let onError: (err: Error) => void = () => undefined;
             let onListening: () => void = () => undefined;
             onError = (err: Error) => {
@@ -120,7 +112,6 @@ export class IntegrationsEnvVarsEndpoint implements IIntegrationsEnvVarsEndpoint
         this.server = undefined;
         this.startedBaseUrl = undefined;
 
-        // `closeAllConnections` prevents the server hanging on a half-open TCP connection at shutdown.
         if (typeof (server as { closeAllConnections?: () => void }).closeAllConnections === 'function') {
             (server as { closeAllConnections: () => void }).closeAllConnections();
         }

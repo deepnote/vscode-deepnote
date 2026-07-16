@@ -111,15 +111,12 @@ describe('Deepnote E2E — inject integration env var from `.deepnote.env.yaml`'
         await createEnvironment(environmentName);
         await selectEnvironmentForNotebook(environmentName, NOTEBOOK_FILE_NAME);
 
-        // Initial: the toolkit resolves PROD_POSTGRES_HOST from `.env` at kernel start.
         const first = await runOnceAndAwaitOutput(NOTEBOOK_FILE_NAME, EXPECTED_OUTPUT, FIRST_RUN_OUTPUT_TIMEOUT);
         expect(first).to.contain(EXPECTED_OUTPUT);
 
-        // Live refresh: rewrite `.env`; the watcher runs `set_integration_env()` in the SAME running kernel
-        // (no restart, no re-select), so a re-run must read the new value.
+        // Live refresh: rewrite `.env`; the watcher runs set_integration_env() in the SAME kernel (no restart) so a re-run reads the new value.
         fs.writeFileSync(path.join(tempDir, DOTENV_FILE_NAME), 'DEMO_DB_HOST=refreshed-host.example.com\n');
-        // Wait out the watcher debounce + let it queue the hidden refresh on the kernel (which the kernel runs
-        // before the next Run All).
+        // Watcher debounce + time to queue the hidden refresh, which the kernel runs before the next Run All.
         await new Promise((resolve) => setTimeout(resolve, 5000));
 
         const second = await runOnceAndAwaitOutput(

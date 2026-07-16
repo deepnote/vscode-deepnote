@@ -46,26 +46,16 @@ export interface IIntegrationManager {
 
 export const IIntegrationEnvLiveRefresher = Symbol('IIntegrationEnvLiveRefresher');
 export interface IIntegrationEnvLiveRefresher {
-    /**
-     * Re-runs the Deepnote toolkit's `set_integration_env()` inside each notebook's already-started kernel so it
-     * picks up new integration environment variables without a restart. Skips notebooks with no running kernel and
-     * shows a single dismissible notification if at least one kernel was refreshed.
-     */
+    /** Re-runs the toolkit's `set_integration_env()` in each notebook's running kernel (no restart); notifies once. */
     refresh(notebooks: readonly NotebookDocument[]): Promise<void>;
 }
 
 export const IIntegrationsEnvVarsEndpoint = Symbol('IIntegrationsEnvVarsEndpoint');
 export interface IIntegrationsEnvVarsEndpoint {
-    /**
-     * `http://127.0.0.1:<port>` once the loopback endpoint is listening; `undefined` before it has started. The
-     * Deepnote toolkit fetches integration environment variables from this base URL.
-     */
+    /** Loopback base URL the toolkit fetches integration env vars from; `undefined` until the server is listening. */
     readonly baseUrl: string | undefined;
 
-    /**
-     * Bearer token the endpoint requires (it serves credentials, so it is validated even though it is
-     * loopback-only). Injected into the toolkit as `DEEPNOTE_RUNTIME__PROJECT_SECRET` so its requests carry it.
-     */
+    /** Bearer token the endpoint requires (it serves credentials); injected into the toolkit as `DEEPNOTE_RUNTIME__PROJECT_SECRET`. */
     readonly authToken: string;
 }
 

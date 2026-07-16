@@ -12,23 +12,13 @@ import { IIntegrationEnvLiveRefresher } from './types';
 /** Trailing-edge debounce so a burst of edits (e.g. .env and .deepnote.env.yaml both saved) is handled once. */
 const debounceTimeInMilliseconds = 500;
 
-/** Integration env files whose changes trigger a live env refresh. */
 const watchedEnvFileNames = [DEFAULT_INTEGRATIONS_FILE, DEFAULT_ENV_FILE];
 
-/**
- * Watches the integration env files (`.deepnote.env.yaml` / `.env`) next to open Deepnote notebooks and in
- * workspace-folder roots. When one changes, it live-refreshes the integration environment in the affected
- * notebooks' kernels (via {@link IIntegrationEnvLiveRefresher}) so the new values are picked up without a restart.
- *
- * Node-only sibling of IntegrationEnvRefreshHandler / FederatedAuthKernelRestartBridge. Unlike those, it
- * does not gate on SQL cells: an env change can affect any cell.
- */
+/** Watches `.deepnote.env.yaml` / `.env` and live-refreshes affected notebooks' kernels on change (no restart). */
 @injectable()
 export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationService {
-    /** Dirs (fsPath) that saw an env-file event during the current debounce window. */
     private readonly changedDirs = new Set<string>();
     private debounceTimer: ReturnType<typeof setTimeout> | undefined;
-    /** Dirs (fsPath) already covered by a watcher, to avoid duplicate watchers. */
     private readonly watchedDirs = new Set<string>();
 
     constructor(
@@ -37,17 +27,14 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
     ) {}
 
     public activate(): void {
-        // Cover every workspace-folder root (dir-then-root fallback) ...
         for (const folder of workspace.workspaceFolders ?? []) {
             this.watchDir(folder.uri);
         }
 
-        // ... and the .deepnote dir of every already-open notebook.
         for (const notebook of workspace.notebookDocuments) {
             this.watchNotebookDir(notebook);
         }
 
-        // Add watchers for notebooks opened later and for folders added to the workspace.
         this.disposables.push(
             workspace.onDidOpenNotebookDocument((notebook) => this.watchNotebookDir(notebook)),
             workspace.onDidChangeWorkspaceFolders((event) => {
@@ -66,10 +53,7 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
         );
     }
 
-    /**
-     * Core decision logic, called on the debounce trailing edge. Public so it can be unit-tested without real
-     * filesystem events.
-     */
+    /** Public so it can be unit-tested without real filesystem events. */
     public async handleChangedDirs(changedDirs: Set<string>): Promise<void> {
         const affected = this.findAffectedNotebooks(changedDirs);
         if (affected.length === 0) {
@@ -79,7 +63,6 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
         await this.liveRefresher.refresh(affected);
     }
 
-    /** Open Deepnote notebooks whose .deepnote dir OR workspace-folder root (dir-then-root) saw a change. */
     private findAffectedNotebooks(changedDirs: Set<string>): NotebookDocument[] {
         const affected: NotebookDocument[] = [];
 
@@ -100,7 +83,6 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
         return affected;
     }
 
-    /** File-watcher callback: accumulate the changed dir and (re)arm the debounce timer. */
     private onFileEvent(dir: Uri): void {
         this.changedDirs.add(dir.fsPath);
 
@@ -118,7 +100,6 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
         }, debounceTimeInMilliseconds);
     }
 
-    /** Create change/create/delete watchers for the env files in a dir, deduped by dir fsPath. */
     private watchDir(dir: Uri): void {
         const dirPath = dir.fsPath;
         if (this.watchedDirs.has(dirPath)) {
@@ -139,7 +120,6 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
         }
     }
 
-    /** Watch the .deepnote dir of a Deepnote notebook (no-op for other notebook types). */
     private watchNotebookDir(notebook: NotebookDocument): void {
         if (notebook.notebookType !== DEEPNOTE_NOTEBOOK_TYPE) {
             return;

@@ -5,17 +5,10 @@ import { IKernelProvider } from '../../../kernels/types';
 import { logger } from '../../../platform/logging';
 import { IIntegrationEnvLiveRefresher } from './types';
 
-/**
- * Toolkit snippet re-fetches integration env from the local endpoint and live-sets it into the kernel process.
- * The `_dntk` alias is not guaranteed here, so import the package explicitly.
- */
+/** `_dntk` isn't guaranteed here, so import the package to re-fetch + apply integration env in the kernel. */
 const REFRESH_INTEGRATION_ENV_SNIPPET = `import deepnote_toolkit
 deepnote_toolkit.set_integration_env()`;
 
-/**
- * Refreshes integration environment variables inside already-started kernels without restarting them by running the
- * Deepnote toolkit's `set_integration_env()` silently in each kernel.
- */
 @injectable()
 export class IntegrationEnvLiveRefresher implements IIntegrationEnvLiveRefresher {
     constructor(@inject(IKernelProvider) private readonly kernelProvider: IKernelProvider) {}
@@ -36,7 +29,6 @@ export class IntegrationEnvLiveRefresher implements IIntegrationEnvLiveRefresher
 
                 const errors = outputs.filter((output) => output.output_type === 'error');
                 if (errors.length > 0) {
-                    // The env was not (fully) applied, so don't claim success in the notification.
                     logger.warn(
                         `IntegrationEnvLiveRefresher: Refresh snippet produced errors for ${notebook.uri.toString()}`,
                         errors

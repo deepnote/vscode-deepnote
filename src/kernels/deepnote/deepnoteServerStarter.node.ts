@@ -403,11 +403,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         return extraEnv;
     }
 
-    /**
-     * Point the deepnote-toolkit at the loopback integration endpoint so it fetches integration env vars in
-     * detached "direct mode" at kernel start and on every live refresh. Only enabled when the endpoint is
-     * listening and the file resolves to a project id; otherwise the toolkit raises on an unreachable webapp URL.
-     */
+    // Skipped unless the endpoint is up and the file has a project id — else the toolkit raises on an unreachable URL.
     private async applyIntegrationEndpointEnv(extraEnv: Record<string, string>, deepnoteFileUri: Uri): Promise<void> {
         const endpoint = this.integrationsEnvVarsEndpoint;
         const baseUrl = endpoint?.baseUrl;
@@ -425,10 +421,9 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         extraEnv['DEEPNOTE_RUNTIME__ENV_INTEGRATION_ENABLED'] = 'true';
         extraEnv['DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE'] = 'true';
         extraEnv['DEEPNOTE_RUNTIME__WEBAPP_URL'] = baseUrl;
-        // Required by the toolkit in detached mode (2.1.1 dereferences it without a null-check); also the bearer
-        // token the loopback endpoint validates. Legacy DEEPNOTE_PROJECT_ID maps to runtime.project_id and
-        // satisfies set_notebook_path's `has_env("DEEPNOTE_PROJECT_ID")` check, avoiding a session-name parse.
+        // 2.1.1 dereferences project_secret without a null-check in detached mode; also the endpoint's bearer token.
         extraEnv['DEEPNOTE_RUNTIME__PROJECT_SECRET'] = endpoint.authToken;
+        // Legacy key (not __PROJECT_ID): also satisfies set_notebook_path's has_env check, avoiding a session-name parse.
         extraEnv['DEEPNOTE_PROJECT_ID'] = projectId;
     }
 

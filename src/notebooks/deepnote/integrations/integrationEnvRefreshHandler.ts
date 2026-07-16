@@ -7,12 +7,7 @@ import { logger } from '../../../platform/logging';
 import { DEEPNOTE_NOTEBOOK_TYPE } from '../../../kernels/deepnote/types';
 import { IIntegrationEnvLiveRefresher, IIntegrationStorage } from './types';
 
-/**
- * Live-refreshes integration environment variables in open Deepnote kernels when integration
- * configurations change. When a user saves/deletes an integration config, this re-runs the Deepnote
- * toolkit's `set_integration_env()` in each notebook's kernel so it picks up the new credentials
- * without a restart.
- */
+/** Live-refreshes integration env in open Deepnote kernels when integration configs change (no restart). */
 @injectable()
 export class IntegrationEnvRefreshHandler implements IExtensionSyncActivationService {
     constructor(
@@ -22,7 +17,6 @@ export class IntegrationEnvRefreshHandler implements IExtensionSyncActivationSer
     ) {
         logger.info('IntegrationEnvRefreshHandler: Initialized');
 
-        // Listen for integration configuration changes
         disposables.push(
             this.integrationStorage.onDidChangeIntegrations(() => {
                 this.onIntegrationConfigurationChanged().catch((err) =>

@@ -62,6 +62,14 @@ export namespace vscMock {
         }
     }
 
+    // Minimal stand-in so `tab.input instanceof TabInputNotebook` can be exercised in tests.
+    export class TabInputNotebook {
+        constructor(
+            public readonly uri: vscode.Uri,
+            public readonly notebookType: string
+        ) {}
+    }
+
     export class EventEmitter<T> implements vscode.EventEmitter<T> {
         public event: vscode.Event<T>;
         public emitter: NodeEventEmitter;

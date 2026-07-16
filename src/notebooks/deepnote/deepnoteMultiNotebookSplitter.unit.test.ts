@@ -1,7 +1,7 @@
 import { deserializeDeepnoteFile, serializeDeepnoteFile, type DeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import { anything, instance, mock, when } from 'ts-mockito';
-import { EventEmitter, FileType, NotebookDocument, TabGroups, Uri } from 'vscode';
+import { EventEmitter, FileType, NotebookDocument, TabGroups, TabInputNotebook, Uri } from 'vscode';
 
 import type { IDeepnoteNotebookEnvironmentMapper } from '../../kernels/deepnote/types';
 import type { ILogger } from '../../platform/logging/types';
@@ -60,6 +60,8 @@ suite('DeepnoteMultiNotebookSplitter', () => {
     let existingOnDisk: Set<string>;
     // If set, writing a file with this basename rejects (to test abort-on-failure).
     let failWriteFor: string | undefined;
+    // If set, writing this basename creates the file THEN rejects (models a create-then-reject orphan).
+    let failWriteAfterCreateFor: string | undefined;
     // Filenames passed to workspace.fs.delete (rollback cleanup), in call order.
     let deleteTargets: string[];
 
@@ -96,6 +98,10 @@ suite('DeepnoteMultiNotebookSplitter', () => {
         );
         when(mockFs.writeFile(anything(), anything())).thenCall((uri: Uri) => {
             const name = basename(uri);
+            if (failWriteAfterCreateFor && name === failWriteAfterCreateFor) {
+                existingOnDisk.add(name);
+                return Promise.reject(new Error(`write failed after creating ${name}`));
+            }
             if (failWriteFor && name === failWriteFor) {
                 return Promise.reject(new Error(`write failed for ${name}`));
             }
@@ -157,6 +163,7 @@ suite('DeepnoteMultiNotebookSplitter', () => {
         refreshTreeCount = 0;
         existingOnDisk = new Set<string>();
         failWriteFor = undefined;
+        failWriteAfterCreateFor = undefined;
         deleteTargets = [];
 
         // Re-stub the open-notebook event with our own emitter so tests can fire opens.
@@ -456,6 +463,70 @@ suite('DeepnoteMultiNotebookSplitter', () => {
             // The first write succeeded before the failure; the original is still present (never retired).
             assert.isTrue(errorShown, 'an error must be surfaced on write failure');
             assert.deepStrictEqual(writeTargets, ['multi-alpha.deepnote'], 'only writes before the failure occurred');
+        });
+
+        test('a child write that CREATES the file then rejects is cleaned up (regression: no untracked orphan → no -2 duplicate on retry)', async () => {
+            const file = makeFile([
+                makeNotebook('n1', 'Alpha', 'a'),
+                makeNotebook('n2', 'Beta', 'b'),
+                makeNotebook('n3', 'Gamma', 'c')
+            ]);
+            stubReadFile(file);
+            acceptSplit();
+
+            let errorShown = false;
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenCall(() => {
+                errorShown = true;
+                return Promise.resolve(undefined);
+            });
+
+            // The second child write creates the destination, then rejects mid-write (partial orphan).
+            failWriteAfterCreateFor = 'multi-beta.deepnote';
+
+            onDidOpen.fire(notebookDoc(Uri.file('/ws/multi.deepnote')));
+
+            await waitFor(() => errorShown);
+            await settle();
+
+            assert.strictEqual(renameOps.length, 0, 'the original must NEVER be renamed when a child write fails');
+            assert.include(deleteTargets, 'multi-beta.deepnote', 'the partial orphan must be deleted on rollback');
+            assert.isFalse(
+                existingOnDisk.has('multi-beta.deepnote'),
+                'the orphan must not remain on disk after rollback'
+            );
+        });
+
+        test('aborts BEFORE renaming when the original tab could not be closed (regression: never rename out from under an open editor)', async () => {
+            const file = makeFile([makeNotebook('n1', 'Alpha', 'a'), makeNotebook('n2', 'Beta', 'b')]);
+            stubReadFile(file);
+            acceptSplit();
+
+            let errorShown = false;
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenCall(() => {
+                errorShown = true;
+                return Promise.resolve(undefined);
+            });
+
+            // The original's editor tab is still open and its close is cancelled (resolves false).
+            const originalUri = Uri.file('/ws/multi.deepnote');
+            let closeAttempted = false;
+            when(mockedVSCodeNamespaces.window.tabGroups).thenReturn({
+                all: [{ tabs: [{ input: new TabInputNotebook(originalUri, 'deepnote') }] }],
+                close: () => {
+                    closeAttempted = true;
+                    return Promise.resolve(false);
+                }
+            } as unknown as TabGroups);
+
+            onDidOpen.fire(notebookDoc(originalUri));
+
+            await waitFor(() => errorShown);
+            await settle();
+
+            assert.isTrue(closeAttempted, 'a close must have been attempted');
+            assert.strictEqual(renameOps.length, 0, 'must NOT rename the original when its tab could not be closed');
+            assert.include(deleteTargets, 'multi-alpha.deepnote', 'already-written siblings must be rolled back');
+            assert.include(deleteTargets, 'multi-beta.deepnote', 'already-written siblings must be rolled back');
         });
     });
 

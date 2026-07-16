@@ -1,5 +1,5 @@
 import type { DeepnoteBlock } from '@deepnote/blocks';
-import { Event } from 'vscode';
+import { Event, NotebookDocument } from 'vscode';
 
 import { IntegrationWithStatus } from '../../../platform/notebooks/deepnote/integrationTypes';
 
@@ -42,6 +42,25 @@ export interface IIntegrationManager {
      * Activate the integration manager by registering commands and event listeners
      */
     activate(): void;
+}
+
+export const IIntegrationEnvLiveRefresher = Symbol('IIntegrationEnvLiveRefresher');
+export interface IIntegrationEnvLiveRefresher {
+    /**
+     * Re-runs the Deepnote toolkit's `set_integration_env()` inside each notebook's already-started kernel so it
+     * picks up new integration environment variables without a restart. Skips notebooks with no running kernel and
+     * shows a single dismissible notification if at least one kernel was refreshed.
+     */
+    refresh(notebooks: readonly NotebookDocument[]): Promise<void>;
+}
+
+export const IIntegrationsEnvVarsEndpoint = Symbol('IIntegrationsEnvVarsEndpoint');
+export interface IIntegrationsEnvVarsEndpoint {
+    /**
+     * `http://127.0.0.1:<port>` once the loopback endpoint is listening; `undefined` before it has started. The
+     * Deepnote toolkit fetches integration environment variables from this base URL.
+     */
+    readonly baseUrl: string | undefined;
 }
 
 /** Persisted federated-auth token entry; fingerprints `${clientId}|${clientSecret}|${project}` to detect stale tokens. Only the refresh token is persisted. */

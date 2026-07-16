@@ -52,7 +52,9 @@ import {
     IFederatedAuthSqlBlockCodeGenerator,
     IFederatedAuthTokenStorage,
     IIntegrationDetector,
+    IIntegrationEnvLiveRefresher,
     IIntegrationManager,
+    IIntegrationsEnvVarsEndpoint,
     IIntegrationStorage,
     IIntegrationWebviewProvider
 } from './deepnote/integrations/types';
@@ -104,6 +106,8 @@ import { DeepnoteEnvironmentTreeDataProvider } from '../kernels/deepnote/environ
 import { OpenInDeepnoteHandler } from './deepnote/openInDeepnoteHandler.node';
 import { IntegrationKernelRestartHandler } from './deepnote/integrations/integrationKernelRestartHandler';
 import { IntegrationsEnvFileWatcher } from './deepnote/integrations/integrationsEnvFileWatcher.node';
+import { IntegrationEnvLiveRefresher } from './deepnote/integrations/integrationEnvLiveRefresher.node';
+import { IntegrationsEnvVarsEndpoint } from './deepnote/integrations/integrationsEnvVarsEndpoint.node';
 import { ISnapshotMetadataService, SnapshotService } from './deepnote/snapshots/snapshotService';
 import { EnvironmentCapture, IEnvironmentCapture } from './deepnote/snapshots/environmentCapture.node';
 import { DeepnoteFileChangeWatcher } from './deepnote/deepnoteFileChangeWatcher';
@@ -246,6 +250,15 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
         IExtensionSyncActivationService,
         IntegrationsEnvFileWatcher
     );
+    serviceManager.addSingleton<IIntegrationEnvLiveRefresher>(
+        IIntegrationEnvLiveRefresher,
+        IntegrationEnvLiveRefresher
+    );
+    serviceManager.addSingleton<IIntegrationsEnvVarsEndpoint>(
+        IIntegrationsEnvVarsEndpoint,
+        IntegrationsEnvVarsEndpoint
+    );
+    serviceManager.addBinding(IIntegrationsEnvVarsEndpoint, IExtensionSyncActivationService);
 
     // Deepnote kernel services
     serviceManager.addSingleton<DeepnoteAgentSkillsManager>(DeepnoteAgentSkillsManager, DeepnoteAgentSkillsManager);

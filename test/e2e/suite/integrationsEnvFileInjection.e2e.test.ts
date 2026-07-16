@@ -57,11 +57,14 @@ describe('Deepnote E2E — inject integration env var from `.deepnote.env.yaml`'
 
     // Captured in `before` and invoked in `after` to remove the throwaway temp dir.
     let cleanupTempDir: (() => void) | undefined;
+    // The temp workspace dir, so the live-refresh assertion can rewrite `.env`.
+    let tempDir: string;
 
     before(async function () {
         // Work on a throwaway copy so execution-dirtied notebook state never touches the source tree.
-        const { cleanup, tempDir } = copyFixtureToTempDir(NOTEBOOK_FILE_NAME);
-        cleanupTempDir = cleanup;
+        const copied = copyFixtureToTempDir(NOTEBOOK_FILE_NAME);
+        cleanupTempDir = copied.cleanup;
+        tempDir = copied.tempDir;
 
         // Write the env files next to the notebook BEFORE opening the workspace so the loader sees them
         // when the kernel first starts. `.deepnote.env.yaml` carries the integration; `.env` resolves its
@@ -104,11 +107,26 @@ describe('Deepnote E2E — inject integration env var from `.deepnote.env.yaml`'
         }
     });
 
-    it('resolves the integration host from `.env` and injects it as `PROD_POSTGRES_HOST`', async function () {
+    it('injects `PROD_POSTGRES_HOST` from `.env`, then live-refreshes it on a `.env` change without a restart', async function () {
         await createEnvironment(environmentName);
         await selectEnvironmentForNotebook(environmentName, NOTEBOOK_FILE_NAME);
 
-        const renderedOutput = await runOnceAndAwaitOutput(NOTEBOOK_FILE_NAME, EXPECTED_OUTPUT, FIRST_RUN_OUTPUT_TIMEOUT);
-        expect(renderedOutput).to.contain(EXPECTED_OUTPUT);
+        // Initial: the toolkit resolves PROD_POSTGRES_HOST from `.env` at kernel start.
+        const first = await runOnceAndAwaitOutput(NOTEBOOK_FILE_NAME, EXPECTED_OUTPUT, FIRST_RUN_OUTPUT_TIMEOUT);
+        expect(first).to.contain(EXPECTED_OUTPUT);
+
+        // Live refresh: rewrite `.env`; the watcher runs `set_integration_env()` in the SAME running kernel
+        // (no restart, no re-select), so a re-run must read the new value.
+        fs.writeFileSync(path.join(tempDir, DOTENV_FILE_NAME), 'DEMO_DB_HOST=refreshed-host.example.com\n');
+        // Wait out the watcher debounce + let it queue the hidden refresh on the kernel (which the kernel runs
+        // before the next Run All).
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+
+        const second = await runOnceAndAwaitOutput(
+            NOTEBOOK_FILE_NAME,
+            'refreshed-host.example.com',
+            FIRST_RUN_OUTPUT_TIMEOUT
+        );
+        expect(second).to.contain('refreshed-host.example.com');
     });
 });

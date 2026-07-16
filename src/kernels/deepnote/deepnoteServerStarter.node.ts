@@ -409,9 +409,10 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
      * listening and the file resolves to a project id; otherwise the toolkit raises on an unreachable webapp URL.
      */
     private async applyIntegrationEndpointEnv(extraEnv: Record<string, string>, deepnoteFileUri: Uri): Promise<void> {
-        const baseUrl = this.integrationsEnvVarsEndpoint?.baseUrl;
+        const endpoint = this.integrationsEnvVarsEndpoint;
+        const baseUrl = endpoint?.baseUrl;
 
-        if (!baseUrl) {
+        if (!endpoint || !baseUrl) {
             return;
         }
 
@@ -424,8 +425,10 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         extraEnv['DEEPNOTE_RUNTIME__ENV_INTEGRATION_ENABLED'] = 'true';
         extraEnv['DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE'] = 'true';
         extraEnv['DEEPNOTE_RUNTIME__WEBAPP_URL'] = baseUrl;
-        // Legacy DEEPNOTE_PROJECT_ID (not DEEPNOTE_RUNTIME__PROJECT_ID): maps to runtime.project_id and satisfies
-        // set_notebook_path's `has_env("DEEPNOTE_PROJECT_ID")` check, avoiding a session-name parse.
+        // Required by the toolkit in detached mode (2.1.1 dereferences it without a null-check); also the bearer
+        // token the loopback endpoint validates. Legacy DEEPNOTE_PROJECT_ID maps to runtime.project_id and
+        // satisfies set_notebook_path's `has_env("DEEPNOTE_PROJECT_ID")` check, avoiding a session-name parse.
+        extraEnv['DEEPNOTE_RUNTIME__PROJECT_SECRET'] = endpoint.authToken;
         extraEnv['DEEPNOTE_PROJECT_ID'] = projectId;
     }
 

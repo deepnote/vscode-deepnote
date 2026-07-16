@@ -57,6 +57,11 @@ suite('IntegrationsEnvVarsEndpoint', () => {
         return `${baseUrl}/userpod-api/${projectId}/integrations/environment-variables`;
     }
 
+    /** GET the endpoint carrying the bearer token it requires. */
+    function authedFetch(url: string): Promise<Response> {
+        return fetch(url, { headers: { Authorization: `Bearer ${endpoint.authToken}` } });
+    }
+
     test('returns the provider env map as [{name,value}] for a matching open deepnote notebook', async () => {
         const notebook = createMockNotebook('project-1', Uri.file('/ws/app.deepnote'));
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
@@ -65,7 +70,7 @@ suite('IntegrationsEnvVarsEndpoint', () => {
         endpoint.activate();
         const baseUrl = await waitForBaseUrl();
 
-        const response = await fetch(envVarsUrl(baseUrl, 'project-1'));
+        const response = await authedFetch(envVarsUrl(baseUrl, 'project-1'));
 
         assert.strictEqual(response.status, 200);
         const body = await response.json();
@@ -83,7 +88,7 @@ suite('IntegrationsEnvVarsEndpoint', () => {
         endpoint.activate();
         const baseUrl = await waitForBaseUrl();
 
-        const response = await fetch(envVarsUrl(baseUrl, 'project-1'));
+        const response = await authedFetch(envVarsUrl(baseUrl, 'project-1'));
 
         assert.strictEqual(response.status, 200);
         assert.deepStrictEqual(await response.json(), []);
@@ -99,7 +104,7 @@ suite('IntegrationsEnvVarsEndpoint', () => {
         endpoint.activate();
         const baseUrl = await waitForBaseUrl();
 
-        const response = await fetch(envVarsUrl(baseUrl, 'project-two'));
+        const response = await authedFetch(envVarsUrl(baseUrl, 'project-two'));
         const body = await response.json();
 
         assert.deepStrictEqual(body, [{ name: 'FROM', value: 'two' }]);
@@ -116,7 +121,7 @@ suite('IntegrationsEnvVarsEndpoint', () => {
         endpoint.activate();
         const baseUrl = await waitForBaseUrl();
 
-        const response = await fetch(envVarsUrl(baseUrl, 'project-1'));
+        const response = await authedFetch(envVarsUrl(baseUrl, 'project-1'));
 
         assert.strictEqual(response.status, 200);
         assert.deepStrictEqual(await response.json(), []);
@@ -130,7 +135,7 @@ suite('IntegrationsEnvVarsEndpoint', () => {
         endpoint.activate();
         const baseUrl = await waitForBaseUrl();
 
-        const response = await fetch(envVarsUrl(baseUrl, 'project-1'));
+        const response = await authedFetch(envVarsUrl(baseUrl, 'project-1'));
 
         assert.deepStrictEqual(await response.json(), []);
         verify(provider.getEnvironmentVariables(anything())).never();
@@ -144,9 +149,27 @@ suite('IntegrationsEnvVarsEndpoint', () => {
         endpoint.activate();
         const baseUrl = await waitForBaseUrl();
 
-        const response = await fetch(envVarsUrl(baseUrl, 'project-1'));
+        const response = await authedFetch(envVarsUrl(baseUrl, 'project-1'));
 
         assert.strictEqual(response.status, 500);
         assert.deepStrictEqual(await response.json(), []);
+    });
+
+    test('responds 401 and never queries the provider when the bearer token is missing or wrong', async () => {
+        const notebook = createMockNotebook('project-1', Uri.file('/ws/app.deepnote'));
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+
+        endpoint.activate();
+        const baseUrl = await waitForBaseUrl();
+
+        const noHeader = await fetch(envVarsUrl(baseUrl, 'project-1'));
+        assert.strictEqual(noHeader.status, 401);
+
+        const wrongToken = await fetch(envVarsUrl(baseUrl, 'project-1'), {
+            headers: { Authorization: 'Bearer wrong-token' }
+        });
+        assert.strictEqual(wrongToken.status, 401);
+
+        verify(provider.getEnvironmentVariables(anything())).never();
     });
 });

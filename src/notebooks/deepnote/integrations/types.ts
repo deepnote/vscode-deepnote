@@ -61,6 +61,12 @@ export interface IIntegrationsEnvVarsEndpoint {
      * Deepnote toolkit fetches integration environment variables from this base URL.
      */
     readonly baseUrl: string | undefined;
+
+    /**
+     * Bearer token the endpoint requires (it serves credentials, so it is validated even though it is
+     * loopback-only). Injected into the toolkit as `DEEPNOTE_RUNTIME__PROJECT_SECRET` so its requests carry it.
+     */
+    readonly authToken: string;
 }
 
 /** Persisted federated-auth token entry; fingerprints `${clientId}|${clientSecret}|${project}` to detect stale tokens. Only the refresh token is persisted. */

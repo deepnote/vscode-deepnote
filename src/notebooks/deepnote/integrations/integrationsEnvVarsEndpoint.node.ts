@@ -7,6 +7,7 @@ import { workspace } from 'vscode';
 import { DEEPNOTE_NOTEBOOK_TYPE } from '../../../kernels/deepnote/types';
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
 import { IDisposableRegistry } from '../../../platform/common/types';
+import { generateUuid } from '../../../platform/common/uuid';
 import { logger } from '../../../platform/logging';
 import { ISqlIntegrationEnvVarsProvider } from '../../../platform/notebooks/deepnote/types';
 import { IIntegrationsEnvVarsEndpoint } from './types';
@@ -19,6 +20,7 @@ import { IIntegrationsEnvVarsEndpoint } from './types';
  */
 @injectable()
 export class IntegrationsEnvVarsEndpoint implements IIntegrationsEnvVarsEndpoint, IExtensionSyncActivationService {
+    private readonly authTokenValue = generateUuid();
     private server: http.Server | undefined;
     private startedBaseUrl: string | undefined;
 
@@ -27,6 +29,10 @@ export class IntegrationsEnvVarsEndpoint implements IIntegrationsEnvVarsEndpoint
         private readonly sqlIntegrationEnvVarsProvider: ISqlIntegrationEnvVarsProvider,
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry
     ) {}
+
+    public get authToken(): string {
+        return this.authTokenValue;
+    }
 
     public get baseUrl(): string | undefined {
         return this.startedBaseUrl;
@@ -44,6 +50,13 @@ export class IntegrationsEnvVarsEndpoint implements IIntegrationsEnvVarsEndpoint
 
         app.get('/userpod-api/:projectId/integrations/environment-variables', async (req: Request, res: Response) => {
             try {
+                // The response carries integration credentials, so require the bearer token even on loopback.
+                if (req.headers.authorization !== `Bearer ${this.authTokenValue}`) {
+                    res.status(401).json([]);
+
+                    return;
+                }
+
                 const projectId = req.params.projectId;
                 const notebook = workspace.notebookDocuments.find(
                     (nb) => nb.notebookType === DEEPNOTE_NOTEBOOK_TYPE && nb.metadata?.deepnoteProjectId === projectId

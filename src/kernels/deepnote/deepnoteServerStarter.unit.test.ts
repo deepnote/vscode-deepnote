@@ -303,7 +303,7 @@ suite('DeepnoteServerStarter', () => {
          * whose `baseUrl` getter yields `endpointBaseUrl`. Tracked for disposal.
          */
         function createStarterWithEndpoint(endpointBaseUrl: string | undefined): DeepnoteServerStarter {
-            const endpoint: IIntegrationsEnvVarsEndpoint = { baseUrl: endpointBaseUrl };
+            const endpoint: IIntegrationsEnvVarsEndpoint = { baseUrl: endpointBaseUrl, authToken: 'endpoint-token' };
             const starter = new DeepnoteServerStarter(
                 instance(mockProcessServiceFactory),
                 instance(mockToolkitInstaller),
@@ -360,7 +360,7 @@ suite('DeepnoteServerStarter', () => {
             return serializeDeepnoteFile(file);
         }
 
-        test('injects all four integration env vars (preserving pre-seeded SQL_* keys) when the endpoint is listening and the file has a project id', async () => {
+        test('injects all five integration env vars (preserving pre-seeded SQL_* keys) when the endpoint is listening and the file has a project id', async () => {
             const mockFs = stubReadFile(serializeProjectFile('the-project-id'));
             const starter = createStarterWithEndpoint(baseUrl);
 
@@ -372,6 +372,7 @@ suite('DeepnoteServerStarter', () => {
                 DEEPNOTE_RUNTIME__ENV_INTEGRATION_ENABLED: 'true',
                 DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE: 'true',
                 DEEPNOTE_RUNTIME__WEBAPP_URL: baseUrl,
+                DEEPNOTE_RUNTIME__PROJECT_SECRET: 'endpoint-token',
                 DEEPNOTE_PROJECT_ID: 'the-project-id'
             });
             // The enabled path must resolve the project id from the file.

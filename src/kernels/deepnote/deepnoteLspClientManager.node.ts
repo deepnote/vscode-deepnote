@@ -21,6 +21,7 @@ import * as path from '../../platform/vscode-path/path';
 import { DeepnoteServerInfo, IDeepnoteLspClientManager } from './types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { logger } from '../../platform/logging';
+import { getNotebookKey } from '../../platform/deepnote/deepnoteProjectUtils';
 import { noop } from '../../platform/common/utils/misc';
 import {
     IIntegrationStorage,
@@ -86,7 +87,7 @@ export class DeepnoteLspClientManager
             return;
         }
 
-        const notebookKey = notebookUri.toString();
+        const notebookKey = getNotebookKey(notebookUri);
 
         const pendingStart = this.pendingStarts.get(notebookKey);
 
@@ -158,7 +159,7 @@ export class DeepnoteLspClientManager
     }
 
     public async stopLspClients(notebookUri: vscode.Uri, token?: vscode.CancellationToken): Promise<void> {
-        const notebookKey = notebookUri.toString();
+        const notebookKey = getNotebookKey(notebookUri);
         const clientInfo = this.clients.get(notebookKey);
 
         if (!clientInfo) {
@@ -342,7 +343,7 @@ export class DeepnoteLspClientManager
         };
 
         // Use a unique client ID per notebook to prevent conflicts when multiple LSP clients exist
-        const clientId = `deepnote-python-lsp-${notebookUri.toString()}`;
+        const clientId = `deepnote-python-lsp-${getNotebookKey(notebookUri)}`;
         const client = new LanguageClient(clientId, 'Deepnote Python Language Server', serverOptions, clientOptions);
 
         // Check cancellation before starting client
@@ -604,13 +605,14 @@ export class DeepnoteLspClientManager
             }
 
             const projectId = notebook.metadata?.deepnoteProjectId as string | undefined;
+            const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
 
-            if (!projectId) {
-                logger.warn('SQL LSP: No project ID in notebook metadata');
+            if (!projectId || !notebookId) {
+                logger.warn('SQL LSP: No project/notebook ID in notebook metadata');
                 return [];
             }
 
-            const project = this.notebookManager.getOriginalProject(projectId);
+            const project = this.notebookManager.getProjectForNotebook(projectId, notebookId);
 
             if (!project) {
                 logger.warn(`SQL LSP: No project found for ID: ${projectId}`);

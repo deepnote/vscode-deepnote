@@ -147,7 +147,11 @@ suite('IntegrationWebviewProvider', () => {
         onDidChangeTokens.dispose();
     });
 
-    function buildProvider(opts: { tokenStorage?: IFederatedAuthTokenStorage } = {}): IntegrationWebviewProvider {
+    function buildProvider(
+        opts: {
+            tokenStorage?: IFederatedAuthTokenStorage;
+        } = {}
+    ): IntegrationWebviewProvider {
         return new IntegrationWebviewProvider(
             instance(extensionContext),
             instance(integrationStorage),
@@ -165,7 +169,7 @@ suite('IntegrationWebviewProvider', () => {
     }
 
     async function show(provider: IntegrationWebviewProvider, integrations: Map<string, IntegrationWithStatus>) {
-        await provider.show(PROJECT_ID, integrations);
+        await provider.show(PROJECT_ID, integrations, Uri.file('/ws/active.deepnote'));
     }
 
     function lastUpdate(): CapturedMessage {
@@ -430,5 +434,51 @@ suite('IntegrationWebviewProvider', () => {
 
         const updateMessages = allPostedMessages.filter((m) => m.type === 'update');
         assert.isEmpty(updateMessages, 'no `update` postMessage should be issued after the panel disposes mid-update');
+    });
+
+    suite('project integrations list update (via save message)', () => {
+        async function callUpdateProjectIntegrationsList(provider: IntegrationWebviewProvider): Promise<void> {
+            when(integrationStorage.save(anything())).thenResolve();
+
+            const pgConfig = buildPostgresIntegration({ id: 'pg-1' });
+            // `show()` seeds projectId + the integrations map; the `save` message drives the cache update through the real handler.
+            await show(provider, singleIntegrationMap('pg-1', pgConfig));
+
+            await fakePanel.onDidReceiveMessage({ type: 'save', integrationId: 'pg-1', config: pgConfig });
+        }
+
+        test('updates the cached project integrations via notebookManager.updateProjectIntegrations', async () => {
+            const updateProjectIntegrationsSpy = sinon.spy((_projectId: string, _integrations: unknown[]) => true);
+            when(notebookManager.updateProjectIntegrations(anyString(), anything())).thenCall(
+                updateProjectIntegrationsSpy
+            );
+
+            const provider = buildProvider({ tokenStorage });
+            await callUpdateProjectIntegrationsList(provider);
+
+            sinon.assert.calledOnce(updateProjectIntegrationsSpy);
+            sinon.assert.calledWith(updateProjectIntegrationsSpy, PROJECT_ID);
+        });
+
+        test('shows a "project not found" error when no cached entry was updated', async () => {
+            const errors: string[] = [];
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenCall((msg: string) => {
+                errors.push(msg);
+
+                return Promise.resolve(undefined);
+            });
+
+            // updateProjectIntegrations returns false → no cached entry for the project → error.
+            when(notebookManager.updateProjectIntegrations(anyString(), anything())).thenReturn(false);
+
+            const provider = buildProvider({ tokenStorage });
+            await callUpdateProjectIntegrationsList(provider);
+
+            assert.strictEqual(
+                errors.length,
+                1,
+                'project-not-found error should show when no cached entry was updated'
+            );
+        });
     });
 });

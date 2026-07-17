@@ -1,0 +1,21 @@
+environment: {}
+execution: {}
+metadata:
+  createdAt: 2026-06-01T09:00:00.000Z
+  modifiedAt: 2026-06-15T14:30:00.000Z
+project:
+  id: dddddddd-dddd-4ddd-8ddd-dddddddddddd
+  initNotebookId: d-nb-init
+  name: Bootstrap Only
+  notebooks:
+    - blocks:
+        - id: blk-0013
+          blockGroup: grp-0013
+          sortingKey: "000000"
+          type: code
+          content: print("this file only contains the init notebook")
+          metadata: {}
+      executionMode: block
+      id: d-nb-init
+      name: Bootstrap
+version: 1.0.0

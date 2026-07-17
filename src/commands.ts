@@ -206,7 +206,6 @@ export interface ICommandNameArgumentTypeMapping {
     [DSCommands.ImportNotebook]: [];
     [DSCommands.ImportJupyterNotebook]: [];
     [DSCommands.RenameProject]: [];
-    [DSCommands.DeleteProject]: [];
     [DSCommands.RenameNotebook]: [];
     [DSCommands.DeleteNotebook]: [];
     [DSCommands.DuplicateNotebook]: [];

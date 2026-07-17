@@ -1,0 +1,20 @@
+environment: {}
+execution: {}
+metadata:
+  createdAt: 2026-06-01T09:00:00.000Z
+  modifiedAt: 2026-06-12T10:00:00.000Z
+project:
+  id: eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee
+  name: Marketing
+  notebooks:
+    - blocks:
+        - id: blk-0017
+          blockGroup: grp-0017
+          sortingKey: "000000"
+          type: code
+          content: print("metrics")
+          metadata: {}
+      executionMode: block
+      id: e-nb-metrics
+      name: Metrics
+version: 1.0.0

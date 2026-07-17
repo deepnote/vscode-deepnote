@@ -1,0 +1,72 @@
+environment: {}
+execution: {}
+metadata:
+  createdAt: 2026-06-01T09:00:00.000Z
+  modifiedAt: 2026-06-15T14:30:00.000Z
+project:
+  id: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+  integrations:
+    - id: int-bq-sales
+      name: Sales BigQuery
+      type: big-query
+  name: Sales Analytics
+  notebooks:
+    - blocks:
+        - id: blk-0001
+          blockGroup: grp-0001
+          sortingKey: "000000"
+          type: text-cell-h1
+          content: Sales Analytics
+          metadata: {}
+        - id: blk-0002
+          blockGroup: grp-0002
+          sortingKey: "000001"
+          type: text-cell-p
+          content: This project has **three** notebooks in a single legacy file.
+          metadata: {}
+        - id: blk-0003
+          blockGroup: grp-0003
+          sortingKey: "000002"
+          type: code
+          content: print("Overview notebook")
+          metadata: {}
+      executionMode: block
+      id: a-nb-overview
+      name: Overview
+    - blocks:
+        - id: blk-0004
+          blockGroup: grp-0004
+          sortingKey: "000000"
+          type: code
+          content: >-
+            revenue = 1000
+
+            print(f"revenue={revenue}")
+          metadata: {}
+        - id: blk-0005
+          blockGroup: grp-0005
+          sortingKey: "000001"
+          type: sql
+          content: SELECT region, SUM(amount) AS total FROM sales GROUP BY region
+          metadata:
+            deepnote_variable_name: df_revenue
+            deepnote_return_variable_type: dataframe
+            sql_integration_id: int-bq-sales
+      executionMode: block
+      id: a-nb-revenue
+      name: Revenue
+    - blocks:
+        - id: blk-0006
+          blockGroup: grp-0006
+          sortingKey: "000000"
+          type: code
+          content: >-
+            print("Forecast notebook")
+
+            for i in range(3):
+                print("forecast", i)
+          metadata: {}
+      executionMode: block
+      id: a-nb-forecast
+      name: Forecast
+version: 1.0.0

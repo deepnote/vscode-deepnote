@@ -230,7 +230,8 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
             displayName = config.name;
         } else {
             // Integration is not configured, try to get the name from the project's integration list
-            const project = this.notebookManager.getOriginalProject(projectId);
+            const notebookId = cell.notebook.metadata?.deepnoteNotebookId;
+            const project = notebookId ? this.notebookManager.getProjectForNotebook(projectId, notebookId) : undefined;
             const projectIntegration = project?.project.integrations?.find((i) => i.id === integrationId);
             const baseName = projectIntegration?.name || l10n.t('Unknown integration');
             displayName = l10n.t('{0} (configure)', baseName);
@@ -326,13 +327,14 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
         // Get the project ID from the notebook metadata
         const projectId = cell.notebook.metadata?.deepnoteProjectId;
-        if (!projectId) {
+        const notebookId = cell.notebook.metadata?.deepnoteNotebookId;
+        if (!projectId || !notebookId) {
             void window.showErrorMessage(l10n.t('Cannot determine project ID'));
             return;
         }
 
         // Get the project to access its integrations list
-        const project = this.notebookManager.getOriginalProject(projectId);
+        const project = this.notebookManager.getProjectForNotebook(projectId, notebookId);
         if (!project) {
             void window.showErrorMessage(l10n.t('Project not found'));
             return;

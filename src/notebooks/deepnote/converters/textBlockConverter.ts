@@ -34,6 +34,12 @@ export class TextBlockConverter implements BlockConverter {
         // Update block content with cell value first
         block.content = cell.value || '';
 
+        // stripMarkdown's bullet regex only matches at column 0; indented bullets
+        // (indent_level >= 1) render with leading spaces that must be trimmed first.
+        if (block.type === 'text-cell-bullet') {
+            block.content = block.content.trim();
+        }
+
         // Then strip the markdown formatting to get plain text
         const textValue = unescapeMarkdown(stripMarkdown(block));
 

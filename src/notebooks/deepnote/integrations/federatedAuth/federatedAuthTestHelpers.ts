@@ -1,10 +1,9 @@
 // Shared test fixtures and helpers for the federated-auth tests + adjacent integration tests.
 // Cross-platform: must not import from `.node.ts` modules. Node-only helpers live in `federatedAuthTestHelpers.node.ts`.
 
-import type { DeepnoteBlock } from '@deepnote/blocks';
+import type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
 
 import type { ConfigurableDatabaseIntegrationConfig } from '../../../../platform/notebooks/deepnote/integrationTypes';
-import type { DeepnoteProject } from '../../../../platform/deepnote/deepnoteTypes';
 import type { FederatedAuthTokenEntry } from '../types';
 
 const DEFAULT_SETTLE_DELAY_MS = 10;
@@ -111,7 +110,7 @@ export function buildCodeBlock(): DeepnoteBlock {
     };
 }
 
-export function createMockProject(projectId: string, integrationIds: string[] = []): DeepnoteProject {
+export function createMockProject(projectId: string, integrationIds: string[] = []): DeepnoteFile {
     return {
         metadata: {
             createdAt: '2023-01-01T00:00:00Z',

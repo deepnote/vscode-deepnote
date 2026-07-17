@@ -1,10 +1,13 @@
-import { TreeItem, TreeItemCollapsibleState, Uri, ThemeIcon } from 'vscode';
-import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
+import { TreeItem, TreeItemCollapsibleState, ThemeIcon } from 'vscode';
+import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
+import { DeepnoteFile } from '@deepnote/blocks';
 
 /**
- * Represents different types of items in the Deepnote tree view
+ * Tree item types: `ProjectGroup` (one per `project.id`) → `ProjectFile` (one `.deepnote` file,
+ * a leaf when it has a single non-init notebook) → `Notebook` (legacy multi-notebook child).
  */
 export enum DeepnoteTreeItemType {
+    ProjectGroup = 'projectGroup',
     ProjectFile = 'projectFile',
     Notebook = 'notebook',
     Loading = 'loading'
@@ -20,107 +23,160 @@ export interface DeepnoteTreeItemContext {
 }
 
 /**
- * Tree item representing a Deepnote project file or notebook in the explorer view
+ * Data backing a `ProjectGroup` node: all sibling `.deepnote` files that share one `project.id`.
+ */
+export interface ProjectGroupData {
+    readonly projectId: string;
+    readonly projectName: string;
+    // `filePath` is the native path (for `Uri.file`); `cacheKey` is the opaque `Uri.toString()` cache key.
+    readonly files: Array<{ filePath: string; cacheKey: string; project: DeepnoteFile }>;
+}
+
+export type DeepnoteTreeItemExtra =
+    | { type: DeepnoteTreeItemType.Loading; data: null }
+    | { type: DeepnoteTreeItemType.ProjectGroup; data: ProjectGroupData }
+    | { type: DeepnoteTreeItemType.ProjectFile; data: DeepnoteFile }
+    | { type: DeepnoteTreeItemType.Notebook; data: DeepnoteNotebook };
+
+/**
+ * Notebooks of a project excluding the init notebook (`project.initNotebookId`).
+ */
+export function getNonInitNotebooks(project: DeepnoteFile): DeepnoteNotebook[] {
+    const notebooks = project.project.notebooks ?? [];
+    const initNotebookId = project.project.initNotebookId;
+
+    return notebooks.filter((notebook) => notebook.id !== initNotebookId);
+}
+
+/**
+ * True when a file renders as a single-notebook leaf: one non-init notebook, or an init-only file
+ * whose sole notebook is the init notebook.
+ */
+export function isSingleNotebookFile(project: DeepnoteFile): boolean {
+    const nonInit = getNonInitNotebooks(project);
+
+    if (nonInit.length === 1) {
+        return true;
+    }
+
+    return nonInit.length === 0 && (project.project.notebooks?.length ?? 0) === 1;
+}
+
+/**
+ * The single notebook to render for a leaf file: first non-init notebook, falling back to the
+ * first notebook when the only notebook IS the init notebook.
+ */
+export function resolveLeafNotebook(project: DeepnoteFile): DeepnoteNotebook | undefined {
+    const nonInit = getNonInitNotebooks(project);
+
+    if (nonInit.length > 0) {
+        return nonInit[0];
+    }
+
+    return project.project.notebooks?.[0];
+}
+
+/**
+ * Tree item representing a Deepnote project group, project file, or in-file notebook in the
+ * explorer view.
  */
 export class DeepnoteTreeItem extends TreeItem {
     constructor(
-        public readonly type: DeepnoteTreeItemType,
         public readonly context: DeepnoteTreeItemContext,
-        public data: DeepnoteProject | DeepnoteNotebook | null,
+        public extra: DeepnoteTreeItemExtra,
         collapsibleState: TreeItemCollapsibleState
     ) {
         super('', collapsibleState);
 
-        this.contextValue = this.type;
-
-        // Inline method calls to avoid ES module TreeItem extension issues
-        if (this.type === DeepnoteTreeItemType.Loading) {
-            this.label = 'Loading…';
-            this.tooltip = 'Loading…';
-            this.description = '';
-            this.iconPath = new ThemeIcon('loading~spin');
-        } else {
-            // getTooltip() inline
-            if (this.type === DeepnoteTreeItemType.ProjectFile) {
-                const project = this.data as DeepnoteProject;
-                this.tooltip = `Deepnote Project: ${project.project.name}\nFile: ${this.context.filePath}`;
-            } else {
-                const notebook = this.data as DeepnoteNotebook;
-                this.tooltip = `Notebook: ${notebook.name}\nExecution Mode: ${notebook.executionMode}`;
-            }
-
-            // getIcon() inline
-            if (this.type === DeepnoteTreeItemType.ProjectFile) {
-                this.iconPath = new ThemeIcon('notebook');
-            } else {
-                this.iconPath = new ThemeIcon('file-code');
-            }
-
-            // getLabel() inline
-            if (this.type === DeepnoteTreeItemType.ProjectFile) {
-                const project = this.data as DeepnoteProject;
-                this.label = project.project.name || 'Untitled Project';
-            } else {
-                const notebook = this.data as DeepnoteNotebook;
-                this.label = notebook.name || 'Untitled Notebook';
-            }
-
-            // getDescription() inline
-            if (this.type === DeepnoteTreeItemType.ProjectFile) {
-                const project = this.data as DeepnoteProject;
-                const notebookCount = project.project.notebooks?.length || 0;
-                this.description = `${notebookCount} notebook${notebookCount !== 1 ? 's' : ''}`;
-            } else {
-                const notebook = this.data as DeepnoteNotebook;
-                const blockCount = notebook.blocks?.length || 0;
-                this.description = `${blockCount} cell${blockCount !== 1 ? 's' : ''}`;
-            }
-        }
-
-        if (this.type === DeepnoteTreeItemType.Notebook) {
-            // getNotebookUri() inline
-            if (this.context.notebookId) {
-                this.resourceUri = Uri.parse(`deepnote-notebook://${this.context.filePath}#${this.context.notebookId}`);
-            }
-            this.command = {
-                command: 'deepnote.openNotebook',
-                title: 'Open Notebook',
-                arguments: [this.context]
-            };
-        }
+        applyVisualFields(this);
     }
 
     /**
-     * Updates the tree item's visual fields (label, description, tooltip) based on current data.
-     * Call this after updating the data property to ensure the tree view reflects changes.
+     * Re-applies the visual fields; call after mutating `extra.data` to reflect changes in the tree.
      */
     public updateVisualFields(): void {
-        if (this.type === DeepnoteTreeItemType.Loading) {
-            this.label = 'Loading…';
-            this.tooltip = 'Loading…';
-            this.description = '';
-            this.iconPath = new ThemeIcon('loading~spin');
+        applyVisualFields(this);
+    }
+}
+
+/**
+ * Sets the item's visual fields from its type/data. A free function, not a method: calling a
+ * subclass method from a `TreeItem` constructor is unsafe in transpiled ES-module output.
+ */
+export function applyVisualFields(item: DeepnoteTreeItem): void {
+    if (item.extra.type === DeepnoteTreeItemType.Loading) {
+        item.contextValue = 'loading';
+        item.label = 'Loading…';
+        item.tooltip = 'Loading…';
+        item.description = '';
+        item.iconPath = new ThemeIcon('loading~spin');
+
+        return;
+    }
+
+    if (item.extra.type === DeepnoteTreeItemType.ProjectGroup) {
+        const group = item.extra.data;
+        const fileCount = group.files?.length ?? 0;
+
+        item.contextValue = 'projectGroup';
+        item.label = group.projectName || 'Untitled Project';
+        item.tooltip = `Deepnote Project: ${group.projectName}`;
+        item.description = `${fileCount} file${fileCount !== 1 ? 's' : ''}`;
+        item.iconPath = new ThemeIcon('folder');
+        item.command = undefined;
+
+        return;
+    }
+
+    if (item.extra.type === DeepnoteTreeItemType.ProjectFile) {
+        const project = item.extra.data;
+        const nonInitNotebooks = getNonInitNotebooks(project);
+
+        if (isSingleNotebookFile(project)) {
+            const notebook = resolveLeafNotebook(project);
+            const blockCount = notebook?.blocks?.length ?? 0;
+
+            item.contextValue = 'notebookFile';
+            item.label = notebook?.name || 'Untitled Notebook';
+            item.tooltip = `Notebook: ${notebook?.name ?? ''}\nFile: ${item.context.filePath}`;
+            item.description = `${blockCount} cell${blockCount !== 1 ? 's' : ''}`;
+            item.iconPath = new ThemeIcon('file-code');
+            item.command = {
+                command: 'deepnote.openNotebook',
+                title: 'Open Notebook',
+                arguments: [
+                    {
+                        filePath: item.context.filePath,
+                        projectId: item.context.projectId,
+                        notebookId: notebook?.id
+                    } satisfies DeepnoteTreeItemContext
+                ]
+            };
+
             return;
         }
 
-        if (this.type === DeepnoteTreeItemType.ProjectFile) {
-            const project = this.data as DeepnoteProject;
+        item.contextValue = 'projectFile';
+        item.label = project.project.name || 'Untitled Project';
+        item.tooltip = `Deepnote Project: ${project.project.name} (legacy)\nFile: ${item.context.filePath}`;
+        item.description = `${nonInitNotebooks.length} notebook${nonInitNotebooks.length !== 1 ? 's' : ''}`;
+        item.iconPath = new ThemeIcon('book');
+        item.command = undefined;
 
-            this.label = project.project.name || 'Untitled Project';
-            this.tooltip = `Deepnote Project: ${project.project.name}\nFile: ${this.context.filePath}`;
-
-            const notebookCount = project.project.notebooks?.length || 0;
-
-            this.description = `${notebookCount} notebook${notebookCount !== 1 ? 's' : ''}`;
-        } else {
-            const notebook = this.data as DeepnoteNotebook;
-
-            this.label = notebook.name || 'Untitled Notebook';
-            this.tooltip = `Notebook: ${notebook.name}\nExecution Mode: ${notebook.executionMode}`;
-
-            const blockCount = notebook.blocks?.length || 0;
-
-            this.description = `${blockCount} cell${blockCount !== 1 ? 's' : ''}`;
-        }
+        return;
     }
+
+    const notebook = item.extra.data;
+    const blockCount = notebook.blocks?.length ?? 0;
+
+    item.contextValue = 'notebook';
+    item.label = notebook.name || 'Untitled Notebook';
+    item.tooltip = `Notebook: ${notebook.name}\nExecution Mode: ${notebook.executionMode}`;
+    item.description = `${blockCount} cell${blockCount !== 1 ? 's' : ''}`;
+    item.iconPath = new ThemeIcon('file-code');
+    item.command = {
+        command: 'deepnote.openNotebook',
+        title: 'Open Notebook',
+        arguments: [item.context]
+    };
 }

@@ -3,9 +3,9 @@ import * as sinon from 'sinon';
 import { instance, mock, when } from 'ts-mockito';
 import { CancellationToken, Uri, WorkspaceFolder } from 'vscode';
 import * as fs from 'fs';
+import type { DeepnoteFile } from '@deepnote/blocks';
 
 import { DeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
-import type { DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
 import { ILogger } from '../../platform/logging/types';
 import { IPersistentStateFactory } from '../../platform/common/types';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
@@ -49,7 +49,7 @@ suite('DeepnoteRequirementsHelper', () => {
 
         when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([mockWorkspaceFolder]);
 
-        const project: DeepnoteProject = {
+        const project: DeepnoteFile = {
             metadata: {
                 createdAt: '2024-01-01T00:00:00Z'
             },

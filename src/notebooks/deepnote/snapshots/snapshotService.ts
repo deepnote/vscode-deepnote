@@ -1,23 +1,40 @@
 import {
-    deserializeDeepnoteFile,
     isExecutableBlock,
     serializeDeepnoteFile,
     type DeepnoteBlock,
     type DeepnoteFile,
     type Environment,
-    type Execution,
-    type ExecutionError
+    type Execution
 } from '@deepnote/blocks';
+import {
+    countBlocksWithOutputs,
+    encodeNotebookIdForFilename,
+    hasOutputs,
+    parseSnapshotFilename,
+    resolveSnapshotNotebookId
+} from '@deepnote/convert';
 import fastDeepEqual from 'fast-deep-equal';
 import { inject, injectable, optional } from 'inversify';
-import { Disposable, FileType, NotebookCell, NotebookCellKind, RelativePattern, Uri, window, workspace } from 'vscode';
+import {
+    Disposable,
+    FileType,
+    NotebookCell,
+    NotebookCellKind,
+    NotebookDocumentChangeEvent,
+    RelativePattern,
+    Uri,
+    WorkspaceFolder,
+    window,
+    workspace
+} from 'vscode';
 import { Utils } from 'vscode-uri';
 
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
 import { IDisposableRegistry } from '../../../platform/common/types';
 import type { DeepnoteOutput } from '../../../platform/deepnote/deepnoteTypes';
+import { readDeepnoteProjectFile } from '../../../platform/deepnote/deepnoteProjectFileReader';
+import { getNotebookKey } from '../../../platform/deepnote/deepnoteProjectUtils';
 import { InvalidProjectNameError } from '../../../platform/errors/invalidProjectNameError';
-import { slugifyProjectName } from './snapshotFiles';
 import { logger } from '../../../platform/logging';
 import {
     notebookCellExecutions,
@@ -26,6 +43,8 @@ import {
 import { IDeepnoteNotebookManager } from '../../types';
 import { DeepnoteDataConverter } from '../deepnoteDataConverter';
 import { IEnvironmentCapture } from './environmentCapture.node';
+import { ExecutionMetadataTracker, type BlockExecutionMetadata } from './executionMetadataTracker';
+import { buildSnapshotPath } from './snapshotFiles';
 
 /**
  * Platform-layer interface for snapshot metadata service.
@@ -46,60 +65,35 @@ export interface ISnapshotMetadataService {
     clearExecutionState(notebookUri: string): void;
 }
 
-/**
- * Block-level execution metadata.
- */
-export interface BlockExecutionMetadata {
-    /** SHA-256 hash of block source code (prefixed with "sha256:") */
-    contentHash: string;
-
-    /** ISO 8601 timestamp when block execution started */
-    executionStartedAt?: string;
-
-    /** ISO 8601 timestamp when block execution completed */
-    executionFinishedAt?: string;
-}
+// Re-exported for the module's public surface; the type now lives with the tracker that owns it.
+export type { BlockExecutionMetadata };
 
 /**
- * Internal state tracking for a notebook execution session.
+ * Per-notebook environment-capture state owned by the service. The cell-execution concern
+ * (counters, timings, per-cell metadata) lives in ExecutionMetadataTracker.
  */
-interface NotebookExecutionState {
-    /** Number of blocks executed so far */
-    blocksExecuted: number;
-
-    /** Number of blocks that failed */
-    blocksFailed: number;
-
-    /** Number of blocks that succeeded */
-    blocksSucceeded: number;
-
+interface EnvironmentCaptureState {
     /** Promise that resolves when environment capture completes */
     capturePromise?: Promise<void>;
-
-    /** Per-cell execution metadata, keyed by cell ID */
-    cellMetadata: Map<string, BlockExecutionMetadata>;
 
     /** Cached environment metadata */
     environment?: Environment;
 
     /** Whether environment has been captured for this session */
     environmentCaptured: boolean;
-
-    /** Top-level error if any */
-    error?: { name?: string; message?: string; traceback?: string[] };
-
-    /** ISO 8601 timestamp when last cell finished executing */
-    finishedAt?: string;
-
-    /** ISO 8601 timestamp when first cell started executing */
-    startedAt: string;
-
-    /** Total duration in milliseconds */
-    totalDurationMs: number;
 }
 
 /** How long a written URI is considered "recent" and suppressed from file-change processing. */
 const recentWriteExpirationMs = 2000;
+
+/** Quiet window with no output/metadata change that must elapse before a deferred snapshot flushes. */
+const outputSettleQuietPeriodMs = 150;
+
+/** Upper bound (from the first arm) on how long repeated changes can defer the snapshot save. */
+const outputSettleMaxWaitMs = 2000;
+
+/** Upper bound on how many RANKED snapshot candidates the open-time reader reads (applied after filter+sort). */
+const maxRankedSnapshotReads = 200;
 
 class TimeoutError extends Error {
     constructor(message: string) {
@@ -124,16 +118,24 @@ function generateTimestamp(): string {
 @injectable()
 export class SnapshotService implements ISnapshotMetadataService, IExtensionSyncActivationService {
     private readonly converter = new DeepnoteDataConverter();
-    private readonly executionStates = new Map<string, NotebookExecutionState>();
+    private readonly environmentStates = new Map<string, EnvironmentCaptureState>();
     private readonly fileWrittenCallbacks: ((uri: Uri) => void)[] = [];
+    private readonly pendingSnapshotSaves = new Map<
+        string,
+        { armedAt: number; timer: ReturnType<typeof setTimeout> }
+    >();
     private readonly recentlyWrittenTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private readonly recentlyWrittenUris = new Set<string>();
+    private readonly tracker: ExecutionMetadataTracker;
 
     constructor(
         @inject(IEnvironmentCapture) private readonly environmentCapture: IEnvironmentCapture,
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
-        @inject(IDeepnoteNotebookManager) @optional() private readonly notebookManager?: IDeepnoteNotebookManager
-    ) {}
+        @inject(IDeepnoteNotebookManager) @optional() private readonly notebookManager?: IDeepnoteNotebookManager,
+        @inject(ExecutionMetadataTracker) @optional() tracker?: ExecutionMetadataTracker
+    ) {
+        this.tracker = tracker ?? new ExecutionMetadataTracker();
+    }
 
     activate(): void {
         logger.info('[Snapshot] SnapshotService activated');
@@ -144,12 +146,29 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
                     clearTimeout(timer);
                 }
                 this.recentlyWrittenTimers.clear();
+
+                // Cancel any in-flight deferred snapshot saves so timers don't fire after disposal.
+                for (const pending of this.pendingSnapshotSaves.values()) {
+                    clearTimeout(pending.timer);
+                }
+                this.pendingSnapshotSaves.clear();
             }
         });
 
         workspace.onDidCloseNotebookDocument(
             (notebook) => {
-                this.clearExecutionState(notebook.uri.toString());
+                const notebookUri = getNotebookKey(notebook.uri);
+
+                this.cancelPendingSnapshotSave(notebookUri);
+                this.clearExecutionState(notebookUri);
+            },
+            this,
+            this.disposables
+        );
+
+        workspace.onDidChangeNotebookDocument(
+            (e) => {
+                this.handleNotebookDocumentChange(e);
             },
             this,
             this.disposables
@@ -165,9 +184,11 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         );
 
         notebookCellExecutions.onDidCompleteQueueExecution(
-            async (e) => {
+            (e) => {
                 logger.debug(`[Snapshot] Queue execution complete for ${e.notebookUri}`);
-                await this.onExecutionComplete(e.notebookUri);
+                this.onExecutionComplete(e.notebookUri).catch((error) =>
+                    logger.error(`[Snapshot] onExecutionComplete failed for ${e.notebookUri}`, error)
+                );
             },
             this,
             this.disposables
@@ -177,7 +198,10 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     async captureEnvironmentBeforeExecution(notebookUri: string): Promise<void> {
         logger.info(`[Snapshot] captureEnvironmentBeforeExecution called for ${notebookUri}`);
 
-        const state = this.getOrCreateExecutionState(notebookUri, Date.now());
+        // Seed the session start at capture time so `startedAt` reflects capture, not the first cell.
+        this.tracker.ensureExecutionState(notebookUri, Date.now());
+
+        const state = this.getOrCreateEnvironmentState(notebookUri);
 
         // If capture is already in progress, wait for it
         if (state.capturePromise) {
@@ -192,7 +216,8 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     }
 
     clearExecutionState(notebookUri: string): void {
-        this.executionStates.delete(notebookUri);
+        this.tracker.clear(notebookUri);
+        this.environmentStates.delete(notebookUri);
 
         logger.trace(`[Snapshot] Cleared execution state for ${notebookUri}`);
     }
@@ -202,9 +227,17 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         projectId: string,
         projectName: string,
         projectData: DeepnoteFile,
+        notebookId?: string,
         notebookUri?: string
     ): Promise<Uri | undefined> {
-        const prepared = await this.prepareSnapshotData(projectUri, projectId, projectName, projectData, notebookUri);
+        const prepared = await this.prepareSnapshotData(
+            projectUri,
+            projectId,
+            projectName,
+            projectData,
+            notebookId,
+            notebookUri
+        );
 
         if (!prepared) {
             logger.debug(`[Snapshot] No changes detected, skipping snapshot creation`);
@@ -214,7 +247,13 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
         const { latestPath, content } = prepared;
         const timestamp = generateTimestamp();
-        const timestampedPath = this.buildSnapshotPath(projectUri, projectId, projectName, timestamp);
+        const timestampedPath = buildSnapshotPath({
+            projectUri,
+            projectId,
+            projectName,
+            variant: timestamp,
+            notebookId
+        });
 
         // Write to timestamped file first (safe - doesn't touch existing files)
         try {
@@ -268,23 +307,17 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     }
 
     getBlockExecutionMetadata(notebookUri: string, cellId: string): BlockExecutionMetadata | undefined {
-        const state = this.executionStates.get(notebookUri);
-
-        if (!state) {
-            return;
-        }
-
-        return state.cellMetadata.get(cellId);
+        return this.tracker.getBlockExecutionMetadata(notebookUri, cellId);
     }
 
     async getEnvironmentMetadata(notebookUri: string): Promise<Environment | undefined> {
-        const state = this.executionStates.get(notebookUri);
+        const state = this.environmentStates.get(notebookUri);
 
         logger.info(`[Snapshot] getEnvironmentMetadata for ${notebookUri}`);
         logger.info(Boolean(state) ? '[Snapshot] State exists.' : '[Snapshot] No state found.');
 
         if (!state) {
-            logger.info(`[Snapshot] Available URIs: ${Array.from(this.executionStates.keys()).join(', ')}`);
+            logger.info(`[Snapshot] Available URIs: ${Array.from(this.environmentStates.keys()).join(', ')}`);
 
             return;
         }
@@ -313,34 +346,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     }
 
     getExecutionMetadata(notebookUri: string): Execution | undefined {
-        const state = this.executionStates.get(notebookUri);
-
-        if (!state) {
-            return;
-        }
-
-        // Don't return execution metadata if no cells have been executed
-        if (state.blocksExecuted === 0) {
-            return;
-        }
-
-        const execution: Execution = {
-            finishedAt: state.finishedAt || state.startedAt,
-            startedAt: state.startedAt,
-            summary: {
-                blocksExecuted: state.blocksExecuted,
-                blocksFailed: state.blocksFailed,
-                blocksSucceeded: state.blocksSucceeded,
-                totalDurationMs: state.totalDurationMs
-            },
-            triggeredBy: 'user'
-        };
-
-        if (state.error) {
-            execution.error = state.error;
-        }
-
-        return execution;
+        return this.tracker.getExecutionMetadata(notebookUri);
     }
 
     isSnapshotsEnabled(): boolean {
@@ -390,8 +396,12 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         };
     }
 
-    async readSnapshot(projectId: string): Promise<Map<string, DeepnoteOutput[]> | undefined> {
-        logger.debug(`[Snapshot] readSnapshot called for projectId=${projectId}`);
+    /**
+     * Reads the best snapshot for a project/notebook WITHOUT a path (`deserializeNotebook` gets only
+     * bytes): globs the workspace by `projectId`, ranks notebook-scoped → `latest` → newest outputs.
+     */
+    async readSnapshot(projectId: string, notebookId?: string): Promise<Map<string, DeepnoteOutput[]> | undefined> {
+        logger.debug(`[Snapshot] readSnapshot called for projectId=${projectId}, notebookId=${notebookId}`);
         const workspaceFolders = workspace.workspaceFolders;
 
         if (!workspaceFolders || workspaceFolders.length === 0) {
@@ -404,69 +414,36 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
         logger.debug(`[Snapshot] Searching ${workspaceFolders.length} workspace folder(s) for snapshots`);
 
-        // 1. Try to find a 'latest' snapshot file
-        const latestGlob = `**/snapshots/*_${projectId}_latest.snapshot.deepnote`;
+        // Pass (a): this notebook's OWN scoped files, globbed + capped on their own so a noisy sibling
+        // sharing the project.id can't truncate this notebook's `latest` before ranking.
+        if (notebookId) {
+            const scopedGlob = `**/snapshots/*_${projectId}_${encodeNotebookIdForFilename(
+                notebookId
+            )}_*.snapshot.deepnote`;
+            const notebookScopedSnapshotOutputs = await this.findSnapshotOutputs(
+                workspaceFolders,
+                scopedGlob,
+                projectId,
+                notebookId,
+                (parsed) => parsed.notebookId === notebookId
+            );
 
-        for (const folder of workspaceFolders) {
-            logger.debug(`[Snapshot] Searching for latest snapshot with glob: ${latestGlob} in ${folder.uri.path}`);
-            const latestPattern = new RelativePattern(folder, latestGlob);
-            const latestFiles = await workspace.findFiles(latestPattern, null, 1);
-
-            if (latestFiles.length > 0) {
-                logger.debug(`[Snapshot] Found latest snapshot: ${latestFiles[0].path}`);
-
-                try {
-                    return await this.parseSnapshotFile(latestFiles[0]);
-                } catch (error) {
-                    logger.error(`[Snapshot] Failed to parse snapshot: ${Utils.basename(latestFiles[0])}`, error);
-
-                    await window.showErrorMessage(`Failed to read latest snapshot: ${Utils.basename(latestFiles[0])}`);
-
-                    return;
-                }
+            if (notebookScopedSnapshotOutputs != null && notebookScopedSnapshotOutputs.size > 0) {
+                return notebookScopedSnapshotOutputs;
             }
         }
 
-        logger.debug(`[Snapshot] No latest snapshot found, looking for timestamped files`);
+        // Pass (b): legacy project-wide, no-notebook-id files (backward compat), used only when the
+        // notebook-scoped pass found nothing. Reproduces the pre-scoping discovery exactly.
+        const legacyGlob = `**/snapshots/*_${projectId}_*.snapshot.deepnote`;
 
-        // 2. Find timestamped snapshots across all workspace folders
-        const timestampedGlob = `**/snapshots/*_${projectId}_*.snapshot.deepnote`;
-        let allTimestampedFiles: Uri[] = [];
-
-        for (const folder of workspaceFolders) {
-            const timestampedPattern = new RelativePattern(folder, timestampedGlob);
-            const files = await workspace.findFiles(timestampedPattern, null, 100);
-
-            allTimestampedFiles = allTimestampedFiles.concat(files);
-        }
-
-        // Filter out 'latest' files and sort by filename descending
-        const sortedFiles = allTimestampedFiles
-            .filter((uri) => !Utils.basename(uri).endsWith('_latest.snapshot.deepnote'))
-            .sort((a, b) => {
-                const nameA = Utils.basename(a);
-                const nameB = Utils.basename(b);
-
-                return nameB.localeCompare(nameA);
-            });
-
-        if (sortedFiles.length === 0) {
-            logger.debug(`[Snapshot] No timestamped snapshots found`);
-
-            return;
-        }
-
-        const newestFile = sortedFiles[0];
-
-        logger.debug(`[Snapshot] Using timestamped snapshot: ${Utils.basename(newestFile)}`);
-
-        try {
-            return await this.parseSnapshotFile(newestFile);
-        } catch (error) {
-            logger.error(`[Snapshot] Failed to parse snapshot: ${Utils.basename(newestFile)}`, error);
-
-            return;
-        }
+        return this.findSnapshotOutputs(
+            workspaceFolders,
+            legacyGlob,
+            projectId,
+            notebookId,
+            (parsed) => !notebookId || parsed.notebookId === undefined
+        );
     }
 
     stripOutputsFromBlocks(blocks: DeepnoteBlock[]): DeepnoteBlock[] {
@@ -490,23 +467,10 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         return this.recentlyWrittenUris.has(uri.toString());
     }
 
-    private buildSnapshotPath(
-        projectUri: Uri,
-        projectId: string,
-        projectName: string,
-        variant: 'latest' | string
-    ): Uri {
-        const parentDir = Uri.joinPath(projectUri, '..');
-        const slug = slugifyProjectName(projectName);
-        const filename = `${slug}_${projectId}_${variant}.snapshot.deepnote`;
-
-        return Uri.joinPath(parentDir, 'snapshots', filename);
-    }
-
     private async captureEnvironmentForNotebook(notebookUri: string): Promise<void> {
         logger.info(`[Snapshot] captureEnvironmentForNotebook called for ${notebookUri}`);
 
-        const state = this.executionStates.get(notebookUri);
+        const state = this.environmentStates.get(notebookUri);
 
         if (!state) {
             logger.info(`[Snapshot] Skipping capture: no state found`);
@@ -521,7 +485,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         }
 
         try {
-            const notebook = workspace.notebookDocuments.find((n) => n.uri.toString() === notebookUri);
+            const notebook = workspace.notebookDocuments.find((n) => getNotebookKey(n.uri) === notebookUri);
 
             if (!notebook) {
                 logger.info(`[Snapshot] Could not find notebook document for ${notebookUri}`);
@@ -581,14 +545,6 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         }
     }
 
-    private findProjectUriFromId(projectId: string): Uri | undefined {
-        const notebookDoc = workspace.notebookDocuments.find(
-            (doc) => doc.notebookType === 'deepnote' && doc.metadata?.deepnoteProjectId === projectId
-        );
-
-        return notebookDoc?.uri.with({ query: '' });
-    }
-
     private getComparableProjectContent(data: DeepnoteFile): object {
         return {
             version: data.version,
@@ -598,28 +554,21 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         };
     }
 
-    private getOrCreateExecutionState(notebookUri: string, startTime: number): NotebookExecutionState {
-        let state = this.executionStates.get(notebookUri);
+    private getOrCreateEnvironmentState(notebookUri: string): EnvironmentCaptureState {
+        let state = this.environmentStates.get(notebookUri);
 
         if (!state) {
             state = {
-                blocksFailed: 0,
-                blocksExecuted: 0,
-                blocksSucceeded: 0,
-                cellMetadata: new Map(),
-                environmentCaptured: false,
-                startedAt: new Date(startTime).toISOString(),
-                totalDurationMs: 0
+                environmentCaptured: false
             };
-            this.executionStates.set(notebookUri, state);
-            logger.trace(`[Snapshot] Created new execution state for ${notebookUri}`);
+            this.environmentStates.set(notebookUri, state);
         }
 
         return state;
     }
 
     private handleCellExecutionStateChange(cell: NotebookCell, state: NotebookCellExecutionState): void {
-        const notebookUri = cell.notebook.uri.toString();
+        const notebookUri = getNotebookKey(cell.notebook.uri);
         const cellId = cell.metadata?.id as string | undefined;
 
         if (!cellId) {
@@ -629,22 +578,22 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         if (state === NotebookCellExecutionState.Executing) {
             const startTime = Date.now();
 
-            this.recordCellExecutionStart(notebookUri, cellId, startTime);
+            // Cancel the previous run's deferred save so no snapshot is written mid-execution.
+            this.cancelPendingSnapshotSave(notebookUri);
+            this.tracker.recordCellExecutionStart(notebookUri, cellId, startTime);
         } else if (state === NotebookCellExecutionState.Idle) {
             const endTime = Date.now();
             const executionSummary = cell.executionSummary;
             const actualEndTime = executionSummary?.timing?.endTime || endTime;
             const success = executionSummary?.success !== false;
 
-            this.recordCellExecutionEnd(notebookUri, cellId, actualEndTime, success);
+            this.tracker.recordCellExecutionEnd(notebookUri, cellId, actualEndTime, success);
         }
     }
 
     private async hasSnapshotChanges(latestPath: Uri, projectData: DeepnoteFile): Promise<boolean> {
         try {
-            const existingContent = await workspace.fs.readFile(latestPath);
-            const existingString = new TextDecoder('utf-8').decode(existingContent);
-            const existingData = deserializeDeepnoteFile(existingString);
+            const existingData = await readDeepnoteProjectFile(latestPath);
 
             const existingProject = this.getComparableProjectContent(existingData);
             const newProject = this.getComparableProjectContent(projectData);
@@ -658,33 +607,13 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     }
 
     /**
-     * Checks if there are any cells with pending execution state changes.
-     * Returns true if any tracked cell started execution but hasn't finished yet.
-     */
-    private hasPendingCellStateChanges(notebookUri: string): boolean {
-        const state = this.executionStates.get(notebookUri);
-
-        if (!state) {
-            return false;
-        }
-
-        for (const metadata of state.cellMetadata.values()) {
-            if (metadata.executionStartedAt && !metadata.executionFinishedAt) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
      * Waits for pending cell state change events to be processed.
      * Uses an event-driven approach with a fallback timeout.
      */
     private waitForPendingCellStateChanges(notebookUri: string, timeoutMs: number): Promise<void> {
         return new Promise((resolve) => {
             // If no pending changes, resolve immediately
-            if (!this.hasPendingCellStateChanges(notebookUri)) {
+            if (!this.tracker.hasPendingCellStateChanges(notebookUri)) {
                 resolve();
 
                 return;
@@ -692,9 +621,12 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
             // Set up a one-time listener for cell state changes
             const disposable = notebookCellExecutions.onDidChangeNotebookCellExecutionState((e) => {
-                if (e.cell.notebook.uri.toString() === notebookUri && e.state === NotebookCellExecutionState.Idle) {
+                if (
+                    getNotebookKey(e.cell.notebook.uri) === notebookUri &&
+                    e.state === NotebookCellExecutionState.Idle
+                ) {
                     // Check if all pending cells are now complete
-                    if (!this.hasPendingCellStateChanges(notebookUri)) {
+                    if (!this.tracker.hasPendingCellStateChanges(notebookUri)) {
                         disposable.dispose();
                         resolve();
                     }
@@ -707,6 +639,63 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
                 resolve();
             }, timeoutMs);
         });
+    }
+
+    /**
+     * Arms (or re-arms) the deferred snapshot save, flushing once outputs settle but no later than
+     * `outputSettleMaxWaitMs` from the first arm.
+     */
+    private armSnapshotSave(notebookUri: string): void {
+        const now = Date.now();
+        const existing = this.pendingSnapshotSaves.get(notebookUri);
+        const armedAt = existing ? existing.armedAt : now;
+
+        if (existing) {
+            clearTimeout(existing.timer);
+        }
+
+        // Bound the quiet-period reset by the max wait measured from the first arm.
+        const remainingMaxWait = Math.max(0, armedAt + outputSettleMaxWaitMs - now);
+        const delay = Math.min(outputSettleQuietPeriodMs, remainingMaxWait);
+
+        const timer = setTimeout(() => {
+            this.pendingSnapshotSaves.delete(notebookUri);
+            this.performSnapshotSave(notebookUri).catch((error) =>
+                logger.error(`[Snapshot] performSnapshotSave failed for ${notebookUri}`, error)
+            );
+        }, delay);
+
+        this.pendingSnapshotSaves.set(notebookUri, { armedAt, timer });
+    }
+
+    private cancelPendingSnapshotSave(notebookUri: string): void {
+        const existing = this.pendingSnapshotSaves.get(notebookUri);
+
+        if (existing) {
+            clearTimeout(existing.timer);
+            this.pendingSnapshotSaves.delete(notebookUri);
+
+            logger.debug(`[Snapshot] Cancelled pending snapshot save for ${notebookUri}`);
+        }
+    }
+
+    private handleNotebookDocumentChange(event: NotebookDocumentChangeEvent): void {
+        const notebookUri = getNotebookKey(event.notebook.uri);
+
+        // Only matters while a save is pending; re-arm the settle timer when outputs/metadata change.
+        if (!this.pendingSnapshotSaves.has(notebookUri)) {
+            return;
+        }
+
+        const bearsOutputOrMetadata = event.cellChanges.some(
+            (change) =>
+                change.outputs !== undefined || change.executionSummary !== undefined || change.metadata !== undefined
+        );
+
+        if (bearsOutputOrMetadata) {
+            logger.trace(`[Snapshot] Output/metadata change while save pending — re-arming settle timer`);
+            this.armSnapshotSave(notebookUri);
+        }
     }
 
     private async onExecutionComplete(notebookUri: string): Promise<void> {
@@ -723,7 +712,24 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             return;
         }
 
-        const notebook = workspace.notebookDocuments.find((n) => n.uri.toString() === notebookUri);
+        // Defer the write until outputs settle; a new execution, close, or disposal cancels it.
+        this.armSnapshotSave(notebookUri);
+    }
+
+    /**
+     * Performs the deferred snapshot save: rebuilds the notebook's blocks, detects Run All vs
+     * partial run, and writes the snapshot. "Run all" → timestamped + latest; partial → latest only.
+     */
+    private async performSnapshotSave(notebookUri: string): Promise<void> {
+        logger.debug(`[Snapshot] performSnapshotSave for ${notebookUri}`);
+
+        if (!this.isSnapshotsEnabled()) {
+            logger.debug(`[Snapshot] Snapshots not enabled, skipping`);
+
+            return;
+        }
+
+        const notebook = workspace.notebookDocuments.find((n) => getNotebookKey(n.uri) === notebookUri);
 
         if (!notebook) {
             logger.warn(`[Snapshot] Could not find notebook document for ${notebookUri}`);
@@ -739,22 +745,6 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             return;
         }
 
-        const originalProject = this.notebookManager?.getOriginalProject(projectId);
-
-        if (!originalProject) {
-            logger.warn(`[Snapshot] No original project found for ${projectId}`);
-
-            return;
-        }
-
-        const projectUri = this.findProjectUriFromId(projectId);
-
-        if (!projectUri) {
-            logger.warn(`[Snapshot] Could not find project URI for ${projectId}`);
-
-            return;
-        }
-
         const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
 
         if (!notebookId) {
@@ -762,6 +752,20 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
             return;
         }
+
+        // Exact (projectId, notebookId) lookup: sibling files share a project.id, so a project-only
+        // lookup could return the wrong sibling and silently skip this notebook's snapshot.
+        const originalProject = this.notebookManager?.getProjectForNotebook(projectId, notebookId);
+
+        if (!originalProject) {
+            logger.warn(`[Snapshot] No original project found for ${projectId}/${notebookId}`);
+
+            return;
+        }
+
+        // Use the saved notebook's own URI so the snapshot lands next to this file (not a sibling
+        // sharing the project.id).
+        const projectUri = notebook.uri;
 
         const deepnoteNotebook = originalProject.project.notebooks?.find((nb) => nb.id === notebookId);
 
@@ -771,94 +775,198 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             return;
         }
 
-        const cellData = notebook.getCells().map((cell) => ({
-            kind: cell.kind,
-            value: cell.document.getText(),
-            languageId: cell.document.languageId,
-            metadata: cell.metadata,
-            outputs: [...cell.outputs]
-        }));
-        const blocks = this.converter.convertCellsToBlocks(cellData);
-
-        const snapshotProject = structuredClone(originalProject) as DeepnoteFile;
-        const snapshotNotebook = snapshotProject.project.notebooks?.find((nb) => nb.id === notebookId);
-
-        if (snapshotNotebook) {
-            snapshotNotebook.blocks = blocks as DeepnoteBlock[];
-        }
-
-        // Detect "Run All" by checking if all code cells in the notebook were executed
-        const state = this.executionStates.get(notebookUri);
-        const totalCodeCells = notebook.getCells().filter((cell) => cell.kind === NotebookCellKind.Code).length;
-        const isRunAll = state && state.blocksExecuted === totalCodeCells;
-
-        if (isRunAll) {
-            logger.debug(`[Snapshot] Creating full snapshot (Run All mode)`);
-
-            const snapshotUri = await this.createSnapshot(
-                projectUri,
-                projectId,
-                originalProject.project.name,
-                snapshotProject,
-                notebookUri
-            );
-
-            if (snapshotUri) {
-                logger.info(`[Snapshot] Created full snapshot: ${snapshotUri.toString()}`);
-            }
-        } else {
-            logger.debug(`[Snapshot] Updating latest snapshot only (partial run)`);
-
-            const snapshotUri = await this.updateLatestSnapshot(
-                projectUri,
-                projectId,
-                originalProject.project.name,
-                snapshotProject,
-                notebookUri
-            );
-
-            if (snapshotUri) {
-                logger.info(`[Snapshot] Updated latest snapshot: ${snapshotUri.toString()}`);
-            }
-        }
-
-        // Clear execution state so the next run starts fresh
-        this.clearExecutionState(notebookUri);
-    }
-
-    private async parseSnapshotFile(path: Uri): Promise<Map<string, DeepnoteOutput[]>> {
-        const outputsMap = new Map<string, DeepnoteOutput[]>();
-
-        logger.debug(`[Snapshot] Parsing snapshot file: ${path.path}`);
-
         try {
-            const content = await workspace.fs.readFile(path);
-            const contentString = new TextDecoder('utf-8').decode(content);
+            const cellData = notebook.getCells().map((cell) => ({
+                kind: cell.kind,
+                value: cell.document.getText(),
+                languageId: cell.document.languageId,
+                metadata: cell.metadata,
+                outputs: [...cell.outputs]
+            }));
+            const blocks = this.converter.convertCellsToBlocks(cellData);
 
-            logger.debug(`[Snapshot] Read ${content.byteLength} bytes from snapshot file`);
+            const snapshotProject = structuredClone(originalProject) as DeepnoteFile;
+            const snapshotNotebook = snapshotProject.project.notebooks?.find((nb) => nb.id === notebookId);
 
-            const data = deserializeDeepnoteFile(contentString);
-            let totalBlocks = 0;
+            if (snapshotNotebook) {
+                snapshotNotebook.blocks = blocks as DeepnoteBlock[];
+            }
 
-            for (const notebook of data.project.notebooks) {
-                for (const block of notebook.blocks) {
-                    totalBlocks++;
-                    try {
-                        if (isExecutableBlock(block) && block.outputs) {
-                            outputsMap.set(block.id, block.outputs as DeepnoteOutput[]);
-                        }
-                    } catch (blockError) {
-                        logger.warn(`[Snapshot] Failed to extract outputs for block ${block.id}`, blockError);
-                    }
+            // Scope the filename by the file's snapshot notebook id, falling back to the rendered
+            // notebook's metadata id for any unexpected multi-notebook shape.
+            const snapshotNotebookId = resolveSnapshotNotebookId(snapshotProject) ?? notebookId;
+
+            const executedBlockCount = this.tracker.getExecutedBlockCount(notebookUri);
+            const totalCodeCells = notebook.getCells().filter((cell) => cell.kind === NotebookCellKind.Code).length;
+            // Keep `undefined` (untracked) distinct from a real count so the predicate doesn't flip for
+            // an untracked notebook with zero code cells.
+            const isRunAll = executedBlockCount !== undefined && executedBlockCount === totalCodeCells;
+
+            if (isRunAll) {
+                logger.debug(`[Snapshot] Creating full snapshot (Run All mode)`);
+
+                const snapshotUri = await this.createSnapshot(
+                    projectUri,
+                    projectId,
+                    originalProject.project.name,
+                    snapshotProject,
+                    snapshotNotebookId,
+                    notebookUri
+                );
+
+                if (snapshotUri) {
+                    logger.info(`[Snapshot] Created full snapshot: ${snapshotUri.toString()}`);
+                }
+            } else {
+                logger.debug(`[Snapshot] Updating latest snapshot only (partial run)`);
+
+                const snapshotUri = await this.updateLatestSnapshot(
+                    projectUri,
+                    projectId,
+                    originalProject.project.name,
+                    snapshotProject,
+                    snapshotNotebookId,
+                    notebookUri
+                );
+
+                if (snapshotUri) {
+                    logger.info(`[Snapshot] Updated latest snapshot: ${snapshotUri.toString()}`);
                 }
             }
-
-            logger.debug(`[Snapshot] Extracted ${outputsMap.size} block outputs from ${totalBlocks} total blocks`);
         } catch (error) {
-            logger.error(`[Snapshot] Failed to parse snapshot file: ${Utils.basename(path)}`, error);
+            // Fire-and-forget save: swallow so a failure never becomes an unhandled rejection.
+            logger.error(`[Snapshot] Failed to save deferred snapshot for ${notebookUri}`, error);
+        } finally {
+            // Clear execution state so the next run starts fresh, even if the save above failed.
+            this.clearExecutionState(notebookUri);
+        }
+    }
+
+    /**
+     * Ranks open-time snapshot candidates: the requested notebook's scoped match first, then
+     * `latest`, then newest timestamp. Legacy no-notebook-id entries sort after as a fallback.
+     */
+    private compareSnapshotCandidates(
+        a: { notebookId?: string; timestamp: string },
+        b: { notebookId?: string; timestamp: string },
+        notebookId?: string
+    ): number {
+        if (notebookId) {
+            const aMatches = a.notebookId === notebookId;
+
+            if (aMatches !== (b.notebookId === notebookId)) {
+                return aMatches ? -1 : 1;
+            }
         }
 
+        const aLatest = a.timestamp === 'latest';
+
+        if (aLatest !== (b.timestamp === 'latest')) {
+            return aLatest ? -1 : 1;
+        }
+
+        return b.timestamp.localeCompare(a.timestamp);
+    }
+
+    private extractOutputsFromFile(file: DeepnoteFile): Map<string, DeepnoteOutput[]> {
+        const outputsMap = new Map<string, DeepnoteOutput[]>();
+        let totalBlocks = 0;
+
+        for (const notebook of file.project.notebooks) {
+            for (const block of notebook.blocks) {
+                totalBlocks++;
+                try {
+                    if (isExecutableBlock(block) && block.outputs) {
+                        outputsMap.set(block.id, block.outputs as DeepnoteOutput[]);
+                    }
+                } catch (blockError) {
+                    logger.warn(`[Snapshot] Failed to extract outputs for block ${block.id}`, blockError);
+                }
+            }
+        }
+
+        logger.debug(`[Snapshot] Extracted ${outputsMap.size} block outputs from ${totalBlocks} total blocks`);
+
         return outputsMap;
+    }
+
+    /** Globs one snapshot family (`keep`-narrowed), then ranks and safe-restores the best candidate with real outputs. */
+    private async findSnapshotOutputs(
+        workspaceFolders: readonly WorkspaceFolder[],
+        glob: string,
+        projectId: string,
+        notebookId: string | undefined,
+        keep: (parsed: { notebookId?: string; timestamp: string }) => boolean
+    ): Promise<Map<string, DeepnoteOutput[]> | undefined> {
+        const candidates: Array<{ uri: Uri; notebookId?: string; timestamp: string }> = [];
+
+        for (const folder of workspaceFolders) {
+            const pattern = new RelativePattern(folder, glob);
+            // Uncapped: a findFiles cap truncates an UNORDERED set, dropping the best candidate before ranking.
+            const files = await workspace.findFiles(pattern, null);
+
+            for (const uri of files) {
+                const basename = Utils.basename(uri);
+                const parsed = parseSnapshotFilename(basename);
+
+                if (!parsed || parsed.projectId !== projectId || !keep(parsed)) {
+                    continue;
+                }
+
+                candidates.push({ uri, notebookId: parsed.notebookId, timestamp: parsed.timestamp });
+            }
+        }
+
+        if (candidates.length === 0) {
+            logger.debug(`[Snapshot] No snapshot files found for project ${projectId}`);
+
+            return;
+        }
+
+        candidates.sort((a, b) => this.compareSnapshotCandidates(a, b, notebookId));
+
+        // Return the first candidate with real outputs; skip corrupt files and empty-output
+        // `latest` snapshots (which signal a save race).
+        for (const candidate of candidates.slice(0, maxRankedSnapshotReads)) {
+            let file: DeepnoteFile;
+
+            try {
+                file = await readDeepnoteProjectFile(candidate.uri);
+            } catch (error) {
+                logger.warn(
+                    `[Snapshot] Failed to read/parse snapshot candidate: ${Utils.basename(candidate.uri)}`,
+                    error
+                );
+
+                continue;
+            }
+
+            if (candidate.timestamp === 'latest' && countBlocksWithOutputs(file) === 0) {
+                logger.debug(
+                    `[Snapshot] Skipping empty-output latest snapshot (possible save race): ${Utils.basename(
+                        candidate.uri
+                    )}`
+                );
+
+                continue;
+            }
+
+            if (!hasOutputs(file)) {
+                logger.debug(
+                    `[Snapshot] Snapshot candidate has no outputs, trying next: ${Utils.basename(candidate.uri)}`
+                );
+
+                continue;
+            }
+
+            logger.debug(`[Snapshot] Using snapshot: ${Utils.basename(candidate.uri)}`);
+
+            return this.extractOutputsFromFile(file);
+        }
+
+        logger.debug(`[Snapshot] No snapshot candidate with real outputs found for project ${projectId}`);
+
+        return;
     }
 
     private async prepareSnapshotData(
@@ -866,12 +974,13 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         projectId: string,
         projectName: string,
         projectData: DeepnoteFile,
+        notebookId?: string,
         notebookUri?: string
     ): Promise<{ latestPath: Uri; content: Uint8Array } | undefined> {
         let latestPath: Uri;
 
         try {
-            latestPath = this.buildSnapshotPath(projectUri, projectId, projectName, 'latest');
+            latestPath = buildSnapshotPath({ projectUri, projectId, projectName, variant: 'latest', notebookId });
         } catch (error) {
             if (error instanceof InvalidProjectNameError) {
                 logger.warn('[Snapshot] Skipping snapshots due to invalid project name', error);
@@ -923,63 +1032,6 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         return { latestPath, content };
     }
 
-    private recordCellExecutionEnd(
-        notebookUri: string,
-        cellId: string,
-        endTime: number,
-        success: boolean,
-        error?: ExecutionError
-    ): void {
-        const state = this.executionStates.get(notebookUri);
-
-        if (!state) {
-            logger.warn(`[Snapshot] No execution state found for notebook ${notebookUri}`);
-
-            return;
-        }
-
-        const isoTimestamp = new Date(endTime).toISOString();
-        const cellMetadata = state.cellMetadata.get(cellId);
-
-        if (cellMetadata) {
-            cellMetadata.executionFinishedAt = isoTimestamp;
-        }
-
-        state.blocksExecuted++;
-
-        if (success) {
-            state.blocksSucceeded++;
-        } else {
-            state.blocksFailed++;
-
-            if (error) {
-                state.error = error;
-            }
-        }
-
-        state.finishedAt = isoTimestamp;
-
-        const startMs = new Date(state.startedAt).getTime();
-
-        state.totalDurationMs = endTime - startMs;
-
-        logger.trace(`[Snapshot] Cell ${cellId} execution ended at ${isoTimestamp} (success: ${success})`);
-    }
-
-    private recordCellExecutionStart(notebookUri: string, cellId: string, startTime: number): void {
-        const state = this.getOrCreateExecutionState(notebookUri, startTime);
-        const isoTimestamp = new Date(startTime).toISOString();
-        const cellMetadata = state.cellMetadata.get(cellId) || { contentHash: '' };
-
-        cellMetadata.executionStartedAt = isoTimestamp;
-
-        delete cellMetadata.executionFinishedAt;
-
-        state.cellMetadata.set(cellId, cellMetadata);
-
-        logger.trace(`[Snapshot] Cell ${cellId} execution started at ${isoTimestamp}`);
-    }
-
     private trackWrittenUri(uri: Uri): void {
         const key = uri.toString();
         this.recentlyWrittenUris.add(key);
@@ -1011,9 +1063,17 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         projectId: string,
         projectName: string,
         projectData: DeepnoteFile,
+        notebookId?: string,
         notebookUri?: string
     ): Promise<Uri | undefined> {
-        const prepared = await this.prepareSnapshotData(projectUri, projectId, projectName, projectData, notebookUri);
+        const prepared = await this.prepareSnapshotData(
+            projectUri,
+            projectId,
+            projectName,
+            projectData,
+            notebookId,
+            notebookUri
+        );
 
         if (!prepared) {
             logger.debug(`[Snapshot] No changes detected, skipping latest snapshot update`);

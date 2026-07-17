@@ -42,7 +42,7 @@ Module._load = function (request: string, _parent: NodeModule) {
     }
     if (request === '@deepnote/convert') {
         return {
-            convertIpynbFilesToDeepnoteFile: async () => {
+            convertIpynbFileToDeepnoteFile: async () => {
                 // Mock implementation - does nothing in tests
             }
         };

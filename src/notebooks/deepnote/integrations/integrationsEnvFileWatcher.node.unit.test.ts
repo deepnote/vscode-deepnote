@@ -44,7 +44,7 @@ suite('IntegrationsEnvFileWatcher', () => {
         disposables = dispose(disposables);
     });
 
-    test('refreshes every notebook view whose .deepnote dir changed (no dedup; the refresher gates each kernel)', async () => {
+    test('refreshes every notebook view whose .deepnote dir changed (no deduplication; the refresher gates each kernel)', async () => {
         // Two open views of the SAME .deepnote file (differ only by notebook query) — both are refreshed.
         const uriA = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
         const uriB = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-b' });

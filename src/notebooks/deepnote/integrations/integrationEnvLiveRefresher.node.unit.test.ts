@@ -91,7 +91,7 @@ suite('IntegrationEnvLiveRefresher', () => {
 
         await refresher.refresh([notebook]);
 
-        assert.strictEqual(executeHiddenSpy.callCount, 0, 'an unstarted kernel must not be executed against');
+        assert.strictEqual(executeHiddenSpy.callCount, 0, 'a kernel that has not started must not be executed against');
         verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).never();
     });
 

@@ -1,6 +1,7 @@
 import { inject, injectable, optional } from 'inversify';
-import { CancellationToken, Event, EventEmitter } from 'vscode';
+import { CancellationToken, Event, EventEmitter, Uri } from 'vscode';
 
+import { DeepnoteFile } from '@deepnote/blocks';
 import {
     DatabaseIntegrationConfig,
     FederatedAuthMethod,
@@ -20,6 +21,9 @@ import {
     IPlatformDeepnoteNotebookManager
 } from './types';
 import { DATAFRAME_SQL_INTEGRATION_ID } from './integrationTypes';
+
+/** One entry of a Deepnote project's `integrations` list. */
+type ProjectIntegration = NonNullable<DeepnoteFile['project']['integrations']>[number];
 
 /** Narrows metadata to the federated-auth variant; upstream `isFederatedAuthMetadata` can't be reused because its generic doesn't unify with our union. Delegates to upstream `isFederatedAuthMethod` at runtime. */
 function isFederatedAuthMetadata(
@@ -116,36 +120,80 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
             `SqlIntegrationEnvironmentVariablesProvider: Found ${projectIntegrations.length} integrations in project`
         );
 
-        // Load integration configs from the `.deepnote.env.yaml` file (CLI parity) when the file source is
-        // available. Isolated in try/catch so a file-source failure degrades to SecretStorage + DuckDB and
-        // never rejects the whole method (unchanged behavior when the provider is absent, e.g. on web).
-        let fileConfigs: DatabaseIntegrationConfig[] = [];
-        if (this.fileConfigProvider) {
-            try {
-                const result = await this.fileConfigProvider.getConfigsForFile(
-                    notebookPathToDeepnoteProjectFilePath(notebook.uri)
+        const fileConfigs = await this.loadFileConfigs(notebook.uri);
+        const allConfigs = await this.mergeIntegrationConfigs(projectIntegrations, fileConfigs);
+
+        // Skip federated-auth integrations: tokens are fetched per-cell via per-cell codegen in `FederatedAuthSqlBlockCodeGenerator`, not baked into kernel env.
+        const projectIntegrationConfigs: Array<DatabaseIntegrationConfig> = [];
+        for (const config of allConfigs) {
+            if (isFederatedAuthMetadata(config.metadata)) {
+                logger.debug(
+                    `SqlIntegrationEnvironmentVariablesProvider: Skipping federated integration ${config.id} (${config.type}); per-cell codegen in FederatedAuthSqlBlockCodeGenerator handles its token.`
                 );
-                fileConfigs = result.configs;
-                result.issues.forEach((issue) => {
-                    logger.warn(
-                        `SqlIntegrationEnvironmentVariablesProvider: integrations file issue ${issue.code} at '${issue.path}': ${issue.message}`
-                    );
-                });
-            } catch (error) {
-                logger.error(
-                    'SqlIntegrationEnvironmentVariablesProvider: file integrations source failed; falling back to SecretStorage',
-                    error
-                );
+                continue;
             }
+            projectIntegrationConfigs.push(config);
         }
 
-        // Merge the two sources. The file wins on id conflicts; SecretStorage is the fallback for project
-        // integrations absent from the file; file-only integrations are injected additively (matches the CLI).
+        // Always add the internal DuckDB integration
+        projectIntegrationConfigs.push({
+            id: DATAFRAME_SQL_INTEGRATION_ID,
+            name: 'Dataframe SQL (DuckDB)',
+            type: 'pandas-dataframe',
+            metadata: {}
+        });
+
+        const { envVars: envVarList, errors } = getEnvironmentVariablesForIntegrations(projectIntegrationConfigs, {
+            projectRootDirectory: '',
+            snowflakePartnerIdentifier: 'Deepnote_Workspaces'
+        });
+
+        errors.forEach((error) => {
+            logger.error(`SqlIntegrationEnvironmentVariablesProvider: ${error.message}`);
+        });
+
+        const envVars: EnvironmentVariables = Object.fromEntries(envVarList.map(({ name, value }) => [name, value]));
+        logger.trace(`SqlIntegrationEnvironmentVariablesProvider: Returning ${Object.keys(envVars).length} env vars`);
+
+        return envVars;
+    }
+
+    /** Loads `.deepnote.env.yaml` configs (CLI parity) when a file source is present; failures — or no provider, e.g. web — degrade to []. */
+    private async loadFileConfigs(notebookUri: Uri): Promise<DatabaseIntegrationConfig[]> {
+        if (!this.fileConfigProvider) {
+            return [];
+        }
+
+        try {
+            const result = await this.fileConfigProvider.getConfigsForFile(
+                notebookPathToDeepnoteProjectFilePath(notebookUri)
+            );
+            result.issues.forEach((issue) => {
+                logger.warn(
+                    `SqlIntegrationEnvironmentVariablesProvider: integrations file issue ${issue.code} at '${issue.path}': ${issue.message}`
+                );
+            });
+
+            return result.configs;
+        } catch (error) {
+            logger.error(
+                'SqlIntegrationEnvironmentVariablesProvider: file integrations source failed; falling back to SecretStorage',
+                error
+            );
+
+            return [];
+        }
+    }
+
+    /** File config wins on id conflict; SecretStorage is the fallback for project ids the file lacks; file-only ids are appended additively (CLI parity). */
+    private async mergeIntegrationConfigs(
+        projectIntegrations: ProjectIntegration[],
+        fileConfigs: DatabaseIntegrationConfig[]
+    ): Promise<DatabaseIntegrationConfig[]> {
         const fileConfigsById = new Map(fileConfigs.map((config) => [config.id, config]));
         const consumedFileIds = new Set<string>();
 
-        // Read from SecretStorage only the project integrations the file did not provide, preserving the
-        // existing Promise.allSettled + per-item error handling.
+        // Read from SecretStorage only the project integrations the file did not provide.
         const secretStorageIds = projectIntegrations
             .map((integration) => integration.id)
             .filter((id) => !fileConfigsById.has(id));
@@ -184,46 +232,13 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
             }
         }
 
-        // Append file-only integrations (not declared in project.integrations) additively. Iterate the
-        // deduped map so both merge paths share one dedup source (guards against duplicate file ids).
+        // Append file-only integrations (not declared in project.integrations) additively, deduped by the map.
         for (const fileConfig of fileConfigsById.values()) {
             if (!consumedFileIds.has(fileConfig.id)) {
                 allConfigs.push(fileConfig);
             }
         }
 
-        // Skip federated-auth integrations: tokens are fetched per-cell via per-cell codegen in `FederatedAuthSqlBlockCodeGenerator`, not baked into kernel env.
-        const projectIntegrationConfigs: Array<DatabaseIntegrationConfig> = [];
-        for (const config of allConfigs) {
-            if (isFederatedAuthMetadata(config.metadata)) {
-                logger.debug(
-                    `SqlIntegrationEnvironmentVariablesProvider: Skipping federated integration ${config.id} (${config.type}); per-cell codegen in FederatedAuthSqlBlockCodeGenerator handles its token.`
-                );
-                continue;
-            }
-            projectIntegrationConfigs.push(config);
-        }
-
-        // Always add the internal DuckDB integration
-        projectIntegrationConfigs.push({
-            id: DATAFRAME_SQL_INTEGRATION_ID,
-            name: 'Dataframe SQL (DuckDB)',
-            type: 'pandas-dataframe',
-            metadata: {}
-        });
-
-        const { envVars: envVarList, errors } = getEnvironmentVariablesForIntegrations(projectIntegrationConfigs, {
-            projectRootDirectory: '',
-            snowflakePartnerIdentifier: 'Deepnote_Workspaces'
-        });
-
-        errors.forEach((error) => {
-            logger.error(`SqlIntegrationEnvironmentVariablesProvider: ${error.message}`);
-        });
-
-        const envVars: EnvironmentVariables = Object.fromEntries(envVarList.map(({ name, value }) => [name, value]));
-        logger.trace(`SqlIntegrationEnvironmentVariablesProvider: Returning ${Object.keys(envVars).length} env vars`);
-
-        return envVars;
+        return allConfigs;
     }
 }

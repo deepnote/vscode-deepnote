@@ -126,4 +126,24 @@ suite('IntegrationEnvLiveRefresher', () => {
         assert.strictEqual(executeHiddenSpy.callCount, 2, 'a throw on the first must not stop the second');
         verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
     });
+
+    test('refreshes kernels in parallel: both executions start before either resolves', async () => {
+        const notebookA = createRunningNotebook(Uri.file('/ws/a.deepnote'));
+        const notebookB = createRunningNotebook(Uri.file('/ws/b.deepnote'));
+
+        // First execution resolves only once the second has been invoked; a sequential loop would deadlock (and time out).
+        let markSecondInvoked!: () => void;
+        const secondInvoked = new Promise<void>((resolve) => (markSecondInvoked = resolve));
+        executeHiddenSpy.onFirstCall().callsFake(() => secondInvoked.then(() => []));
+        executeHiddenSpy.onSecondCall().callsFake(() => {
+            markSecondInvoked();
+
+            return Promise.resolve([]);
+        });
+
+        await refresher.refresh([notebookA, notebookB]);
+
+        assert.strictEqual(executeHiddenSpy.callCount, 2, 'both started kernels are refreshed');
+        verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
+    });
 });

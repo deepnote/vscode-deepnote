@@ -1,3 +1,5 @@
+import * as http from 'http';
+
 import { assert } from 'chai';
 import { anything, capture, instance, mock, verify, when } from 'ts-mockito';
 import { Disposable, NotebookDocument, Uri } from 'vscode';
@@ -170,5 +172,40 @@ suite('UserpodApiEndpoints', () => {
         assert.strictEqual(wrongToken.status, 401);
 
         verify(provider.getEnvironmentVariables(anything())).never();
+    });
+
+    test('responds 401 for a wrong token of the SAME length (exercises the constant-time compare path)', async () => {
+        const notebook = createMockNotebook('project-1', Uri.file('/ws/app.deepnote'));
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+
+        endpoint.activate();
+        const baseUrl = await waitForBaseUrl();
+
+        // Same byte length as the real `Bearer <token>` header, different value — timingSafeEqual must reject it.
+        const sameLengthWrong = `Bearer ${'x'.repeat(endpoint.authToken.length)}`;
+        const response = await fetch(envVarsUrl(baseUrl, 'project-1'), {
+            headers: { Authorization: sameLengthWrong }
+        });
+
+        assert.strictEqual(response.status, 401);
+        verify(provider.getEnvironmentVariables(anything())).never();
+    });
+
+    test('logs and prompts the user to recover when the server errors after startup, without crashing', async () => {
+        const notebook = createMockNotebook('project-1', Uri.file('/ws/app.deepnote'));
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+        when(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything(), anything())).thenResolve(
+            undefined as never
+        );
+
+        endpoint.activate();
+        await waitForBaseUrl();
+
+        // Reach the running server to simulate a post-listen failure (e.g. an accept error under fd exhaustion).
+        const server = (endpoint as unknown as { server: http.Server }).server;
+        server.emit('error', new Error('accept failed'));
+
+        assert.strictEqual(endpoint.baseUrl, undefined, 'a crashed endpoint must stop advertising its base URL');
+        verify(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything(), anything())).once();
     });
 });

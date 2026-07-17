@@ -1,8 +1,8 @@
+import { timingSafeEqual } from 'crypto';
 import express, { type Express, type Request, type Response } from 'express';
 import * as http from 'http';
 import { inject, injectable } from 'inversify';
-import { type AddressInfo } from 'net';
-import { workspace } from 'vscode';
+import { commands, l10n, window, workspace } from 'vscode';
 
 import { DEEPNOTE_NOTEBOOK_TYPE } from '../../../kernels/deepnote/types';
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
@@ -16,6 +16,7 @@ import { IUserpodApiEndpoints } from './types';
 @injectable()
 export class UserpodApiEndpoints implements IUserpodApiEndpoints, IExtensionSyncActivationService {
     private readonly authTokenValue = generateUuid();
+    private isListening = false;
     private server: http.Server | undefined;
     private serverBaseUrl: string | undefined;
 
@@ -34,8 +35,58 @@ export class UserpodApiEndpoints implements IUserpodApiEndpoints, IExtensionSync
     }
 
     public activate(): void {
+        this.disposables.push({ dispose: () => this.stop() });
         this.start().catch((err) =>
             logger.error('UserpodApiEndpoints: Failed to start integration env vars endpoint', err)
+        );
+    }
+
+    private isAuthorized(authorizationHeader: string | undefined): boolean {
+        if (authorizationHeader === undefined) {
+            return false;
+        }
+
+        // Constant-time compare: the response carries credentials, so don't leak the token via early-exit timing.
+        const expected = Buffer.from(`Bearer ${this.authTokenValue}`);
+        const actual = Buffer.from(authorizationHeader);
+
+        return actual.length === expected.length && timingSafeEqual(actual, expected);
+    }
+
+    private onServerError(err: Error): void {
+        logger.error('UserpodApiEndpoints: HTTP server error', err);
+
+        // Startup failures are surfaced by start()'s rejection; only recover from errors once actually listening.
+        if (!this.isListening) {
+            return;
+        }
+        this.isListening = false;
+        this.serverBaseUrl = undefined;
+
+        const restart = l10n.t('Restart');
+        const reloadWindow = l10n.t('Reload Window');
+
+        void window
+            .showErrorMessage(
+                l10n.t(
+                    'The Deepnote integrations service stopped unexpectedly. Integration environment variables will not update until it restarts.'
+                ),
+                restart,
+                reloadWindow
+            )
+            .then((choice) => {
+                if (choice === restart) {
+                    this.restart();
+                } else if (choice === reloadWindow) {
+                    void commands.executeCommand('workbench.action.reloadWindow');
+                }
+            });
+    }
+
+    private restart(): void {
+        this.stop();
+        this.start().catch((err) =>
+            logger.error('UserpodApiEndpoints: Failed to restart integration env vars endpoint', err)
         );
     }
 
@@ -44,8 +95,7 @@ export class UserpodApiEndpoints implements IUserpodApiEndpoints, IExtensionSync
 
         app.get('/userpod-api/:projectId/integrations/environment-variables', async (req: Request, res: Response) => {
             try {
-                // The response carries integration credentials, so require the bearer token even on loopback.
-                if (req.headers.authorization !== `Bearer ${this.authTokenValue}`) {
+                if (!this.isAuthorized(req.headers.authorization)) {
                     res.status(401).json([]);
 
                     return;
@@ -75,28 +125,30 @@ export class UserpodApiEndpoints implements IUserpodApiEndpoints, IExtensionSync
         const server = http.createServer(app);
         this.server = server;
 
-        this.disposables.push({ dispose: () => this.stop() });
+        // Persistent handler: an 'error' with no listener is re-thrown as an uncaught exception that crashes the host.
+        server.on('error', (err) => this.onServerError(err));
 
         server.listen(0, '127.0.0.1');
 
         const port = await new Promise<number>((resolve, reject) => {
-            let onError: (err: Error) => void = () => undefined;
+            let onStartupError: (err: Error) => void = () => undefined;
             let onListening: () => void = () => undefined;
-            onError = (err: Error) => {
+            onStartupError = (err: Error) => {
                 server.removeListener('listening', onListening);
                 reject(err);
             };
             onListening = () => {
-                server.removeListener('error', onError);
-                const address = server.address() as AddressInfo | null;
+                server.removeListener('error', onStartupError);
+                const address = server.address();
                 if (!address || typeof address === 'string') {
                     reject(new Error('Integration env vars endpoint did not bind a port.'));
 
                     return;
                 }
+                this.isListening = true;
                 resolve(address.port);
             };
-            server.once('error', onError);
+            server.once('error', onStartupError);
             server.once('listening', onListening);
         });
 
@@ -106,13 +158,18 @@ export class UserpodApiEndpoints implements IUserpodApiEndpoints, IExtensionSync
 
     private stop(): void {
         const server = this.server;
+        this.server = undefined;
+        this.serverBaseUrl = undefined;
+        this.isListening = false;
         if (!server) {
             return;
         }
-        this.server = undefined;
-        this.serverBaseUrl = undefined;
 
-        server.closeAllConnections();
-        server.close();
+        try {
+            server.closeAllConnections();
+            server.close();
+        } catch (err) {
+            logger.warn('UserpodApiEndpoints: Error while stopping server', err);
+        }
     }
 }

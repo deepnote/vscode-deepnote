@@ -14,40 +14,44 @@ export class IntegrationEnvLiveRefresher implements IIntegrationEnvLiveRefresher
     constructor(@inject(IKernelProvider) private readonly kernelProvider: IKernelProvider) {}
 
     public async refresh(notebooks: readonly NotebookDocument[]): Promise<void> {
-        let refreshedCount = 0;
-
-        for (const notebook of notebooks) {
-            try {
-                const kernel = this.kernelProvider.get(notebook);
-                if (!kernel || !kernel.startedAtLeastOnce) {
-                    continue;
-                }
-
-                const outputs = await this.kernelProvider
-                    .getKernelExecution(kernel)
-                    .executeHidden(REFRESH_INTEGRATION_ENV_SNIPPET);
-
-                const errors = outputs.filter((output) => output.output_type === 'error');
-                if (errors.length > 0) {
-                    logger.warn(
-                        `IntegrationEnvLiveRefresher: Refresh snippet produced errors for ${notebook.uri.toString()}`,
-                        errors
-                    );
-
-                    continue;
-                }
-
-                refreshedCount += 1;
-            } catch (err) {
-                logger.error(
-                    `IntegrationEnvLiveRefresher: Failed to refresh integration env for ${notebook.uri.toString()}`,
-                    err
-                );
-            }
-        }
+        const results = await Promise.all(notebooks.map((notebook) => this.refreshNotebook(notebook)));
+        const refreshedCount = results.filter(Boolean).length;
 
         if (refreshedCount > 0) {
             void window.showInformationMessage(l10n.t('Deepnote integration environment updated.'));
+        }
+    }
+
+    /** Refreshes one kernel; never throws (per-notebook errors are logged), resolves true only on a clean run. */
+    private async refreshNotebook(notebook: NotebookDocument): Promise<boolean> {
+        try {
+            const kernel = this.kernelProvider.get(notebook);
+            if (!kernel || !kernel.startedAtLeastOnce) {
+                return false;
+            }
+
+            const outputs = await this.kernelProvider
+                .getKernelExecution(kernel)
+                .executeHidden(REFRESH_INTEGRATION_ENV_SNIPPET);
+
+            const errors = outputs.filter((output) => output.output_type === 'error');
+            if (errors.length > 0) {
+                logger.warn(
+                    `IntegrationEnvLiveRefresher: Refresh snippet produced errors for ${notebook.uri.toString()}`,
+                    errors
+                );
+
+                return false;
+            }
+
+            return true;
+        } catch (err) {
+            logger.error(
+                `IntegrationEnvLiveRefresher: Failed to refresh integration env for ${notebook.uri.toString()}`,
+                err
+            );
+
+            return false;
         }
     }
 }

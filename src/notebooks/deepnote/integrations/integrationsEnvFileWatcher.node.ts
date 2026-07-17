@@ -72,6 +72,15 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
             }
 
             const deepnoteFileUri = notebookPathToDeepnoteProjectFilePath(notebook.uri);
+
+            // Mirror IntegrationsFileConfigProvider's gate: a disabled feature must not trigger kernel refreshes.
+            const enabled = workspace
+                .getConfiguration('deepnote', deepnoteFileUri)
+                .get<boolean>('integrations.envFile.enabled', true);
+            if (enabled === false) {
+                continue;
+            }
+
             const deepnoteDir = Uri.joinPath(deepnoteFileUri, '..').fsPath;
             const workspaceRoot = workspace.getWorkspaceFolder(notebook.uri)?.uri.fsPath;
 

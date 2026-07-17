@@ -100,4 +100,32 @@ suite('IntegrationsEnvFileWatcher', () => {
 
         verify(liveRefresher.refresh(anything())).never();
     });
+
+    test('does not refresh when the env-file feature is disabled for the notebook', async () => {
+        const uri = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
+        const notebook = createMockNotebook(uri);
+
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+        when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote', anything())).thenReturn({
+            get: () => false
+        } as never);
+
+        await watcher.handleChangedDirs(new Set([deepnoteDirOf(uri)]));
+
+        verify(liveRefresher.refresh(anything())).never();
+    });
+
+    test('refreshes when the env-file feature is explicitly enabled for the notebook', async () => {
+        const uri = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
+        const notebook = createMockNotebook(uri);
+
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+        when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote', anything())).thenReturn({
+            get: () => true
+        } as never);
+
+        await watcher.handleChangedDirs(new Set([deepnoteDirOf(uri)]));
+
+        verify(liveRefresher.refresh(anything())).once();
+    });
 });

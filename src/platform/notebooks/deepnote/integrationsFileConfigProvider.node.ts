@@ -75,7 +75,7 @@ export class IntegrationsFileConfigProvider implements IIntegrationsFileConfigPr
             // Locate the `.env` (dir-then-root) and resolve `env:` refs against it; real env wins over the file.
             const envUri = await this.findFirstExisting(candidateDirs, DEFAULT_ENV_FILE);
             const fileEnv = envUri ? dotenv.parse(await this.fileSystem.readFile(envUri)) : {};
-            const env: Record<string, string | undefined> = { ...fileEnv, ...process.env };
+            const env: Record<string, string | undefined> = { ...fileEnv, ...this.getProcessEnvironment() };
 
             const { integrations, issues } = parseIntegrations({ yaml, env });
 
@@ -91,6 +91,11 @@ export class IntegrationsFileConfigProvider implements IIntegrationsFileConfigPr
 
             return { configs: [], issues: [issue] };
         }
+    }
+
+    /** The process environment merged over the `.env` file; a seam tests override so they never touch the real `process.env`. */
+    protected getProcessEnvironment(): Record<string, string | undefined> {
+        return process.env;
     }
 
     /**

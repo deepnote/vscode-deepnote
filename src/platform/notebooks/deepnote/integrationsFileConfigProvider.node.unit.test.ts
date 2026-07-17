@@ -1,4 +1,3 @@
-/* eslint-disable local-rules/dont-use-process */
 import assert from 'assert';
 
 import {
@@ -21,6 +20,15 @@ interface VirtualFile {
     readError?: Error;
 }
 
+/** Provider whose process environment is controllable, so tests never read or mutate the real `process.env`. */
+class TestableIntegrationsFileConfigProvider extends IntegrationsFileConfigProvider {
+    public processEnvironment: Record<string, string | undefined> = {};
+
+    protected override getProcessEnvironment(): Record<string, string | undefined> {
+        return this.processEnvironment;
+    }
+}
+
 suite('IntegrationsFileConfigProvider', () => {
     const deepnoteFileUri = Uri.file('/workspace/project/notebook.deepnote');
     const deepnoteDirUri = Uri.joinPath(deepnoteFileUri, '..');
@@ -29,7 +37,7 @@ suite('IntegrationsFileConfigProvider', () => {
     const envPath = Uri.joinPath(deepnoteDirUri, DEFAULT_ENV_FILE).fsPath;
 
     let fileSystem: IFileSystem;
-    let provider: IntegrationsFileConfigProvider;
+    let provider: TestableIntegrationsFileConfigProvider;
     let featureEnabled: boolean;
     let workspaceFolder: WorkspaceFolder | undefined;
 
@@ -40,7 +48,7 @@ suite('IntegrationsFileConfigProvider', () => {
         workspaceFolder = undefined;
 
         fileSystem = mock<IFileSystem>();
-        provider = new IntegrationsFileConfigProvider(instance(fileSystem));
+        provider = new TestableIntegrationsFileConfigProvider(instance(fileSystem));
 
         // The gate reads `deepnote.integrations.envFile.enabled`; return the current `featureEnabled` value.
         when(mockedVSCodeNamespaces.workspace.getConfiguration(anything(), anything())).thenReturn({
@@ -126,42 +134,32 @@ suite('IntegrationsFileConfigProvider', () => {
         assert.deepStrictEqual(issues, []);
     });
 
-    test('lets process.env override values from the .env file', async () => {
-        const key = 'DEEPNOTE_TEST_OVERRIDE_PASSWORD';
-        const original = process.env[key];
-        process.env[key] = 'secret-from-process-env';
-        try {
-            configureFileSystem([
-                {
-                    path: yamlPath,
-                    content: dedent`
-                        integrations:
-                          - id: override-postgres
-                            name: Override Postgres
-                            type: pgsql
-                            metadata:
-                              host: localhost
-                              port: "5432"
-                              database: mydb
-                              user: root
-                              password: "env:DEEPNOTE_TEST_OVERRIDE_PASSWORD"
-                    `
-                },
-                { path: envPath, content: 'DEEPNOTE_TEST_OVERRIDE_PASSWORD=stale-from-dotenv\n' }
-            ]);
+    test('lets the process environment override values from the .env file', async () => {
+        provider.processEnvironment = { DEEPNOTE_TEST_OVERRIDE_PASSWORD: 'secret-from-process-env' };
+        configureFileSystem([
+            {
+                path: yamlPath,
+                content: dedent`
+                    integrations:
+                      - id: override-postgres
+                        name: Override Postgres
+                        type: pgsql
+                        metadata:
+                          host: localhost
+                          port: "5432"
+                          database: mydb
+                          user: root
+                          password: "env:DEEPNOTE_TEST_OVERRIDE_PASSWORD"
+                `
+            },
+            { path: envPath, content: 'DEEPNOTE_TEST_OVERRIDE_PASSWORD=stale-from-dotenv\n' }
+        ]);
 
-            const { configs, issues } = await provider.getConfigsForFile(deepnoteFileUri);
+        const { configs, issues } = await provider.getConfigsForFile(deepnoteFileUri);
 
-            assert.strictEqual(configs.length, 1);
-            assert.strictEqual(metadataField(configs[0], 'password'), 'secret-from-process-env');
-            assert.deepStrictEqual(issues, []);
-        } finally {
-            if (original === undefined) {
-                delete process.env[key];
-            } else {
-                process.env[key] = original;
-            }
-        }
+        assert.strictEqual(configs.length, 1);
+        assert.strictEqual(metadataField(configs[0], 'password'), 'secret-from-process-env');
+        assert.deepStrictEqual(issues, []);
     });
 
     test('returns an empty result when the YAML file is missing', async () => {

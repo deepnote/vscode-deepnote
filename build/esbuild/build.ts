@@ -231,6 +231,12 @@ function createConfig(
             inject.push(path.join(__dirname, isDevbuild ? 'process.development.js' : 'process.production.js'));
         }
     }
+    if (target === 'desktop') {
+        // Bake the PostHog key in from the CI secret at build time; falls back to the placeholder locally (see constants.ts).
+        define = {
+            POSTHOG_API_KEY_BUILD: JSON.stringify(process.env.POSTHOG_API_KEY ?? '')
+        };
+    }
     if (source.endsWith(path.join('data-explorer', 'index.tsx'))) {
         inject.push(path.join(__dirname, 'jquery.js'));
     }

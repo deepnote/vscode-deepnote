@@ -58,6 +58,8 @@ jobs:
 
       - name: Package extension
         run: npm run package
+        env:
+          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
 
       - name: Rename VSIX file
         run: |

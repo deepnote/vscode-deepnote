@@ -3,7 +3,7 @@ import { commands, Disposable, l10n, Uri, ViewColumn, WebviewPanel, window } fro
 
 import { BigQueryAuthMethods } from '@deepnote/database-integrations';
 
-import { ITelemetryService } from '../../../platform/analytics/types';
+import { ITelemetryService, TelemetryEventName } from '../../../platform/analytics/types';
 import { Commands } from '../../../platform/common/constants';
 import { IDisposableRegistry, IExtensionContext } from '../../../platform/common/types';
 import * as localize from '../../../platform/common/utils/localize';
@@ -564,6 +564,10 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         }
     }
 
+    private trackIntegrationEvent(eventName: TelemetryEventName, integrationType: string | undefined): void {
+        this.analytics.trackEvent({ eventName, properties: { integrationType: integrationType ?? 'unknown' } });
+    }
+
     /** Handle messages from the webview; mirrors the `WebviewOutboundMessage` union in `src/webviews/webview-side/integrations/types.ts`. */
     private async handleMessage(message: {
         type: string;
@@ -573,7 +577,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         switch (message.type) {
             case 'configure':
                 if (message.integrationId) {
-                    this.analytics.trackEvent({ eventName: 'configure_integration' });
+                    const integrationType = this.integrations.get(message.integrationId)?.integrationType;
+                    this.trackIntegrationEvent('configure_integration', integrationType);
                     await this.showConfigurationForm(message.integrationId);
                 }
                 break;
@@ -582,34 +587,34 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                     const saved = await this.saveConfiguration(message.integrationId, message.config);
 
                     if (saved) {
-                        this.analytics.trackEvent({
-                            eventName: 'save_integration',
-                            properties: { integrationType: message.config.type ?? 'unknown' }
-                        });
+                        this.trackIntegrationEvent('save_integration', message.config.type);
                     }
                 }
                 break;
             case 'reset':
                 if (message.integrationId) {
+                    const integrationType = this.integrations.get(message.integrationId)?.integrationType;
                     const reset = await this.resetConfiguration(message.integrationId);
 
                     if (reset) {
-                        this.analytics.trackEvent({ eventName: 'reset_integration' });
+                        this.trackIntegrationEvent('reset_integration', integrationType);
                     }
                 }
                 break;
             case 'delete':
                 if (message.integrationId) {
+                    const integrationType = this.integrations.get(message.integrationId)?.integrationType;
                     const deleted = await this.deleteConfiguration(message.integrationId);
 
                     if (deleted) {
-                        this.analytics.trackEvent({ eventName: 'delete_integration' });
+                        this.trackIntegrationEvent('delete_integration', integrationType);
                     }
                 }
                 break;
             case 'authenticate':
                 if (message.integrationId) {
-                    this.analytics.trackEvent({ eventName: 'authenticate_integration' });
+                    const integrationType = this.integrations.get(message.integrationId)?.integrationType;
+                    this.trackIntegrationEvent('authenticate_integration', integrationType);
 
                     try {
                         await commands.executeCommand(Commands.AuthenticateIntegration, message.integrationId);

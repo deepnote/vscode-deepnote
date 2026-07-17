@@ -1646,7 +1646,7 @@
                 "deepnote.telemetry.enabled": {
                     "type": "boolean",
                     "default": true,
-                    "description": "Enable anonymous usage telemetry to help improve Deepnote for VS Code.",
+                    "description": "%deepnote.configuration.deepnote.telemetry.enabled.description%",
                     "scope": "application"
                 },
                 "deepnote.snapshots.enabled": {

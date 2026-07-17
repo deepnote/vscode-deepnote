@@ -52,15 +52,6 @@ export interface IIntegrationEnvLiveRefresher {
     refresh(notebooks: readonly NotebookDocument[]): Promise<void>;
 }
 
-export const IUserpodApiEndpoints = Symbol('IUserpodApiEndpoints');
-export interface IUserpodApiEndpoints {
-    /** Loopback base URL the toolkit fetches integration env vars from; `undefined` until the server is listening. */
-    readonly baseUrl: string | undefined;
-
-    /** Bearer token the endpoint requires (it serves credentials); injected into the toolkit as `DEEPNOTE_RUNTIME__PROJECT_SECRET`. */
-    readonly authToken: string;
-}
-
 /** Persisted federated-auth token entry; fingerprints `${clientId}|${clientSecret}|${project}` to detect stale tokens. Only the refresh token is persisted. */
 export interface FederatedAuthTokenEntry {
     integrationId: string;

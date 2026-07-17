@@ -11,8 +11,7 @@ import { DeepnoteServerStarter } from './deepnoteServerStarter.node';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { IAsyncDisposableRegistry, IOutputChannel } from '../../platform/common/types';
 import { IDeepnoteToolkitInstaller } from './types';
-import { IUserpodApiEndpoints } from '../../notebooks/deepnote/integrations/types';
-import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
+import { ISqlIntegrationEnvVarsProvider, IUserpodApiEndpoints } from '../../platform/notebooks/deepnote/types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import {
     __getStartServerCalls,

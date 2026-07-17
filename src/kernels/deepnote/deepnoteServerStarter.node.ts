@@ -12,7 +12,6 @@ import { CancellationToken, l10n, Uri } from 'vscode';
 
 import { startServer, stopServer } from '@deepnote/runtime-core';
 
-import { IUserpodApiEndpoints } from '../../notebooks/deepnote/integrations/types';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { Cancellation } from '../../platform/common/cancellation';
 import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
@@ -23,7 +22,7 @@ import { generateUuid } from '../../platform/common/uuid';
 import { resolveProjectIdForFile } from '../../platform/deepnote/deepnoteProjectIdResolver';
 import { DeepnoteServerStartupError } from '../../platform/errors/deepnoteKernelErrors';
 import { logger } from '../../platform/logging';
-import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
+import { ISqlIntegrationEnvVarsProvider, IUserpodApiEndpoints } from '../../platform/notebooks/deepnote/types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import * as path from '../../platform/vscode-path/path';
 import { DeepnoteServerInfo, IDeepnoteServerStarter, IDeepnoteToolkitInstaller } from './types';

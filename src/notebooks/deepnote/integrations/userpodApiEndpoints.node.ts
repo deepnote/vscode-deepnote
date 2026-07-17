@@ -9,8 +9,7 @@ import { IExtensionSyncActivationService } from '../../../platform/activation/ty
 import { IDisposableRegistry } from '../../../platform/common/types';
 import { generateUuid } from '../../../platform/common/uuid';
 import { logger } from '../../../platform/logging';
-import { ISqlIntegrationEnvVarsProvider } from '../../../platform/notebooks/deepnote/types';
-import { IUserpodApiEndpoints } from './types';
+import { ISqlIntegrationEnvVarsProvider, IUserpodApiEndpoints } from '../../../platform/notebooks/deepnote/types';
 
 /** Loopback host for the toolkit's `userpod-api` calls; currently serves integration env vars for `set_integration_env()` (as `[{name,value}]`). */
 @injectable()

@@ -54,7 +54,6 @@ import {
     IIntegrationDetector,
     IIntegrationEnvLiveRefresher,
     IIntegrationManager,
-    IUserpodApiEndpoints,
     IIntegrationStorage,
     IIntegrationWebviewProvider
 } from './deepnote/integrations/types';
@@ -66,7 +65,8 @@ import { FederatedAuthTokenStorage } from './deepnote/integrations/federatedAuth
 import {
     IIntegrationsFileConfigProvider,
     IPlatformNotebookEditorProvider,
-    IPlatformDeepnoteNotebookManager
+    IPlatformDeepnoteNotebookManager,
+    IUserpodApiEndpoints
 } from '../platform/notebooks/deepnote/types';
 import { SqlCellStatusBarProvider } from './deepnote/sqlCellStatusBarProvider';
 import { DirtyInputBlockStatusBarProvider } from './deepnote/dirtyInputBlockStatusBarProvider';

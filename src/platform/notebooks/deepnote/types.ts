@@ -99,6 +99,15 @@ export interface ISqlIntegrationEnvVarsProvider {
     getEnvironmentVariables(resource: Resource, token?: CancellationToken): Promise<EnvironmentVariables>;
 }
 
+export const IUserpodApiEndpoints = Symbol('IUserpodApiEndpoints');
+export interface IUserpodApiEndpoints {
+    /** Loopback base URL the toolkit fetches integration env vars from; `undefined` until the server is listening. */
+    readonly baseUrl: string | undefined;
+
+    /** Bearer token the endpoint requires (it serves credentials); injected into the toolkit as `DEEPNOTE_RUNTIME__PROJECT_SECRET`. */
+    readonly authToken: string;
+}
+
 export const IIntegrationsFileConfigProvider = Symbol('IIntegrationsFileConfigProvider');
 export interface IIntegrationsFileConfigProvider {
     /**

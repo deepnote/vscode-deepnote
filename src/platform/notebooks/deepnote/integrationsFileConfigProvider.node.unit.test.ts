@@ -1,3 +1,4 @@
+/* eslint-disable local-rules/dont-use-process */
 import assert from 'assert';
 
 import {

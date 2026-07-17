@@ -426,7 +426,7 @@ export class DeepnoteExplorerView {
                 await window.showInformationMessage(l10n.t('Project renamed to: {0}', newName));
             }
 
-            return true;
+            return failedCount === 0;
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             await window.showErrorMessage(l10n.t('Failed to rename project: {0}', errorMessage));

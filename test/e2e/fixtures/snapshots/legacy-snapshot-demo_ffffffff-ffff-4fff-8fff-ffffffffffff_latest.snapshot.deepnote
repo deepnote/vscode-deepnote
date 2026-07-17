@@ -1,0 +1,25 @@
+environment: {}
+execution: {}
+metadata:
+  createdAt: 2026-06-01T09:00:00.000Z
+  modifiedAt: 2026-06-20T10:00:00.000Z
+project:
+  id: ffffffff-ffff-4fff-8fff-ffffffffffff
+  name: Legacy Snapshot Demo
+  notebooks:
+    - blocks:
+        - id: blk-snap-0001
+          blockGroup: grp-snap-0001
+          sortingKey: "000000"
+          type: code
+          content: print("hello")
+          metadata: {}
+          outputs:
+            - output_type: stream
+              name: stdout
+              text: |
+                SNAPSHOT_OUTPUT_MARKER
+      executionMode: block
+      id: f-nb-snapshot
+      name: Main
+version: 1.0.0

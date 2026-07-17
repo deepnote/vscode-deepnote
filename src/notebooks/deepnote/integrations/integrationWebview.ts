@@ -9,6 +9,7 @@ import * as localize from '../../../platform/common/utils/localize';
 import { logger } from '../../../platform/logging';
 import { LocalizedMessages, SharedMessages } from '../../../messageTypes';
 import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
+import { persistProjectIntegrations } from './projectIntegrationsWriter';
 import { IFederatedAuthTokenStorage, IIntegrationStorage, IIntegrationWebviewProvider } from './types';
 import {
     ConfigurableDatabaseIntegrationConfig,
@@ -22,6 +23,8 @@ import {
  */
 @injectable()
 export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
+    private activeFileUri: Uri | undefined;
+
     private currentPanel: WebviewPanel | undefined;
 
     private readonly disposables: Disposable[] = [];
@@ -29,6 +32,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     private integrations: Map<string, IntegrationWithStatus> = new Map();
 
     private projectId: string | undefined;
+
+    private projectName: string | undefined;
 
     /** Generation counter for `updateWebview()` ("latest call wins"; stale in-flight updates bail). */
     private updateGeneration = 0;
@@ -58,15 +63,21 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
      * Show the integration management webview
      * @param projectId The Deepnote project ID
      * @param integrations Map of integration IDs to their status
+     * @param activeFileUri The `.deepnote` file being edited — always persisted to disk on save
      * @param selectedIntegrationId Optional integration ID to select/configure immediately
+     * @param projectName Optional project display name (sourced from the active notebook's metadata)
      */
     public async show(
         projectId: string,
         integrations: Map<string, IntegrationWithStatus>,
-        selectedIntegrationId?: string
+        activeFileUri: Uri,
+        selectedIntegrationId?: string,
+        projectName?: string
     ): Promise<void> {
         // Update the stored integrations and project ID with the latest data
+        this.activeFileUri = activeFileUri;
         this.projectId = projectId;
+        this.projectName = projectName;
         this.integrations = integrations;
 
         const column = window.activeTextEditor ? window.activeTextEditor.viewColumn : ViewColumn.One;
@@ -477,16 +488,9 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
 
         logger.debug(`IntegrationWebviewProvider: Sending ${integrationsData.length} integrations to webview`);
 
-        // Get the project name from the notebook manager
-        let projectName: string | undefined;
-        if (this.projectId) {
-            const project = this.notebookManager.getOriginalProject(this.projectId);
-            projectName = project?.project.name;
-        }
-
         await this.currentPanel.webview.postMessage({
             integrations: integrationsData,
-            projectName,
+            projectName: this.projectName,
             type: 'update'
         });
     }
@@ -651,14 +655,16 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 });
             }
 
-            // Update the project's integrations list
-            await this.updateProjectIntegrationsList();
+            const persisted = await this.updateProjectIntegrationsList();
 
             await this.updateWebview();
-            await this.currentPanel?.webview.postMessage({
-                message: l10n.t('Configuration saved successfully'),
-                type: 'success'
-            });
+
+            if (persisted) {
+                await this.currentPanel?.webview.postMessage({
+                    message: l10n.t('Configuration saved successfully'),
+                    type: 'success'
+                });
+            }
         } catch (error) {
             logger.error('Failed to save integration configuration', error);
             await this.currentPanel?.webview.postMessage({
@@ -689,14 +695,16 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 this.integrations.set(integrationId, integration);
             }
 
-            // Update the project's integrations list
-            await this.updateProjectIntegrationsList();
+            const persisted = await this.updateProjectIntegrationsList();
 
             await this.updateWebview();
-            await this.currentPanel?.webview.postMessage({
-                message: l10n.t('Configuration reset successfully'),
-                type: 'success'
-            });
+
+            if (persisted) {
+                await this.currentPanel?.webview.postMessage({
+                    message: l10n.t('Configuration reset successfully'),
+                    type: 'success'
+                });
+            }
         } catch (error) {
             logger.error('Failed to reset integration configuration', error);
             await this.currentPanel?.webview.postMessage({
@@ -722,14 +730,16 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             // Remove from local state
             this.integrations.delete(integrationId);
 
-            // Update the project's integrations list
-            await this.updateProjectIntegrationsList();
+            const persisted = await this.updateProjectIntegrationsList();
 
             await this.updateWebview();
-            await this.currentPanel?.webview.postMessage({
-                message: l10n.t('Integration deleted successfully'),
-                type: 'success'
-            });
+
+            if (persisted) {
+                await this.currentPanel?.webview.postMessage({
+                    message: l10n.t('Integration deleted successfully'),
+                    type: 'success'
+                });
+            }
         } catch (error) {
             logger.error('Failed to delete integration', error);
             await this.currentPanel?.webview.postMessage({
@@ -745,10 +755,10 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     /**
      * Update the project's integrations list based on current integrations
      */
-    private async updateProjectIntegrationsList(): Promise<void> {
-        if (!this.projectId) {
-            logger.warn('IntegrationWebviewProvider: No project ID available, skipping project update');
-            return;
+    private async updateProjectIntegrationsList(): Promise<boolean> {
+        if (!this.projectId || !this.activeFileUri) {
+            logger.warn('IntegrationWebviewProvider: No project ID / active file available, skipping project update');
+            return false;
         }
 
         // Build the integrations list from current integrations
@@ -773,17 +783,29 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             `IntegrationWebviewProvider: Updating project ${this.projectId} with ${projectIntegrations.length} integrations`
         );
 
-        // Update the project in the notebook manager
-        const success = this.notebookManager.updateProjectIntegrations(this.projectId, projectIntegrations);
+        const { activePersisted, siblingsFailed } = await persistProjectIntegrations({
+            notebookManager: this.notebookManager,
+            projectId: this.projectId,
+            integrations: projectIntegrations,
+            activeFileUri: this.activeFileUri
+        });
 
-        if (!success) {
+        if (!activePersisted) {
             logger.error(
-                `IntegrationWebviewProvider: Failed to update integrations for project ${this.projectId} - project not found`
+                `IntegrationWebviewProvider: Failed to persist integrations for project ${this.projectId} to disk`
             );
-            void window.showErrorMessage(
-                l10n.t('Failed to update integrations: project not found. Please reopen the notebook and try again.')
+            void window.showErrorMessage(l10n.t('Failed to save integrations to the notebook file. Please try again.'));
+
+            return false;
+        }
+
+        if (siblingsFailed > 0) {
+            void window.showWarningMessage(
+                l10n.t('Integrations saved, but {0} related notebook file(s) could not be updated.', siblingsFailed)
             );
         }
+
+        return true;
     }
 
     /**

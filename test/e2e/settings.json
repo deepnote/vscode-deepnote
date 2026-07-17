@@ -1,6 +1,7 @@
 {
     "files.simpleDialog.enable": true,
     "window.dialogStyle": "custom",
+    "window.openFoldersInNewWindow": "off",
     "workbench.editor.enablePreview": false,
     "workbench.startupEditor": "none",
     "extensions.ignoreRecommendations": true,
@@ -9,5 +10,7 @@
     "telemetry.telemetryLevel": "off",
     "update.mode": "none",
     "jupyter.kernels.trusted": true,
-    "security.workspace.trust.enabled": false
+    "security.workspace.trust.enabled": false,
+    "deepnote.askForKernelRestart": false,
+    "files.enableTrash": false
 }

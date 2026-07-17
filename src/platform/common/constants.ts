@@ -223,6 +223,7 @@ export namespace Commands {
     export const OpenDeepnoteNotebook = 'deepnote.openNotebook';
     export const OpenDeepnoteFile = 'deepnote.openFile';
     export const RevealInDeepnoteExplorer = 'deepnote.revealInExplorer';
+    export const CopyNotebookDetails = 'deepnote.copyNotebookDetails';
     export const EnableSnapshots = 'deepnote.enableSnapshots';
     export const DisableSnapshots = 'deepnote.disableSnapshots';
     export const AuthenticateIntegration = 'deepnote.authenticateIntegration';
@@ -250,12 +251,10 @@ export namespace Commands {
     export const ImportNotebook = 'deepnote.importNotebook';
     export const ImportJupyterNotebook = 'deepnote.importJupyterNotebook';
     export const RenameProject = 'deepnote.renameProject';
-    export const DeleteProject = 'deepnote.deleteProject';
     export const RenameNotebook = 'deepnote.renameNotebook';
     export const DeleteNotebook = 'deepnote.deleteNotebook';
     export const DuplicateNotebook = 'deepnote.duplicateNotebook';
     export const AddNotebookToProject = 'deepnote.addNotebookToProject';
-    export const ExportProject = 'deepnote.exportProject';
     export const ExportNotebook = 'deepnote.exportNotebook';
     export const OpenInDeepnote = 'deepnote.openInDeepnote';
     export const ExportAsPythonScript = 'deepnote.exportAsPythonScript';

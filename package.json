@@ -294,12 +294,6 @@
                 "icon": "$(edit)"
             },
             {
-                "command": "deepnote.deleteProject",
-                "title": "%deepnote.commands.deleteProject.title%",
-                "category": "Deepnote",
-                "icon": "$(trash)"
-            },
-            {
                 "command": "deepnote.renameNotebook",
                 "title": "%deepnote.commands.renameNotebook.title%",
                 "category": "Deepnote",
@@ -324,16 +318,16 @@
                 "icon": "$(add)"
             },
             {
-                "command": "deepnote.exportProject",
-                "title": "%deepnote.commands.exportProject.title%",
-                "category": "Deepnote",
-                "icon": "$(export)"
-            },
-            {
                 "command": "deepnote.exportNotebook",
                 "title": "%deepnote.commands.exportNotebook.title%",
                 "category": "Deepnote",
                 "icon": "$(export)"
+            },
+            {
+                "command": "deepnote.copyNotebookDetails",
+                "title": "%deepnote.commands.copyNotebookDetails.title%",
+                "category": "Deepnote",
+                "icon": "$(copy)"
             },
             {
                 "command": "dataScience.ClearCache",
@@ -1603,42 +1597,32 @@
                 },
                 {
                     "command": "deepnote.addNotebookToProject",
-                    "when": "view == deepnoteExplorer && viewItem == projectFile",
+                    "when": "view == deepnoteExplorer && viewItem == projectGroup",
                     "group": "1_add@1"
                 },
                 {
                     "command": "deepnote.renameProject",
-                    "when": "view == deepnoteExplorer && viewItem == projectFile",
+                    "when": "view == deepnoteExplorer && viewItem == projectGroup",
                     "group": "2_manage@1"
                 },
                 {
-                    "command": "deepnote.exportProject",
-                    "when": "view == deepnoteExplorer && viewItem == projectFile",
-                    "group": "2_manage@2"
-                },
-                {
-                    "command": "deepnote.deleteProject",
-                    "when": "view == deepnoteExplorer && viewItem == projectFile",
-                    "group": "3_delete@1"
-                },
-                {
                     "command": "deepnote.renameNotebook",
-                    "when": "view == deepnoteExplorer && viewItem == notebook",
+                    "when": "view == deepnoteExplorer && (viewItem == notebookFile || viewItem == notebook)",
                     "group": "1_edit@1"
                 },
                 {
                     "command": "deepnote.duplicateNotebook",
-                    "when": "view == deepnoteExplorer && viewItem == notebook",
+                    "when": "view == deepnoteExplorer && (viewItem == notebookFile || viewItem == notebook)",
                     "group": "1_edit@2"
                 },
                 {
                     "command": "deepnote.exportNotebook",
-                    "when": "view == deepnoteExplorer && viewItem == notebook",
+                    "when": "view == deepnoteExplorer && (viewItem == notebookFile || viewItem == notebook)",
                     "group": "2_export@1"
                 },
                 {
                     "command": "deepnote.deleteNotebook",
-                    "when": "view == deepnoteExplorer && viewItem == notebook",
+                    "when": "view == deepnoteExplorer && (viewItem == notebookFile || viewItem == notebook)",
                     "group": "3_delete@1"
                 }
             ]
@@ -2689,10 +2673,10 @@
     },
     "dependencies": {
         "@c4312/evt": "^0.1.1",
-        "@deepnote/blocks": "^4.3.0",
-        "@deepnote/convert": "^3.2.0",
+        "@deepnote/blocks": "^4.6.0",
+        "@deepnote/convert": "^4.0.0",
         "@deepnote/database-integrations": "^1.5.0",
-        "@deepnote/runtime-core": "^0.2.0",
+        "@deepnote/runtime-core": "^0.4.0",
         "@deepnote/sql-language-server": "^3.0.0",
         "@enonic/fnv-plus": "^1.3.0",
         "@jupyter-widgets/base": "^6.0.8",

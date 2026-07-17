@@ -741,9 +741,7 @@ suite('SnapshotService', () => {
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
 
             const snapshotUri = Uri.file(`/workspace/snapshots/project_${projectId}_latest.snapshot.deepnote`);
-            when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything())).thenResolve([
-                snapshotUri
-            ] as any);
+            when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything())).thenResolve([snapshotUri] as any);
 
             const snapshotYaml = `
 version: '1.0.0'
@@ -785,7 +783,7 @@ project:
         test('should return undefined when no snapshot files found', async () => {
             const workspaceFolder = createWorkspaceFolder(Uri.file('/workspace'));
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
-            when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything())).thenResolve([] as any);
+            when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything())).thenResolve([] as any);
 
             const result = await service.readSnapshot(projectId);
 
@@ -803,7 +801,7 @@ project:
                 `/workspace/snapshots/project_${projectId}_2025-01-02T10-00-00.snapshot.deepnote`
             );
 
-            when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything())).thenResolve([
+            when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything())).thenResolve([
                 timestampedUri1,
                 timestampedUri2
             ] as any);
@@ -843,9 +841,7 @@ project:
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
 
             const snapshotUri = Uri.file(`/workspace/snapshots/project_${projectId}_latest.snapshot.deepnote`);
-            when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything())).thenResolve([
-                snapshotUri
-            ] as any);
+            when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything())).thenResolve([snapshotUri] as any);
 
             const mockFs = mock<typeof import('vscode').workspace.fs>();
             when(mockFs.readFile(anything())).thenReject(new Error('File read error'));
@@ -863,9 +859,7 @@ project:
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
 
             const snapshotUri = Uri.file(`/workspace/snapshots/project_${projectId}_latest.snapshot.deepnote`);
-            when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything())).thenResolve([
-                snapshotUri
-            ] as any);
+            when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything())).thenResolve([snapshotUri] as any);
 
             // A `latest` snapshot whose blocks carry no real outputs signals a save race and is
             // skipped by the safe-restore walk.
@@ -937,8 +931,10 @@ project:
          */
         function stubSnapshotFiles(filesByUri: Array<{ uri: Uri; yaml: string }>): void {
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
-            when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything())).thenResolve(
-                filesByUri.map((f) => f.uri) as any
+            // Honor maxResults (real findFiles truncates) so a pre-ranking cap is observable in tests.
+            when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything())).thenCall(
+                (_pattern: unknown, _exclude: unknown, maxResults?: number) =>
+                    Promise.resolve(filesByUri.slice(0, maxResults ?? filesByUri.length).map((f) => f.uri))
             );
 
             const byPath = new Map(filesByUri.map((f) => [f.uri.fsPath, f.yaml]));
@@ -1008,9 +1004,7 @@ project:
             const legacyUri = Uri.file(`/workspace/snapshots/test-project_${projectId}_latest.snapshot.deepnote`);
 
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
-            when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything())).thenResolve([
-                legacyUri
-            ] as any);
+            when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything())).thenResolve([legacyUri] as any);
 
             const mockFs = mock<typeof import('vscode').workspace.fs>();
             when(mockFs.readFile(anything())).thenResolve(
@@ -1027,6 +1021,54 @@ project:
             verify(mockFs.rename(anything(), anything())).never();
             verify(mockFs.rename(anything(), anything(), anything())).never();
             verify(mockFs.writeFile(anything(), anything())).never();
+        });
+
+        // Must match `maxRankedSnapshotReads` in snapshotService.ts.
+        const RANKED_CAP = 200;
+
+        /** `count` scoped, timestamped snapshots for `nbId`, each carrying `marker`, with distinct filenames. */
+        function timestampedFamily(nbId: string, marker: string, count: number): Array<{ uri: Uri; yaml: string }> {
+            return Array.from({ length: count }, (_, i) => {
+                const mm = String(Math.floor(i / 60)).padStart(2, '0');
+                const ss = String(i % 60).padStart(2, '0');
+
+                return {
+                    uri: Uri.file(
+                        `/workspace/snapshots/test-project_${projectId}_${nbId}_2025-01-01T00-${mm}-${ss}.snapshot.deepnote`
+                    ),
+                    yaml: snapshotYamlWithOutput(marker)
+                };
+            });
+        }
+
+        test('returns the notebook own `latest` even when its snapshots exceed the cap (regression: cap must apply AFTER ranking)', async () => {
+            const latestUri = Uri.file(
+                `/workspace/snapshots/test-project_${projectId}_${notebookId}_latest.snapshot.deepnote`
+            );
+
+            // `latest` LAST in the returned order: a cap applied before ranking would truncate it.
+            stubSnapshotFiles([
+                ...timestampedFamily(notebookId, 'stale', RANKED_CAP),
+                { uri: latestUri, yaml: snapshotYamlWithOutput('from-latest') }
+            ]);
+
+            const result = await service.readSnapshot(projectId, notebookId);
+
+            assert.strictEqual(markerOf(result), 'from-latest');
+        });
+
+        test('returns the legacy fallback even when sibling snapshots exceed the cap (regression: a sibling flood must not hide the legacy file)', async () => {
+            const legacyUri = Uri.file(`/workspace/snapshots/test-project_${projectId}_latest.snapshot.deepnote`);
+
+            // Legacy file LAST behind a sibling flood: a pre-rank cap truncates it, then keep-filter drops the siblings.
+            stubSnapshotFiles([
+                ...timestampedFamily(otherNotebookId, 'from-sibling', RANKED_CAP),
+                { uri: legacyUri, yaml: snapshotYamlWithOutput('from-legacy') }
+            ]);
+
+            const result = await service.readSnapshot(projectId, notebookId);
+
+            assert.strictEqual(markerOf(result), 'from-legacy');
         });
     });
 
@@ -1058,7 +1100,7 @@ project:
 
         function stubFiles(filesByUri: Array<{ uri: Uri; yaml: string }>): void {
             when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
-            when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything())).thenResolve(
+            when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything())).thenResolve(
                 filesByUri.map((f) => f.uri) as any
             );
 

@@ -178,6 +178,7 @@ export class IntegrationManager implements IIntegrationManager {
         await this.webviewProvider.show(
             projectId,
             integrations,
+            activeNotebook.uri,
             selectedIntegrationId,
             activeNotebook.metadata?.deepnoteProjectName
         );

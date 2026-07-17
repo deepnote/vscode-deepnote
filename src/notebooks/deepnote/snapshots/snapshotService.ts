@@ -92,8 +92,8 @@ const outputSettleQuietPeriodMs = 150;
 /** Upper bound (from the first arm) on how long repeated changes can defer the snapshot save. */
 const outputSettleMaxWaitMs = 2000;
 
-/** Maximum number of snapshot files the open-time (path-free) reader inspects per workspace folder. */
-const maxSnapshotFilesPerFolder = 200;
+/** Upper bound on how many RANKED snapshot candidates the open-time reader reads (applied after filter+sort). */
+const maxRankedSnapshotReads = 200;
 
 class TimeoutError extends Error {
     constructor(message: string) {
@@ -890,11 +890,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         return outputsMap;
     }
 
-    /**
-     * Globs one snapshot family, caps it per folder, then ranks and safe-restores the best candidate
-     * with real outputs. `keep` narrows the parsed files (this notebook's scoped set, or legacy no-id
-     * files) so the per-folder cap applies to that family alone — a sibling flood can't truncate it.
-     */
+    /** Globs one snapshot family (`keep`-narrowed), then ranks and safe-restores the best candidate with real outputs. */
     private async findSnapshotOutputs(
         workspaceFolders: readonly WorkspaceFolder[],
         glob: string,
@@ -906,7 +902,8 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
         for (const folder of workspaceFolders) {
             const pattern = new RelativePattern(folder, glob);
-            const files = await workspace.findFiles(pattern, null, maxSnapshotFilesPerFolder);
+            // Uncapped: a findFiles cap truncates an UNORDERED set, dropping the best candidate before ranking.
+            const files = await workspace.findFiles(pattern, null);
 
             for (const uri of files) {
                 const basename = Utils.basename(uri);
@@ -930,7 +927,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
 
         // Return the first candidate with real outputs; skip corrupt files and empty-output
         // `latest` snapshots (which signal a save race).
-        for (const candidate of candidates) {
+        for (const candidate of candidates.slice(0, maxRankedSnapshotReads)) {
             let file: DeepnoteFile;
 
             try {

@@ -7,24 +7,40 @@ import { logger } from '../../../platform/logging';
 import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
 import { isSnapshotFile } from '../snapshots/snapshotFiles';
 
-/**
- * Applies a project's integration list everywhere it lives, deterministically and regardless of which
- * siblings are open: writes `project.integrations` into every sibling `.deepnote` file on disk and
- * refreshes the in-memory cache for the open ones. Only `project.integrations` is rewritten — every
- * other field (incl. notebook blocks) round-trips from disk, so a sibling's saved cells are untouched.
- *
- * @returns `true` if the cache was refreshed or at least one file was written, `false` otherwise.
- */
-export async function persistProjectIntegrations(
-    notebookManager: IDeepnoteNotebookManager,
-    projectId: string,
-    integrations: ProjectIntegration[]
-): Promise<boolean> {
-    // Refresh the in-memory cache (open siblings) first, so live env/kernel behavior stays correct
-    // even if a subsequent disk write fails.
-    const cacheUpdated = notebookManager.updateProjectIntegrations(projectId, integrations);
+export interface PersistIntegrationsResult {
+    activePersisted: boolean;
+    siblingsFailed: number;
+}
 
-    let filesWritten = 0;
+export interface PersistProjectIntegrationsParams {
+    notebookManager: IDeepnoteNotebookManager;
+    projectId: string;
+    integrations: ProjectIntegration[];
+    activeFileUri: Uri;
+}
+
+interface WriteIntegrationsToFileParams {
+    fileUri: Uri;
+    projectId: string;
+    integrations: ProjectIntegration[];
+}
+
+type IntegrationWriteOutcome = 'failed' | 'skipped' | 'written';
+
+/** Writes `integrations` to the active file and every on-disk sibling; `activePersisted` reflects disk truth, not the cache. */
+export async function persistProjectIntegrations(
+    params: PersistProjectIntegrationsParams
+): Promise<PersistIntegrationsResult> {
+    const { notebookManager, projectId, integrations, activeFileUri } = params;
+
+    // Refresh the cache first so live env/kernel behavior stays correct even if a disk write fails.
+    notebookManager.updateProjectIntegrations(projectId, integrations);
+
+    // findFiles only covers open folders, so write the active file explicitly (no open folder / out-of-workspace).
+    const activeOutcome = await writeIntegrationsToFile({ fileUri: activeFileUri, projectId, integrations });
+
+    const visited = new Set<string>([activeFileUri.toString()]);
+    let siblingsFailed = 0;
 
     for (const workspaceFolder of workspace.workspaceFolders || []) {
         let files: Uri[];
@@ -38,48 +54,65 @@ export async function persistProjectIntegrations(
         }
 
         for (const fileUri of files) {
-            // Skip snapshot sidecars: they are output-only project clones, not editable sources.
-            if (isSnapshotFile(fileUri)) {
+            if (visited.has(fileUri.toString())) {
                 continue;
             }
 
-            try {
-                let projectData = await readDeepnoteProjectFile(fileUri);
+            visited.add(fileUri.toString());
 
-                if (projectData?.project?.id !== projectId) {
-                    continue;
-                }
-
-                // Flush an open, dirty sibling and re-read before rewriting, so we serialize its live
-                // cell edits rather than clobbering them via the watcher reload. If the save is declined
-                // we skip this sibling (its integrations sync on the next update) rather than clobber it.
-                if (!(await flushNotebookDocumentIfDirty(fileUri))) {
-                    logger.warn(
-                        `persistProjectIntegrations: skipped ${fileUri.path} — unsaved edits could not be saved`
-                    );
-
-                    continue;
-                }
-
-                projectData = await readDeepnoteProjectFile(fileUri);
-
-                // Rewrite ONLY the project-level integrations; every other field (incl. notebook
-                // blocks) round-trips from disk verbatim, so a sibling's saved cells are untouched.
-                projectData.project.integrations = integrations;
-
-                if (!projectData.metadata) {
-                    projectData.metadata = { createdAt: new Date().toISOString() };
-                }
-
-                projectData.metadata.modifiedAt = new Date().toISOString();
-
-                await workspace.fs.writeFile(fileUri, new TextEncoder().encode(serializeDeepnoteFile(projectData)));
-                filesWritten++;
-            } catch (error) {
-                logger.error(`persistProjectIntegrations: failed to update ${fileUri.path}`, error);
+            if ((await writeIntegrationsToFile({ fileUri, projectId, integrations })) === 'failed') {
+                siblingsFailed++;
             }
         }
     }
 
-    return cacheUpdated || filesWritten > 0;
+    return { activePersisted: activeOutcome === 'written', siblingsFailed };
+}
+
+/** Returns `'skipped'` (snapshot / other project), `'failed'`, or `'written'` for one `.deepnote` file. */
+async function writeIntegrationsToFile(params: WriteIntegrationsToFileParams): Promise<IntegrationWriteOutcome> {
+    const { fileUri, projectId, integrations } = params;
+
+    if (isSnapshotFile(fileUri)) {
+        return 'skipped';
+    }
+
+    try {
+        let projectData = await readDeepnoteProjectFile(fileUri);
+
+        if (projectData?.project?.id !== projectId) {
+            return 'skipped';
+        }
+
+        // Flush an open dirty file and re-read, so live cell edits aren't clobbered by the watcher reload.
+        if (!(await flushNotebookDocumentIfDirty(fileUri))) {
+            logger.warn(`persistProjectIntegrations: ${fileUri.path} — unsaved edits could not be saved`);
+
+            return 'failed';
+        }
+
+        projectData = await readDeepnoteProjectFile(fileUri);
+
+        // The flush may have saved a stale open document, swapping the on-disk project; re-validate before writing.
+        if (projectData?.project?.id !== projectId) {
+            return 'skipped';
+        }
+
+        // Rewrite ONLY integrations; every other field round-trips from disk, so saved cells are untouched.
+        projectData.project.integrations = integrations;
+
+        if (!projectData.metadata) {
+            projectData.metadata = { createdAt: new Date().toISOString() };
+        }
+
+        projectData.metadata.modifiedAt = new Date().toISOString();
+
+        await workspace.fs.writeFile(fileUri, new TextEncoder().encode(serializeDeepnoteFile(projectData)));
+
+        return 'written';
+    } catch (error) {
+        logger.error(`persistProjectIntegrations: failed to update ${fileUri.path}`, error);
+
+        return 'failed';
+    }
 }

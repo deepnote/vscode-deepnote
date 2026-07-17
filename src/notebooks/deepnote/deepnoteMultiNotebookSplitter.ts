@@ -152,10 +152,14 @@ export class DeepnoteMultiNotebookSplitter {
             for (const entry of entries) {
                 const targetUri = await allocateSiblingUri(parentDir, entry.outputFilename, this.exists, reserved);
 
+                // Register cleanup BEFORE the write: a create-then-reject leaves an orphan the rollback must delete.
+                rollbacks.push(async () => {
+                    if (await this.exists(targetUri)) {
+                        await workspace.fs.delete(targetUri, { useTrash: false });
+                    }
+                });
                 await workspace.fs.writeFile(targetUri, encoder.encode(serializeDeepnoteFile(entry.file)));
                 newUris.push(targetUri);
-                // Undo this write on a later failure: an orphaned sibling would bump a retry's name to a duplicate.
-                rollbacks.push(() => workspace.fs.delete(targetUri, { useTrash: false }));
             }
 
             // Migrate the environment selection onto each new file (desktop-only).
@@ -167,8 +171,11 @@ export class DeepnoteMultiNotebookSplitter {
                 }
             }
 
-            // Only now that all children are durably written: close the tab and retire the original.
-            await this.closeNotebookTab(fileUri);
+            // Abort before retiring the original if its tab won't close, else a later save recreates it.
+            if (!(await this.closeNotebookTab(fileUri))) {
+                throw new Error(l10n.t('The file is still open in an editor and could not be closed.'));
+            }
+
             const legacyUri = await this.allocateLegacyUri(fileUri);
             await workspace.fs.rename(fileUri, legacyUri, { overwrite: false });
             renamed = true;
@@ -251,18 +258,20 @@ export class DeepnoteMultiNotebookSplitter {
         throw new Error(`Unable to allocate a free "${LEGACY_SUFFIX}" filename for "${fileUri.toString()}".`);
     }
 
-    private async closeNotebookTab(fileUri: Uri): Promise<void> {
-        for (const group of window.tabGroups.all) {
-            for (const tab of group.tabs) {
-                if (
+    /** Closes every editor tab still showing `fileUri`; resolves `false` if a dirty tab's close was cancelled. */
+    private async closeNotebookTab(fileUri: Uri): Promise<boolean> {
+        const tabs = window.tabGroups.all.flatMap((group) =>
+            group.tabs.filter(
+                (tab) =>
                     tab.input instanceof TabInputNotebook &&
                     tab.input.uri.with({ query: '', fragment: '' }).toString() === fileUri.toString()
-                ) {
-                    await window.tabGroups.close(tab);
+            )
+        );
 
-                    return;
-                }
-            }
+        if (tabs.length === 0) {
+            return true;
         }
+
+        return window.tabGroups.close(tabs);
     }
 }

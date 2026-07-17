@@ -42,12 +42,29 @@ async function leaveUnsavedCellEdit(): Promise<void> {
 
     // Focus the first CODE cell's Monaco editor by clicking its visible source line (markdown cells
     // render without an editor, so scope to code rows), then type a marker into the focused input.
-    const line = await driver.wait(
-        async () => (await driver.findElements(By.css('.notebookOverlay .code-cell-row .view-line')))[0],
+    // Locate AND click in one waited step, retrying on failure: a freshly opened Deepnote notebook
+    // re-renders its cells for a beat (status-bar items, kernel wiring), which can invalidate a
+    // separately-located element reference before the click lands (StaleElementReferenceError).
+    await driver.wait(
+        async () => {
+            const line = (await driver.findElements(By.css('.notebookOverlay .code-cell-row .view-line')))[0];
+
+            if (!line) {
+                return false;
+            }
+
+            try {
+                await line.click();
+
+                return true;
+            } catch {
+                // Stale reference (the cell re-rendered) or not yet clickable — re-locate and retry.
+                return false;
+            }
+        },
         WORKBENCH_TIMEOUT,
-        'the notebook code cell did not render'
+        'the notebook code cell did not render or settle enough to focus'
     );
-    await line.click();
     await driver.sleep(400);
     await driver.switchTo().activeElement().sendKeys(DIRTY_MARKER);
 

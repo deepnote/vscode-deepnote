@@ -40,9 +40,10 @@ export class DeepnoteCellExecutionAnalytics implements IExtensionSyncActivationS
 
                     if (integrationId) {
                         const projectId = e.cell.notebook.metadata?.deepnoteProjectId;
+                        const notebookId = e.cell.notebook.metadata?.deepnoteNotebookId;
 
-                        if (projectId) {
-                            const project = this.notebookManager.getOriginalProject(projectId);
+                        if (projectId && notebookId) {
+                            const project = this.notebookManager.getProjectForNotebook(projectId, notebookId);
                             const integration = project?.project.integrations?.find((i) => i.id === integrationId);
 
                             if (integration?.type) {

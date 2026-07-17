@@ -8,9 +8,16 @@ export interface IIntegrationListProps {
     onConfigure: (integrationId: string) => void;
     onReset: (integrationId: string) => void;
     onDelete: (integrationId: string) => void;
+    onAuthenticate: (integrationId: string) => void;
 }
 
-export const IntegrationList: React.FC<IIntegrationListProps> = ({ integrations, onConfigure, onReset, onDelete }) => {
+export const IntegrationList: React.FC<IIntegrationListProps> = ({
+    integrations,
+    onConfigure,
+    onReset,
+    onDelete,
+    onAuthenticate
+}) => {
     if (integrations.length === 0) {
         return (
             <p className="no-integrations">
@@ -28,6 +35,7 @@ export const IntegrationList: React.FC<IIntegrationListProps> = ({ integrations,
                     onConfigure={onConfigure}
                     onReset={onReset}
                     onDelete={onDelete}
+                    onAuthenticate={onAuthenticate}
                 />
             ))}
         </div>

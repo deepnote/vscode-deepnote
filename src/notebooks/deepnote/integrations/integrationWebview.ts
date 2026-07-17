@@ -1,15 +1,20 @@
-import { inject, injectable } from 'inversify';
-import { Disposable, l10n, Uri, ViewColumn, WebviewPanel, window } from 'vscode';
+import { inject, injectable, optional } from 'inversify';
+import { commands, Disposable, l10n, Uri, ViewColumn, WebviewPanel, window } from 'vscode';
+
+import { BigQueryAuthMethods } from '@deepnote/database-integrations';
 
 import { ITelemetryService } from '../../../platform/analytics/types';
-import { IExtensionContext } from '../../../platform/common/types';
+import { Commands } from '../../../platform/common/constants';
+import { IDisposableRegistry, IExtensionContext } from '../../../platform/common/types';
 import * as localize from '../../../platform/common/utils/localize';
 import { logger } from '../../../platform/logging';
 import { LocalizedMessages, SharedMessages } from '../../../messageTypes';
 import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
-import { IIntegrationStorage, IIntegrationWebviewProvider } from './types';
+import { persistProjectIntegrations } from './projectIntegrationsWriter';
+import { IFederatedAuthTokenStorage, IIntegrationStorage, IIntegrationWebviewProvider } from './types';
 import {
     ConfigurableDatabaseIntegrationConfig,
+    FederatedAuthTokenStatus,
     IntegrationStatus,
     IntegrationWithStatus
 } from '../../../platform/notebooks/deepnote/integrationTypes';
@@ -19,6 +24,8 @@ import {
  */
 @injectable()
 export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
+    private activeFileUri: Uri | undefined;
+
     private currentPanel: WebviewPanel | undefined;
 
     private readonly disposables: Disposable[] = [];
@@ -27,26 +34,52 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
 
     private projectId: string | undefined;
 
+    private projectName: string | undefined;
+
+    /** Generation counter for `updateWebview()` ("latest call wins"; stale in-flight updates bail). */
+    private updateGeneration = 0;
+
     constructor(
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
-        @inject(ITelemetryService) private readonly analytics: ITelemetryService
-    ) {}
+        @inject(ITelemetryService) private readonly analytics: ITelemetryService,
+        @inject(IDisposableRegistry) private readonly disposableRegistry: IDisposableRegistry,
+        @inject(IFederatedAuthTokenStorage)
+        @optional()
+        private readonly tokenStorage?: IFederatedAuthTokenStorage
+    ) {
+        // Refresh on token-storage change so the auth pill flips without panel reload. Pushed into the extension-lifetime registry to survive panel close/reopen.
+        if (this.tokenStorage) {
+            this.disposableRegistry.push(
+                this.tokenStorage.onDidChangeTokens(() => {
+                    this.updateWebview().catch((err) => {
+                        logger.error('IntegrationWebviewProvider: Failed to update webview', err);
+                    });
+                })
+            );
+        }
+    }
 
     /**
      * Show the integration management webview
      * @param projectId The Deepnote project ID
      * @param integrations Map of integration IDs to their status
+     * @param activeFileUri The `.deepnote` file being edited — always persisted to disk on save
      * @param selectedIntegrationId Optional integration ID to select/configure immediately
+     * @param projectName Optional project display name (sourced from the active notebook's metadata)
      */
     public async show(
         projectId: string,
         integrations: Map<string, IntegrationWithStatus>,
-        selectedIntegrationId?: string
+        activeFileUri: Uri,
+        selectedIntegrationId?: string,
+        projectName?: string
     ): Promise<void> {
         // Update the stored integrations and project ID with the latest data
+        this.activeFileUri = activeFileUri;
         this.projectId = projectId;
+        this.projectName = projectName;
         this.integrations = integrations;
 
         const column = window.activeTextEditor ? window.activeTextEditor.viewColumn : ViewColumn.One;
@@ -143,6 +176,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsAlloyDBTypeLabel: localize.Integrations.alloyDBTypeLabel,
             integrationsAthenaTypeLabel: localize.Integrations.athenaTypeLabel,
             integrationsClickHouseTypeLabel: localize.Integrations.clickHouseTypeLabel,
+            integrationsCloudSqlTypeLabel: localize.Integrations.cloudSqlTypeLabel,
             integrationsDatabricksTypeLabel: localize.Integrations.databricksTypeLabel,
             integrationsDremioTypeLabel: localize.Integrations.dremioTypeLabel,
             integrationsMariaDBTypeLabel: localize.Integrations.mariaDBTypeLabel,
@@ -179,6 +213,24 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsBigQueryCredentialsLabel: localize.Integrations.bigQueryCredentialsLabel,
             integrationsBigQueryCredentialsPlaceholder: localize.Integrations.bigQueryCredentialsPlaceholder,
             integrationsBigQueryCredentialsRequired: localize.Integrations.bigQueryCredentialsRequired,
+            integrationsBigQueryAuthMethodLabel: localize.Integrations.bigQueryAuthMethodLabel,
+            integrationsBigQueryAuthMethodServiceAccount: localize.Integrations.bigQueryAuthMethodServiceAccount,
+            integrationsBigQueryAuthMethodGoogleOauth: localize.Integrations.bigQueryAuthMethodGoogleOauth,
+            integrationsBigQueryProjectLabel: localize.Integrations.bigQueryProjectLabel,
+            integrationsBigQueryProjectPlaceholder: localize.Integrations.bigQueryProjectPlaceholder,
+            integrationsBigQueryClientIdLabel: localize.Integrations.bigQueryClientIdLabel,
+            integrationsBigQueryClientIdPlaceholder: localize.Integrations.bigQueryClientIdPlaceholder,
+            integrationsBigQueryClientSecretLabel: localize.Integrations.bigQueryClientSecretLabel,
+            integrationsBigQueryClientSecretPlaceholder: localize.Integrations.bigQueryClientSecretPlaceholder,
+            integrationsAuthenticate: localize.Integrations.authenticate,
+            integrationsReauthenticate: localize.Integrations.reauthenticate,
+            integrationsTokenStatusAuthenticated: localize.Integrations.tokenStatusAuthenticated,
+            integrationsTokenStatusDisconnected: localize.Integrations.tokenStatusDisconnected,
+            integrationsAuthenticating: localize.Integrations.authenticating('{0}'),
+            integrationsAuthenticationSucceeded: localize.Integrations.authenticationSucceeded('{0}'),
+            integrationsAuthenticationFailed: localize.Integrations.authenticationFailed('{0}'),
+            integrationsBigQueryNotAuthenticated: localize.Integrations.bigQueryNotAuthenticated('{0}'),
+            integrationsFederatedAuthNotSupportedInWeb: localize.Integrations.federatedAuthNotSupportedInWeb,
             integrationsSnowflakeNameLabel: localize.Integrations.snowflakeNameLabel,
             integrationsSnowflakeNamePlaceholder: localize.Integrations.snowflakeNamePlaceholder,
             integrationsSnowflakeAccountLabel: localize.Integrations.snowflakeAccountLabel,
@@ -301,8 +353,16 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsSpannerServiceAccountPlaceholder: localize.Integrations.spannerServiceAccountPlaceholder,
             integrationsSpannerServiceAccountHelp: localize.Integrations.spannerServiceAccountHelp,
             integrationsSpannerServiceAccountInvalidJson: localize.Integrations.spannerServiceAccountInvalidJson,
+            integrationsSpannerServiceAccountRequired: localize.Integrations.spannerServiceAccountRequired,
             integrationsSpannerDataBoostLabel: localize.Integrations.spannerDataBoostLabel,
             integrationsSpannerDataBoostHelp: localize.Integrations.spannerDataBoostHelp,
+            integrationsCloudSqlNameLabel: localize.Integrations.cloudSqlNameLabel,
+            integrationsCloudSqlNamePlaceholder: localize.Integrations.cloudSqlNamePlaceholder,
+            integrationsCloudSqlServiceAccountLabel: localize.Integrations.cloudSqlServiceAccountLabel,
+            integrationsCloudSqlServiceAccountPlaceholder: localize.Integrations.cloudSqlServiceAccountPlaceholder,
+            integrationsCloudSqlServiceAccountHelp: localize.Integrations.cloudSqlServiceAccountHelp,
+            integrationsCloudSqlServiceAccountInvalidJson: localize.Integrations.cloudSqlServiceAccountInvalidJson,
+            integrationsCloudSqlServiceAccountRequired: localize.Integrations.cloudSqlServiceAccountRequired,
             integrationsAlloyDBNameLabel: localize.Integrations.alloyDBNameLabel,
             integrationsAlloyDBNamePlaceholder: localize.Integrations.alloyDBNamePlaceholder,
             integrationsAlloyDBHostLabel: localize.Integrations.alloyDBHostLabel,
@@ -393,41 +453,118 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         });
     }
 
-    /**
-     * Update the webview with current integration data
-     */
+    /** Update the webview with current integration data. Each call gets a generation number; stale or post-dispose updates bail at every await. */
     private async updateWebview(): Promise<void> {
         if (!this.currentPanel) {
             logger.debug('IntegrationWebviewProvider: No current panel, skipping update');
             return;
         }
 
-        const integrationsData = Array.from(this.integrations.entries()).map(([id, integration]) => ({
-            config: integration.config,
-            id,
-            integrationName: integration.integrationName,
-            integrationType: integration.integrationType,
-            status: integration.status
-        }));
-        logger.debug(`IntegrationWebviewProvider: Sending ${integrationsData.length} integrations to webview`);
+        this.updateGeneration += 1;
+        const generation = this.updateGeneration;
 
-        // Get the project name from the notebook manager
-        let projectName: string | undefined;
-        if (this.projectId) {
-            const project = this.notebookManager.getOriginalProject(this.projectId);
-            projectName = project?.project.name;
+        const integrationsData = await Promise.all(
+            Array.from(this.integrations.entries()).map(async ([id, integration]) => ({
+                config: integration.config,
+                id,
+                integrationName: integration.integrationName,
+                integrationType: integration.integrationType,
+                status: integration.status,
+                tokenStatus: await this.deriveTokenStatus(id, integration.config)
+            }))
+        );
+
+        // Bail if the panel was disposed during the `tokenStorage.has()` await.
+        if (!this.currentPanel) {
+            logger.debug('IntegrationWebviewProvider: Panel disposed during update, skipping postMessage');
+            return;
         }
+
+        // A newer update started; let it post the fresher state.
+        if (generation !== this.updateGeneration) {
+            logger.debug(
+                `IntegrationWebviewProvider: Superseded by newer update (gen ${generation} < ${this.updateGeneration}), skipping postMessage`
+            );
+            return;
+        }
+
+        logger.debug(`IntegrationWebviewProvider: Sending ${integrationsData.length} integrations to webview`);
 
         await this.currentPanel.webview.postMessage({
             integrations: integrationsData,
-            projectName,
+            projectName: this.projectName,
             type: 'update'
         });
     }
 
-    /**
-     * Handle messages from the webview
-     */
+    /** Drops stale federated tokens when the new config's fingerprint changed or the auth method is no longer `google-oauth`. */
+    private async invalidateStaleFederatedToken(
+        integrationId: string,
+        newConfig: ConfigurableDatabaseIntegrationConfig
+    ): Promise<void> {
+        if (!this.tokenStorage) {
+            return;
+        }
+
+        const stored = await this.tokenStorage.get(integrationId);
+        if (!stored) {
+            return;
+        }
+
+        // Switched away from google-oauth (or another integration type): previously-captured token is meaningless.
+        if (newConfig.type !== 'big-query' || newConfig.metadata.authMethod !== BigQueryAuthMethods.GoogleOauth) {
+            logger.info(
+                `IntegrationWebviewProvider: deleting stale federated token for ${integrationId} (auth method changed).`
+            );
+            await this.tokenStorage.delete(integrationId).catch((err) => {
+                logger.warn(
+                    `IntegrationWebviewProvider: failed to delete stale federated token for ${integrationId}`,
+                    err
+                );
+            });
+            return;
+        }
+
+        // Same auth method but OAuth client metadata changed: stored token was issued against a different client.
+        const { clientId, clientSecret, project } = newConfig.metadata;
+        const newFingerprint = this.tokenStorage.computeMetadataFingerprint({ clientId, clientSecret, project });
+        if (newFingerprint !== stored.metadataFingerprint) {
+            logger.info(
+                `IntegrationWebviewProvider: deleting stale federated token for ${integrationId} (fingerprint changed).`
+            );
+            await this.tokenStorage.delete(integrationId).catch((err) => {
+                logger.warn(
+                    `IntegrationWebviewProvider: failed to delete stale federated token for ${integrationId}`,
+                    err
+                );
+            });
+        }
+    }
+
+    /** Federated-auth token status: `'unsupported'` for non-BigQuery, non-google-oauth, or web; else `'authenticated'`/`'disconnected'`. */
+    private async deriveTokenStatus(
+        integrationId: string,
+        config: ConfigurableDatabaseIntegrationConfig | null
+    ): Promise<FederatedAuthTokenStatus> {
+        if (!this.tokenStorage) {
+            return 'unsupported';
+        }
+        if (!config || config.type !== 'big-query' || config.metadata.authMethod !== BigQueryAuthMethods.GoogleOauth) {
+            return 'unsupported';
+        }
+        try {
+            const hasToken = await this.tokenStorage.has(integrationId);
+            return hasToken ? 'authenticated' : 'disconnected';
+        } catch (err) {
+            logger.warn(
+                `IntegrationWebviewProvider: failed to check token for ${integrationId}; reporting disconnected.`,
+                err
+            );
+            return 'disconnected';
+        }
+    }
+
+    /** Handle messages from the webview; mirrors the `WebviewOutboundMessage` union in `src/webviews/webview-side/integrations/types.ts`. */
     private async handleMessage(message: {
         type: string;
         integrationId?: string;
@@ -461,6 +598,19 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                     await this.deleteConfiguration(message.integrationId);
                 }
                 break;
+            case 'authenticate':
+                if (message.integrationId) {
+                    try {
+                        await commands.executeCommand(Commands.AuthenticateIntegration, message.integrationId);
+                    } catch (error) {
+                        // Command handler shows its own toasts; log here to avoid an unhandled-rejection.
+                        logger.error(
+                            `IntegrationWebviewProvider: AuthenticateIntegration command failed for ${message.integrationId}`,
+                            error
+                        );
+                    }
+                }
+                break;
         }
     }
 
@@ -490,6 +640,9 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         config: ConfigurableDatabaseIntegrationConfig
     ): Promise<void> {
         try {
+            // Invalidate stale federated tokens before saving (fingerprint change or auth-method switch).
+            await this.invalidateStaleFederatedToken(integrationId, config);
+
             await this.integrationStorage.save(config);
 
             // Update local state
@@ -511,14 +664,16 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 });
             }
 
-            // Update the project's integrations list
-            await this.updateProjectIntegrationsList();
+            const persisted = await this.updateProjectIntegrationsList();
 
             await this.updateWebview();
-            await this.currentPanel?.webview.postMessage({
-                message: l10n.t('Configuration saved successfully'),
-                type: 'success'
-            });
+
+            if (persisted) {
+                await this.currentPanel?.webview.postMessage({
+                    message: l10n.t('Configuration saved successfully'),
+                    type: 'success'
+                });
+            }
         } catch (error) {
             logger.error('Failed to save integration configuration', error);
             await this.currentPanel?.webview.postMessage({
@@ -537,6 +692,9 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     private async resetConfiguration(integrationId: string): Promise<void> {
         try {
             await this.integrationStorage.delete(integrationId);
+            await this.tokenStorage?.delete(integrationId).catch((error) => {
+                logger.warn(`IntegrationWebviewProvider: failed to delete federated token for ${integrationId}`, error);
+            });
 
             // Update local state
             const integration = this.integrations.get(integrationId);
@@ -546,14 +704,16 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 this.integrations.set(integrationId, integration);
             }
 
-            // Update the project's integrations list
-            await this.updateProjectIntegrationsList();
+            const persisted = await this.updateProjectIntegrationsList();
 
             await this.updateWebview();
-            await this.currentPanel?.webview.postMessage({
-                message: l10n.t('Configuration reset successfully'),
-                type: 'success'
-            });
+
+            if (persisted) {
+                await this.currentPanel?.webview.postMessage({
+                    message: l10n.t('Configuration reset successfully'),
+                    type: 'success'
+                });
+            }
         } catch (error) {
             logger.error('Failed to reset integration configuration', error);
             await this.currentPanel?.webview.postMessage({
@@ -572,18 +732,23 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     private async deleteConfiguration(integrationId: string): Promise<void> {
         try {
             await this.integrationStorage.delete(integrationId);
+            await this.tokenStorage?.delete(integrationId).catch((error) => {
+                logger.warn(`IntegrationWebviewProvider: failed to delete federated token for ${integrationId}`, error);
+            });
 
             // Remove from local state
             this.integrations.delete(integrationId);
 
-            // Update the project's integrations list
-            await this.updateProjectIntegrationsList();
+            const persisted = await this.updateProjectIntegrationsList();
 
             await this.updateWebview();
-            await this.currentPanel?.webview.postMessage({
-                message: l10n.t('Integration deleted successfully'),
-                type: 'success'
-            });
+
+            if (persisted) {
+                await this.currentPanel?.webview.postMessage({
+                    message: l10n.t('Integration deleted successfully'),
+                    type: 'success'
+                });
+            }
         } catch (error) {
             logger.error('Failed to delete integration', error);
             await this.currentPanel?.webview.postMessage({
@@ -599,10 +764,10 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     /**
      * Update the project's integrations list based on current integrations
      */
-    private async updateProjectIntegrationsList(): Promise<void> {
-        if (!this.projectId) {
-            logger.warn('IntegrationWebviewProvider: No project ID available, skipping project update');
-            return;
+    private async updateProjectIntegrationsList(): Promise<boolean> {
+        if (!this.projectId || !this.activeFileUri) {
+            logger.warn('IntegrationWebviewProvider: No project ID / active file available, skipping project update');
+            return false;
         }
 
         // Build the integrations list from current integrations
@@ -627,17 +792,29 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             `IntegrationWebviewProvider: Updating project ${this.projectId} with ${projectIntegrations.length} integrations`
         );
 
-        // Update the project in the notebook manager
-        const success = this.notebookManager.updateProjectIntegrations(this.projectId, projectIntegrations);
+        const { activePersisted, siblingsFailed } = await persistProjectIntegrations({
+            notebookManager: this.notebookManager,
+            projectId: this.projectId,
+            integrations: projectIntegrations,
+            activeFileUri: this.activeFileUri
+        });
 
-        if (!success) {
+        if (!activePersisted) {
             logger.error(
-                `IntegrationWebviewProvider: Failed to update integrations for project ${this.projectId} - project not found`
+                `IntegrationWebviewProvider: Failed to persist integrations for project ${this.projectId} to disk`
             );
-            void window.showErrorMessage(
-                l10n.t('Failed to update integrations: project not found. Please reopen the notebook and try again.')
+            void window.showErrorMessage(l10n.t('Failed to save integrations to the notebook file. Please try again.'));
+
+            return false;
+        }
+
+        if (siblingsFailed > 0) {
+            void window.showWarningMessage(
+                l10n.t('Integrations saved, but {0} related notebook file(s) could not be updated.', siblingsFailed)
             );
         }
+
+        return true;
     }
 
     /**

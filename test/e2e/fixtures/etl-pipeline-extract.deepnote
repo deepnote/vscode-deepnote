@@ -1,0 +1,24 @@
+environment: {}
+execution: {}
+metadata:
+  createdAt: 2026-06-01T09:00:00.000Z
+  modifiedAt: 2026-06-15T14:30:00.000Z
+project:
+  id: bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb
+  initNotebookId: b-nb-init
+  name: ETL Pipeline
+  notebooks:
+    - blocks:
+        - id: blk-0008
+          blockGroup: grp-0008
+          sortingKey: "000000"
+          type: code
+          content: >-
+            # After the kernel starts, INIT_MARKER should already be defined by the init notebook
+
+            print(INIT_MARKER)
+          metadata: {}
+      executionMode: block
+      id: b-nb-extract
+      name: Extract
+version: 1.0.0

@@ -94,7 +94,7 @@ export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
                         progress.report({ message: l10n.t('Preparing upload...') });
                         logger.debug(`Initializing import for ${fileName} (${stats.size} bytes)`);
 
-                        const initResponse = await initImport(fileName, stats.size);
+                        const initResponse = await initImport(fileName, stats.size, fileUri);
                         logger.debug(`Import initialized: ${initResponse.importId}`);
 
                         progress.report({ message: l10n.t('Uploading file...') });
@@ -106,7 +106,7 @@ export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
                         logger.debug('File uploaded successfully');
 
                         progress.report({ message: l10n.t('Opening in Deepnote...') });
-                        const domain = getDeepnoteDomain();
+                        const domain = getDeepnoteDomain(fileUri);
                         const deepnoteUrl = `https://${domain}/launch?importId=${initResponse.importId}`;
                         await env.openExternal(Uri.parse(deepnoteUrl));
 

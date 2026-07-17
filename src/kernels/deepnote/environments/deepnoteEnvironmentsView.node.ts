@@ -28,7 +28,8 @@ import {
     DeepnoteKernelConnectionMetadata,
     IDeepnoteEnvironmentManager,
     IDeepnoteKernelAutoSelector,
-    IDeepnoteNotebookEnvironmentMapper
+    IDeepnoteNotebookEnvironmentMapper,
+    IDeepnoteServerStarter
 } from '../types';
 import { CreateDeepnoteEnvironmentOptions, DeepnoteEnvironment } from './deepnoteEnvironment';
 import { DeepnoteEnvironmentTreeDataProvider } from './deepnoteEnvironmentTreeDataProvider.node';
@@ -54,6 +55,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
         private readonly notebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper,
         @inject(IKernelProvider) private readonly kernelProvider: IKernelProvider,
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel,
+        @inject(IDeepnoteServerStarter) private readonly serverStarter: IDeepnoteServerStarter,
         @inject(ITelemetryService) private readonly analytics: ITelemetryService
     ) {
         // Create tree data provider
@@ -310,14 +312,26 @@ export class DeepnoteEnvironmentsView implements Disposable {
                     cancellable: true
                 },
                 async (_progress, token) => {
-                    // Clean up notebook mappings referencing this env
-                    const notebooks = this.notebookEnvironmentMapper.getNotebooksUsingEnvironment(environmentId);
-                    for (const nb of notebooks) {
-                        await this.notebookEnvironmentMapper.removeEnvironmentForNotebook(nb);
+                    // Resolve every notebook that uses this environment from the persisted
+                    // mapper state BEFORE any entries are removed, so the list is complete.
+                    const uris = this.notebookEnvironmentMapper.getNotebooksUsingEnvironment(environmentId);
+
+                    // Stop each notebook's server (per-notebook keying reaches closed-but-running ones too).
+                    // stopServer is a safe no-op when a notebook has no running server.
+                    for (const uri of uris) {
+                        try {
+                            await this.serverStarter.stopServer(uri, token);
+                        } catch (error) {
+                            logger.error(`Failed to stop server for ${getDisplayPath(uri)}`, error);
+                        }
                     }
 
                     // Dispose kernels from any open notebooks using this environment
                     await this.disposeKernelsUsingEnvironment(environmentId);
+
+                    for (const uri of uris) {
+                        await this.notebookEnvironmentMapper.removeEnvironmentForNotebook(uri);
+                    }
 
                     await this.environmentManager.deleteEnvironment(environmentId, token);
                     logger.info(`Deleted environment: ${environmentId}`);
@@ -381,11 +395,8 @@ export class DeepnoteEnvironmentsView implements Disposable {
     public async selectEnvironmentForNotebook({ notebook }: { notebook: NotebookDocument }): Promise<void> {
         logger.info('Selecting environment for notebook:', notebook);
 
-        // Get base file URI (without query/fragment)
-        const baseFileUri = notebook.uri.with({ query: '', fragment: '' });
-
         // Get current environment selection
-        const currentEnvironmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri);
+        const currentEnvironmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(notebook.uri);
         const currentEnvironment = currentEnvironmentId
             ? this.environmentManager.getEnvironment(currentEnvironmentId)
             : undefined;
@@ -483,7 +494,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 },
                 async (progress, token) => {
                     // Update the notebook-to-environment mapping
-                    await this.notebookEnvironmentMapper.setEnvironmentForNotebook(baseFileUri, selectedEnvironmentId);
+                    await this.notebookEnvironmentMapper.setEnvironmentForNotebook(notebook.uri, selectedEnvironmentId);
 
                     // Force rebuild the controller with the new environment
                     // This clears cached metadata and creates a fresh controller.

@@ -9,7 +9,6 @@ export type TelemetryEventName =
     | 'delete_environment'
     | 'delete_integration'
     | 'delete_notebook'
-    | 'delete_project'
     | 'duplicate_notebook'
     | 'execute_cell'
     | 'execute_notebook'

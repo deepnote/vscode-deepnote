@@ -48,11 +48,18 @@ import { IntegrationDetector } from './deepnote/integrations/integrationDetector
 import { IntegrationManager } from './deepnote/integrations/integrationManager';
 import { IntegrationWebviewProvider } from './deepnote/integrations/integrationWebview';
 import {
+    IFederatedAuthSqlBlockCodeGenerator,
+    IFederatedAuthTokenStorage,
     IIntegrationDetector,
     IIntegrationManager,
     IIntegrationStorage,
     IIntegrationWebviewProvider
 } from './deepnote/integrations/types';
+import { FederatedAuthCommandHandlerNode } from './deepnote/integrations/federatedAuth/federatedAuthCommandHandler.node';
+import { FederatedAuthKernelRestartBridge } from './deepnote/integrations/federatedAuth/federatedAuthKernelRestartBridge.node';
+import { FederatedAuthOrphanedTokenCleaner } from './deepnote/integrations/federatedAuth/federatedAuthOrphanedTokenCleaner.node';
+import { FederatedAuthSqlBlockCodeGenerator } from './deepnote/integrations/federatedAuth/federatedAuthSqlBlockCodeGenerator.node';
+import { FederatedAuthTokenStorage } from './deepnote/integrations/federatedAuth/federatedAuthTokenStorage.node';
 import {
     IPlatformNotebookEditorProvider,
     IPlatformDeepnoteNotebookManager
@@ -67,15 +74,17 @@ import {
     IDeepnoteServerProvider,
     IDeepnoteEnvironmentManager,
     IDeepnoteNotebookEnvironmentMapper,
-    IDeepnoteLspClientManager
+    IDeepnoteLspClientManager,
+    IServerHandleRegistry
 } from '../kernels/deepnote/types';
 import { DeepnoteAgentSkillsManager } from '../kernels/deepnote/deepnoteAgentSkillsManager.node';
 import { DeepnoteToolkitInstaller } from '../kernels/deepnote/deepnoteToolkitInstaller.node';
 import { DeepnoteServerStarter } from '../kernels/deepnote/deepnoteServerStarter.node';
 import { DeepnoteKernelAutoSelector } from './deepnote/deepnoteKernelAutoSelector.node';
 import { DeepnoteServerProvider } from '../kernels/deepnote/deepnoteServerProvider.node';
+import { ServerHandleRegistry } from '../kernels/deepnote/deepnoteServerHandleRegistry.node';
 import { DeepnoteLspClientManager } from '../kernels/deepnote/deepnoteLspClientManager.node';
-import { DeepnoteInitNotebookRunner, IDeepnoteInitNotebookRunner } from './deepnote/deepnoteInitNotebookRunner.node';
+import { DeepnoteInitNotebookRunner } from './deepnote/deepnoteInitNotebookRunner.node';
 import { DeepnoteRequirementsHelper, IDeepnoteRequirementsHelper } from './deepnote/deepnoteRequirementsHelper.node';
 import { DeepnoteEnvironmentManager } from '../kernels/deepnote/environments/deepnoteEnvironmentManager.node';
 import { DeepnoteEnvironmentStorage } from '../kernels/deepnote/environments/deepnoteEnvironmentStorage.node';
@@ -96,6 +105,7 @@ import { IntegrationKernelRestartHandler } from './deepnote/integrations/integra
 import { ISnapshotMetadataService, SnapshotService } from './deepnote/snapshots/snapshotService';
 import { EnvironmentCapture, IEnvironmentCapture } from './deepnote/snapshots/environmentCapture.node';
 import { DeepnoteFileChangeWatcher } from './deepnote/deepnoteFileChangeWatcher';
+import { DeepnoteNotebookInfoStatusBar } from './deepnote/deepnoteNotebookInfoStatusBar';
 
 export function registerTypes(serviceManager: IServiceManager, isDevMode: boolean) {
     registerControllerTypes(serviceManager, isDevMode);
@@ -185,6 +195,23 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IIntegrationDetector>(IIntegrationDetector, IntegrationDetector);
     serviceManager.addSingleton<IIntegrationWebviewProvider>(IIntegrationWebviewProvider, IntegrationWebviewProvider);
     serviceManager.addSingleton<IIntegrationManager>(IIntegrationManager, IntegrationManager);
+    serviceManager.addSingleton<IFederatedAuthTokenStorage>(IFederatedAuthTokenStorage, FederatedAuthTokenStorage);
+    serviceManager.addSingleton<IFederatedAuthSqlBlockCodeGenerator>(
+        IFederatedAuthSqlBlockCodeGenerator,
+        FederatedAuthSqlBlockCodeGenerator
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        FederatedAuthCommandHandlerNode
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        FederatedAuthKernelRestartBridge
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        FederatedAuthOrphanedTokenCleaner
+    );
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
         SqlCellStatusBarProvider
@@ -221,11 +248,15 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addBinding(IDeepnoteServerStarter, IExtensionSyncActivationService);
     serviceManager.addSingleton<IDeepnoteServerProvider>(IDeepnoteServerProvider, DeepnoteServerProvider);
     serviceManager.addBinding(IDeepnoteServerProvider, IExtensionSyncActivationService);
+    serviceManager.addSingleton<IServerHandleRegistry>(IServerHandleRegistry, ServerHandleRegistry);
     serviceManager.addSingleton<IDeepnoteKernelAutoSelector>(IDeepnoteKernelAutoSelector, DeepnoteKernelAutoSelector);
     serviceManager.addBinding(IDeepnoteKernelAutoSelector, IExtensionSyncActivationService);
     serviceManager.addSingleton<IDeepnoteLspClientManager>(IDeepnoteLspClientManager, DeepnoteLspClientManager);
     serviceManager.addBinding(IDeepnoteLspClientManager, IExtensionSyncActivationService);
-    serviceManager.addSingleton<IDeepnoteInitNotebookRunner>(IDeepnoteInitNotebookRunner, DeepnoteInitNotebookRunner);
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        DeepnoteInitNotebookRunner
+    );
     serviceManager.addSingleton<IDeepnoteRequirementsHelper>(IDeepnoteRequirementsHelper, DeepnoteRequirementsHelper);
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
@@ -238,6 +269,10 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
         DeepnoteNewCellLanguageService
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        DeepnoteNotebookInfoStatusBar
     );
 
     // Deepnote configuration services

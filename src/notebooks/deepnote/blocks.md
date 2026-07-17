@@ -231,6 +231,12 @@ Simple: just moves the content between block and cell.
 Text blocks (headings, bullets, todos, etc.) use the `@deepnote/blocks` package to convert between plain text and markdown:
 
 ```typescript
+// Exact inverse of escapeMarkdown in @deepnote/blocks (identical character class),
+// since stripMarkdown only removes the type prefix and trims — it does not unescape.
+function unescapeMarkdown(text: string): string {
+    return text.replace(/\\([\\`*_{}[\]()#+\-.!|>])/g, '$1');
+}
+
 export class TextBlockConverter implements BlockConverter {
     protected static readonly textBlockTypes = [
         'text-cell-h1', 'text-cell-h2', 'text-cell-h3',
@@ -245,9 +251,10 @@ export class TextBlockConverter implements BlockConverter {
     }
 
     applyChangesToBlock(block: DeepnoteBlock, cell: NotebookCellData): void {
-        // Convert markdown back to plain text for Deepnote
+        // Convert markdown back to plain text for Deepnote.
+        // Reverse the escaping createMarkdown applied so the round-trip is idempotent.
         block.content = cell.value || '';
-        const textValue = stripMarkdown(block);
+        const textValue = unescapeMarkdown(stripMarkdown(block));
         block.content = textValue;
     }
 }

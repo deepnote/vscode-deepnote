@@ -2,19 +2,57 @@ import * as React from 'react';
 import { format, getLocString } from '../react-common/locReactSide';
 import { BigQueryAuthMethods, DatabaseIntegrationConfig } from '@deepnote/database-integrations';
 import { getDefaultIntegrationName } from './integrationUtils';
+import { validateServiceAccountJson } from './serviceAccountValidation';
 
 type BigQueryConfig = Extract<DatabaseIntegrationConfig, { type: 'big-query' }>;
+type BigQueryAuthMethod = BigQueryConfig['metadata']['authMethod'];
 
-function createEmptyBigQueryConfig(params: { id: string; name?: string }): BigQueryConfig {
+function isBigQueryAuthMethod(value: string | undefined): value is BigQueryAuthMethod {
+    return value === BigQueryAuthMethods.ServiceAccount || value === BigQueryAuthMethods.GoogleOauth;
+}
+
+function createEmptyBigQueryConfig(params: {
+    id: string;
+    name?: string;
+    authMethod?: BigQueryAuthMethod;
+}): BigQueryConfig {
+    const name = (params.name || getDefaultIntegrationName('big-query')).trim();
+    const authMethod = params.authMethod ?? BigQueryAuthMethods.ServiceAccount;
+    if (authMethod === BigQueryAuthMethods.GoogleOauth) {
+        return {
+            id: params.id,
+            name,
+            type: 'big-query',
+            metadata: {
+                authMethod: BigQueryAuthMethods.GoogleOauth,
+                project: '',
+                clientId: '',
+                clientSecret: ''
+            }
+        };
+    }
     return {
         id: params.id,
-        name: (params.name || getDefaultIntegrationName('big-query')).trim(),
+        name,
         type: 'big-query',
         metadata: {
             authMethod: BigQueryAuthMethods.ServiceAccount,
             service_account: ''
         }
     };
+}
+
+function buildInitialConfig(
+    existingConfig: BigQueryConfig | null,
+    integrationId: string,
+    defaultName?: string
+): BigQueryConfig {
+    if (!existingConfig) {
+        return createEmptyBigQueryConfig({ id: integrationId, name: defaultName });
+    }
+    // Preserve existing config when its auth method is supported. Both
+    // service-account and google-oauth are editable in this milestone.
+    return structuredClone(existingConfig);
 }
 
 export interface IBigQueryFormProps {
@@ -32,27 +70,32 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({
     onSave,
     onCancel
 }) => {
-    const [pendingConfig, setPendingConfig] = React.useState<BigQueryConfig>(
-        existingConfig && existingConfig.metadata.authMethod === BigQueryAuthMethods.ServiceAccount
-            ? structuredClone(existingConfig)
-            : createEmptyBigQueryConfig({ id: integrationId, name: defaultName })
+    const [pendingConfig, setPendingConfig] = React.useState<BigQueryConfig>(() =>
+        buildInitialConfig(existingConfig, integrationId, defaultName)
     );
 
     const [credentialsError, setCredentialsError] = React.useState<string | null>(null);
 
     React.useEffect(() => {
-        setPendingConfig(
-            existingConfig && existingConfig.metadata.authMethod === BigQueryAuthMethods.ServiceAccount
-                ? structuredClone(existingConfig)
-                : createEmptyBigQueryConfig({ id: integrationId, name: defaultName })
-        );
+        setPendingConfig(buildInitialConfig(existingConfig, integrationId, defaultName));
         setCredentialsError(null);
     }, [existingConfig, integrationId, defaultName]);
+
+    const authMethod = pendingConfig.metadata.authMethod ?? BigQueryAuthMethods.ServiceAccount;
 
     // Extract service account value with proper type narrowing
     const serviceAccountValue =
         pendingConfig.metadata.authMethod === BigQueryAuthMethods.ServiceAccount
             ? pendingConfig.metadata.service_account
+            : '';
+
+    const oauthProject =
+        pendingConfig.metadata.authMethod === BigQueryAuthMethods.GoogleOauth ? pendingConfig.metadata.project : '';
+    const oauthClientId =
+        pendingConfig.metadata.authMethod === BigQueryAuthMethods.GoogleOauth ? pendingConfig.metadata.clientId : '';
+    const oauthClientSecret =
+        pendingConfig.metadata.authMethod === BigQueryAuthMethods.GoogleOauth
+            ? pendingConfig.metadata.clientSecret
             : '';
 
     const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -63,22 +106,32 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({
         }));
     };
 
+    const handleAuthMethodChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const nextAuthMethod = e.target.value;
+        if (!isBigQueryAuthMethod(nextAuthMethod)) {
+            // Defence-in-depth; the <select> only renders the two canonical options.
+            return;
+        }
+        setPendingConfig((prev) =>
+            createEmptyBigQueryConfig({ id: prev.id, name: prev.name, authMethod: nextAuthMethod })
+        );
+        setCredentialsError(null);
+    };
+
     const validateCredentials = (value: string): boolean => {
-        if (!value.trim()) {
+        const validationError = validateServiceAccountJson(value);
+        if (validationError === null) {
+            setCredentialsError(null);
+            return true;
+        }
+
+        if (validationError.kind === 'required') {
             setCredentialsError(getLocString('integrationsBigQueryCredentialsRequired', 'Credentials are required'));
             return false;
         }
 
-        try {
-            JSON.parse(value);
-            setCredentialsError(null);
-            return true;
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Invalid JSON format';
-            const invalidJsonMsg = format('Invalid JSON: {0}', errorMessage);
-            setCredentialsError(invalidJsonMsg);
-            return false;
-        }
+        setCredentialsError(format('Invalid JSON: {0}', validationError.detail));
+        return false;
     };
 
     const handleCredentialsChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -100,14 +153,35 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({
         validateCredentials(value);
     };
 
+    const handleOauthFieldChange =
+        (field: 'project' | 'clientId' | 'clientSecret') => (e: React.ChangeEvent<HTMLInputElement>) => {
+            const value = e.target.value;
+            setPendingConfig((prev) => {
+                if (prev.metadata.authMethod !== BigQueryAuthMethods.GoogleOauth) {
+                    return prev;
+                }
+                return {
+                    ...prev,
+                    metadata: {
+                        ...prev.metadata,
+                        [field]: value
+                    }
+                };
+            });
+        };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Validate credentials before submitting
-        if (!validateCredentials(serviceAccountValue)) {
+        if (pendingConfig.metadata.authMethod === BigQueryAuthMethods.GoogleOauth) {
+            // `required` on each input handles empty-submission blocking; no extra runtime validation.
+            onSave(pendingConfig);
             return;
         }
 
+        if (!validateCredentials(serviceAccountValue)) {
+            return;
+        }
         onSave(pendingConfig);
     };
 
@@ -126,33 +200,104 @@ export const BigQueryForm: React.FC<IBigQueryFormProps> = ({
             </div>
 
             <div className="form-group">
-                <label htmlFor="credentials">
-                    {getLocString('integrationsBigQueryCredentialsLabel', 'Service Account Credentials (JSON)')}{' '}
-                    <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
+                <label htmlFor="bigquery-auth-method">
+                    {getLocString('integrationsBigQueryAuthMethodLabel', 'Authentication method')}
                 </label>
-                <textarea
-                    id="credentials"
-                    value={serviceAccountValue}
-                    onChange={handleCredentialsChange}
-                    placeholder={getLocString(
-                        'integrationsBigQueryCredentialsPlaceholder',
-                        '{"type": "service_account", ...}'
-                    )}
-                    rows={10}
-                    autoComplete="off"
-                    spellCheck={false}
-                    autoCorrect="off"
-                    autoCapitalize="off"
-                    required
-                    aria-invalid={credentialsError ? 'true' : 'false'}
-                    aria-describedby={credentialsError ? 'credentials-error' : undefined}
-                />
-                {credentialsError && (
-                    <div id="credentials-error" className="error-message" role="alert">
-                        {credentialsError}
-                    </div>
-                )}
+                <select id="bigquery-auth-method" value={authMethod} onChange={handleAuthMethodChange}>
+                    <option value={BigQueryAuthMethods.ServiceAccount}>
+                        {getLocString('integrationsBigQueryAuthMethodServiceAccount', 'Service account')}
+                    </option>
+                    <option value={BigQueryAuthMethods.GoogleOauth}>
+                        {getLocString('integrationsBigQueryAuthMethodGoogleOauth', 'Google OAuth')}
+                    </option>
+                </select>
             </div>
+
+            {authMethod === BigQueryAuthMethods.ServiceAccount && (
+                <div className="form-group">
+                    <label htmlFor="credentials">
+                        {getLocString('integrationsBigQueryCredentialsLabel', 'Service Account Credentials (JSON)')}{' '}
+                        <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
+                    </label>
+                    <textarea
+                        id="credentials"
+                        value={serviceAccountValue}
+                        onChange={handleCredentialsChange}
+                        placeholder={getLocString(
+                            'integrationsBigQueryCredentialsPlaceholder',
+                            '{"type": "service_account", ...}'
+                        )}
+                        rows={10}
+                        autoComplete="off"
+                        spellCheck={false}
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        required
+                        aria-invalid={credentialsError ? 'true' : 'false'}
+                        aria-describedby={credentialsError ? 'credentials-error' : undefined}
+                    />
+                    {credentialsError && (
+                        <div id="credentials-error" className="error-message" role="alert">
+                            {credentialsError}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {authMethod === BigQueryAuthMethods.GoogleOauth && (
+                <>
+                    <div className="form-group">
+                        <label htmlFor="bigquery-client-id">
+                            {getLocString('integrationsBigQueryClientIdLabel', 'Client ID')}{' '}
+                            <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
+                        </label>
+                        <input
+                            type="text"
+                            id="bigquery-client-id"
+                            value={oauthClientId}
+                            onChange={handleOauthFieldChange('clientId')}
+                            placeholder={getLocString(
+                                'integrationsBigQueryClientIdPlaceholder',
+                                '1234567890-abcdefg.apps.googleusercontent.com'
+                            )}
+                            autoComplete="off"
+                            required
+                        />
+                    </div>
+
+                    <div className="form-group">
+                        <label htmlFor="bigquery-client-secret">
+                            {getLocString('integrationsBigQueryClientSecretLabel', 'Client Secret')}{' '}
+                            <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
+                        </label>
+                        <input
+                            type="password"
+                            id="bigquery-client-secret"
+                            value={oauthClientSecret}
+                            onChange={handleOauthFieldChange('clientSecret')}
+                            placeholder={getLocString('integrationsBigQueryClientSecretPlaceholder', 'XyZ123AbCdEfGhI')}
+                            autoComplete="off"
+                            required
+                        />
+                    </div>
+
+                    <div className="form-group">
+                        <label htmlFor="bigquery-project">
+                            {getLocString('integrationsBigQueryProjectLabel', 'Google Project ID')}{' '}
+                            <span className="required">{getLocString('integrationsRequiredField', '*')}</span>
+                        </label>
+                        <input
+                            type="text"
+                            id="bigquery-project"
+                            value={oauthProject}
+                            onChange={handleOauthFieldChange('project')}
+                            placeholder={getLocString('integrationsBigQueryProjectPlaceholder', 'my-dev-project')}
+                            autoComplete="off"
+                            required
+                        />
+                    </div>
+                </>
+            )}
 
             <div className="form-actions">
                 <button type="submit" className="primary">

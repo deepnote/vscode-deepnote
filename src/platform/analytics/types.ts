@@ -2,6 +2,7 @@ import { IAsyncDisposable } from '../common/types';
 
 export type TelemetryEventName =
     | 'add_block'
+    | 'authenticate_integration'
     | 'configure_integration'
     | 'create_environment'
     | 'create_notebook'
@@ -16,10 +17,15 @@ export type TelemetryEventName =
     | 'import_notebook'
     | 'open_in_deepnote'
     | 'open_notebook'
+    | 'rename_notebook'
+    | 'rename_project'
     | 'reset_integration'
     | 'save_integration'
     | 'select_environment'
-    | 'toggle_snapshots';
+    | 'split_notebook'
+    | 'switch_sql_integration'
+    | 'toggle_snapshots'
+    | 'update_environment';
 
 export interface TelemetryEvent {
     eventName: TelemetryEventName;

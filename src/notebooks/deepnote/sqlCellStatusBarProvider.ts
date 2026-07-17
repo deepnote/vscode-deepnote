@@ -19,6 +19,7 @@ import {
 import { inject, injectable } from 'inversify';
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
+import { ITelemetryService } from '../../platform/analytics/types';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { IIntegrationStorage } from './integrations/types';
 import { Commands } from '../../platform/common/constants';
@@ -69,7 +70,8 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
     constructor(
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
-        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager
+        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
+        @inject(ITelemetryService) private readonly analytics: ITelemetryService
     ) {}
 
     public activate(): void {
@@ -459,5 +461,14 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
         // Trigger status bar update
         this._onDidChangeCellStatusBarItems.fire();
+
+        const selectedIntegration = projectIntegrations.find((i) => i.id === selectedId);
+        this.analytics.trackEvent({
+            eventName: 'switch_sql_integration',
+            properties: {
+                integrationType:
+                    selectedId === DATAFRAME_SQL_INTEGRATION_ID ? 'duckdb' : selectedIntegration?.type ?? 'unknown'
+            }
+        });
     }
 }

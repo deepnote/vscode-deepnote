@@ -22,13 +22,13 @@ export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
     public activate(): void {
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.OpenInDeepnote, async () => {
-                await this.handleOpenInDeepnote();
-                this.analytics.trackEvent({ eventName: 'open_in_deepnote' });
+                const completed = await this.handleOpenInDeepnote();
+                this.analytics.trackEvent({ eventName: 'open_in_deepnote', properties: { completed } });
             })
         );
     }
 
-    private async handleOpenInDeepnote(): Promise<void> {
+    private async handleOpenInDeepnote(): Promise<boolean> {
         try {
             let fileUri: Uri | undefined;
             let isNotebook = false;
@@ -46,7 +46,7 @@ export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
                 const activeEditor = window.activeTextEditor;
                 if (!activeEditor) {
                     void window.showErrorMessage('Please open a .deepnote file first');
-                    return;
+                    return false;
                 }
 
                 fileUri = activeEditor.document.uri;
@@ -54,7 +54,7 @@ export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
 
             if (!fileUri.fsPath.endsWith('.deepnote')) {
                 void window.showErrorMessage('This command only works with .deepnote files');
-                return;
+                return false;
             }
 
             if (isNotebook) {
@@ -65,7 +65,7 @@ export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
                     const saved = await activeEditor.document.save();
                     if (!saved) {
                         void window.showErrorMessage('Please save the file before opening in Deepnote');
-                        return;
+                        return false;
                     }
                 }
             }
@@ -78,12 +78,12 @@ export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
             const stats = await fs.promises.stat(filePath);
             if (stats.size > MAX_FILE_SIZE) {
                 void window.showErrorMessage(`File exceeds ${MAX_FILE_SIZE / (1024 * 1024)}MB limit`);
-                return;
+                return false;
             }
 
             const fileBuffer = await fs.promises.readFile(filePath);
 
-            await window.withProgress(
+            return await window.withProgress(
                 {
                     location: { viewId: 'workbench.view.extension.deepnoteExplorer' },
                     title: l10n.t('Opening in Deepnote'),
@@ -112,10 +112,14 @@ export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
 
                         void window.showInformationMessage('Opening in Deepnote...');
                         logger.info('Successfully opened file in Deepnote');
+
+                        return true;
                     } catch (error) {
                         logger.error('Failed to open in Deepnote', error);
                         const errorMessage = getErrorMessage(error);
                         void window.showErrorMessage(`Failed to open in Deepnote: ${errorMessage}`);
+
+                        return false;
                     }
                 }
             );
@@ -123,6 +127,8 @@ export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
             logger.error('Error in handleOpenInDeepnote', error);
             const errorMessage = getErrorMessage(error);
             void window.showErrorMessage(`Failed to open in Deepnote: ${errorMessage}`);
+
+            return false;
         }
     }
 }

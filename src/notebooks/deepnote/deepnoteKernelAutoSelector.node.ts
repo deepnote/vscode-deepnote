@@ -44,6 +44,7 @@ import {
 } from '../../kernels/jupyter/types';
 import { IJupyterKernelSpec, IKernelProvider } from '../../kernels/types';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
+import { ITelemetryService } from '../../platform/analytics/types';
 import { IPythonExtensionChecker } from '../../platform/api/types';
 import { Cancellation, isCancellationError } from '../../platform/common/cancellation';
 import { JVSC_EXTENSION_ID, STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
@@ -98,7 +99,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         private readonly notebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper,
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel,
         @inject(IDeepnoteToolkitInstaller) private readonly toolkitInstaller: IDeepnoteToolkitInstaller,
-        @inject(IServerHandleRegistry) private readonly serverHandleRegistry: IServerHandleRegistry
+        @inject(IServerHandleRegistry) private readonly serverHandleRegistry: IServerHandleRegistry,
+        @inject(ITelemetryService) private readonly analytics: ITelemetryService
     ) {}
 
     public activate() {
@@ -766,6 +768,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         Cancellation.throwIfCanceled(token);
 
         await this.notebookEnvironmentMapper.setEnvironmentForNotebook(notebook.uri, selectedEnvironment.id);
+        this.analytics.trackEvent({ eventName: 'select_environment' });
 
         const result = await this.setupKernelForEnvironment(notebook, selectedEnvironment, notebookKey, token);
 

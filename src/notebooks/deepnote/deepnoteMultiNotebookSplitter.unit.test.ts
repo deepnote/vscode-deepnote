@@ -3,6 +3,7 @@ import { assert } from 'chai';
 import { anything, instance, mock, when } from 'ts-mockito';
 import { EventEmitter, FileType, NotebookDocument, TabGroups, TabInputNotebook, Uri } from 'vscode';
 
+import { ITelemetryService } from '../../platform/analytics/types';
 import type { IDeepnoteNotebookEnvironmentMapper } from '../../kernels/deepnote/types';
 import type { ILogger } from '../../platform/logging/types';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
@@ -193,7 +194,8 @@ suite('DeepnoteMultiNotebookSplitter', () => {
             },
             logger,
             // `exists` probe injected directly (mirrors deepnoteFileExists, but synchronous-set-backed).
-            (uri: Uri) => Promise.resolve(existingOnDisk.has(basename(uri)))
+            (uri: Uri) => Promise.resolve(existingOnDisk.has(basename(uri))),
+            instance(mock<ITelemetryService>())
         );
         splitter.activate();
     });
@@ -403,7 +405,8 @@ suite('DeepnoteMultiNotebookSplitter', () => {
                     refreshTreeCount++;
                 },
                 logger,
-                (uri: Uri) => Promise.resolve(existingOnDisk.has(basename(uri)))
+                (uri: Uri) => Promise.resolve(existingOnDisk.has(basename(uri))),
+                instance(mock<ITelemetryService>())
             );
             splitterWithEnv.activate();
 
@@ -582,7 +585,8 @@ suite('DeepnoteMultiNotebookSplitter', () => {
                     refreshTreeCount++;
                 },
                 logger,
-                (uri: Uri) => Promise.resolve(existingOnDisk.has(basename(uri)))
+                (uri: Uri) => Promise.resolve(existingOnDisk.has(basename(uri))),
+                instance(mock<ITelemetryService>())
             );
             envSplitter.activate();
 

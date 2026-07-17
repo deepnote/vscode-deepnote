@@ -4,6 +4,7 @@ import { CancellationToken, CancellationTokenSource, EventEmitter, NotebookCell 
 
 import { IDisposableRegistry } from '../../platform/common/types';
 import { IIntegrationStorage } from './integrations/types';
+import { ITelemetryService } from '../../platform/analytics/types';
 import { SqlCellStatusBarProvider } from './sqlCellStatusBarProvider';
 import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
@@ -23,7 +24,12 @@ suite('SqlCellStatusBarProvider', () => {
         disposables = [];
         integrationStorage = mock<IIntegrationStorage>();
         notebookManager = mock<IDeepnoteNotebookManager>();
-        provider = new SqlCellStatusBarProvider(disposables, instance(integrationStorage), instance(notebookManager));
+        provider = new SqlCellStatusBarProvider(
+            disposables,
+            instance(integrationStorage),
+            instance(notebookManager),
+            instance(mock<ITelemetryService>())
+        );
 
         const tokenSource = new CancellationTokenSource();
         cancellationToken = tokenSource.token;
@@ -304,7 +310,8 @@ suite('SqlCellStatusBarProvider', () => {
             activateProvider = new SqlCellStatusBarProvider(
                 activateDisposables,
                 instance(activateIntegrationStorage),
-                instance(activateNotebookManager)
+                instance(activateNotebookManager),
+                instance(mock<ITelemetryService>())
             );
         });
 
@@ -540,7 +547,8 @@ suite('SqlCellStatusBarProvider', () => {
             eventProvider = new SqlCellStatusBarProvider(
                 eventDisposables,
                 instance(eventIntegrationStorage),
-                instance(eventNotebookManager)
+                instance(eventNotebookManager),
+                instance(mock<ITelemetryService>())
             );
         });
 
@@ -668,7 +676,8 @@ suite('SqlCellStatusBarProvider', () => {
             commandProvider = new SqlCellStatusBarProvider(
                 commandDisposables,
                 instance(commandIntegrationStorage),
-                instance(commandNotebookManager)
+                instance(commandNotebookManager),
+                instance(mock<ITelemetryService>())
             );
 
             // Capture the command handler
@@ -809,7 +818,8 @@ suite('SqlCellStatusBarProvider', () => {
             commandProvider = new SqlCellStatusBarProvider(
                 commandDisposables,
                 instance(commandIntegrationStorage),
-                instance(commandNotebookManager)
+                instance(commandNotebookManager),
+                instance(mock<ITelemetryService>())
             );
 
             // Capture the command handler

@@ -579,27 +579,38 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 break;
             case 'save':
                 if (message.integrationId && message.config) {
-                    this.analytics.trackEvent({
-                        eventName: 'save_integration',
-                        properties: { integrationType: message.config.type ?? 'unknown' }
-                    });
-                    await this.saveConfiguration(message.integrationId, message.config);
+                    const saved = await this.saveConfiguration(message.integrationId, message.config);
+
+                    if (saved) {
+                        this.analytics.trackEvent({
+                            eventName: 'save_integration',
+                            properties: { integrationType: message.config.type ?? 'unknown' }
+                        });
+                    }
                 }
                 break;
             case 'reset':
                 if (message.integrationId) {
-                    this.analytics.trackEvent({ eventName: 'reset_integration' });
-                    await this.resetConfiguration(message.integrationId);
+                    const reset = await this.resetConfiguration(message.integrationId);
+
+                    if (reset) {
+                        this.analytics.trackEvent({ eventName: 'reset_integration' });
+                    }
                 }
                 break;
             case 'delete':
                 if (message.integrationId) {
-                    this.analytics.trackEvent({ eventName: 'delete_integration' });
-                    await this.deleteConfiguration(message.integrationId);
+                    const deleted = await this.deleteConfiguration(message.integrationId);
+
+                    if (deleted) {
+                        this.analytics.trackEvent({ eventName: 'delete_integration' });
+                    }
                 }
                 break;
             case 'authenticate':
                 if (message.integrationId) {
+                    this.analytics.trackEvent({ eventName: 'authenticate_integration' });
+
                     try {
                         await commands.executeCommand(Commands.AuthenticateIntegration, message.integrationId);
                     } catch (error) {
@@ -638,7 +649,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     private async saveConfiguration(
         integrationId: string,
         config: ConfigurableDatabaseIntegrationConfig
-    ): Promise<void> {
+    ): Promise<boolean> {
         try {
             // Invalidate stale federated tokens before saving (fingerprint change or auth-method switch).
             await this.invalidateStaleFederatedToken(integrationId, config);
@@ -674,6 +685,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                     type: 'success'
                 });
             }
+
+            return persisted;
         } catch (error) {
             logger.error('Failed to save integration configuration', error);
             await this.currentPanel?.webview.postMessage({
@@ -683,13 +696,15 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 ),
                 type: 'error'
             });
+
+            return false;
         }
     }
 
     /**
      * Reset the configuration for an integration (clears credentials but keeps the integration entry)
      */
-    private async resetConfiguration(integrationId: string): Promise<void> {
+    private async resetConfiguration(integrationId: string): Promise<boolean> {
         try {
             await this.integrationStorage.delete(integrationId);
             await this.tokenStorage?.delete(integrationId).catch((error) => {
@@ -714,6 +729,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                     type: 'success'
                 });
             }
+
+            return persisted;
         } catch (error) {
             logger.error('Failed to reset integration configuration', error);
             await this.currentPanel?.webview.postMessage({
@@ -723,13 +740,15 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 ),
                 type: 'error'
             });
+
+            return false;
         }
     }
 
     /**
      * Delete the integration completely (removes credentials and integration entry)
      */
-    private async deleteConfiguration(integrationId: string): Promise<void> {
+    private async deleteConfiguration(integrationId: string): Promise<boolean> {
         try {
             await this.integrationStorage.delete(integrationId);
             await this.tokenStorage?.delete(integrationId).catch((error) => {
@@ -749,6 +768,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                     type: 'success'
                 });
             }
+
+            return persisted;
         } catch (error) {
             logger.error('Failed to delete integration', error);
             await this.currentPanel?.webview.postMessage({
@@ -758,6 +779,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 ),
                 type: 'error'
             });
+
+            return false;
         }
     }
 

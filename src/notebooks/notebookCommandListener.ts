@@ -115,8 +115,11 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
     }
 
     private runAllCells() {
-        if (window.activeNotebookEditor) {
-            this.analytics.trackEvent({ eventName: 'execute_notebook' });
+        const editor = window.activeNotebookEditor;
+        if (editor) {
+            if (editor.notebook.notebookType === 'deepnote') {
+                this.analytics.trackEvent({ eventName: 'execute_notebook' });
+            }
             commands.executeCommand('notebook.execute').then(noop, noop);
         }
     }
@@ -143,8 +146,11 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
     }
 
     private addCellBelow() {
-        if (window.activeNotebookEditor) {
-            this.analytics.trackEvent({ eventName: 'add_block', properties: { blockType: 'code' } });
+        const editor = window.activeNotebookEditor;
+        if (editor) {
+            if (editor.notebook.notebookType === 'deepnote') {
+                this.analytics.trackEvent({ eventName: 'add_block', properties: { blockType: 'code' } });
+            }
             commands.executeCommand('notebook.cell.insertCodeCellBelow').then(noop, noop);
         }
     }

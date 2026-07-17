@@ -556,6 +556,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
 
             logger.info(`Renamed environment ${environmentId} to "${newName}"`);
             void window.showInformationMessage(l10n.t('Environment renamed to "{0}"', newName));
+            this.analytics.trackEvent({ eventName: 'update_environment', properties: { field: 'name' } });
         } catch (error) {
             logger.error('Failed to rename environment', error);
             void window.showErrorMessage(l10n.t('Failed to rename environment. See output for details.'));
@@ -614,6 +615,10 @@ export class DeepnoteEnvironmentsView implements Disposable {
             );
 
             void window.showInformationMessage(l10n.t('Packages updated for "{0}"', config.name));
+            this.analytics.trackEvent({
+                eventName: 'update_environment',
+                properties: { field: 'packages', packageCount: packages.length }
+            });
         } catch (error) {
             logger.error('Failed to update packages', error);
             void window.showErrorMessage(l10n.t('Failed to update packages. See output for details.'));

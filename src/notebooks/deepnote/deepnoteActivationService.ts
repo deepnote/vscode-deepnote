@@ -89,7 +89,8 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
             this.environmentMapper,
             () => this.explorerView.refresh(),
             this.logger,
-            deepnoteFileExists
+            deepnoteFileExists,
+            this.analytics
         );
         this.extensionContext.subscriptions.push(...this.multiNotebookSplitter.activate());
         this.extensionContext.subscriptions.push(this.multiNotebookSplitter);

@@ -11,7 +11,7 @@ import {
 } from '../common/types';
 import { generateUuid } from '../common/uuid';
 import { logger } from '../logging';
-import { POSTHOG_API_KEY, POSTHOG_HOST } from './constants';
+import { IS_POSTHOG_CONFIGURED, POSTHOG_API_KEY, POSTHOG_HOST } from './constants';
 import { ITelemetryService, TelemetryEvent } from './types';
 
 const USER_ID_STORAGE_KEY = 'deepnote-telemetry-anonymous-user-id';
@@ -70,7 +70,7 @@ export class TelemetryService implements ITelemetryService, IExtensionSyncActiva
     }
 
     private createClient(): void {
-        if (this.client || !this.isTelemetryEnabled()) {
+        if (this.client || !this.isPostHogConfigured() || !this.isTelemetryEnabled()) {
             return;
         }
 
@@ -94,6 +94,10 @@ export class TelemetryService implements ITelemetryService, IExtensionSyncActiva
         } catch (ex) {
             logger.debug(`PostHog shutdown error: ${ex}`);
         }
+    }
+
+    private isPostHogConfigured(): boolean {
+        return IS_POSTHOG_CONFIGURED;
     }
 
     private isTelemetryEnabled(): boolean {

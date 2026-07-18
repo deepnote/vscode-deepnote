@@ -40,6 +40,11 @@ suite('TelemetryService', () => {
         (service as any).isTelemetryEnabled = () => enabled;
     }
 
+    function stubPostHogConfigured(service: TelemetryService, configured: boolean): void {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (service as any).isPostHogConfigured = () => configured;
+    }
+
     setup(() => {
         mockUserIdState = createMockPersistentState('');
         mockDisposables = [];
@@ -75,12 +80,26 @@ suite('TelemetryService', () => {
     test('activate should create client when telemetry is enabled', async () => {
         analyticsService = new TelemetryService(mockDisposables, mockStateFactory, mockAsyncDisposableRegistry);
         stubTelemetryEnabled(analyticsService, true);
+        stubPostHogConfigured(analyticsService, true);
 
         await analyticsService.activate();
 
         const client = getPostHogClient(analyticsService);
 
         assert.isDefined(client, 'PostHog client should be initialized');
+    });
+
+    test('activate should not create client when PostHog is not configured', async () => {
+        analyticsService = new TelemetryService(mockDisposables, mockStateFactory, mockAsyncDisposableRegistry);
+        stubTelemetryEnabled(analyticsService, true);
+        stubPostHogConfigured(analyticsService, false);
+
+        await analyticsService.activate();
+
+        assert.isNull(
+            getPostHogClient(analyticsService),
+            'PostHog client should not be created with the placeholder key'
+        );
     });
 
     test('should generate user ID and call PostHog capture on first trackEvent', async () => {
@@ -90,6 +109,7 @@ suite('TelemetryService', () => {
 
         analyticsService = new TelemetryService(mockDisposables, mockStateFactory, mockAsyncDisposableRegistry);
         stubTelemetryEnabled(analyticsService, true);
+        stubPostHogConfigured(analyticsService, true);
 
         await analyticsService.activate();
 
@@ -137,6 +157,7 @@ suite('TelemetryService', () => {
     test('settings change should destroy client when telemetry is disabled', async () => {
         analyticsService = new TelemetryService(mockDisposables, mockStateFactory, mockAsyncDisposableRegistry);
         stubTelemetryEnabled(analyticsService, true);
+        stubPostHogConfigured(analyticsService, true);
 
         await analyticsService.activate();
 
@@ -157,6 +178,7 @@ suite('TelemetryService', () => {
     test('settings change should create client when telemetry is enabled', async () => {
         analyticsService = new TelemetryService(mockDisposables, mockStateFactory, mockAsyncDisposableRegistry);
         stubTelemetryEnabled(analyticsService, false);
+        stubPostHogConfigured(analyticsService, true);
 
         await analyticsService.activate();
 

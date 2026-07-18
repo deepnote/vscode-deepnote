@@ -40,14 +40,27 @@ async function leaveUnsavedCellEdit(): Promise<void> {
 
     await openWorkspaceFile(DIRTIED_FILE);
 
-    // Focus the first CODE cell's Monaco editor by clicking its visible source line (markdown cells
-    // render without an editor, so scope to code rows), then type a marker into the focused input.
-    const line = await driver.wait(
-        async () => (await driver.findElements(By.css('.notebookOverlay .code-cell-row .view-line')))[0],
+    // Click the first CODE cell's source line to focus its editor (markdown cells have none); locate
+    // and click in one retried step, since the cell re-renders on open and can stale a prior reference.
+    await driver.wait(
+        async () => {
+            const line = (await driver.findElements(By.css('.notebookOverlay .code-cell-row .view-line')))[0];
+
+            if (!line) {
+                return false;
+            }
+
+            try {
+                await line.click();
+
+                return true;
+            } catch {
+                return false;
+            }
+        },
         WORKBENCH_TIMEOUT,
-        'the notebook code cell did not render'
+        'the notebook code cell did not render or settle enough to focus'
     );
-    await line.click();
     await driver.sleep(400);
     await driver.switchTo().activeElement().sendKeys(DIRTY_MARKER);
 

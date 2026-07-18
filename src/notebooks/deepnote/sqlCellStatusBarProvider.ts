@@ -16,7 +16,7 @@ import {
     window,
     workspace
 } from 'vscode';
-import { inject, injectable } from 'inversify';
+import { inject, injectable, optional } from 'inversify';
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
@@ -27,6 +27,7 @@ import {
     DATAFRAME_SQL_INTEGRATION_ID
 } from '../../platform/notebooks/deepnote/integrationTypes';
 import { IDeepnoteNotebookManager } from '../types';
+import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
 import { DatabaseIntegrationType, databaseIntegrationTypes } from '@deepnote/database-integrations';
 
 /**
@@ -69,7 +70,10 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
     constructor(
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
-        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager
+        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
+        @inject(ISqlIntegrationEnvVarsProvider)
+        @optional()
+        private readonly sqlIntegrationEnvVars?: ISqlIntegrationEnvVarsProvider
     ) {}
 
     public activate(): void {
@@ -229,12 +233,25 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
             // Integration is configured, use the config name
             displayName = config.name;
         } else {
-            // Integration is not configured, try to get the name from the project's integration list
-            const notebookId = cell.notebook.metadata?.deepnoteNotebookId;
-            const project = notebookId ? this.notebookManager.getProjectForNotebook(projectId, notebookId) : undefined;
-            const projectIntegration = project?.project.integrations?.find((i) => i.id === integrationId);
-            const baseName = projectIntegration?.name || l10n.t('Unknown integration');
-            displayName = l10n.t('{0} (configure)', baseName);
+            // Not in SecretStorage — a `.deepnote.env.yaml` file config still counts as configured, so check the
+            // merged configs before prompting the user to configure (F13).
+            const fileConfig = this.sqlIntegrationEnvVars
+                ? (await this.sqlIntegrationEnvVars.getMergedConfigs(cell.notebook.uri)).find(
+                      (c) => c.id === integrationId
+                  )
+                : undefined;
+            if (fileConfig) {
+                displayName = fileConfig.name;
+            } else {
+                // Integration is not configured, try to get the name from the project's integration list
+                const notebookId = cell.notebook.metadata?.deepnoteNotebookId;
+                const project = notebookId
+                    ? this.notebookManager.getProjectForNotebook(projectId, notebookId)
+                    : undefined;
+                const projectIntegration = project?.project.integrations?.find((i) => i.id === integrationId);
+                const baseName = projectIntegration?.name || l10n.t('Unknown integration');
+                displayName = l10n.t('{0} (configure)', baseName);
+            }
         }
 
         // Create a status bar item that opens the integration picker

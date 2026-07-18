@@ -59,9 +59,9 @@ suite('UserpodApiEndpoints', () => {
         return `${baseUrl}/userpod-api/${projectId}/integrations/environment-variables`;
     }
 
-    /** GET the endpoint carrying the bearer token it requires. */
-    function authedFetch(url: string): Promise<Response> {
-        return fetch(url, { headers: { Authorization: `Bearer ${endpoint.authToken}` } });
+    /** GET the endpoint carrying the per-project bearer token it requires. */
+    function authedFetch(url: string, projectId: string): Promise<Response> {
+        return fetch(url, { headers: { Authorization: `Bearer ${endpoint.getAuthToken(projectId)}` } });
     }
 
     test('returns the provider env map as [{name,value}] for a matching open deepnote notebook', async () => {
@@ -72,7 +72,7 @@ suite('UserpodApiEndpoints', () => {
         endpoint.activate();
         const baseUrl = await waitForBaseUrl();
 
-        const response = await authedFetch(envVarsUrl(baseUrl, 'project-1'));
+        const response = await authedFetch(envVarsUrl(baseUrl, 'project-1'), 'project-1');
 
         assert.strictEqual(response.status, 200);
         const body = await response.json();
@@ -90,7 +90,7 @@ suite('UserpodApiEndpoints', () => {
         endpoint.activate();
         const baseUrl = await waitForBaseUrl();
 
-        const response = await authedFetch(envVarsUrl(baseUrl, 'project-1'));
+        const response = await authedFetch(envVarsUrl(baseUrl, 'project-1'), 'project-1');
 
         assert.strictEqual(response.status, 200);
         assert.deepStrictEqual(await response.json(), []);
@@ -106,7 +106,7 @@ suite('UserpodApiEndpoints', () => {
         endpoint.activate();
         const baseUrl = await waitForBaseUrl();
 
-        const response = await authedFetch(envVarsUrl(baseUrl, 'project-two'));
+        const response = await authedFetch(envVarsUrl(baseUrl, 'project-two'), 'project-two');
         const body = await response.json();
 
         assert.deepStrictEqual(body, [{ name: 'FROM', value: 'two' }]);
@@ -123,7 +123,7 @@ suite('UserpodApiEndpoints', () => {
         endpoint.activate();
         const baseUrl = await waitForBaseUrl();
 
-        const response = await authedFetch(envVarsUrl(baseUrl, 'project-1'));
+        const response = await authedFetch(envVarsUrl(baseUrl, 'project-1'), 'project-1');
 
         assert.strictEqual(response.status, 200);
         assert.deepStrictEqual(await response.json(), []);
@@ -137,7 +137,7 @@ suite('UserpodApiEndpoints', () => {
         endpoint.activate();
         const baseUrl = await waitForBaseUrl();
 
-        const response = await authedFetch(envVarsUrl(baseUrl, 'project-1'));
+        const response = await authedFetch(envVarsUrl(baseUrl, 'project-1'), 'project-1');
 
         assert.deepStrictEqual(await response.json(), []);
         verify(provider.getEnvironmentVariables(anything())).never();
@@ -151,7 +151,7 @@ suite('UserpodApiEndpoints', () => {
         endpoint.activate();
         const baseUrl = await waitForBaseUrl();
 
-        const response = await authedFetch(envVarsUrl(baseUrl, 'project-1'));
+        const response = await authedFetch(envVarsUrl(baseUrl, 'project-1'), 'project-1');
 
         assert.strictEqual(response.status, 500);
     });
@@ -181,14 +181,43 @@ suite('UserpodApiEndpoints', () => {
         endpoint.activate();
         const baseUrl = await waitForBaseUrl();
 
-        // Same byte length as the real `Bearer <token>` header, different value — timingSafeEqual must reject it.
-        const sameLengthWrong = `Bearer ${'x'.repeat(endpoint.authToken.length)}`;
+        // Issue the project's token, then present a DIFFERENT value of the same byte length — timingSafeEqual must reject it.
+        const realToken = endpoint.getAuthToken('project-1');
+        const sameLengthWrong = `Bearer ${'x'.repeat(realToken.length)}`;
         const response = await fetch(envVarsUrl(baseUrl, 'project-1'), {
             headers: { Authorization: sameLengthWrong }
         });
 
         assert.strictEqual(response.status, 401);
         verify(provider.getEnvironmentVariables(anything())).never();
+    });
+
+    test('cross-project: a token issued for one project cannot read another project', async () => {
+        const notebookA = createMockNotebook('project-a', Uri.file('/ws/a.deepnote'));
+        const notebookB = createMockNotebook('project-b', Uri.file('/ws/b.deepnote'));
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebookA, notebookB]);
+
+        endpoint.activate();
+        const baseUrl = await waitForBaseUrl();
+
+        // Issue tokens for both projects, then use project A's token against project B's URL.
+        const tokenA = endpoint.getAuthToken('project-a');
+        endpoint.getAuthToken('project-b');
+
+        const response = await fetch(envVarsUrl(baseUrl, 'project-b'), {
+            headers: { Authorization: `Bearer ${tokenA}` }
+        });
+
+        assert.strictEqual(response.status, 401, "project A's token must not authorize a read of project B");
+        verify(provider.getEnvironmentVariables(anything())).never();
+    });
+
+    test('ready resolves once the server is listening', async () => {
+        endpoint.activate();
+
+        await endpoint.ready;
+
+        assert.isString(endpoint.baseUrl, 'baseUrl must be set once ready resolves');
     });
 
     test('logs and prompts the user to recover when the server errors after startup, without crashing', async () => {

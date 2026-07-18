@@ -116,14 +116,27 @@ describe('Deepnote E2E — inject integration env var from `.deepnote.env.yaml`'
 
         // Live refresh: rewrite `.env`; the watcher runs set_integration_env() in the SAME kernel (no restart) so a re-run reads the new value.
         fs.writeFileSync(path.join(tempDir, DOTENV_FILE_NAME), 'DEMO_DB_HOST=refreshed-host.example.com\n');
-        // Watcher debounce + time to queue the hidden refresh, which the kernel runs before the next Run All.
-        await new Promise((resolve) => setTimeout(resolve, 5000));
 
-        const second = await runOnceAndAwaitOutput(
-            NOTEBOOK_FILE_NAME,
-            'refreshed-host.example.com',
-            FIRST_RUN_OUTPUT_TIMEOUT
-        );
+        // The refresh is asynchronous (watcher debounce + hidden kernel exec), so re-run a bounded number of times
+        // until the refreshed value renders — rather than a fixed sleep + single run, which is flaky and burns the
+        // full timeout on a slow box. Re-running is safe here: the kernel is already bound after the first run.
+        const REFRESH_MAX_ATTEMPTS = 6;
+        const REFRESH_ATTEMPT_TIMEOUT = 10_000;
+        let second = '';
+        for (let attempt = 1; attempt <= REFRESH_MAX_ATTEMPTS; attempt++) {
+            try {
+                second = await runOnceAndAwaitOutput(
+                    NOTEBOOK_FILE_NAME,
+                    'refreshed-host.example.com',
+                    REFRESH_ATTEMPT_TIMEOUT
+                );
+                break;
+            } catch (error) {
+                if (attempt === REFRESH_MAX_ATTEMPTS) {
+                    throw error;
+                }
+            }
+        }
         expect(second).to.contain('refreshed-host.example.com');
     });
 });

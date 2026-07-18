@@ -48,7 +48,7 @@ suite('IntegrationsFileConfigProvider', () => {
         workspaceFolder = undefined;
 
         fileSystem = mock<IFileSystem>();
-        provider = new TestableIntegrationsFileConfigProvider(instance(fileSystem));
+        provider = new TestableIntegrationsFileConfigProvider(instance(fileSystem), []);
 
         // The gate reads `deepnote.integrations.envFile.enabled`; return the current `featureEnabled` value.
         when(mockedVSCodeNamespaces.workspace.getConfiguration(anything(), anything())).thenReturn({

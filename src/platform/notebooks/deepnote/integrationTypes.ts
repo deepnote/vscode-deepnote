@@ -74,7 +74,12 @@ export interface LegacyDuckDBIntegrationConfig extends BaseLegacyIntegrationConf
     type: LegacyIntegrationType.DuckDB;
 }
 
-import { DatabaseIntegrationConfig, DatabaseIntegrationType } from '@deepnote/database-integrations';
+import {
+    DatabaseIntegrationConfig,
+    DatabaseIntegrationType,
+    FederatedAuthMethod,
+    isFederatedAuthMethod
+} from '@deepnote/database-integrations';
 // Import and re-export Snowflake auth constants from shared module
 import {
     type SnowflakeAuthMethod,
@@ -172,4 +177,23 @@ export interface IntegrationWithStatus {
     integrationType?: ConfigurableDatabaseIntegrationType;
     /** Federated-auth token status; only meaningful for federated integrations (currently BigQuery + `google-oauth`). */
     tokenStatus?: FederatedAuthTokenStatus;
+}
+
+/**
+ * Narrows integration metadata to the federated-auth variant. Shared by the file-config provider and the SQL
+ * env-vars provider (upstream `isFederatedAuthMetadata`'s generic doesn't unify with our
+ * `DatabaseIntegrationConfig['metadata']` union); delegates to the exported `isFederatedAuthMethod` at runtime.
+ */
+export function isFederatedAuthMetadata(
+    metadata: DatabaseIntegrationConfig['metadata']
+): metadata is Extract<DatabaseIntegrationConfig['metadata'], { authMethod: FederatedAuthMethod }> {
+    if (typeof metadata !== 'object' || metadata === null) {
+        return false;
+    }
+    if (!('authMethod' in metadata)) {
+        return false;
+    }
+    const authMethod = metadata.authMethod;
+
+    return typeof authMethod === 'string' && isFederatedAuthMethod(authMethod);
 }

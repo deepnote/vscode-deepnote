@@ -4,6 +4,7 @@ import { anything, capture, instance, mock, verify, when } from 'ts-mockito';
 
 import { DEEPNOTE_NOTEBOOK_TYPE } from '../../../kernels/deepnote/types';
 import { IDisposable } from '../../../platform/common/types';
+import { IFileSystem } from '../../../platform/common/platform/types';
 import { IIntegrationEnvLiveRefresher } from './types';
 import { IntegrationsEnvFileWatcher } from './integrationsEnvFileWatcher.node';
 import { dispose } from '../../../platform/common/utils/lifecycle';
@@ -13,6 +14,7 @@ import { notebookPathToDeepnoteProjectFilePath } from '../../../platform/deepnot
 suite('IntegrationsEnvFileWatcher', () => {
     let watcher: IntegrationsEnvFileWatcher;
     let liveRefresher: IIntegrationEnvLiveRefresher;
+    let fileSystem: IFileSystem;
     let disposables: IDisposable[];
 
     const workspaceRoot = Uri.file('/ws');
@@ -37,7 +39,11 @@ suite('IntegrationsEnvFileWatcher', () => {
         liveRefresher = mock<IIntegrationEnvLiveRefresher>();
         when(liveRefresher.refresh(anything())).thenResolve();
 
-        watcher = new IntegrationsEnvFileWatcher(instance(liveRefresher), disposables);
+        // Default: a `.deepnote.env.yaml` exists, so a dir change refreshes; individual tests override this.
+        fileSystem = mock<IFileSystem>();
+        when(fileSystem.exists(anything())).thenResolve(true);
+
+        watcher = new IntegrationsEnvFileWatcher(instance(liveRefresher), instance(fileSystem), disposables);
     });
 
     teardown(() => {
@@ -127,5 +133,18 @@ suite('IntegrationsEnvFileWatcher', () => {
         await watcher.handleChangedDirs(new Set([deepnoteDirOf(uri)]));
 
         verify(liveRefresher.refresh(anything())).once();
+    });
+
+    test('does not refresh when no .deepnote.env.yaml exists for the notebook (an unrelated .env change)', async () => {
+        const uri = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
+        const notebook = createMockNotebook(uri);
+
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+        // No integrations file present in any candidate dir — the change must be treated as unrelated.
+        when(fileSystem.exists(anything())).thenResolve(false);
+
+        await watcher.handleChangedDirs(new Set([deepnoteDirOf(uri)]));
+
+        verify(liveRefresher.refresh(anything())).never();
     });
 });

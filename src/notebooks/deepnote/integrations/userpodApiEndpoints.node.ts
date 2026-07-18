@@ -14,10 +14,11 @@ import { ISqlIntegrationEnvVarsProvider, IUserpodApiEndpoints } from '../../../p
 /** Loopback host for the toolkit's `userpod-api` calls; currently serves integration env vars for `set_integration_env()` (as `[{name,value}]`). */
 @injectable()
 export class UserpodApiEndpoints implements IUserpodApiEndpoints, IExtensionSyncActivationService {
-    private readonly authTokenValue = generateUuid();
+    private readonly authTokensByProject = new Map<string, string>();
     private isListening = false;
     private server: http.Server | undefined;
     private serverBaseUrl: string | undefined;
+    private startAttempt: Promise<void> = Promise.resolve();
 
     constructor(
         @inject(ISqlIntegrationEnvVarsProvider)
@@ -25,28 +26,45 @@ export class UserpodApiEndpoints implements IUserpodApiEndpoints, IExtensionSync
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry
     ) {}
 
-    public get authToken(): string {
-        return this.authTokenValue;
-    }
-
     public get baseUrl(): string | undefined {
         return this.serverBaseUrl;
     }
 
+    /** Settles (never rejects) once the initial bind attempt completes, so callers can await readiness before reading `baseUrl`. */
+    public get ready(): Promise<void> {
+        return this.startAttempt;
+    }
+
+    /** Per-project bearer token, generated on first use, so a kernel can only read its own project's credentials. */
+    public getAuthToken(projectId: string): string {
+        let token = this.authTokensByProject.get(projectId);
+        if (token === undefined) {
+            token = generateUuid();
+            this.authTokensByProject.set(projectId, token);
+        }
+
+        return token;
+    }
+
     public activate(): void {
         this.disposables.push({ dispose: () => this.stop() });
-        this.start().catch((err) =>
+        this.startAttempt = this.start().catch((err) =>
             logger.error('UserpodApiEndpoints: Failed to start integration env vars endpoint', err)
         );
     }
 
-    private isAuthorized(authorizationHeader: string | undefined): boolean {
+    private isAuthorized(authorizationHeader: string | undefined, projectId: string): boolean {
         if (authorizationHeader === undefined) {
             return false;
         }
 
+        const expectedToken = this.authTokensByProject.get(projectId);
+        if (expectedToken === undefined) {
+            return false;
+        }
+
         // Constant-time compare: the response carries credentials, so don't leak the token via early-exit timing.
-        const expected = Buffer.from(`Bearer ${this.authTokenValue}`);
+        const expected = Buffer.from(`Bearer ${expectedToken}`);
         const actual = Buffer.from(authorizationHeader);
 
         return actual.length === expected.length && timingSafeEqual(actual, expected);
@@ -84,7 +102,7 @@ export class UserpodApiEndpoints implements IUserpodApiEndpoints, IExtensionSync
 
     private restart(): void {
         this.stop();
-        this.start().catch((err) =>
+        this.startAttempt = this.start().catch((err) =>
             logger.error('UserpodApiEndpoints: Failed to restart integration env vars endpoint', err)
         );
     }
@@ -94,25 +112,48 @@ export class UserpodApiEndpoints implements IUserpodApiEndpoints, IExtensionSync
 
         app.get('/userpod-api/:projectId/integrations/environment-variables', async (req: Request, res: Response) => {
             try {
-                if (!this.isAuthorized(req.headers.authorization)) {
+                // The `:projectId` route segment is always a single value at runtime; narrow the over-broad express type.
+                const projectId = Array.isArray(req.params.projectId) ? req.params.projectId[0] : req.params.projectId;
+
+                if (!this.isAuthorized(req.headers.authorization, projectId)) {
                     res.status(401).json([]);
 
                     return;
                 }
 
-                const projectId = req.params.projectId;
-                const notebook = workspace.notebookDocuments.find(
+                // Filter (not find): sibling `.deepnote` files can share a project id, so serve the project's env
+                // vars rather than an arbitrary first match, merged deterministically by notebook uri (F1).
+                const notebooks = workspace.notebookDocuments.filter(
                     (nb) => nb.notebookType === DEEPNOTE_NOTEBOOK_TYPE && nb.metadata?.deepnoteProjectId === projectId
                 );
 
-                if (!notebook) {
+                if (notebooks.length === 0) {
                     res.json([]);
 
                     return;
                 }
 
-                const envVars = await this.sqlIntegrationEnvVarsProvider.getEnvironmentVariables(notebook.uri);
-                const payload = Object.entries(envVars ?? {}).map(([name, value]) => ({ name, value }));
+                if (notebooks.length > 1) {
+                    logger.warn(
+                        `UserpodApiEndpoints: ${notebooks.length} open notebooks share project '${projectId}'; merging their integration env vars.`
+                    );
+                }
+
+                const ordered = [...notebooks].sort((a, b) => a.uri.toString().localeCompare(b.uri.toString()));
+                const resolved = await Promise.all(
+                    ordered.map((notebook) => this.sqlIntegrationEnvVarsProvider.getEnvironmentVariables(notebook.uri))
+                );
+
+                const merged = new Map<string, string | undefined>();
+                for (const envVars of resolved) {
+                    for (const [name, value] of Object.entries(envVars ?? {})) {
+                        if (!merged.has(name)) {
+                            merged.set(name, value);
+                        }
+                    }
+                }
+
+                const payload = [...merged].map(([name, value]) => ({ name, value }));
 
                 res.json(payload);
             } catch (err) {

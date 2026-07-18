@@ -9,6 +9,9 @@ import { IIntegrationEnvLiveRefresher } from './types';
 const REFRESH_INTEGRATION_ENV_SNIPPET = `import deepnote_toolkit
 deepnote_toolkit.set_integration_env()`;
 
+/** How long the transient "environment updated" status-bar message stays visible. */
+const STATUS_BAR_MESSAGE_TIMEOUT_MS = 5000;
+
 @injectable()
 export class IntegrationEnvLiveRefresher implements IIntegrationEnvLiveRefresher {
     constructor(@inject(IKernelProvider) private readonly kernelProvider: IKernelProvider) {}
@@ -18,7 +21,11 @@ export class IntegrationEnvLiveRefresher implements IIntegrationEnvLiveRefresher
         const refreshedCount = results.filter(Boolean).length;
 
         if (refreshedCount > 0) {
-            void window.showInformationMessage(l10n.t('Deepnote integration environment updated.'));
+            // Transient status-bar message rather than a persistent toast, so frequent env-file edits don't spam notifications (F2).
+            window.setStatusBarMessage(
+                l10n.t('Deepnote integration environment updated.'),
+                STATUS_BAR_MESSAGE_TIMEOUT_MS
+            );
         }
     }
 

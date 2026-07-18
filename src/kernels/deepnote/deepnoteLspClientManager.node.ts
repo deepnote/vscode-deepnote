@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as vscode from 'vscode';
 import { CancellationError } from 'vscode';
-import { inject, injectable } from 'inversify';
+import { inject, injectable, optional } from 'inversify';
 import type {
     LanguageClient as LanguageClientType,
     LanguageClientOptions,
@@ -26,7 +26,8 @@ import { noop } from '../../platform/common/utils/misc';
 import {
     IIntegrationStorage,
     IPlatformNotebookEditorProvider,
-    IPlatformDeepnoteNotebookManager
+    IPlatformDeepnoteNotebookManager,
+    ISqlIntegrationEnvVarsProvider
 } from '../../platform/notebooks/deepnote/types';
 import { ConfigurableDatabaseIntegrationConfig } from '../../platform/notebooks/deepnote/integrationTypes';
 import { SqlLspConnection, isSupportedBySqlLsp, convertToSqlLspConnection } from './sqlLspConnectionUtils';
@@ -64,7 +65,10 @@ export class DeepnoteLspClientManager
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
         @inject(IPlatformNotebookEditorProvider)
         private readonly notebookEditorProvider: IPlatformNotebookEditorProvider,
-        @inject(IPlatformDeepnoteNotebookManager) private readonly notebookManager: IPlatformDeepnoteNotebookManager
+        @inject(IPlatformDeepnoteNotebookManager) private readonly notebookManager: IPlatformDeepnoteNotebookManager,
+        @inject(ISqlIntegrationEnvVarsProvider)
+        @optional()
+        private readonly sqlIntegrationEnvVars?: ISqlIntegrationEnvVarsProvider
     ) {
         this.disposables.push(this);
     }
@@ -623,13 +627,19 @@ export class DeepnoteLspClientManager
 
             logger.trace(`SQL LSP: Found ${projectIntegrations.length} integrations in project ${projectId}`);
 
-            const projectIntegrationConfigs = (
-                await Promise.all(
-                    projectIntegrations.map((integration) =>
-                        this.integrationStorage.getIntegrationConfig(integration.id)
-                    )
-                )
-            ).filter((config): config is ConfigurableDatabaseIntegrationConfig => config != null);
+            // Prefer the merged (SecretStorage + `.deepnote.env.yaml`) configs so file-configured databases also get
+            // LSP autocomplete/schema (F13); fall back to SecretStorage-only when the merged provider is unavailable (e.g. web).
+            const projectIntegrationConfigs = this.sqlIntegrationEnvVars
+                ? (await this.sqlIntegrationEnvVars.getMergedConfigs(notebookUri)).filter(
+                      (config): config is ConfigurableDatabaseIntegrationConfig => config.type !== 'pandas-dataframe'
+                  )
+                : (
+                      await Promise.all(
+                          projectIntegrations.map((integration) =>
+                              this.integrationStorage.getIntegrationConfig(integration.id)
+                          )
+                      )
+                  ).filter((config): config is ConfigurableDatabaseIntegrationConfig => config != null);
 
             const connections = projectIntegrationConfigs
                 .filter((config) => isSupportedBySqlLsp(config.type))

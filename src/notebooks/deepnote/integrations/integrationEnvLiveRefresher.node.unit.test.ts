@@ -51,7 +51,7 @@ suite('IntegrationEnvLiveRefresher', () => {
         return notebook;
     }
 
-    test('runs the exact refresh snippet in a started kernel and shows one notification', async () => {
+    test('runs the exact refresh snippet in a started kernel and shows one status-bar message', async () => {
         const notebook = createRunningNotebook(Uri.file('/ws/a.deepnote'));
 
         await refresher.refresh([notebook]);
@@ -63,12 +63,12 @@ suite('IntegrationEnvLiveRefresher', () => {
             'executeHidden must receive the toolkit set_integration_env() snippet verbatim'
         );
 
-        verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
-        const [message] = capture(mockedVSCodeNamespaces.window.showInformationMessage).last();
+        verify(mockedVSCodeNamespaces.window.setStatusBarMessage(anything(), anything())).once();
+        const [message] = capture(mockedVSCodeNamespaces.window.setStatusBarMessage).last();
         assert.strictEqual(message, EXPECTED_NOTIFICATION);
     });
 
-    test('skips notebooks with no kernel and shows no notification', async () => {
+    test('skips notebooks with no kernel and shows no status-bar message', async () => {
         const notebookMock = mock<NotebookDocument>();
         when(notebookMock.uri).thenReturn(Uri.file('/ws/a.deepnote'));
         const notebook = instance(notebookMock);
@@ -77,10 +77,10 @@ suite('IntegrationEnvLiveRefresher', () => {
         await refresher.refresh([notebook]);
 
         assert.strictEqual(executeHiddenSpy.callCount, 0, 'no kernel means nothing to refresh');
-        verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).never();
+        verify(mockedVSCodeNamespaces.window.setStatusBarMessage(anything(), anything())).never();
     });
 
-    test('skips kernels that have not started and shows no notification', async () => {
+    test('skips kernels that have not started and shows no status-bar message', async () => {
         const notebookMock = mock<NotebookDocument>();
         when(notebookMock.uri).thenReturn(Uri.file('/ws/a.deepnote'));
         const notebook = instance(notebookMock);
@@ -92,27 +92,27 @@ suite('IntegrationEnvLiveRefresher', () => {
         await refresher.refresh([notebook]);
 
         assert.strictEqual(executeHiddenSpy.callCount, 0, 'a kernel that has not started must not be executed against');
-        verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).never();
+        verify(mockedVSCodeNamespaces.window.setStatusBarMessage(anything(), anything())).never();
     });
 
-    test('does not show a notification when the refresh snippet produces an error output', async () => {
+    test('does not show a status-bar message when the refresh snippet produces an error output', async () => {
         const notebook = createRunningNotebook(Uri.file('/ws/a.deepnote'));
         executeHiddenSpy.resolves([{ output_type: 'error', ename: 'RuntimeError', evalue: 'boom', traceback: [] }]);
 
         await refresher.refresh([notebook]);
 
         assert.strictEqual(executeHiddenSpy.callCount, 1, 'the snippet still runs, but its output signals failure');
-        verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).never();
+        verify(mockedVSCodeNamespaces.window.setStatusBarMessage(anything(), anything())).never();
     });
 
-    test('shows exactly one notification when multiple kernels are refreshed', async () => {
+    test('shows exactly one status-bar message when multiple kernels are refreshed', async () => {
         const notebookA = createRunningNotebook(Uri.file('/ws/a.deepnote'));
         const notebookB = createRunningNotebook(Uri.file('/ws/b.deepnote'));
 
         await refresher.refresh([notebookA, notebookB]);
 
         assert.strictEqual(executeHiddenSpy.callCount, 2, 'both started kernels are refreshed');
-        verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
+        verify(mockedVSCodeNamespaces.window.setStatusBarMessage(anything(), anything())).once();
     });
 
     test('continues to the next notebook when one executeHidden throws, and still notifies for the success', async () => {
@@ -124,7 +124,7 @@ suite('IntegrationEnvLiveRefresher', () => {
         await refresher.refresh([notebookA, notebookB]);
 
         assert.strictEqual(executeHiddenSpy.callCount, 2, 'a throw on the first must not stop the second');
-        verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
+        verify(mockedVSCodeNamespaces.window.setStatusBarMessage(anything(), anything())).once();
     });
 
     test('refreshes kernels in parallel: both executions start before either resolves', async () => {
@@ -144,6 +144,6 @@ suite('IntegrationEnvLiveRefresher', () => {
         await refresher.refresh([notebookA, notebookB]);
 
         assert.strictEqual(executeHiddenSpy.callCount, 2, 'both started kernels are refreshed');
-        verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
+        verify(mockedVSCodeNamespaces.window.setStatusBarMessage(anything(), anything())).once();
     });
 });

@@ -302,7 +302,11 @@ suite('DeepnoteServerStarter', () => {
          * whose `baseUrl` getter yields `endpointBaseUrl`. Tracked for disposal.
          */
         function createStarterWithEndpoint(endpointBaseUrl: string | undefined): DeepnoteServerStarter {
-            const endpoint: IUserpodApiEndpoints = { baseUrl: endpointBaseUrl, authToken: 'endpoint-token' };
+            const endpoint: IUserpodApiEndpoints = {
+                baseUrl: endpointBaseUrl,
+                ready: Promise.resolve(),
+                getAuthToken: () => 'endpoint-token'
+            };
             const starter = new DeepnoteServerStarter(
                 instance(mockProcessServiceFactory),
                 instance(mockToolkitInstaller),

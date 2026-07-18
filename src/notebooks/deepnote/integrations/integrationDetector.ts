@@ -1,4 +1,5 @@
-import { inject, injectable } from 'inversify';
+import { inject, injectable, optional } from 'inversify';
+import { workspace } from 'vscode';
 
 import { logger } from '../../../platform/logging';
 import { IDeepnoteNotebookManager } from '../../types';
@@ -8,7 +9,8 @@ import {
     IntegrationWithStatus
 } from '../../../platform/notebooks/deepnote/integrationTypes';
 import { IIntegrationDetector, IIntegrationStorage } from './types';
-import { databaseIntegrationTypes } from '@deepnote/database-integrations';
+import { ISqlIntegrationEnvVarsProvider } from '../../../platform/notebooks/deepnote/types';
+import { DatabaseIntegrationConfig, databaseIntegrationTypes } from '@deepnote/database-integrations';
 
 /**
  * Service for detecting integrations used in Deepnote notebooks
@@ -17,7 +19,10 @@ import { databaseIntegrationTypes } from '@deepnote/database-integrations';
 export class IntegrationDetector implements IIntegrationDetector {
     constructor(
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
-        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager
+        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
+        @inject(ISqlIntegrationEnvVarsProvider)
+        @optional()
+        private readonly sqlIntegrationEnvVars?: ISqlIntegrationEnvVarsProvider
     ) {}
 
     /**
@@ -42,6 +47,19 @@ export class IntegrationDetector implements IIntegrationDetector {
         const projectIntegrations = project.project.integrations?.slice() ?? [];
         logger.debug(`IntegrationDetector: Found ${projectIntegrations.length} integrations in project.integrations`);
 
+        // Merged (SecretStorage + `.deepnote.env.yaml`) configs, so file-configured integrations are not shown as
+        // unconfigured (F13). Resolved from the open notebook document; when the merged provider is unavailable
+        // (e.g. web) this stays empty and detection falls back to SecretStorage only.
+        const mergedConfigsById = new Map<string, DatabaseIntegrationConfig>();
+        const notebookUri = workspace.notebookDocuments.find(
+            (nb) => nb.metadata?.deepnoteProjectId === projectId && nb.metadata?.deepnoteNotebookId === notebookId
+        )?.uri;
+        if (this.sqlIntegrationEnvVars && notebookUri) {
+            for (const config of await this.sqlIntegrationEnvVars.getMergedConfigs(notebookUri)) {
+                mergedConfigsById.set(config.id, config);
+            }
+        }
+
         for (const projectIntegration of projectIntegrations) {
             const integrationId = projectIntegration.id;
             const integrationType = projectIntegration.type;
@@ -53,17 +71,35 @@ export class IntegrationDetector implements IIntegrationDetector {
                 continue;
             }
 
-            // Check if the integration is configured
+            // Configured if SecretStorage has it OR a `.deepnote.env.yaml` file config provides it.
             const config = await this.integrationStorage.getIntegrationConfig(integrationId);
+            const isConfigured = config != null || mergedConfigsById.has(integrationId);
             const status: IntegrationWithStatus = {
                 config: config ?? null,
-                status: config ? IntegrationStatus.Connected : IntegrationStatus.Disconnected,
+                status: isConfigured ? IntegrationStatus.Connected : IntegrationStatus.Disconnected,
                 // Include integration metadata from project for prefilling when config is null
                 integrationName: projectIntegration.name,
                 integrationType: integrationType as ConfigurableDatabaseIntegrationType
             };
 
             integrations.set(integrationId, status);
+        }
+
+        // Append file-only integrations (present in `.deepnote.env.yaml` but not declared in project.integrations).
+        for (const [integrationId, fileConfig] of mergedConfigsById) {
+            if (
+                integrations.has(integrationId) ||
+                !(databaseIntegrationTypes as readonly string[]).includes(fileConfig.type) ||
+                fileConfig.type === 'pandas-dataframe'
+            ) {
+                continue;
+            }
+            integrations.set(integrationId, {
+                config: null,
+                status: IntegrationStatus.Connected,
+                integrationName: fileConfig.name,
+                integrationType: fileConfig.type as ConfigurableDatabaseIntegrationType
+            });
         }
 
         logger.debug(`IntegrationDetector: Found ${integrations.size} integrations`);

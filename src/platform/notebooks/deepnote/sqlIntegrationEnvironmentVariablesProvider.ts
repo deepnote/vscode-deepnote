@@ -2,12 +2,7 @@ import { inject, injectable, optional } from 'inversify';
 import { CancellationToken, Event, EventEmitter, Uri } from 'vscode';
 
 import { DeepnoteFile } from '@deepnote/blocks';
-import {
-    DatabaseIntegrationConfig,
-    FederatedAuthMethod,
-    getEnvironmentVariablesForIntegrations,
-    isFederatedAuthMethod
-} from '@deepnote/database-integrations';
+import { DatabaseIntegrationConfig, getEnvironmentVariablesForIntegrations } from '@deepnote/database-integrations';
 
 import { IDisposableRegistry, Resource } from '../../common/types';
 import { EnvironmentVariables } from '../../common/variables/types';
@@ -20,24 +15,10 @@ import {
     IPlatformNotebookEditorProvider,
     IPlatformDeepnoteNotebookManager
 } from './types';
-import { DATAFRAME_SQL_INTEGRATION_ID } from './integrationTypes';
+import { DATAFRAME_SQL_INTEGRATION_ID, isFederatedAuthMetadata } from './integrationTypes';
 
 /** One entry of a Deepnote project's `integrations` list. */
 type ProjectIntegration = NonNullable<DeepnoteFile['project']['integrations']>[number];
-
-/** Narrows metadata to the federated-auth variant; upstream `isFederatedAuthMetadata` can't be reused because its generic doesn't unify with our union. Delegates to upstream `isFederatedAuthMethod` at runtime. */
-function isFederatedAuthMetadata(
-    metadata: DatabaseIntegrationConfig['metadata']
-): metadata is Extract<DatabaseIntegrationConfig['metadata'], { authMethod: FederatedAuthMethod }> {
-    if (typeof metadata !== 'object' || metadata === null) {
-        return false;
-    }
-    if (!('authMethod' in metadata)) {
-        return false;
-    }
-    const authMethod = metadata.authMethod;
-    return typeof authMethod === 'string' && isFederatedAuthMethod(authMethod);
-}
 
 /**
  * Provides environment variables for SQL integrations.
@@ -156,6 +137,38 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
         logger.trace(`SqlIntegrationEnvironmentVariablesProvider: Returning ${Object.keys(envVars).length} env vars`);
 
         return envVars;
+    }
+
+    /**
+     * Project SecretStorage integrations merged with `.deepnote.env.yaml` file configs (file wins, additive
+     * file-only). The single source of truth so integration detection, the SQL status bar, and the SQL LSP agree
+     * with what kernel execution actually sees (F13). Excludes the internal DuckDB integration.
+     */
+    public async getMergedConfigs(resource: Resource, token?: CancellationToken): Promise<DatabaseIntegrationConfig[]> {
+        if (!resource || token?.isCancellationRequested) {
+            return [];
+        }
+
+        const notebook = this.notebookEditorProvider.findAssociatedNotebookDocument(resource);
+        if (!notebook) {
+            return [];
+        }
+
+        const projectId = notebook.metadata?.deepnoteProjectId as string | undefined;
+        const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
+        if (!projectId || !notebookId) {
+            return [];
+        }
+
+        const project = this.notebookManager.getProjectForNotebook(projectId, notebookId);
+        if (!project) {
+            return [];
+        }
+
+        const projectIntegrations = project.project.integrations?.slice() ?? [];
+        const fileConfigs = await this.loadFileConfigs(notebook.uri);
+
+        return this.mergeIntegrationConfigs(projectIntegrations, fileConfigs);
     }
 
     /** Loads `.deepnote.env.yaml` configs (CLI parity) when a file source is present; failures — or no provider, e.g. web — degrade to []. */

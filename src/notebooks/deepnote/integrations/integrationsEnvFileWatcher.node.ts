@@ -3,6 +3,7 @@ import { NotebookDocument, RelativePattern, Uri, workspace } from 'vscode';
 import { DEFAULT_ENV_FILE, DEFAULT_INTEGRATIONS_FILE } from '@deepnote/database-integrations';
 
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
+import { IFileSystem } from '../../../platform/common/platform/types';
 import { IDisposableRegistry } from '../../../platform/common/types';
 import { notebookPathToDeepnoteProjectFilePath } from '../../../platform/deepnote/deepnoteProjectUtils';
 import { logger } from '../../../platform/logging';
@@ -23,6 +24,7 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
 
     constructor(
         @inject(IIntegrationEnvLiveRefresher) private readonly liveRefresher: IIntegrationEnvLiveRefresher,
+        @inject(IFileSystem) private readonly fileSystem: IFileSystem,
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry
     ) {}
 
@@ -55,7 +57,7 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
 
     /** Public so it can be unit-tested without real filesystem events. */
     public async handleChangedDirs(changedDirs: Set<string>): Promise<void> {
-        const affected = this.findAffectedNotebooks(changedDirs);
+        const affected = await this.findAffectedNotebooks(changedDirs);
         if (affected.length === 0) {
             return;
         }
@@ -63,7 +65,7 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
         await this.liveRefresher.refresh(affected);
     }
 
-    private findAffectedNotebooks(changedDirs: Set<string>): NotebookDocument[] {
+    private async findAffectedNotebooks(changedDirs: Set<string>): Promise<NotebookDocument[]> {
         const affected: NotebookDocument[] = [];
 
         for (const notebook of workspace.notebookDocuments) {
@@ -81,15 +83,40 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
                 continue;
             }
 
-            const deepnoteDir = Uri.joinPath(deepnoteFileUri, '..').fsPath;
-            const workspaceRoot = workspace.getWorkspaceFolder(notebook.uri)?.uri.fsPath;
+            const deepnoteDir = Uri.joinPath(deepnoteFileUri, '..');
+            const workspaceRoot = workspace.getWorkspaceFolder(notebook.uri)?.uri;
 
-            if (changedDirs.has(deepnoteDir) || (workspaceRoot != null && changedDirs.has(workspaceRoot))) {
+            const changedInScope =
+                changedDirs.has(deepnoteDir.fsPath) || (workspaceRoot != null && changedDirs.has(workspaceRoot.fsPath));
+            if (!changedInScope) {
+                continue;
+            }
+
+            // A `.env` change only affects integration env when a `.deepnote.env.yaml` actually exists for this
+            // notebook; without one the refresh is a no-op and its status message misleading, so an unrelated
+            // `.env` (a very common non-Deepnote file) must not trigger hidden kernel executions (F2).
+            const candidateDirs =
+                workspaceRoot != null && workspaceRoot.fsPath !== deepnoteDir.fsPath
+                    ? [deepnoteDir, workspaceRoot]
+                    : [deepnoteDir];
+            if (await this.hasIntegrationsFile(candidateDirs)) {
                 affected.push(notebook);
             }
         }
 
         return affected;
+    }
+
+    /** True when a `.deepnote.env.yaml` exists in any candidate dir (dir-then-root), mirroring the config provider's probe. */
+    private async hasIntegrationsFile(dirs: Uri[]): Promise<boolean> {
+        for (const dir of dirs) {
+            const candidate = Uri.joinPath(dir, DEFAULT_INTEGRATIONS_FILE);
+            if (await this.fileSystem.exists(candidate)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private onFileEvent(dir: Uri): void {

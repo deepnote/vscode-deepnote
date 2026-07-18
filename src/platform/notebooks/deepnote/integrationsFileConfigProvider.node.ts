@@ -1,42 +1,21 @@
 import dotenv from 'dotenv';
 import { inject, injectable } from 'inversify';
-import { Uri, workspace } from 'vscode';
+import { Diagnostic, DiagnosticCollection, DiagnosticSeverity, languages, Range, Uri, workspace } from 'vscode';
 
 import {
     BUILTIN_INTEGRATIONS,
     DatabaseIntegrationConfig,
     DEFAULT_ENV_FILE,
     DEFAULT_INTEGRATIONS_FILE,
-    FederatedAuthMethod,
-    isFederatedAuthMethod,
     parseIntegrations,
     ValidationIssue
 } from '@deepnote/database-integrations';
 
 import { IFileSystem } from '../../common/platform/types';
+import { IDisposableRegistry } from '../../common/types';
 import { logger } from '../../logging';
-import { DATAFRAME_SQL_INTEGRATION_ID } from './integrationTypes';
+import { isFederatedAuthMetadata } from './integrationTypes';
 import { IIntegrationsFileConfigProvider } from './types';
-
-/**
- * Narrows metadata to the federated-auth variant. Mirrors the guard in
- * `sqlIntegrationEnvironmentVariablesProvider.ts` because upstream `isFederatedAuthMetadata`'s generic
- * doesn't unify with our `DatabaseIntegrationConfig['metadata']` union; delegates to the exported
- * `isFederatedAuthMethod` at runtime.
- */
-function isFederatedAuthMetadata(
-    metadata: DatabaseIntegrationConfig['metadata']
-): metadata is Extract<DatabaseIntegrationConfig['metadata'], { authMethod: FederatedAuthMethod }> {
-    if (typeof metadata !== 'object' || metadata === null) {
-        return false;
-    }
-    if (!('authMethod' in metadata)) {
-        return false;
-    }
-    const authMethod = metadata.authMethod;
-
-    return typeof authMethod === 'string' && isFederatedAuthMethod(authMethod);
-}
 
 /**
  * Stateless loader that reads integration configs from a `.deepnote.env.yaml` file (CLI parity),
@@ -49,7 +28,17 @@ function isFederatedAuthMetadata(
  */
 @injectable()
 export class IntegrationsFileConfigProvider implements IIntegrationsFileConfigProvider {
-    constructor(@inject(IFileSystem) private readonly fileSystem: IFileSystem) {}
+    private readonly diagnostics: DiagnosticCollection | undefined;
+
+    constructor(
+        @inject(IFileSystem) private readonly fileSystem: IFileSystem,
+        @inject(IDisposableRegistry) disposables: IDisposableRegistry
+    ) {
+        this.diagnostics = languages.createDiagnosticCollection('deepnote-integrations');
+        if (this.diagnostics) {
+            disposables.push(this.diagnostics);
+        }
+    }
 
     public async getConfigsForFile(
         deepnoteFileUri: Uri
@@ -79,7 +68,10 @@ export class IntegrationsFileConfigProvider implements IIntegrationsFileConfigPr
 
             const { integrations, issues } = parseIntegrations({ yaml, env });
 
-            return this.filterIntegrations(integrations, issues);
+            const result = this.filterIntegrations(integrations, issues);
+            this.updateDiagnostics(yamlUri, result.issues);
+
+            return result;
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             const issue: ValidationIssue = {
@@ -124,7 +116,7 @@ export class IntegrationsFileConfigProvider implements IIntegrationsFileConfigPr
                 return;
             }
 
-            if (integration.type === 'pandas-dataframe' || integration.id === DATAFRAME_SQL_INTEGRATION_ID) {
+            if (integration.type === 'pandas-dataframe') {
                 issues.push({
                     path: issuePath,
                     message: `Integration '${integration.id}' has unsupported type '${integration.type}' and was ignored.`,
@@ -199,5 +191,30 @@ export class IntegrationsFileConfigProvider implements IIntegrationsFileConfigPr
 
             return true;
         });
+    }
+
+    /** Surfaces validation issues in the Problems panel against the located `.deepnote.env.yaml` so a typo/missing key isn't silent (F6); a clean parse clears them. No-op when diagnostics are unavailable (e.g. web/tests). */
+    private updateDiagnostics(yamlUri: Uri, issues: ValidationIssue[]): void {
+        if (!this.diagnostics) {
+            return;
+        }
+
+        if (issues.length === 0) {
+            this.diagnostics.delete(yamlUri);
+
+            return;
+        }
+
+        const diagnostics = issues.map((issue) => {
+            const detail = issue.path
+                ? `${issue.code} at '${issue.path}': ${issue.message}`
+                : `${issue.code}: ${issue.message}`;
+            const diagnostic = new Diagnostic(new Range(0, 0, 0, 0), detail, DiagnosticSeverity.Warning);
+            diagnostic.source = 'Deepnote integrations';
+
+            return diagnostic;
+        });
+
+        this.diagnostics.set(yamlUri, diagnostics);
     }
 }

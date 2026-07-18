@@ -97,6 +97,12 @@ export interface ISqlIntegrationEnvVarsProvider {
      * Get environment variables for SQL integrations used in the given notebook.
      */
     getEnvironmentVariables(resource: Resource, token?: CancellationToken): Promise<EnvironmentVariables>;
+
+    /**
+     * Project SecretStorage integrations merged with `.deepnote.env.yaml` file configs (file wins, additive
+     * file-only), so integration detection, the SQL status bar, and the SQL LSP agree with kernel execution.
+     */
+    getMergedConfigs(resource: Resource, token?: CancellationToken): Promise<DatabaseIntegrationConfig[]>;
 }
 
 export const IUserpodApiEndpoints = Symbol('IUserpodApiEndpoints');
@@ -104,8 +110,11 @@ export interface IUserpodApiEndpoints {
     /** Loopback base URL the toolkit fetches integration env vars from; `undefined` until the server is listening. */
     readonly baseUrl: string | undefined;
 
-    /** Bearer token the endpoint requires (it serves credentials); injected into the toolkit as `DEEPNOTE_RUNTIME__PROJECT_SECRET`. */
-    readonly authToken: string;
+    /** Settles (never rejects) once the initial bind attempt completes, so callers can await readiness before reading `baseUrl`. */
+    readonly ready: Promise<void>;
+
+    /** Per-project bearer token the endpoint requires (it serves credentials); injected into the toolkit as `DEEPNOTE_RUNTIME__PROJECT_SECRET`. */
+    getAuthToken(projectId: string): string;
 }
 
 export const IIntegrationsFileConfigProvider = Symbol('IIntegrationsFileConfigProvider');

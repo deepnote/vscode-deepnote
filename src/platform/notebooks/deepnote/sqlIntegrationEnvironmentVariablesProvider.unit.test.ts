@@ -563,6 +563,50 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             );
         });
 
+        test('getMergedConfigs returns the merged config list (file wins, SecretStorage fallback, file-only additive)', async () => {
+            stubNotebookWithProject(
+                createMockProject('project-123', [
+                    { id: 'shared-db', name: 'shared-db', type: 'pgsql' },
+                    { id: 'secret-only', name: 'secret-only', type: 'pgsql' }
+                ])
+            );
+            when(fileConfigProvider.getConfigsForFile(anything())).thenResolve({
+                configs: [
+                    pgConfig('shared-db', 'from-file.example.com'),
+                    pgConfig('file-only', 'file-only.example.com')
+                ],
+                issues: []
+            });
+            when(integrationStorage.getIntegrationConfig('secret-only')).thenResolve(
+                pgConfig('secret-only', 'secret-only.example.com')
+            );
+
+            const merged = await providerWithFile.getMergedConfigs(notebookUri);
+            const byId = new Map(merged.map((config) => [config.id, config]));
+
+            assert.deepStrictEqual(
+                [...byId.keys()].sort(),
+                ['file-only', 'secret-only', 'shared-db'],
+                'merged configs must include the file-won, SecretStorage-fallback, and file-only integrations'
+            );
+            const sharedDb = byId.get('shared-db');
+            assert.ok(
+                sharedDb && JSON.stringify(sharedDb.metadata).includes('from-file.example.com'),
+                'file config must win the id conflict in the merged list'
+            );
+            assert.ok(
+                !byId.has(DATAFRAME_SQL_INTEGRATION_ID),
+                'the internal DuckDB integration is not part of the merged list'
+            );
+            verify(integrationStorage.getIntegrationConfig('shared-db')).never();
+        });
+
+        test('getMergedConfigs returns [] when the resource resolves to no project', async () => {
+            const merged = await providerWithFile.getMergedConfigs(undefined);
+
+            assert.deepStrictEqual(merged, []);
+        });
+
         test('File provider absent: behavior is SecretStorage-only (unchanged)', async () => {
             const providerWithoutFile = new SqlIntegrationEnvironmentVariablesProvider(
                 instance(integrationStorage),

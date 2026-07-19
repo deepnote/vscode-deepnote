@@ -1,6 +1,6 @@
 import { inject, injectable } from 'inversify';
 import { PostHog } from 'posthog-node';
-import { workspace } from 'vscode';
+import { env, workspace } from 'vscode';
 
 import { IExtensionSyncActivationService } from '../activation/types';
 import {
@@ -11,10 +11,12 @@ import {
 } from '../common/types';
 import { generateUuid } from '../common/uuid';
 import { logger } from '../logging';
-import { IS_POSTHOG_CONFIGURED, POSTHOG_API_KEY, POSTHOG_HOST } from './constants';
+import { IS_POSTHOG_CONFIGURED, POSTHOG_API_KEY, POSTHOG_CHANNEL, POSTHOG_HOST } from './constants';
 import { ITelemetryService, TelemetryEvent } from './types';
 
 const USER_ID_STORAGE_KEY = 'deepnote-telemetry-anonymous-user-id';
+const POSTHOG_FLUSH_AT = 20;
+const POSTHOG_FLUSH_INTERVAL = 30000;
 const POSTHOG_SHUTDOWN_TIMEOUT = 5000;
 
 @injectable()
@@ -30,11 +32,15 @@ export class TelemetryService implements ITelemetryService, IExtensionSyncActiva
     ) {
         asyncDisposables.push(this);
         this.client = null;
-        this.userIdState = this.stateFactory.createGlobalPersistentState<string>(USER_ID_STORAGE_KEY, generateUuid());
+        this.userIdState = this.stateFactory.createGlobalPersistentState<string>(USER_ID_STORAGE_KEY, 'anonymous');
     }
 
     public async activate(): Promise<void> {
         try {
+            if (!this.userIdState.value) {
+                await this.userIdState.updateValue(generateUuid());
+            }
+
             this.createClient();
         } catch (error) {
             logger.debug(`TelemetryService activation error: ${error}`);
@@ -45,7 +51,8 @@ export class TelemetryService implements ITelemetryService, IExtensionSyncActiva
                 if (e.affectsConfiguration('telemetry') || e.affectsConfiguration('deepnote.telemetry')) {
                     this.handleConfigChanged();
                 }
-            })
+            }),
+            env.onDidChangeTelemetryEnabled(() => this.handleConfigChanged())
         );
     }
 
@@ -62,7 +69,7 @@ export class TelemetryService implements ITelemetryService, IExtensionSyncActiva
             this.client.capture({
                 distinctId: this.userIdState.value,
                 event: eventName,
-                properties
+                properties: { ...properties, channel: POSTHOG_CHANNEL, $process_person_profile: false }
             });
         } catch (ex) {
             logger.debug(`PostHog analytics error: ${ex}`);
@@ -75,8 +82,8 @@ export class TelemetryService implements ITelemetryService, IExtensionSyncActiva
         }
 
         this.client = new PostHog(POSTHOG_API_KEY, {
-            flushAt: 20,
-            flushInterval: 30000,
+            flushAt: POSTHOG_FLUSH_AT,
+            flushInterval: POSTHOG_FLUSH_INTERVAL,
             host: POSTHOG_HOST
         });
     }
@@ -96,11 +103,29 @@ export class TelemetryService implements ITelemetryService, IExtensionSyncActiva
         }
     }
 
+    private handleConfigChanged(): void {
+        try {
+            if (this.isTelemetryEnabled()) {
+                this.createClient();
+            } else {
+                this.destroyClient().catch((error) => {
+                    logger.debug(`Failed to destroy PostHog client: ${error}`);
+                });
+            }
+        } catch (error) {
+            logger.debug(`Failed to handle telemetry configuration change: ${error}`);
+        }
+    }
+
     private isPostHogConfigured(): boolean {
         return IS_POSTHOG_CONFIGURED;
     }
 
     private isTelemetryEnabled(): boolean {
+        if (!env.isTelemetryEnabled) {
+            return false;
+        }
+
         const telemetryLevel = workspace.getConfiguration('telemetry').get<string>('telemetryLevel', 'all');
 
         if (telemetryLevel !== 'all') {
@@ -108,16 +133,5 @@ export class TelemetryService implements ITelemetryService, IExtensionSyncActiva
         }
 
         return workspace.getConfiguration('deepnote').get<boolean>('telemetry.enabled', true);
-    }
-
-    private handleConfigChanged(): void {
-        if (this.isTelemetryEnabled()) {
-            this.createClient();
-        } else {
-            this.destroyClient().catch((error) => {
-                logger.error(`Failed to destroy PostHog client: ${error}`);
-                this.client = null;
-            });
-        }
     }
 }

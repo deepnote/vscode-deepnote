@@ -60,6 +60,8 @@ jobs:
         run: npm run package
         env:
           POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          # Tag PR-build telemetry as 'pr' so dogfood installs are segmentable out of production ('stable').
+          POSTHOG_CHANNEL: ${{ github.event_name == 'pull_request' && 'pr' || 'stable' }}
 
       - name: Rename VSIX file
         run: |

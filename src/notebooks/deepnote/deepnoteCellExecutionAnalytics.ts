@@ -4,7 +4,9 @@ import { Disposable } from 'vscode';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { ITelemetryService } from '../../platform/analytics/types';
 import { IDisposableRegistry } from '../../platform/common/types';
+import { isDeepnoteNotebook } from '../../platform/common/utils';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
+import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
 import { IDeepnoteNotebookManager } from '../types';
 
 /**
@@ -25,7 +27,7 @@ export class DeepnoteCellExecutionAnalytics implements IExtensionSyncActivationS
                     return;
                 }
 
-                if (e.cell.notebook.notebookType !== 'deepnote') {
+                if (!isDeepnoteNotebook(e.cell.notebook)) {
                     return;
                 }
 
@@ -35,10 +37,15 @@ export class DeepnoteCellExecutionAnalytics implements IExtensionSyncActivationS
                 const properties: Record<string, string> = { cellType };
 
                 if (cellType === 'sql') {
-                    const integrationId =
-                        e.cell.metadata?.__deepnotePocket?.sql_integration_id ?? e.cell.metadata?.sql_integration_id;
+                    // Read the authoritative top-level key only; the status-bar switch updates only this
+                    // key (the __deepnotePocket copy can go stale after an in-session integration switch).
+                    const integrationId = e.cell.metadata?.sql_integration_id;
 
-                    if (integrationId) {
+                    if (integrationId === DATAFRAME_SQL_INTEGRATION_ID) {
+                        // The built-in DataFrame SQL integration is a pseudo-id never present in
+                        // project.integrations; map it the same way switch_sql_integration does.
+                        properties.integrationType = 'duckdb';
+                    } else if (integrationId) {
                         const projectId = e.cell.notebook.metadata?.deepnoteProjectId;
                         const notebookId = e.cell.notebook.metadata?.deepnoteNotebookId;
 

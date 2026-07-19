@@ -57,8 +57,10 @@ async function leaveUnsavedCellEdit(): Promise<void> {
                 await line.click();
 
                 return true;
-            } catch {
+            } catch (error) {
                 // Stale reference (the cell re-rendered) or not yet clickable — re-locate and retry.
+                console.warn('[deepnote-e2e] locate/click notebook code cell (retrying):', error);
+
                 return false;
             }
         },

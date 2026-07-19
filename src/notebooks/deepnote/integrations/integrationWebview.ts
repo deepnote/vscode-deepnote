@@ -691,7 +691,9 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 });
             }
 
-            return persisted;
+            // The credential save above is the operation being tracked; a skipped/failed
+            // project-YAML sync must not report the whole operation as a failure.
+            return true;
         } catch (error) {
             logger.error('Failed to save integration configuration', error);
             await this.currentPanel?.webview.postMessage({
@@ -735,7 +737,9 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 });
             }
 
-            return persisted;
+            // The credential reset above is the operation being tracked; a skipped/failed
+            // project-YAML sync must not report the whole operation as a failure.
+            return true;
         } catch (error) {
             logger.error('Failed to reset integration configuration', error);
             await this.currentPanel?.webview.postMessage({
@@ -774,7 +778,9 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 });
             }
 
-            return persisted;
+            // The credential delete above is the operation being tracked; a skipped/failed
+            // project-YAML sync must not report the whole operation as a failure.
+            return true;
         } catch (error) {
             logger.error('Failed to delete integration', error);
             await this.currentPanel?.webview.postMessage({

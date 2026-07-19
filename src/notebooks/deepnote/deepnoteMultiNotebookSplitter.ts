@@ -24,6 +24,8 @@ const MAX_LEGACY_ALLOCATION_ATTEMPTS = 10_000;
  * The environment mapper is undefined on the web target, where env migration is a desktop-only no-op.
  */
 export class DeepnoteMultiNotebookSplitter {
+    private readonly analytics: ITelemetryService;
+
     private readonly disposables: Disposable[] = [];
 
     private readonly envMapper: IDeepnoteNotebookEnvironmentMapper | undefined;
@@ -35,8 +37,6 @@ export class DeepnoteMultiNotebookSplitter {
     private readonly promptedUris = new Set<string>();
 
     private readonly refreshTree: () => void;
-
-    private readonly analytics: ITelemetryService;
 
     constructor(
         envMapper: IDeepnoteNotebookEnvironmentMapper | undefined,

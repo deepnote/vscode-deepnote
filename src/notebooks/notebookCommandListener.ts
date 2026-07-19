@@ -29,7 +29,7 @@ import { IServiceContainer } from '../platform/ioc/types';
 import { endCellAndDisplayErrorsInCell } from '../kernels/execution/helpers';
 import { chainWithPendingUpdates } from '../kernels/execution/notebookUpdater';
 import { IDataScienceErrorHandler } from '../kernels/errors/types';
-import { getNotebookMetadata } from '../platform/common/utils';
+import { getNotebookMetadata, isDeepnoteNotebook } from '../platform/common/utils';
 import { KernelConnector } from './controllers/kernelConnector';
 import { IControllerRegistration } from './controllers/types';
 import { IExtensionSyncActivationService } from '../platform/activation/types';
@@ -117,10 +117,12 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
     private runAllCells() {
         const editor = window.activeNotebookEditor;
         if (editor) {
-            if (editor.notebook.notebookType === 'deepnote') {
-                this.analytics.trackEvent({ eventName: 'execute_notebook' });
-            }
-            commands.executeCommand('notebook.execute').then(noop, noop);
+            const isDeepnote = isDeepnoteNotebook(editor.notebook);
+            commands.executeCommand('notebook.execute').then(() => {
+                if (isDeepnote) {
+                    this.analytics.trackEvent({ eventName: 'execute_notebook' });
+                }
+            }, noop);
         }
     }
 
@@ -148,10 +150,12 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
     private addCellBelow() {
         const editor = window.activeNotebookEditor;
         if (editor) {
-            if (editor.notebook.notebookType === 'deepnote') {
-                this.analytics.trackEvent({ eventName: 'add_block', properties: { blockType: 'code' } });
-            }
-            commands.executeCommand('notebook.cell.insertCodeCellBelow').then(noop, noop);
+            const isDeepnote = isDeepnoteNotebook(editor.notebook);
+            commands.executeCommand('notebook.cell.insertCodeCellBelow').then(() => {
+                if (isDeepnote) {
+                    this.analytics.trackEvent({ eventName: 'add_block', properties: { blockType: 'code' } });
+                }
+            }, noop);
         }
     }
 

@@ -25,6 +25,9 @@ import { buildSingleNotebookFile, buildSiblingNotebookFileUri } from './deepnote
 import { deepnoteFileExists } from './deepnoteSiblingFileAllocator';
 import { isSnapshotFile } from './snapshots/snapshotFiles';
 
+/** Outcome of a tracked explorer command, so telemetry can separate user drop-off from real failures. */
+type CommandOutcome = 'completed' | 'cancelled' | 'failed';
+
 /**
  * Manages the Deepnote explorer tree view and its commands. Sibling `.deepnote` files are grouped
  * by `project.id`; project-scoped commands span the group, notebook-scoped ones a single leaf/child.
@@ -146,9 +149,9 @@ export class DeepnoteExplorerView {
         return { id: newNotebook.id, name: notebookName };
     }
 
-    public async renameNotebook(treeItem: DeepnoteTreeItem): Promise<boolean> {
+    public async renameNotebook(treeItem: DeepnoteTreeItem): Promise<CommandOutcome> {
         if (!this.itemIsNotebookScoped(treeItem)) {
-            return false;
+            return 'cancelled';
         }
 
         try {
@@ -158,7 +161,7 @@ export class DeepnoteExplorerView {
             if (!projectData?.project?.notebooks) {
                 await window.showErrorMessage(l10n.t('Invalid Deepnote file format'));
 
-                return false;
+                return 'failed';
             }
 
             const targetNotebook = this.resolveTargetNotebook(treeItem, projectData);
@@ -166,7 +169,7 @@ export class DeepnoteExplorerView {
             if (!targetNotebook) {
                 await window.showErrorMessage(l10n.t('Notebook not found'));
 
-                return false;
+                return 'failed';
             }
 
             const currentName = targetNotebook.name;
@@ -175,7 +178,7 @@ export class DeepnoteExplorerView {
             const newName = await this.promptForNotebookName(currentName, existingNames);
 
             if (!newName || newName === currentName) {
-                return false;
+                return 'cancelled';
             }
 
             // Flush the open document and re-read before rewriting, so we serialize the user's live cell
@@ -185,7 +188,7 @@ export class DeepnoteExplorerView {
                     l10n.t('Could not save "{0}" before renaming. The notebook was left unchanged.', currentName)
                 );
 
-                return false;
+                return 'failed';
             }
 
             const freshData = await readDeepnoteProjectFile(fileUri);
@@ -194,7 +197,7 @@ export class DeepnoteExplorerView {
             if (!freshTarget) {
                 await window.showErrorMessage(l10n.t('Notebook not found'));
 
-                return false;
+                return 'failed';
             }
 
             freshTarget.name = newName;
@@ -204,18 +207,18 @@ export class DeepnoteExplorerView {
             this.treeDataProvider.refreshNotebook(treeItem.context.projectId);
             await window.showInformationMessage(l10n.t('Notebook renamed to: {0}', newName));
 
-            return true;
+            return 'completed';
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             await window.showErrorMessage(l10n.t('Failed to rename notebook: {0}', errorMessage));
 
-            return false;
+            return 'failed';
         }
     }
 
-    public async deleteNotebook(treeItem: DeepnoteTreeItem): Promise<boolean> {
+    public async deleteNotebook(treeItem: DeepnoteTreeItem): Promise<CommandOutcome> {
         if (!this.itemIsNotebookScoped(treeItem)) {
-            return false;
+            return 'cancelled';
         }
 
         try {
@@ -225,7 +228,7 @@ export class DeepnoteExplorerView {
             if (!projectData?.project?.notebooks) {
                 await window.showErrorMessage(l10n.t('Invalid Deepnote file format'));
 
-                return false;
+                return 'failed';
             }
 
             const targetNotebook = this.resolveTargetNotebook(treeItem, projectData);
@@ -233,7 +236,7 @@ export class DeepnoteExplorerView {
             if (!targetNotebook) {
                 await window.showErrorMessage(l10n.t('Notebook not found'));
 
-                return false;
+                return 'failed';
             }
 
             const notebookName = targetNotebook.name;
@@ -245,7 +248,7 @@ export class DeepnoteExplorerView {
             );
 
             if (confirmation !== l10n.t('Delete')) {
-                return false;
+                return 'cancelled';
             }
 
             // A single-notebook file's only non-init notebook is the file itself: delete the file.
@@ -254,7 +257,7 @@ export class DeepnoteExplorerView {
                 this.treeDataProvider.refresh();
                 await window.showInformationMessage(l10n.t('Notebook deleted: {0}', notebookName));
 
-                return true;
+                return 'completed';
             }
 
             // Legacy multi-notebook file: remove the notebook from the array.
@@ -267,12 +270,12 @@ export class DeepnoteExplorerView {
             this.treeDataProvider.refreshNotebook(treeItem.context.projectId);
             await window.showInformationMessage(l10n.t('Notebook deleted: {0}', notebookName));
 
-            return true;
+            return 'completed';
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             await window.showErrorMessage(l10n.t('Failed to delete notebook: {0}', errorMessage));
 
-            return false;
+            return 'failed';
         }
     }
 
@@ -286,9 +289,9 @@ export class DeepnoteExplorerView {
         await workspace.fs.delete(fileUri, { useTrash });
     }
 
-    public async duplicateNotebook(treeItem: DeepnoteTreeItem): Promise<boolean> {
+    public async duplicateNotebook(treeItem: DeepnoteTreeItem): Promise<CommandOutcome> {
         if (!this.itemIsNotebookScoped(treeItem)) {
-            return false;
+            return 'cancelled';
         }
 
         try {
@@ -298,7 +301,7 @@ export class DeepnoteExplorerView {
             if (!projectData?.project?.notebooks) {
                 await window.showErrorMessage(l10n.t('Invalid Deepnote file format'));
 
-                return false;
+                return 'failed';
             }
 
             const targetNotebook = this.resolveTargetNotebook(treeItem, projectData);
@@ -306,7 +309,7 @@ export class DeepnoteExplorerView {
             if (!targetNotebook) {
                 await window.showErrorMessage(l10n.t('Notebook not found'));
 
-                return false;
+                return 'failed';
             }
 
             const existingNames = await this.collectNotebookNamesForProject(treeItem.context.projectId);
@@ -327,7 +330,7 @@ export class DeepnoteExplorerView {
                 this.treeDataProvider.refreshNotebook(treeItem.context.projectId);
                 await window.showInformationMessage(l10n.t('Notebook duplicated: {0}', newName));
 
-                return true;
+                return 'completed';
             }
 
             // Legacy multi-notebook file: append the duplicate in place (existing behavior).
@@ -345,18 +348,18 @@ export class DeepnoteExplorerView {
 
             await window.showInformationMessage(l10n.t('Notebook duplicated: {0}', newName));
 
-            return true;
+            return 'completed';
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             await window.showErrorMessage(l10n.t('Failed to duplicate notebook: {0}', errorMessage));
 
-            return false;
+            return 'failed';
         }
     }
 
-    public async renameProject(treeItem: DeepnoteTreeItem): Promise<boolean> {
-        if (treeItem.extra.type !== DeepnoteTreeItemType.ProjectGroup) {
-            return false;
+    public async renameProject(treeItem: DeepnoteTreeItem): Promise<CommandOutcome> {
+        if (treeItem?.extra?.type !== DeepnoteTreeItemType.ProjectGroup) {
+            return 'cancelled';
         }
 
         const group = treeItem.extra.data;
@@ -375,7 +378,7 @@ export class DeepnoteExplorerView {
         });
 
         if (!newName || newName === currentName) {
-            return false;
+            return 'cancelled';
         }
 
         try {
@@ -392,7 +395,7 @@ export class DeepnoteExplorerView {
                         )
                     );
 
-                    return false;
+                    return 'failed';
                 }
             }
 
@@ -426,12 +429,12 @@ export class DeepnoteExplorerView {
                 await window.showInformationMessage(l10n.t('Project renamed to: {0}', newName));
             }
 
-            return failedCount === 0;
+            return failedCount === 0 ? 'completed' : 'failed';
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             await window.showErrorMessage(l10n.t('Failed to rename project: {0}', errorMessage));
 
-            return false;
+            return 'failed';
         }
     }
 
@@ -442,8 +445,8 @@ export class DeepnoteExplorerView {
 
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.OpenDeepnoteNotebook, async (context: DeepnoteTreeItemContext) => {
-                const completed = await this.openNotebook(context);
-                this.analytics.trackEvent({ eventName: 'open_notebook', properties: { completed } });
+                const outcome = await this.openNotebook(context);
+                this.analytics.trackEvent({ eventName: 'open_notebook', properties: { outcome } });
             })
         );
 
@@ -457,74 +460,80 @@ export class DeepnoteExplorerView {
 
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.NewProject, async () => {
-                const completed = await this.newProject();
-                this.analytics.trackEvent({ eventName: 'create_project', properties: { completed } });
+                const outcome = await this.newProject();
+                this.analytics.trackEvent({ eventName: 'create_project', properties: { outcome } });
             })
         );
 
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.ImportNotebook, async () => {
-                const completed = await this.importNotebook();
-                this.analytics.trackEvent({ eventName: 'import_notebook', properties: { completed } });
+                const outcome = await this.importNotebook();
+                this.analytics.trackEvent({
+                    eventName: 'import_notebook',
+                    properties: { outcome, source: 'deepnote' }
+                });
             })
         );
 
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.ImportJupyterNotebook, async () => {
-                const completed = await this.importJupyterNotebook();
-                this.analytics.trackEvent({ eventName: 'import_notebook', properties: { completed } });
+                const outcome = await this.importJupyterNotebook();
+                this.analytics.trackEvent({ eventName: 'import_notebook', properties: { outcome, source: 'jupyter' } });
             })
         );
 
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.NewNotebook, async () => {
-                const completed = await this.newNotebook();
-                this.analytics.trackEvent({ eventName: 'create_notebook', properties: { completed } });
+                const outcome = await this.newNotebook();
+                this.analytics.trackEvent({ eventName: 'create_notebook', properties: { outcome, source: 'toolbar' } });
             })
         );
 
         // Context menu commands for tree items
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.RenameProject, async (treeItem: DeepnoteTreeItem) => {
-                const completed = await this.renameProject(treeItem);
-                this.analytics.trackEvent({ eventName: 'rename_project', properties: { completed } });
+                const outcome = await this.renameProject(treeItem);
+                this.analytics.trackEvent({ eventName: 'rename_project', properties: { outcome } });
             })
         );
 
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.RenameNotebook, async (treeItem: DeepnoteTreeItem) => {
-                const completed = await this.renameNotebook(treeItem);
-                this.analytics.trackEvent({ eventName: 'rename_notebook', properties: { completed } });
+                const outcome = await this.renameNotebook(treeItem);
+                this.analytics.trackEvent({ eventName: 'rename_notebook', properties: { outcome } });
             })
         );
 
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.DeleteNotebook, async (treeItem: DeepnoteTreeItem) => {
-                const completed = await this.deleteNotebook(treeItem);
-                this.analytics.trackEvent({ eventName: 'delete_notebook', properties: { completed } });
+                const outcome = await this.deleteNotebook(treeItem);
+                this.analytics.trackEvent({ eventName: 'delete_notebook', properties: { outcome } });
             })
         );
 
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.DuplicateNotebook, async (treeItem: DeepnoteTreeItem) => {
-                const completed = await this.duplicateNotebook(treeItem);
-                this.analytics.trackEvent({ eventName: 'duplicate_notebook', properties: { completed } });
+                const outcome = await this.duplicateNotebook(treeItem);
+                this.analytics.trackEvent({ eventName: 'duplicate_notebook', properties: { outcome } });
             })
         );
 
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.AddNotebookToProject, async (treeItem: DeepnoteTreeItem) => {
-                const completed = await this.addNotebookToProject(treeItem);
-                this.analytics.trackEvent({ eventName: 'create_notebook', properties: { completed } });
+                const outcome = await this.addNotebookToProject(treeItem);
+                this.analytics.trackEvent({
+                    eventName: 'create_notebook',
+                    properties: { outcome, source: 'project_menu' }
+                });
             })
         );
 
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.ExportNotebook, async (treeItem: DeepnoteTreeItem) => {
-                const completed = await this.exportNotebook(treeItem);
+                const { outcome, format } = await this.exportNotebook(treeItem);
                 this.analytics.trackEvent({
                     eventName: 'export_notebook',
-                    properties: { completed, format: 'jupyter' }
+                    properties: { outcome, ...(format ? { format } : {}) }
                 });
             })
         );
@@ -536,8 +545,8 @@ export class DeepnoteExplorerView {
      */
     private itemIsNotebookScoped(treeItem: DeepnoteTreeItem): boolean {
         return (
-            treeItem.extra.type === DeepnoteTreeItemType.ProjectFile ||
-            treeItem.extra.type === DeepnoteTreeItemType.Notebook
+            treeItem?.extra?.type === DeepnoteTreeItemType.ProjectFile ||
+            treeItem?.extra?.type === DeepnoteTreeItemType.Notebook
         );
     }
 
@@ -558,7 +567,7 @@ export class DeepnoteExplorerView {
      * multi-notebook file's in-file child.
      */
     private itemIsSingleNotebookFile(treeItem: DeepnoteTreeItem, projectData: DeepnoteFile): boolean {
-        if (treeItem.extra.type !== DeepnoteTreeItemType.ProjectFile) {
+        if (treeItem?.extra?.type !== DeepnoteTreeItemType.ProjectFile) {
             return false;
         }
 
@@ -704,7 +713,7 @@ export class DeepnoteExplorerView {
         this.treeDataProvider.refresh();
     }
 
-    private async openNotebook(context: DeepnoteTreeItemContext): Promise<boolean> {
+    private async openNotebook(context: DeepnoteTreeItemContext): Promise<CommandOutcome> {
         try {
             const fileUri = Uri.file(context.filePath);
             const document = await workspace.openNotebookDocument(fileUri);
@@ -714,18 +723,18 @@ export class DeepnoteExplorerView {
                 preserveFocus: false
             });
 
-            return true;
+            return 'completed';
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
             await window.showErrorMessage(`Failed to open notebook: ${errorMessage}`);
 
-            return false;
+            return 'failed';
         }
     }
 
     private async openFile(treeItem: DeepnoteTreeItem): Promise<void> {
-        if (treeItem.extra.type !== DeepnoteTreeItemType.ProjectFile) {
+        if (treeItem?.extra?.type !== DeepnoteTreeItemType.ProjectFile) {
             return;
         }
 
@@ -784,7 +793,7 @@ export class DeepnoteExplorerView {
         }
     }
 
-    private async newProject(): Promise<boolean> {
+    private async newProject(): Promise<CommandOutcome> {
         if (!workspace.workspaceFolders || workspace.workspaceFolders.length === 0) {
             const selection = await window.showInformationMessage(
                 l10n.t('No workspace folder is open. Would you like to open a folder?'),
@@ -796,7 +805,7 @@ export class DeepnoteExplorerView {
                 await commands.executeCommand('vscode.openFolder');
             }
 
-            return false;
+            return 'cancelled';
         }
 
         const projectName = await window.showInputBox({
@@ -812,7 +821,7 @@ export class DeepnoteExplorerView {
         });
 
         if (!projectName) {
-            return false;
+            return 'cancelled';
         }
 
         try {
@@ -825,7 +834,7 @@ export class DeepnoteExplorerView {
                 await workspace.fs.stat(fileUri);
                 await window.showErrorMessage(l10n.t('A file named "{0}" already exists in this workspace.', fileName));
 
-                return false;
+                return 'failed';
             } catch {
                 // File doesn't exist, continue
             }
@@ -880,23 +889,23 @@ export class DeepnoteExplorerView {
                 preview: false
             });
 
-            return true;
+            return 'completed';
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
             await window.showErrorMessage(l10n.t(`Failed to create project: {0}`, errorMessage));
 
-            return false;
+            return 'failed';
         }
     }
 
-    private async newNotebook(): Promise<boolean> {
+    private async newNotebook(): Promise<CommandOutcome> {
         const activeEditor = window.activeNotebookEditor;
 
         if (!activeEditor || activeEditor.notebook.notebookType !== 'deepnote') {
             await window.showErrorMessage(l10n.t('No active Deepnote file opened. Please open a Deepnote file first.'));
 
-            return false;
+            return 'cancelled';
         }
 
         const document = activeEditor.notebook;
@@ -919,12 +928,12 @@ export class DeepnoteExplorerView {
                 await window.showInformationMessage(l10n.t('Created new notebook: {0}', result.name));
             }
 
-            return result !== null;
+            return result !== null ? 'completed' : 'cancelled';
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             await window.showErrorMessage(l10n.t('Failed to add notebook: {0}', errorMessage));
 
-            return false;
+            return 'failed';
         }
     }
 
@@ -1004,7 +1013,7 @@ export class DeepnoteExplorerView {
         };
     }
 
-    private async importNotebook(): Promise<boolean> {
+    private async importNotebook(): Promise<CommandOutcome> {
         if (!workspace.workspaceFolders || workspace.workspaceFolders.length === 0) {
             const selection = await window.showInformationMessage(
                 l10n.t('No workspace folder is open. Would you like to open a folder?'),
@@ -1016,7 +1025,7 @@ export class DeepnoteExplorerView {
                 await commands.executeCommand('vscode.openFolder');
             }
 
-            return false;
+            return 'cancelled';
         }
 
         const fileUris = await window.showOpenDialog({
@@ -1030,7 +1039,7 @@ export class DeepnoteExplorerView {
         });
 
         if (!fileUris || fileUris.length === 0) {
-            return false;
+            return 'cancelled';
         }
 
         try {
@@ -1050,14 +1059,14 @@ export class DeepnoteExplorerView {
                         l10n.t('A file named "{0}" already exists in this workspace.', fileName)
                     );
 
-                    return false;
+                    return 'failed';
                 } catch {
                     // File doesn't exist, continue
                 }
             }
 
             if (!(await this.checkJupyterImportTargetsAvailable(jupyterUris, workspaceFolder.uri))) {
-                return false;
+                return 'failed';
             }
 
             // Import deepnote files
@@ -1082,17 +1091,17 @@ export class DeepnoteExplorerView {
 
             this.treeDataProvider.refresh();
 
-            return numberOfNotebooks > 0;
+            return numberOfNotebooks > 0 ? 'completed' : 'failed';
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
             await window.showErrorMessage(`Failed to import notebook: ${errorMessage}`);
 
-            return false;
+            return 'failed';
         }
     }
 
-    private async importJupyterNotebook(): Promise<boolean> {
+    private async importJupyterNotebook(): Promise<CommandOutcome> {
         if (!workspace.workspaceFolders || workspace.workspaceFolders.length === 0) {
             const selection = await window.showInformationMessage(
                 l10n.t('No workspace folder is open. Would you like to open a folder?'),
@@ -1104,7 +1113,7 @@ export class DeepnoteExplorerView {
                 await commands.executeCommand('vscode.openFolder');
             }
 
-            return false;
+            return 'cancelled';
         }
 
         const fileUris = await window.showOpenDialog({
@@ -1118,14 +1127,14 @@ export class DeepnoteExplorerView {
         });
 
         if (!fileUris || fileUris.length === 0) {
-            return false;
+            return 'cancelled';
         }
 
         try {
             const workspaceFolder = workspace.workspaceFolders[0];
 
             if (!(await this.checkJupyterImportTargetsAvailable(fileUris, workspaceFolder.uri))) {
-                return false;
+                return 'failed';
             }
 
             const failedCount = await this.convertJupyterUrisToDeepnoteFiles(fileUris, workspaceFolder.uri);
@@ -1142,19 +1151,19 @@ export class DeepnoteExplorerView {
 
             this.treeDataProvider.refresh();
 
-            return numberOfNotebooks > 0;
+            return numberOfNotebooks > 0 ? 'completed' : 'failed';
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
             await window.showErrorMessage(l10n.t(`Failed to import Jupyter notebook: {0}`, errorMessage));
 
-            return false;
+            return 'failed';
         }
     }
 
-    private async addNotebookToProject(treeItem: DeepnoteTreeItem): Promise<boolean> {
-        if (treeItem.extra.type !== DeepnoteTreeItemType.ProjectGroup) {
-            return false;
+    private async addNotebookToProject(treeItem: DeepnoteTreeItem): Promise<CommandOutcome> {
+        if (treeItem?.extra?.type !== DeepnoteTreeItemType.ProjectGroup) {
+            return 'cancelled';
         }
 
         const group = treeItem.extra.data;
@@ -1163,7 +1172,7 @@ export class DeepnoteExplorerView {
         if (!sourceFile) {
             await window.showErrorMessage(l10n.t('Invalid Deepnote file format'));
 
-            return false;
+            return 'failed';
         }
 
         try {
@@ -1177,19 +1186,19 @@ export class DeepnoteExplorerView {
                 await window.showInformationMessage(l10n.t('Created new notebook: {0}', result.name));
             }
 
-            return result !== null;
+            return result !== null ? 'completed' : 'cancelled';
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             await window.showErrorMessage(l10n.t('Failed to add notebook: {0}', errorMessage));
 
-            return false;
+            return 'failed';
         }
     }
 
     /** Exports a single notebook (single-notebook leaf or legacy in-file notebook) to Jupyter. */
-    private async exportNotebook(treeItem: DeepnoteTreeItem): Promise<boolean> {
+    private async exportNotebook(treeItem: DeepnoteTreeItem): Promise<{ outcome: CommandOutcome; format?: string }> {
         if (!this.itemIsNotebookScoped(treeItem)) {
-            return false;
+            return { outcome: 'cancelled' };
         }
 
         try {
@@ -1198,7 +1207,7 @@ export class DeepnoteExplorerView {
             });
 
             if (!format) {
-                return false;
+                return { outcome: 'cancelled' };
             }
 
             const fileUri = Uri.file(treeItem.context.filePath);
@@ -1207,7 +1216,7 @@ export class DeepnoteExplorerView {
             if (!projectData?.project) {
                 await window.showErrorMessage(l10n.t('Invalid Deepnote file format'));
 
-                return false;
+                return { outcome: 'failed' };
             }
 
             const outputFolder = await window.showOpenDialog({
@@ -1219,7 +1228,7 @@ export class DeepnoteExplorerView {
             });
 
             if (!outputFolder?.length) {
-                return false;
+                return { outcome: 'cancelled' };
             }
 
             const targetNotebook = this.resolveTargetNotebook(treeItem, projectData);
@@ -1227,7 +1236,7 @@ export class DeepnoteExplorerView {
             if (!targetNotebook) {
                 await window.showErrorMessage(l10n.t('Notebook not found'));
 
-                return false;
+                return { outcome: 'failed' };
             }
 
             const filteredProject = {
@@ -1262,7 +1271,7 @@ export class DeepnoteExplorerView {
                 );
 
                 if (result !== overwrite) {
-                    return false;
+                    return { outcome: 'cancelled' };
                 }
             }
 
@@ -1273,12 +1282,12 @@ export class DeepnoteExplorerView {
 
             await window.showInformationMessage(l10n.t('Exported 1 notebook successfully'));
 
-            return true;
+            return { outcome: 'completed', format: format.value };
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             await window.showErrorMessage(l10n.t('Failed to export: {0}', errorMessage));
 
-            return false;
+            return { outcome: 'failed' };
         }
     }
 }

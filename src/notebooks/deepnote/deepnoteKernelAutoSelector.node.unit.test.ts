@@ -2,7 +2,6 @@ import { assert } from 'chai';
 import * as sinon from 'sinon';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { DeepnoteKernelAutoSelector } from './deepnoteKernelAutoSelector.node';
-import { ITelemetryService } from '../../platform/analytics/types';
 import { createMockChildProcess } from '../../kernels/deepnote/deepnoteTestHelpers.node';
 import { ServerHandleRegistry } from '../../kernels/deepnote/deepnoteServerHandleRegistry.node';
 import {
@@ -142,8 +141,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             instance(mockNotebookEnvironmentMapper),
             instance(mockOutputChannel),
             instance(mockToolkitInstaller),
-            registry,
-            instance(mock<ITelemetryService>())
+            registry
         );
     });
 

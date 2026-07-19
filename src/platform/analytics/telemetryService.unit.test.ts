@@ -1,4 +1,5 @@
-import { assert } from 'chai';
+import { assert, use } from 'chai';
+import chaiAsPromised from 'chai-as-promised';
 import * as sinon from 'sinon';
 
 import {
@@ -8,6 +9,8 @@ import {
     IPersistentStateFactory
 } from '../common/types';
 import { TelemetryService } from './telemetryService';
+
+use(chaiAsPromised);
 
 suite('TelemetryService', () => {
     let analyticsService: TelemetryService;
@@ -43,6 +46,23 @@ suite('TelemetryService', () => {
     function stubPostHogConfigured(service: TelemetryService, configured: boolean): void {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (service as any).isPostHogConfigured = () => configured;
+    }
+
+    // Replaces createClient so no test constructs a real, network-capable PostHog client,
+    // while preserving the real configured + enabled gating.
+    function stubClientFactory(service: TelemetryService): { capture: sinon.SinonStub; shutdown: sinon.SinonStub } {
+        const fakeClient = { capture: sinon.stub(), shutdown: sinon.stub().resolves() };
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const internal = service as any;
+        internal.createClient = () => {
+            if (internal.client || !internal.isPostHogConfigured() || !internal.isTelemetryEnabled()) {
+                return;
+            }
+
+            internal.client = fakeClient;
+        };
+
+        return fakeClient;
     }
 
     setup(() => {
@@ -81,12 +101,13 @@ suite('TelemetryService', () => {
         analyticsService = new TelemetryService(mockDisposables, mockStateFactory, mockAsyncDisposableRegistry);
         stubTelemetryEnabled(analyticsService, true);
         stubPostHogConfigured(analyticsService, true);
+        stubClientFactory(analyticsService);
 
         await analyticsService.activate();
 
         const client = getPostHogClient(analyticsService);
 
-        assert.isDefined(client, 'PostHog client should be initialized');
+        assert.isNotNull(client, 'PostHog client should be initialized');
     });
 
     test('activate should not create client when PostHog is not configured', async () => {
@@ -110,6 +131,7 @@ suite('TelemetryService', () => {
         analyticsService = new TelemetryService(mockDisposables, mockStateFactory, mockAsyncDisposableRegistry);
         stubTelemetryEnabled(analyticsService, true);
         stubPostHogConfigured(analyticsService, true);
+        stubClientFactory(analyticsService);
 
         await analyticsService.activate();
 
@@ -124,7 +146,7 @@ suite('TelemetryService', () => {
 
         const client = getPostHogClient(analyticsService);
 
-        assert.isDefined(client, 'PostHog client should be initialized');
+        assert.isNotNull(client, 'PostHog client should be initialized');
 
         const captureStub = sinon.stub();
         client.capture = captureStub;
@@ -135,7 +157,7 @@ suite('TelemetryService', () => {
         assert.deepStrictEqual(captureStub.firstCall.args[0], {
             distinctId: generatedId,
             event: 'execute_notebook',
-            properties: undefined
+            properties: { channel: 'development', $process_person_profile: false }
         });
     });
 
@@ -158,12 +180,13 @@ suite('TelemetryService', () => {
         analyticsService = new TelemetryService(mockDisposables, mockStateFactory, mockAsyncDisposableRegistry);
         stubTelemetryEnabled(analyticsService, true);
         stubPostHogConfigured(analyticsService, true);
+        stubClientFactory(analyticsService);
 
         await analyticsService.activate();
 
         const client = getPostHogClient(analyticsService);
 
-        assert.isDefined(client, 'Client should be created initially');
+        assert.isNotNull(client, 'Client should be created initially');
 
         const shutdownStub = sinon.stub().resolves();
         client.shutdown = shutdownStub;
@@ -179,6 +202,7 @@ suite('TelemetryService', () => {
         analyticsService = new TelemetryService(mockDisposables, mockStateFactory, mockAsyncDisposableRegistry);
         stubTelemetryEnabled(analyticsService, false);
         stubPostHogConfigured(analyticsService, true);
+        stubClientFactory(analyticsService);
 
         await analyticsService.activate();
 
@@ -188,7 +212,7 @@ suite('TelemetryService', () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (analyticsService as any).handleConfigChanged();
 
-        assert.isDefined(getPostHogClient(analyticsService), 'Client should be created when telemetry is enabled');
+        assert.isNotNull(getPostHogClient(analyticsService), 'Client should be created when telemetry is enabled');
     });
 
     test('dispose should not throw even when client is not initialized', async () => {

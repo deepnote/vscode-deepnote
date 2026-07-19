@@ -232,9 +232,10 @@ function createConfig(
         }
     }
     if (target === 'desktop') {
-        // Bake the PostHog key in from the CI secret at build time; falls back to the placeholder locally (see constants.ts).
+        // Bake the PostHog key and channel in from CI at build time; both fall back to safe defaults locally (see constants.ts).
         define = {
-            POSTHOG_API_KEY_BUILD: JSON.stringify(process.env.POSTHOG_API_KEY ?? '')
+            POSTHOG_API_KEY_BUILD: JSON.stringify(process.env.POSTHOG_API_KEY ?? ''),
+            POSTHOG_CHANNEL_BUILD: JSON.stringify(process.env.POSTHOG_CHANNEL ?? '')
         };
     }
     if (source.endsWith(path.join('data-explorer', 'index.tsx'))) {

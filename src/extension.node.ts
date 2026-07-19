@@ -134,7 +134,6 @@ export function deactivate(): Thenable<void> {
     // Make sure to shutdown anybody who needs it.
     if (activatedServiceContainer) {
         const registry = activatedServiceContainer.get<IAsyncDisposableRegistry>(IAsyncDisposableRegistry);
-
         if (registry) {
             return registry.dispose();
         }

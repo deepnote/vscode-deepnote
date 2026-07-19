@@ -46,6 +46,7 @@ export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
                 const activeEditor = window.activeTextEditor;
                 if (!activeEditor) {
                     void window.showErrorMessage('Please open a .deepnote file first');
+
                     return false;
                 }
 
@@ -54,6 +55,7 @@ export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
 
             if (!fileUri.fsPath.endsWith('.deepnote')) {
                 void window.showErrorMessage('This command only works with .deepnote files');
+
                 return false;
             }
 
@@ -65,6 +67,7 @@ export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
                     const saved = await activeEditor.document.save();
                     if (!saved) {
                         void window.showErrorMessage('Please save the file before opening in Deepnote');
+
                         return false;
                     }
                 }
@@ -78,6 +81,7 @@ export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
             const stats = await fs.promises.stat(filePath);
             if (stats.size > MAX_FILE_SIZE) {
                 void window.showErrorMessage(`File exceeds ${MAX_FILE_SIZE / (1024 * 1024)}MB limit`);
+
                 return false;
             }
 

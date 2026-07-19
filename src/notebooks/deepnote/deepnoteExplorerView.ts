@@ -1095,7 +1095,7 @@ export class DeepnoteExplorerView {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
-            await window.showErrorMessage(`Failed to import notebook: ${errorMessage}`);
+            await window.showErrorMessage(l10n.t('Failed to import notebook: {0}', errorMessage));
 
             return 'failed';
         }

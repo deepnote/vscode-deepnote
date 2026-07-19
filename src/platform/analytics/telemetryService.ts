@@ -3,6 +3,7 @@ import { PostHog } from 'posthog-node';
 import { env, workspace } from 'vscode';
 
 import { IExtensionSyncActivationService } from '../activation/types';
+import { IApplicationEnvironment } from '../common/application/types';
 import {
     IAsyncDisposableRegistry,
     IDisposableRegistry,
@@ -23,16 +24,27 @@ const POSTHOG_SHUTDOWN_TIMEOUT = 5000;
 export class TelemetryService implements ITelemetryService, IExtensionSyncActivationService {
     private client: PostHog | null;
 
+    // Attached to every event so metrics can be segmented by build channel, extension/VS Code
+    // version, platform, and session.
+    private readonly commonProperties: Record<string, string | number | boolean>;
+
     private userIdState: IPersistentState<string>;
 
     constructor(
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
         @inject(IPersistentStateFactory) private readonly stateFactory: IPersistentStateFactory,
-        @inject(IAsyncDisposableRegistry) asyncDisposables: IAsyncDisposableRegistry
+        @inject(IAsyncDisposableRegistry) asyncDisposables: IAsyncDisposableRegistry,
+        @inject(IApplicationEnvironment) appEnvironment: IApplicationEnvironment
     ) {
         asyncDisposables.push(this);
         this.client = null;
-        this.userIdState = this.stateFactory.createGlobalPersistentState<string>(USER_ID_STORAGE_KEY, 'anonymous');
+        this.userIdState = this.stateFactory.createGlobalPersistentState<string>(USER_ID_STORAGE_KEY, '');
+        this.commonProperties = {
+            channel: POSTHOG_CHANNEL,
+            extensionVersion: appEnvironment.extensionVersion,
+            platform: process.platform,
+            sessionId: env.sessionId
+        };
     }
 
     public async activate(): Promise<void> {
@@ -60,7 +72,7 @@ export class TelemetryService implements ITelemetryService, IExtensionSyncActiva
         await this.destroyClient();
     }
 
-    public trackEvent({ eventName, properties }: TelemetryEvent): void {
+    public trackEvent(event: TelemetryEvent): void {
         try {
             if (!this.client || !this.userIdState) {
                 return;
@@ -68,8 +80,8 @@ export class TelemetryService implements ITelemetryService, IExtensionSyncActiva
 
             this.client.capture({
                 distinctId: this.userIdState.value,
-                event: eventName,
-                properties: { ...properties, channel: POSTHOG_CHANNEL, $process_person_profile: false }
+                event: event.eventName,
+                properties: { ...event.properties, ...this.commonProperties, $process_person_profile: false }
             });
         } catch (ex) {
             logger.debug(`PostHog analytics error: ${ex}`);

@@ -3,7 +3,7 @@ import { commands, Disposable, l10n, Uri, ViewColumn, WebviewPanel, window } fro
 
 import { BigQueryAuthMethods } from '@deepnote/database-integrations';
 
-import { ITelemetryService, TelemetryEventName } from '../../../platform/analytics/types';
+import { ITelemetryService, TelemetryEvent } from '../../../platform/analytics/types';
 import { Commands } from '../../../platform/common/constants';
 import { IDisposableRegistry, IExtensionContext } from '../../../platform/common/types';
 import * as localize from '../../../platform/common/utils/localize';
@@ -564,8 +564,20 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         }
     }
 
-    private trackIntegrationEvent(eventName: TelemetryEventName, integrationType: string | undefined): void {
-        this.analytics.trackEvent({ eventName, properties: { integrationType: integrationType ?? 'unknown' } });
+    private trackIntegrationEvent<
+        E extends
+            | 'authenticate_integration'
+            | 'configure_integration'
+            | 'delete_integration'
+            | 'reset_integration'
+            | 'save_integration'
+    >(eventName: E, integrationType: string | undefined): void {
+        // All five integration events share the { integrationType } shape; the cast bridges the
+        // generic event name to the discriminated TelemetryEvent union (unprovable for an abstract E).
+        this.analytics.trackEvent({
+            eventName,
+            properties: { integrationType: integrationType ?? 'unknown' }
+        } as TelemetryEvent<E>);
     }
 
     /** Handle messages from the webview; mirrors the `WebviewOutboundMessage` union in `src/webviews/webview-side/integrations/types.ts`. */

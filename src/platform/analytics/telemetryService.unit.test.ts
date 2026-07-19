@@ -2,6 +2,7 @@ import { assert, use } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 import * as sinon from 'sinon';
 
+import { IApplicationEnvironment } from '../common/application/types';
 import {
     IAsyncDisposableRegistry,
     IDisposableRegistry,
@@ -18,6 +19,7 @@ suite('TelemetryService', () => {
     let mockStateFactory: IPersistentStateFactory;
     let mockAsyncDisposableRegistry: IAsyncDisposableRegistry;
     let mockUserIdState: IPersistentState<string>;
+    let mockAppEnv: IApplicationEnvironment;
 
     function createMockPersistentState(initialValue: string): IPersistentState<string> {
         let storedValue = initialValue;
@@ -68,6 +70,7 @@ suite('TelemetryService', () => {
     setup(() => {
         mockUserIdState = createMockPersistentState('');
         mockDisposables = [];
+        mockAppEnv = { extensionVersion: '1.2.3' };
         mockStateFactory = {
             createGlobalPersistentState: sinon.stub().returns(mockUserIdState),
             createWorkspacePersistentState: sinon.stub().returns(mockUserIdState)
@@ -79,13 +82,23 @@ suite('TelemetryService', () => {
     });
 
     test('should create instance without errors', () => {
-        analyticsService = new TelemetryService(mockDisposables, mockStateFactory, mockAsyncDisposableRegistry);
+        analyticsService = new TelemetryService(
+            mockDisposables,
+            mockStateFactory,
+            mockAsyncDisposableRegistry,
+            mockAppEnv
+        );
 
         assert.isDefined(analyticsService);
     });
 
     test('activate should not create client when telemetry is disabled', async () => {
-        analyticsService = new TelemetryService(mockDisposables, mockStateFactory, mockAsyncDisposableRegistry);
+        analyticsService = new TelemetryService(
+            mockDisposables,
+            mockStateFactory,
+            mockAsyncDisposableRegistry,
+            mockAppEnv
+        );
         stubTelemetryEnabled(analyticsService, false);
 
         await analyticsService.activate();
@@ -98,7 +111,12 @@ suite('TelemetryService', () => {
     });
 
     test('activate should create client when telemetry is enabled', async () => {
-        analyticsService = new TelemetryService(mockDisposables, mockStateFactory, mockAsyncDisposableRegistry);
+        analyticsService = new TelemetryService(
+            mockDisposables,
+            mockStateFactory,
+            mockAsyncDisposableRegistry,
+            mockAppEnv
+        );
         stubTelemetryEnabled(analyticsService, true);
         stubPostHogConfigured(analyticsService, true);
         stubClientFactory(analyticsService);
@@ -111,7 +129,12 @@ suite('TelemetryService', () => {
     });
 
     test('activate should not create client when PostHog is not configured', async () => {
-        analyticsService = new TelemetryService(mockDisposables, mockStateFactory, mockAsyncDisposableRegistry);
+        analyticsService = new TelemetryService(
+            mockDisposables,
+            mockStateFactory,
+            mockAsyncDisposableRegistry,
+            mockAppEnv
+        );
         stubTelemetryEnabled(analyticsService, true);
         stubPostHogConfigured(analyticsService, false);
 
@@ -123,49 +146,56 @@ suite('TelemetryService', () => {
         );
     });
 
-    test('should generate user ID and call PostHog capture on first trackEvent', async () => {
-        (mockStateFactory.createGlobalPersistentState as sinon.SinonStub).callsFake(
-            (_key: string, defaultValue: string) => createMockPersistentState(defaultValue)
-        );
+    test('should generate and persist a user ID and send it as distinctId with common properties', async () => {
+        // Default is empty, so the mock state starts empty and activate() must generate + persist a UUID.
+        const userIdState = createMockPersistentState('');
+        (mockStateFactory.createGlobalPersistentState as sinon.SinonStub).returns(userIdState);
 
-        analyticsService = new TelemetryService(mockDisposables, mockStateFactory, mockAsyncDisposableRegistry);
+        analyticsService = new TelemetryService(
+            mockDisposables,
+            mockStateFactory,
+            mockAsyncDisposableRegistry,
+            mockAppEnv
+        );
         stubTelemetryEnabled(analyticsService, true);
         stubPostHogConfigured(analyticsService, true);
-        stubClientFactory(analyticsService);
+        const fakeClient = stubClientFactory(analyticsService);
 
         await analyticsService.activate();
 
-        const createStateSpy = mockStateFactory.createGlobalPersistentState as sinon.SinonStub;
+        // Catches: distinctId churning because the empty default is never persisted (updateValue never called).
+        assert.isTrue(
+            (userIdState.updateValue as sinon.SinonStub).calledOnce,
+            'A user ID should be generated and persisted on first activation'
+        );
 
-        assert.isTrue(createStateSpy.calledOnce, 'Should create persistent state');
+        const persistedId = userIdState.value;
 
-        const generatedId = createStateSpy.firstCall.args[1];
-
-        assert.isString(generatedId);
-        assert.isNotEmpty(generatedId, 'Generated user ID should not be empty');
-
-        const client = getPostHogClient(analyticsService);
-
-        assert.isNotNull(client, 'PostHog client should be initialized');
-
-        const captureStub = sinon.stub();
-        client.capture = captureStub;
+        assert.isNotEmpty(persistedId, 'Persisted user ID should not be empty');
 
         analyticsService.trackEvent({ eventName: 'execute_notebook' });
 
-        assert.isTrue(captureStub.calledOnce, 'PostHog capture should be called');
-        assert.deepStrictEqual(captureStub.firstCall.args[0], {
-            distinctId: generatedId,
-            event: 'execute_notebook',
-            properties: { channel: 'development', $process_person_profile: false }
-        });
+        assert.isTrue(fakeClient.capture.calledOnce, 'PostHog capture should be called');
+
+        const captured = fakeClient.capture.firstCall.args[0];
+
+        assert.strictEqual(captured.distinctId, persistedId, 'distinctId should be the persisted user ID');
+        assert.strictEqual(captured.event, 'execute_notebook');
+        assert.strictEqual(captured.properties.$process_person_profile, false, 'events must be personless');
+        assert.strictEqual(captured.properties.channel, 'development');
+        assert.strictEqual(captured.properties.extensionVersion, '1.2.3', 'common properties must be attached');
     });
 
     test('should reuse existing user ID', async () => {
         mockUserIdState = createMockPersistentState('existing-user-id');
         (mockStateFactory.createGlobalPersistentState as sinon.SinonStub).returns(mockUserIdState);
 
-        analyticsService = new TelemetryService(mockDisposables, mockStateFactory, mockAsyncDisposableRegistry);
+        analyticsService = new TelemetryService(
+            mockDisposables,
+            mockStateFactory,
+            mockAsyncDisposableRegistry,
+            mockAppEnv
+        );
         stubTelemetryEnabled(analyticsService, true);
 
         await analyticsService.activate();
@@ -177,7 +207,12 @@ suite('TelemetryService', () => {
     });
 
     test('settings change should destroy client when telemetry is disabled', async () => {
-        analyticsService = new TelemetryService(mockDisposables, mockStateFactory, mockAsyncDisposableRegistry);
+        analyticsService = new TelemetryService(
+            mockDisposables,
+            mockStateFactory,
+            mockAsyncDisposableRegistry,
+            mockAppEnv
+        );
         stubTelemetryEnabled(analyticsService, true);
         stubPostHogConfigured(analyticsService, true);
         stubClientFactory(analyticsService);
@@ -199,7 +234,12 @@ suite('TelemetryService', () => {
     });
 
     test('settings change should create client when telemetry is enabled', async () => {
-        analyticsService = new TelemetryService(mockDisposables, mockStateFactory, mockAsyncDisposableRegistry);
+        analyticsService = new TelemetryService(
+            mockDisposables,
+            mockStateFactory,
+            mockAsyncDisposableRegistry,
+            mockAppEnv
+        );
         stubTelemetryEnabled(analyticsService, false);
         stubPostHogConfigured(analyticsService, true);
         stubClientFactory(analyticsService);
@@ -216,7 +256,12 @@ suite('TelemetryService', () => {
     });
 
     test('dispose should not throw even when client is not initialized', async () => {
-        analyticsService = new TelemetryService(mockDisposables, mockStateFactory, mockAsyncDisposableRegistry);
+        analyticsService = new TelemetryService(
+            mockDisposables,
+            mockStateFactory,
+            mockAsyncDisposableRegistry,
+            mockAppEnv
+        );
 
         await assert.isFulfilled(analyticsService.dispose());
     });

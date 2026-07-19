@@ -34,7 +34,7 @@ export class DeepnoteCellExecutionAnalytics implements IExtensionSyncActivationS
                 const languageId = e.cell.document.languageId;
                 const cellType = languageId === 'sql' ? 'sql' : languageId === 'markdown' ? 'markdown' : 'code';
 
-                const properties: Record<string, string> = { cellType };
+                const properties: { cellType: 'sql' | 'markdown' | 'code'; integrationType?: string } = { cellType };
 
                 if (cellType === 'sql') {
                     // Read the authoritative top-level key only; the status-bar switch updates only this

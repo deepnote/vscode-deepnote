@@ -86,19 +86,9 @@ jobs:
             pip-${{ runner.os }}-py312-
 
       - name: Run E2E
-        # ExTester launches VS Code with --no-sandbox by default, so no AppArmor sysctl is needed.
-        # A small retry absorbs transient UI/launch flakiness (mocha already retries the test once).
-        run: |
-          attempt=1
-          max=2
-          until xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' npm run test:e2e:prebuilt; do
-            if [ "$attempt" -ge "$max" ]; then
-              echo "E2E failed after $attempt attempt(s)"
-              exit 1
-            fi
-            echo "E2E attempt $attempt failed — retrying…"
-            attempt=$((attempt + 1))
-          done
+        # VS Code launches with --no-sandbox (no AppArmor sysctl needed). Runs once; Mocha's retries:1
+        # and rootHooks.ts (dismiss toasts between tests) handle flakiness in the single shared instance.
+        run: xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' npm run test:e2e:prebuilt
 
       - name: Upload failure screenshots
         if: failure()

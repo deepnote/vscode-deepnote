@@ -747,6 +747,45 @@ export async function executeSilently(
     return outputs;
 }
 
+/**
+ * Leak-safe silent execution, for injecting secrets into a live kernel.
+ *
+ * `silent: true` suppresses the `execute_input` broadcast, the output cache (`Out[]`/`_`) and the
+ * execution-count bump; `store_history: false` keeps the code out of `_ih`/`In` and `history.sqlite`.
+ * Unlike {@link executeSilently} the code body is never logged, and IOPub is deliberately not read so
+ * no traceback can echo the source line back to the caller.
+ *
+ * Success is *only* `status: 'ok'`. Every other outcome — `error`, `abort`, a missing status, or a
+ * rejected/disposed future (a kernel that died or restarted mid-request) — is reported as a single
+ * content-free error output, so nothing about the executed code leaks through the result either.
+ */
+export async function executeSilentlyLeakSafe(
+    kernelConnection: Kernel.IKernelConnection,
+    code: string
+): Promise<nbformat.IOutput[]> {
+    const errorMarker: nbformat.IError[] = [{ output_type: 'error', ename: 'error', evalue: '', traceback: [] }];
+
+    try {
+        const request = kernelConnection.requestExecute(
+            {
+                code: code.replace(/\r\n/g, '\n'),
+                silent: true,
+                stop_on_error: false,
+                allow_stdin: false,
+                store_history: false
+            },
+            true
+        );
+
+        // The shell `execute_reply` still resolves under `silent: true`.
+        const reply = await request.done;
+
+        return reply?.content.status === 'ok' ? [] : errorMarker;
+    } catch {
+        return errorMarker;
+    }
+}
+
 export function executeSilentlyAndEmitOutput(
     kernelConnection: Kernel.IKernelConnection,
     code: string,

@@ -15,11 +15,16 @@ const debounceTimeInMilliseconds = 500;
 
 const watchedEnvFileNames = [DEFAULT_INTEGRATIONS_FILE, DEFAULT_ENV_FILE];
 
-/** Watches `.deepnote.env.yaml` / `.env` and live-refreshes affected notebooks' kernels on change (no restart). */
+/**
+ * Watches `.deepnote.env.yaml` / `.env` and live-refreshes affected notebooks' kernels on change (no restart).
+ * Deleting `.deepnote.env.yaml` refreshes too, so the credentials it contributed are unset rather than left live.
+ */
 @injectable()
 export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationService {
     private readonly changedDirs = new Set<string>();
     private debounceTimer: ReturnType<typeof setTimeout> | undefined;
+    /** Subset of {@link changedDirs} where `.deepnote.env.yaml` itself was created, changed or deleted. */
+    private readonly integrationsFileChangedDirs = new Set<string>();
     private readonly watchedDirs = new Set<string>();
 
     constructor(
@@ -56,8 +61,11 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
     }
 
     /** Public so it can be unit-tested without real filesystem events. */
-    public async handleChangedDirs(changedDirs: Set<string>): Promise<void> {
-        const affected = await this.findAffectedNotebooks(changedDirs);
+    public async handleChangedDirs(
+        changedDirs: Set<string>,
+        integrationsFileChangedDirs: Set<string> = new Set()
+    ): Promise<void> {
+        const affected = await this.findAffectedNotebooks(changedDirs, integrationsFileChangedDirs);
         if (affected.length === 0) {
             return;
         }
@@ -65,7 +73,10 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
         await this.liveRefresher.refresh(affected);
     }
 
-    private async findAffectedNotebooks(changedDirs: Set<string>): Promise<NotebookDocument[]> {
+    private async findAffectedNotebooks(
+        changedDirs: Set<string>,
+        integrationsFileChangedDirs: Set<string>
+    ): Promise<NotebookDocument[]> {
         const affected: NotebookDocument[] = [];
 
         for (const notebook of workspace.notebookDocuments) {
@@ -92,14 +103,23 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
                 continue;
             }
 
-            // A `.env` change only affects integration env when a `.deepnote.env.yaml` actually exists for this
-            // notebook; without one the refresh is a no-op and its status message misleading, so an unrelated
-            // `.env` (a very common non-Deepnote file) must not trigger hidden kernel executions (F2).
+            // An event on `.deepnote.env.yaml` itself is unambiguously ours and always refreshes, without
+            // consulting the filesystem. Requiring the file to exist would skip exactly the deletion case —
+            // the variables it contributed would stay live in the kernel, and deleting the file is the most
+            // direct way a user revokes them.
+            const integrationsFileChanged =
+                integrationsFileChangedDirs.has(deepnoteDir.fsPath) ||
+                (workspaceRoot != null && integrationsFileChangedDirs.has(workspaceRoot.fsPath));
+
+            // A `.env` change, by contrast, only affects integration env when a `.deepnote.env.yaml` actually
+            // exists for this notebook; without one the refresh is a no-op and its status message misleading,
+            // so an unrelated `.env` (a very common non-Deepnote file) must not trigger hidden kernel
+            // executions (F2).
             const candidateDirs =
                 workspaceRoot != null && workspaceRoot.fsPath !== deepnoteDir.fsPath
                     ? [deepnoteDir, workspaceRoot]
                     : [deepnoteDir];
-            if (await this.hasIntegrationsFile(candidateDirs)) {
+            if (integrationsFileChanged || (await this.hasIntegrationsFile(candidateDirs))) {
                 affected.push(notebook);
             }
         }
@@ -119,8 +139,12 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
         return false;
     }
 
-    private onFileEvent(dir: Uri): void {
+    private onFileEvent(dir: Uri, fileName: string): void {
         this.changedDirs.add(dir.fsPath);
+
+        if (fileName === DEFAULT_INTEGRATIONS_FILE) {
+            this.integrationsFileChangedDirs.add(dir.fsPath);
+        }
 
         if (this.debounceTimer) {
             clearTimeout(this.debounceTimer);
@@ -129,8 +153,10 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
         this.debounceTimer = setTimeout(() => {
             this.debounceTimer = undefined;
             const dirs = new Set(this.changedDirs);
+            const integrationsFileDirs = new Set(this.integrationsFileChangedDirs);
             this.changedDirs.clear();
-            this.handleChangedDirs(dirs).catch((error) =>
+            this.integrationsFileChangedDirs.clear();
+            this.handleChangedDirs(dirs, integrationsFileDirs).catch((error) =>
                 logger.error('IntegrationsEnvFileWatcher: Failed to handle env file change', error)
             );
         }, debounceTimeInMilliseconds);
@@ -149,9 +175,9 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
 
             this.disposables.push(
                 watcher,
-                watcher.onDidChange(() => this.onFileEvent(dir)),
-                watcher.onDidCreate(() => this.onFileEvent(dir)),
-                watcher.onDidDelete(() => this.onFileEvent(dir))
+                watcher.onDidChange(() => this.onFileEvent(dir, fileName)),
+                watcher.onDidCreate(() => this.onFileEvent(dir, fileName)),
+                watcher.onDidDelete(() => this.onFileEvent(dir, fileName))
             );
         }
     }

@@ -65,8 +65,7 @@ import { FederatedAuthTokenStorage } from './deepnote/integrations/federatedAuth
 import {
     IIntegrationsFileConfigProvider,
     IPlatformNotebookEditorProvider,
-    IPlatformDeepnoteNotebookManager,
-    IUserpodApiEndpoints
+    IPlatformDeepnoteNotebookManager
 } from '../platform/notebooks/deepnote/types';
 import { SqlCellStatusBarProvider } from './deepnote/sqlCellStatusBarProvider';
 import { DirtyInputBlockStatusBarProvider } from './deepnote/dirtyInputBlockStatusBarProvider';
@@ -107,7 +106,6 @@ import { OpenInDeepnoteHandler } from './deepnote/openInDeepnoteHandler.node';
 import { IntegrationEnvRefreshHandler } from './deepnote/integrations/integrationEnvRefreshHandler';
 import { IntegrationsEnvFileWatcher } from './deepnote/integrations/integrationsEnvFileWatcher.node';
 import { IntegrationEnvLiveRefresher } from './deepnote/integrations/integrationEnvLiveRefresher.node';
-import { UserpodApiEndpoints } from './deepnote/integrations/userpodApiEndpoints.node';
 import { ISnapshotMetadataService, SnapshotService } from './deepnote/snapshots/snapshotService';
 import { EnvironmentCapture, IEnvironmentCapture } from './deepnote/snapshots/environmentCapture.node';
 import { DeepnoteFileChangeWatcher } from './deepnote/deepnoteFileChangeWatcher';
@@ -254,8 +252,9 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
         IIntegrationEnvLiveRefresher,
         IntegrationEnvLiveRefresher
     );
-    serviceManager.addSingleton<IUserpodApiEndpoints>(IUserpodApiEndpoints, UserpodApiEndpoints);
-    serviceManager.addBinding(IUserpodApiEndpoints, IExtensionSyncActivationService);
+    // Activated in its own right: it subscribes to kernel start/restart to seed its removal baseline,
+    // which must not depend on some other service happening to inject it.
+    serviceManager.addBinding(IIntegrationEnvLiveRefresher, IExtensionSyncActivationService);
 
     // Deepnote kernel services
     serviceManager.addSingleton<DeepnoteAgentSkillsManager>(DeepnoteAgentSkillsManager, DeepnoteAgentSkillsManager);

@@ -13,6 +13,7 @@ import {
     PythonKernelConnectionMetadata
 } from './types';
 import { EnvironmentType, PythonEnvironment } from '../platform/pythonEnvironments/info';
+import { logger } from '../platform/logging';
 import { PythonExtension, type Environment } from '@vscode/python-extension';
 import { resolvableInstance } from '../test/datascience/helpers';
 import { DisposableStore, dispose } from '../platform/common/utils/lifecycle';
@@ -956,5 +957,183 @@ suite('Kernel Connection Helpers', () => {
             assert.equal(result[0].output_type, 'error');
             assert.equal((result[0] as any).ename, 'RuntimeError');
         });
+    });
+});
+
+suite('executeSilentlyLeakSafe', () => {
+    /** The single output every non-`ok` outcome must collapse to: no ename detail, no value, no traceback. */
+    const CONTENT_FREE_ERROR = { output_type: 'error', ename: 'error', evalue: '', traceback: [] };
+
+    /** Stands in for a credential embedded in the executed snippet. */
+    const SECRET_CODE = '__import__("deepnote_toolkit.env").set_env("SQL_DEMO", "p4ssw0rd-do-not-log")';
+
+    type ExecuteReply = { content?: { status?: string; [field: string]: unknown } };
+
+    let requests: { content: any; disposeOnDone: unknown }[];
+    let logCalls: sinon.SinonStub[];
+
+    setup(() => {
+        requests = [];
+        logCalls = [];
+    });
+
+    teardown(() => {
+        sinon.restore();
+    });
+
+    /** A kernel connection whose `execute_reply` resolves with `reply`, or rejects if `rejectWith` is given. */
+    function createMockKernel(options: { reply?: ExecuteReply; rejectWith?: Error; throwSync?: Error }) {
+        return {
+            requestExecute: (content: any, disposeOnDone: unknown) => {
+                requests.push({ content, disposeOnDone });
+
+                if (options.throwSync) {
+                    throw options.throwSync;
+                }
+
+                return {
+                    done: options.rejectWith ? Promise.reject(options.rejectWith) : Promise.resolve(options.reply)
+                };
+            }
+        };
+    }
+
+    /** Stubs every logger method so any logged text can be inspected. */
+    function stubLogger() {
+        logCalls = (['error', 'warn', 'info', 'debug', 'trace', 'ci'] as const).map((level) =>
+            sinon.stub(logger, level)
+        );
+    }
+
+    /** Every argument passed to any logger method, flattened to strings. */
+    function allLoggedText(): string {
+        return logCalls
+            .flatMap((stub) => stub.getCalls())
+            .flatMap((call) => call.args)
+            .map((arg) => (typeof arg === 'string' ? arg : JSON.stringify(arg) ?? String(arg)))
+            .join('\n');
+    }
+
+    test('sends exactly the leak-safe request flags', async () => {
+        const mockKernel = createMockKernel({ reply: { content: { status: 'ok' } } });
+
+        const { executeSilentlyLeakSafe } = await import('./helpers');
+        await executeSilentlyLeakSafe(mockKernel as any, SECRET_CODE);
+
+        assert.equal(requests.length, 1);
+        assert.deepStrictEqual(requests[0].content, {
+            code: SECRET_CODE,
+            silent: true,
+            stop_on_error: false,
+            allow_stdin: false,
+            store_history: false
+        });
+        assert.strictEqual(requests[0].disposeOnDone, true);
+    });
+
+    test('normalizes CRLF line endings in the code', async () => {
+        const mockKernel = createMockKernel({ reply: { content: { status: 'ok' } } });
+
+        const { executeSilentlyLeakSafe } = await import('./helpers');
+        await executeSilentlyLeakSafe(mockKernel as any, 'a = 1\r\nb = 2\r\n');
+
+        assert.strictEqual(requests[0].content.code, 'a = 1\nb = 2\n');
+    });
+
+    test('resolves to no outputs when the reply status is ok', async () => {
+        const mockKernel = createMockKernel({ reply: { content: { status: 'ok' } } });
+
+        const { executeSilentlyLeakSafe } = await import('./helpers');
+        const result = await executeSilentlyLeakSafe(mockKernel as any, SECRET_CODE);
+
+        assert.deepStrictEqual(result, []);
+    });
+
+    test('resolves to one content-free error output on status error', async () => {
+        const mockKernel = createMockKernel({
+            reply: { content: { status: 'error', ename: 'ValueError', evalue: SECRET_CODE, traceback: [SECRET_CODE] } }
+        });
+
+        const { executeSilentlyLeakSafe } = await import('./helpers');
+        const result = await executeSilentlyLeakSafe(mockKernel as any, SECRET_CODE);
+
+        // Nothing from the reply is copied through — a traceback renders the failing source line.
+        assert.deepStrictEqual(result, [CONTENT_FREE_ERROR]);
+    });
+
+    test('resolves to one content-free error output on status abort', async () => {
+        // Reachable when a request is aborted around a restart or shutdown. Treating it as success
+        // would wrongly advance the caller's removal baseline.
+        const mockKernel = createMockKernel({ reply: { content: { status: 'abort' } } });
+
+        const { executeSilentlyLeakSafe } = await import('./helpers');
+        const result = await executeSilentlyLeakSafe(mockKernel as any, SECRET_CODE);
+
+        assert.deepStrictEqual(result, [CONTENT_FREE_ERROR]);
+    });
+
+    test('resolves to one content-free error output when the status is missing', async () => {
+        const mockKernel = createMockKernel({ reply: { content: {} } });
+
+        const { executeSilentlyLeakSafe } = await import('./helpers');
+        const result = await executeSilentlyLeakSafe(mockKernel as any, SECRET_CODE);
+
+        assert.deepStrictEqual(result, [CONTENT_FREE_ERROR]);
+    });
+
+    test('resolves to one content-free error output when there is no reply at all', async () => {
+        const mockKernel = createMockKernel({ reply: undefined });
+
+        const { executeSilentlyLeakSafe } = await import('./helpers');
+        const result = await executeSilentlyLeakSafe(mockKernel as any, SECRET_CODE);
+
+        assert.deepStrictEqual(result, [CONTENT_FREE_ERROR]);
+    });
+
+    test('resolves to the same marker instead of throwing when the request future rejects', async () => {
+        // A refresh racing a restart or shutdown rejects the disposed future.
+        const mockKernel = createMockKernel({ rejectWith: new Error('Kernel disposed') });
+
+        const { executeSilentlyLeakSafe } = await import('./helpers');
+        const result = await executeSilentlyLeakSafe(mockKernel as any, SECRET_CODE);
+
+        assert.deepStrictEqual(result, [CONTENT_FREE_ERROR]);
+    });
+
+    test('resolves to the same marker instead of throwing when requestExecute throws synchronously', async () => {
+        const mockKernel = createMockKernel({ throwSync: new Error('Kernel is dead') });
+
+        const { executeSilentlyLeakSafe } = await import('./helpers');
+        const result = await executeSilentlyLeakSafe(mockKernel as any, SECRET_CODE);
+
+        assert.deepStrictEqual(result, [CONTENT_FREE_ERROR]);
+    });
+
+    test('never logs the code body, on success or on any failure', async () => {
+        stubLogger();
+
+        const { executeSilentlyLeakSafe } = await import('./helpers');
+        const outcomes = [
+            createMockKernel({ reply: { content: { status: 'ok' } } }),
+            createMockKernel({ reply: { content: { status: 'error' } } }),
+            createMockKernel({ reply: { content: { status: 'abort' } } }),
+            createMockKernel({ reply: { content: {} } }),
+            createMockKernel({ rejectWith: new Error('Kernel disposed') }),
+            createMockKernel({ throwSync: new Error('Kernel is dead') })
+        ];
+
+        for (const mockKernel of outcomes) {
+            await executeSilentlyLeakSafe(mockKernel as any, SECRET_CODE);
+        }
+
+        // The regression this guards: executeSilently logs the first 100 characters of the code, and
+        // the full source on error when traceErrors is set. Neither may happen here.
+        const logged = allLoggedText();
+
+        assert.notInclude(logged, 'p4ssw0rd-do-not-log');
+        assert.notInclude(logged, SECRET_CODE);
+        assert.notInclude(logged, SECRET_CODE.substring(0, 100));
+        assert.notInclude(logged, 'set_env');
+        assert.strictEqual(logged, '', 'the leak-safe primitive must log nothing at all');
     });
 });

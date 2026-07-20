@@ -105,18 +105,6 @@ export interface ISqlIntegrationEnvVarsProvider {
     getMergedConfigs(resource: Resource, token?: CancellationToken): Promise<DatabaseIntegrationConfig[]>;
 }
 
-export const IUserpodApiEndpoints = Symbol('IUserpodApiEndpoints');
-export interface IUserpodApiEndpoints {
-    /** Loopback base URL the toolkit fetches integration env vars from; `undefined` until the server is listening. */
-    readonly baseUrl: string | undefined;
-
-    /** Settles (never rejects) once the initial bind attempt completes, so callers can await readiness before reading `baseUrl`. */
-    readonly ready: Promise<void>;
-
-    /** Per-project bearer token the endpoint requires (it serves credentials); injected into the toolkit as `DEEPNOTE_RUNTIME__PROJECT_SECRET`. */
-    getAuthToken(projectId: string): string;
-}
-
 export const IIntegrationsFileConfigProvider = Symbol('IIntegrationsFileConfigProvider');
 export interface IIntegrationsFileConfigProvider {
     /**

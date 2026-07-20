@@ -114,7 +114,7 @@ describe('Deepnote E2E — inject integration env var from `.deepnote.env.yaml`'
         const first = await runOnceAndAwaitOutput(NOTEBOOK_FILE_NAME, EXPECTED_OUTPUT, FIRST_RUN_OUTPUT_TIMEOUT);
         expect(first).to.contain(EXPECTED_OUTPUT);
 
-        // Live refresh: rewrite `.env`; the watcher runs set_integration_env() in the SAME kernel (no restart) so a re-run reads the new value.
+        // Live refresh: rewrite `.env`; the watcher applies the new env directly in the SAME kernel (no restart) so a re-run reads the new value.
         fs.writeFileSync(path.join(tempDir, DOTENV_FILE_NAME), 'DEMO_DB_HOST=refreshed-host.example.com\n');
 
         // The refresh is asynchronous (watcher debounce + hidden kernel exec), so re-run a bounded number of times

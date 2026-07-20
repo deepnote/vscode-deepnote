@@ -20,7 +20,7 @@ import { CellExecutionFactory } from './execution/cellExecution';
 import { CellExecutionMessageHandlerService } from './execution/cellExecutionMessageHandlerService';
 import { CellExecutionQueue } from './execution/cellExecutionQueue';
 import { cellOutputToVSCCellOutput, traceCellMessage } from './execution/helpers';
-import { executeSilently } from './helpers';
+import { executeSilently, executeSilentlyLeakSafe } from './helpers';
 import { sendKernelTelemetryEvent } from './telemetry/sendKernelTelemetryEvent';
 import {
     IKernel,
@@ -315,6 +315,12 @@ export class NotebookKernelExecution implements INotebookKernelExecution {
         const sessionPromise = this.kernel.start();
         return sessionPromise.then((session) =>
             session.kernel ? executeSilently(session.kernel, code) : Promise.reject(new SessionDisposedError())
+        );
+    }
+    executeHiddenSilent(code: string): Promise<IOutput[]> {
+        const sessionPromise = this.kernel.start();
+        return sessionPromise.then((session) =>
+            session.kernel ? executeSilentlyLeakSafe(session.kernel, code) : Promise.reject(new SessionDisposedError())
         );
     }
     private async onWillInterrupt() {

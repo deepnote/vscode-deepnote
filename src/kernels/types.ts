@@ -492,6 +492,13 @@ export interface INotebookKernelExecution {
      * Executes arbitrary code against the kernel without incrementing the execution count.
      */
     executeHidden(code: string): Promise<nbformat.IOutput[]>;
+    /**
+     * Executes arbitrary code against the kernel leaving no trace of it: no IPython history, no
+     * `execute_input` broadcast, no output cache, and nothing logged. Use this — not `executeHidden` —
+     * whenever the code embeds secrets. Resolves to `[]` on success, or a single content-free error
+     * output on any failure (see `executeSilentlyLeakSafe`).
+     */
+    executeHiddenSilent(code: string): Promise<nbformat.IOutput[]>;
 }
 /**
  * Kernels created by third party extensions.

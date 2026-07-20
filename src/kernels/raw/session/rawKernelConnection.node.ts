@@ -42,8 +42,48 @@ import { KernelProcessExitedError } from '../../errors/kernelProcessExitedError'
 import { once } from '../../../platform/common/utils/functional';
 import { disposeAsync } from '../../../platform/common/utils';
 import { generateUuid } from '../../../platform/common/uuid';
+import { getParentHeaderMsgId } from '../../execution/cellExecutionMessageHandler';
 
 let jupyterLabKernel: typeof import('@jupyterlab/services/lib/kernel/default');
+
+/**
+ * How many leak-safe request ids the wire dump remembers, so the set cannot grow for the life of the
+ * kernel. One id is added per integration-env refresh, which is far more history than correlating a
+ * reply ever needs.
+ *
+ * Ids expire by age rather than being dropped when a request completes, and that is deliberate: the
+ * shell `execute_reply` is not the last message for a request. IOPub travels on its own socket with no
+ * cross-channel ordering guarantee, and `silent: true` suppresses `execute_input` but *not* IOPub
+ * `error` — whose traceback renders the failing source line. Retiring an id on its reply would let
+ * exactly that message through.
+ */
+const MAX_TRACKED_LEAK_SAFE_MSG_IDS = 32;
+
+/**
+ * `silent` together with `store_history: false` is the signature of `executeSilentlyLeakSafe`, the only
+ * caller that combines them — every other execution path in the extension sends `silent: false`.
+ */
+function isLeakSafeExecuteRequest(msg: Readonly<IMessage>): boolean {
+    if (msg.header.msg_type !== 'execute_request') {
+        return false;
+    }
+
+    const content = (msg as KernelMessage.IExecuteRequestMsg).content;
+
+    return content.silent === true && content.store_history === false;
+}
+
+function rememberLeakSafeMsgId(msgIds: Set<string>, msgId: string): void {
+    msgIds.add(msgId);
+
+    if (msgIds.size > MAX_TRACKED_LEAK_SAFE_MSG_IDS) {
+        // A Set iterates in insertion order, so this evicts the oldest request.
+        const oldest = msgIds.values().next().value;
+        if (oldest !== undefined) {
+            msgIds.delete(oldest);
+        }
+    }
+}
 
 /*
 RawKernel class represents the mapping from the JupyterLab services IKernel interface
@@ -701,7 +741,30 @@ function newRawKernel(kernelProcess: IKernelProcess, clientId: string, username:
         model
     });
     if (workspace.getConfiguration('deepnote').get('enablePythonKernelLogging', false)) {
+        // Leak-safe executions (see `executeSilentlyLeakSafe`) embed credentials, so neither the request
+        // nor anything answering it may be dumped. Redacting the request's `code` alone is not enough:
+        // an error reply's `traceback` renders the failing source line via `linecache`, independent of
+        // `store_history`, so replies have to be dropped by parent message id too.
+        //
+        // Scope: this covers the raw-kernel path only. Deepnote kernels are remote connection metadata,
+        // so `KernelSessionFactory` routes them to `JupyterKernelSessionFactory` and `newRawKernel`
+        // never runs for them — but that path has no equivalent dump (`baseJupyterSessionConnection`
+        // only re-emits `anyMessage`), so there is nothing to suppress there. This still matters when a
+        // `.deepnote` file is opened against a plain local Python interpreter kernel.
+        const leakSafeMsgIds = new Set<string>();
+
         realKernel.anyMessage.connect((_, msg) => {
+            if (isLeakSafeExecuteRequest(msg.msg)) {
+                rememberLeakSafeMsgId(leakSafeMsgIds, msg.msg.header.msg_id);
+
+                return;
+            }
+
+            const parentMsgId = getParentHeaderMsgId(msg.msg);
+            if (parentMsgId !== undefined && leakSafeMsgIds.has(parentMsgId)) {
+                return;
+            }
+
             logger.trace(`[AnyMessage Event] [${msg.direction}] [${kernelProcess.pid}] ${JSON.stringify(msg.msg)}`);
         });
     }

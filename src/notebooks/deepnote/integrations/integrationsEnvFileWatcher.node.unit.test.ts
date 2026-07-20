@@ -147,4 +147,50 @@ suite('IntegrationsEnvFileWatcher', () => {
 
         verify(liveRefresher.refresh(anything())).never();
     });
+
+    suite('integrations-file deletion', () => {
+        test('refreshes after `.deepnote.env.yaml` is deleted, so the variables it contributed are unset', async () => {
+            const uri = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
+            const notebook = createMockNotebook(uri);
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+            // The file is gone, so the existence probe that gates a plain `.env` change would skip this
+            // notebook. Deleting the file is how a user revokes its credentials, so it must still refresh.
+            when(fileSystem.exists(anything())).thenResolve(false);
+
+            await watcher.handleChangedDirs(new Set([deepnoteDirOf(uri)]), new Set([deepnoteDirOf(uri)]));
+
+            verify(liveRefresher.refresh(anything())).once();
+            const [refreshed] = capture(liveRefresher.refresh).last();
+            assert.deepStrictEqual([...refreshed], [notebook]);
+        });
+
+        test('refreshes after a `.deepnote.env.yaml` deletion in the workspace root', async () => {
+            const uri = Uri.file('/ws/nested/deep/app.deepnote').with({ query: 'notebook=nb-a' });
+            const notebook = createMockNotebook(uri);
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+            when(mockedVSCodeNamespaces.workspace.getWorkspaceFolder(anything())).thenReturn({
+                uri: workspaceRoot
+            } as never);
+            when(fileSystem.exists(anything())).thenResolve(false);
+
+            await watcher.handleChangedDirs(new Set([workspaceRoot.fsPath]), new Set([workspaceRoot.fsPath]));
+
+            verify(liveRefresher.refresh(anything())).once();
+        });
+
+        test('a deleted `.env` alone still does not refresh when no `.deepnote.env.yaml` exists', async () => {
+            const uri = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
+            const notebook = createMockNotebook(uri);
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+            when(fileSystem.exists(anything())).thenResolve(false);
+
+            // Empty second set: the event was for `.env`, not the integrations file, so the F2 guard applies.
+            await watcher.handleChangedDirs(new Set([deepnoteDirOf(uri)]), new Set());
+
+            verify(liveRefresher.refresh(anything())).never();
+        });
+    });
 });

@@ -10,6 +10,7 @@ import { logger } from '../../../platform/logging';
 import { isPythonKernelConnection } from '../../../kernels/helpers';
 import { DEEPNOTE_NOTEBOOK_TYPE } from '../../../kernels/deepnote/types';
 import { workspace } from 'vscode';
+import { recordStartupIntegrationEnvNames } from './startupIntegrationEnvTracker';
 
 /**
  * Provides startup code to inject SQL integration credentials into the kernel environment.
@@ -89,13 +90,20 @@ export class SqlIntegrationStartupCodeProvider implements IStartupCodeProvider, 
             code.push(`    # [SQL Integration] Setting ${Object.keys(envVars).length} SQL integration env vars...`);
 
             // Set each environment variable directly in os.environ
+            const emittedNames: string[] = [];
             for (const [key, value] of Object.entries(envVars)) {
                 if (value) {
                     // Use JSON.stringify to properly escape the value
                     const jsonEscaped = JSON.stringify(value);
                     code.push(`    os.environ['${key}'] = ${jsonEscaped}`);
+                    emittedNames.push(key);
                 }
             }
+
+            // Give IntegrationEnvLiveRefresher the removal baseline for this kernel. Recorded only on
+            // the path that emits code: the early returns above write nothing, and clearing a previous
+            // entry there would lose names that are still live in a restarted kernel's environment.
+            recordStartupIntegrationEnvNames(kernel, emittedNames);
 
             code.push(
                 `    # [SQL Integration] Successfully set ${Object.keys(envVars).length} SQL integration env vars`

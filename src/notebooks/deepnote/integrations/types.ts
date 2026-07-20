@@ -48,7 +48,7 @@ export interface IIntegrationManager {
 
 export const IIntegrationEnvLiveRefresher = Symbol('IIntegrationEnvLiveRefresher');
 export interface IIntegrationEnvLiveRefresher {
-    /** Re-runs the toolkit's `set_integration_env()` in each notebook's running kernel (no restart); notifies once. */
+    /** Applies each notebook's current integration env to its running kernel (no restart); notifies once. */
     refresh(notebooks: readonly NotebookDocument[]): Promise<void>;
 }
 

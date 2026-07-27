@@ -19,7 +19,7 @@ export async function applyIntegrationEndpointEnv({
     endpoint: IUserpodApiEndpoints;
     extraEnv: Record<string, string>;
 }): Promise<void> {
-    // Wait for the initial bind so a kernel starting before the loopback endpoint is listening still gets the env (F3).
+    // Wait for the initial bind so a kernel starting before the loopback endpoint is listening still gets the env.
     await endpoint.ready;
 
     const baseUrl = endpoint.baseUrl;

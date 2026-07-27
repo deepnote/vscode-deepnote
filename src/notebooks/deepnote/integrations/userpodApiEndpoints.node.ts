@@ -122,7 +122,7 @@ export class UserpodApiEndpoints implements IUserpodApiEndpoints, IExtensionSync
                 }
 
                 // Filter (not find): sibling `.deepnote` files can share a project id, so serve the project's env
-                // vars rather than an arbitrary first match, merged deterministically by notebook uri (F1).
+                // vars rather than an arbitrary first match, merged deterministically by notebook uri.
                 const notebooks = workspace.notebookDocuments.filter(
                     (nb) => nb.notebookType === DEEPNOTE_NOTEBOOK_TYPE && nb.metadata?.deepnoteProjectId === projectId
                 );

@@ -94,7 +94,7 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
 
             // A `.env` change only affects integration env when a `.deepnote.env.yaml` actually exists for this
             // notebook; without one the refresh is a no-op and its status message misleading, so an unrelated
-            // `.env` (a very common non-Deepnote file) must not trigger hidden kernel executions (F2).
+            // `.env` (a very common non-Deepnote file) must not trigger hidden kernel executions.
             const candidateDirs =
                 workspaceRoot != null && workspaceRoot.fsPath !== deepnoteDir.fsPath
                     ? [deepnoteDir, workspaceRoot]

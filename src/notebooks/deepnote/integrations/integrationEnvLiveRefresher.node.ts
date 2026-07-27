@@ -21,7 +21,7 @@ export class IntegrationEnvLiveRefresher implements IIntegrationEnvLiveRefresher
         const refreshedCount = results.filter(Boolean).length;
 
         if (refreshedCount > 0) {
-            // Transient status-bar message rather than a persistent toast, so frequent env-file edits don't spam notifications (F2).
+            // Transient status-bar message rather than a persistent toast, so frequent env-file edits don't spam notifications.
             window.setStatusBarMessage(
                 l10n.t('Deepnote integration environment updated.'),
                 STATUS_BAR_MESSAGE_TIMEOUT_MS

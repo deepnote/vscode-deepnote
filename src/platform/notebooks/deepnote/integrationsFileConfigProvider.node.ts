@@ -193,7 +193,7 @@ export class IntegrationsFileConfigProvider implements IIntegrationsFileConfigPr
         });
     }
 
-    /** Surfaces validation issues in the Problems panel against the located `.deepnote.env.yaml` so a typo/missing key isn't silent (F6); a clean parse clears them. No-op when diagnostics are unavailable (e.g. web/tests). */
+    /** Surfaces validation issues in the Problems panel against the located `.deepnote.env.yaml` so a typo/missing key isn't silent; a clean parse clears them. No-op when diagnostics are unavailable (e.g. web/tests). */
     private updateDiagnostics(yamlUri: Uri, issues: ValidationIssue[]): void {
         if (!this.diagnostics) {
             return;

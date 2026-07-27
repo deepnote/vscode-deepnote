@@ -142,7 +142,7 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
     /**
      * Project SecretStorage integrations merged with `.deepnote.env.yaml` file configs (file wins, additive
      * file-only). The single source of truth so integration detection, the SQL status bar, and the SQL LSP agree
-     * with what kernel execution actually sees (F13). Excludes the internal DuckDB integration.
+     * with what kernel execution actually sees. Excludes the internal DuckDB integration.
      */
     public async getMergedConfigs(resource: Resource, token?: CancellationToken): Promise<DatabaseIntegrationConfig[]> {
         if (!resource || token?.isCancellationRequested) {

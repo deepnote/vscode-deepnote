@@ -48,7 +48,7 @@ export class IntegrationDetector implements IIntegrationDetector {
         logger.debug(`IntegrationDetector: Found ${projectIntegrations.length} integrations in project.integrations`);
 
         // Merged (SecretStorage + `.deepnote.env.yaml`) configs, so file-configured integrations are not shown as
-        // unconfigured (F13). Resolved from the open notebook document; when the merged provider is unavailable
+        // unconfigured. Resolved from the open notebook document; when the merged provider is unavailable
         // (e.g. web) this stays empty and detection falls back to SecretStorage only.
         const mergedConfigsById = new Map<string, DatabaseIntegrationConfig>();
         const notebookUri = workspace.notebookDocuments.find(

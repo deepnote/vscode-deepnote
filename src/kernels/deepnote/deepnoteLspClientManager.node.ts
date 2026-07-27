@@ -627,7 +627,7 @@ export class DeepnoteLspClientManager
             logger.trace(`SQL LSP: Found ${projectIntegrations.length} integrations in project ${projectId}`);
 
             // Prefer the merged (SecretStorage + `.deepnote.env.yaml`) configs so file-configured databases also get
-            // LSP autocomplete/schema (F13); fall back to SecretStorage-only when the merged provider is unavailable (e.g. web).
+            // LSP autocomplete/schema; fall back to SecretStorage-only when the merged provider is unavailable (e.g. web).
             const projectIntegrationConfigs = this.sqlIntegrationEnvVars
                 ? (await this.sqlIntegrationEnvVars.getMergedConfigs(notebookUri)).filter(
                       (config) => config.type !== 'pandas-dataframe'

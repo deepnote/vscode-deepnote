@@ -1,24 +1,21 @@
 import { assert } from 'chai';
 import * as fakeTimers from '@sinonjs/fake-timers';
 import * as sinon from 'sinon';
-import { anything, instance, mock, verify, when } from 'ts-mockito';
+import { anything, instance, mock, when } from 'ts-mockito';
 import { CancellationError, Uri } from 'vscode';
 
-import { serializeDeepnoteFile, type DeepnoteFile } from '@deepnote/blocks';
-
-import { DeepnoteAgentSkillsManager } from './deepnoteAgentSkillsManager.node';
-import { DeepnoteServerStarter } from './deepnoteServerStarter.node';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { IAsyncDisposableRegistry, IOutputChannel } from '../../platform/common/types';
-import { IDeepnoteToolkitInstaller } from './types';
-import { ISqlIntegrationEnvVarsProvider, IUserpodApiEndpoints } from '../../platform/notebooks/deepnote/types';
+import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import {
     __getStartServerCalls,
     __getStopServerCalls,
     __resetRuntimeCoreMock
 } from '../../test/mocks/deepnoteRuntimeCore';
-import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
+import { DeepnoteAgentSkillsManager } from './deepnoteAgentSkillsManager.node';
+import { DeepnoteServerStarter } from './deepnoteServerStarter.node';
+import { IDeepnoteToolkitInstaller } from './types';
 
 /**
  * Unit tests for DeepnoteServerStarter.
@@ -265,155 +262,6 @@ suite('DeepnoteServerStarter', () => {
 
                 assert.deepStrictEqual(__getStopServerCalls(), [info], 'dispose must stop the server it waited for');
             });
-        });
-    });
-
-    /**
-     * Direct tests for the private `applyIntegrationEndpointEnv`, exercised via a cast so we mutate a
-     * plain env object rather than intercepting the third-party `startServer`. The four integration env
-     * vars are only injected when the loopback endpoint is listening AND the file resolves to a project
-     * id; every other path degrades gracefully to whatever SQL_* vars were already gathered.
-     */
-    suite('applyIntegrationEndpointEnv (integration endpoint env injection)', () => {
-        const projectFileUri = Uri.file('/workspace/project/notebook-a.deepnote');
-        const baseUrl = 'http://127.0.0.1:5555';
-        // A pre-seeded SQL_* var stands in for the env already gathered before the endpoint step runs.
-        const sqlEnvKey = 'SQL_DEEPNOTE_INTEGRATION_ABC';
-        const sqlEnvValue = 'postgres://localhost:5432/db';
-
-        type WithApplyIntegrationEndpointEnv = {
-            applyIntegrationEndpointEnv(extraEnv: Record<string, string>, deepnoteFileUri: Uri): Promise<void>;
-        };
-
-        // Starters built with an endpoint arg are tracked so each is disposed after its test.
-        let extraStarters: DeepnoteServerStarter[];
-
-        setup(() => {
-            resetVSCodeMocks();
-            extraStarters = [];
-        });
-
-        teardown(async () => {
-            await Promise.all(extraStarters.map((starter) => starter.dispose()));
-        });
-
-        /**
-         * Builds a starter wired with the integration endpoint (optional ctor arg at positional index 6),
-         * whose `baseUrl` getter yields `endpointBaseUrl`. Tracked for disposal.
-         */
-        function createStarterWithEndpoint(endpointBaseUrl: string | undefined): DeepnoteServerStarter {
-            const endpoint: IUserpodApiEndpoints = {
-                baseUrl: endpointBaseUrl,
-                ready: Promise.resolve(),
-                getAuthToken: () => 'endpoint-token'
-            };
-            const starter = new DeepnoteServerStarter(
-                instance(mockProcessServiceFactory),
-                instance(mockToolkitInstaller),
-                instance(mockAgentSkillsManager),
-                instance(mockOutputChannel),
-                instance(mockAsyncRegistry),
-                instance(mockSqlIntegrationEnvVars),
-                endpoint
-            );
-            extraStarters.push(starter);
-
-            return starter;
-        }
-
-        function applyIntegrationEndpointEnv(
-            starter: DeepnoteServerStarter,
-            extraEnv: Record<string, string>,
-            deepnoteFileUri: Uri
-        ): Promise<void> {
-            return (starter as unknown as WithApplyIntegrationEndpointEnv).applyIntegrationEndpointEnv(
-                extraEnv,
-                deepnoteFileUri
-            );
-        }
-
-        /**
-         * Stubs `workspace.fs.readFile` — the read behind `resolveProjectIdForFile` — to yield the
-         * serialized `.deepnote` bytes. Returns the mock so tests can assert whether the read happened.
-         */
-        function stubReadFile(fileContents: string): typeof import('vscode').workspace.fs {
-            const mockFs = mock<typeof import('vscode').workspace.fs>();
-
-            when(mockFs.readFile(anything())).thenReturn(Promise.resolve(new TextEncoder().encode(fileContents)));
-            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
-
-            return mockFs;
-        }
-
-        function serializeProjectFile(projectId: string): string {
-            const file: DeepnoteFile = {
-                metadata: {
-                    createdAt: '2023-01-01T00:00:00Z',
-                    modifiedAt: '2023-01-02T00:00:00Z'
-                },
-                project: {
-                    id: projectId,
-                    name: 'Project',
-                    notebooks: [{ id: 'notebook-1', name: 'Notebook One', blocks: [] }],
-                    settings: {}
-                },
-                version: '1.0.0'
-            };
-
-            return serializeDeepnoteFile(file);
-        }
-
-        test('injects all five integration env vars (preserving pre-seeded SQL_* keys) when the endpoint is listening and the file has a project id', async () => {
-            const mockFs = stubReadFile(serializeProjectFile('the-project-id'));
-            const starter = createStarterWithEndpoint(baseUrl);
-
-            const extraEnv: Record<string, string> = { [sqlEnvKey]: sqlEnvValue };
-            await applyIntegrationEndpointEnv(starter, extraEnv, projectFileUri);
-
-            assert.deepStrictEqual(extraEnv, {
-                [sqlEnvKey]: sqlEnvValue,
-                DEEPNOTE_RUNTIME__ENV_INTEGRATION_ENABLED: 'true',
-                DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE: 'true',
-                DEEPNOTE_RUNTIME__WEBAPP_URL: baseUrl,
-                DEEPNOTE_RUNTIME__PROJECT_SECRET: 'endpoint-token',
-                DEEPNOTE_PROJECT_ID: 'the-project-id'
-            });
-            // The enabled path must resolve the project id from the file.
-            verify(mockFs.readFile(anything())).once();
-        });
-
-        test('injects nothing and does NOT read the file when the endpoint has no baseUrl', async () => {
-            const mockFs = stubReadFile(serializeProjectFile('the-project-id'));
-            const starter = createStarterWithEndpoint(undefined);
-
-            const extraEnv: Record<string, string> = { [sqlEnvKey]: sqlEnvValue };
-            await applyIntegrationEndpointEnv(starter, extraEnv, projectFileUri);
-
-            assert.deepStrictEqual(extraEnv, { [sqlEnvKey]: sqlEnvValue });
-            // A missing baseUrl short-circuits BEFORE resolving the project id — no file read.
-            verify(mockFs.readFile(anything())).never();
-        });
-
-        test('injects nothing and does NOT read the file when no endpoint was injected at all', async () => {
-            // The outer-suite `serverStarter` is constructed WITHOUT the optional endpoint arg.
-            const mockFs = stubReadFile(serializeProjectFile('the-project-id'));
-
-            const extraEnv: Record<string, string> = { [sqlEnvKey]: sqlEnvValue };
-            await applyIntegrationEndpointEnv(serverStarter, extraEnv, projectFileUri);
-
-            assert.deepStrictEqual(extraEnv, { [sqlEnvKey]: sqlEnvValue });
-            verify(mockFs.readFile(anything())).never();
-        });
-
-        test('injects nothing when the endpoint is listening but the file resolves to no project id', async () => {
-            // A schema-valid `.deepnote` whose project.id is empty — `resolveProjectIdForFile` yields a falsy id.
-            stubReadFile(serializeProjectFile(''));
-            const starter = createStarterWithEndpoint(baseUrl);
-
-            const extraEnv: Record<string, string> = { [sqlEnvKey]: sqlEnvValue };
-            await applyIntegrationEndpointEnv(starter, extraEnv, projectFileUri);
-
-            assert.deepStrictEqual(extraEnv, { [sqlEnvKey]: sqlEnvValue });
         });
     });
 });

@@ -29,7 +29,6 @@ import {
     IPlatformDeepnoteNotebookManager,
     ISqlIntegrationEnvVarsProvider
 } from '../../platform/notebooks/deepnote/types';
-import { ConfigurableDatabaseIntegrationConfig } from '../../platform/notebooks/deepnote/integrationTypes';
 import { SqlLspConnection, isSupportedBySqlLsp, convertToSqlLspConnection } from './sqlLspConnectionUtils';
 
 interface LspClientInfo {
@@ -631,7 +630,7 @@ export class DeepnoteLspClientManager
             // LSP autocomplete/schema (F13); fall back to SecretStorage-only when the merged provider is unavailable (e.g. web).
             const projectIntegrationConfigs = this.sqlIntegrationEnvVars
                 ? (await this.sqlIntegrationEnvVars.getMergedConfigs(notebookUri)).filter(
-                      (config): config is ConfigurableDatabaseIntegrationConfig => config.type !== 'pandas-dataframe'
+                      (config) => config.type !== 'pandas-dataframe'
                   )
                 : (
                       await Promise.all(
@@ -639,12 +638,12 @@ export class DeepnoteLspClientManager
                               this.integrationStorage.getIntegrationConfig(integration.id)
                           )
                       )
-                  ).filter((config): config is ConfigurableDatabaseIntegrationConfig => config != null);
+                  ).filter((config) => config != null);
 
             const connections = projectIntegrationConfigs
                 .filter((config) => isSupportedBySqlLsp(config.type))
                 .map((config) => convertToSqlLspConnection(config))
-                .filter((conn): conn is SqlLspConnection => conn !== null);
+                .filter((conn) => conn !== null);
 
             logger.trace(
                 `SQL LSP: Found ${connections.length} SQL LSP-compatible integrations for project ${projectId}`

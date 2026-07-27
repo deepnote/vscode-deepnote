@@ -19,14 +19,14 @@ import { IProcessServiceFactory } from '../../platform/common/process/types.node
 import { IAsyncDisposableRegistry, IDisposable, IOutputChannel } from '../../platform/common/types';
 import { sleep } from '../../platform/common/utils/async';
 import { generateUuid } from '../../platform/common/uuid';
-import { resolveProjectIdForFile } from '../../platform/deepnote/deepnoteProjectIdResolver';
 import { DeepnoteServerStartupError } from '../../platform/errors/deepnoteKernelErrors';
 import { logger } from '../../platform/logging';
 import { ISqlIntegrationEnvVarsProvider, IUserpodApiEndpoints } from '../../platform/notebooks/deepnote/types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import * as path from '../../platform/vscode-path/path';
-import { DeepnoteServerInfo, IDeepnoteServerStarter, IDeepnoteToolkitInstaller } from './types';
 import { DeepnoteAgentSkillsManager } from './deepnoteAgentSkillsManager.node';
+import { applyIntegrationEndpointEnv } from './deepnoteIntegrationEndpointEnv';
+import { DeepnoteServerInfo, IDeepnoteServerStarter, IDeepnoteToolkitInstaller } from './types';
 
 const MAX_OUTPUT_TRACKING_LENGTH = 5000;
 const SERVER_STARTUP_TIMEOUT_MS = 120_000;
@@ -402,7 +402,6 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         return extraEnv;
     }
 
-    // Skipped unless the endpoint is up and the file has a project id — else the toolkit raises on an unreachable URL.
     private async applyIntegrationEndpointEnv(extraEnv: Record<string, string>, deepnoteFileUri: Uri): Promise<void> {
         const endpoint = this.userpodApiEndpoints;
 
@@ -410,31 +409,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             return;
         }
 
-        // Wait for the initial bind so a kernel starting before the loopback endpoint is listening still gets the env (F3).
-        await endpoint.ready;
-
-        const baseUrl = endpoint.baseUrl;
-        if (!baseUrl) {
-            logger.warn(
-                'DeepnoteServerStarter: integration endpoint is not listening; skipping live integration env injection.'
-            );
-
-            return;
-        }
-
-        const projectId = await resolveProjectIdForFile(deepnoteFileUri);
-
-        if (!projectId) {
-            return;
-        }
-
-        extraEnv['DEEPNOTE_RUNTIME__ENV_INTEGRATION_ENABLED'] = 'true';
-        extraEnv['DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE'] = 'true';
-        extraEnv['DEEPNOTE_RUNTIME__WEBAPP_URL'] = baseUrl;
-        // 2.1.1 dereferences project_secret without a null-check in detached mode; also the endpoint's per-project bearer token.
-        extraEnv['DEEPNOTE_RUNTIME__PROJECT_SECRET'] = endpoint.getAuthToken(projectId);
-        // Legacy key (not __PROJECT_ID): also satisfies set_notebook_path's has_env check, avoiding a session-name parse.
-        extraEnv['DEEPNOTE_PROJECT_ID'] = projectId;
+        await applyIntegrationEndpointEnv({ deepnoteFileUri, endpoint, extraEnv });
     }
 
     /**

@@ -18,7 +18,6 @@ import { Uri } from 'vscode';
 import { IConfigurationService, IWatchableJupyterSettings, type ReadWrite } from '../../../platform/common/types';
 import { JupyterSettings } from '../../../platform/common/configSettings';
 import { ISqlIntegrationEnvVarsProvider } from '../../../platform/notebooks/deepnote/types';
-import { SqlIntegrationEnvironmentVariablesProviderWeb } from '../../../platform/notebooks/deepnote/sqlIntegrationEnvironmentVariablesProvider.web';
 
 use(chaiAsPromised);
 
@@ -74,23 +73,15 @@ suite('Kernel Environment Variables Service', () => {
 
     teardown(() => Object.assign(process.env, originalEnvVars));
 
-    /**
-     * Helper factory function to build KernelEnvironmentVariablesService with optional overrides.
-     * @param overrides Optional overrides for the service dependencies
-     * @returns A new instance of KernelEnvironmentVariablesService
-     */
-    function buildKernelEnvVarsService(overrides?: {
-        sqlIntegrationEnvVars?: ISqlIntegrationEnvVarsProvider;
-    }): KernelEnvironmentVariablesService {
-        const sqlProvider = overrides?.sqlIntegrationEnvVars ?? instance(sqlIntegrationEnvVars);
-
+    /** Builds the service under test from the suite's mocks. */
+    function buildKernelEnvVarsService(): KernelEnvironmentVariablesService {
         return new KernelEnvironmentVariablesService(
             instance(interpreterService),
             instance(envActivation),
             variablesService,
             instance(customVariablesService),
             instance(configService),
-            sqlProvider
+            instance(sqlIntegrationEnvVars)
         );
     }
 
@@ -395,11 +386,9 @@ suite('Kernel Environment Variables Service', () => {
                 customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())
             ).thenResolve();
 
-            const serviceWithoutSql = buildKernelEnvVarsService({
-                sqlIntegrationEnvVars: new SqlIntegrationEnvironmentVariablesProviderWeb()
-            });
+            when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
 
-            const vars = await serviceWithoutSql.getEnvironmentVariables(resource, interpreter, kernelSpec);
+            const vars = await kernelVariablesService.getEnvironmentVariables(resource, interpreter, kernelSpec);
 
             assert.isOk(vars);
             assert.isUndefined(vars!['SQL_MY_DB']);

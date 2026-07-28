@@ -1,4 +1,5 @@
 import { assert } from 'chai';
+import { anything, instance, mock, when } from 'ts-mockito';
 import { Uri } from 'vscode';
 
 import { DeepnoteLspClientManager } from './deepnoteLspClientManager.node';
@@ -6,7 +7,7 @@ import { createMockChildProcess } from './deepnoteTestHelpers.node';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import * as path from '../../platform/vscode-path/path';
-import { SqlIntegrationEnvironmentVariablesProviderWeb } from '../../platform/notebooks/deepnote/sqlIntegrationEnvironmentVariablesProvider.web';
+import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
 
 suite('DeepnoteLspClientManager Integration Tests', () => {
     let lspClientManager: DeepnoteLspClientManager;
@@ -42,11 +43,15 @@ suite('DeepnoteLspClientManager Integration Tests', () => {
     } as any;
 
     setup(() => {
+        // No integrations configured, so the LSP resolves an empty connection list.
+        const sqlIntegrationEnvVars = mock<ISqlIntegrationEnvVarsProvider>();
+        when(sqlIntegrationEnvVars.getMergedConfigs(anything())).thenResolve([]);
+
         lspClientManager = new DeepnoteLspClientManager(
             mockDisposableRegistry,
             mockNotebookEditorProvider,
             mockNotebookManager,
-            new SqlIntegrationEnvironmentVariablesProviderWeb()
+            instance(sqlIntegrationEnvVars)
         );
         lspClientManager.activate();
     });

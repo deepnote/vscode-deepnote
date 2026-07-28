@@ -11,7 +11,18 @@ import { createEventHandler } from '../../test/common';
 import { Commands } from '../../platform/common/constants';
 import { IDeepnoteNotebookManager } from '../types';
 import { createMockCell } from './deepnoteTestHelpers';
-import { SqlIntegrationEnvironmentVariablesProviderWeb } from '../../platform/notebooks/deepnote/sqlIntegrationEnvironmentVariablesProvider.web';
+import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
+
+/**
+ * A merged-config source that yields nothing, so integrations resolve from SecretStorage alone.
+ * These suites never assert against it, hence an instance rather than a mock handle.
+ */
+function emptySqlIntegrationEnvVars(): ISqlIntegrationEnvVarsProvider {
+    const provider = mock<ISqlIntegrationEnvVarsProvider>();
+    when(provider.getMergedConfigs(anything())).thenResolve([]);
+
+    return instance(provider);
+}
 
 suite('SqlCellStatusBarProvider', () => {
     let provider: SqlCellStatusBarProvider;
@@ -28,7 +39,7 @@ suite('SqlCellStatusBarProvider', () => {
             disposables,
             instance(integrationStorage),
             instance(notebookManager),
-            new SqlIntegrationEnvironmentVariablesProviderWeb()
+            emptySqlIntegrationEnvVars()
         );
 
         const tokenSource = new CancellationTokenSource();
@@ -311,7 +322,7 @@ suite('SqlCellStatusBarProvider', () => {
                 activateDisposables,
                 instance(activateIntegrationStorage),
                 instance(activateNotebookManager),
-                new SqlIntegrationEnvironmentVariablesProviderWeb()
+                emptySqlIntegrationEnvVars()
             );
         });
 
@@ -548,7 +559,7 @@ suite('SqlCellStatusBarProvider', () => {
                 eventDisposables,
                 instance(eventIntegrationStorage),
                 instance(eventNotebookManager),
-                new SqlIntegrationEnvironmentVariablesProviderWeb()
+                emptySqlIntegrationEnvVars()
             );
         });
 
@@ -677,7 +688,7 @@ suite('SqlCellStatusBarProvider', () => {
                 commandDisposables,
                 instance(commandIntegrationStorage),
                 instance(commandNotebookManager),
-                new SqlIntegrationEnvironmentVariablesProviderWeb()
+                emptySqlIntegrationEnvVars()
             );
 
             // Capture the command handler
@@ -819,7 +830,7 @@ suite('SqlCellStatusBarProvider', () => {
                 commandDisposables,
                 instance(commandIntegrationStorage),
                 instance(commandNotebookManager),
-                new SqlIntegrationEnvironmentVariablesProviderWeb()
+                emptySqlIntegrationEnvVars()
             );
 
             // Capture the command handler

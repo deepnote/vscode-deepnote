@@ -11,7 +11,7 @@ import { DEEPNOTE_NOTEBOOK_TYPE } from '../../../kernels/deepnote/types';
 import { IIntegrationEnvLiveRefresher } from './types';
 
 /** Trailing-edge debounce so a burst of edits (e.g. .env and .deepnote.env.yaml both saved) is handled once. */
-const debounceTimeInMilliseconds = 500;
+export const debounceTimeInMilliseconds = 500;
 
 const watchedEnvFileNames = [DEFAULT_INTEGRATIONS_FILE, DEFAULT_ENV_FILE];
 
@@ -55,16 +55,6 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
         );
     }
 
-    /** Public so it can be unit-tested without real filesystem events. */
-    public async handleChangedDirs(changedDirs: Set<string>): Promise<void> {
-        const affected = await this.findAffectedNotebooks(changedDirs);
-        if (affected.length === 0) {
-            return;
-        }
-
-        await this.liveRefresher.refresh(affected);
-    }
-
     private async findAffectedNotebooks(changedDirs: Set<string>): Promise<NotebookDocument[]> {
         const affected: NotebookDocument[] = [];
 
@@ -105,6 +95,15 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
         }
 
         return affected;
+    }
+
+    private async handleChangedDirs(changedDirs: Set<string>): Promise<void> {
+        const affected = await this.findAffectedNotebooks(changedDirs);
+        if (affected.length === 0) {
+            return;
+        }
+
+        await this.liveRefresher.refresh(affected);
     }
 
     /** True when a `.deepnote.env.yaml` exists in any candidate dir (dir-then-root), mirroring the config provider's probe. */

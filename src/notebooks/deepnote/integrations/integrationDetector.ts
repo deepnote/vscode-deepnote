@@ -1,5 +1,4 @@
 import { inject, injectable } from 'inversify';
-import { workspace } from 'vscode';
 
 import { logger } from '../../../platform/logging';
 import { IDeepnoteNotebookManager } from '../../types';
@@ -8,7 +7,7 @@ import {
     IntegrationStatus,
     IntegrationWithStatus
 } from '../../../platform/notebooks/deepnote/integrationTypes';
-import { IIntegrationDetector, IIntegrationStorage } from './types';
+import { IIntegrationDetector, IIntegrationStorage, IntegrationDetectionInput } from './types';
 import { ISqlIntegrationEnvVarsProvider } from '../../../platform/notebooks/deepnote/types';
 import { DatabaseIntegrationConfig, databaseIntegrationTypes } from '@deepnote/database-integrations';
 
@@ -28,7 +27,9 @@ export class IntegrationDetector implements IIntegrationDetector {
      * Detect all integrations used in the given project.
      * Uses the project's integrations field as the source of truth.
      */
-    async detectIntegrations(projectId: string, notebookId: string): Promise<Map<string, IntegrationWithStatus>> {
+    async detectIntegrations(input: IntegrationDetectionInput): Promise<Map<string, IntegrationWithStatus>> {
+        const { notebookUri, projectId, notebookId } = input;
+
         // Get the project
         const project = this.notebookManager.getProjectForNotebook(projectId, notebookId);
         if (!project) {
@@ -47,16 +48,10 @@ export class IntegrationDetector implements IIntegrationDetector {
         logger.debug(`IntegrationDetector: Found ${projectIntegrations.length} integrations in project.integrations`);
 
         // Merged (SecretStorage + `.deepnote.env.yaml`) configs, so file-configured integrations are not shown as
-        // unconfigured. Resolved from the open notebook document; with no open document this stays empty and
-        // detection falls back to SecretStorage only.
+        // unconfigured. The caller forwards the open notebook's URI, so the file config is always resolvable here.
         const mergedConfigsById = new Map<string, DatabaseIntegrationConfig>();
-        const notebookUri = workspace.notebookDocuments.find(
-            (nb) => nb.metadata?.deepnoteProjectId === projectId && nb.metadata?.deepnoteNotebookId === notebookId
-        )?.uri;
-        if (notebookUri) {
-            for (const config of await this.sqlIntegrationEnvVars.getMergedConfigs(notebookUri)) {
-                mergedConfigsById.set(config.id, config);
-            }
+        for (const config of await this.sqlIntegrationEnvVars.getMergedConfigs(notebookUri)) {
+            mergedConfigsById.set(config.id, config);
         }
 
         for (const projectIntegration of projectIntegrations) {
@@ -104,20 +99,5 @@ export class IntegrationDetector implements IIntegrationDetector {
         logger.debug(`IntegrationDetector: Found ${integrations.size} integrations`);
 
         return integrations;
-    }
-
-    /**
-     * Check if a project has any unconfigured integrations
-     */
-    async hasUnconfiguredIntegrations(projectId: string, notebookId: string): Promise<boolean> {
-        const integrations = await this.detectIntegrations(projectId, notebookId);
-
-        for (const integration of integrations.values()) {
-            if (integration.status === IntegrationStatus.Disconnected) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

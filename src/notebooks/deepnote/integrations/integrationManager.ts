@@ -104,7 +104,11 @@ export class IntegrationManager implements IIntegrationManager {
         }
 
         // Detect integrations in the project
-        const integrations = await this.integrationDetector.detectIntegrations(projectId, notebookId);
+        const integrations = await this.integrationDetector.detectIntegrations({
+            notebookUri: activeNotebook.uri,
+            projectId,
+            notebookId
+        });
         const hasIntegrations = integrations.size > 0;
         const hasUnconfigured = Array.from(integrations.values()).some(
             (integration) => integration.status === IntegrationStatus.Disconnected
@@ -137,7 +141,11 @@ export class IntegrationManager implements IIntegrationManager {
         logger.trace(`IntegrationManager: Notebook metadata:`, activeNotebook.metadata);
 
         // First try to detect integrations from the stored project
-        let integrations = await this.integrationDetector.detectIntegrations(projectId, notebookId);
+        let integrations = await this.integrationDetector.detectIntegrations({
+            notebookUri: activeNotebook.uri,
+            projectId,
+            notebookId
+        });
         logger.debug(`IntegrationManager: Found ${integrations.size} integrations`);
 
         // If a specific integration was requested (e.g., from status bar click),

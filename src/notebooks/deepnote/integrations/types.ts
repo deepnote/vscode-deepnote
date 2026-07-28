@@ -7,16 +7,19 @@ import { IntegrationWithStatus } from '../../../platform/notebooks/deepnote/inte
 export { IIntegrationStorage } from '../../../platform/notebooks/deepnote/types';
 
 export const IIntegrationDetector = Symbol('IIntegrationDetector');
+
+/** Inputs for {@link IIntegrationDetector.detectIntegrations}: the open notebook's URI plus its already-validated Deepnote IDs. */
+export interface IntegrationDetectionInput {
+    notebookUri: Uri;
+    projectId: string;
+    notebookId: string;
+}
+
 export interface IIntegrationDetector {
     /**
      * Detect all integrations used in the given project
      */
-    detectIntegrations(projectId: string, notebookId: string): Promise<Map<string, IntegrationWithStatus>>;
-
-    /**
-     * Check if a project has any unconfigured integrations
-     */
-    hasUnconfiguredIntegrations(projectId: string, notebookId: string): Promise<boolean>;
+    detectIntegrations(input: IntegrationDetectionInput): Promise<Map<string, IntegrationWithStatus>>;
 }
 
 export const IIntegrationWebviewProvider = Symbol('IIntegrationWebviewProvider');

@@ -58,8 +58,6 @@ suite('DeepnoteServerStarter', () => {
         when(mockAsyncRegistry.push(anything())).thenReturn();
         when(mockOutputChannel.appendLine(anything())).thenReturn();
 
-        // An endpoint that never binds (no baseUrl), so live-integration env injection is skipped —
-        // that path has its own coverage in `deepnoteIntegrationEndpointEnv.unit.test.ts`.
         when(mockUserpodApiEndpoints.ready).thenReturn(Promise.resolve());
         when(mockUserpodApiEndpoints.baseUrl).thenReturn(undefined);
 

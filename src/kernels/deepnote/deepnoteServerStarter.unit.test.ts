@@ -26,20 +26,6 @@ import { IDeepnoteToolkitInstaller } from './types';
  * for src/test/mocks/deepnoteRuntimeCore.ts. These tests drive the public API
  * and assert on the calls recorded by that mock — no private state access.
  */
-/**
- * A loopback endpoint that never binds, so live-integration env injection is skipped.
- * That path has its own coverage in `deepnoteIntegrationEndpointEnv.unit.test.ts`.
- */
-function unboundUserpodApiEndpoints(): IUserpodApiEndpoints {
-    return {
-        baseUrl: undefined,
-        ready: Promise.resolve(),
-        getAuthToken: () => {
-            throw new Error('getAuthToken must not be called while the endpoint is not listening');
-        }
-    };
-}
-
 suite('DeepnoteServerStarter', () => {
     const interpreter: PythonEnvironment = {
         id: '/usr/bin/python3',
@@ -57,6 +43,7 @@ suite('DeepnoteServerStarter', () => {
     let mockOutputChannel: IOutputChannel;
     let mockAsyncRegistry: IAsyncDisposableRegistry;
     let mockSqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider;
+    let mockUserpodApiEndpoints: IUserpodApiEndpoints;
 
     setup(() => {
         __resetRuntimeCoreMock();
@@ -67,9 +54,15 @@ suite('DeepnoteServerStarter', () => {
         mockOutputChannel = mock<IOutputChannel>();
         mockAsyncRegistry = mock<IAsyncDisposableRegistry>();
         mockSqlIntegrationEnvVars = mock<ISqlIntegrationEnvVarsProvider>();
+        mockUserpodApiEndpoints = mock<IUserpodApiEndpoints>();
 
         when(mockAsyncRegistry.push(anything())).thenReturn();
         when(mockOutputChannel.appendLine(anything())).thenReturn();
+
+        // An endpoint that never binds (no baseUrl), so live-integration env injection is skipped —
+        // that path has its own coverage in `deepnoteIntegrationEndpointEnv.unit.test.ts`.
+        when(mockUserpodApiEndpoints.ready).thenReturn(Promise.resolve());
+        when(mockUserpodApiEndpoints.baseUrl).thenReturn(undefined);
 
         // The toolkit install step runs before runtime-core's startServer; stub it so the
         // start path reaches startServer. (ts-mockito methods that are not stubbed return null.)
@@ -87,7 +80,7 @@ suite('DeepnoteServerStarter', () => {
             instance(mockOutputChannel),
             instance(mockAsyncRegistry),
             instance(mockSqlIntegrationEnvVars),
-            unboundUserpodApiEndpoints()
+            instance(mockUserpodApiEndpoints)
         );
     });
 
@@ -105,7 +98,7 @@ suite('DeepnoteServerStarter', () => {
                 instance(mockOutputChannel),
                 instance(mockAsyncRegistry),
                 new SqlIntegrationEnvironmentVariablesProviderWeb(),
-                unboundUserpodApiEndpoints()
+                instance(mockUserpodApiEndpoints)
             );
 
             try {

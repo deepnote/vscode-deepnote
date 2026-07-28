@@ -9,7 +9,7 @@ import { ConfigurationForm } from './ConfigurationForm';
 import {
     ConfigurableDatabaseIntegrationConfig,
     ConfigurableDatabaseIntegrationType,
-    IntegrationWithStatus,
+    DetectedIntegration,
     WebviewMessage,
     WebviewOutboundMessage
 } from './types';
@@ -20,7 +20,7 @@ export interface IIntegrationPanelProps {
 }
 
 export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, vscodeApi }) => {
-    const [integrations, setIntegrations] = React.useState<IntegrationWithStatus[]>([]);
+    const [integrations, setIntegrations] = React.useState<DetectedIntegration[]>([]);
     const [projectName, setProjectName] = React.useState<string | undefined>(undefined);
     const [selectedIntegrationId, setSelectedIntegrationId] = React.useState<string | null>(null);
     const [selectedConfig, setSelectedConfig] = React.useState<ConfigurableDatabaseIntegrationConfig | null>(null);

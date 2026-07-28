@@ -77,6 +77,7 @@ export interface LegacyDuckDBIntegrationConfig extends BaseLegacyIntegrationConf
 import {
     DatabaseIntegrationConfig,
     DatabaseIntegrationType,
+    databaseIntegrationTypes,
     FederatedAuthMethod,
     isFederatedAuthMethod
 } from '@deepnote/database-integrations';
@@ -148,25 +149,25 @@ export type ConfigurableDatabaseIntegrationConfig = Extract<
 
 export type ConfigurableDatabaseIntegrationType = Exclude<DatabaseIntegrationType, 'pandas-dataframe'>;
 
-/**
- * Integration connection status
- */
-export enum IntegrationStatus {
-    Connected = 'connected',
-    Disconnected = 'disconnected',
-    Error = 'error'
+/** Narrows a raw type string to one the webview can configure; excludes the internal DuckDB integration. */
+export function isConfigurableDatabaseIntegrationType(
+    type: string | undefined
+): type is ConfigurableDatabaseIntegrationType {
+    return (
+        type !== undefined &&
+        type !== 'pandas-dataframe' &&
+        (databaseIntegrationTypes as readonly string[]).includes(type)
+    );
 }
 
 /** Federated-auth token status: `'authenticated'`, `'disconnected'` (federated but no token), or `'unsupported'` (non-federated or web/remote). */
 export type FederatedAuthTokenStatus = 'authenticated' | 'disconnected' | 'unsupported';
 
 /**
- * Integration with its current status
+ * An integration declared by a project, paired with the credentials stored for it (if any)
  */
-export interface IntegrationWithStatus {
+export interface DetectedIntegration {
     config: ConfigurableDatabaseIntegrationConfig | null;
-    status: IntegrationStatus;
-    error?: string;
     /**
      * Name from the project's integrations list (used for prefilling when config is null)
      */

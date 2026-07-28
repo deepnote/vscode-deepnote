@@ -2,11 +2,11 @@ import * as React from 'react';
 import { BigQueryAuthMethods } from '@deepnote/database-integrations';
 
 import { getLocString } from '../react-common/locReactSide';
-import { ConfigurableDatabaseIntegrationType, IntegrationWithStatus } from './types';
+import { ConfigurableDatabaseIntegrationType, DetectedIntegration } from './types';
 import { integrationTypeIcons } from './integrationUtils';
 
 export interface IIntegrationItemProps {
-    integration: IntegrationWithStatus;
+    integration: DetectedIntegration;
     onConfigure: (integrationId: string) => void;
     onReset: (integrationId: string) => void;
     onDelete: (integrationId: string) => void;
@@ -63,11 +63,11 @@ export const IntegrationItem: React.FC<IIntegrationItemProps> = ({
     onDelete,
     onAuthenticate
 }) => {
-    const statusClass = integration.status === 'connected' ? 'status-connected' : 'status-disconnected';
-    const statusText =
-        integration.status === 'connected'
-            ? getLocString('integrationsConnected', 'Connected')
-            : getLocString('integrationsNotConfigured', 'Not Configured');
+    // Credentials the panel can edit live in SecretStorage, which is exactly what `config` holds.
+    const statusClass = integration.config ? 'status-connected' : 'status-disconnected';
+    const statusText = integration.config
+        ? getLocString('integrationsConnected', 'Connected')
+        : getLocString('integrationsNotConfigured', 'Not Configured');
     const configureText = integration.config
         ? getLocString('integrationsReconfigure', 'Reconfigure')
         : getLocString('integrationsConfigure', 'Configure');

@@ -1,16 +1,15 @@
 import type { DeepnoteBlock } from '@deepnote/blocks';
 import { Event, NotebookDocument, Uri } from 'vscode';
 
-import { IntegrationWithStatus } from '../../../platform/notebooks/deepnote/integrationTypes';
+import { DetectedIntegration } from '../../../platform/notebooks/deepnote/integrationTypes';
 
 // Re-export IIntegrationStorage from platform layer
 export { IIntegrationStorage } from '../../../platform/notebooks/deepnote/types';
 
 export const IIntegrationDetector = Symbol('IIntegrationDetector');
 
-/** Inputs for {@link IIntegrationDetector.detectIntegrations}: the open notebook's URI plus its already-validated Deepnote IDs. */
+/** Inputs for {@link IIntegrationDetector.detectIntegrations}: the open notebook's already-validated Deepnote IDs. */
 export interface IntegrationDetectionInput {
-    notebookUri: Uri;
     projectId: string;
     notebookId: string;
 }
@@ -19,7 +18,7 @@ export interface IIntegrationDetector {
     /**
      * Detect all integrations used in the given project
      */
-    detectIntegrations(input: IntegrationDetectionInput): Promise<Map<string, IntegrationWithStatus>>;
+    detectIntegrations(input: IntegrationDetectionInput): Promise<Map<string, DetectedIntegration>>;
 }
 
 export const IIntegrationWebviewProvider = Symbol('IIntegrationWebviewProvider');
@@ -27,14 +26,14 @@ export interface IIntegrationWebviewProvider {
     /**
      * Show the integration management webview
      * @param projectId The Deepnote project ID
-     * @param integrations Map of integration IDs to their status
+     * @param integrations Map of integration IDs to their detected config and metadata
      * @param activeFileUri The `.deepnote` file being edited — always persisted to disk on save
      * @param selectedIntegrationId Optional integration ID to select/configure immediately
      * @param projectName Optional project display name (sourced from the active notebook's metadata)
      */
     show(
         projectId: string,
-        integrations: Map<string, IntegrationWithStatus>,
+        integrations: Map<string, DetectedIntegration>,
         activeFileUri: Uri,
         selectedIntegrationId?: string,
         projectName?: string

@@ -1,11 +1,10 @@
 import { inject, injectable } from 'inversify';
-import { commands, l10n, window, workspace } from 'vscode';
+import { commands, l10n, window } from 'vscode';
 
 import { IExtensionContext } from '../../../platform/common/types';
 import { Commands } from '../../../platform/common/constants';
 import { logger } from '../../../platform/logging';
 import { IIntegrationDetector, IIntegrationManager, IIntegrationStorage, IIntegrationWebviewProvider } from './types';
-import { IntegrationStatus } from '../../../platform/notebooks/deepnote/integrationTypes';
 import { IDeepnoteNotebookManager } from '../../types';
 import { DatabaseIntegrationType, databaseIntegrationTypes } from '@deepnote/database-integrations';
 
@@ -14,10 +13,6 @@ import { DatabaseIntegrationType, databaseIntegrationTypes } from '@deepnote/dat
  */
 @injectable()
 export class IntegrationManager implements IIntegrationManager {
-    private hasIntegrationsContext = 'deepnote.hasIntegrations';
-
-    private hasUnconfiguredIntegrationsContext = 'deepnote.hasUnconfiguredIntegrations';
-
     constructor(
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
         @inject(IIntegrationDetector) private readonly integrationDetector: IIntegrationDetector,
@@ -50,72 +45,6 @@ export class IntegrationManager implements IIntegrationManager {
                 return this.showIntegrationsUI(integrationId);
             })
         );
-
-        // Listen for active notebook changes to update context
-        this.extensionContext.subscriptions.push(
-            window.onDidChangeActiveNotebookEditor(() =>
-                this.updateContext().catch((err) =>
-                    logger.error('IntegrationManager: Failed to update context on notebook editor change', err)
-                )
-            )
-        );
-
-        // Listen for notebook document changes
-        this.extensionContext.subscriptions.push(
-            workspace.onDidOpenNotebookDocument(() =>
-                this.updateContext().catch((err) =>
-                    logger.error('IntegrationManager: Failed to update context on notebook open', err)
-                )
-            )
-        );
-
-        this.extensionContext.subscriptions.push(
-            workspace.onDidCloseNotebookDocument(() =>
-                this.updateContext().catch((err) =>
-                    logger.error('IntegrationManager: Failed to update context on notebook close', err)
-                )
-            )
-        );
-
-        // Initial context update
-        this.updateContext().catch((err) =>
-            logger.error('IntegrationManager: Failed to update context on activation', err)
-        );
-    }
-
-    /**
-     * Update the context keys based on the active notebook
-     */
-    private async updateContext(): Promise<void> {
-        const activeNotebook = window.activeNotebookEditor?.notebook;
-
-        if (!activeNotebook || activeNotebook.notebookType !== 'deepnote') {
-            await commands.executeCommand('setContext', this.hasIntegrationsContext, false);
-            await commands.executeCommand('setContext', this.hasUnconfiguredIntegrationsContext, false);
-            return;
-        }
-
-        const projectId = activeNotebook.metadata?.deepnoteProjectId;
-        const notebookId = activeNotebook.metadata?.deepnoteNotebookId;
-        if (!projectId || !notebookId) {
-            await commands.executeCommand('setContext', this.hasIntegrationsContext, false);
-            await commands.executeCommand('setContext', this.hasUnconfiguredIntegrationsContext, false);
-            return;
-        }
-
-        // Detect integrations in the project
-        const integrations = await this.integrationDetector.detectIntegrations({
-            notebookUri: activeNotebook.uri,
-            projectId,
-            notebookId
-        });
-        const hasIntegrations = integrations.size > 0;
-        const hasUnconfigured = Array.from(integrations.values()).some(
-            (integration) => integration.status === IntegrationStatus.Disconnected
-        );
-
-        await commands.executeCommand('setContext', this.hasIntegrationsContext, hasIntegrations);
-        await commands.executeCommand('setContext', this.hasUnconfiguredIntegrationsContext, hasUnconfigured);
     }
 
     /**
@@ -142,7 +71,6 @@ export class IntegrationManager implements IIntegrationManager {
 
         // First try to detect integrations from the stored project
         let integrations = await this.integrationDetector.detectIntegrations({
-            notebookUri: activeNotebook.uri,
             projectId,
             notebookId
         });
@@ -175,7 +103,6 @@ export class IntegrationManager implements IIntegrationManager {
             } else {
                 integrations.set(selectedIntegrationId, {
                     config: config || null,
-                    status: config ? IntegrationStatus.Connected : IntegrationStatus.Disconnected,
                     integrationName,
                     integrationType
                 });

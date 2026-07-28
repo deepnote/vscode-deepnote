@@ -11,8 +11,7 @@ import { FederatedAuthTokenEntry, IFederatedAuthTokenStorage, IIntegrationStorag
 import { computeMetadataFingerprint } from './federatedAuth/federatedAuthTokenStorage.node';
 import {
     ConfigurableDatabaseIntegrationConfig,
-    IntegrationStatus,
-    IntegrationWithStatus
+    DetectedIntegration
 } from '../../../platform/notebooks/deepnote/integrationTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 import {
@@ -164,11 +163,11 @@ suite('IntegrationWebviewProvider', () => {
     function singleIntegrationMap(
         id: string,
         config: ConfigurableDatabaseIntegrationConfig
-    ): Map<string, IntegrationWithStatus> {
-        return new Map([[id, { config, status: IntegrationStatus.Connected }]]);
+    ): Map<string, DetectedIntegration> {
+        return new Map([[id, { config }]]);
     }
 
-    async function show(provider: IntegrationWebviewProvider, integrations: Map<string, IntegrationWithStatus>) {
+    async function show(provider: IntegrationWebviewProvider, integrations: Map<string, DetectedIntegration>) {
         await provider.show(PROJECT_ID, integrations, Uri.file('/ws/active.deepnote'));
     }
 

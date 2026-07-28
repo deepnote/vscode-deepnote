@@ -14,8 +14,7 @@ import { IFederatedAuthTokenStorage, IIntegrationStorage, IIntegrationWebviewPro
 import {
     ConfigurableDatabaseIntegrationConfig,
     FederatedAuthTokenStatus,
-    IntegrationStatus,
-    IntegrationWithStatus
+    DetectedIntegration
 } from '../../../platform/notebooks/deepnote/integrationTypes';
 
 /**
@@ -29,7 +28,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
 
     private readonly disposables: Disposable[] = [];
 
-    private integrations: Map<string, IntegrationWithStatus> = new Map();
+    private integrations: Map<string, DetectedIntegration> = new Map();
 
     private projectId: string | undefined;
 
@@ -69,7 +68,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
      */
     public async show(
         projectId: string,
-        integrations: Map<string, IntegrationWithStatus>,
+        integrations: Map<string, DetectedIntegration>,
         activeFileUri: Uri,
         selectedIntegrationId?: string,
         projectName?: string
@@ -467,7 +466,6 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 id,
                 integrationName: integration.integrationName,
                 integrationType: integration.integrationType,
-                status: integration.status,
                 tokenStatus: await this.deriveTokenStatus(id, integration.config)
             }))
         );
@@ -641,7 +639,6 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             if (integration) {
                 // Existing integration - update it
                 integration.config = config;
-                integration.status = IntegrationStatus.Connected;
                 integration.integrationName = config.name;
                 integration.integrationType = config.type;
                 this.integrations.set(integrationId, integration);
@@ -649,7 +646,6 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 // New integration - add it to the map
                 this.integrations.set(integrationId, {
                     config,
-                    status: IntegrationStatus.Connected,
                     integrationName: config.name,
                     integrationType: config.type
                 });
@@ -691,7 +687,6 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             const integration = this.integrations.get(integrationId);
             if (integration) {
                 integration.config = null;
-                integration.status = IntegrationStatus.Disconnected;
                 this.integrations.set(integrationId, integration);
             }
 

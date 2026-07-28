@@ -397,28 +397,23 @@ Handles migration of legacy integration configurations to the new `@deepnote/dat
 
 #### 2. **Integration Detector** (`integrationDetector.ts`)
 
-Scans Deepnote projects to discover which integrations are used in SQL blocks.
+Lists the integrations a Deepnote project declares, paired with the credentials stored for each.
 
 **Detection Process:**
 
 1. Retrieves the Deepnote project from `IDeepnoteNotebookManager`
-2. Scans all notebooks in the project
-3. Examines each code block for `metadata.sql_integration_id`
-4. Maps Deepnote integration types to `DatabaseIntegrationType` using the project's integration list
-5. Checks if each integration is configured (has credentials)
-6. Returns a map of integration IDs to their status
-
-**Integration Status:**
-
-- `Connected`: Integration has valid credentials stored
-- `Disconnected`: Integration is used but not configured
-- `Error`: Integration configuration is invalid
+2. Iterates the project's `integrations` roster (ids, names and types only — never credentials)
+3. Skips entries whose type is not a configurable `DatabaseIntegrationType`
+4. Reads each integration's config from `SecretStorage`, or `null` when nothing is stored
+5. Returns a map of integration IDs to their config and declared name/type
 
 **Special Cases:**
 
 - Excludes `deepnote-dataframe-sql` (internal DuckDB integration)
-- Only processes code blocks with SQL integration metadata
-- Uses project integration metadata to determine integration types
+- Integrations configured only in `.deepnote.env.yaml` have a `null` config here, since those configs are never
+  written through `SecretStorage`. They still resolve normally for kernel execution and SQL autocomplete, which
+  read the merged configs directly — but the panel labels them "Not Configured" (see below), because it has no
+  visibility into the merged configs.
 
 #### 3. **Integration Manager** (`integrationManager.ts`)
 
@@ -427,10 +422,6 @@ Orchestrates the integration management UI and commands.
 **Responsibilities:**
 
 - Registers the `deepnote.manageIntegrations` command
-- Updates VSCode context keys for UI visibility:
-  - `deepnote.hasIntegrations`: True if any integrations are detected
-  - `deepnote.hasUnconfiguredIntegrations`: True if any integrations lack credentials
-- Handles notebook selection changes
 - Opens the integration webview with detected integrations
 
 **Command Flow:**
@@ -447,8 +438,16 @@ Provides the webview-based UI for managing integration credentials.
 **Features:**
 
 - Persistent webview panel (survives defocus)
-- Real-time integration status updates
+- Real-time updates as credentials are saved or cleared
 - Configuration forms for each integration type
+
+**Connection Status:**
+
+`IntegrationItem.tsx` derives the status pill from `config` alone — "Connected" when SecretStorage holds
+credentials, "Not Configured" otherwise. The panel is a SecretStorage editor and is not given the merged
+configs, so an integration configured only in `.deepnote.env.yaml` reads "Not Configured" here even though its
+SQL cells run fine. The separate federated-auth pill (BigQuery + `google-oauth`) is independent and tracks
+whether a refresh token is stored.
 - Delete/reset functionality
 
 **Message Protocol:**
@@ -457,7 +456,7 @@ Extension → Webview:
 
 ```typescript
 // Update integration list
-{ type: 'update', integrations: IntegrationWithStatus[] }
+{ type: 'update', integrations: DetectedIntegration[] }
 
 // Show configuration form
 { type: 'showForm', integrationId: string, config: IntegrationConfig | null }
@@ -487,7 +486,7 @@ Main React component that manages the webview UI state.
 
 **State Management:**
 
-- `integrations`: List of detected integrations with status
+- `integrations`: List of detected integrations with their stored configs
 - `selectedIntegrationId`: Currently selected integration for configuration
 - `selectedConfig`: Existing configuration being edited
 - `message`: Success/error messages
@@ -501,7 +500,7 @@ Main React component that manages the webview UI state.
 2. Panel shows configuration form overlay
 3. User enters credentials
 4. Panel sends save message to extension
-5. Extension stores credentials and updates status
+5. Extension stores credentials
 6. Panel shows success message and refreshes list
 
 **Delete Integration:**
@@ -511,7 +510,7 @@ Main React component that manages the webview UI state.
 3. User clicks again to confirm
 4. Panel sends delete message to extension
 5. Extension removes credentials
-6. Panel updates status to "Disconnected"
+6. Panel clears the stored config, so the item offers "Configure" again
 
 #### 6. **Configuration Forms**
 

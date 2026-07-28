@@ -1,4 +1,4 @@
-import { inject, injectable, optional } from 'inversify';
+import { inject, injectable } from 'inversify';
 import { CancellationToken, Event, EventEmitter, Uri } from 'vscode';
 
 import { DeepnoteFile } from '@deepnote/blocks';
@@ -38,8 +38,7 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
         @inject(IPlatformDeepnoteNotebookManager) private readonly notebookManager: IPlatformDeepnoteNotebookManager,
         @inject(IDisposableRegistry) disposables: IDisposableRegistry,
         @inject(IIntegrationsFileConfigProvider)
-        @optional()
-        private readonly fileConfigProvider?: IIntegrationsFileConfigProvider
+        private readonly fileConfigProvider: IIntegrationsFileConfigProvider
     ) {
         logger.info('SqlIntegrationEnvironmentVariablesProvider: Constructor called - provider is being instantiated');
         // Dispose emitter when extension deactivates
@@ -171,12 +170,8 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
         return this.mergeIntegrationConfigs(projectIntegrations, fileConfigs);
     }
 
-    /** Loads `.deepnote.env.yaml` configs (CLI parity) when a file source is present; failures — or no provider, e.g. web — degrade to []. */
+    /** Loads `.deepnote.env.yaml` configs (CLI parity); failures degrade to [] so SecretStorage still applies. */
     private async loadFileConfigs(notebookUri: Uri): Promise<DatabaseIntegrationConfig[]> {
-        if (!this.fileConfigProvider) {
-            return [];
-        }
-
         try {
             const result = await this.fileConfigProvider.getConfigsForFile(
                 notebookPathToDeepnoteProjectFilePath(notebookUri)

@@ -6,7 +6,7 @@ import { CancellationError, Uri } from 'vscode';
 
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { IAsyncDisposableRegistry, IOutputChannel } from '../../platform/common/types';
-import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
+import { ISqlIntegrationEnvVarsProvider, IUserpodApiEndpoints } from '../../platform/notebooks/deepnote/types';
 import { SqlIntegrationEnvironmentVariablesProviderWeb } from '../../platform/notebooks/deepnote/sqlIntegrationEnvironmentVariablesProvider.web';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import {
@@ -26,6 +26,20 @@ import { IDeepnoteToolkitInstaller } from './types';
  * for src/test/mocks/deepnoteRuntimeCore.ts. These tests drive the public API
  * and assert on the calls recorded by that mock — no private state access.
  */
+/**
+ * A loopback endpoint that never binds, so live-integration env injection is skipped.
+ * That path has its own coverage in `deepnoteIntegrationEndpointEnv.unit.test.ts`.
+ */
+function unboundUserpodApiEndpoints(): IUserpodApiEndpoints {
+    return {
+        baseUrl: undefined,
+        ready: Promise.resolve(),
+        getAuthToken: () => {
+            throw new Error('getAuthToken must not be called while the endpoint is not listening');
+        }
+    };
+}
+
 suite('DeepnoteServerStarter', () => {
     const interpreter: PythonEnvironment = {
         id: '/usr/bin/python3',
@@ -72,7 +86,8 @@ suite('DeepnoteServerStarter', () => {
             instance(mockAgentSkillsManager),
             instance(mockOutputChannel),
             instance(mockAsyncRegistry),
-            instance(mockSqlIntegrationEnvVars)
+            instance(mockSqlIntegrationEnvVars),
+            unboundUserpodApiEndpoints()
         );
     });
 
@@ -89,7 +104,8 @@ suite('DeepnoteServerStarter', () => {
                 instance(mockAgentSkillsManager),
                 instance(mockOutputChannel),
                 instance(mockAsyncRegistry),
-                new SqlIntegrationEnvironmentVariablesProviderWeb()
+                new SqlIntegrationEnvironmentVariablesProviderWeb(),
+                unboundUserpodApiEndpoints()
             );
 
             try {

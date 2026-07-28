@@ -34,6 +34,11 @@ function createMockProject(
     };
 }
 
+/** A file-config source that yields nothing — what callers see when no `.deepnote.env.yaml` exists. */
+function emptyFileConfigProvider(): IIntegrationsFileConfigProvider {
+    return { getConfigsForFile: async () => ({ configs: [], issues: [] }) };
+}
+
 suite('SqlIntegrationEnvironmentVariablesProvider', () => {
     let provider: SqlIntegrationEnvironmentVariablesProvider;
     let integrationStorage: IIntegrationStorage;
@@ -55,7 +60,8 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             instance(integrationStorage),
             instance(notebookEditorProvider),
             instance(notebookManager),
-            disposables
+            disposables,
+            emptyFileConfigProvider()
         );
     });
 
@@ -607,13 +613,13 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             assert.deepStrictEqual(merged, []);
         });
 
-        test('File provider absent: behavior is SecretStorage-only (unchanged)', async () => {
+        test('File source yields nothing: behavior is SecretStorage-only (unchanged)', async () => {
             const providerWithoutFile = new SqlIntegrationEnvironmentVariablesProvider(
                 instance(integrationStorage),
                 instance(notebookEditorProvider),
                 instance(notebookManager),
                 disposables,
-                undefined
+                emptyFileConfigProvider()
             );
             stubNotebookWithProject(
                 createMockProject('project-123', [{ id: 'secret-db', name: 'secret-db', type: 'pgsql' }])

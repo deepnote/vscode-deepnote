@@ -6,7 +6,7 @@
  */
 
 import * as fs from 'fs-extra';
-import { inject, injectable, named, optional } from 'inversify';
+import { inject, injectable, named } from 'inversify';
 import * as os from 'os';
 import { CancellationToken, l10n, Uri } from 'vscode';
 
@@ -79,8 +79,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         @inject(ISqlIntegrationEnvVarsProvider)
         private readonly sqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider,
         @inject(IUserpodApiEndpoints)
-        @optional()
-        private readonly userpodApiEndpoints?: IUserpodApiEndpoints
+        private readonly userpodApiEndpoints: IUserpodApiEndpoints
     ) {
         asyncRegistry.push(this);
     }
@@ -396,13 +395,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
     }
 
     private async applyIntegrationEndpointEnv(extraEnv: Record<string, string>, deepnoteFileUri: Uri): Promise<void> {
-        const endpoint = this.userpodApiEndpoints;
-
-        if (!endpoint) {
-            return;
-        }
-
-        await applyIntegrationEndpointEnv({ deepnoteFileUri, endpoint, extraEnv });
+        await applyIntegrationEndpointEnv({ deepnoteFileUri, endpoint: this.userpodApiEndpoints, extraEnv });
     }
 
     /**

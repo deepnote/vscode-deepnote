@@ -81,11 +81,8 @@ const watchAll = process.argv.includes('--watch-all');
 const isWatchMode = watchAll || process.argv.includes('--watch');
 const extensionFolder = path.join(__dirname, '..', '..');
 
-// Package names whose root package.json `overrides` entry must be propagated into the generated
-// sql-lsp-modules package.json. That install runs in isolation with no lockfile and no inherited
-// overrides, so a transitive dependency pinned for security at the repo level would otherwise
-// resolve to a vulnerable version inside the shipped VSIX. Sourcing the pins from the root
-// package.json keeps them from drifting apart.
+// Security pins copied from the root `overrides` into the generated sql-lsp-modules package.json,
+// which npm installs in isolation and would otherwise resolve to vulnerable versions.
 const sqlLspOverridesToPropagate = ['ssh2', 'tar'];
 
 interface StylePluginOptions {

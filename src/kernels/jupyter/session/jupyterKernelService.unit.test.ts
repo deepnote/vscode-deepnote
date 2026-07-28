@@ -30,7 +30,7 @@ import { ICustomEnvironmentVariablesProvider } from '../../../platform/common/va
 import { EnvironmentVariablesService } from '../../../platform/common/variables/environment.node';
 import { isWeb } from '../../../platform/common/utils/misc';
 import { isPythonKernelConnection } from '../../helpers';
-import { SqlIntegrationEnvironmentVariablesProviderWeb } from '../../../platform/notebooks/deepnote/sqlIntegrationEnvironmentVariablesProvider.web';
+import { ISqlIntegrationEnvVarsProvider } from '../../../platform/notebooks/deepnote/types';
 
 // eslint-disable-next-line
 suite('JupyterKernelService', () => {
@@ -443,13 +443,16 @@ suite('JupyterKernelService', () => {
         const configService = mock(ConfigurationService);
         settings = mock(JupyterSettings);
         when(configService.getSettings(anything())).thenReturn(instance(settings));
+        // These tests do not exercise SQL integrations; the provider just has to yield nothing.
+        const sqlIntegrationEnvVars = mock<ISqlIntegrationEnvVarsProvider>();
+        when(sqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
         const kernelEnvService = new KernelEnvironmentVariablesService(
             instance(interpreterService),
             instance(appEnv),
             variablesService,
             instance(customEnvVars),
             instance(configService),
-            new SqlIntegrationEnvironmentVariablesProviderWeb()
+            instance(sqlIntegrationEnvVars)
         );
         testWorkspaceFolder = Uri.file(path.join(EXTENSION_ROOT_DIR, 'src', 'test', 'datascience'));
         const jupyterPaths = mock<JupyterPaths>();

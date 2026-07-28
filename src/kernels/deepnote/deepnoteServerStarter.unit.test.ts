@@ -7,7 +7,6 @@ import { CancellationError, Uri } from 'vscode';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { IAsyncDisposableRegistry, IOutputChannel } from '../../platform/common/types';
 import { ISqlIntegrationEnvVarsProvider, IUserpodApiEndpoints } from '../../platform/notebooks/deepnote/types';
-import { SqlIntegrationEnvironmentVariablesProviderWeb } from '../../platform/notebooks/deepnote/sqlIntegrationEnvironmentVariablesProvider.web';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import {
     __getStartServerCalls,
@@ -91,26 +90,14 @@ suite('DeepnoteServerStarter', () => {
 
     suite('SQL integration env vars', () => {
         test('starts the server without SQL env vars when the provider yields none (e.g. web)', async () => {
-            const starterWithoutSql = new DeepnoteServerStarter(
-                instance(mockProcessServiceFactory),
-                instance(mockToolkitInstaller),
-                instance(mockAgentSkillsManager),
-                instance(mockOutputChannel),
-                instance(mockAsyncRegistry),
-                new SqlIntegrationEnvironmentVariablesProviderWeb(),
-                instance(mockUserpodApiEndpoints)
+            when(mockSqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
+
+            await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriA);
+
+            assert.deepStrictEqual(
+                __getStartServerCalls().map((c) => c.env),
+                [{}]
             );
-
-            try {
-                await starterWithoutSql.startServer(interpreter, venvPath, true, [], 'env1', uriA);
-
-                assert.deepStrictEqual(
-                    __getStartServerCalls().map((c) => c.env),
-                    [{}]
-                );
-            } finally {
-                await starterWithoutSql.dispose();
-            }
         });
 
         test('starts the server without SQL env vars when the provider rejects with a cancellation error', async () => {

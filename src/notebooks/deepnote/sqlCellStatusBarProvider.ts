@@ -16,7 +16,7 @@ import {
     window,
     workspace
 } from 'vscode';
-import { inject, injectable, optional } from 'inversify';
+import { inject, injectable } from 'inversify';
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
@@ -72,8 +72,7 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
         @inject(ISqlIntegrationEnvVarsProvider)
-        @optional()
-        private readonly sqlIntegrationEnvVars?: ISqlIntegrationEnvVarsProvider
+        private readonly sqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider
     ) {}
 
     public activate(): void {
@@ -235,11 +234,9 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         } else {
             // Not in SecretStorage — a `.deepnote.env.yaml` file config still counts as configured, so check the
             // merged configs before prompting the user to configure.
-            const fileConfig = this.sqlIntegrationEnvVars
-                ? (await this.sqlIntegrationEnvVars.getMergedConfigs(cell.notebook.uri)).find(
-                      (c) => c.id === integrationId
-                  )
-                : undefined;
+            const fileConfig = (await this.sqlIntegrationEnvVars.getMergedConfigs(cell.notebook.uri)).find(
+                (c) => c.id === integrationId
+            );
             if (fileConfig) {
                 displayName = fileConfig.name;
             } else {

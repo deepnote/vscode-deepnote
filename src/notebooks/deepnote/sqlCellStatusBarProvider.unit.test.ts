@@ -11,6 +11,7 @@ import { createEventHandler } from '../../test/common';
 import { Commands } from '../../platform/common/constants';
 import { IDeepnoteNotebookManager } from '../types';
 import { createMockCell } from './deepnoteTestHelpers';
+import { SqlIntegrationEnvironmentVariablesProviderWeb } from '../../platform/notebooks/deepnote/sqlIntegrationEnvironmentVariablesProvider.web';
 
 suite('SqlCellStatusBarProvider', () => {
     let provider: SqlCellStatusBarProvider;
@@ -23,7 +24,12 @@ suite('SqlCellStatusBarProvider', () => {
         disposables = [];
         integrationStorage = mock<IIntegrationStorage>();
         notebookManager = mock<IDeepnoteNotebookManager>();
-        provider = new SqlCellStatusBarProvider(disposables, instance(integrationStorage), instance(notebookManager));
+        provider = new SqlCellStatusBarProvider(
+            disposables,
+            instance(integrationStorage),
+            instance(notebookManager),
+            new SqlIntegrationEnvironmentVariablesProviderWeb()
+        );
 
         const tokenSource = new CancellationTokenSource();
         cancellationToken = tokenSource.token;
@@ -304,7 +310,8 @@ suite('SqlCellStatusBarProvider', () => {
             activateProvider = new SqlCellStatusBarProvider(
                 activateDisposables,
                 instance(activateIntegrationStorage),
-                instance(activateNotebookManager)
+                instance(activateNotebookManager),
+                new SqlIntegrationEnvironmentVariablesProviderWeb()
             );
         });
 
@@ -540,7 +547,8 @@ suite('SqlCellStatusBarProvider', () => {
             eventProvider = new SqlCellStatusBarProvider(
                 eventDisposables,
                 instance(eventIntegrationStorage),
-                instance(eventNotebookManager)
+                instance(eventNotebookManager),
+                new SqlIntegrationEnvironmentVariablesProviderWeb()
             );
         });
 
@@ -668,7 +676,8 @@ suite('SqlCellStatusBarProvider', () => {
             commandProvider = new SqlCellStatusBarProvider(
                 commandDisposables,
                 instance(commandIntegrationStorage),
-                instance(commandNotebookManager)
+                instance(commandNotebookManager),
+                new SqlIntegrationEnvironmentVariablesProviderWeb()
             );
 
             // Capture the command handler
@@ -809,7 +818,8 @@ suite('SqlCellStatusBarProvider', () => {
             commandProvider = new SqlCellStatusBarProvider(
                 commandDisposables,
                 instance(commandIntegrationStorage),
-                instance(commandNotebookManager)
+                instance(commandNotebookManager),
+                new SqlIntegrationEnvironmentVariablesProviderWeb()
             );
 
             // Capture the command handler

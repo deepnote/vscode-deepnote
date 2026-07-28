@@ -77,8 +77,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel,
         @inject(IAsyncDisposableRegistry) asyncRegistry: IAsyncDisposableRegistry,
         @inject(ISqlIntegrationEnvVarsProvider)
-        @optional()
-        private readonly sqlIntegrationEnvVars?: ISqlIntegrationEnvVarsProvider,
+        private readonly sqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider,
         @inject(IUserpodApiEndpoints)
         @optional()
         private readonly userpodApiEndpoints?: IUserpodApiEndpoints
@@ -376,12 +375,6 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         token?: CancellationToken
     ): Promise<Record<string, string>> {
         const extraEnv: Record<string, string> = {};
-
-        if (!this.sqlIntegrationEnvVars) {
-            logger.debug('DeepnoteServerStarter: SqlIntegrationEnvironmentVariablesProvider not available');
-            return extraEnv;
-        }
-
         const fileKey = deepnoteFileUri.fsPath;
 
         logger.debug(

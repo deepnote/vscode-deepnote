@@ -30,6 +30,7 @@ import { ICustomEnvironmentVariablesProvider } from '../../../platform/common/va
 import { EnvironmentVariablesService } from '../../../platform/common/variables/environment.node';
 import { isWeb } from '../../../platform/common/utils/misc';
 import { isPythonKernelConnection } from '../../helpers';
+import { SqlIntegrationEnvironmentVariablesProviderWeb } from '../../../platform/notebooks/deepnote/sqlIntegrationEnvironmentVariablesProvider.web';
 
 // eslint-disable-next-line
 suite('JupyterKernelService', () => {
@@ -447,7 +448,8 @@ suite('JupyterKernelService', () => {
             instance(appEnv),
             variablesService,
             instance(customEnvVars),
-            instance(configService)
+            instance(configService),
+            new SqlIntegrationEnvironmentVariablesProviderWeb()
         );
         testWorkspaceFolder = Uri.file(path.join(EXTENSION_ROOT_DIR, 'src', 'test', 'datascience'));
         const jupyterPaths = mock<JupyterPaths>();

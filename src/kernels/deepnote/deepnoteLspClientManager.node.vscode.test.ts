@@ -6,7 +6,7 @@ import { createMockChildProcess } from './deepnoteTestHelpers.node';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import * as path from '../../platform/vscode-path/path';
-import { noop } from '../../platform/common/utils/misc';
+import { SqlIntegrationEnvironmentVariablesProviderWeb } from '../../platform/notebooks/deepnote/sqlIntegrationEnvironmentVariablesProvider.web';
 
 suite('DeepnoteLspClientManager Integration Tests', () => {
     let lspClientManager: DeepnoteLspClientManager;
@@ -29,16 +29,6 @@ suite('DeepnoteLspClientManager Integration Tests', () => {
         dispose: () => Promise.resolve()
     } as any;
 
-    // Mock integration storage
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mockIntegrationStorage = {
-        getAll: async () => [],
-        getIntegrationConfig: async () => undefined,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        onDidChangeIntegrations: { dispose: noop } as any,
-        dispose: noop
-    } as any;
-
     // Mock notebook editor provider
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mockNotebookEditorProvider = {
@@ -54,9 +44,9 @@ suite('DeepnoteLspClientManager Integration Tests', () => {
     setup(() => {
         lspClientManager = new DeepnoteLspClientManager(
             mockDisposableRegistry,
-            mockIntegrationStorage,
             mockNotebookEditorProvider,
-            mockNotebookManager
+            mockNotebookManager,
+            new SqlIntegrationEnvironmentVariablesProviderWeb()
         );
         lspClientManager.activate();
     });

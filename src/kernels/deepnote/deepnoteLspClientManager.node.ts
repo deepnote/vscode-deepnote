@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as vscode from 'vscode';
 import { CancellationError } from 'vscode';
-import { inject, injectable, optional } from 'inversify';
+import { inject, injectable } from 'inversify';
 import type {
     LanguageClient as LanguageClientType,
     LanguageClientOptions,
@@ -24,7 +24,6 @@ import { logger } from '../../platform/logging';
 import { getNotebookKey } from '../../platform/deepnote/deepnoteProjectUtils';
 import { noop } from '../../platform/common/utils/misc';
 import {
-    IIntegrationStorage,
     IPlatformNotebookEditorProvider,
     IPlatformDeepnoteNotebookManager,
     ISqlIntegrationEnvVarsProvider
@@ -61,13 +60,11 @@ export class DeepnoteLspClientManager
 
     constructor(
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
-        @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
         @inject(IPlatformNotebookEditorProvider)
         private readonly notebookEditorProvider: IPlatformNotebookEditorProvider,
         @inject(IPlatformDeepnoteNotebookManager) private readonly notebookManager: IPlatformDeepnoteNotebookManager,
         @inject(ISqlIntegrationEnvVarsProvider)
-        @optional()
-        private readonly sqlIntegrationEnvVars?: ISqlIntegrationEnvVarsProvider
+        private readonly sqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider
     ) {
         this.disposables.push(this);
     }
@@ -626,19 +623,11 @@ export class DeepnoteLspClientManager
 
             logger.trace(`SQL LSP: Found ${projectIntegrations.length} integrations in project ${projectId}`);
 
-            // Prefer the merged (SecretStorage + `.deepnote.env.yaml`) configs so file-configured databases also get
-            // LSP autocomplete/schema; fall back to SecretStorage-only when the merged provider is unavailable (e.g. web).
-            const projectIntegrationConfigs = this.sqlIntegrationEnvVars
-                ? (await this.sqlIntegrationEnvVars.getMergedConfigs(notebookUri)).filter(
-                      (config) => config.type !== 'pandas-dataframe'
-                  )
-                : (
-                      await Promise.all(
-                          projectIntegrations.map((integration) =>
-                              this.integrationStorage.getIntegrationConfig(integration.id)
-                          )
-                      )
-                  ).filter((config) => config != null);
+            // Merged (SecretStorage + `.deepnote.env.yaml`) configs, so file-configured databases also get
+            // LSP autocomplete/schema.
+            const projectIntegrationConfigs = (await this.sqlIntegrationEnvVars.getMergedConfigs(notebookUri)).filter(
+                (config) => config.type !== 'pandas-dataframe'
+            );
 
             const connections = projectIntegrationConfigs
                 .filter((config) => isSupportedBySqlLsp(config.type))

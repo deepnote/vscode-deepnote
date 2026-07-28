@@ -1,4 +1,4 @@
-import { inject, injectable, optional } from 'inversify';
+import { inject, injectable } from 'inversify';
 import { workspace } from 'vscode';
 
 import { logger } from '../../../platform/logging';
@@ -21,8 +21,7 @@ export class IntegrationDetector implements IIntegrationDetector {
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
         @inject(ISqlIntegrationEnvVarsProvider)
-        @optional()
-        private readonly sqlIntegrationEnvVars?: ISqlIntegrationEnvVarsProvider
+        private readonly sqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider
     ) {}
 
     /**
@@ -48,13 +47,13 @@ export class IntegrationDetector implements IIntegrationDetector {
         logger.debug(`IntegrationDetector: Found ${projectIntegrations.length} integrations in project.integrations`);
 
         // Merged (SecretStorage + `.deepnote.env.yaml`) configs, so file-configured integrations are not shown as
-        // unconfigured. Resolved from the open notebook document; when the merged provider is unavailable
-        // (e.g. web) this stays empty and detection falls back to SecretStorage only.
+        // unconfigured. Resolved from the open notebook document; with no open document this stays empty and
+        // detection falls back to SecretStorage only.
         const mergedConfigsById = new Map<string, DatabaseIntegrationConfig>();
         const notebookUri = workspace.notebookDocuments.find(
             (nb) => nb.metadata?.deepnoteProjectId === projectId && nb.metadata?.deepnoteNotebookId === notebookId
         )?.uri;
-        if (this.sqlIntegrationEnvVars && notebookUri) {
+        if (notebookUri) {
             for (const config of await this.sqlIntegrationEnvVars.getMergedConfigs(notebookUri)) {
                 mergedConfigsById.set(config.id, config);
             }

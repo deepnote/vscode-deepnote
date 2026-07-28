@@ -18,6 +18,7 @@ import { Uri } from 'vscode';
 import { IConfigurationService, IWatchableJupyterSettings, type ReadWrite } from '../../../platform/common/types';
 import { JupyterSettings } from '../../../platform/common/configSettings';
 import { ISqlIntegrationEnvVarsProvider } from '../../../platform/notebooks/deepnote/types';
+import { SqlIntegrationEnvironmentVariablesProviderWeb } from '../../../platform/notebooks/deepnote/sqlIntegrationEnvironmentVariablesProvider.web';
 
 use(chaiAsPromised);
 
@@ -79,12 +80,9 @@ suite('Kernel Environment Variables Service', () => {
      * @returns A new instance of KernelEnvironmentVariablesService
      */
     function buildKernelEnvVarsService(overrides?: {
-        sqlIntegrationEnvVars?: ISqlIntegrationEnvVarsProvider | undefined;
+        sqlIntegrationEnvVars?: ISqlIntegrationEnvVarsProvider;
     }): KernelEnvironmentVariablesService {
-        const sqlProvider =
-            overrides && 'sqlIntegrationEnvVars' in overrides
-                ? overrides.sqlIntegrationEnvVars
-                : instance(sqlIntegrationEnvVars);
+        const sqlProvider = overrides?.sqlIntegrationEnvVars ?? instance(sqlIntegrationEnvVars);
 
         return new KernelEnvironmentVariablesService(
             instance(interpreterService),
@@ -388,7 +386,7 @@ suite('Kernel Environment Variables Service', () => {
             );
         });
 
-        test('SQL integration env vars work when provider is undefined (optional dependency)', async () => {
+        test('SQL integration env vars work when the provider yields none (e.g. web)', async () => {
             const resource = Uri.file('test.ipynb');
             when(envActivation.getActivatedEnvironmentVariables(anything(), anything(), anything())).thenResolve({
                 PATH: 'foobar'
@@ -397,8 +395,9 @@ suite('Kernel Environment Variables Service', () => {
                 customVariablesService.getCustomEnvironmentVariables(anything(), anything(), anything())
             ).thenResolve();
 
-            // Create service without SQL integration provider
-            const serviceWithoutSql = buildKernelEnvVarsService({ sqlIntegrationEnvVars: undefined });
+            const serviceWithoutSql = buildKernelEnvVarsService({
+                sqlIntegrationEnvVars: new SqlIntegrationEnvironmentVariablesProviderWeb()
+            });
 
             const vars = await serviceWithoutSql.getEnvironmentVariables(resource, interpreter, kernelSpec);
 

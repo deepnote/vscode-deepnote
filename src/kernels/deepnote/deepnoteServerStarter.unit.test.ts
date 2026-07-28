@@ -7,6 +7,7 @@ import { CancellationError, Uri } from 'vscode';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { IAsyncDisposableRegistry, IOutputChannel } from '../../platform/common/types';
 import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
+import { SqlIntegrationEnvironmentVariablesProviderWeb } from '../../platform/notebooks/deepnote/sqlIntegrationEnvironmentVariablesProvider.web';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import {
     __getStartServerCalls,
@@ -81,14 +82,14 @@ suite('DeepnoteServerStarter', () => {
     });
 
     suite('SQL integration env vars', () => {
-        test('starts the server without SQL env vars when no provider is available', async () => {
-            // The provider is @optional() — construct a starter without it.
+        test('starts the server without SQL env vars when the provider yields none (e.g. web)', async () => {
             const starterWithoutSql = new DeepnoteServerStarter(
                 instance(mockProcessServiceFactory),
                 instance(mockToolkitInstaller),
                 instance(mockAgentSkillsManager),
                 instance(mockOutputChannel),
-                instance(mockAsyncRegistry)
+                instance(mockAsyncRegistry),
+                new SqlIntegrationEnvironmentVariablesProviderWeb()
             );
 
             try {

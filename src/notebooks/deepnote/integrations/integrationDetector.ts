@@ -37,24 +37,24 @@ export class IntegrationDetector implements IIntegrationDetector {
             return new Map();
         }
 
-        const declarations = project.project.integrations ?? [];
+        const projectIntegrations = project.project.integrations ?? [];
 
-        logger.debug(`IntegrationDetector: Project ${projectId} declares ${declarations.length} integrations`);
+        logger.debug(`IntegrationDetector: Project ${projectId} declares ${projectIntegrations.length} integrations`);
 
         const integrations = new Map<string, DetectedIntegration>();
 
-        for (const declaration of declarations) {
-            const integrationType = declaration.type;
+        for (const projectIntegration of projectIntegrations) {
+            const integrationType = projectIntegration.type;
             if (!isConfigurableDatabaseIntegrationType(integrationType)) {
                 logger.debug(`IntegrationDetector: Skipping unsupported integration type: ${integrationType}`);
                 continue;
             }
 
-            const storedConfig = await this.integrationStorage.getIntegrationConfig(declaration.id);
+            const storedConfig = await this.integrationStorage.getIntegrationConfig(projectIntegration.id);
 
-            integrations.set(declaration.id, {
+            integrations.set(projectIntegration.id, {
                 config: storedConfig ?? null,
-                integrationName: declaration.name,
+                integrationName: projectIntegration.name,
                 integrationType
             });
         }

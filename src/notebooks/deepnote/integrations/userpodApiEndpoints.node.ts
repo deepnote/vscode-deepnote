@@ -48,9 +48,7 @@ export class UserpodApiEndpoints implements IUserpodApiEndpoints, IExtensionSync
 
     public activate(): void {
         this.disposables.push({ dispose: () => this.stop() });
-        this.startAttempt = this.start().catch((err) =>
-            logger.error('UserpodApiEndpoints: Failed to start integration env vars endpoint', err)
-        );
+        this.startAttempt = this.startAndNotifyOnFailure();
     }
 
     private isAuthorized(authorizationHeader: string | undefined, projectId: string): boolean {
@@ -73,38 +71,33 @@ export class UserpodApiEndpoints implements IUserpodApiEndpoints, IExtensionSync
     private onServerError(err: Error): void {
         logger.error('UserpodApiEndpoints: HTTP server error', err);
 
-        // Startup failures are surfaced by start()'s rejection; only recover from errors once actually listening.
+        // Startup failures are reported by startAndNotifyOnFailure(); only recover from errors once actually listening.
         if (!this.isListening) {
             return;
         }
         this.isListening = false;
         this.serverBaseUrl = undefined;
 
-        const restart = l10n.t('Restart');
-        const reloadWindow = l10n.t('Reload Window');
-
-        void window
-            .showErrorMessage(
-                l10n.t(
-                    'The Deepnote integrations service stopped unexpectedly. Integration environment variables will not update until it restarts.'
-                ),
-                restart,
-                reloadWindow
+        this.promptToRecover(
+            l10n.t(
+                'The Deepnote integrations service stopped unexpectedly. SQL integrations will no longer receive their credentials. Reload the window to restore it.'
             )
-            .then((choice) => {
-                if (choice === restart) {
-                    this.restart();
-                } else if (choice === reloadWindow) {
-                    void commands.executeCommand('workbench.action.reloadWindow');
-                }
-            });
+        );
     }
 
-    private restart(): void {
-        this.stop();
-        this.startAttempt = this.start().catch((err) =>
-            logger.error('UserpodApiEndpoints: Failed to restart integration env vars endpoint', err)
-        );
+    /**
+     * Reload is the only offered remedy: restarting in place binds a NEW ephemeral port, and the endpoint's
+     * URL is baked into a toolkit server's env at spawn time, so already-running servers would keep pointing
+     * at the dead port and stay silently broken.
+     */
+    private promptToRecover(message: string): void {
+        const reloadWindow = l10n.t('Reload Window');
+
+        void window.showErrorMessage(message, reloadWindow).then((choice) => {
+            if (choice === reloadWindow) {
+                void commands.executeCommand('workbench.action.reloadWindow');
+            }
+        });
     }
 
     private async start(): Promise<void> {
@@ -194,6 +187,20 @@ export class UserpodApiEndpoints implements IUserpodApiEndpoints, IExtensionSync
 
         this.serverBaseUrl = `http://127.0.0.1:${port}`;
         logger.info(`UserpodApiEndpoints: Listening on ${this.serverBaseUrl}`);
+    }
+
+    /** Never rejects — `ready` is documented as settling regardless of the outcome. */
+    private async startAndNotifyOnFailure(): Promise<void> {
+        try {
+            await this.start();
+        } catch (err) {
+            logger.error('UserpodApiEndpoints: Failed to start integration env vars endpoint', err);
+            this.promptToRecover(
+                l10n.t(
+                    'The Deepnote integrations service could not start. SQL integrations will not receive their credentials. Reload the window to try again.'
+                )
+            );
+        }
     }
 
     private stop(): void {

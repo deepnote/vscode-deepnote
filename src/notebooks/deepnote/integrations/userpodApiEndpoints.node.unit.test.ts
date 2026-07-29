@@ -220,12 +220,26 @@ suite('UserpodApiEndpoints', () => {
         assert.isString(endpoint.baseUrl, 'baseUrl must be set once ready resolves');
     });
 
+    test('prompts the user to recover when the initial bind fails, and never advertises a base URL', async () => {
+        when(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything())).thenResolve(undefined as never);
+
+        endpoint.activate();
+
+        // `start()` assigns the server synchronously before its first await, so the bind failure can be
+        // simulated here — while `isListening` is still false, i.e. the initial-bind path.
+        const server = (endpoint as unknown as { server: http.Server }).server;
+        server.emit('error', new Error('EADDRINUSE'));
+
+        await endpoint.ready;
+
+        assert.strictEqual(endpoint.baseUrl, undefined, 'a failed bind must not advertise a base URL');
+        verify(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything())).once();
+    });
+
     test('logs and prompts the user to recover when the server errors after startup, without crashing', async () => {
         const notebook = createMockNotebook('project-1', Uri.file('/ws/app.deepnote'));
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything(), anything())).thenResolve(
-            undefined as never
-        );
+        when(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything())).thenResolve(undefined as never);
 
         endpoint.activate();
         await waitForBaseUrl();
@@ -235,6 +249,6 @@ suite('UserpodApiEndpoints', () => {
         server.emit('error', new Error('accept failed'));
 
         assert.strictEqual(endpoint.baseUrl, undefined, 'a crashed endpoint must stop advertising its base URL');
-        verify(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything(), anything())).once();
+        verify(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything())).once();
     });
 });

@@ -6,6 +6,7 @@ import {
     DEFAULT_INTEGRATIONS_FILE
 } from '@deepnote/database-integrations';
 import dedent from 'dedent';
+import { dump } from 'js-yaml';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { Uri, WorkspaceConfiguration, WorkspaceFolder } from 'vscode';
 
@@ -89,26 +90,21 @@ suite('IntegrationsFileConfigProvider', () => {
 
     /** An integrations document holding the given pgsql entries, each with valid default connection metadata. */
     function pgIntegrationYaml(...entries: PgIntegrationSpec[]): string {
-        const integrationEntries = entries.map(({ id, name, ...overrides }) => {
-            const metadata: Record<string, string> = {
-                host: 'localhost',
-                port: '5432',
-                database: 'mydb',
-                user: 'root',
-                password: 'my-secret',
-                ...overrides
-            };
-
-            return [
-                `  - id: ${id}`,
-                `    name: ${name}`,
-                '    type: pgsql',
-                '    metadata:',
-                ...Object.entries(metadata).map(([key, value]) => `      ${key}: "${value}"`)
-            ].join('\n');
+        return dump({
+            integrations: entries.map(({ id, name, ...overrides }) => ({
+                id,
+                name,
+                type: 'pgsql',
+                metadata: {
+                    host: 'localhost',
+                    port: '5432',
+                    database: 'mydb',
+                    user: 'root',
+                    password: 'my-secret',
+                    ...overrides
+                }
+            }))
         });
-
-        return ['integrations:', ...integrationEntries].join('\n');
     }
 
     test('returns configs for a valid integrations file', async () => {

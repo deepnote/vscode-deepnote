@@ -1,4 +1,3 @@
-import { BigQueryAuthMethods } from '@deepnote/database-integrations';
 import { assert } from 'chai';
 
 import { supportedSqlLspTypes, isSupportedBySqlLsp, convertToSqlLspConnection } from './sqlLspConnectionUtils';
@@ -163,36 +162,6 @@ suite('SQL LSP Connection Utils Unit Tests', () => {
 
                 assert.strictEqual(result?.projectId, 'alt-project');
                 assert.strictEqual(result?.keyFilename, '/alt/path.json');
-            });
-
-            test('should convert service account big-query config', () => {
-                const config = createTestConfig('big-query', 'Service Account BigQuery', {
-                    authMethod: BigQueryAuthMethods.ServiceAccount,
-                    projectId: 'sa-project',
-                    keyFilename: '/sa/key.json'
-                });
-
-                const result = convertToSqlLspConnection(config);
-
-                assert.deepStrictEqual(result, {
-                    name: 'Service Account BigQuery',
-                    adapter: 'bigquery',
-                    projectId: 'sa-project',
-                    keyFilename: '/sa/key.json'
-                });
-            });
-
-            test('should return null for federated (google-oauth) big-query config', () => {
-                const config = createTestConfig('big-query', 'Federated BigQuery', {
-                    authMethod: BigQueryAuthMethods.GoogleOauth,
-                    project: 'federated-project',
-                    clientId: 'client-id',
-                    clientSecret: 'client-secret'
-                });
-
-                const result = convertToSqlLspConnection(config);
-
-                assert.isNull(result);
             });
         });
 

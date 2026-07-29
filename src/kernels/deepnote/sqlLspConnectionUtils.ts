@@ -1,4 +1,7 @@
-import { ConfigurableDatabaseIntegrationConfig } from '../../platform/notebooks/deepnote/integrationTypes';
+import {
+    ConfigurableDatabaseIntegrationConfig,
+    isFederatedAuthMetadata
+} from '../../platform/notebooks/deepnote/integrationTypes';
 
 /**
  * SQL LSP connection configuration format expected by sql-language-server
@@ -64,6 +67,13 @@ export function convertToSqlLspConnection(config: ConfigurableDatabaseIntegratio
                 };
 
             case 'big-query':
+                // Federated (google-oauth) metadata carries `project`/`clientId`/`clientSecret` and has no
+                // `projectId`/`keyFilename`, so handing it to the LSP would yield a broken connection. Narrow the
+                // typed `config.metadata` rather than the `Record<string, any>` cast, or the guard cannot apply.
+                if (isFederatedAuthMetadata(config.metadata)) {
+                    return null;
+                }
+
                 return {
                     name: config.name || 'bigquery',
                     adapter: 'bigquery',

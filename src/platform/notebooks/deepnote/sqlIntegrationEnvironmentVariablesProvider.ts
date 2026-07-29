@@ -15,7 +15,7 @@ import {
     IPlatformNotebookEditorProvider,
     IPlatformDeepnoteNotebookManager
 } from './types';
-import { DATAFRAME_SQL_INTEGRATION_ID, isFederatedAuthMetadata } from './integrationTypes';
+import { DATAFRAME_SQL_INTEGRATION_ID, isFederatedAuthMetadata, isSupportedFederatedAuth } from './integrationTypes';
 
 /** One entry of a Deepnote project's `integrations` list. */
 type ProjectIntegration = NonNullable<DeepnoteFile['project']['integrations']>[number];
@@ -103,7 +103,14 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
         const fileConfigs = await this.loadFileConfigs(notebook.uri);
         const allConfigs = await this.mergeIntegrationConfigs(projectIntegrations, fileConfigs);
 
-        // Skip federated-auth integrations: tokens are fetched per-cell via per-cell codegen in `FederatedAuthSqlBlockCodeGenerator`, not baked into kernel env.
+        // Federated-auth configs are dropped here, and only here: the single chokepoint for both consumers of
+        // `getEnvironmentVariables` — the userpod endpoint (`userpodApiEndpoints.node.ts`) and raw kernel launch
+        // (`kernelEnvVarsService.node.ts`). Upstream would otherwise emit every metadata key, including
+        // `<INTEGRATION_NAME>_CLIENTID` / `_CLIENTSECRET`, with no usable `SQL_<id>` connection var to go with them
+        // (`getSqlAlchemyInput` returns null for federated metadata) — pure credential leakage, no benefit.
+        // `FederatedAuthSqlBlockCodeGenerator` fetches a token per cell and inlines it into the generated Python.
+        // Keep the skip: `.deepnote.env.yaml` may legitimately declare federated OAuth client metadata, but the
+        // merge including it is not a reason to inject it.
         const projectIntegrationConfigs: Array<DatabaseIntegrationConfig> = [];
         for (const config of allConfigs) {
             if (isFederatedAuthMetadata(config.metadata)) {
@@ -139,9 +146,26 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
     }
 
     /**
+     * Ids from the merged configs that can be federated-authenticated — BigQuery + `google-oauth`, whether the
+     * config came from SecretStorage or `.deepnote.env.yaml`. A filter over the same merge, never a second one.
+     * Derived state only: it exposes no config, so the integrations panel can offer an Authenticate action
+     * without receiving credentials it cannot write back.
+     */
+    public async getFederatedAuthCandidates(
+        resource: Resource,
+        token?: CancellationToken
+    ): Promise<ReadonlySet<string>> {
+        const configs = await this.getMergedConfigs(resource, token);
+
+        return new Set(configs.filter(isSupportedFederatedAuth).map((config) => config.id));
+    }
+
+    /**
      * Project SecretStorage integrations merged with `.deepnote.env.yaml` file configs (file wins, additive
      * file-only). The single source of truth so integration detection, the SQL status bar, and the SQL LSP agree
      * with what kernel execution actually sees. Excludes the internal DuckDB integration.
+     *
+     * Read-only: the file layer cannot be written back, so these must never reach `IIntegrationStorage.save`.
      */
     public async getMergedConfigs(resource: Resource, token?: CancellationToken): Promise<DatabaseIntegrationConfig[]> {
         if (!resource || token?.isCancellationRequested) {

@@ -3,8 +3,9 @@ import sinon from 'sinon';
 import { EventEmitter, Uri } from 'vscode';
 import { anyString, anything, instance, mock, reset, verify, when } from 'ts-mockito';
 
-import { IExtensionContext, IDisposable } from '../../../platform/common/types';
+import { IExtensionContext, IDisposable, Resource } from '../../../platform/common/types';
 import { Commands } from '../../../platform/common/constants';
+import { ISqlIntegrationEnvVarsProvider } from '../../../platform/notebooks/deepnote/types';
 import { IDeepnoteNotebookManager } from '../../types';
 import { IntegrationWebviewProvider } from './integrationWebview';
 import { FederatedAuthTokenEntry, IFederatedAuthTokenStorage, IIntegrationStorage } from './types';
@@ -22,7 +23,7 @@ import {
 
 interface CapturedMessage {
     type: string;
-    integrations?: Array<{ id: string; tokenStatus?: string }>;
+    integrations?: Array<{ id: string; config?: unknown; tokenStatus?: string }>;
     [key: string]: unknown;
 }
 
@@ -89,11 +90,16 @@ function createFakeWebviewPanel(): FakeWebviewPanel {
 }
 
 suite('IntegrationWebviewProvider', () => {
+    const ACTIVE_FILE_URI = Uri.file('/ws/active.deepnote');
     const PROJECT_ID = 'project-id-1';
 
     let extensionContext: IExtensionContext;
     let integrationStorage: IIntegrationStorage;
     let notebookManager: IDeepnoteNotebookManager;
+    let federatedAuthCandidates: Set<string>;
+    let candidatesSpy: sinon.SinonSpy<[Resource], Promise<ReadonlySet<string>>>;
+    let onDidChangeEnvironmentVariables: EventEmitter<Resource>;
+    let sqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider;
     let tokens: Map<string, FederatedAuthTokenEntry>;
     let onDidChangeTokens: EventEmitter<string>;
     let tokenSaveSpy: sinon.SinonSpy<[FederatedAuthTokenEntry, { silent?: boolean }?], Promise<void>>;
@@ -110,6 +116,17 @@ suite('IntegrationWebviewProvider', () => {
         extensionSubscriptions = [];
         when(extensionContext.subscriptions).thenReturn(extensionSubscriptions);
         when(extensionContext.extensionUri).thenReturn(Uri.file('/ext'));
+
+        // Federated-auth eligibility is derived state: the provider hands back ids only, never config.
+        federatedAuthCandidates = new Set<string>();
+        candidatesSpy = sinon.spy(async (_resource: Resource): Promise<ReadonlySet<string>> => federatedAuthCandidates);
+        onDidChangeEnvironmentVariables = new EventEmitter<Resource>();
+        sqlIntegrationEnvVars = {
+            onDidChangeEnvironmentVariables: onDidChangeEnvironmentVariables.event,
+            getEnvironmentVariables: async () => ({}),
+            getFederatedAuthCandidates: candidatesSpy,
+            getMergedConfigs: async () => []
+        };
 
         tokens = new Map();
         onDidChangeTokens = new EventEmitter<string>();
@@ -144,10 +161,12 @@ suite('IntegrationWebviewProvider', () => {
         reset(mockedVSCodeNamespaces.window);
         reset(mockedVSCodeNamespaces.commands);
         onDidChangeTokens.dispose();
+        onDidChangeEnvironmentVariables.dispose();
     });
 
     function buildProvider(
         opts: {
+            sqlIntegrationEnvVars?: ISqlIntegrationEnvVarsProvider;
             tokenStorage?: IFederatedAuthTokenStorage;
         } = {}
     ): IntegrationWebviewProvider {
@@ -156,6 +175,7 @@ suite('IntegrationWebviewProvider', () => {
             instance(integrationStorage),
             instance(notebookManager),
             extensionSubscriptions,
+            opts.sqlIntegrationEnvVars ?? sqlIntegrationEnvVars,
             opts.tokenStorage
         );
     }
@@ -168,7 +188,7 @@ suite('IntegrationWebviewProvider', () => {
     }
 
     async function show(provider: IntegrationWebviewProvider, integrations: Map<string, DetectedIntegration>) {
-        await provider.show(PROJECT_ID, integrations, Uri.file('/ws/active.deepnote'));
+        await provider.show(PROJECT_ID, integrations, ACTIVE_FILE_URI);
     }
 
     function lastUpdate(): CapturedMessage {
@@ -183,80 +203,98 @@ suite('IntegrationWebviewProvider', () => {
         });
     }
 
-    suite('updateWebview tokenStatus matrix', () => {
-        (
-            [
-                {
-                    name: 'no tokenStorage → unsupported',
-                    tokenStorage: false as const,
-                    config: () => buildGoogleOauthIntegration({ id: 'bq-1' }),
-                    storeToken: false,
-                    expected: 'unsupported'
-                },
-                {
-                    name: 'service-account BigQuery → unsupported',
-                    tokenStorage: true as const,
-                    config: () => buildServiceAccountIntegration({ id: 'bq-sa' }),
-                    storeToken: false,
-                    expected: 'unsupported'
-                },
-                {
-                    name: 'Postgres → unsupported',
-                    tokenStorage: true as const,
-                    config: () => buildPostgresIntegration({ id: 'pg-1' }),
-                    storeToken: false,
-                    expected: 'unsupported'
-                },
-                {
-                    name: 'BigQuery + google-oauth + stored token → authenticated',
-                    tokenStorage: true as const,
-                    config: () => buildGoogleOauthIntegration({ id: 'bq-2' }),
-                    storeToken: true,
-                    expected: 'authenticated'
-                },
-                {
-                    name: 'BigQuery + google-oauth + no stored token → disconnected',
-                    tokenStorage: true as const,
-                    config: () => buildGoogleOauthIntegration({ id: 'bq-3' }),
-                    storeToken: false,
-                    expected: 'disconnected'
-                }
-            ] as const
-        ).forEach((row) => {
-            test(row.name, async () => {
-                const config = row.config();
-                if (row.storeToken) {
-                    preStoreToken(config.id);
-                }
-                const provider = buildProvider({
-                    tokenStorage: row.tokenStorage ? tokenStorage : undefined
-                });
-                await show(provider, singleIntegrationMap(config.id, config));
+    suite('updateWebview tokenStatus', () => {
+        // Eligibility now comes entirely from the candidate set; `config` no longer gates the status.
+        test('candidate but no tokenStorage → unsupported', async () => {
+            const config = buildGoogleOauthIntegration({ id: 'bq-1' });
+            federatedAuthCandidates.add(config.id);
 
-                const item = (lastUpdate().integrations || []).find((i) => i.id === config.id);
-                assert.strictEqual(item?.tokenStatus, row.expected);
+            const provider = buildProvider();
+            await show(provider, singleIntegrationMap(config.id, config));
+
+            const item = (lastUpdate().integrations || []).find((i) => i.id === config.id);
+            assert.strictEqual(item?.tokenStatus, 'unsupported');
+        });
+
+        test('candidate + stored token → authenticated', async () => {
+            const config = buildGoogleOauthIntegration({ id: 'bq-2' });
+            federatedAuthCandidates.add(config.id);
+            preStoreToken(config.id);
+
+            const provider = buildProvider({ tokenStorage });
+            await show(provider, singleIntegrationMap(config.id, config));
+
+            const item = (lastUpdate().integrations || []).find((i) => i.id === config.id);
+            assert.strictEqual(item?.tokenStatus, 'authenticated');
+        });
+
+        test('a candidate with no SecretStorage config gets a status while `config` stays null', async () => {
+            // A `.deepnote.env.yaml`-declared integration: authenticatable, but the panel holds no credentials
+            // for it and must not receive any from the file layer.
+            const integrationId = 'bq-file-only';
+            federatedAuthCandidates.add(integrationId);
+
+            const provider = buildProvider({ tokenStorage });
+            await show(
+                provider,
+                new Map<string, DetectedIntegration>([
+                    [integrationId, { config: null, integrationName: 'File BigQuery', integrationType: 'big-query' }]
+                ])
+            );
+
+            const item = (lastUpdate().integrations || []).find((i) => i.id === integrationId);
+            assert.strictEqual(item?.tokenStatus, 'disconnected');
+            assert.isNull(item?.config, 'no `.deepnote.env.yaml` config may reach the webview payload');
+            sinon.assert.calledWith(candidatesSpy, ACTIVE_FILE_URI);
+        });
+
+        test('a non-candidate reports unsupported even when a token exists', async () => {
+            const config = buildGoogleOauthIntegration({ id: 'bq-not-a-candidate' });
+            preStoreToken(config.id);
+
+            const provider = buildProvider({ tokenStorage });
+            await show(provider, singleIntegrationMap(config.id, config));
+
+            const item = (lastUpdate().integrations || []).find((i) => i.id === config.id);
+            assert.strictEqual(item?.tokenStatus, 'unsupported');
+        });
+
+        test('a rejected candidate lookup still renders the panel', async () => {
+            const config = buildGoogleOauthIntegration({ id: 'bq-lookup-fails' });
+            preStoreToken(config.id);
+
+            const provider = buildProvider({
+                sqlIntegrationEnvVars: {
+                    ...sqlIntegrationEnvVars,
+                    getFederatedAuthCandidates: async () => {
+                        throw new Error('merge failed');
+                    }
+                },
+                tokenStorage
             });
+            await show(provider, singleIntegrationMap(config.id, config));
+
+            const item = (lastUpdate().integrations || []).find((i) => i.id === config.id);
+            assert.strictEqual(item?.tokenStatus, 'unsupported', 'a failed lookup degrades to "no candidates"');
         });
     });
 
-    test('handleMessage: "authenticate" → commands.executeCommand(AuthenticateIntegration, integrationId)', async () => {
+    test('handleMessage: "authenticate" → executeCommand(AuthenticateIntegration, integrationId, activeFileUri)', async () => {
         const executeCommandStub = sinon.stub().resolves(undefined);
-        when(mockedVSCodeNamespaces.commands.executeCommand(anyString(), anything())).thenCall((command, arg) =>
-            executeCommandStub(command, arg)
-        );
-        when(mockedVSCodeNamespaces.commands.executeCommand(anyString())).thenCall((command) =>
-            executeCommandStub(command)
+        when(mockedVSCodeNamespaces.commands.executeCommand(anyString(), anything(), anything())).thenCall(
+            (command, integrationId, resource) => executeCommandStub(command, integrationId, resource)
         );
 
         const provider = buildProvider({ tokenStorage });
         const integrationId = 'bq-auth';
+        federatedAuthCandidates.add(integrationId);
         await show(provider, singleIntegrationMap(integrationId, buildGoogleOauthIntegration({ id: integrationId })));
 
         await fakePanel.onDidReceiveMessage({ type: 'authenticate', integrationId });
 
         assert.isTrue(
-            executeCommandStub.calledWith(Commands.AuthenticateIntegration, integrationId),
-            'expected executeCommand to be called with AuthenticateIntegration and the integration id'
+            executeCommandStub.calledWith(Commands.AuthenticateIntegration, integrationId, ACTIVE_FILE_URI),
+            'expected executeCommand to receive the id and the URI the candidate set was derived from'
         );
     });
 
@@ -409,6 +447,8 @@ suite('IntegrationWebviewProvider', () => {
 
         const provider = buildProvider({ tokenStorage: slowTokenStorage });
         const integrationId = 'bq-disposed-during-update';
+        // Only candidates reach `deriveTokenStatus`, so the update parks on `has()` only if this id is one.
+        federatedAuthCandidates.add(integrationId);
         const integrations = singleIntegrationMap(integrationId, buildGoogleOauthIntegration({ id: integrationId }));
 
         const allPostedMessages: CapturedMessage[] = [];

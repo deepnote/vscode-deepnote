@@ -14,7 +14,7 @@ import {
 import { IFileSystem } from '../../common/platform/types';
 import { IDisposableRegistry } from '../../common/types';
 import { logger } from '../../logging';
-import { isFederatedAuthMetadata } from './integrationTypes';
+import { isFederatedAuthMetadata, isSupportedFederatedAuth } from './integrationTypes';
 import { IIntegrationsFileConfigProvider } from './types';
 
 /**
@@ -23,8 +23,10 @@ import { IIntegrationsFileConfigProvider } from './types';
  * filesystem/dotenv shell that `@deepnote/database-integrations` does not export, delegating parsing
  * to the exported, environment-agnostic `parseIntegrations`.
  *
- * No caching, no watching: a fresh read happens on every call, since it is only invoked at
- * kernel/server (re)start.
+ * No caching, no watching: a fresh read happens on every call. That was cheap when the only caller was
+ * kernel/server (re)start, but `getMergedConfigs` now reaches here on every SQL cell execution and on every
+ * integrations-panel refresh, so each call is up to two `exists` + two `readFile` round-trips and re-publishes
+ * the YAML's diagnostics. Adding a cache means invalidating it on file change — deliberately not done yet.
  */
 @injectable()
 export class IntegrationsFileConfigProvider implements IIntegrationsFileConfigProvider {
@@ -91,9 +93,14 @@ export class IntegrationsFileConfigProvider implements IIntegrationsFileConfigPr
     }
 
     /**
-     * Filters parsed integrations into the configs we can inject, collecting an issue for each dropped
+     * Filters parsed integrations into the configs we accept, collecting an issue for each dropped
      * entry: reserved ids, unsupported (dataframe) types, duplicate ids (first wins), and federated-auth
-     * configs (whose tokens are only available via SecretStorage, not the environment file).
+     * configs other than the one combination this extension implements (BigQuery + `google-oauth`).
+     *
+     * That combination is kept because the file only ever carries its OAuth client metadata (`project`,
+     * `clientId`, `clientSecret`); the token is a separate artifact owned by `IFederatedAuthTokenStorage`.
+     * Keeping those credentials out of the kernel environment is
+     * `SqlIntegrationEnvironmentVariablesProvider.getEnvironmentVariables`' job, not this filter's.
      */
     private filterIntegrations(
         integrations: DatabaseIntegrationConfig[],
@@ -136,10 +143,10 @@ export class IntegrationsFileConfigProvider implements IIntegrationsFileConfigPr
                 return;
             }
 
-            if (isFederatedAuthMetadata(integration.metadata)) {
+            if (isFederatedAuthMetadata(integration.metadata) && !isSupportedFederatedAuth(integration)) {
                 issues.push({
                     path: issuePath,
-                    message: `Integration '${integration.id}' uses federated authentication, which is unsupported from the environment file, and was ignored.`,
+                    message: `Integration '${integration.id}' uses an unsupported federated authentication method and was ignored.`,
                     code: 'unsupported_federated_integration'
                 });
 

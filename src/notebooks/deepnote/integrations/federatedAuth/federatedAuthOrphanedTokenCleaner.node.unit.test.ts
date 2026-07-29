@@ -84,53 +84,127 @@ suite('FederatedAuthOrphanedTokenCleaner', () => {
         disposables = dispose(disposables);
     });
 
-    test('does not call delete when every stored token has a matching integration', async () => {
+    test('never deletes a token SecretStorage has never held, on the first run or later', async () => {
         integrations.set('bq-1', buildGoogleOauthIntegration({ id: 'bq-1' }));
-        integrations.set('bq-2', buildGoogleOauthIntegration({ id: 'bq-2' }));
-        tokens.set('bq-1', buildTokenEntry({ integrationId: 'bq-1' }));
-        tokens.set('bq-2', buildTokenEntry({ integrationId: 'bq-2' }));
+        tokens.set('file-only', buildTokenEntry({ integrationId: 'file-only' }));
 
         new FederatedAuthOrphanedTokenCleaner(tokenStorage, integrationStorage, disposables);
 
+        await fireChangeAndWait();
+        // An unrelated integration is saved, which is exactly the event that used to wipe the file-backed token.
+        integrations.set('bq-2', buildGoogleOauthIntegration({ id: 'bq-2' }));
+        await fireChangeAndWait();
         await fireChangeAndWait();
 
         sinon.assert.notCalled(deleteSpy);
     });
 
-    test('deletes tokens for integrations that no longer exist', async () => {
+    test('serialises overlapping runs so a slow observation cannot witness a removal that never happened', async () => {
+        // Declared only in `.deepnote.env.yaml`, so SecretStorage never holds it.
+        tokens.set('file-only', buildTokenEntry({ integrationId: 'file-only' }));
+
+        let releaseFirstRead: (() => void) | undefined;
+        const firstReadBlocked = new Promise<void>((resolve) => {
+            releaseFirstRead = resolve;
+        });
+        let reads = 0;
+        integrationStorage.getAll = async () => {
+            reads += 1;
+            if (reads === 1) {
+                // The activation read is still walking the keychain when the next event arrives.
+                await firstReadBlocked;
+
+                return [];
+            }
+
+            return [buildGoogleOauthIntegration({ id: 'file-only' })];
+        };
+
+        const cleaner = new FederatedAuthOrphanedTokenCleaner(tokenStorage, integrationStorage, disposables);
+
+        cleaner.activate();
+        // A save reusing the file-declared id lands while the activation read is still in flight. Unserialised,
+        // this run finishes first, records its ids as the snapshot, and the stale run then reads that snapshot
+        // and "witnesses" a removal against its own older, empty read.
+        onDidChangeIntegrations.fire();
+        await settleAsyncHandlers();
+
+        releaseFirstRead?.();
+        await settleAsyncHandlers();
+
+        sinon.assert.notCalled(deleteSpy);
+    });
+
+    test('deletes a token only once it has witnessed its integration being removed', async () => {
         integrations.set('bq-1', buildGoogleOauthIntegration({ id: 'bq-1' }));
+        integrations.set('orphan-a', buildGoogleOauthIntegration({ id: 'orphan-a' }));
         tokens.set('bq-1', buildTokenEntry({ integrationId: 'bq-1' }));
         tokens.set('orphan-a', buildTokenEntry({ integrationId: 'orphan-a' }));
-        tokens.set('orphan-b', buildTokenEntry({ integrationId: 'orphan-b' }));
 
         new FederatedAuthOrphanedTokenCleaner(tokenStorage, integrationStorage, disposables);
+
+        // First run only records which ids SecretStorage holds; no removal has been witnessed yet.
+        await fireChangeAndWait();
+
+        sinon.assert.notCalled(deleteSpy);
+
+        integrations.delete('orphan-a');
 
         await fireChangeAndWait();
 
         sinon.assert.calledWith(deleteSpy, 'orphan-a');
-        sinon.assert.calledWith(deleteSpy, 'orphan-b');
         sinon.assert.neverCalledWith(deleteSpy, 'bq-1');
     });
 
-    test('no-op when there are no stored tokens at all', async () => {
+    test('witnesses a removal even when the previous run stored no tokens', async () => {
         integrations.set('bq-1', buildGoogleOauthIntegration({ id: 'bq-1' }));
 
         new FederatedAuthOrphanedTokenCleaner(tokenStorage, integrationStorage, disposables);
 
+        // Nothing to clean up yet, but `bq-1` must still be recorded as observed.
         await fireChangeAndWait();
 
+        // The user authenticates and then deletes the integration, both between the two runs.
+        tokens.set('bq-1', buildTokenEntry({ integrationId: 'bq-1' }));
+        integrations.delete('bq-1');
+
+        await fireChangeAndWait();
+
+        sinon.assert.calledWith(deleteSpy, 'bq-1');
+    });
+
+    test('seeds the snapshot from the activation run', async () => {
+        integrations.set('bq-1', buildGoogleOauthIntegration({ id: 'bq-1' }));
+        tokens.set('bq-1', buildTokenEntry({ integrationId: 'bq-1' }));
+
+        const cleaner = new FederatedAuthOrphanedTokenCleaner(tokenStorage, integrationStorage, disposables);
+
+        cleaner.activate();
+        await settleAsyncHandlers();
+
         sinon.assert.notCalled(deleteSpy);
+
+        integrations.delete('bq-1');
+
+        await fireChangeAndWait();
+
+        sinon.assert.calledWith(deleteSpy, 'bq-1');
     });
 
     test('continues deleting other orphans when one delete fails', async () => {
         tokenStorage = buildTokenStorage(new Set(['orphan-a']));
         integrations.set('bq-1', buildGoogleOauthIntegration({ id: 'bq-1' }));
+        integrations.set('orphan-a', buildGoogleOauthIntegration({ id: 'orphan-a' }));
+        integrations.set('orphan-b', buildGoogleOauthIntegration({ id: 'orphan-b' }));
         tokens.set('bq-1', buildTokenEntry({ integrationId: 'bq-1' }));
         tokens.set('orphan-a', buildTokenEntry({ integrationId: 'orphan-a' }));
         tokens.set('orphan-b', buildTokenEntry({ integrationId: 'orphan-b' }));
 
         new FederatedAuthOrphanedTokenCleaner(tokenStorage, integrationStorage, disposables);
 
+        await fireChangeAndWait();
+        integrations.delete('orphan-a');
+        integrations.delete('orphan-b');
         await fireChangeAndWait();
 
         // Both attempts must have happened, even after orphan-a's failure.

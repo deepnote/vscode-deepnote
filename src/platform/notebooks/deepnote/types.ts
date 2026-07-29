@@ -99,8 +99,17 @@ export interface ISqlIntegrationEnvVarsProvider {
     getEnvironmentVariables(resource: Resource, token?: CancellationToken): Promise<EnvironmentVariables>;
 
     /**
-     * Project SecretStorage integrations merged with `.deepnote.env.yaml` file configs (file wins, additive
-     * file-only), so integration detection, the SQL status bar, and the SQL LSP agree with kernel execution.
+     * Ids that can be federated-authenticated for this notebook — BigQuery + `google-oauth`, from either
+     * source. Derived state only: it exposes **no config**, so the integrations panel (an editor) can offer an
+     * Authenticate action without receiving credentials it cannot write back.
+     */
+    getFederatedAuthCandidates(resource: Resource, token?: CancellationToken): Promise<ReadonlySet<string>>;
+
+    /**
+     * What actually applies for this notebook: project SecretStorage integrations merged with
+     * `.deepnote.env.yaml` file configs (file wins, additive file-only), so integration detection, the SQL
+     * status bar, and the SQL LSP agree with kernel execution. **Read-only** — the file layer cannot be
+     * written back, so these must never reach `IIntegrationStorage.save`, which only ever edits SecretStorage.
      */
     getMergedConfigs(resource: Resource, token?: CancellationToken): Promise<DatabaseIntegrationConfig[]>;
 }

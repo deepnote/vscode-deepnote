@@ -910,10 +910,7 @@ export namespace Integrations {
     export const authenticationSucceeded = (integrationName: string) => l10n.t('Authenticated {0}', integrationName);
     export const authenticationFailed = (errorMessage: string) => l10n.t('Authentication failed: {0}', errorMessage);
     export const bigQueryNotAuthenticated = (integrationName: string) =>
-        l10n.t(
-            'BigQuery integration "{0}" is not authenticated. Click Authenticate with Google in Manage Integrations to sign in.',
-            integrationName
-        );
+        l10n.t('BigQuery integration "{0}" is not authenticated.', integrationName);
     export const federatedAuthNotSupportedInWeb = l10n.t(
         'Federated authentication is not supported in the web extension. Open the workspace in desktop VS Code to authenticate.'
     );

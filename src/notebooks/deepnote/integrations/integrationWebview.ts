@@ -8,6 +8,7 @@ import { IDisposableRegistry, IExtensionContext } from '../../../platform/common
 import * as localize from '../../../platform/common/utils/localize';
 import { logger } from '../../../platform/logging';
 import { LocalizedMessages, SharedMessages } from '../../../messageTypes';
+import { ISqlIntegrationEnvVarsProvider } from '../../../platform/notebooks/deepnote/types';
 import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
 import { persistProjectIntegrations } from './projectIntegrationsWriter';
 import { IFederatedAuthTokenStorage, IIntegrationStorage, IIntegrationWebviewProvider } from './types';
@@ -42,6 +43,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
         @inject(IDisposableRegistry) private readonly disposableRegistry: IDisposableRegistry,
+        @inject(ISqlIntegrationEnvVarsProvider) private readonly sqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider,
         @inject(IFederatedAuthTokenStorage)
         @optional()
         private readonly tokenStorage?: IFederatedAuthTokenStorage
@@ -457,20 +459,24 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             return;
         }
 
+        // Bumped before any await so the newest call always owns the highest generation; every earlier call
+        // then loses the comparison below no matter which of them resumes last.
         this.updateGeneration += 1;
         const generation = this.updateGeneration;
 
+        const candidates = await this.resolveFederatedAuthCandidates();
+
         const integrationsData = await Promise.all(
             Array.from(this.integrations.entries()).map(async ([id, integration]) => ({
-                config: integration.config,
+                config: integration.config, // SecretStorage only — no `.deepnote.env.yaml` config reaches the webview.
                 id,
                 integrationName: integration.integrationName,
                 integrationType: integration.integrationType,
-                tokenStatus: await this.deriveTokenStatus(id, integration.config)
+                tokenStatus: candidates.has(id) ? await this.deriveTokenStatus(id) : 'unsupported'
             }))
         );
 
-        // Bail if the panel was disposed during the `tokenStorage.has()` await.
+        // Bail if the panel was disposed during the candidate lookup or the `tokenStorage.has()` await.
         if (!this.currentPanel) {
             logger.debug('IntegrationWebviewProvider: Panel disposed during update, skipping postMessage');
             return;
@@ -537,25 +543,38 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         }
     }
 
-    /** Federated-auth token status: `'unsupported'` for non-BigQuery, non-google-oauth, or web; else `'authenticated'`/`'disconnected'`. */
-    private async deriveTokenStatus(
-        integrationId: string,
-        config: ConfigurableDatabaseIntegrationConfig | null
-    ): Promise<FederatedAuthTokenStatus> {
+    /**
+     * Ids eligible for federated auth in the active notebook — derived state only, so no `.deepnote.env.yaml`
+     * credentials enter the panel. A failed lookup degrades to "none eligible" rather than blocking the render.
+     */
+    private async resolveFederatedAuthCandidates(): Promise<ReadonlySet<string>> {
+        if (!this.activeFileUri) {
+            return new Set<string>();
+        }
+
+        try {
+            return await this.sqlIntegrationEnvVars.getFederatedAuthCandidates(this.activeFileUri);
+        } catch (err) {
+            logger.warn('IntegrationWebviewProvider: failed to resolve federated auth candidates.', err);
+
+            return new Set<string>();
+        }
+    }
+
+    /** Whether a federated-auth-eligible integration currently holds a token. Eligibility is the caller's call. */
+    private async deriveTokenStatus(integrationId: string): Promise<FederatedAuthTokenStatus> {
         if (!this.tokenStorage) {
             return 'unsupported';
         }
-        if (!config || config.type !== 'big-query' || config.metadata.authMethod !== BigQueryAuthMethods.GoogleOauth) {
-            return 'unsupported';
-        }
+
         try {
-            const hasToken = await this.tokenStorage.has(integrationId);
-            return hasToken ? 'authenticated' : 'disconnected';
+            return (await this.tokenStorage.has(integrationId)) ? 'authenticated' : 'disconnected';
         } catch (err) {
             logger.warn(
                 `IntegrationWebviewProvider: failed to check token for ${integrationId}; reporting disconnected.`,
                 err
             );
+
             return 'disconnected';
         }
     }
@@ -590,7 +609,13 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             case 'authenticate':
                 if (message.integrationId) {
                     try {
-                        await commands.executeCommand(Commands.AuthenticateIntegration, message.integrationId);
+                        // Same URI the candidate set was derived from, so the button's eligibility and the
+                        // command's config lookup cannot disagree about which notebook they mean.
+                        await commands.executeCommand(
+                            Commands.AuthenticateIntegration,
+                            message.integrationId,
+                            this.activeFileUri
+                        );
                     } catch (error) {
                         // Command handler shows its own toasts; log here to avoid an unhandled-rejection.
                         logger.error(

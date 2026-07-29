@@ -107,33 +107,6 @@ suite('IntegrationsFileConfigProvider', () => {
         assert.deepStrictEqual(issues, []);
     });
 
-    test('resolves env: references from the .env file', async () => {
-        configureFileSystem([
-            {
-                path: yamlPath,
-                content: dedent`
-                    integrations:
-                      - id: dotenv-postgres
-                        name: Dotenv Postgres
-                        type: pgsql
-                        metadata:
-                          host: localhost
-                          port: "5432"
-                          database: mydb
-                          user: root
-                          password: "env:DEEPNOTE_TEST_DOTENV_PASSWORD"
-                `
-            },
-            { path: envPath, content: 'DEEPNOTE_TEST_DOTENV_PASSWORD=secret-from-dotenv\n' }
-        ]);
-
-        const { configs, issues } = await provider.getConfigsForFile(deepnoteFileUri);
-
-        assert.strictEqual(configs.length, 1);
-        assert.strictEqual(metadataField(configs[0], 'password'), 'secret-from-dotenv');
-        assert.deepStrictEqual(issues, []);
-    });
-
     test('lets the process environment override values from the .env file', async () => {
         provider.processEnvironment = { DEEPNOTE_TEST_OVERRIDE_PASSWORD: 'secret-from-process-env' };
         configureFileSystem([
@@ -337,7 +310,7 @@ suite('IntegrationsFileConfigProvider', () => {
         assert.ok(issues[0].message.includes('Failed to read integrations file'));
     });
 
-    test('drops a federated (google-oauth) integration (unsupported_federated_integration)', async () => {
+    test('keeps a BigQuery google-oauth integration, resolving env: references inside its metadata', async () => {
         configureFileSystem([
             {
                 path: yamlPath,
@@ -350,7 +323,39 @@ suite('IntegrationsFileConfigProvider', () => {
                           authMethod: google-oauth
                           project: my-project
                           clientId: my-client-id
+                          clientSecret: "env:DEEPNOTE_TEST_BQ_CLIENT_SECRET"
+                `
+            },
+            { path: envPath, content: 'DEEPNOTE_TEST_BQ_CLIENT_SECRET=oauth-secret-from-dotenv\n' }
+        ]);
+
+        const { configs, issues } = await provider.getConfigsForFile(deepnoteFileUri);
+
+        assert.strictEqual(configs.length, 1);
+        assert.strictEqual(configs[0].id, 'bq-oauth');
+        assert.strictEqual(configs[0].type, 'big-query');
+        assert.strictEqual(metadataField(configs[0], 'authMethod'), 'google-oauth');
+        assert.strictEqual(metadataField(configs[0], 'clientSecret'), 'oauth-secret-from-dotenv');
+        assert.deepStrictEqual(issues, []);
+    });
+
+    test('drops a federated integration using an unsupported method (unsupported_federated_integration)', async () => {
+        configureFileSystem([
+            {
+                path: yamlPath,
+                content: dedent`
+                    integrations:
+                      - id: sf-okta
+                        name: Snowflake Okta
+                        type: snowflake
+                        metadata:
+                          authMethod: okta
+                          accountName: my-account
+                          clientId: my-client-id
                           clientSecret: my-client-secret
+                          oktaSubdomain: my-subdomain
+                          identityProvider: okta
+                          authorizationServer: default
                 `
             }
         ]);

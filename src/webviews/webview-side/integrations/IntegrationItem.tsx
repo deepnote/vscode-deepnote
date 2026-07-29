@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { BigQueryAuthMethods } from '@deepnote/database-integrations';
 
 import { getLocString } from '../react-common/locReactSide';
 import { ConfigurableDatabaseIntegrationType, DetectedIntegration } from './types';
@@ -82,13 +81,11 @@ export const IntegrationItem: React.FC<IIntegrationItemProps> = ({
     const typeLabel = type ? getIntegrationTypeLabel(type) : undefined;
     const typeIcon = type ? integrationTypeIcons[type] : undefined;
 
-    // Federated-auth UI: only for BigQuery + google-oauth; hidden for service-account BigQuery and other types.
-    const isFederatedOauth =
-        integration.config?.type === 'big-query' &&
-        integration.config.metadata.authMethod === BigQueryAuthMethods.GoogleOauth;
+    // Federated-auth UI: `tokenStatus` alone decides. The extension gates on its candidate set, which also
+    // covers integrations declared in `.deepnote.env.yaml` — those have no `config` here, so re-deriving
+    // eligibility from `config` would hide the action for exactly the case that needs it.
     const tokenStatus = integration.tokenStatus;
-    const showFederatedPill = isFederatedOauth && tokenStatus && tokenStatus !== 'unsupported';
-    const showFederatedAuthButton = isFederatedOauth && tokenStatus && tokenStatus !== 'unsupported';
+    const showFederatedAuth = tokenStatus && tokenStatus !== 'unsupported';
 
     const tokenStatusText =
         tokenStatus === 'authenticated'
@@ -113,7 +110,7 @@ export const IntegrationItem: React.FC<IIntegrationItemProps> = ({
                     {typeLabel && <span className="integration-type">{typeLabel}</span>}
                     {typeLabel && <span className="integration-meta-separator"> • </span>}
                     <span className={`integration-status ${statusClass}`}>{statusText}</span>
-                    {showFederatedPill && (
+                    {showFederatedAuth && (
                         <>
                             <span className="integration-meta-separator"> • </span>
                             <span className={`integration-status ${tokenStatusPillClass}`}>{tokenStatusText}</span>
@@ -125,7 +122,7 @@ export const IntegrationItem: React.FC<IIntegrationItemProps> = ({
                 <button type="button" onClick={() => onConfigure(integration.id)}>
                     {configureText}
                 </button>
-                {showFederatedAuthButton && (
+                {showFederatedAuth && (
                     <button type="button" onClick={() => onAuthenticate(integration.id)}>
                         {authenticateButtonText}
                     </button>

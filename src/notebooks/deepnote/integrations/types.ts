@@ -87,7 +87,15 @@ export interface IFederatedAuthTokenStorage {
 
 export const IFederatedAuthSqlBlockCodeGenerator = Symbol('IFederatedAuthSqlBlockCodeGenerator');
 export interface IFederatedAuthSqlBlockCodeGenerator {
-    generate(block: DeepnoteBlock): Promise<string | undefined>;
+    /**
+     * Python for a federated SQL block, or `undefined` when the block is not one (non-SQL, no integration id, or
+     * an integration that is not BigQuery + `google-oauth`).
+     *
+     * `notebookUri` is required, not optional: the integration config is resolved per notebook as
+     * `.deepnote.env.yaml` merged over SecretStorage, so the same integration id can carry different OAuth-client
+     * metadata in two notebooks and there is no ambient answer to fall back on.
+     */
+    generate(block: DeepnoteBlock, notebookUri: Uri): Promise<string | undefined>;
 }
 
 /** Thrown when a federated integration has no usable refresh token (not authenticated yet, fingerprint mismatch, or `invalid_grant`). */

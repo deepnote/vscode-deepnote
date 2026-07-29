@@ -26,6 +26,11 @@ export class SqlIntegrationEnvironmentVariablesProviderWeb
         return {};
     }
 
+    /** Federated auth is node-only (no codegen is bound on web), so nothing is ever a candidate here. */
+    public async getFederatedAuthCandidates(): Promise<ReadonlySet<string>> {
+        return new Set();
+    }
+
     public async getMergedConfigs(): Promise<DatabaseIntegrationConfig[]> {
         return [];
     }

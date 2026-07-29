@@ -75,6 +75,7 @@ export interface LegacyDuckDBIntegrationConfig extends BaseLegacyIntegrationConf
 }
 
 import {
+    BigQueryAuthMethods,
     DatabaseIntegrationConfig,
     DatabaseIntegrationType,
     databaseIntegrationTypes,
@@ -197,4 +198,9 @@ export function isFederatedAuthMetadata(
     const authMethod = metadata.authMethod;
 
     return typeof authMethod === 'string' && isFederatedAuthMethod(authMethod);
+}
+
+/** The only federated combination this extension implements — see `FederatedAuthSqlBlockCodeGenerator`. */
+export function isSupportedFederatedAuth(integration: DatabaseIntegrationConfig): boolean {
+    return integration.type === 'big-query' && integration.metadata.authMethod === BigQueryAuthMethods.GoogleOauth;
 }

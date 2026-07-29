@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import type * as KernelMessage from '@jupyterlab/services/lib/kernel/messages';
-import { NotebookCell, NotebookCellExecution, workspace, NotebookCellOutput } from 'vscode';
+import { commands, NotebookCell, NotebookCellExecution, NotebookCellOutput, window, workspace } from 'vscode';
 
 import { createPythonCode } from '@deepnote/blocks';
 import type { Kernel } from '@jupyterlab/services';
@@ -12,6 +12,7 @@ import { analyzeKernelErrors, createOutputWithErrorMessageForDisplay } from '../
 import { BaseError } from '../../platform/errors/types';
 import { dispose } from '../../platform/common/utils/lifecycle';
 import { logger } from '../../platform/logging';
+import { Commands } from '../../platform/common/constants';
 import { IDisposable } from '../../platform/common/types';
 import { createDeferred } from '../../platform/common/utils/async';
 import { noop } from '../../platform/common/utils/misc';
@@ -425,11 +426,31 @@ export class CellExecution implements ICellExecution, IDisposable {
         return !this.cell.document.isClosed;
     }
 
-    /** Surfaces a federated-auth `generate()` failure as a cell-execution failure with a clear message. */
-    private async handleFederatedGenerateError(ex: unknown) {
+    /**
+     * Surfaces a federated-auth `generate()` failure as a cell-execution failure with a clear message.
+     * When the block names an integration, an unauthenticated failure also offers to start the auth flow —
+     * a file-declared integration has no row in Manage Integrations, so this toast is the only entry point.
+     */
+    private async handleFederatedGenerateError(ex: unknown, integrationId?: string) {
         let message: string;
         if (ex instanceof NotAuthenticatedError) {
             message = Integrations.bigQueryNotAuthenticated(ex.integrationName);
+            if (integrationId) {
+                // Fire-and-forget: awaiting the toast would delay recording the cell failure. Self-handled so a rejected
+                // command cannot surface as an unhandled promise.
+                void window
+                    .showErrorMessage(message, Integrations.authenticate)
+                    .then((choice) =>
+                        choice === Integrations.authenticate
+                            ? commands.executeCommand(
+                                  Commands.AuthenticateIntegration,
+                                  integrationId,
+                                  this.cell.notebook.uri
+                              )
+                            : undefined
+                    )
+                    .then(undefined, (err) => logger.error('Failed to start federated authentication', err));
+            }
         } else if (ex instanceof OAuthClientMisconfiguredError) {
             // `invalid_client` / `unauthorized_client`: wrong clientId/clientSecret. Surface a dedicated message; re-auth won't help.
             message = Integrations.federatedAuthOAuthClientMisconfigured;
@@ -483,9 +504,16 @@ export class CellExecution implements ICellExecution, IDisposable {
         // Federated-auth (BigQuery + google-oauth): generator returns a single Python string with the connection JSON embedded as a literal (containing the fresh access token). `undefined` means non-federated or web — fall back to `createPythonCode`.
         let federatedCode: string | undefined;
         try {
-            federatedCode = await this.federatedAuthSqlBlockCodeGenerator?.generate(deepnoteBlock);
+            federatedCode = await this.federatedAuthSqlBlockCodeGenerator?.generate(
+                deepnoteBlock,
+                this.cell.notebook.uri
+            );
         } catch (ex) {
-            await this.handleFederatedGenerateError(ex);
+            await this.handleFederatedGenerateError(
+                ex,
+                deepnoteBlock.type === 'sql' ? deepnoteBlock.metadata?.sql_integration_id : undefined
+            );
+
             return;
         }
         if (federatedCode !== undefined) {

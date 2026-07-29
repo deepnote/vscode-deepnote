@@ -4,14 +4,12 @@ import type { Kernel, KernelMessage } from '@jupyterlab/services';
 import type { IKernelConnection } from '@jupyterlab/services/lib/kernel/kernel';
 import { assert } from 'chai';
 import sinon from 'sinon';
-import { anything, capture, instance, mock, verify, when } from 'ts-mockito';
+import { anything, instance, mock, when } from 'ts-mockito';
 import { NotebookCell, NotebookCellKind, Uri } from 'vscode';
 
 import { dispose } from '../../platform/common/utils/lifecycle';
 import { createDeferred, Deferred } from '../../platform/common/utils/async';
-import { Commands } from '../../platform/common/constants';
 import { IDisposable } from '../../platform/common/types';
-import { Integrations } from '../../platform/common/utils/localize';
 import {
     IFederatedAuthSqlBlockCodeGenerator,
     NotAuthenticatedError,
@@ -19,7 +17,6 @@ import {
 } from '../../notebooks/deepnote/integrations/types';
 import { IKernelController, IKernelSession, KernelConnectionMetadata } from '../types';
 import { createKernelController } from '../../test/datascience/notebook/executionHelper';
-import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { CellExecutionOutputError } from '../errors/cellExecutionOutputError';
 import { CellExecution, CellExecutionFactory } from './cellExecution';
 import { CellExecutionMessageHandlerService } from './cellExecutionMessageHandlerService';
@@ -71,8 +68,6 @@ suite('CellExecution federated-auth branch', () => {
     let requestExecuteSpy: sinon.SinonSpy;
     let connectionMetadata: KernelConnectionMetadata;
     let cell: NotebookCell;
-    const NOTEBOOK_URI = Uri.parse('untitled:test-notebook.deepnote');
-    const INTEGRATION_ID = 'bq-federated';
 
     /** Build a minimal mocked NotebookCell populated for `CellExecution`'s constructor + execute. */
     function buildCell(opts: {
@@ -89,7 +84,7 @@ suite('CellExecution federated-auth branch', () => {
         };
         const notebook = {
             isClosed: false,
-            uri: NOTEBOOK_URI
+            uri: Uri.parse('untitled:test-notebook.deepnote')
         };
         return {
             index: 0,
@@ -103,17 +98,7 @@ suite('CellExecution federated-auth branch', () => {
         } as any as NotebookCell;
     }
 
-    /** A SQL block naming a federated integration — the shape that makes an auth failure actionable. */
-    function buildFederatedSqlCell(integrationId: string): NotebookCell {
-        return buildCell({
-            content: 'SELECT 1',
-            languageId: 'sql',
-            metadata: { __deepnotePocket: { type: 'sql' }, sql_integration_id: integrationId }
-        });
-    }
-
     setup(() => {
-        resetVSCodeMocks();
         disposables = [];
 
         controller = createKernelController();
@@ -155,7 +140,6 @@ suite('CellExecution federated-auth branch', () => {
 
     teardown(() => {
         disposables = dispose(disposables);
-        resetVSCodeMocks();
     });
 
     function createExecution(generator?: IFederatedAuthSqlBlockCodeGenerator) {
@@ -163,35 +147,6 @@ suite('CellExecution federated-auth branch', () => {
         const execution = factory.create(cell, undefined, connectionMetadata) as CellExecution;
         disposables.push(execution);
         return execution;
-    }
-
-    /**
-     * Runs a cell whose federated generator rejects, and returns the resulting execution failure.
-     * The authenticate toast is deliberately fire-and-forget, so this also lets its handlers settle.
-     */
-    async function runFailingExecution(error: Error): Promise<unknown> {
-        const generator: IFederatedAuthSqlBlockCodeGenerator = { generate: sinon.stub().rejects(error) };
-        const execution = createExecution(generator);
-
-        let caught: unknown;
-        await execution.start(instance(session)).catch((err) => {
-            caught = err;
-        });
-        await new Promise((resolve) => setTimeout(resolve, 10));
-
-        return caught;
-    }
-
-    /** `verify` only matches calls whose argument count equals the matcher count, so cover every plausible arity. */
-    function assertNoCommandExecuted(): void {
-        verify(mockedVSCodeNamespaces.commands.executeCommand(anything())).never();
-        verify(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything())).never();
-        verify(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything(), anything())).never();
-    }
-
-    function assertNoErrorToastShown(): void {
-        verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).never();
-        verify(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything())).never();
     }
 
     function assertMainExecuteShape(call: sinon.SinonSpyCall): void {
@@ -227,7 +182,6 @@ suite('CellExecution federated-auth branch', () => {
         const [block, notebookUri] = generateStub.firstCall.args;
         assert.isObject(block, 'first argument must be the converted Deepnote block');
         assert.strictEqual(notebookUri, cell.notebook.uri);
-        assert.strictEqual(notebookUri, NOTEBOOK_URI);
 
         // `undefined` from the generator falls back to `createPythonCode` — still exactly one execute.
         const calls = requestExecuteSpy.getCalls();
@@ -367,75 +321,6 @@ suite('CellExecution federated-auth branch', () => {
 
             assert(caught instanceof CellExecutionOutputError);
             assert.include(caught.message.toLowerCase(), expectedFragment);
-            sinon.assert.notCalled(requestExecuteSpy);
-        });
-    });
-
-    test('NotAuthenticatedError toast: choosing Authenticate executes AuthenticateIntegration with the id and the notebook URI', async () => {
-        // A file-declared integration has no row in Manage Integrations, so this toast is the only way in.
-        cell = buildFederatedSqlCell(INTEGRATION_ID);
-        // The `anything()` matchers select the `MessageOptions` overload, whose stubbed result type is `void`;
-        // the cast restores the `(message, ...items: string[]) => Thenable<string | undefined>` shape being faked.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        when(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything())).thenResolve(
-            Integrations.authenticate as any
-        );
-
-        const caught = await runFailingExecution(new NotAuthenticatedError('My BigQuery'));
-
-        const [, toastAction] = capture<string, string>(
-            mockedVSCodeNamespaces.window.showErrorMessage as (message: string, action: string) => unknown
-        ).last();
-        assert.strictEqual(toastAction, Integrations.authenticate);
-
-        verify(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything(), anything())).once();
-        const [command, integrationId, resource] = capture<string, string, Uri>(
-            mockedVSCodeNamespaces.commands.executeCommand as (
-                command: string,
-                integrationId: string,
-                resource: Uri
-            ) => unknown
-        ).last();
-        assert.deepStrictEqual(
-            { command, integrationId },
-            { command: Commands.AuthenticateIntegration, integrationId: INTEGRATION_ID }
-        );
-        // Identity, not equality: the command must resolve the integration against this cell's own notebook.
-        assert.strictEqual(resource, cell.notebook.uri);
-
-        assert(caught instanceof CellExecutionOutputError, 'the cell must still record an execution error');
-        sinon.assert.notCalled(requestExecuteSpy);
-    });
-
-    test('NotAuthenticatedError toast: dismissing it executes no command, and the cell still fails', async () => {
-        cell = buildFederatedSqlCell(INTEGRATION_ID);
-        when(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything())).thenResolve(undefined);
-
-        const caught = await runFailingExecution(new NotAuthenticatedError('My BigQuery'));
-
-        verify(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything())).once();
-        assertNoCommandExecuted();
-
-        assert(caught instanceof CellExecutionOutputError, 'the cell must still record an execution error');
-        sinon.assert.notCalled(requestExecuteSpy);
-    });
-
-    (
-        [
-            ['OAuthClientMisconfiguredError', () => new OAuthClientMisconfiguredError('My BigQuery')],
-            ['a plain Error', () => new Error('codegen blew up')]
-        ] as const
-    ).forEach(([label, buildError]) => {
-        test(`${label} on a federated SQL block: no authenticate action is offered and no command runs`, async () => {
-            // Re-authenticating cannot fix these, so the toast must not appear even though the block names an integration.
-            cell = buildFederatedSqlCell(INTEGRATION_ID);
-
-            const caught = await runFailingExecution(buildError());
-
-            assertNoErrorToastShown();
-            assertNoCommandExecuted();
-
-            assert(caught instanceof CellExecutionOutputError, 'the cell must still record an execution error');
             sinon.assert.notCalled(requestExecuteSpy);
         });
     });

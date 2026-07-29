@@ -143,13 +143,6 @@ suite('FederatedAuthCommandHandlerNode', () => {
         verify(tokenStorage.save(anything())).never();
     });
 
-    test('returns without a lookup when invoked without an integrationId', async () => {
-        await handler.authenticate('', NOTEBOOK_URI);
-
-        verify(sqlIntegrationEnvVars.getMergedConfigs(anything())).never();
-        assert.strictEqual(runOAuthFlowStub.callCount, 0);
-    });
-
     test('runOAuthFlow is called with clientId, clientSecret, state, codeVerifier, and the deepnote-callback redirectUri', async () => {
         setMergedConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
 

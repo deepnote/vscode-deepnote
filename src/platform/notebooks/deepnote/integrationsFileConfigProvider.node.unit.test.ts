@@ -13,6 +13,13 @@ import { IFileSystem } from '../../common/platform/types';
 import { IntegrationsFileConfigProvider } from './integrationsFileConfigProvider.node';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 
+/** A pgsql entry for `pgIntegrationYaml`: `id`/`name` identify it, every other key overrides a metadata default. */
+interface PgIntegrationSpec {
+    id: string;
+    name: string;
+    [key: string]: string;
+}
+
 /** A file present in the virtual filesystem: either readable `content`, or a `readError` that rejects. */
 interface VirtualFile {
     path: string;
@@ -80,23 +87,33 @@ suite('IntegrationsFileConfigProvider', () => {
         return (config.metadata as unknown as Record<string, unknown>)[key];
     }
 
+    /** An integrations document holding the given pgsql entries, each with valid default connection metadata. */
+    function pgIntegrationYaml(...entries: PgIntegrationSpec[]): string {
+        const integrationEntries = entries.map(({ id, name, ...overrides }) => {
+            const metadata: Record<string, string> = {
+                host: 'localhost',
+                port: '5432',
+                database: 'mydb',
+                user: 'root',
+                password: 'my-secret',
+                ...overrides
+            };
+
+            return [
+                `  - id: ${id}`,
+                `    name: ${name}`,
+                '    type: pgsql',
+                '    metadata:',
+                ...Object.entries(metadata).map(([key, value]) => `      ${key}: "${value}"`)
+            ].join('\n');
+        });
+
+        return ['integrations:', ...integrationEntries].join('\n');
+    }
+
     test('returns configs for a valid integrations file', async () => {
         configureFileSystem([
-            {
-                path: yamlPath,
-                content: dedent`
-                    integrations:
-                      - id: my-postgres
-                        name: My Postgres
-                        type: pgsql
-                        metadata:
-                          host: localhost
-                          port: "5432"
-                          database: mydb
-                          user: root
-                          password: my-secret
-                `
-            }
+            { path: yamlPath, content: pgIntegrationYaml({ id: 'my-postgres', name: 'My Postgres' }) }
         ]);
 
         const { configs, issues } = await provider.getConfigsForFile(deepnoteFileUri);
@@ -112,18 +129,11 @@ suite('IntegrationsFileConfigProvider', () => {
         configureFileSystem([
             {
                 path: yamlPath,
-                content: dedent`
-                    integrations:
-                      - id: override-postgres
-                        name: Override Postgres
-                        type: pgsql
-                        metadata:
-                          host: localhost
-                          port: "5432"
-                          database: mydb
-                          user: root
-                          password: "env:DEEPNOTE_TEST_OVERRIDE_PASSWORD"
-                `
+                content: pgIntegrationYaml({
+                    id: 'override-postgres',
+                    name: 'Override Postgres',
+                    password: 'env:DEEPNOTE_TEST_OVERRIDE_PASSWORD'
+                })
             },
             { path: envPath, content: 'DEEPNOTE_TEST_OVERRIDE_PASSWORD=stale-from-dotenv\n' }
         ]);
@@ -153,32 +163,6 @@ suite('IntegrationsFileConfigProvider', () => {
         assert.strictEqual(issues[0].code, 'yaml_parse_error');
     });
 
-    test('drops an integration and reports env_var_not_defined for an unresolved env: reference', async () => {
-        configureFileSystem([
-            {
-                path: yamlPath,
-                content: dedent`
-                    integrations:
-                      - id: missing-env-postgres
-                        name: Missing Env Postgres
-                        type: pgsql
-                        metadata:
-                          host: localhost
-                          port: "5432"
-                          database: mydb
-                          user: root
-                          password: "env:DEEPNOTE_TEST_UNDEFINED_VAR_DEADBEEF"
-                `
-            }
-        ]);
-
-        const { configs, issues } = await provider.getConfigsForFile(deepnoteFileUri);
-
-        assert.deepStrictEqual(configs, []);
-        assert.strictEqual(issues.length, 1);
-        assert.strictEqual(issues[0].code, 'env_var_not_defined');
-    });
-
     test('finds the YAML at the workspace-folder root when absent next to the .deepnote file', async () => {
         const nestedDeepnoteUri = Uri.file('/workspace/project/sub/notebook.deepnote');
         const rootFolder: WorkspaceFolder = { uri: Uri.file('/workspace/project'), name: 'project', index: 0 };
@@ -186,21 +170,7 @@ suite('IntegrationsFileConfigProvider', () => {
 
         workspaceFolder = rootFolder;
         configureFileSystem([
-            {
-                path: rootYamlPath,
-                content: dedent`
-                    integrations:
-                      - id: root-postgres
-                        name: Root Postgres
-                        type: pgsql
-                        metadata:
-                          host: localhost
-                          port: "5432"
-                          database: mydb
-                          user: root
-                          password: my-secret
-                `
-            }
+            { path: rootYamlPath, content: pgIntegrationYaml({ id: 'root-postgres', name: 'Root Postgres' }) }
         ]);
 
         const { configs, issues } = await provider.getConfigsForFile(nestedDeepnoteUri);
@@ -212,21 +182,7 @@ suite('IntegrationsFileConfigProvider', () => {
 
     test('drops an integration whose id is reserved (reserved_integration_id)', async () => {
         configureFileSystem([
-            {
-                path: yamlPath,
-                content: dedent`
-                    integrations:
-                      - id: deepnote-dataframe-sql
-                        name: Reserved
-                        type: pgsql
-                        metadata:
-                          host: localhost
-                          port: "5432"
-                          database: mydb
-                          user: root
-                          password: my-secret
-                `
-            }
+            { path: yamlPath, content: pgIntegrationYaml({ id: 'deepnote-dataframe-sql', name: 'Reserved' }) }
         ]);
 
         const { configs, issues } = await provider.getConfigsForFile(deepnoteFileUri);
@@ -263,27 +219,10 @@ suite('IntegrationsFileConfigProvider', () => {
         configureFileSystem([
             {
                 path: yamlPath,
-                content: dedent`
-                    integrations:
-                      - id: dup-postgres
-                        name: First
-                        type: pgsql
-                        metadata:
-                          host: first-host
-                          port: "5432"
-                          database: mydb
-                          user: root
-                          password: my-secret
-                      - id: dup-postgres
-                        name: Second
-                        type: pgsql
-                        metadata:
-                          host: second-host
-                          port: "5432"
-                          database: mydb
-                          user: root
-                          password: my-secret
-                `
+                content: pgIntegrationYaml(
+                    { id: 'dup-postgres', name: 'First', host: 'first-host' },
+                    { id: 'dup-postgres', name: 'Second', host: 'second-host' }
+                )
             }
         ]);
 

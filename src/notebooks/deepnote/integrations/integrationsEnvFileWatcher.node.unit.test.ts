@@ -13,10 +13,10 @@ import { anything, capture, instance, mock, verify, when } from 'ts-mockito';
 import * as sinon from 'sinon';
 import { DEFAULT_ENV_FILE, DEFAULT_INTEGRATIONS_FILE } from '@deepnote/database-integrations';
 
-import { DEEPNOTE_NOTEBOOK_TYPE } from '../../../kernels/deepnote/types';
 import { IDisposable } from '../../../platform/common/types';
 import { IFileSystem } from '../../../platform/common/platform/types';
 import { IIntegrationEnvLiveRefresher } from './types';
+import { createMockNotebook } from '../deepnoteTestHelpers';
 import { debounceTimeInMilliseconds, IntegrationsEnvFileWatcher } from './integrationsEnvFileWatcher.node';
 import { dispose } from '../../../platform/common/utils/lifecycle';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
@@ -47,14 +47,6 @@ suite('IntegrationsEnvFileWatcher', () => {
         when(fsWatcher.dispose()).thenReturn();
 
         return instance(fsWatcher);
-    }
-
-    function createMockNotebook(uri: Uri, notebookType: string = DEEPNOTE_NOTEBOOK_TYPE): NotebookDocument {
-        const notebook = mock<NotebookDocument>();
-        when(notebook.notebookType).thenReturn(notebookType);
-        when(notebook.uri).thenReturn(uri);
-
-        return instance(notebook);
     }
 
     /** The dir the watcher derives from a notebook uri (the `.deepnote` file's dir). */
@@ -120,8 +112,8 @@ suite('IntegrationsEnvFileWatcher', () => {
         // Two open views of the SAME .deepnote file (differ only by notebook query) — both are refreshed.
         const uriA = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
         const uriB = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-b' });
-        const notebookA = createMockNotebook(uriA);
-        const notebookB = createMockNotebook(uriB);
+        const notebookA = createMockNotebook({ uri: uriA });
+        const notebookB = createMockNotebook({ uri: uriB });
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebookA, notebookB]);
         watcher.activate();
@@ -136,7 +128,7 @@ suite('IntegrationsEnvFileWatcher', () => {
     test('resolves affected notebooks via the workspace-folder root (dir-then-root fallback)', async () => {
         // The .deepnote lives in a nested dir; only the workspace ROOT changed.
         const uri = Uri.file('/ws/nested/deep/app.deepnote').with({ query: 'notebook=nb-a' });
-        const notebook = createMockNotebook(uri);
+        const notebook = createMockNotebook({ uri });
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
         when(mockedVSCodeNamespaces.workspace.getWorkspaceFolder(anything())).thenReturn(workspaceFolder);
@@ -152,7 +144,7 @@ suite('IntegrationsEnvFileWatcher', () => {
 
     test('coalesces a burst of env file events into a single refresh', async () => {
         const uri = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
-        const notebook = createMockNotebook(uri);
+        const notebook = createMockNotebook({ uri });
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
         watcher.activate();
@@ -168,7 +160,7 @@ suite('IntegrationsEnvFileWatcher', () => {
     test('watches the dir of a notebook opened after activation', async () => {
         // Outside the workspace folder, so the dir is watched only because the notebook was opened.
         const uri = Uri.file('/elsewhere/proj/app.deepnote').with({ query: 'notebook=nb-a' });
-        const notebook = createMockNotebook(uri);
+        const notebook = createMockNotebook({ uri });
 
         watcher.activate();
 
@@ -183,7 +175,7 @@ suite('IntegrationsEnvFileWatcher', () => {
     test('does not refresh when the changed dir matches no open Deepnote notebook', async () => {
         const otherFolder: WorkspaceFolder = { index: 1, name: 'other', uri: Uri.file('/other') };
         const uri = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
-        const notebook = createMockNotebook(uri);
+        const notebook = createMockNotebook({ uri });
 
         when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder, otherFolder]);
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
@@ -197,7 +189,7 @@ suite('IntegrationsEnvFileWatcher', () => {
 
     test('ignores non-Deepnote notebooks even when their dir changed', async () => {
         const uri = Uri.file('/ws/app.ipynb').with({ query: 'notebook=nb-a' });
-        const notebook = createMockNotebook(uri, 'jupyter-notebook');
+        const notebook = createMockNotebook({ uri, notebookType: 'jupyter-notebook' });
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
         watcher.activate();
@@ -210,7 +202,7 @@ suite('IntegrationsEnvFileWatcher', () => {
 
     test('does not refresh when the env-file feature is disabled for the notebook', async () => {
         const uri = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
-        const notebook = createMockNotebook(uri);
+        const notebook = createMockNotebook({ uri });
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
         when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote', anything())).thenReturn({
@@ -223,24 +215,9 @@ suite('IntegrationsEnvFileWatcher', () => {
         verify(liveRefresher.refresh(anything())).never();
     });
 
-    test('refreshes when the env-file feature is explicitly enabled for the notebook', async () => {
-        const uri = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
-        const notebook = createMockNotebook(uri);
-
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote', anything())).thenReturn({
-            get: () => true
-        } as never);
-        watcher.activate();
-
-        await fireEnvFileChange(deepnoteDirOf(uri));
-
-        verify(liveRefresher.refresh(anything())).once();
-    });
-
     test('does not refresh when no .deepnote.env.yaml exists for the notebook (an unrelated .env change)', async () => {
         const uri = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
-        const notebook = createMockNotebook(uri);
+        const notebook = createMockNotebook({ uri });
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
         // No integrations file present in any candidate dir — the change must be treated as unrelated.

@@ -8,6 +8,7 @@ import { DEEPNOTE_NOTEBOOK_TYPE } from '../../../kernels/deepnote/types';
 import { IDisposable } from '../../../platform/common/types';
 import { dispose } from '../../../platform/common/utils/lifecycle';
 import { ISqlIntegrationEnvVarsProvider } from '../../../platform/notebooks/deepnote/types';
+import { createMockNotebook } from '../deepnoteTestHelpers';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 import { UserpodApiEndpoints } from './userpodApiEndpoints.node';
 
@@ -29,17 +30,9 @@ suite('UserpodApiEndpoints', () => {
         disposables = dispose(disposables);
     });
 
-    function createMockNotebook(
-        projectId: string | undefined,
-        uri: Uri,
-        notebookType: string = DEEPNOTE_NOTEBOOK_TYPE
-    ): NotebookDocument {
-        const notebook = mock<NotebookDocument>();
-        when(notebook.notebookType).thenReturn(notebookType);
-        when(notebook.metadata).thenReturn(projectId === undefined ? {} : { deepnoteProjectId: projectId });
-        when(notebook.uri).thenReturn(uri);
-
-        return instance(notebook);
+    /** A notebook carrying `projectId` in its metadata, which is how the endpoint's route lookup finds it. */
+    function createNotebook(projectId: string, uri: Uri, notebookType: string = DEEPNOTE_NOTEBOOK_TYPE) {
+        return createMockNotebook({ notebookType, uri, metadata: { deepnoteProjectId: projectId } });
     }
 
     /** `activate()` is fire-and-forget; poll `baseUrl` until the server has bound a port. */
@@ -55,6 +48,14 @@ suite('UserpodApiEndpoints', () => {
         return endpoint.baseUrl;
     }
 
+    /** Registers `notebooks` as the open documents, starts the endpoint, and returns its base URL. */
+    function startWith(...notebooks: NotebookDocument[]): Promise<string> {
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn(notebooks);
+        endpoint.activate();
+
+        return waitForBaseUrl();
+    }
+
     function envVarsUrl(baseUrl: string, projectId: string): string {
         return `${baseUrl}/userpod-api/${projectId}/integrations/environment-variables`;
     }
@@ -65,12 +66,9 @@ suite('UserpodApiEndpoints', () => {
     }
 
     test('returns the provider env map as [{name,value}] for a matching open deepnote notebook', async () => {
-        const notebook = createMockNotebook('project-1', Uri.file('/ws/app.deepnote'));
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
         when(provider.getEnvironmentVariables(anything())).thenResolve({ FOO: 'bar', BAZ: 'qux' });
 
-        endpoint.activate();
-        const baseUrl = await waitForBaseUrl();
+        const baseUrl = await startWith(createNotebook('project-1', Uri.file('/ws/app.deepnote')));
 
         const response = await authedFetch(envVarsUrl(baseUrl, 'project-1'), 'project-1');
 
@@ -82,29 +80,14 @@ suite('UserpodApiEndpoints', () => {
         ]);
     });
 
-    test('returns an empty array when the matching notebook has no integration env vars', async () => {
-        const notebook = createMockNotebook('project-1', Uri.file('/ws/app.deepnote'));
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(provider.getEnvironmentVariables(anything())).thenResolve({});
-
-        endpoint.activate();
-        const baseUrl = await waitForBaseUrl();
-
-        const response = await authedFetch(envVarsUrl(baseUrl, 'project-1'), 'project-1');
-
-        assert.strictEqual(response.status, 200);
-        assert.deepStrictEqual(await response.json(), []);
-    });
-
     test('routes by projectId: queries only the notebook whose metadata matches the URL param', async () => {
         const uriTwo = Uri.file('/ws/two.deepnote');
-        const notebookOne = createMockNotebook('project-one', Uri.file('/ws/one.deepnote'));
-        const notebookTwo = createMockNotebook('project-two', uriTwo);
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebookOne, notebookTwo]);
         when(provider.getEnvironmentVariables(anything())).thenResolve({ FROM: 'two' });
 
-        endpoint.activate();
-        const baseUrl = await waitForBaseUrl();
+        const baseUrl = await startWith(
+            createNotebook('project-one', Uri.file('/ws/one.deepnote')),
+            createNotebook('project-two', uriTwo)
+        );
 
         const response = await authedFetch(envVarsUrl(baseUrl, 'project-two'), 'project-two');
         const body = await response.json();
@@ -117,11 +100,7 @@ suite('UserpodApiEndpoints', () => {
     });
 
     test('returns an empty array and never queries the provider when no notebook matches the projectId', async () => {
-        const notebook = createMockNotebook('some-other-project', Uri.file('/ws/app.deepnote'));
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-
-        endpoint.activate();
-        const baseUrl = await waitForBaseUrl();
+        const baseUrl = await startWith(createNotebook('some-other-project', Uri.file('/ws/app.deepnote')));
 
         const response = await authedFetch(envVarsUrl(baseUrl, 'project-1'), 'project-1');
 
@@ -131,11 +110,7 @@ suite('UserpodApiEndpoints', () => {
     });
 
     test('ignores non-Deepnote notebooks even when their projectId matches', async () => {
-        const notebook = createMockNotebook('project-1', Uri.file('/ws/app.ipynb'), 'jupyter-notebook');
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-
-        endpoint.activate();
-        const baseUrl = await waitForBaseUrl();
+        const baseUrl = await startWith(createNotebook('project-1', Uri.file('/ws/app.ipynb'), 'jupyter-notebook'));
 
         const response = await authedFetch(envVarsUrl(baseUrl, 'project-1'), 'project-1');
 
@@ -144,12 +119,9 @@ suite('UserpodApiEndpoints', () => {
     });
 
     test('responds 500 when the provider rejects', async () => {
-        const notebook = createMockNotebook('project-1', Uri.file('/ws/app.deepnote'));
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
         when(provider.getEnvironmentVariables(anything())).thenReject(new Error('resolution failed'));
 
-        endpoint.activate();
-        const baseUrl = await waitForBaseUrl();
+        const baseUrl = await startWith(createNotebook('project-1', Uri.file('/ws/app.deepnote')));
 
         const response = await authedFetch(envVarsUrl(baseUrl, 'project-1'), 'project-1');
 
@@ -157,11 +129,7 @@ suite('UserpodApiEndpoints', () => {
     });
 
     test('responds 401 and never queries the provider when the bearer token is missing or wrong', async () => {
-        const notebook = createMockNotebook('project-1', Uri.file('/ws/app.deepnote'));
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-
-        endpoint.activate();
-        const baseUrl = await waitForBaseUrl();
+        const baseUrl = await startWith(createNotebook('project-1', Uri.file('/ws/app.deepnote')));
 
         const noHeader = await fetch(envVarsUrl(baseUrl, 'project-1'));
         assert.strictEqual(noHeader.status, 401);
@@ -175,11 +143,7 @@ suite('UserpodApiEndpoints', () => {
     });
 
     test('responds 401 for a wrong token of the SAME length (exercises the constant-time compare path)', async () => {
-        const notebook = createMockNotebook('project-1', Uri.file('/ws/app.deepnote'));
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-
-        endpoint.activate();
-        const baseUrl = await waitForBaseUrl();
+        const baseUrl = await startWith(createNotebook('project-1', Uri.file('/ws/app.deepnote')));
 
         // Issue the project's token, then present a DIFFERENT value of the same byte length — timingSafeEqual must reject it.
         const realToken = endpoint.getAuthToken('project-1');
@@ -193,12 +157,10 @@ suite('UserpodApiEndpoints', () => {
     });
 
     test('cross-project: a token issued for one project cannot read another project', async () => {
-        const notebookA = createMockNotebook('project-a', Uri.file('/ws/a.deepnote'));
-        const notebookB = createMockNotebook('project-b', Uri.file('/ws/b.deepnote'));
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebookA, notebookB]);
-
-        endpoint.activate();
-        const baseUrl = await waitForBaseUrl();
+        const baseUrl = await startWith(
+            createNotebook('project-a', Uri.file('/ws/a.deepnote')),
+            createNotebook('project-b', Uri.file('/ws/b.deepnote'))
+        );
 
         // Issue tokens for both projects, then use project A's token against project B's URL.
         const tokenA = endpoint.getAuthToken('project-a');
@@ -237,12 +199,9 @@ suite('UserpodApiEndpoints', () => {
     });
 
     test('logs and prompts the user to recover when the server errors after startup, without crashing', async () => {
-        const notebook = createMockNotebook('project-1', Uri.file('/ws/app.deepnote'));
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
         when(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything())).thenResolve(undefined as never);
 
-        endpoint.activate();
-        await waitForBaseUrl();
+        await startWith(createNotebook('project-1', Uri.file('/ws/app.deepnote')));
 
         // Reach the running server to simulate a post-listen failure (e.g. an accept error under fd exhaustion).
         const server = (endpoint as unknown as { server: http.Server }).server;

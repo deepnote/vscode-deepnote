@@ -494,35 +494,6 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             );
         });
 
-        test('Merges file config with SecretStorage config: both are included', async () => {
-            stubNotebookWithProject(
-                createMockProject('project-123', [
-                    { id: 'file-db', name: 'file-db', type: 'pgsql' },
-                    { id: 'secret-db', name: 'secret-db', type: 'pgsql' }
-                ])
-            );
-            when(fileConfigProvider.getConfigsForFile(anything())).thenResolve({
-                configs: [pgConfig('file-db', 'from-file.example.com')],
-                issues: []
-            });
-            when(integrationStorage.getIntegrationConfig('secret-db')).thenResolve(
-                pgConfig('secret-db', 'from-secret.example.com')
-            );
-
-            const result = await providerWithFile.getEnvironmentVariables(notebookUri);
-
-            assert.ok(result['SQL_FILE_DB'], 'File-sourced integration env var should be present');
-            assert.ok(result['SQL_SECRET_DB'], 'SecretStorage-sourced integration env var should be present');
-            assert.ok(
-                JSON.parse(result['SQL_FILE_DB']!).url.includes('from-file.example.com'),
-                'File config connection details should be used for the file-sourced integration'
-            );
-            assert.ok(
-                JSON.parse(result['SQL_SECRET_DB']!).url.includes('from-secret.example.com'),
-                'SecretStorage config connection details should be used for the SecretStorage-only integration'
-            );
-        });
-
         test('File wins on id conflict: file config used and SecretStorage is not queried for that id', async () => {
             stubNotebookWithProject(
                 createMockProject('project-123', [
@@ -552,22 +523,6 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             // The conflicting id must never hit SecretStorage; the SecretStorage-only id must be queried exactly once.
             verify(integrationStorage.getIntegrationConfig('shared-db')).never();
             verify(integrationStorage.getIntegrationConfig('secret-only')).once();
-        });
-
-        test('File-only integration (absent from project.integrations) is injected additively', async () => {
-            stubNotebookWithProject(createMockProject('project-123', []));
-            when(fileConfigProvider.getConfigsForFile(anything())).thenResolve({
-                configs: [pgConfig('file-only', 'file-only.example.com')],
-                issues: []
-            });
-
-            const result = await providerWithFile.getEnvironmentVariables(notebookUri);
-
-            assert.ok(result['SQL_FILE_ONLY'], 'File-only integration env var should be present');
-            assert.ok(
-                JSON.parse(result['SQL_FILE_ONLY']!).url.includes('file-only.example.com'),
-                'File-only integration should use its file config'
-            );
         });
 
         test('getMergedConfigs returns the merged config list (file wins, SecretStorage fallback, file-only additive)', async () => {

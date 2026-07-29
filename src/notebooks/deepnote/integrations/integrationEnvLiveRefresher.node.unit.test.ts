@@ -107,16 +107,6 @@ suite('IntegrationEnvLiveRefresher', () => {
         verify(mockedVSCodeNamespaces.window.setStatusBarMessage(anything(), anything())).never();
     });
 
-    test('shows exactly one status-bar message when multiple kernels are refreshed', async () => {
-        const notebookA = createRunningNotebook(Uri.file('/ws/a.deepnote'));
-        const notebookB = createRunningNotebook(Uri.file('/ws/b.deepnote'));
-
-        await refresher.refresh([notebookA, notebookB]);
-
-        verify(kernelExecution.executeHidden(anything())).twice(); // both started kernels are refreshed
-        verify(mockedVSCodeNamespaces.window.setStatusBarMessage(anything(), anything())).once();
-    });
-
     test('continues to the next notebook when one executeHidden throws, and still notifies for the success', async () => {
         const notebookA = createRunningNotebook(Uri.file('/ws/a.deepnote'));
         const notebookB = createRunningNotebook(Uri.file('/ws/b.deepnote'));

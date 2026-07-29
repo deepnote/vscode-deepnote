@@ -2,9 +2,7 @@ import { assert } from 'chai';
 import { anything, verify } from 'ts-mockito';
 import { Uri } from 'vscode';
 
-import { serializeDeepnoteFile } from '@deepnote/blocks';
-
-import { createDeepnoteFile, createDeepnoteProject } from '../../notebooks/deepnote/deepnoteTestHelpers';
+import { serializeProjectFile } from '../../notebooks/deepnote/deepnoteTestHelpers';
 import { IUserpodApiEndpoints } from '../../platform/notebooks/deepnote/types';
 import { stubReadFile } from '../../test/mocks/vscodeFs';
 import { resetVSCodeMocks } from '../../test/vscode-mock';
@@ -31,10 +29,6 @@ suite('applyIntegrationEndpointEnv', () => {
             ready: Promise.resolve(),
             getAuthToken: () => 'endpoint-token'
         };
-    }
-
-    function serializeProjectFile(projectId: string): string {
-        return serializeDeepnoteFile(createDeepnoteFile({ project: createDeepnoteProject({ id: projectId }) }));
     }
 
     test('injects all five integration env vars (preserving pre-existing keys) when the endpoint is listening and the file has a project id', async () => {

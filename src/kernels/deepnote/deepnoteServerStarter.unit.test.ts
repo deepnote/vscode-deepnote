@@ -4,9 +4,7 @@ import * as sinon from 'sinon';
 import { anything, instance, mock, when } from 'ts-mockito';
 import { Uri } from 'vscode';
 
-import { serializeDeepnoteFile } from '@deepnote/blocks';
-
-import { createDeepnoteFile, createDeepnoteProject } from '../../notebooks/deepnote/deepnoteTestHelpers';
+import { serializeProjectFile } from '../../notebooks/deepnote/deepnoteTestHelpers';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { IAsyncDisposableRegistry, IOutputChannel } from '../../platform/common/types';
 import { IUserpodApiEndpoints } from '../../platform/notebooks/deepnote/types';
@@ -89,34 +87,9 @@ suite('DeepnoteServerStarter', () => {
         await serverStarter.dispose();
     });
 
-    function serializeProjectFile(projectId: string): string {
-        return serializeDeepnoteFile(createDeepnoteFile({ project: createDeepnoteProject({ id: projectId }) }));
-    }
-
     suite('integration endpoint env vars', () => {
-        // The empty-env paths (endpoint not listening, no project id) belong to applyIntegrationEndpointEnv
-        // and are covered by deepnoteIntegrationEndpointEnv.unit.test.ts; these tests cover the wiring only.
-        test('forwards the integration endpoint env vars into the started server', async () => {
-            stubReadFile(serializeProjectFile('the-project-id'));
-            when(mockUserpodApiEndpoints.baseUrl).thenReturn('http://127.0.0.1:5555');
-            when(mockUserpodApiEndpoints.getAuthToken(anything())).thenReturn('endpoint-token');
-
-            await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriA);
-
-            assert.deepStrictEqual(
-                __getStartServerCalls().map((c) => c.env),
-                [
-                    {
-                        DEEPNOTE_RUNTIME__ENV_INTEGRATION_ENABLED: 'true',
-                        DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE: 'true',
-                        DEEPNOTE_RUNTIME__WEBAPP_URL: 'http://127.0.0.1:5555',
-                        DEEPNOTE_RUNTIME__PROJECT_SECRET: 'endpoint-token',
-                        DEEPNOTE_PROJECT_ID: 'the-project-id'
-                    }
-                ]
-            );
-        });
-
+        // The env shape and the empty-env paths belong to applyIntegrationEndpointEnv and are covered by
+        // deepnoteIntegrationEndpointEnv.unit.test.ts; this test covers the per-notebook wiring only.
         test('does NOT leak one project id or bearer token into a sibling notebook server', async () => {
             // Sibling files in the same directory resolving to DIFFERENT projects, each with its own token.
             stubReadFile((uri) =>

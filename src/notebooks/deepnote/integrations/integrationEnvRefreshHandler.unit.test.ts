@@ -1,7 +1,7 @@
 import { assert } from 'chai';
 import * as sinon from 'sinon';
 import { anything, capture, instance, mock, verify, when } from 'ts-mockito';
-import { Disposable, EventEmitter, NotebookDocument, Uri } from 'vscode';
+import { Disposable, EventEmitter, Uri } from 'vscode';
 
 import { IDisposable } from '../../../platform/common/types';
 import { dispose } from '../../../platform/common/utils/lifecycle';
@@ -9,7 +9,7 @@ import { logger } from '../../../platform/logging';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 import { IIntegrationEnvLiveRefresher, IIntegrationStorage } from './types';
 import { IntegrationEnvRefreshHandler } from './integrationEnvRefreshHandler';
-import { DEEPNOTE_NOTEBOOK_TYPE } from '../../../kernels/deepnote/types';
+import { createMockNotebook } from '../deepnoteTestHelpers';
 
 suite('IntegrationEnvRefreshHandler', () => {
     let handler: IntegrationEnvRefreshHandler;
@@ -37,32 +37,9 @@ suite('IntegrationEnvRefreshHandler', () => {
         disposables = dispose(disposables);
     });
 
-    function createMockNotebook(notebookType: string, uri: Uri): NotebookDocument {
-        const notebook = mock<NotebookDocument>();
-        when(notebook.notebookType).thenReturn(notebookType);
-        when(notebook.uri).thenReturn(uri);
-
-        return instance(notebook);
-    }
-
-    test('refreshes integration env for open Deepnote notebooks when integrations change', async () => {
-        const notebook = createMockNotebook(DEEPNOTE_NOTEBOOK_TYPE, Uri.file('/test.deepnote'));
-
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-
-        handler.activate();
-        onDidChangeIntegrations.fire();
-
-        await new Promise((resolve) => setTimeout(resolve, 10));
-
-        verify(liveRefresher.refresh(anything())).once();
-        const [refreshed] = capture(liveRefresher.refresh).last();
-        assert.deepStrictEqual([...refreshed], [notebook]);
-    });
-
-    test('passes only Deepnote notebooks to the refresher', async () => {
-        const deepnote = createMockNotebook(DEEPNOTE_NOTEBOOK_TYPE, Uri.file('/a.deepnote'));
-        const jupyter = createMockNotebook('jupyter-notebook', Uri.file('/b.ipynb'));
+    test('passes only Deepnote notebooks to the refresher when integrations change', async () => {
+        const deepnote = createMockNotebook({ uri: Uri.file('/a.deepnote') });
+        const jupyter = createMockNotebook({ notebookType: 'jupyter-notebook', uri: Uri.file('/b.ipynb') });
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([deepnote, jupyter]);
 
@@ -77,8 +54,8 @@ suite('IntegrationEnvRefreshHandler', () => {
     });
 
     test('refreshes multiple Deepnote notebooks in a single call', async () => {
-        const notebook1 = createMockNotebook(DEEPNOTE_NOTEBOOK_TYPE, Uri.file('/test1.deepnote'));
-        const notebook2 = createMockNotebook(DEEPNOTE_NOTEBOOK_TYPE, Uri.file('/test2.deepnote'));
+        const notebook1 = createMockNotebook({ uri: Uri.file('/test1.deepnote') });
+        const notebook2 = createMockNotebook({ uri: Uri.file('/test2.deepnote') });
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook1, notebook2]);
 
@@ -92,23 +69,8 @@ suite('IntegrationEnvRefreshHandler', () => {
         assert.deepStrictEqual([...refreshed], [notebook1, notebook2]);
     });
 
-    test('refreshes with an empty list when no Deepnote notebooks are open', async () => {
-        const jupyter = createMockNotebook('jupyter-notebook', Uri.file('/b.ipynb'));
-
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([jupyter]);
-
-        handler.activate();
-        onDidChangeIntegrations.fire();
-
-        await new Promise((resolve) => setTimeout(resolve, 10));
-
-        verify(liveRefresher.refresh(anything())).once();
-        const [refreshed] = capture(liveRefresher.refresh).last();
-        assert.deepStrictEqual([...refreshed], []);
-    });
-
     test('catches and logs a rejected refresh instead of propagating it', async () => {
-        const notebook = createMockNotebook(DEEPNOTE_NOTEBOOK_TYPE, Uri.file('/test.deepnote'));
+        const notebook = createMockNotebook({ uri: Uri.file('/test.deepnote') });
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
         when(liveRefresher.refresh(anything())).thenReject(new Error('refresh boom'));

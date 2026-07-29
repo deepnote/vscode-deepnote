@@ -38,7 +38,7 @@ This feature automatically restarts Jupyter kernels when integration configurati
    - User receives a notification: "Integration configuration updated. N kernel(s) restarted to apply changes."
 
 4. **Credential Injection**
-   - When the kernel restarts, `SqlIntegrationStartupCodeProvider` automatically injects the new credentials
+   - When the kernel restarts, `deepnote-toolkit` re-fetches the credentials from the extension's loopback `userpod-api` endpoint
    - Environment variables are updated with the new integration configurations
    - SQL cells can immediately use the updated credentials
 
@@ -158,6 +158,6 @@ Potential improvements:
 - `src/notebooks/deepnote/integrations/integrationWebview.ts` - Webview that triggers config saves
 - `src/platform/notebooks/deepnote/integrationStorage.ts` - Storage layer that fires events
 - `src/platform/notebooks/deepnote/sqlIntegrationEnvironmentVariablesProvider.ts` - Environment variable provider
-- `src/notebooks/deepnote/integrations/sqlIntegrationStartupCodeProvider.ts` - Injects credentials on kernel start
+- `src/notebooks/deepnote/integrations/userpodApiEndpoints.node.ts` - Serves credentials to the toolkit over loopback
 - `src/kernels/kernel.ts` - Kernel restart implementation
 

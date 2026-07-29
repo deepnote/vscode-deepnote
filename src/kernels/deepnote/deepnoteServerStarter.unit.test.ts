@@ -2,17 +2,22 @@ import { assert } from 'chai';
 import * as fakeTimers from '@sinonjs/fake-timers';
 import * as sinon from 'sinon';
 import { anything, instance, mock, when } from 'ts-mockito';
-import { CancellationError, Uri } from 'vscode';
+import { Uri } from 'vscode';
 
+import { serializeDeepnoteFile } from '@deepnote/blocks';
+
+import { createDeepnoteFile, createDeepnoteProject } from '../../notebooks/deepnote/deepnoteTestHelpers';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { IAsyncDisposableRegistry, IOutputChannel } from '../../platform/common/types';
-import { ISqlIntegrationEnvVarsProvider, IUserpodApiEndpoints } from '../../platform/notebooks/deepnote/types';
+import { IUserpodApiEndpoints } from '../../platform/notebooks/deepnote/types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import {
     __getStartServerCalls,
     __getStopServerCalls,
     __resetRuntimeCoreMock
 } from '../../test/mocks/deepnoteRuntimeCore';
+import { stubReadFile } from '../../test/mocks/vscodeFs';
+import { resetVSCodeMocks } from '../../test/vscode-mock';
 import { DeepnoteAgentSkillsManager } from './deepnoteAgentSkillsManager.node';
 import { DeepnoteServerStarter } from './deepnoteServerStarter.node';
 import { IDeepnoteToolkitInstaller } from './types';
@@ -41,18 +46,17 @@ suite('DeepnoteServerStarter', () => {
     let mockAgentSkillsManager: DeepnoteAgentSkillsManager;
     let mockOutputChannel: IOutputChannel;
     let mockAsyncRegistry: IAsyncDisposableRegistry;
-    let mockSqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider;
     let mockUserpodApiEndpoints: IUserpodApiEndpoints;
 
     setup(() => {
         __resetRuntimeCoreMock();
+        resetVSCodeMocks();
 
         mockProcessServiceFactory = mock<IProcessServiceFactory>();
         mockToolkitInstaller = mock<IDeepnoteToolkitInstaller>();
         mockAgentSkillsManager = mock<DeepnoteAgentSkillsManager>();
         mockOutputChannel = mock<IOutputChannel>();
         mockAsyncRegistry = mock<IAsyncDisposableRegistry>();
-        mockSqlIntegrationEnvVars = mock<ISqlIntegrationEnvVarsProvider>();
         mockUserpodApiEndpoints = mock<IUserpodApiEndpoints>();
 
         when(mockAsyncRegistry.push(anything())).thenReturn();
@@ -76,7 +80,6 @@ suite('DeepnoteServerStarter', () => {
             instance(mockAgentSkillsManager),
             instance(mockOutputChannel),
             instance(mockAsyncRegistry),
-            instance(mockSqlIntegrationEnvVars),
             instance(mockUserpodApiEndpoints)
         );
     });
@@ -86,54 +89,67 @@ suite('DeepnoteServerStarter', () => {
         await serverStarter.dispose();
     });
 
-    suite('SQL integration env vars', () => {
-        test('starts the server without SQL env vars when the provider yields none (e.g. web)', async () => {
-            when(mockSqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({});
+    function serializeProjectFile(projectId: string): string {
+        return serializeDeepnoteFile(createDeepnoteFile({ project: createDeepnoteProject({ id: projectId }) }));
+    }
+
+    suite('integration endpoint env vars', () => {
+        // The empty-env paths (endpoint not listening, no project id) belong to applyIntegrationEndpointEnv
+        // and are covered by deepnoteIntegrationEndpointEnv.unit.test.ts; these tests cover the wiring only.
+        test('forwards the integration endpoint env vars into the started server', async () => {
+            stubReadFile(serializeProjectFile('the-project-id'));
+            when(mockUserpodApiEndpoints.baseUrl).thenReturn('http://127.0.0.1:5555');
+            when(mockUserpodApiEndpoints.getAuthToken(anything())).thenReturn('endpoint-token');
 
             await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriA);
 
             assert.deepStrictEqual(
                 __getStartServerCalls().map((c) => c.env),
-                [{}]
+                [
+                    {
+                        DEEPNOTE_RUNTIME__ENV_INTEGRATION_ENABLED: 'true',
+                        DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE: 'true',
+                        DEEPNOTE_RUNTIME__WEBAPP_URL: 'http://127.0.0.1:5555',
+                        DEEPNOTE_RUNTIME__PROJECT_SECRET: 'endpoint-token',
+                        DEEPNOTE_PROJECT_ID: 'the-project-id'
+                    }
+                ]
             );
         });
 
-        test('starts the server without SQL env vars when the provider rejects with a cancellation error', async () => {
-            when(mockSqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenReject(
-                new CancellationError()
+        test('does NOT leak one project id or bearer token into a sibling notebook server', async () => {
+            // Sibling files in the same directory resolving to DIFFERENT projects, each with its own token.
+            stubReadFile((uri) =>
+                uri.toString() === uriA.toString()
+                    ? serializeProjectFile('project-a')
+                    : serializeProjectFile('project-b')
             );
-
-            await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriA);
-
-            assert.deepStrictEqual(
-                __getStartServerCalls().map((c) => c.env),
-                [{}]
-            );
-        });
-
-        test('forwards the SQL integration provider env vars into the started server', async () => {
-            when(mockSqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenResolve({ FOO: 'bar' });
-
-            await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriA);
-
-            assert.deepStrictEqual(
-                __getStartServerCalls().map((c) => c.env),
-                [{ FOO: 'bar' }]
-            );
-        });
-
-        test('does NOT leak one notebook SQL env vars into a sibling whose provider yields none', async () => {
-            // The provider is keyed by notebook URI: it yields env vars for A but nothing for its sibling B.
-            when(mockSqlIntegrationEnvVars.getEnvironmentVariables(uriA, anything())).thenResolve({ FOO: 'bar' });
-            when(mockSqlIntegrationEnvVars.getEnvironmentVariables(uriB, anything())).thenResolve({});
+            when(mockUserpodApiEndpoints.baseUrl).thenReturn('http://127.0.0.1:5555');
+            when(mockUserpodApiEndpoints.getAuthToken('project-a')).thenReturn('token-a');
+            when(mockUserpodApiEndpoints.getAuthToken('project-b')).thenReturn('token-b');
 
             await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriA);
             await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriB);
 
             assert.deepStrictEqual(
                 __getStartServerCalls().map((c) => c.env),
-                [{ FOO: 'bar' }, {}],
-                "notebook B's server must NOT inherit A's SQL env vars"
+                [
+                    {
+                        DEEPNOTE_RUNTIME__ENV_INTEGRATION_ENABLED: 'true',
+                        DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE: 'true',
+                        DEEPNOTE_RUNTIME__WEBAPP_URL: 'http://127.0.0.1:5555',
+                        DEEPNOTE_RUNTIME__PROJECT_SECRET: 'token-a',
+                        DEEPNOTE_PROJECT_ID: 'project-a'
+                    },
+                    {
+                        DEEPNOTE_RUNTIME__ENV_INTEGRATION_ENABLED: 'true',
+                        DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE: 'true',
+                        DEEPNOTE_RUNTIME__WEBAPP_URL: 'http://127.0.0.1:5555',
+                        DEEPNOTE_RUNTIME__PROJECT_SECRET: 'token-b',
+                        DEEPNOTE_PROJECT_ID: 'project-b'
+                    }
+                ],
+                "notebook B's server must carry ONLY project B's id and bearer token"
             );
         });
     });
@@ -229,11 +245,11 @@ suite('DeepnoteServerStarter', () => {
             });
 
             test('waits for an in-flight start operation before completing', async () => {
-                // Park the start mid-flight: its SQL env-var gathering resolves only via releaseStart.
+                // Park the start mid-flight: the integration endpoint's readiness settles only via releaseStart.
                 let releaseStart!: () => void;
-                when(mockSqlIntegrationEnvVars.getEnvironmentVariables(anything(), anything())).thenReturn(
-                    new Promise((resolve) => {
-                        releaseStart = () => resolve({});
+                when(mockUserpodApiEndpoints.ready).thenReturn(
+                    new Promise<void>((resolve) => {
+                        releaseStart = resolve;
                     })
                 );
 

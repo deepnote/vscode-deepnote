@@ -677,55 +677,23 @@ DuckDB (internal):
 
 **Integration Points:**
 
-- Registered as an environment variable provider in the kernel environment service
-- Called when starting a Jupyter kernel for a Deepnote notebook
-- Environment variables are passed to the kernel process at startup
+- Backs the loopback `userpod-api` endpoint (`userpodApiEndpoints.node.ts`), which serves the resolved credentials to `deepnote-toolkit` as `[{name, value}]`
+- Queried per request rather than at kernel start, so a kernel always reads the credentials that are current at the moment it asks
 - Fires `onDidChangeEnvironmentVariables` event when integration storage changes
-
-#### 8. **SQL Integration Startup Code Provider** (`sqlIntegrationStartupCodeProvider.ts`)
-
-Injects Python code into the kernel at startup to set environment variables.
-
-**Why This Is Needed:**
-Jupyter doesn't automatically pass all environment variables from the server process to the kernel process. This provider ensures credentials are available in the kernel's `os.environ`.
-
-**Generated Code:**
-
-```python
-try:
-    import os
-    # [SQL Integration] Setting N SQL integration env vars...
-    os.environ['SQL_MY_POSTGRES_DB'] = '{"url":"postgresql://...","params":{},"param_style":"format"}'
-    os.environ['SQL_MY_BIGQUERY'] = '{"url":"bigquery://...","params":{...},"param_style":"format"}'
-    # [SQL Integration] Successfully set N SQL integration env vars
-except Exception as e:
-    import traceback
-    print(f"[SQL Integration] ERROR: Failed to set SQL integration env vars: {e}")
-    traceback.print_exc()
-```
-
-**Execution:**
-
-- Registered with `IStartupCodeProviders` for `JupyterNotebookView`
-- Runs automatically when a Python kernel starts for a Deepnote notebook
-- Priority: `StartupCodePriority.Base` (runs early)
-- Only runs for Python kernels on Deepnote notebooks
 
 ### Toolkit Integration
 
-#### 9. **How Credentials Are Exposed to deepnote-toolkit**
+#### 8. **How Credentials Are Exposed to deepnote-toolkit**
 
 The `deepnote-toolkit` Python package reads credentials from environment variables to execute SQL blocks.
 
 **Flow:**
 
-1. Extension detects SQL blocks in notebook
-2. Extension retrieves credentials from secure storage
-3. Extension converts credentials to JSON format
-4. Extension injects credentials as environment variables (two methods):
-   - **Server Process**: Via `SqlIntegrationEnvironmentVariablesProvider` when starting Jupyter server
-   - **Kernel Process**: Via `SqlIntegrationStartupCodeProvider` when starting Python kernel
-5. `deepnote-toolkit` reads environment variables when executing SQL blocks
+1. Extension starts the Jupyter server with the integration endpoint env vars applied by `applyIntegrationEndpointEnv` (`DEEPNOTE_RUNTIME__ENV_INTEGRATION_ENABLED`, `DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE`, `DEEPNOTE_RUNTIME__WEBAPP_URL`, `DEEPNOTE_RUNTIME__PROJECT_SECRET`, `DEEPNOTE_PROJECT_ID`) — no credentials are injected by the extension
+2. At kernel init, `deepnote-toolkit`'s `set_integration_env()` calls the extension's loopback `userpod-api` endpoint at `DEEPNOTE_RUNTIME__WEBAPP_URL`, authenticating with the per-project bearer token in `DEEPNOTE_RUNTIME__PROJECT_SECRET`
+3. The endpoint resolves the project's integrations via `SqlIntegrationEnvironmentVariablesProvider` — reading secure storage and converting the configs to `SQL_*` JSON values — and returns them as `[{name, value}]`
+4. Toolkit sets the returned variables into the kernel's `os.environ`
+5. `deepnote-toolkit` reads those environment variables when executing SQL blocks
 6. Toolkit creates database connections using the credentials
 7. Toolkit executes SQL queries and returns results
 
@@ -759,21 +727,31 @@ User → IntegrationPanel (UI)
 ### Execution Flow
 
 ```text
+Deepnote server starts
+  → applyIntegrationEndpointEnv()
+    → Awaits UserpodApiEndpoints readiness, reads its loopback baseUrl
+    → Resolves the project id from the .deepnote file
+    → Sets DEEPNOTE_RUNTIME__* + DEEPNOTE_PROJECT_ID on the server process
+  → Jupyter server process starts with those env vars (no credentials)
+
 User executes SQL cell
   → Kernel startup triggered
-  → SqlIntegrationEnvironmentVariablesProvider.getEnvironmentVariables()
-    → Identifies Deepnote project from notebook resource
-    → Retrieves project integrations from notebook manager
-    → Fetches configured credentials from IntegrationStorage
-    → Adds internal DuckDB integration
-    → Calls getEnvironmentVariablesForIntegrations() from @deepnote/database-integrations
-      → Converts configs to environment variable format
-      → Generates SQL_* environment variables
-    → Returns environment variables
-  → Environment variables passed to Jupyter server process
-  → SqlIntegrationStartupCodeProvider.getCode()
-    → Generates Python code to set os.environ
-  → Startup code executed in kernel
+  → deepnote-toolkit set_integration_env()
+    → GET {DEEPNOTE_RUNTIME__WEBAPP_URL}/userpod-api/{projectId}/integrations/environment-variables
+      Authorization: Bearer {DEEPNOTE_RUNTIME__PROJECT_SECRET}
+  → UserpodApiEndpoints handles the request
+    → Verifies the per-project bearer token
+    → Finds the open deepnote notebook(s) for that project id
+    → SqlIntegrationEnvironmentVariablesProvider.getEnvironmentVariables()
+      → Retrieves project integrations from notebook manager
+      → Fetches configured credentials from IntegrationStorage
+      → Adds internal DuckDB integration
+      → Calls getEnvironmentVariablesForIntegrations() from @deepnote/database-integrations
+        → Converts configs to environment variable format
+        → Generates SQL_* environment variables
+      → Returns environment variables
+    → Responds with [{name, value}]
+  → Toolkit sets them into the kernel's os.environ
   → deepnote-toolkit reads os.environ['SQL_*']
   → Toolkit executes SQL query
   → Results returned to notebook

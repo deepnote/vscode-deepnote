@@ -1,21 +1,23 @@
 import { assert } from 'chai';
-import { anything, instance, mock, verify, when } from 'ts-mockito';
+import { anything, verify } from 'ts-mockito';
 import { Uri } from 'vscode';
 
-import { serializeDeepnoteFile, type DeepnoteFile } from '@deepnote/blocks';
+import { serializeDeepnoteFile } from '@deepnote/blocks';
 
+import { createDeepnoteFile, createDeepnoteProject } from '../../notebooks/deepnote/deepnoteTestHelpers';
 import { IUserpodApiEndpoints } from '../../platform/notebooks/deepnote/types';
-import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
+import { stubReadFile } from '../../test/mocks/vscodeFs';
+import { resetVSCodeMocks } from '../../test/vscode-mock';
 import { applyIntegrationEndpointEnv } from './deepnoteIntegrationEndpointEnv';
 
 /**
- * The four integration env vars are only injected when the loopback endpoint is listening AND the
+ * The five integration env vars are only injected when the loopback endpoint is listening AND the
  * file resolves to a project id; every other path leaves `extraEnv` unchanged.
  */
 suite('applyIntegrationEndpointEnv', () => {
     const projectFileUri = Uri.file('/workspace/project/notebook-a.deepnote');
     const baseUrl = 'http://127.0.0.1:5555';
-    // A pre-seeded SQL_* var stands in for the env already gathered before the endpoint step runs.
+    // A pre-seeded key stands in for env a caller may already hold; the helper must add to it, not replace it.
     const sqlEnvKey = 'SQL_DEEPNOTE_INTEGRATION_ABC';
     const sqlEnvValue = 'postgres://localhost:5432/db';
 
@@ -31,38 +33,11 @@ suite('applyIntegrationEndpointEnv', () => {
         };
     }
 
-    /**
-     * Stubs `workspace.fs.readFile` — the read behind `resolveProjectIdForFile` — to yield the
-     * serialized `.deepnote` bytes. Returns the mock so tests can assert whether the read happened.
-     */
-    function stubReadFile(fileContents: string): typeof import('vscode').workspace.fs {
-        const mockFs = mock<typeof import('vscode').workspace.fs>();
-
-        when(mockFs.readFile(anything())).thenReturn(Promise.resolve(new TextEncoder().encode(fileContents)));
-        when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
-
-        return mockFs;
-    }
-
     function serializeProjectFile(projectId: string): string {
-        const file: DeepnoteFile = {
-            metadata: {
-                createdAt: '2023-01-01T00:00:00Z',
-                modifiedAt: '2023-01-02T00:00:00Z'
-            },
-            project: {
-                id: projectId,
-                name: 'Project',
-                notebooks: [{ id: 'notebook-1', name: 'Notebook One', blocks: [] }],
-                settings: {}
-            },
-            version: '1.0.0'
-        };
-
-        return serializeDeepnoteFile(file);
+        return serializeDeepnoteFile(createDeepnoteFile({ project: createDeepnoteProject({ id: projectId }) }));
     }
 
-    test('injects all five integration env vars (preserving pre-seeded SQL_* keys) when the endpoint is listening and the file has a project id', async () => {
+    test('injects all five integration env vars (preserving pre-existing keys) when the endpoint is listening and the file has a project id', async () => {
         const mockFs = stubReadFile(serializeProjectFile('the-project-id'));
         const extraEnv: Record<string, string> = { [sqlEnvKey]: sqlEnvValue };
 

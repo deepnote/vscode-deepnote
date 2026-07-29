@@ -24,7 +24,7 @@ import { logger } from '../../../../platform/logging';
 @injectable()
 export class FederatedAuthOrphanedTokenCleaner implements IExtensionSyncActivationService {
     /**
-     * Serialises runs. Both the snapshot read and its replacement straddle an `await`, so two overlapping
+     * Serializes runs. Both the snapshot read and its replacement straddle an `await`, so two overlapping
      * observations would pair one run's `getAll()` result against the other's snapshot and "witness" a removal
      * that never happened.
      */

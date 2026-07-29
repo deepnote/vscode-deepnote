@@ -99,7 +99,7 @@ suite('FederatedAuthOrphanedTokenCleaner', () => {
         sinon.assert.notCalled(deleteSpy);
     });
 
-    test('serialises overlapping runs so a slow observation cannot witness a removal that never happened', async () => {
+    test('serializes overlapping runs so a slow observation cannot witness a removal that never happened', async () => {
         // Declared only in `.deepnote.env.yaml`, so SecretStorage never holds it.
         tokens.set('file-only', buildTokenEntry({ integrationId: 'file-only' }));
 
@@ -123,7 +123,7 @@ suite('FederatedAuthOrphanedTokenCleaner', () => {
         const cleaner = new FederatedAuthOrphanedTokenCleaner(tokenStorage, integrationStorage, disposables);
 
         cleaner.activate();
-        // A save reusing the file-declared id lands while the activation read is still in flight. Unserialised,
+        // A save reusing the file-declared id lands while the activation read is still in flight. Deserialized,
         // this run finishes first, records its ids as the snapshot, and the stale run then reads that snapshot
         // and "witnesses" a removal against its own older, empty read.
         onDidChangeIntegrations.fire();

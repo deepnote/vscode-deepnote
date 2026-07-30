@@ -64,7 +64,7 @@ export class IntegrationManager implements IIntegrationManager {
 
     /**
      * The Deepnote notebook to act on: `window.activeNotebookEditor` is unset until an editor is focused, so a
-     * restored-but-unclicked notebook resolves via the menu's URI or the one visible editor instead.
+     * restored but not yet focused notebook resolves via the menu's URI or the one visible editor instead.
      */
     private resolveDeepnoteNotebook(notebookUri: string | undefined): NotebookDocument | undefined {
         if (notebookUri) {
@@ -114,8 +114,9 @@ export class IntegrationManager implements IIntegrationManager {
 
         // First try to detect integrations from the stored project
         let integrations = await this.integrationDetector.detectIntegrations({
-            projectId,
-            notebookId
+            notebookId,
+            notebookUri: activeNotebook.uri,
+            projectId
         });
         logger.debug(`IntegrationManager: Found ${integrations.size} integrations`);
 

@@ -8,10 +8,14 @@ export { IIntegrationStorage } from '../../../platform/notebooks/deepnote/types'
 
 export const IIntegrationDetector = Symbol('IIntegrationDetector');
 
-/** Inputs for {@link IIntegrationDetector.detectIntegrations}: the open notebook's already-validated Deepnote IDs. */
+/**
+ * Inputs for {@link IIntegrationDetector.detectIntegrations}: the open notebook's already-validated Deepnote IDs,
+ * plus its URI — `.deepnote.env.yaml` is located relative to the notebook, so the ids alone cannot find it.
+ */
 export interface IntegrationDetectionInput {
-    projectId: string;
     notebookId: string;
+    notebookUri: Uri;
+    projectId: string;
 }
 
 export interface IIntegrationDetector {

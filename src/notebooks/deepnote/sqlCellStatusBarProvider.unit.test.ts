@@ -19,7 +19,7 @@ import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnot
  */
 function emptySqlIntegrationEnvVars(): ISqlIntegrationEnvVarsProvider {
     const provider = mock<ISqlIntegrationEnvVarsProvider>();
-    when(provider.getMergedConfigs(anything())).thenResolve([]);
+    when(provider.getMergedIntegrationConfigs(anything())).thenResolve([]);
 
     return instance(provider);
 }

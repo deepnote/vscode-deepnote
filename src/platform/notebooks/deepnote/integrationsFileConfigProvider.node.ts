@@ -92,16 +92,7 @@ export class IntegrationsFileConfigProvider implements IIntegrationsFileConfigPr
         return process.env;
     }
 
-    /**
-     * Filters parsed integrations into the configs we accept, collecting an issue for each dropped
-     * entry: reserved ids, unsupported (dataframe) types, duplicate ids (first wins), and federated-auth
-     * configs other than the one combination this extension implements (BigQuery + `google-oauth`).
-     *
-     * That combination is kept because the file only ever carries its OAuth client metadata (`project`,
-     * `clientId`, `clientSecret`); the token is a separate artifact owned by `IFederatedAuthTokenStorage`.
-     * Keeping those credentials out of the kernel environment is
-     * `SqlIntegrationEnvironmentVariablesProvider.getEnvironmentVariables`' job, not this filter's.
-     */
+    /** Drops reserved, unsupported, duplicate, and unsupported federated-auth integrations, recording an issue for each. */
     private filterIntegrations(
         integrations: DatabaseIntegrationConfig[],
         parseIssues: ValidationIssue[]

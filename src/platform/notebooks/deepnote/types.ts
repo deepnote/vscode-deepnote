@@ -111,7 +111,7 @@ export interface ISqlIntegrationEnvVarsProvider {
      * status bar, and the SQL LSP agree with kernel execution. **Read-only** — the file layer cannot be
      * written back, so these must never reach `IIntegrationStorage.save`, which only ever edits SecretStorage.
      */
-    getMergedConfigs(resource: Resource, token?: CancellationToken): Promise<DatabaseIntegrationConfig[]>;
+    getMergedIntegrationConfigs(resource: Resource, token?: CancellationToken): Promise<DatabaseIntegrationConfig[]>;
 }
 
 export const IUserpodApiEndpoints = Symbol('IUserpodApiEndpoints');

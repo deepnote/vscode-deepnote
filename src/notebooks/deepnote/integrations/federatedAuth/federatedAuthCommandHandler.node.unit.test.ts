@@ -44,7 +44,7 @@ suite('FederatedAuthCommandHandlerNode', () => {
         tokenStorage = mock<IFederatedAuthTokenStorage>();
         when(extensionContext.subscriptions).thenReturn(subscriptions);
         // A single matcher that dispatches on the URI: a per-URI `when` would be shadowed by matcher ordering.
-        when(sqlIntegrationEnvVars.getMergedConfigs(anything())).thenCall(
+        when(sqlIntegrationEnvVars.getMergedIntegrationConfigs(anything())).thenCall(
             async (resource: Uri) => mergedConfigs.get(resource.toString()) ?? []
         );
 
@@ -104,7 +104,7 @@ suite('FederatedAuthCommandHandlerNode', () => {
 
         await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID, NOTEBOOK_URI);
 
-        verify(sqlIntegrationEnvVars.getMergedConfigs(NOTEBOOK_URI)).once();
+        verify(sqlIntegrationEnvVars.getMergedIntegrationConfigs(NOTEBOOK_URI)).once();
         assert.strictEqual(runOAuthFlowStub.callCount, 1);
         verify(
             tokenStorage.save(
@@ -127,7 +127,7 @@ suite('FederatedAuthCommandHandlerNode', () => {
 
         await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID, OTHER_NOTEBOOK_URI);
 
-        verify(sqlIntegrationEnvVars.getMergedConfigs(OTHER_NOTEBOOK_URI)).once();
+        verify(sqlIntegrationEnvVars.getMergedIntegrationConfigs(OTHER_NOTEBOOK_URI)).once();
         assert.strictEqual(runOAuthFlowStub.callCount, 0);
         verify(tokenStorage.save(anything())).never();
     });
@@ -138,7 +138,7 @@ suite('FederatedAuthCommandHandlerNode', () => {
 
         await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID, undefined as unknown as Uri);
 
-        verify(sqlIntegrationEnvVars.getMergedConfigs(anything())).never();
+        verify(sqlIntegrationEnvVars.getMergedIntegrationConfigs(anything())).never();
         assert.strictEqual(runOAuthFlowStub.callCount, 0);
         verify(tokenStorage.save(anything())).never();
     });

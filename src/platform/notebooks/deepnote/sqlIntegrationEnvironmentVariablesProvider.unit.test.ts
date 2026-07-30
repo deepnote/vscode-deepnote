@@ -543,7 +543,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 pgConfig('secret-only', 'secret-only.example.com')
             );
 
-            const merged = await providerWithFile.getMergedConfigs(notebookUri);
+            const merged = await providerWithFile.getMergedIntegrationConfigs(notebookUri);
             const byId = new Map(merged.map((config) => [config.id, config]));
 
             assert.deepStrictEqual(
@@ -564,7 +564,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         });
 
         test('getMergedConfigs returns [] when the resource resolves to no project', async () => {
-            const merged = await providerWithFile.getMergedConfigs(undefined);
+            const merged = await providerWithFile.getMergedIntegrationConfigs(undefined);
 
             assert.deepStrictEqual(merged, []);
         });
@@ -651,7 +651,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 issues: []
             });
 
-            const merged = await providerWithFile.getMergedConfigs(notebookUri);
+            const merged = await providerWithFile.getMergedIntegrationConfigs(notebookUri);
             const envVars = await providerWithFile.getEnvironmentVariables(notebookUri);
 
             assert.deepStrictEqual(

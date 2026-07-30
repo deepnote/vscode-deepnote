@@ -625,9 +625,9 @@ export class DeepnoteLspClientManager
 
             // Merged (SecretStorage + `.deepnote.env.yaml`) configs, so file-configured databases also get
             // LSP autocomplete/schema.
-            const projectIntegrationConfigs = (await this.sqlIntegrationEnvVars.getMergedConfigs(notebookUri)).filter(
-                (config) => config.type !== 'pandas-dataframe'
-            );
+            const projectIntegrationConfigs = (
+                await this.sqlIntegrationEnvVars.getMergedIntegrationConfigs(notebookUri)
+            ).filter((config) => config.type !== 'pandas-dataframe');
 
             const connections = projectIntegrationConfigs
                 .filter((config) => isSupportedBySqlLsp(config.type))

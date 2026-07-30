@@ -45,7 +45,7 @@ suite('DeepnoteLspClientManager Integration Tests', () => {
     setup(() => {
         // No integrations configured, so the LSP resolves an empty connection list.
         const sqlIntegrationEnvVars = mock<ISqlIntegrationEnvVarsProvider>();
-        when(sqlIntegrationEnvVars.getMergedConfigs(anything())).thenResolve([]);
+        when(sqlIntegrationEnvVars.getMergedIntegrationConfigs(anything())).thenResolve([]);
 
         lspClientManager = new DeepnoteLspClientManager(
             mockDisposableRegistry,

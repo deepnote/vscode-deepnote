@@ -68,7 +68,7 @@ export class FederatedAuthCommandHandlerNode implements IExtensionSyncActivation
             return;
         }
 
-        const integration = (await this.sqlIntegrationEnvVars.getMergedConfigs(resource)).find(
+        const integration = (await this.sqlIntegrationEnvVars.getMergedIntegrationConfigs(resource)).find(
             (config) => config.id === integrationId
         );
         if (!integration) {

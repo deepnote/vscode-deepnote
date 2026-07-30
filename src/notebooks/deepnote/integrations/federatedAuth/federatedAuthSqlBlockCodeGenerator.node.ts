@@ -56,7 +56,7 @@ export class FederatedAuthSqlBlockCodeGenerator implements IFederatedAuthSqlBloc
 
         // Merged configs, not SecretStorage: a federated integration can be declared purely in `.deepnote.env.yaml`,
         // and when both sources have it the file wins — same resolution the kernel and the SQL LSP use.
-        const integration = (await this.sqlIntegrationEnvVars.getMergedConfigs(notebookUri)).find(
+        const integration = (await this.sqlIntegrationEnvVars.getMergedIntegrationConfigs(notebookUri)).find(
             (config) => config.id === integrationId
         );
         if (!integration || integration.type !== 'big-query') {

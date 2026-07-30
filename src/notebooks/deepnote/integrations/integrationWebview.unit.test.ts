@@ -125,7 +125,7 @@ suite('IntegrationWebviewProvider', () => {
             onDidChangeEnvironmentVariables: onDidChangeEnvironmentVariables.event,
             getEnvironmentVariables: async () => ({}),
             getFederatedAuthCandidates: candidatesSpy,
-            getMergedConfigs: async () => []
+            getMergedIntegrationConfigs: async () => []
         };
 
         tokens = new Map();

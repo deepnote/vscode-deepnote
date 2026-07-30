@@ -31,7 +31,7 @@ export class SqlIntegrationEnvironmentVariablesProviderWeb
         return new Set();
     }
 
-    public async getMergedConfigs(): Promise<DatabaseIntegrationConfig[]> {
+    public async getMergedIntegrationConfigs(): Promise<DatabaseIntegrationConfig[]> {
         return [];
     }
 }

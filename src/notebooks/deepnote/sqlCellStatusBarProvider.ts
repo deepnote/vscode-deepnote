@@ -234,7 +234,7 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         } else {
             // Not in SecretStorage — a `.deepnote.env.yaml` file config still counts as configured, so check the
             // merged configs before prompting the user to configure.
-            const fileConfig = (await this.sqlIntegrationEnvVars.getMergedConfigs(cell.notebook.uri)).find(
+            const fileConfig = (await this.sqlIntegrationEnvVars.getMergedIntegrationConfigs(cell.notebook.uri)).find(
                 (c) => c.id === integrationId
             );
             if (fileConfig) {

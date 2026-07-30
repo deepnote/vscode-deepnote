@@ -24,7 +24,7 @@ import { IIntegrationsFileConfigProvider } from './types';
  * to the exported, environment-agnostic `parseIntegrations`.
  *
  * No caching, no watching: a fresh read happens on every call. That was cheap when the only caller was
- * kernel/server (re)start, but `getMergedConfigs` now reaches here on every SQL cell execution and on every
+ * kernel/server (re)start, but `getMergedIntegrationConfigs` now reaches here on every SQL cell execution and on every
  * integrations-panel refresh, so each call is up to two `exists` + two `readFile` round-trips and re-publishes
  * the YAML's diagnostics. Adding a cache means invalidating it on file change — deliberately not done yet.
  */

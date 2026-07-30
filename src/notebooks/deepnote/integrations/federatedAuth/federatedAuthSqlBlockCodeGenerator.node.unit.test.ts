@@ -53,7 +53,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
     let onDidChangeEnvironmentVariables: EventEmitter<Resource>;
     let saveSpy: sinon.SinonSpy<[FederatedAuthTokenEntry, { silent?: boolean }?], Promise<void>>;
     let deleteSpy: sinon.SinonSpy<[string], Promise<void>>;
-    let getMergedConfigsSpy: sinon.SinonSpy<[Resource], Promise<DatabaseIntegrationConfig[]>>;
+    let getMergedIntegrationConfigsSpy: sinon.SinonSpy<[Resource], Promise<DatabaseIntegrationConfig[]>>;
     let sqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider;
     let tokenStorage: IFederatedAuthTokenStorage;
     let fetcher: sinon.SinonStub<Parameters<FetcherFn>, ReturnType<FetcherFn>>;
@@ -70,12 +70,12 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         deleteSpy = sinon.spy(async (id: string) => {
             tokens.delete(id);
         });
-        getMergedConfigsSpy = sinon.spy(async (resource: Resource) =>
+        getMergedIntegrationConfigsSpy = sinon.spy(async (resource: Resource) =>
             resource ? mergedConfigs.get(resource.toString()) ?? [] : []
         );
 
         // Declared as a plain object (not a typed literal) so the extra members the provider grows for other
-        // consumers stay assignable here; the generator only ever calls `getMergedConfigs`.
+        // consumers stay assignable here; the generator only ever calls `getMergedIntegrationConfigs`.
         const envVarsProvider = {
             onDidChangeEnvironmentVariables: onDidChangeEnvironmentVariables.event,
             async getEnvironmentVariables(): Promise<EnvironmentVariables> {
@@ -84,7 +84,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
             async getFederatedAuthCandidates(): Promise<ReadonlySet<string>> {
                 return new Set<string>();
             },
-            getMergedConfigs: getMergedConfigsSpy
+            getMergedIntegrationConfigs: getMergedIntegrationConfigsSpy
         };
         sqlIntegrationEnvVars = envVarsProvider;
 
@@ -175,7 +175,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         const result = await generator.generate(buildSqlBlock(), OTHER_NOTEBOOK_URI);
 
         assert.strictEqual(result, undefined);
-        sinon.assert.calledOnceWithExactly(getMergedConfigsSpy, OTHER_NOTEBOOK_URI);
+        sinon.assert.calledOnceWithExactly(getMergedIntegrationConfigsSpy, OTHER_NOTEBOOK_URI);
         sinon.assert.notCalled(fetcher);
     });
 

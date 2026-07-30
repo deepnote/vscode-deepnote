@@ -525,7 +525,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             verify(integrationStorage.getIntegrationConfig('secret-only')).once();
         });
 
-        test('getMergedConfigs returns the merged config list (file wins, SecretStorage fallback, file-only additive)', async () => {
+        test('getMergedIntegrationConfigs returns the merged config list (file wins, SecretStorage fallback, file-only additive)', async () => {
             stubNotebookWithProject(
                 createMockProject('project-123', [
                     { id: 'shared-db', name: 'shared-db', type: 'pgsql' },
@@ -563,7 +563,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             verify(integrationStorage.getIntegrationConfig('shared-db')).never();
         });
 
-        test('getMergedConfigs returns [] when the resource resolves to no project', async () => {
+        test('getMergedIntegrationConfigs returns [] when the resource resolves to no project', async () => {
             const merged = await providerWithFile.getMergedIntegrationConfigs(undefined);
 
             assert.deepStrictEqual(merged, []);
@@ -644,7 +644,7 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             );
         });
 
-        test('File-sourced federated config reaches getMergedConfigs but contributes no env vars', async () => {
+        test('File-sourced federated config reaches getMergedIntegrationConfigs but contributes no env vars', async () => {
             stubNotebookWithProject(createMockProject('project-123', []));
             when(fileConfigProvider.getConfigsForFile(anything())).thenResolve({
                 configs: [bigQueryOauthConfig('bq-file', 'File BQ'), pgConfig('pg-file', 'pg-file.example.com')],

@@ -7,19 +7,10 @@ import { IFederatedAuthTokenStorage } from '../types';
 import { logger } from '../../../../platform/logging';
 
 /**
- * Node-only listener that prunes federated-auth tokens when an integration is deleted: subscribes to
- * `onDidChangeIntegrations` and deletes a token only once it has **witnessed** the removal of its integration —
- * an id present in a previous observation of {@link IIntegrationStorage} and gone from the current one.
- *
- * Absence from SecretStorage alone is not evidence of orphaning: a token can legitimately belong to an
- * integration declared in `.deepnote.env.yaml`, which SecretStorage never holds.
- *
- * The cost of that rule: `onDidChangeIntegrations` is a per-extension-host emitter, so a removal performed in
- * another window — or in an earlier session — is never witnessed here at all. Every later session seeds its first
- * snapshot from a SecretStorage that already lacks the id, so it can never appear in a previous observation and
- * this cleaner will retain its token indefinitely, not merely until the next session. The panel's own
- * `tokenStorage.delete` remains the primary path for those. The asymmetry is deliberate: an over-retained token
- * is inert, whereas a wrongly deleted one costs a full re-authentication.
+ * Prunes federated-auth tokens only when this host witnesses an integration leave SecretStorage
+ * (`onDidChangeIntegrations`); file-backed integrations are never treated as orphans.
+ * Removals in other windows/sessions are not witnessed — the panel's `tokenStorage.delete` covers those,
+ * preferring over-retention over a wrongly deleted token.
  */
 @injectable()
 export class FederatedAuthOrphanedTokenCleaner implements IExtensionSyncActivationService {

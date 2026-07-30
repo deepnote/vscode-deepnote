@@ -27,7 +27,7 @@ suite('FederatedAuthCommandHandlerNode', () => {
 
     let extensionContext: IExtensionContext;
     /** Merged (`.deepnote.env.yaml` over SecretStorage) configs keyed by the notebook they resolve for. */
-    let mergedConfigs: Map<string, DatabaseIntegrationConfig[]>;
+    let mergedIntegrationConfigs: Map<string, DatabaseIntegrationConfig[]>;
     let sqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider;
     let tokenStorage: IFederatedAuthTokenStorage;
     let subscriptions: IDisposable[];
@@ -37,7 +37,7 @@ suite('FederatedAuthCommandHandlerNode', () => {
     setup(() => {
         resetVSCodeMocks();
         subscriptions = [];
-        mergedConfigs = new Map();
+        mergedIntegrationConfigs = new Map();
 
         extensionContext = mock<IExtensionContext>();
         sqlIntegrationEnvVars = mock<ISqlIntegrationEnvVarsProvider>();
@@ -45,7 +45,7 @@ suite('FederatedAuthCommandHandlerNode', () => {
         when(extensionContext.subscriptions).thenReturn(subscriptions);
         // A single matcher that dispatches on the URI: a per-URI `when` would be shadowed by matcher ordering.
         when(sqlIntegrationEnvVars.getMergedIntegrationConfigs(anything())).thenCall(
-            async (resource: Uri) => mergedConfigs.get(resource.toString()) ?? []
+            async (resource: Uri) => mergedIntegrationConfigs.get(resource.toString()) ?? []
         );
 
         runOAuthFlowStub = sinon.stub<[RunOAuthFlowParams], Promise<{ refreshToken: string }>>();
@@ -66,8 +66,8 @@ suite('FederatedAuthCommandHandlerNode', () => {
     });
 
     /** Publishes `configs` as what `.deepnote.env.yaml` + SecretStorage merge to for `uri`. */
-    function setMergedConfigs(uri: Uri, ...configs: DatabaseIntegrationConfig[]) {
-        mergedConfigs.set(uri.toString(), configs);
+    function setMergedIntegrationConfigs(uri: Uri, ...configs: DatabaseIntegrationConfig[]) {
+        mergedIntegrationConfigs.set(uri.toString(), configs);
     }
 
     /** Drives the stubbed flow through `onListening`, the callback that opens the browser at the start URL. */
@@ -89,7 +89,7 @@ suite('FederatedAuthCommandHandlerNode', () => {
         test(`skips OAuth flow for ${label}`, async () => {
             const config = build();
             const id = lookupId ?? FED_AUTH_FIXTURE.INTEGRATION_ID;
-            setMergedConfigs(NOTEBOOK_URI, ...(config ? [config] : []));
+            setMergedIntegrationConfigs(NOTEBOOK_URI, ...(config ? [config] : []));
 
             await handler.authenticate(id, NOTEBOOK_URI);
 
@@ -100,7 +100,7 @@ suite('FederatedAuthCommandHandlerNode', () => {
 
     test('happy path: saves the captured refresh token with a fresh fingerprint', async () => {
         // The config lives only in that notebook's `.deepnote.env.yaml`; SecretStorage has nothing for the id.
-        setMergedConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
+        setMergedIntegrationConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
 
         await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID, NOTEBOOK_URI);
 
@@ -123,7 +123,7 @@ suite('FederatedAuthCommandHandlerNode', () => {
 
     test('skips OAuth flow when the supplied notebook resolves no config for the id, even if another notebook does', async () => {
         // Catches: resolving against an ambient/active notebook instead of the one the request came from.
-        setMergedConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
+        setMergedIntegrationConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
 
         await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID, OTHER_NOTEBOOK_URI);
 
@@ -134,7 +134,7 @@ suite('FederatedAuthCommandHandlerNode', () => {
 
     test('returns without a lookup when invoked without a resource', async () => {
         // `executeCommand` callers are untyped, so the guard has to hold at runtime.
-        setMergedConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
+        setMergedIntegrationConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
 
         await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID, undefined as unknown as Uri);
 
@@ -144,7 +144,7 @@ suite('FederatedAuthCommandHandlerNode', () => {
     });
 
     test('runOAuthFlow is called with clientId, clientSecret, state, codeVerifier, and the deepnote-callback redirectUri', async () => {
-        setMergedConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
+        setMergedIntegrationConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
 
         await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID, NOTEBOOK_URI);
 
@@ -162,7 +162,7 @@ suite('FederatedAuthCommandHandlerNode', () => {
     });
 
     test('onListening opens the deepnote.com start URL with the externalized callback as finalRedirect', async () => {
-        setMergedConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
+        setMergedIntegrationConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
         driveOnListening();
 
         await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID, NOTEBOOK_URI);
@@ -192,7 +192,7 @@ suite('FederatedAuthCommandHandlerNode', () => {
             get: () => 'staging.deepnote.com'
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any);
-        setMergedConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
+        setMergedIntegrationConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
         driveOnListening();
 
         await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID, NOTEBOOK_URI);
@@ -206,7 +206,7 @@ suite('FederatedAuthCommandHandlerNode', () => {
     });
 
     test('silently returns when the user cancels the flow', async () => {
-        setMergedConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
+        setMergedIntegrationConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
         runOAuthFlowStub.rejects(new CancellationError());
 
         await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID, NOTEBOOK_URI);
@@ -216,7 +216,7 @@ suite('FederatedAuthCommandHandlerNode', () => {
     });
 
     test('surfaces a generic OAuth error via the failure toast and does not save a token', async () => {
-        setMergedConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
+        setMergedIntegrationConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
         runOAuthFlowStub.rejects(new Error('boom'));
 
         await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID, NOTEBOOK_URI);

@@ -148,6 +148,26 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
         return new Set(configs.filter(isSupportedFederatedAuth).map((config) => config.id));
     }
 
+    /** Ids `.deepnote.env.yaml` configures for this notebook; ids only, so no file config or credentials leak out. */
+    public async getFileConfiguredIntegrationIds(
+        resource: Resource,
+        token?: CancellationToken
+    ): Promise<ReadonlySet<string>> {
+        if (!resource || token?.isCancellationRequested) {
+            return new Set();
+        }
+
+        // Unlike the merge, this needs no project/notebook id: the file is located from the notebook's own path.
+        const notebook = this.notebookEditorProvider.findAssociatedNotebookDocument(resource);
+        if (!notebook) {
+            return new Set();
+        }
+
+        const fileConfigs = await this.loadFileIntegrationConfigs(notebook.uri);
+
+        return new Set(fileConfigs.map((config) => config.id));
+    }
+
     /** SecretStorage integrations merged with `.deepnote.env.yaml` (file wins); excludes DuckDB; never pass to `save`. */
     public async getMergedIntegrationConfigs(
         resource: Resource,

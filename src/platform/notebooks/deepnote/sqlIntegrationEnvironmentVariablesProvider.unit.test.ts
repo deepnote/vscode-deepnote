@@ -569,6 +569,34 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             assert.deepStrictEqual(merged, []);
         });
 
+        test('getFileConfiguredIntegrationIds returns the file config ids only', async () => {
+            stubNotebookWithProject(
+                createMockProject('project-123', [{ id: 'secret-only', name: 'secret-only', type: 'pgsql' }])
+            );
+            when(fileConfigProvider.getConfigsForFile(anything())).thenResolve({
+                configs: [pgConfig('shared-db', 'from-file.example.com'), pgConfig('file-only', 'file-only.test')],
+                issues: []
+            });
+
+            const ids = await providerWithFile.getFileConfiguredIntegrationIds(notebookUri);
+
+            assert.deepStrictEqual(
+                ids,
+                new Set(['shared-db', 'file-only']),
+                'SecretStorage-only ids must not be reported as file-configured'
+            );
+            assert.deepStrictEqual(
+                await providerWithFile.getFileConfiguredIntegrationIds(undefined),
+                new Set(),
+                'no resource means nothing to look up'
+            );
+            assert.deepStrictEqual(
+                await providerWithFile.getFileConfiguredIntegrationIds(Uri.file('/ws/not-open.deepnote')),
+                new Set(),
+                'a resource with no associated notebook resolves to no file configs'
+            );
+        });
+
         test('File source yields nothing: behavior is SecretStorage-only (unchanged)', async () => {
             const providerWithoutFile = new SqlIntegrationEnvironmentVariablesProvider(
                 instance(integrationStorage),

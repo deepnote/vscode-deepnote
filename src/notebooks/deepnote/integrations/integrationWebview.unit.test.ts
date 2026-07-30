@@ -23,7 +23,7 @@ import {
 
 interface CapturedMessage {
     type: string;
-    integrations?: Array<{ id: string; config?: unknown; tokenStatus?: string }>;
+    integrations?: Array<{ id: string; config?: unknown; isFileConfigured?: boolean; tokenStatus?: string }>;
     [key: string]: unknown;
 }
 
@@ -108,6 +108,7 @@ suite('IntegrationWebviewProvider', () => {
     let notebookManager: IDeepnoteNotebookManager;
     let federatedAuthCandidates: Set<string>;
     let candidatesSpy: sinon.SinonSpy<[Resource], Promise<ReadonlySet<string>>>;
+    let fileConfiguredIds: Set<string>;
     let onDidChangeEnvironmentVariables: EventEmitter<Resource>;
     let sqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider;
     let tokens: Map<string, FederatedAuthTokenEntry>;
@@ -130,11 +131,14 @@ suite('IntegrationWebviewProvider', () => {
         // Federated-auth eligibility is derived state: the provider hands back ids only, never config.
         federatedAuthCandidates = new Set<string>();
         candidatesSpy = sinon.spy(async (_resource: Resource): Promise<ReadonlySet<string>> => federatedAuthCandidates);
+        // Same shape for the `.deepnote.env.yaml` ids: read-only rows are derived from ids alone.
+        fileConfiguredIds = new Set<string>();
         onDidChangeEnvironmentVariables = new EventEmitter<Resource>();
         sqlIntegrationEnvVars = {
             onDidChangeEnvironmentVariables: onDidChangeEnvironmentVariables.event,
             getEnvironmentVariables: async () => ({}),
             getFederatedAuthCandidates: candidatesSpy,
+            getFileConfiguredIntegrationIds: async () => fileConfiguredIds,
             getMergedIntegrationConfigs: async () => []
         };
 
@@ -257,6 +261,31 @@ suite('IntegrationWebviewProvider', () => {
             sinon.assert.calledWith(candidatesSpy, ACTIVE_FILE_URI);
         });
 
+        test('a file-configured candidate keeps a real tokenStatus: read-only must not disable Authenticate', async () => {
+            // BigQuery + `google-oauth` declared in `.deepnote.env.yaml`: the config is read-only, but the OAuth
+            // token lives in SecretStorage, so authenticating is the one action the panel can still perform.
+            // Deriving federated-auth visibility from `isFileConfigured` would break exactly this row.
+            const integrationId = 'bq-file-configured-candidate';
+            federatedAuthCandidates.add(integrationId);
+            fileConfiguredIds.add(integrationId);
+
+            const provider = buildProvider({ tokenStorage });
+            await show(
+                provider,
+                new Map<string, DetectedIntegration>([
+                    [integrationId, { config: null, integrationName: 'File BigQuery', integrationType: 'big-query' }]
+                ])
+            );
+
+            const item = (lastUpdate().integrations || []).find((i) => i.id === integrationId);
+            assert.isTrue(item?.isFileConfigured, 'the row is file-configured, hence read-only');
+            assert.strictEqual(
+                item?.tokenStatus,
+                'disconnected',
+                'a live token status must survive alongside `isFileConfigured`, or the Authenticate button disappears'
+            );
+        });
+
         test('a non-candidate reports unsupported even when a token exists', async () => {
             const config = buildGoogleOauthIntegration({ id: 'bq-not-a-candidate' });
             preStoreToken(config.id);
@@ -286,6 +315,68 @@ suite('IntegrationWebviewProvider', () => {
             const item = (lastUpdate().integrations || []).find((i) => i.id === config.id);
             assert.strictEqual(item?.tokenStatus, 'unsupported', 'a failed lookup degrades to "no candidates"');
         });
+    });
+
+    test('updateWebview flags `.deepnote.env.yaml`-configured ids as read-only, others not', async () => {
+        const fileConfig = buildPostgresIntegration({ id: 'pg-from-file' });
+        const secretConfig = buildPostgresIntegration({ id: 'pg-from-secret-storage' });
+        fileConfiguredIds.add(fileConfig.id);
+
+        const provider = buildProvider({ tokenStorage });
+        await show(
+            provider,
+            new Map<string, DetectedIntegration>([
+                [fileConfig.id, { config: null, integrationName: fileConfig.name, integrationType: 'pgsql' }],
+                [secretConfig.id, { config: secretConfig }]
+            ])
+        );
+
+        const items = lastUpdate().integrations || [];
+        assert.isTrue(
+            items.find((i) => i.id === fileConfig.id)?.isFileConfigured,
+            'a file-configured id must be marked read-only'
+        );
+        assert.isFalse(
+            items.find((i) => i.id === secretConfig.id)?.isFileConfigured,
+            'a SecretStorage-only id stays editable'
+        );
+    });
+
+    test('a save for a file-configured id never reaches SecretStorage, whatever the webview sent', async () => {
+        // Read-only is enforced here, not just rendered: the SQL status bar's "Configure current integration"
+        // reaches `showConfigurationForm` directly, so a save can arrive for a row that has no Configure button.
+        // Letting it through would report success and change nothing, since the file wins the merge.
+        const integrationSaveSpy = sinon.spy();
+        when(integrationStorage.save(anything())).thenCall(integrationSaveSpy);
+
+        const config = buildPostgresIntegration({ id: 'pg-managed-by-file' });
+        fileConfiguredIds.add(config.id);
+
+        const provider = buildProvider({ tokenStorage });
+        await show(provider, singleIntegrationMap(config.id, config));
+
+        await fakePanel.onDidReceiveMessage({ type: 'save', integrationId: config.id, config });
+
+        sinon.assert.notCalled(integrationSaveSpy);
+        assert.isFalse(
+            fakePanel.posted.some((message) => message.type === 'success'),
+            'a refused edit must not be reported as saved'
+        );
+    });
+
+    test('show() with a file-configured selectedIntegrationId opens no configuration form', async () => {
+        // The SQL status bar's "Configure current integration" routes through `Commands.ManageIntegrations` and
+        // lands on `showConfigurationForm` directly, so the panel's hidden Configure button never gets a say.
+        const config = buildPostgresIntegration({ id: 'pg-file-form' });
+        fileConfiguredIds.add(config.id);
+
+        const provider = buildProvider({ tokenStorage });
+        await provider.show(PROJECT_ID, singleIntegrationMap(config.id, config), ACTIVE_FILE_URI, config.id);
+
+        assert.isFalse(
+            fakePanel.posted.some((message) => message.type === 'showForm'),
+            'an editable form must not open for an integration `.deepnote.env.yaml` owns'
+        );
     });
 
     test('handleMessage: "authenticate" → executeCommand(AuthenticateIntegration, integrationId, activeFileUri)', async () => {

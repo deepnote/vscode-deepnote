@@ -153,6 +153,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsTitle: localize.Integrations.title,
             integrationsNoIntegrationsFound: localize.Integrations.noIntegrationsFound,
             integrationsConnected: localize.Integrations.connected,
+            integrationsConfiguredInFile: localize.Integrations.configuredInFile,
             integrationsNotConfigured: localize.Integrations.notConfigured,
             integrationsConfigure: localize.Integrations.configure,
             integrationsReconfigure: localize.Integrations.reconfigure,
@@ -464,19 +465,25 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         this.updateGeneration += 1;
         const generation = this.updateGeneration;
 
-        const candidates = await this.resolveFederatedAuthCandidates();
+        const [candidates, fileConfiguredIds] = await Promise.all([
+            this.resolveFederatedAuthCandidates(),
+            this.resolveFileConfiguredIds()
+        ]);
 
         const integrationsData = await Promise.all(
             Array.from(this.integrations.entries()).map(async ([id, integration]) => ({
-                config: integration.config, // SecretStorage only — no `.deepnote.env.yaml` config reaches the webview.
+                // SecretStorage only: the webview learns *that* an integration is file-configured, never the
+                // file's config or credentials.
+                config: integration.config,
                 id,
                 integrationName: integration.integrationName,
                 integrationType: integration.integrationType,
+                isFileConfigured: fileConfiguredIds.has(id),
                 tokenStatus: candidates.has(id) ? await this.deriveTokenStatus(id) : 'unsupported'
             }))
         );
 
-        // Bail if the panel was disposed during the candidate lookup or the `tokenStorage.has()` await.
+        // Bail if the panel was disposed during the candidate/file-configured lookups or the `tokenStorage.has()` await.
         if (!this.currentPanel) {
             logger.debug('IntegrationWebviewProvider: Panel disposed during update, skipping postMessage');
             return;
@@ -549,6 +556,57 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
 
             return new Set<string>();
         }
+    }
+
+    /**
+     * Ids `.deepnote.env.yaml` configures for the active notebook — ids only, so the panel can mark those rows
+     * read-only without ever holding file config. A failed lookup degrades to "none" rather than blocking the render.
+     */
+    private async resolveFileConfiguredIds(): Promise<ReadonlySet<string>> {
+        if (!this.activeFileUri) {
+            return new Set<string>();
+        }
+
+        try {
+            return await this.sqlIntegrationEnvVars.getFileConfiguredIntegrationIds(this.activeFileUri);
+        } catch (err) {
+            logger.warn('IntegrationWebviewProvider: failed to resolve file-configured integration ids.', err);
+
+            return new Set<string>();
+        }
+    }
+
+    /**
+     * Refuses an edit to an integration `.deepnote.env.yaml` owns, and says so; returns `true` when it did.
+     * The panel writes SecretStorage, which the file-wins merge overrides, so going through with the edit would
+     * report success and change nothing at runtime. Each mutating action calls this itself rather than trusting
+     * the webview to have hidden its button — `showConfigurationForm` is reachable from the SQL status bar too.
+     *
+     * Re-resolves the file per action instead of reading what the last render saw, so it cannot be defeated by a
+     * stale snapshot, a lost `updateWebview()` generation race, or a switch to another notebook. That costs one
+     * extra `.deepnote.env.yaml` read per user-initiated edit (two on the `show(selectedIntegrationId)` path, which
+     * refreshes first) — rare and off the render path, so it is worth paying for a guard that cannot go stale.
+     * A read failure fails open: a hiccup must not block a real edit.
+     */
+    private async refuseEditIfFileConfigured(integrationId: string): Promise<boolean> {
+        const fileConfiguredIds = await this.resolveFileConfiguredIds();
+        if (!fileConfiguredIds.has(integrationId)) {
+            return false;
+        }
+
+        const name = this.integrations.get(integrationId)?.integrationName || integrationId;
+
+        logger.debug(
+            `IntegrationWebviewProvider: Refused edit of ${integrationId}; it is configured in .deepnote.env.yaml`
+        );
+        void window.showInformationMessage(
+            l10n.t(
+                "'{0}' is configured in .deepnote.env.yaml, which takes precedence over anything saved here. Edit that file to change it.",
+                name
+            )
+        );
+
+        return true;
     }
 
     /** Whether a federated-auth-eligible integration currently holds a token. Eligibility is the caller's call. */
@@ -627,6 +685,10 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             return;
         }
 
+        if (await this.refuseEditIfFileConfigured(integrationId)) {
+            return;
+        }
+
         await this.currentPanel?.webview.postMessage({
             config: integration.config,
             integrationId,
@@ -643,6 +705,10 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         integrationId: string,
         config: ConfigurableDatabaseIntegrationConfig
     ): Promise<void> {
+        if (await this.refuseEditIfFileConfigured(integrationId)) {
+            return;
+        }
+
         try {
             // Invalidate stale federated tokens before saving (fingerprint change or auth-method switch).
             await this.invalidateStaleFederatedToken(integrationId, config);
@@ -692,6 +758,10 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
      * Reset the configuration for an integration (clears credentials but keeps the integration entry)
      */
     private async resetConfiguration(integrationId: string): Promise<void> {
+        if (await this.refuseEditIfFileConfigured(integrationId)) {
+            return;
+        }
+
         try {
             // Token first: a failure here has to abort before the config is committed, otherwise the token is
             // stranded with no integration left in the panel to retry from.
@@ -731,6 +801,10 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
      * Delete the integration completely (removes credentials and integration entry)
      */
     private async deleteConfiguration(integrationId: string): Promise<void> {
+        if (await this.refuseEditIfFileConfigured(integrationId)) {
+            return;
+        }
+
         try {
             // Token first: a failure here has to abort before the config is committed, otherwise the token is
             // stranded with no integration left in the panel to retry from.

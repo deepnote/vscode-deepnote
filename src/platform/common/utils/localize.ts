@@ -818,6 +818,7 @@ export namespace Integrations {
     export const title = l10n.t('Deepnote Integrations');
     export const noIntegrationsFound = l10n.t('No integrations found in this project.');
     export const connected = l10n.t('Connected');
+    export const configuredInFile = l10n.t('Configured in file');
     export const notConfigured = l10n.t('Not Configured');
     export const configure = l10n.t('Configure');
     export const reconfigure = l10n.t('Reconfigure');

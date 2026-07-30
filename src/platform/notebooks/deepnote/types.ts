@@ -106,6 +106,13 @@ export interface ISqlIntegrationEnvVarsProvider {
     getFederatedAuthCandidates(resource: Resource, token?: CancellationToken): Promise<ReadonlySet<string>>;
 
     /**
+     * Ids that `.deepnote.env.yaml` configures for this notebook. Derived state only — it exposes **no
+     * config and no credentials** — so the integrations panel (a SecretStorage editor) can render them
+     * read-only without receiving values it could never write back.
+     */
+    getFileConfiguredIntegrationIds(resource: Resource, token?: CancellationToken): Promise<ReadonlySet<string>>;
+
+    /**
      * What actually applies for this notebook: project SecretStorage integrations merged with
      * `.deepnote.env.yaml` file configs (file wins, additive file-only), so integration detection, the SQL
      * status bar, and the SQL LSP agree with kernel execution. **Read-only** — the file layer cannot be

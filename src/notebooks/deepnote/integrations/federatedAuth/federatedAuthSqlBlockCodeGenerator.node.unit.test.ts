@@ -84,6 +84,9 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
             async getFederatedAuthCandidates(): Promise<ReadonlySet<string>> {
                 return new Set<string>();
             },
+            async getFileConfiguredIntegrationIds(): Promise<ReadonlySet<string>> {
+                return new Set<string>();
+            },
             getMergedIntegrationConfigs: getMergedIntegrationConfigsSpy
         };
         sqlIntegrationEnvVars = envVarsProvider;

@@ -12,6 +12,8 @@ export interface DetectedIntegration {
     config: ConfigurableDatabaseIntegrationConfig | null;
     integrationName?: string;
     integrationType?: ConfigurableDatabaseIntegrationType;
+    /** `.deepnote.env.yaml` configures this integration; the panel cannot write that layer, so the row is read-only. */
+    isFileConfigured?: boolean;
     tokenStatus?: FederatedAuthTokenStatus;
 }
 

@@ -169,6 +169,7 @@ export type LocalizedMessages = {
     integrationsTitle: string;
     integrationsNoIntegrationsFound: string;
     integrationsConnected: string;
+    integrationsConfiguredInFile: string;
     integrationsNotConfigured: string;
     integrationsConfigure: string;
     integrationsReconfigure: string;

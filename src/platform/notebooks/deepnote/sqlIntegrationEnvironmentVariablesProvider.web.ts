@@ -31,6 +31,11 @@ export class SqlIntegrationEnvironmentVariablesProviderWeb
         return new Set();
     }
 
+    /** No filesystem on web, so `.deepnote.env.yaml` never contributes configs here. */
+    public async getFileConfiguredIntegrationIds(): Promise<ReadonlySet<string>> {
+        return new Set();
+    }
+
     public async getMergedIntegrationConfigs(): Promise<DatabaseIntegrationConfig[]> {
         return [];
     }

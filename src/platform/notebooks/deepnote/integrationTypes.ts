@@ -177,6 +177,11 @@ export interface DetectedIntegration {
      * Type from the project's integrations list (used for prefilling when config is null)
      */
     integrationType?: ConfigurableDatabaseIntegrationType;
+    /**
+     * `.deepnote.env.yaml` supplies this integration's config. The panel only ever edits SecretStorage, and the
+     * file wins the merge, so anything saved from here would be silently overridden — the row is read-only.
+     */
+    isFileConfigured?: boolean;
     /** Federated-auth token status; only meaningful for federated integrations (currently BigQuery + `google-oauth`). */
     tokenStatus?: FederatedAuthTokenStatus;
 }

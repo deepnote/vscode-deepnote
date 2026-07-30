@@ -93,6 +93,12 @@ suite('IntegrationsEnvFileWatcher', () => {
         );
         when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
 
+        // The shared mock's `get()` ignores the default argument; the real API returns it when the setting is
+        // unset, which is what the `envFile.enabled` gate relies on. Individual tests override this.
+        when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote', anything())).thenReturn({
+            get: (_section: string, defaultValue?: unknown) => defaultValue
+        } as never);
+
         liveRefresher = mock<IIntegrationEnvLiveRefresher>();
         when(liveRefresher.refresh(anything())).thenResolve();
 

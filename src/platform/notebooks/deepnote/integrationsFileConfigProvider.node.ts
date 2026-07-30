@@ -14,6 +14,7 @@ import {
 import { IFileSystem } from '../../common/platform/types';
 import { IDisposableRegistry } from '../../common/types';
 import { logger } from '../../logging';
+import { isIntegrationsEnvFileEnabled } from './integrationsEnvFileSettings';
 import { isFederatedAuthMetadata, isSupportedFederatedAuth } from './integrationTypes';
 import { IIntegrationsFileConfigProvider } from './types';
 
@@ -46,18 +47,21 @@ export class IntegrationsFileConfigProvider implements IIntegrationsFileConfigPr
         deepnoteFileUri: Uri
     ): Promise<{ configs: DatabaseIntegrationConfig[]; issues: ValidationIssue[] }> {
         try {
-            const enabled = workspace
-                .getConfiguration('deepnote', deepnoteFileUri)
-                .get<boolean>('integrations.envFile.enabled', true);
-            if (!enabled) {
+            const candidateDirs = this.getCandidateDirs(deepnoteFileUri);
+
+            // Both early returns clear first: nothing below republishes diagnostics, so a warning from a previous
+            // read would otherwise stay pinned in Problems after the file is fixed, deleted or the gate turned off.
+            if (!isIntegrationsEnvFileEnabled(deepnoteFileUri)) {
+                this.clearDiagnostics(candidateDirs);
+
                 return { configs: [], issues: [] };
             }
-
-            const candidateDirs = this.getCandidateDirs(deepnoteFileUri);
 
             // Locate the integrations YAML (dir-then-root). A missing file is not an error.
             const yamlUri = await this.findFirstExisting(candidateDirs, DEFAULT_INTEGRATIONS_FILE);
             if (!yamlUri) {
+                this.clearDiagnostics(candidateDirs);
+
                 return { configs: [], issues: [] };
             }
 
@@ -90,6 +94,11 @@ export class IntegrationsFileConfigProvider implements IIntegrationsFileConfigPr
     /** The process environment merged over the `.env` file; a seam tests override so they never touch the real `process.env`. */
     protected getProcessEnvironment(): Record<string, string | undefined> {
         return process.env;
+    }
+
+    /** Drops any diagnostics published against a candidate dir's `.deepnote.env.yaml`, whether or not it still exists. */
+    private clearDiagnostics(dirs: Uri[]): void {
+        dirs.forEach((dir) => this.diagnostics?.delete(Uri.joinPath(dir, DEFAULT_INTEGRATIONS_FILE)));
     }
 
     /** Drops reserved, unsupported, duplicate, and unsupported federated-auth integrations, recording an issue for each. */

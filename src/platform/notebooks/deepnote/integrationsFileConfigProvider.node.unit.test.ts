@@ -8,7 +8,7 @@ import {
 import dedent from 'dedent';
 import { dump } from 'js-yaml';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
-import { Uri, WorkspaceConfiguration, WorkspaceFolder } from 'vscode';
+import { DiagnosticCollection, Uri, WorkspaceConfiguration, WorkspaceFolder } from 'vscode';
 
 import { IFileSystem } from '../../common/platform/types';
 import { IntegrationsFileConfigProvider } from './integrationsFileConfigProvider.node';
@@ -86,6 +86,24 @@ suite('IntegrationsFileConfigProvider', () => {
     /** Reads a metadata field off a parsed config without narrowing the metadata union. */
     function metadataField(config: DatabaseIntegrationConfig, key: string): unknown {
         return (config.metadata as unknown as Record<string, unknown>)[key];
+    }
+
+    /**
+     * Rebuilds `provider` with a recording `DiagnosticCollection`. The default `languages` mock returns
+     * undefined, so a test that cares about diagnostics has to opt in before the constructor runs.
+     */
+    function recordDiagnostics(): { deleted: string[]; set: string[] } {
+        const recorded: { deleted: string[]; set: string[] } = { deleted: [], set: [] };
+
+        when(mockedVSCodeNamespaces.languages.createDiagnosticCollection(anything())).thenReturn({
+            delete: (uri: Uri) => recorded.deleted.push(uri.fsPath),
+            dispose: () => undefined,
+            set: (uri: Uri) => recorded.set.push(uri.fsPath)
+        } as unknown as DiagnosticCollection);
+
+        provider = new TestableIntegrationsFileConfigProvider(instance(fileSystem), []);
+
+        return recorded;
     }
 
     /** An integrations document holding the given pgsql entries, each with valid default connection metadata. */
@@ -311,5 +329,34 @@ suite('IntegrationsFileConfigProvider', () => {
         assert.deepStrictEqual(result, { configs: [], issues: [] });
         verify(fileSystem.exists(anything())).never();
         verify(fileSystem.readFile(anything())).never();
+    });
+
+    test('clears a stale diagnostic once the YAML file is deleted', async () => {
+        const diagnostics = recordDiagnostics();
+
+        configureFileSystem([{ path: yamlPath, content: 'integrations:\n  - id: "unclosed string' }]);
+        await provider.getConfigsForFile(deepnoteFileUri);
+
+        assert.deepStrictEqual(diagnostics.set, [yamlPath], 'the malformed file should publish a diagnostic');
+
+        // Nothing below the early return republishes, so the warning would otherwise stay pinned in Problems.
+        configureFileSystem([]);
+        await provider.getConfigsForFile(deepnoteFileUri);
+
+        assert.deepStrictEqual(diagnostics.deleted, [yamlPath]);
+    });
+
+    test('clears a stale diagnostic once the feature is disabled', async () => {
+        const diagnostics = recordDiagnostics();
+
+        configureFileSystem([{ path: yamlPath, content: 'integrations:\n  - id: "unclosed string' }]);
+        await provider.getConfigsForFile(deepnoteFileUri);
+
+        assert.deepStrictEqual(diagnostics.set, [yamlPath], 'the malformed file should publish a diagnostic');
+
+        featureEnabled = false;
+        await provider.getConfigsForFile(deepnoteFileUri);
+
+        assert.deepStrictEqual(diagnostics.deleted, [yamlPath]);
     });
 });

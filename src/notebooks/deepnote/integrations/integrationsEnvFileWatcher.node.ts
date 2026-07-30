@@ -6,6 +6,7 @@ import { IExtensionSyncActivationService } from '../../../platform/activation/ty
 import { IFileSystem } from '../../../platform/common/platform/types';
 import { IDisposableRegistry } from '../../../platform/common/types';
 import { notebookPathToDeepnoteProjectFilePath } from '../../../platform/deepnote/deepnoteProjectUtils';
+import { isIntegrationsEnvFileEnabled } from '../../../platform/notebooks/deepnote/integrationsEnvFileSettings';
 import { logger } from '../../../platform/logging';
 import { DEEPNOTE_NOTEBOOK_TYPE } from '../../../kernels/deepnote/types';
 import { IIntegrationEnvLiveRefresher } from './types';
@@ -65,11 +66,8 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
 
             const deepnoteFileUri = notebookPathToDeepnoteProjectFilePath(notebook.uri);
 
-            // Mirror IntegrationsFileConfigProvider's gate: a disabled feature must not trigger kernel refreshes.
-            const enabled = workspace
-                .getConfiguration('deepnote', deepnoteFileUri)
-                .get<boolean>('integrations.envFile.enabled', true);
-            if (enabled === false) {
+            // Same gate as IntegrationsFileConfigProvider: a disabled feature must not trigger kernel refreshes.
+            if (!isIntegrationsEnvFileEnabled(deepnoteFileUri)) {
                 continue;
             }
 

@@ -405,15 +405,17 @@ Lists the integrations a Deepnote project declares, paired with the credentials 
 2. Iterates the project's `integrations` roster (ids, names and types only — never credentials)
 3. Skips entries whose type is not a configurable `DatabaseIntegrationType`
 4. Reads each integration's config from `SecretStorage`, or `null` when nothing is stored
-5. Returns a map of integration IDs to their config and declared name/type
+5. Appends `.deepnote.env.yaml` integrations the roster omits, so the panel lists what actually applies at
+   execution time; a failed lookup leaves the roster-only result rather than blocking the panel
+6. Returns a map of integration IDs to their config and declared name/type
 
 **Special Cases:**
 
 - Excludes `deepnote-dataframe-sql` (internal DuckDB integration)
-- Integrations configured only in `.deepnote.env.yaml` have a `null` config here, since those configs are never
+- Integrations configured in `.deepnote.env.yaml` have a `null` config here, since those configs are never
   written through `SecretStorage`. They still resolve normally for kernel execution and SQL autocomplete, which
-  read the merged configs directly — but the panel labels them "Not Configured" (see below), because it has no
-  visibility into the merged configs.
+  read the merged configs directly, and the panel marks them read-only rather than unconfigured (see below):
+  `IntegrationWebviewProvider` pairs the detection result with the file-configured ids.
 
 #### 3. **Integration Manager** (`integrationManager.ts`)
 
@@ -440,15 +442,25 @@ Provides the webview-based UI for managing integration credentials.
 - Persistent webview panel (survives defocus)
 - Real-time updates as credentials are saved or cleared
 - Configuration forms for each integration type
+- Delete/reset functionality
 
 **Connection Status:**
 
-`IntegrationItem.tsx` derives the status pill from `config` alone — "Connected" when SecretStorage holds
-credentials, "Not Configured" otherwise. The panel is a SecretStorage editor and is not given the merged
-configs, so an integration configured only in `.deepnote.env.yaml` reads "Not Configured" here even though its
-SQL cells run fine. The separate federated-auth pill (BigQuery + `google-oauth`) is independent and tracks
-whether a refresh token is stored.
-- Delete/reset functionality
+`IntegrationItem.tsx` derives the status pill from two inputs: `config` (the SecretStorage credentials the panel
+can edit) and `isFileConfigured`, which `IntegrationWebviewProvider` computes from
+`ISqlIntegrationEnvVarsProvider.getFileConfiguredIntegrationIds()`. That call returns ids only, so neither the
+file's config nor its credentials ever reach the webview.
+
+- **"Configured in file"** — `.deepnote.env.yaml` configures this id. Rendered with the connected styling, and
+  the Configure/Reset/Delete actions are hidden: the panel writes `SecretStorage` only and the file wins the
+  merge, so those edits would be silent no-ops at runtime. This holds even when SecretStorage also happens to
+  hold a config for the same id.
+- **"Connected"** — SecretStorage holds credentials and no file config overrides them.
+- **"Not Configured"** — neither layer configures the integration.
+
+The separate federated-auth pill (BigQuery + `google-oauth`) is independent and tracks whether a refresh token
+is stored. It is driven by `tokenStatus` alone, which the extension derives from its own candidate set, so the
+Authenticate action stays available for file-configured integrations — exactly the rows that carry no `config`.
 
 **Message Protocol:**
 

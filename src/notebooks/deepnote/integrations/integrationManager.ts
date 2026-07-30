@@ -1,5 +1,5 @@
 import { inject, injectable } from 'inversify';
-import { commands, l10n, window } from 'vscode';
+import { commands, l10n, NotebookDocument, window, workspace } from 'vscode';
 
 import { IExtensionContext } from '../../../platform/common/types';
 import { Commands } from '../../../platform/common/constants';
@@ -33,28 +33,71 @@ export class IntegrationManager implements IIntegrationManager {
                 // Find the integration ID from the arguments
                 // It could be the first arg (if called directly) or in the args array (if called from UI)
                 let integrationId: string | undefined;
+                let notebookUri: string | undefined;
 
                 for (const arg of args) {
                     if (typeof arg === 'string') {
-                        integrationId = arg;
-                        break;
+                        integrationId ??= arg;
+                        continue;
                     }
+                    notebookUri ??= this.extractNotebookUri(arg);
                 }
 
-                logger.debug(`IntegrationManager: Extracted integrationId: ${integrationId}`);
-                return this.showIntegrationsUI(integrationId);
+                logger.debug(`IntegrationManager: Extracted integrationId: ${integrationId}, notebook: ${notebookUri}`);
+
+                return this.showIntegrationsUI(integrationId, notebookUri);
             })
         );
+    }
+
+    /** The notebook URI a menu contribution passed; `notebook/toolbar` sends `{ notebookEditor: { notebookUri } }`. */
+    private extractNotebookUri(arg: unknown): string | undefined {
+        if (!arg || typeof arg !== 'object') {
+            return undefined;
+        }
+
+        const candidate = arg as { notebookUri?: unknown; notebookEditor?: { notebookUri?: unknown } };
+        const uri = candidate.notebookEditor?.notebookUri ?? candidate.notebookUri;
+
+        return uri ? String(uri) : undefined;
+    }
+
+    /**
+     * The Deepnote notebook to act on: `window.activeNotebookEditor` is unset until an editor is focused, so a
+     * restored-but-unclicked notebook resolves via the menu's URI or the one visible editor instead.
+     */
+    private resolveDeepnoteNotebook(notebookUri: string | undefined): NotebookDocument | undefined {
+        if (notebookUri) {
+            const fromUri = workspace.notebookDocuments.find(
+                (notebook) => notebook.notebookType === 'deepnote' && notebook.uri.toString() === notebookUri
+            );
+            if (fromUri) {
+                return fromUri;
+            }
+        }
+
+        const active = window.activeNotebookEditor?.notebook;
+        if (active?.notebookType === 'deepnote') {
+            return active;
+        }
+
+        // Only when unambiguous: several visible Deepnote editors give no basis for a guess.
+        const visible = window.visibleNotebookEditors
+            .map((editor) => editor.notebook)
+            .filter((notebook) => notebook.notebookType === 'deepnote');
+
+        return visible.length === 1 ? visible[0] : undefined;
     }
 
     /**
      * Show the integrations management UI
      * @param selectedIntegrationId Optional integration ID to select/configure immediately
+     * @param notebookUri Optional notebook URI passed by the invoking menu contribution
      */
-    private async showIntegrationsUI(selectedIntegrationId?: string): Promise<void> {
-        const activeNotebook = window.activeNotebookEditor?.notebook;
+    private async showIntegrationsUI(selectedIntegrationId?: string, notebookUri?: string): Promise<void> {
+        const activeNotebook = this.resolveDeepnoteNotebook(notebookUri);
 
-        if (!activeNotebook || activeNotebook.notebookType !== 'deepnote') {
+        if (!activeNotebook) {
             void window.showErrorMessage(l10n.t('No active Deepnote notebook'));
             return;
         }

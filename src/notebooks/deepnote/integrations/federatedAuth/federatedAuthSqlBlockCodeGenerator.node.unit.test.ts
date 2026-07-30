@@ -94,7 +94,6 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
             delete: deleteSpy,
             get: async (id) => tokens.get(id),
             has: async (id) => tokens.has(id),
-            listIntegrationIds: async () => Array.from(tokens.keys()),
             save: saveSpy
         };
 

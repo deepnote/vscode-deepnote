@@ -79,8 +79,6 @@ export interface IFederatedAuthTokenStorage {
     delete(integrationId: string): Promise<void>;
     get(integrationId: string): Promise<FederatedAuthTokenEntry | undefined>;
     has(integrationId: string): Promise<boolean>;
-    /** All integration IDs with a stored token entry; used for orphaned-token cleanup. */
-    listIntegrationIds(): Promise<string[]>;
     /** Persists a token entry. Pass `silent: true` for refresh-token rotation to skip `onDidChangeTokens` (avoids interrupting in-flight SQL cells). */
     save(entry: FederatedAuthTokenEntry, options?: { silent?: boolean }): Promise<void>;
 }

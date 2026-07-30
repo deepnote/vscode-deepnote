@@ -171,11 +171,6 @@ export class FederatedAuthTokenStorage implements IFederatedAuthTokenStorage {
         return this.cache.has(integrationId);
     }
 
-    public async listIntegrationIds(): Promise<string[]> {
-        await this.ensureCacheLoaded();
-        return Array.from(this.cache.keys());
-    }
-
     public async save(entry: FederatedAuthTokenEntry, options?: { silent?: boolean }): Promise<void> {
         await this.ensureCacheLoaded();
 

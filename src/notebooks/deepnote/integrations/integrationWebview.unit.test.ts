@@ -147,7 +147,6 @@ suite('IntegrationWebviewProvider', () => {
             delete: tokenDeleteSpy,
             get: async (id) => tokens.get(id),
             has: async (id) => tokens.has(id),
-            listIntegrationIds: async () => Array.from(tokens.keys()),
             save: tokenSaveSpy
         };
 
@@ -436,9 +435,6 @@ suite('IntegrationWebviewProvider', () => {
             },
             async delete() {
                 /* no-op */
-            },
-            async listIntegrationIds() {
-                return [];
             },
             computeMetadataFingerprint() {
                 return 'fp';

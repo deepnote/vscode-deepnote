@@ -59,7 +59,6 @@ import {
 } from './deepnote/integrations/types';
 import { FederatedAuthCommandHandlerNode } from './deepnote/integrations/federatedAuth/federatedAuthCommandHandler.node';
 import { FederatedAuthKernelRestartBridge } from './deepnote/integrations/federatedAuth/federatedAuthKernelRestartBridge.node';
-import { FederatedAuthOrphanedTokenCleaner } from './deepnote/integrations/federatedAuth/federatedAuthOrphanedTokenCleaner.node';
 import { FederatedAuthSqlBlockCodeGenerator } from './deepnote/integrations/federatedAuth/federatedAuthSqlBlockCodeGenerator.node';
 import { FederatedAuthTokenStorage } from './deepnote/integrations/federatedAuth/federatedAuthTokenStorage.node';
 import {
@@ -208,10 +207,6 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
         FederatedAuthKernelRestartBridge
-    );
-    serviceManager.addSingleton<IExtensionSyncActivationService>(
-        IExtensionSyncActivationService,
-        FederatedAuthOrphanedTokenCleaner
     );
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,

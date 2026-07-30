@@ -1,5 +1,5 @@
 import { assert } from 'chai';
-import { anything, instance, mock, verify, when } from 'ts-mockito';
+import { anything, capture, instance, mock, verify, when } from 'ts-mockito';
 import { CancellationToken, CancellationTokenSource, EventEmitter, NotebookCell } from 'vscode';
 
 import { IDisposableRegistry } from '../../platform/common/types';
@@ -466,6 +466,50 @@ suite('SqlCellStatusBarProvider', () => {
             verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).once();
         });
 
+        test('switchSqlIntegration offers `.deepnote.env.yaml` integrations the project roster omits', async () => {
+            let commandHandler: ((cell?: NotebookCell) => Promise<void>) | undefined;
+            when(mockedVSCodeNamespaces.commands.registerCommand('deepnote.switchSqlIntegration', anything())).thenCall(
+                (_name, handler) => {
+                    commandHandler = handler;
+                    return { dispose: () => undefined };
+                }
+            );
+
+            // A merged source reporting one integration the roster below never declares.
+            const envVars = mock<ISqlIntegrationEnvVarsProvider>();
+            when(envVars.getMergedIntegrationConfigs(anything())).thenResolve([
+                { id: 'file-only-bq', name: 'BigQuery from file', type: 'big-query', metadata: {} } as any
+            ]);
+            const fileAwareProvider = new SqlCellStatusBarProvider(
+                [],
+                instance(activateIntegrationStorage),
+                instance(activateNotebookManager),
+                instance(envVars)
+            );
+
+            const notebookMetadata = { deepnoteProjectId: 'project-1', deepnoteNotebookId: 'notebook-1' };
+            const cell = createMockCell({ languageId: 'sql', notebookMetadata });
+            when(activateNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn({
+                project: { integrations: [] }
+            } as any);
+
+            let offeredIds: string[] = [];
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenCall((items) => {
+                offeredIds = (items as { id?: string }[]).map((item) => item.id ?? '');
+
+                return Promise.resolve(undefined);
+            });
+
+            fileAwareProvider.activate();
+            await commandHandler!(cell);
+
+            assert.include(
+                offeredIds,
+                'file-only-bq',
+                'a file-only integration must be selectable, not reachable only by hand-editing sql_integration_id'
+            );
+        });
+
         test('switchSqlIntegration command handler shows error when no cell and no active editor', async () => {
             let commandHandler: ((cell?: NotebookCell) => Promise<void>) | undefined;
             when(mockedVSCodeNamespaces.commands.registerCommand('deepnote.switchSqlIntegration', anything())).thenCall(
@@ -883,6 +927,38 @@ suite('SqlCellStatusBarProvider', () => {
 
             verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).once();
             verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
+        });
+
+        test('picking a `.deepnote.env.yaml` integration adds it to the project integrations list', async () => {
+            const notebookMetadata = { deepnoteProjectId: 'project-1', deepnoteNotebookId: 'notebook-1' };
+            const cell = createMockCell({ languageId: 'sql', metadata: {}, notebookMetadata });
+            const fileOnlyId = 'file-only-bq';
+
+            // Declared in the file only — the roster below never mentions it.
+            const envVars = mock<ISqlIntegrationEnvVarsProvider>();
+            when(envVars.getMergedIntegrationConfigs(anything())).thenResolve([
+                { id: fileOnlyId, name: 'BigQuery from file', type: 'big-query', metadata: {} } as any
+            ]);
+            new SqlCellStatusBarProvider(
+                [],
+                instance(commandIntegrationStorage),
+                instance(commandNotebookManager),
+                instance(envVars)
+            ).activate();
+
+            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn({
+                project: { integrations: [] }
+            } as any);
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ id: fileOnlyId, label: 'BigQuery from file' } as any)
+            );
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+            await switchIntegrationHandler(cell);
+
+            const [projectId, integrations] = capture(commandNotebookManager.updateProjectIntegrations).last();
+            assert.strictEqual(projectId, 'project-1');
+            assert.deepStrictEqual(integrations, [{ id: fileOnlyId, name: 'BigQuery from file', type: 'big-query' }]);
         });
 
         test('does not update if user cancels quick pick', async () => {

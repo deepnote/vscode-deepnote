@@ -24,11 +24,18 @@ import { IIntegrationStorage } from './integrations/types';
 import { Commands } from '../../platform/common/constants';
 import {
     ConfigurableDatabaseIntegrationType,
-    DATAFRAME_SQL_INTEGRATION_ID
+    DATAFRAME_SQL_INTEGRATION_ID,
+    isConfigurableDatabaseIntegrationType
 } from '../../platform/notebooks/deepnote/integrationTypes';
-import { IDeepnoteNotebookManager } from '../types';
+import { persistProjectIntegrations } from './integrations/projectIntegrationsWriter';
+import { IDeepnoteNotebookManager, ProjectIntegration } from '../types';
+import { logger } from '../../platform/logging';
 import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
+import type { DeepnoteFile } from '@deepnote/blocks';
 import { DatabaseIntegrationType, databaseIntegrationTypes } from '@deepnote/database-integrations';
+
+/** One entry of a project's `integrations` list as it appears in the file, where `type` is not yet validated. */
+type RawProjectIntegration = NonNullable<DeepnoteFile['project']['integrations']>[number];
 
 /**
  * QuickPick item with an integration ID
@@ -336,6 +343,65 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         this._onDidChangeCellStatusBarItems.fire();
     }
 
+    /**
+     * Appends a picked integration to the project roster so the `.deepnote` file records what it uses.
+     * Additive only: existing entries pass through verbatim, never filtered, because a project's integrations
+     * are shared with sibling notebooks whose blocks this cannot see — dropping one would be data loss.
+     */
+    private async addToProjectIntegrations(
+        cell: NotebookCell,
+        projectId: string,
+        roster: RawProjectIntegration[],
+        selected: RawProjectIntegration
+    ): Promise<void> {
+        // No usable `type` means no valid roster entry; leave it out rather than guessing one.
+        if (!isConfigurableDatabaseIntegrationType(selected.type)) {
+            return;
+        }
+
+        try {
+            await persistProjectIntegrations({
+                notebookManager: this.notebookManager,
+                projectId,
+                // Cast rather than narrow: validating the existing entries would silently drop any type this
+                // build does not know about, which is pruning by another name.
+                integrations: [...roster, selected] as ProjectIntegration[],
+                activeFileUri: cell.notebook.uri
+            });
+        } catch (error) {
+            // The cell metadata edit already succeeded, so the selection stands either way.
+            logger.error(`SqlCellStatusBarProvider: failed to add ${selected.id} to the project integrations`, error);
+        }
+    }
+
+    /**
+     * The roster plus any `.deepnote.env.yaml` integrations it omits, so a file-only one can be picked here
+     * instead of only by hand-editing `sql_integration_id`. A failed lookup falls back to the roster alone.
+     */
+    private async getSelectableIntegrations(
+        cell: NotebookCell,
+        projectIntegrations: RawProjectIntegration[]
+    ): Promise<RawProjectIntegration[]> {
+        let mergedConfigs;
+
+        try {
+            mergedConfigs = await this.sqlIntegrationEnvVars.getMergedIntegrationConfigs(cell.notebook.uri);
+        } catch (error) {
+            logger.error('SqlCellStatusBarProvider: failed to read file integrations; offering the roster only', error);
+
+            return projectIntegrations;
+        }
+
+        const rosterIds = new Set(projectIntegrations.map((integration) => integration.id));
+
+        // Anything merged but absent from the roster came from the file alone — the merge resolves roster ids first.
+        const fileOnly = mergedConfigs
+            .filter((config) => !rosterIds.has(config.id))
+            .map((config) => ({ id: config.id, name: config.name, type: config.type }));
+
+        return fileOnly.length > 0 ? [...projectIntegrations, ...fileOnly] : projectIntegrations;
+    }
+
     private async switchIntegration(cell: NotebookCell): Promise<void> {
         const currentIntegrationId = this.getIntegrationId(cell);
 
@@ -357,7 +423,8 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         // Build quick pick items from project integrations
         const items: (QuickPickItem | LocalQuickPickItem)[] = [];
 
-        const projectIntegrations = project.project.integrations || [];
+        const roster = project.project.integrations || [];
+        const projectIntegrations = await this.getSelectableIntegrations(cell, roster);
 
         // Check if current integration is unknown (not in the project's list)
         const isCurrentIntegrationUnknown =
@@ -469,6 +536,12 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         if (!success) {
             void window.showErrorMessage(l10n.t('Failed to select integration'));
             return;
+        }
+
+        // Picking a file-declared integration is the one place the roster drifts, so reconcile it here.
+        const selectedIntegration = projectIntegrations.find((integration) => integration.id === selectedId);
+        if (selectedIntegration && !roster.some((integration) => integration.id === selectedId)) {
+            await this.addToProjectIntegrations(cell, projectId, roster, selectedIntegration);
         }
 
         // Trigger status bar update

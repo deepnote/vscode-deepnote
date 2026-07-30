@@ -518,12 +518,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             logger.info(
                 `IntegrationWebviewProvider: deleting stale federated token for ${integrationId} (auth method changed).`
             );
-            await this.tokenStorage.delete(integrationId).catch((err) => {
-                logger.warn(
-                    `IntegrationWebviewProvider: failed to delete stale federated token for ${integrationId}`,
-                    err
-                );
-            });
+            await this.tokenStorage.delete(integrationId);
             return;
         }
 
@@ -534,12 +529,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             logger.info(
                 `IntegrationWebviewProvider: deleting stale federated token for ${integrationId} (fingerprint changed).`
             );
-            await this.tokenStorage.delete(integrationId).catch((err) => {
-                logger.warn(
-                    `IntegrationWebviewProvider: failed to delete stale federated token for ${integrationId}`,
-                    err
-                );
-            });
+            await this.tokenStorage.delete(integrationId);
         }
     }
 
@@ -703,10 +693,10 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
      */
     private async resetConfiguration(integrationId: string): Promise<void> {
         try {
+            // Token first: a failure here has to abort before the config is committed, otherwise the token is
+            // stranded with no integration left in the panel to retry from.
+            await this.tokenStorage?.delete(integrationId);
             await this.integrationStorage.delete(integrationId);
-            await this.tokenStorage?.delete(integrationId).catch((error) => {
-                logger.warn(`IntegrationWebviewProvider: failed to delete federated token for ${integrationId}`, error);
-            });
 
             // Update local state
             const integration = this.integrations.get(integrationId);
@@ -742,10 +732,10 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
      */
     private async deleteConfiguration(integrationId: string): Promise<void> {
         try {
+            // Token first: a failure here has to abort before the config is committed, otherwise the token is
+            // stranded with no integration left in the panel to retry from.
+            await this.tokenStorage?.delete(integrationId);
             await this.integrationStorage.delete(integrationId);
-            await this.tokenStorage?.delete(integrationId).catch((error) => {
-                logger.warn(`IntegrationWebviewProvider: failed to delete federated token for ${integrationId}`, error);
-            });
 
             // Remove from local state
             this.integrations.delete(integrationId);

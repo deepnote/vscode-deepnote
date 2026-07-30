@@ -46,7 +46,8 @@ function createFakeWebviewPanel(): FakeWebviewPanel {
     const webview = {
         html: '',
         cspSource: 'mock-csp',
-        asWebviewUri: (uri: unknown) => uri,
+        options: {},
+        asWebviewUri: (uri: Uri) => uri,
         postMessage: (message: CapturedMessage) => postMessageImpl(message),
         onDidReceiveMessage: (
             cb: (message: unknown) => Promise<void> | void,
@@ -59,8 +60,17 @@ function createFakeWebviewPanel(): FakeWebviewPanel {
             return disposable;
         }
     };
-    const panel = {
+    const panel: import('vscode').WebviewPanel = {
         webview,
+        viewType: '',
+        title: '',
+        options: {},
+        viewColumn: 1,
+        active: true,
+        visible: true,
+        onDidChangeViewState: function () {
+            return this;
+        },
         reveal: () => undefined,
         dispose: () => undefined,
         onDidDispose: (cb: () => void, _thisArg?: unknown, disposables?: IDisposable[]): IDisposable => {
@@ -71,7 +81,7 @@ function createFakeWebviewPanel(): FakeWebviewPanel {
         }
     };
     return {
-        panel: panel as unknown as import('vscode').WebviewPanel,
+        panel,
         posted,
         onDidReceiveMessage: async (message: unknown) => {
             if (messageHandler) {
@@ -314,6 +324,38 @@ suite('IntegrationWebviewProvider', () => {
             sinon.assert.calledWith(tokenDeleteSpy, integrationId);
             verify(integrationStorage.delete(integrationId)).once();
         });
+
+        test(`${messageType}Configuration: a failed token delete aborts before the config is removed`, async () => {
+            when(integrationStorage.delete(anyString())).thenResolve();
+
+            const provider = buildProvider({
+                tokenStorage: {
+                    ...tokenStorage,
+                    delete: async () => {
+                        throw new Error('keychain unavailable');
+                    }
+                }
+            });
+            const integrationId = `bq-${messageType}-fails`;
+            preStoreToken(integrationId);
+
+            await show(
+                provider,
+                singleIntegrationMap(integrationId, buildGoogleOauthIntegration({ id: integrationId }))
+            );
+            await fakePanel.onDidReceiveMessage({ type: messageType, integrationId });
+
+            // Nothing is committed, so the integration stays in the panel for the user to retry from.
+            verify(integrationStorage.delete(integrationId)).never();
+            assert.isTrue(
+                fakePanel.posted.some((message) => message.type === 'error'),
+                'the failure must reach the panel'
+            );
+            assert.isFalse(
+                fakePanel.posted.some((message) => message.type === 'success'),
+                'a partial failure must not be reported as success'
+            );
+        });
     });
 
     test('saveConfiguration: deletes the token BEFORE save when fingerprint changes', async () => {
@@ -335,13 +377,50 @@ suite('IntegrationWebviewProvider', () => {
                 clientId: 'new-client',
                 clientSecret: 'new-secret'
             }
-        } as ConfigurableDatabaseIntegrationConfig);
+        });
 
         await fakePanel.onDidReceiveMessage({ type: 'save', integrationId, config: newConfig });
 
         sinon.assert.calledOnce(tokenDeleteSpy);
         sinon.assert.calledOnce(integrationSaveSpy);
         assert.isTrue(tokenDeleteSpy.calledBefore(integrationSaveSpy), 'token.delete must occur BEFORE storage.save');
+    });
+
+    test('saveConfiguration: a failed token invalidation aborts the save', async () => {
+        const integrationId = 'bq-save-fails';
+        const integrationSaveSpy = sinon.spy();
+        when(integrationStorage.save(anything())).thenCall(integrationSaveSpy);
+
+        const provider = buildProvider({
+            tokenStorage: {
+                ...tokenStorage,
+                delete: async () => {
+                    throw new Error('keychain unavailable');
+                }
+            }
+        });
+        preStoreToken(integrationId, 'old-fingerprint');
+        await show(provider, singleIntegrationMap(integrationId, buildGoogleOauthIntegration({ id: integrationId })));
+
+        const newConfig = buildGoogleOauthIntegration({
+            id: integrationId,
+            name: 'New name',
+            metadata: {
+                authMethod: 'google-oauth',
+                project: 'new-proj',
+                clientId: 'new-client',
+                clientSecret: 'new-secret'
+            }
+        });
+
+        await fakePanel.onDidReceiveMessage({ type: 'save', integrationId, config: newConfig });
+
+        // Saving anyway would pair the new client's config with a token issued against the old one.
+        sinon.assert.notCalled(integrationSaveSpy);
+        assert.isTrue(
+            fakePanel.posted.some((message) => message.type === 'error'),
+            'the failure must reach the panel'
+        );
     });
 
     test('saveConfiguration: deletes the token when authMethod switches away from google-oauth', async () => {

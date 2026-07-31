@@ -49,6 +49,7 @@
         "evalue",
         "findstr",
         "getsitepackages",
+        "hubot",
         "IMAGENAME",
         "ipykernel",
         "ipynb",

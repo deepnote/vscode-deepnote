@@ -62,6 +62,14 @@ export namespace vscMock {
         }
     }
 
+    // Minimal stand-in so `tab.input instanceof TabInputNotebook` can be exercised in tests.
+    export class TabInputNotebook {
+        constructor(
+            public readonly uri: vscode.Uri,
+            public readonly notebookType: string
+        ) {}
+    }
+
     export class EventEmitter<T> implements vscode.EventEmitter<T> {
         public event: vscode.Event<T>;
         public emitter: NodeEventEmitter;
@@ -80,11 +88,12 @@ export namespace vscMock {
         protected add = (listener: (e: T) => any, _thisArgs?: any, _disposables?: Disposable[]): Disposable => {
             const bound = _thisArgs ? listener.bind(_thisArgs) : listener;
             this.emitter.addListener('evt', bound);
-            return {
-                dispose: () => {
-                    this.emitter.removeListener('evt', bound);
-                }
-            } as any as Disposable;
+            const disposable = new Disposable(() => {
+                this.emitter.removeListener('evt', bound);
+            });
+            _disposables?.push(disposable);
+
+            return disposable;
         };
     }
 

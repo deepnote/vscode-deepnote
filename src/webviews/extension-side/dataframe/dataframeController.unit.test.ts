@@ -307,7 +307,8 @@ suite('DataframeController', () => {
                 await (controller as any).getDataframeFromDataframeOutput([]);
                 assert.fail('Should have thrown an error');
             } catch (error) {
-                assert.include((error as Error).message, 'No outputs found');
+                assert(error instanceof Error);
+                assert.include(error.message, 'No outputs found');
             }
         });
 
@@ -318,7 +319,8 @@ suite('DataframeController', () => {
                 await (controller as any).getDataframeFromDataframeOutput(outputs);
                 assert.fail('Should have thrown an error');
             } catch (error) {
-                assert.include((error as Error).message, 'No dataframe output found');
+                assert(error instanceof Error);
+                assert.include(error.message, 'No dataframe output found');
             }
         });
 
@@ -361,7 +363,8 @@ suite('DataframeController', () => {
                 await (controller as any).handleCopyTable(editor, message);
                 assert.fail('Should have thrown an error');
             } catch (error) {
-                assert.include((error as Error).message, 'No cell identifier');
+                assert(error instanceof Error);
+                assert.include(error.message, 'No cell identifier');
             }
         });
 
@@ -375,7 +378,8 @@ suite('DataframeController', () => {
                 await (controller as any).handleCopyTable(editor, message);
                 assert.fail('Should have thrown an error');
             } catch (error) {
-                assert.include((error as Error).message, 'Could not find the cell');
+                assert(error instanceof Error);
+                assert.include(error.message, 'Could not find the cell');
             }
         });
 
@@ -451,7 +455,8 @@ suite('DataframeController', () => {
                 await (controller as any).handleCopyTable(editor, message);
                 assert.fail('Should have thrown an error');
             } catch (error) {
-                assert.include((error as Error).message, 'dataframe is empty');
+                assert(error instanceof Error);
+                assert.include(error.message, 'dataframe is empty');
             }
         });
     });
@@ -465,7 +470,8 @@ suite('DataframeController', () => {
                 await (controller as any).handleExportTable(editor, message);
                 assert.fail('Should have thrown an error');
             } catch (error) {
-                assert.include((error as Error).message, 'No cell identifier');
+                assert(error instanceof Error);
+                assert.include(error.message, 'No cell identifier');
             }
         });
 
@@ -479,7 +485,8 @@ suite('DataframeController', () => {
                 await (controller as any).handleExportTable(editor, message);
                 assert.fail('Should have thrown an error');
             } catch (error) {
-                assert.include((error as Error).message, 'Could not find the cell');
+                assert(error instanceof Error);
+                assert.include(error.message, 'Could not find the cell');
             }
         });
 
@@ -664,7 +671,8 @@ suite('DataframeController', () => {
                 await (controller as any).handleExportTable(editor, message);
                 assert.fail('Should have thrown an error');
             } catch (error) {
-                assert.include((error as Error).message, 'empty');
+                assert(error instanceof Error);
+                assert.include(error.message, 'empty');
             }
         });
     });

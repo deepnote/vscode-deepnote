@@ -116,7 +116,7 @@ export class DeepnoteExtensionSidecarWriter implements IExtensionSyncActivationS
         }
 
         try {
-            const notebookUri = doc.uri.with({ query: '', fragment: '' });
+            const notebookUri = doc.uri;
             const projectId = doc.metadata?.deepnoteProjectId as string | undefined;
             if (!projectId) {
                 return;
@@ -335,8 +335,7 @@ export class DeepnoteExtensionSidecarWriter implements IExtensionSyncActivationS
 
     private resolveProjectId(notebookUri: Uri): string | undefined {
         const doc = workspace.notebookDocuments.find(
-            (d) =>
-                d.notebookType === 'deepnote' && d.uri.with({ query: '', fragment: '' }).fsPath === notebookUri.fsPath
+            (d) => d.notebookType === 'deepnote' && d.uri.fsPath === notebookUri.fsPath
         );
         return doc?.metadata?.deepnoteProjectId as string | undefined;
     }

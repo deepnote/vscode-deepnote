@@ -74,3 +74,8 @@ vscode.d.ts
 vscode.proposed.*.d.ts
 xunit-test-results.xml
 tsconfig.tsbuildinfo
+/testing
+
+# ExTester (vscode-extension-tester) E2E artifacts
+test-resources
+.test-extensions

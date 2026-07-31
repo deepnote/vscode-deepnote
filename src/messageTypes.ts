@@ -194,6 +194,7 @@ export type LocalizedMessages = {
     integrationsAlloyDBTypeLabel: string;
     integrationsAthenaTypeLabel: string;
     integrationsClickHouseTypeLabel: string;
+    integrationsCloudSqlTypeLabel: string;
     integrationsDatabricksTypeLabel: string;
     integrationsDremioTypeLabel: string;
     integrationsMariaDBTypeLabel: string;
@@ -228,6 +229,26 @@ export type LocalizedMessages = {
     integrationsBigQueryCredentialsLabel: string;
     integrationsBigQueryCredentialsPlaceholder: string;
     integrationsBigQueryCredentialsRequired: string;
+    // BigQuery federated-auth form strings
+    integrationsBigQueryAuthMethodLabel: string;
+    integrationsBigQueryAuthMethodServiceAccount: string;
+    integrationsBigQueryAuthMethodGoogleOauth: string;
+    integrationsBigQueryProjectLabel: string;
+    integrationsBigQueryProjectPlaceholder: string;
+    integrationsBigQueryClientIdLabel: string;
+    integrationsBigQueryClientIdPlaceholder: string;
+    integrationsBigQueryClientSecretLabel: string;
+    integrationsBigQueryClientSecretPlaceholder: string;
+    // Federated-auth integration management strings
+    integrationsAuthenticate: string;
+    integrationsReauthenticate: string;
+    integrationsTokenStatusAuthenticated: string;
+    integrationsTokenStatusDisconnected: string;
+    integrationsAuthenticating: string;
+    integrationsAuthenticationSucceeded: string;
+    integrationsAuthenticationFailed: string;
+    integrationsBigQueryNotAuthenticated: string;
+    integrationsFederatedAuthNotSupportedInWeb: string;
     // Snowflake form strings
     integrationsSnowflakeNameLabel: string;
     integrationsSnowflakeNamePlaceholder: string;
@@ -357,8 +378,17 @@ export type LocalizedMessages = {
     integrationsSpannerServiceAccountPlaceholder: string;
     integrationsSpannerServiceAccountHelp: string;
     integrationsSpannerServiceAccountInvalidJson: string;
+    integrationsSpannerServiceAccountRequired: string;
     integrationsSpannerDataBoostLabel: string;
     integrationsSpannerDataBoostHelp: string;
+    // Cloud SQL form strings
+    integrationsCloudSqlNameLabel: string;
+    integrationsCloudSqlNamePlaceholder: string;
+    integrationsCloudSqlServiceAccountLabel: string;
+    integrationsCloudSqlServiceAccountPlaceholder: string;
+    integrationsCloudSqlServiceAccountHelp: string;
+    integrationsCloudSqlServiceAccountInvalidJson: string;
+    integrationsCloudSqlServiceAccountRequired: string;
     // AlloyDB form strings
     integrationsAlloyDBNameLabel: string;
     integrationsAlloyDBNamePlaceholder: string;

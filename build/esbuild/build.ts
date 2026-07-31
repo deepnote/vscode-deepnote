@@ -82,6 +82,10 @@ const watchAll = process.argv.includes('--watch-all');
 const isWatchMode = watchAll || process.argv.includes('--watch');
 const extensionFolder = path.join(__dirname, '..', '..');
 
+// Security pins copied from the root `overrides` into the generated sql-lsp-modules package.json,
+// which npm installs in isolation and would otherwise resolve to vulnerable versions.
+const sqlLspOverridesToPropagate = ['ssh2', 'tar'];
+
 interface StylePluginOptions {
     /**
      * whether to minify the css code.
@@ -661,6 +665,20 @@ async function buildSqlLanguageServer() {
     await fs.ensureDir(sqlLspNodeModules);
 
     // Create a minimal package.json and install dependencies
+    const rootPackageJson = await fs.readJSON(path.join(extensionFolder, 'package.json'));
+    const rootOverrides: Record<string, string> = rootPackageJson.overrides || {};
+    const overrides: Record<string, string> = {};
+
+    for (const name of sqlLspOverridesToPropagate) {
+        if (typeof rootOverrides[name] === 'string') {
+            overrides[name] = rootOverrides[name];
+        } else {
+            throw new Error(
+                `Expected a string "${name}" entry in the root package.json overrides to propagate to sql-lsp-modules.`
+            );
+        }
+    }
+
     const packageJson = {
         name: 'sql-lsp-deps',
         version: '1.0.0',
@@ -670,7 +688,8 @@ async function buildSqlLanguageServer() {
             pg: '^8.9.0',
             sqlite3: '^5.0.3',
             '@google-cloud/bigquery': '^8.1.1'
-        }
+        },
+        overrides
     };
 
     const packageJsonPath = path.join(sqlLspNodeModules, 'package.json');

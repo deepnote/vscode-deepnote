@@ -25,6 +25,7 @@ import {
     workspace
 } from 'vscode';
 import { DisplayOptions } from '../../kernels/displayOptions';
+import { CellExecutionOutputError } from '../../kernels/errors/cellExecutionOutputError';
 import { KernelDeadError } from '../../kernels/errors/kernelDeadError';
 import { KernelError } from '../../kernels/errors/kernelError';
 import { IDataScienceErrorHandler } from '../../kernels/errors/types';
@@ -680,6 +681,11 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
                 // Kernel errors would have been handled and displayed
                 return;
             }
+            ex = WrappedError.unwrap(ex);
+            if (ex instanceof CellExecutionOutputError) {
+                // CellExecution already wrote this message to the cell output.
+                return;
+            }
             if (!isCancellationError(ex)) {
                 logger.error(`Error in notebook cell execution`, ex);
             }
@@ -689,7 +695,6 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
             });
 
             const errorHandler = this.serviceContainer.get<IDataScienceErrorHandler>(IDataScienceErrorHandler);
-            ex = WrappedError.unwrap(ex);
             const isCancelled = isCancellationError(ex) || ex instanceof KernelDeadError;
             // If there was a failure connecting or executing the kernel, stick it in this cell
             await endCellAndDisplayErrorsInCell(
@@ -729,11 +734,14 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
                         // Kernel errors would have been handled and displayed
                         return;
                     }
+                    ex = WrappedError.unwrap(ex);
+                    if (ex instanceof CellExecutionOutputError) {
+                        return;
+                    }
                     if (!isCancellationError(ex)) {
                         logger.error(`Error in cell execution`, ex);
                     }
                     const errorHandler = this.serviceContainer.get<IDataScienceErrorHandler>(IDataScienceErrorHandler);
-                    ex = WrappedError.unwrap(ex);
                     const isCancelled = isCancellationError(ex) || ex instanceof KernelDeadError;
                     // If there was a failure connecting or executing the kernel, stick it in this cell
                     await endCellAndDisplayErrorsInCell(

@@ -84,6 +84,8 @@ node_modules/**
 obj/**
 logs/**
 out/**
+.test-extensions/**
+test-resources/**
 precommit.hook
 pythonFiles/.env
 pythonFiles/**/*.pyc

@@ -4,12 +4,14 @@
 import { assert } from 'chai';
 import fs from 'fs-extra';
 import nock from 'nock';
+import * as sinon from 'sinon';
 import * as path from '../../../../platform/vscode-path/path';
 import { Readable } from 'stream';
 import { anything, deepEqual, instance, mock, verify, when } from 'ts-mockito';
 import { ConfigurationTarget, Disposable, Memento, Uri } from 'vscode';
 import { JupyterSettings } from '../../../../platform/common/configSettings';
 import { ConfigurationService } from '../../../../platform/common/configuration/service.node';
+import { HttpClient } from '../../../../platform/common/net/httpClient';
 import { IConfigurationService, IDisposable, WidgetCDNs } from '../../../../platform/common/types';
 import { noop } from '../../../../platform/common/utils/misc';
 import { EXTENSION_ROOT_DIR } from '../../../../platform/constants.node';
@@ -292,6 +294,8 @@ suite('ipywidget - CDN', () => {
     });
     test('When CDN is turned on and widget script is not found, then display a warning about script not found on CDN', async () => {
         settings.widgetScriptSources = ['jsdelivr.com', 'unpkg.com'];
+        const httpExistsStub = sinon.stub(HttpClient.prototype, 'exists').resolves(false);
+        disposables.push(new Disposable(() => httpExistsStub.restore()));
 
         let values = await scriptSourceProvider.getWidgetScriptSource('module1', '1');
 

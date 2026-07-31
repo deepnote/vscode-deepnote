@@ -11,7 +11,6 @@ import { IFileSystem } from '../../../platform/common/platform/types';
 import { IProcessService, IProcessServiceFactory } from '../../../platform/common/process/types.node';
 import { IExtensionContext, IOutputChannel } from '../../../platform/common/types';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
-import { IDeepnoteServerStarter } from '../types';
 
 use(chaiAsPromised);
 
@@ -19,7 +18,6 @@ suite('DeepnoteEnvironmentManager', () => {
     let manager: DeepnoteEnvironmentManager;
     let mockContext: IExtensionContext;
     let mockStorage: DeepnoteEnvironmentStorage;
-    let mockServerStarter: IDeepnoteServerStarter;
     let mockOutputChannel: IOutputChannel;
     let mockFileSystem: IFileSystem;
     let mockProcessServiceFactory: IProcessServiceFactory;
@@ -35,7 +33,6 @@ suite('DeepnoteEnvironmentManager', () => {
     setup(() => {
         mockContext = mock<IExtensionContext>();
         mockStorage = mock<DeepnoteEnvironmentStorage>();
-        mockServerStarter = mock<IDeepnoteServerStarter>();
         mockOutputChannel = mock<IOutputChannel>();
         mockFileSystem = mock<IFileSystem>();
         mockProcessServiceFactory = mock<IProcessServiceFactory>();
@@ -69,7 +66,6 @@ suite('DeepnoteEnvironmentManager', () => {
         manager = new DeepnoteEnvironmentManager(
             instance(mockContext),
             instance(mockStorage),
-            instance(mockServerStarter),
             instance(mockOutputChannel),
             instance(mockFileSystem),
             instance(mockProcessServiceFactory)

@@ -7,6 +7,7 @@ import { NotebookCell, NotebookCellExecution, workspace, NotebookCellOutput } fr
 import { createPythonCode } from '@deepnote/blocks';
 import type { Kernel } from '@jupyterlab/services';
 import { CellExecutionCreator } from './cellExecutionCreator';
+import { CellExecutionOutputError } from '../errors/cellExecutionOutputError';
 import { analyzeKernelErrors, createOutputWithErrorMessageForDisplay } from '../../platform/errors/errorUtils';
 import { BaseError } from '../../platform/errors/types';
 import { dispose } from '../../platform/common/utils/lifecycle';
@@ -28,20 +29,26 @@ import { NotebookCellStateTracker, traceCellMessage } from './helpers';
 import { getDisplayPath } from '../../platform/common/platform/fs-paths';
 import { SessionDisposedError } from '../../platform/errors/sessionDisposedError';
 import { isKernelSessionDead } from '../kernel';
-import { ICellExecution } from './types';
+import { CellExecutionCompletedWithErrorsOptions, ICellExecution } from './types';
 import { KernelError } from '../errors/kernelError';
 import { getCachedSysPrefix } from '../../platform/interpreter/helpers';
 import { getCellMetadata } from '../../platform/common/utils';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
 import { DeepnoteDataConverter } from '../../notebooks/deepnote/deepnoteDataConverter';
+import {
+    IFederatedAuthSqlBlockCodeGenerator,
+    NotAuthenticatedError,
+    OAuthClientMisconfiguredError
+} from '../../notebooks/deepnote/integrations/types';
+import { Integrations } from '../../platform/common/utils/localize';
 
-/**
- * Factory for CellExecution objects.
- */
+/** Factory for CellExecution objects. Built outside inversify (see `NotebookKernelExecution`); optional deps are plain ctor args. */
 export class CellExecutionFactory {
     constructor(
         private readonly controller: IKernelController,
-        private readonly requestListener: CellExecutionMessageHandlerService
+        private readonly requestListener: CellExecutionMessageHandlerService,
+        /** Federated-auth generator; `undefined` on web (symbol unbound) so the federated branch in {@link CellExecution.execute} is skipped via optional chaining. */
+        private readonly federatedAuthSqlBlockCodeGenerator?: IFederatedAuthSqlBlockCodeGenerator
     ) {}
 
     public create(
@@ -51,7 +58,15 @@ export class CellExecutionFactory {
         info?: ResumeCellExecutionInformation
     ) {
         // eslint-disable-next-line @typescript-eslint/no-use-before-define
-        return CellExecution.fromCell(cell, code, metadata, this.controller, this.requestListener, info);
+        return CellExecution.fromCell(
+            cell,
+            code,
+            metadata,
+            this.controller,
+            this.requestListener,
+            info,
+            this.federatedAuthSqlBlockCodeGenerator
+        );
     }
 }
 
@@ -99,7 +114,8 @@ export class CellExecution implements ICellExecution, IDisposable {
         private readonly kernelConnection: Readonly<KernelConnectionMetadata>,
         private readonly controller: IKernelController,
         private readonly requestListener: CellExecutionMessageHandlerService,
-        private readonly resumeExecution?: ResumeCellExecutionInformation
+        private readonly resumeExecution?: ResumeCellExecutionInformation,
+        private readonly federatedAuthSqlBlockCodeGenerator?: IFederatedAuthSqlBlockCodeGenerator
     ) {
         workspace.onDidCloseTextDocument(
             (e) => {
@@ -147,9 +163,18 @@ export class CellExecution implements ICellExecution, IDisposable {
         metadata: Readonly<KernelConnectionMetadata>,
         controller: IKernelController,
         requestListener: CellExecutionMessageHandlerService,
-        info?: ResumeCellExecutionInformation
+        info?: ResumeCellExecutionInformation,
+        federatedAuthSqlBlockCodeGenerator?: IFederatedAuthSqlBlockCodeGenerator
     ) {
-        return new CellExecution(cell, code, metadata, controller, requestListener, info);
+        return new CellExecution(
+            cell,
+            code,
+            metadata,
+            controller,
+            requestListener,
+            info,
+            federatedAuthSqlBlockCodeGenerator
+        );
     }
     public async start(session: IKernelSession) {
         this.session = session;
@@ -173,7 +198,7 @@ export class CellExecution implements ICellExecution, IDisposable {
             if (!session.kernel || session.kernel.isDisposed || session.isDisposed) {
                 this.execution?.start();
                 this.execution?.clearOutput().then(noop, noop);
-                this.completedWithErrors(new SessionDisposedError());
+                this.completedWithErrors({ error: new SessionDisposedError(), output: 'append' });
                 return this.result;
             }
         }
@@ -190,7 +215,7 @@ export class CellExecution implements ICellExecution, IDisposable {
         NotebookCellStateTracker.setCellState(this.cell, NotebookCellExecutionState.Executing);
         // Begin the request that will modify our cell.
         this.execute(this.codeOverride || this.cell.document.getText().replace(/\r\n/g, '\n'), session)
-            .catch((e) => this.completedWithErrors(e))
+            .catch((e) => this.completedWithErrors({ error: e, output: 'append' }))
             .catch(noop);
         return this.result;
     }
@@ -231,7 +256,7 @@ export class CellExecution implements ICellExecution, IDisposable {
             (error) => {
                 logger.error(`Cell (index = ${this.cell.index}) execution completed with errors (2).`, error);
                 // If not a restart error, then tell the subscriber
-                this.completedWithErrors(error.error);
+                this.completedWithErrors({ error: error.error, output: 'append' });
             },
             this,
             this.disposables
@@ -285,7 +310,7 @@ export class CellExecution implements ICellExecution, IDisposable {
         traceCellMessage(this.cell, 'Execution disposed');
         dispose(this.disposables);
     }
-    private completedWithErrors(error: Partial<Error>, completedTime?: number, appendErrorToOutput = true) {
+    private completedWithErrors({ completedTime, error, output }: CellExecutionCompletedWithErrorsOptions) {
         if (this.cancelHandled) {
             // We cancelled the cell, hence don't do anything.
             return;
@@ -297,36 +322,43 @@ export class CellExecution implements ICellExecution, IDisposable {
         }
         traceCellMessage(this.cell, 'Completed with errors');
 
-        if (appendErrorToOutput) {
+        if (output) {
             let errorMessage: string | undefined;
-            let output: NotebookCellOutput | undefined;
+            let cellOutput: NotebookCellOutput | undefined;
+            let resolvedError = error;
             if (
-                error &&
-                !(error instanceof BaseError) &&
-                error.message?.includes('Canceled future for execute_request message before replies were done') &&
+                resolvedError &&
+                !(resolvedError instanceof BaseError) &&
+                resolvedError.message?.includes(
+                    'Canceled future for execute_request message before replies were done'
+                ) &&
                 this.session &&
                 isKernelSessionDead(this.session)
             ) {
-                error = new SessionDisposedError();
+                resolvedError = new SessionDisposedError();
             }
             // If the error doesn't derive from BaseError, it came from execution
-            if (!error) {
+            if (!resolvedError) {
                 //
-            } else if (!(error instanceof BaseError)) {
-                errorMessage = error.message || error.name || error.stack;
+            } else if (!(resolvedError instanceof BaseError)) {
+                errorMessage = resolvedError.message || resolvedError.name || resolvedError.stack;
             } else {
                 // Otherwise it's an error from the kernel itself. Put it into the cell
                 const failureInfo = analyzeKernelErrors(
                     workspace.workspaceFolders || [],
-                    error,
+                    resolvedError,
                     getDisplayNameOrNameOfKernelConnection(this.kernelConnection),
                     getCachedSysPrefix(this.kernelConnection.interpreter)
                 );
                 errorMessage = failureInfo?.message;
             }
-            output = createOutputWithErrorMessageForDisplay(errorMessage || '');
-            if (output) {
-                this.execution?.appendOutput(output).then(noop, noop);
+            cellOutput = createOutputWithErrorMessageForDisplay(errorMessage || '');
+            if (cellOutput) {
+                const writeOutput =
+                    output === 'replace'
+                        ? this.execution?.replaceOutput(cellOutput)
+                        : this.execution?.appendOutput(cellOutput);
+                writeOutput?.then(noop, noop);
             }
         }
 
@@ -393,6 +425,25 @@ export class CellExecution implements ICellExecution, IDisposable {
         return !this.cell.document.isClosed;
     }
 
+    /** Surfaces a federated-auth `generate()` failure as a cell-execution failure with a clear message. */
+    private async handleFederatedGenerateError(ex: unknown) {
+        let message: string;
+        if (ex instanceof NotAuthenticatedError) {
+            message = Integrations.bigQueryNotAuthenticated(ex.integrationName);
+        } else if (ex instanceof OAuthClientMisconfiguredError) {
+            // `invalid_client` / `unauthorized_client`: wrong clientId/clientSecret. Surface a dedicated message; re-auth won't help.
+            message = Integrations.federatedAuthOAuthClientMisconfigured;
+        } else {
+            logger.error(`Federated SQL code generation failed for cell Index ${this.cell.index}`, ex);
+            message = ex instanceof Error ? ex.message : String(ex);
+        }
+
+        const error = new CellExecutionOutputError(message);
+        this.execution?.start();
+        await this.execution?.clearOutput();
+        this.completedWithErrors({ error, output: 'replace' });
+    }
+
     private async execute(code: string, session: IKernelSession) {
         if (!session.kernel) {
             throw new Error('No kernel available to execute code');
@@ -420,9 +471,6 @@ export class CellExecution implements ICellExecution, IDisposable {
         const dataConverter = new DeepnoteDataConverter();
         const deepnoteBlock = dataConverter.convertCellToBlock(cellData, this.cell.index);
 
-        logger.info(`Cell ${this.cell.index}: Using createPythonCode for ${deepnoteBlock.type} block`);
-        code = createPythonCode(deepnoteBlock);
-
         // Generate metadata from our cell (some kernels expect this.)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const metadata: any = {
@@ -431,6 +479,23 @@ export class CellExecution implements ICellExecution, IDisposable {
         };
 
         const kernelConnection = session.kernel;
+
+        // Federated-auth (BigQuery + google-oauth): generator returns a single Python string with the connection JSON embedded as a literal (containing the fresh access token). `undefined` means non-federated or web — fall back to `createPythonCode`.
+        let federatedCode: string | undefined;
+        try {
+            federatedCode = await this.federatedAuthSqlBlockCodeGenerator?.generate(deepnoteBlock);
+        } catch (ex) {
+            await this.handleFederatedGenerateError(ex);
+            return;
+        }
+        if (federatedCode !== undefined) {
+            logger.info(`Cell ${this.cell.index}: Using federated BigQuery code path`);
+            code = federatedCode;
+        } else {
+            logger.info(`Cell ${this.cell.index}: Using createPythonCode for ${deepnoteBlock.type} block`);
+            code = createPythonCode(deepnoteBlock);
+        }
+
         try {
             // At this point we're about to ACTUALLY execute some code. Fire an event to indicate that
             notebookCellExecutions.changeCellState(this.cell, NotebookCellExecutionState.Executing);
@@ -452,7 +517,7 @@ export class CellExecution implements ICellExecution, IDisposable {
             this.request.done.then(noop, noop);
         } catch (ex) {
             logger.error(`Cell execution failed without request, for cell Index ${this.cell.index}`, ex);
-            return this.completedWithErrors(ex);
+            return this.completedWithErrors({ error: ex, output: 'append' });
         }
         this.cellExecutionHandler = this.requestListener.registerListenerForExecution(this.cell, {
             kernel: kernelConnection,
@@ -463,7 +528,7 @@ export class CellExecution implements ICellExecution, IDisposable {
             (error) => {
                 logger.error(`Cell (index = ${this.cell.index}) execution completed with errors (2).`, error);
                 // If not a restart error, then tell the subscriber
-                this.completedWithErrors(error.error);
+                this.completedWithErrors({ error: error.error, output: 'append' });
             },
             this,
             this.disposables
@@ -491,7 +556,7 @@ export class CellExecution implements ICellExecution, IDisposable {
             // }
             traceCellMessage(this.cell, 'Jupyter execution completed');
             if (response.content.status === 'error') {
-                this.completedWithErrors(new KernelError(response.content), completedTime, false);
+                this.completedWithErrors({ error: new KernelError(response.content), completedTime });
             } else {
                 this.completedSuccessfully(completedTime);
             }
@@ -510,10 +575,10 @@ export class CellExecution implements ICellExecution, IDisposable {
                 // No point displaying the error stack trace from Jupyter npm package.
                 // Just display the error message and log details in output.
                 // Note: This could be an error from cancellation (interrupt) or due to kernel dying as well.
-                this.completedWithErrors({ message: ex.message });
+                this.completedWithErrors({ error: { message: ex.message }, output: 'append' });
             } else {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                this.completedWithErrors(ex as any);
+                this.completedWithErrors({ error: ex as any, output: 'append' });
             }
         }
     }

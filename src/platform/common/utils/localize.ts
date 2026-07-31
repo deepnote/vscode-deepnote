@@ -851,6 +851,7 @@ export namespace Integrations {
     export const alloyDBTypeLabel = l10n.t('Google AlloyDB');
     export const athenaTypeLabel = l10n.t('Amazon Athena');
     export const clickHouseTypeLabel = l10n.t('ClickHouse');
+    export const cloudSqlTypeLabel = l10n.t('Google Cloud SQL');
     export const databricksTypeLabel = l10n.t('Databricks');
     export const dremioTypeLabel = l10n.t('Dremio');
     export const mariaDBTypeLabel = l10n.t('MariaDB');
@@ -888,6 +889,41 @@ export namespace Integrations {
     export const bigQueryCredentialsPlaceholder = l10n.t('{"type": "service_account", ...}');
     export const bigQueryCredentialsRequired = l10n.t('Credentials are required');
     export const bigQueryInvalidJson = (message: string) => l10n.t('Invalid JSON: {0}', message);
+
+    // BigQuery federated-auth form strings (M4)
+    export const bigQueryAuthMethodLabel = l10n.t('Authentication method');
+    export const bigQueryAuthMethodServiceAccount = l10n.t('Service account');
+    export const bigQueryAuthMethodGoogleOauth = l10n.t('Google OAuth');
+    export const bigQueryProjectLabel = l10n.t('Google Project ID');
+    export const bigQueryProjectPlaceholder = l10n.t('my-dev-project');
+    export const bigQueryClientIdLabel = l10n.t('Client ID');
+    export const bigQueryClientIdPlaceholder = l10n.t('1234567890-abcdefg.apps.googleusercontent.com');
+    export const bigQueryClientSecretLabel = l10n.t('Client Secret');
+    export const bigQueryClientSecretPlaceholder = l10n.t('XyZ123AbCdEfGhI');
+
+    // Federated-auth integration management strings (M4)
+    export const authenticate = l10n.t('Authenticate with Google');
+    export const reauthenticate = l10n.t('Re-authenticate with Google');
+    export const tokenStatusAuthenticated = l10n.t('Authenticated');
+    export const tokenStatusDisconnected = l10n.t('Not authenticated');
+    export const authenticating = (integrationName: string) => l10n.t('Authenticating {0}...', integrationName);
+    export const authenticationSucceeded = (integrationName: string) => l10n.t('Authenticated {0}', integrationName);
+    export const authenticationFailed = (errorMessage: string) => l10n.t('Authentication failed: {0}', errorMessage);
+    export const bigQueryNotAuthenticated = (integrationName: string) =>
+        l10n.t(
+            'BigQuery integration "{0}" is not authenticated. Click Authenticate with Google in Manage Integrations to sign in.',
+            integrationName
+        );
+    export const federatedAuthNotSupportedInWeb = l10n.t(
+        'Federated authentication is not supported in the web extension. Open the workspace in desktop VS Code to authenticate.'
+    );
+    export const federatedAuthIntegrationNotConfiguredForOAuth = (integrationName: string) =>
+        l10n.t('Integration "{0}" is not configured for Google OAuth authentication.', integrationName);
+    export const federatedAuthIntegrationNotFound = (integrationId: string) =>
+        l10n.t('Integration "{0}" was not found.', integrationId);
+    export const federatedAuthOAuthClientMisconfigured = l10n.t(
+        'The OAuth client is misconfigured. Verify the client ID and client secret in the integration settings.'
+    );
 
     // Snowflake form strings
     export const snowflakeNameLabel = l10n.t('Name (optional)');
@@ -1046,10 +1082,24 @@ export namespace Integrations {
         'Paste the contents of your Google Cloud service account JSON key file.'
     );
     export const spannerServiceAccountInvalidJson = l10n.t('Invalid JSON format');
+    export const spannerServiceAccountRequired = l10n.t('Service account is required');
     export const spannerDataBoostLabel = l10n.t('Enable Data Boost');
     export const spannerDataBoostHelp = l10n.t(
         'Data Boost provides independent compute resources for analytics queries.'
     );
+
+    // Cloud SQL form strings
+    export const cloudSqlNameLabel = l10n.t('Name (optional)');
+    export const cloudSqlNamePlaceholder = l10n.t('My Cloud SQL Database');
+    export const cloudSqlServiceAccountLabel = l10n.t('Service Account JSON');
+    export const cloudSqlServiceAccountPlaceholder = l10n.t(
+        '{\n  "type": "service_account",\n  "project_id": "...",\n  ...\n}'
+    );
+    export const cloudSqlServiceAccountHelp = l10n.t(
+        'Paste the contents of your Google Cloud service account JSON key file.'
+    );
+    export const cloudSqlServiceAccountInvalidJson = l10n.t('Invalid JSON format');
+    export const cloudSqlServiceAccountRequired = l10n.t('Service account is required');
 
     // AlloyDB form strings
     export const alloyDBNameLabel = l10n.t('Name (optional)');

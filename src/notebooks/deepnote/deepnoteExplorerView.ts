@@ -358,7 +358,7 @@ export class DeepnoteExplorerView {
     }
 
     public async renameProject(treeItem: DeepnoteTreeItem): Promise<CommandOutcome> {
-        if (treeItem?.extra?.type !== DeepnoteTreeItemType.ProjectGroup) {
+        if (treeItem.extra.type !== DeepnoteTreeItemType.ProjectGroup) {
             return 'cancelled';
         }
 
@@ -545,8 +545,8 @@ export class DeepnoteExplorerView {
      */
     private itemIsNotebookScoped(treeItem: DeepnoteTreeItem): boolean {
         return (
-            treeItem?.extra?.type === DeepnoteTreeItemType.ProjectFile ||
-            treeItem?.extra?.type === DeepnoteTreeItemType.Notebook
+            treeItem.extra.type === DeepnoteTreeItemType.ProjectFile ||
+            treeItem.extra.type === DeepnoteTreeItemType.Notebook
         );
     }
 
@@ -567,7 +567,7 @@ export class DeepnoteExplorerView {
      * multi-notebook file's in-file child.
      */
     private itemIsSingleNotebookFile(treeItem: DeepnoteTreeItem, projectData: DeepnoteFile): boolean {
-        if (treeItem?.extra?.type !== DeepnoteTreeItemType.ProjectFile) {
+        if (treeItem.extra.type !== DeepnoteTreeItemType.ProjectFile) {
             return false;
         }
 
@@ -734,7 +734,7 @@ export class DeepnoteExplorerView {
     }
 
     private async openFile(treeItem: DeepnoteTreeItem): Promise<void> {
-        if (treeItem?.extra?.type !== DeepnoteTreeItemType.ProjectFile) {
+        if (treeItem.extra.type !== DeepnoteTreeItemType.ProjectFile) {
             return;
         }
 
@@ -1162,7 +1162,7 @@ export class DeepnoteExplorerView {
     }
 
     private async addNotebookToProject(treeItem: DeepnoteTreeItem): Promise<CommandOutcome> {
-        if (treeItem?.extra?.type !== DeepnoteTreeItemType.ProjectGroup) {
+        if (treeItem.extra.type !== DeepnoteTreeItemType.ProjectGroup) {
             return 'cancelled';
         }
 

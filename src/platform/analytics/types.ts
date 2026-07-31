@@ -38,7 +38,7 @@ export interface TelemetryEventProperties {
     add_block: { blockType: string };
     authenticate_integration: { integrationType: string };
     configure_integration: { integrationType: string };
-    create_environment: { hasDescription: boolean; hasPackages: boolean };
+    create_environment: { hasDescription: boolean; packageCount: number };
     create_notebook: { outcome: CommandOutcome; source: 'toolbar' | 'project_menu' };
     create_project: { outcome: CommandOutcome };
     delete_environment: undefined;
@@ -56,7 +56,7 @@ export interface TelemetryEventProperties {
     reset_integration: { integrationType: string };
     save_integration: { integrationType: string };
     select_environment: undefined;
-    split_notebook: { completed: boolean; notebookCount: number };
+    split_notebook: { notebookCount: number };
     switch_sql_integration: { integrationType: string };
     toggle_snapshots: { enabled: boolean };
     update_environment: { field: 'name' | 'packages'; packageCount?: number };
@@ -69,7 +69,7 @@ export interface TelemetryEventProperties {
  */
 export type TelemetryEvent<E extends TelemetryEventName = TelemetryEventName> = E extends TelemetryEventName
     ? TelemetryEventProperties[E] extends undefined
-        ? { eventName: E; properties?: undefined }
+        ? { eventName: E; properties?: never }
         : { eventName: E; properties: TelemetryEventProperties[E] }
     : never;
 

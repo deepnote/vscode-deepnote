@@ -201,7 +201,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
                             eventName: 'create_environment',
                             properties: {
                                 hasDescription: !!options.description,
-                                hasPackages: !!options.packages?.length
+                                packageCount: options.packages?.length ?? 0
                             }
                         });
 

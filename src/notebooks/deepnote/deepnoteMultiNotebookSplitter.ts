@@ -110,7 +110,7 @@ export class DeepnoteMultiNotebookSplitter {
                 const notebookCount = await this.splitFile(fileUri);
                 this.analytics.trackEvent({
                     eventName: 'split_notebook',
-                    properties: { completed: notebookCount > 0, notebookCount }
+                    properties: { notebookCount }
                 });
             }
         } catch (error) {

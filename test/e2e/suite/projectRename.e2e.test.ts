@@ -40,11 +40,8 @@ async function leaveUnsavedCellEdit(): Promise<void> {
 
     await openWorkspaceFile(DIRTIED_FILE);
 
-    // Focus the first CODE cell's Monaco editor by clicking its visible source line (markdown cells
-    // render without an editor, so scope to code rows), then type a marker into the focused input.
-    // Locate AND click in one waited step, retrying on failure: a freshly opened Deepnote notebook
-    // re-renders its cells for a beat (status-bar items, kernel wiring), which can invalidate a
-    // separately-located element reference before the click lands (StaleElementReferenceError).
+    // Click the first CODE cell's source line to focus its editor (markdown cells have none); locate
+    // and click in one retried step, since the cell re-renders on open and can stale a prior reference.
     await driver.wait(
         async () => {
             const line = (await driver.findElements(By.css('.notebookOverlay .code-cell-row .view-line')))[0];
@@ -57,10 +54,7 @@ async function leaveUnsavedCellEdit(): Promise<void> {
                 await line.click();
 
                 return true;
-            } catch (error) {
-                // Stale reference (the cell re-rendered) or not yet clickable — re-locate and retry.
-                console.warn('[deepnote-e2e] locate/click notebook code cell (retrying):', error);
-
+            } catch {
                 return false;
             }
         },

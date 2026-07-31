@@ -3,7 +3,7 @@ import { commands, Disposable, l10n, Uri, ViewColumn, WebviewPanel, window } fro
 
 import { BigQueryAuthMethods } from '@deepnote/database-integrations';
 
-import { ITelemetryService } from '../../../platform/analytics/types';
+import { type CommandOutcome, ITelemetryService } from '../../../platform/analytics/types';
 import { Commands } from '../../../platform/common/constants';
 import { IDisposableRegistry, IExtensionContext } from '../../../platform/common/types';
 import * as localize from '../../../platform/common/utils/localize';
@@ -565,12 +565,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     }
 
     private trackIntegrationEvent(event: {
-        eventName:
-            | 'authenticate_integration'
-            | 'configure_integration'
-            | 'delete_integration'
-            | 'reset_integration'
-            | 'save_integration';
+        eventName: 'configure_integration' | 'delete_integration' | 'reset_integration';
         integrationType: string | undefined;
     }): void {
         const properties = { integrationType: event.integrationType ?? 'unknown' };
@@ -597,9 +592,18 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                     const saved = await this.saveConfiguration(message.integrationId, message.config);
 
                     if (saved) {
-                        this.trackIntegrationEvent({
+                        // Legacy big-query configs may omit authMethod, which means service-account.
+                        const authMethod =
+                            message.config.type === 'big-query'
+                                ? message.config.metadata.authMethod ?? BigQueryAuthMethods.ServiceAccount
+                                : undefined;
+
+                        this.analytics.trackEvent({
                             eventName: 'save_integration',
-                            integrationType: message.config.type
+                            properties: {
+                                integrationType: message.config.type,
+                                ...(authMethod ? { authMethod } : {})
+                            }
                         });
                     }
                 }
@@ -627,10 +631,14 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             case 'authenticate':
                 if (message.integrationId) {
                     const integrationType = this.integrations.get(message.integrationId)?.integrationType;
-                    this.trackIntegrationEvent({ eventName: 'authenticate_integration', integrationType });
+                    let outcome: CommandOutcome = 'failed';
 
                     try {
-                        await commands.executeCommand(Commands.AuthenticateIntegration, message.integrationId);
+                        outcome =
+                            (await commands.executeCommand<CommandOutcome | undefined>(
+                                Commands.AuthenticateIntegration,
+                                message.integrationId
+                            )) ?? 'failed';
                     } catch (error) {
                         // Command handler shows its own toasts; log here to avoid an unhandled-rejection.
                         logger.error(
@@ -638,6 +646,11 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                             error
                         );
                     }
+
+                    this.analytics.trackEvent({
+                        eventName: 'authenticate_integration',
+                        properties: { integrationType: integrationType ?? 'unknown', outcome }
+                    });
                 }
                 break;
         }

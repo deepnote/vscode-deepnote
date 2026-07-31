@@ -107,10 +107,19 @@ export class DeepnoteMultiNotebookSplitter {
             );
 
             if (selection === SPLIT_ACTION) {
+                // splitFile reports 0 when the split failed and was rolled back.
                 const notebookCount = await this.splitFile(fileUri);
                 this.analytics.trackEvent({
                     eventName: 'split_notebook',
-                    properties: { notebookCount }
+                    properties:
+                        notebookCount > 0
+                            ? { notebookCount, outcome: 'completed' }
+                            : { notebookCount: file.project.notebooks.length, outcome: 'failed' }
+                });
+            } else {
+                this.analytics.trackEvent({
+                    eventName: 'split_notebook',
+                    properties: { notebookCount: file.project.notebooks.length, outcome: 'cancelled' }
                 });
             }
         } catch (error) {

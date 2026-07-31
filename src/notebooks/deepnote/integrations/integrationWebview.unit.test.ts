@@ -3,7 +3,7 @@ import sinon from 'sinon';
 import { EventEmitter, Uri } from 'vscode';
 import { anyString, anything, instance, mock, reset, verify, when } from 'ts-mockito';
 
-import { ITelemetryService } from '../../../platform/analytics/types';
+import { ITelemetryService, type TelemetryEvent } from '../../../platform/analytics/types';
 import { IExtensionContext, IDisposable } from '../../../platform/common/types';
 import { Commands } from '../../../platform/common/constants';
 import { IDeepnoteNotebookManager } from '../../types';
@@ -103,9 +103,11 @@ suite('IntegrationWebviewProvider', () => {
     let tokenStorage: IFederatedAuthTokenStorage;
     let extensionSubscriptions: IDisposable[];
     let fakePanel: FakeWebviewPanel;
+    let trackedEvents: TelemetryEvent[];
 
     setup(() => {
         resetVSCodeMocks();
+        trackedEvents = [];
         extensionContext = mock<IExtensionContext>();
         integrationStorage = mock<IIntegrationStorage>();
         notebookManager = mock<IDeepnoteNotebookManager>();
@@ -157,7 +159,12 @@ suite('IntegrationWebviewProvider', () => {
             instance(extensionContext),
             instance(integrationStorage),
             instance(notebookManager),
-            instance(mock<ITelemetryService>()),
+            {
+                dispose: () => Promise.resolve(),
+                trackEvent: (event: TelemetryEvent) => {
+                    trackedEvents.push(event);
+                }
+            } as ITelemetryService,
             extensionSubscriptions,
             opts.tokenStorage
         );
@@ -167,7 +174,17 @@ suite('IntegrationWebviewProvider', () => {
         id: string,
         config: ConfigurableDatabaseIntegrationConfig
     ): Map<string, IntegrationWithStatus> {
-        return new Map([[id, { config, status: IntegrationStatus.Connected }]]);
+        return new Map([
+            [
+                id,
+                {
+                    config,
+                    status: IntegrationStatus.Connected,
+                    integrationName: config.name,
+                    integrationType: config.type
+                }
+            ]
+        ]);
     }
 
     async function show(provider: IntegrationWebviewProvider, integrations: Map<string, IntegrationWithStatus>) {
@@ -261,6 +278,103 @@ suite('IntegrationWebviewProvider', () => {
             executeCommandStub.calledWith(Commands.AuthenticateIntegration, integrationId),
             'expected executeCommand to be called with AuthenticateIntegration and the integration id'
         );
+    });
+
+    suite('handleMessage: "authenticate" telemetry outcome', () => {
+        async function authenticate(commandResult: Promise<unknown>): Promise<void> {
+            when(mockedVSCodeNamespaces.commands.executeCommand(anyString(), anything())).thenReturn(commandResult);
+
+            const provider = buildProvider({ tokenStorage });
+            const integrationId = 'bq-auth-outcome';
+            await show(
+                provider,
+                singleIntegrationMap(integrationId, buildGoogleOauthIntegration({ id: integrationId }))
+            );
+            trackedEvents.length = 0;
+
+            await fakePanel.onDidReceiveMessage({ type: 'authenticate', integrationId });
+        }
+
+        test('reports the outcome returned by the command, after it settles', async () => {
+            await authenticate(Promise.resolve('cancelled'));
+
+            assert.deepStrictEqual(trackedEvents, [
+                {
+                    eventName: 'authenticate_integration',
+                    properties: { integrationType: 'big-query', outcome: 'cancelled' }
+                }
+            ]);
+        });
+
+        test('reports failed when the command returns nothing (web stub / unexpected undefined)', async () => {
+            await authenticate(Promise.resolve(undefined));
+
+            assert.deepStrictEqual(trackedEvents, [
+                {
+                    eventName: 'authenticate_integration',
+                    properties: { integrationType: 'big-query', outcome: 'failed' }
+                }
+            ]);
+        });
+
+        test('reports failed when the command rejects', async () => {
+            const rejection = Promise.reject(new Error('boom'));
+            rejection.catch(() => undefined); // avoid an unhandled-rejection warning before the handler awaits it
+
+            await authenticate(rejection);
+
+            assert.deepStrictEqual(trackedEvents, [
+                {
+                    eventName: 'authenticate_integration',
+                    properties: { integrationType: 'big-query', outcome: 'failed' }
+                }
+            ]);
+        });
+    });
+
+    suite('handleMessage: "save" telemetry authMethod', () => {
+        async function save(config: ConfigurableDatabaseIntegrationConfig): Promise<void> {
+            when(integrationStorage.save(anything())).thenResolve();
+
+            const provider = buildProvider({ tokenStorage });
+            await show(provider, singleIntegrationMap(config.id, config));
+            trackedEvents.length = 0;
+
+            await fakePanel.onDidReceiveMessage({ type: 'save', integrationId: config.id, config });
+        }
+
+        test('reports authMethod google-oauth for an OAuth BigQuery config', async () => {
+            await save(buildGoogleOauthIntegration({ id: 'bq-save-oauth' }));
+
+            assert.deepStrictEqual(trackedEvents, [
+                {
+                    eventName: 'save_integration',
+                    properties: { integrationType: 'big-query', authMethod: 'google-oauth' }
+                }
+            ]);
+        });
+
+        test('reports authMethod service-account for a legacy BigQuery config that omits authMethod', async () => {
+            const config = buildServiceAccountIntegration({ id: 'bq-save-legacy' });
+            delete (config.metadata as { authMethod?: string }).authMethod;
+
+            await save(config);
+
+            assert.deepStrictEqual(trackedEvents, [
+                {
+                    eventName: 'save_integration',
+                    properties: { integrationType: 'big-query', authMethod: 'service-account' }
+                }
+            ]);
+        });
+
+        test('omits authMethod for non-BigQuery configs', async () => {
+            await save(buildPostgresIntegration({ id: 'pg-save' }));
+
+            assert.deepStrictEqual(trackedEvents, [
+                { eventName: 'save_integration', properties: { integrationType: 'pgsql' } }
+            ]);
+        });
     });
 
     (['reset', 'delete'] as const).forEach((messageType) => {

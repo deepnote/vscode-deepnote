@@ -4,6 +4,7 @@ export type TelemetryEventName =
     | 'add_block'
     | 'authenticate_integration'
     | 'configure_integration'
+    | 'copy_notebook_details'
     | 'create_environment'
     | 'create_notebook'
     | 'create_project'
@@ -36,8 +37,9 @@ export type CommandOutcome = 'completed' | 'cancelled' | 'failed';
  */
 export interface TelemetryEventProperties {
     add_block: { blockType: string };
-    authenticate_integration: { integrationType: string };
+    authenticate_integration: { integrationType: string; outcome: CommandOutcome };
     configure_integration: { integrationType: string };
+    copy_notebook_details: undefined;
     create_environment: { hasDescription: boolean; packageCount: number };
     create_notebook: { outcome: CommandOutcome; source: 'toolbar' | 'project_menu' };
     create_project: { outcome: CommandOutcome };
@@ -54,9 +56,9 @@ export interface TelemetryEventProperties {
     rename_notebook: { outcome: CommandOutcome };
     rename_project: { outcome: CommandOutcome };
     reset_integration: { integrationType: string };
-    save_integration: { integrationType: string };
+    save_integration: { integrationType: string; authMethod?: 'service-account' | 'google-oauth' };
     select_environment: undefined;
-    split_notebook: { notebookCount: number };
+    split_notebook: { notebookCount: number; outcome: CommandOutcome };
     switch_sql_integration: { integrationType: string };
     toggle_snapshots: { enabled: boolean };
     update_environment: { field: 'name' | 'packages'; packageCount?: number };

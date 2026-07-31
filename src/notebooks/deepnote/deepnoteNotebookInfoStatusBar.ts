@@ -14,6 +14,7 @@ import {
 } from 'vscode';
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
+import { ITelemetryService } from '../../platform/analytics/types';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { Commands } from '../../platform/common/constants';
 
@@ -32,7 +33,10 @@ export class DeepnoteNotebookInfoStatusBar implements IExtensionSyncActivationSe
 
     private statusBarItem: StatusBarItem | undefined;
 
-    constructor(@inject(IDisposableRegistry) disposableRegistry: IDisposableRegistry) {
+    constructor(
+        @inject(IDisposableRegistry) disposableRegistry: IDisposableRegistry,
+        @inject(ITelemetryService) private readonly analytics: ITelemetryService
+    ) {
         disposableRegistry.push(this);
     }
 
@@ -115,6 +119,7 @@ export class DeepnoteNotebookInfoStatusBar implements IExtensionSyncActivationSe
         const details = this.formatNotebookDetails(notebook);
 
         await env.clipboard.writeText(details);
+        this.analytics.trackEvent({ eventName: 'copy_notebook_details' });
         await window.showInformationMessage(l10n.t('Copied Deepnote notebook details to clipboard.'));
     }
 

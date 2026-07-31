@@ -4,6 +4,7 @@ import { CancellationError, CancellationToken, ProgressLocation, Uri, commands, 
 import { BigQueryAuthMethods } from '@deepnote/database-integrations';
 
 import { IExtensionSyncActivationService } from '../../../../platform/activation/types';
+import type { CommandOutcome } from '../../../../platform/analytics/types';
 import { Commands } from '../../../../platform/common/constants';
 import { IExtensionContext } from '../../../../platform/common/types';
 import { Integrations } from '../../../../platform/common/utils/localize';
@@ -43,22 +44,25 @@ export class FederatedAuthCommandHandlerNode implements IExtensionSyncActivation
         );
     }
 
-    /** Core flow. Public so tests can drive the handler without `commands.executeCommand`. */
-    public async authenticate(integrationId: string): Promise<void> {
+    /**
+     * Core flow. Public so tests can drive the handler without `commands.executeCommand`. Returns the
+     * outcome so the invoking UI layer can attach it to its telemetry.
+     */
+    public async authenticate(integrationId: string): Promise<CommandOutcome> {
         if (typeof integrationId !== 'string' || integrationId.length === 0) {
             logger.warn(
                 `FederatedAuthCommandHandlerNode: invoked without a valid integrationId (received: ${String(
                     integrationId
                 )})`
             );
-            return;
+            return 'failed';
         }
 
         const integration = await this.integrationStorage.getIntegrationConfig(integrationId);
         if (!integration) {
             logger.warn(`FederatedAuthCommandHandlerNode: integration "${integrationId}" not found.`);
             void window.showErrorMessage(Integrations.federatedAuthIntegrationNotFound(integrationId));
-            return;
+            return 'failed';
         }
 
         if (integration.type !== 'big-query' || integration.metadata.authMethod !== BigQueryAuthMethods.GoogleOauth) {
@@ -66,7 +70,7 @@ export class FederatedAuthCommandHandlerNode implements IExtensionSyncActivation
                 `FederatedAuthCommandHandlerNode: integration "${integration.name}" is not configured for Google OAuth.`
             );
             void window.showErrorMessage(Integrations.federatedAuthIntegrationNotConfiguredForOAuth(integration.name));
-            return;
+            return 'failed';
         }
 
         const { clientId, clientSecret, project } = integration.metadata;
@@ -129,14 +133,18 @@ export class FederatedAuthCommandHandlerNode implements IExtensionSyncActivation
             await this.tokenStorage.save(entry);
 
             void window.showInformationMessage(Integrations.authenticationSucceeded(integration.name));
+
+            return 'completed';
         } catch (err) {
             if (err instanceof CancellationError) {
                 logger.info(`FederatedAuthCommandHandlerNode: authentication cancelled for "${integration.name}".`);
-                return;
+                return 'cancelled';
             }
             const message = err instanceof Error ? err.message : String(err);
             logger.error(`FederatedAuthCommandHandlerNode: authentication failed for "${integration.name}".`, err);
             void window.showErrorMessage(Integrations.authenticationFailed(message));
+
+            return 'failed';
         }
     }
 }

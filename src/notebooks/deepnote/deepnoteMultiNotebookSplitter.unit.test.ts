@@ -3,7 +3,7 @@ import { assert } from 'chai';
 import { anything, instance, mock, when } from 'ts-mockito';
 import { EventEmitter, FileType, NotebookDocument, TabGroups, TabInputNotebook, Uri } from 'vscode';
 
-import { ITelemetryService } from '../../platform/analytics/types';
+import { ITelemetryService, type TelemetryEvent } from '../../platform/analytics/types';
 import type { IDeepnoteNotebookEnvironmentMapper } from '../../kernels/deepnote/types';
 import type { ILogger } from '../../platform/logging/types';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
@@ -65,6 +65,8 @@ suite('DeepnoteMultiNotebookSplitter', () => {
     let failWriteAfterCreateFor: string | undefined;
     // Filenames passed to workspace.fs.delete (rollback cleanup), in call order.
     let deleteTargets: string[];
+    // Events the default splitter reported, in call order.
+    let trackedEvents: TelemetryEvent[];
 
     const logger: ILogger = {
         error: () => undefined,
@@ -166,6 +168,7 @@ suite('DeepnoteMultiNotebookSplitter', () => {
         failWriteFor = undefined;
         failWriteAfterCreateFor = undefined;
         deleteTargets = [];
+        trackedEvents = [];
 
         // Re-stub the open-notebook event with our own emitter so tests can fire opens.
         onDidOpen = new EventEmitter<NotebookDocument>();
@@ -195,7 +198,12 @@ suite('DeepnoteMultiNotebookSplitter', () => {
             logger,
             // `exists` probe injected directly (mirrors deepnoteFileExists, but synchronous-set-backed).
             (uri: Uri) => Promise.resolve(existingOnDisk.has(basename(uri))),
-            instance(mock<ITelemetryService>())
+            {
+                dispose: () => Promise.resolve(),
+                trackEvent: (event: TelemetryEvent) => {
+                    trackedEvents.push(event);
+                }
+            } as ITelemetryService
         );
         splitter.activate();
     });
@@ -714,6 +722,56 @@ suite('DeepnoteMultiNotebookSplitter', () => {
             await waitFor(() => renameOps.length >= 1);
 
             assert.notInclude(writeTargets, 'multi.deepnote', 'the original file must never be written');
+        });
+    });
+
+    suite('telemetry outcomes', () => {
+        test('a dismissed prompt reports split_notebook cancelled with the parsed notebook count', async () => {
+            const file = makeFile([
+                makeNotebook('n1', 'Alpha', 'a'),
+                makeNotebook('n2', 'Beta', 'b'),
+                makeNotebook('n3', 'Gamma', 'c')
+            ]);
+            stubReadFile(file);
+            // Default prompt resolves to dismiss.
+
+            onDidOpen.fire(notebookDoc(Uri.file('/ws/multi.deepnote')));
+            await waitFor(() => trackedEvents.length >= 1);
+
+            assert.deepStrictEqual(trackedEvents, [
+                { eventName: 'split_notebook', properties: { notebookCount: 3, outcome: 'cancelled' } }
+            ]);
+        });
+
+        test('a successful split reports split_notebook completed with the number of files created', async () => {
+            const file = makeFile([makeNotebook('n1', 'Alpha', 'a'), makeNotebook('n2', 'Beta', 'b')]);
+            stubReadFile(file);
+            acceptSplit();
+
+            onDidOpen.fire(notebookDoc(Uri.file('/ws/multi.deepnote')));
+            await waitFor(() => trackedEvents.length >= 1);
+
+            assert.deepStrictEqual(trackedEvents, [
+                { eventName: 'split_notebook', properties: { notebookCount: 2, outcome: 'completed' } }
+            ]);
+        });
+
+        test('a failed split (child write rejects, rollback) reports split_notebook failed with the parsed notebook count', async () => {
+            const file = makeFile([
+                makeNotebook('n1', 'Alpha', 'a'),
+                makeNotebook('n2', 'Beta', 'b'),
+                makeNotebook('n3', 'Gamma', 'c')
+            ]);
+            stubReadFile(file);
+            acceptSplit();
+            failWriteFor = 'multi-beta.deepnote';
+
+            onDidOpen.fire(notebookDoc(Uri.file('/ws/multi.deepnote')));
+            await waitFor(() => trackedEvents.length >= 1);
+
+            assert.deepStrictEqual(trackedEvents, [
+                { eventName: 'split_notebook', properties: { notebookCount: 3, outcome: 'failed' } }
+            ]);
         });
     });
 

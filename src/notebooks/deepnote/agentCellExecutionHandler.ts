@@ -13,7 +13,7 @@ import {
     workspace
 } from 'vscode';
 
-import { AgentBlock, DeepnoteBlock } from '@deepnote/blocks';
+import { AgentBlock, DeepnoteBlock, extractOutputsText } from '@deepnote/blocks';
 import {
     AgentBlockContext,
     AgentStreamEvent,
@@ -33,6 +33,12 @@ import { generateBlockId, generateSortingKey, isEphemeralCell } from './dataConv
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
 import { getOrPromptOpenAiApiKey } from './deepnoteSecretStore';
 
+// Tool results reported back to the agent. These mirror the wording @deepnote/runtime-core uses in
+// its own ExecutionEngine implementation of the same tools, so the agent sees identical phrasing
+// whether a block runs in the extension or on the backend.
+const MARKDOWN_BLOCK_ADDED_TEXT = 'Markdown block added.';
+const NO_OUTPUT_TEXT = '(no output)';
+
 export async function getOpenAiApiKey(): Promise<string> {
     return getOrPromptOpenAiApiKey();
 }
@@ -43,7 +49,13 @@ export function isAgentCell(cell: NotebookCell): boolean {
     return pocket?.type === 'agent';
 }
 
-export function serializeNotebookContext({ cells }: { cells: NotebookCell[] }): string {
+export function serializeNotebookContext({
+    cells,
+    notebookName
+}: {
+    cells: NotebookCell[];
+    notebookName: string;
+}): string {
     const converter = new DeepnoteDataConverter();
 
     const blocks = cells.reduce<DeepnoteBlock[]>((acc, cell) => {
@@ -65,7 +77,28 @@ export function serializeNotebookContext({ cells }: { cells: NotebookCell[] }): 
         return acc;
     }, []);
 
-    return serializeNotebookContextFromBlocks({ blocks, notebookName: null });
+    return serializeNotebookContextFromBlocks({ blocks, notebookName });
+}
+
+/**
+ * `translateCellDisplayOutput` follows nbformat's multiline convention and emits stream `text` as an
+ * array of lines. `extractOutputsText` only reads `text` when it is a string, so join it first —
+ * otherwise every `print()` an ephemeral cell produces would be dropped from the agent's tool result.
+ */
+function normalizeOutputsForTextExtraction(outputs: unknown[]): unknown[] {
+    return outputs.map((output) => {
+        const candidate = output as { output_type?: unknown; text?: unknown } | null;
+
+        if (candidate?.output_type === 'stream' && Array.isArray(candidate.text)) {
+            return { ...candidate, text: candidate.text.join('') };
+        }
+
+        return output;
+    });
+}
+
+function describeExecutionOutputs(outputs: unknown[]): string {
+    return extractOutputsText(normalizeOutputsForTextExtraction(outputs), { includeTraceback: true }) || NO_OUTPUT_TEXT;
 }
 
 export interface ExecuteAgentCellOptions {
@@ -113,7 +146,8 @@ export async function executeAgentCell(
         let lastAgentEventType: AgentStreamEvent['type'] | undefined;
 
         const notebookContext = serializeNotebookContext({
-            cells: cell.notebook.getCells().filter((c) => c.index !== cell.index)
+            cells: cell.notebook.getCells().filter((c) => c.index !== cell.index),
+            notebookName: (cell.notebook.metadata?.deepnoteNotebookName as string | undefined) ?? ''
         });
 
         const openAiToken = await getOpenAiApiKey();
@@ -124,14 +158,23 @@ export async function executeAgentCell(
             notebookContext,
             addMarkdownBlock: async ({ content }: { content: string }) => {
                 await insertEphemeralCell(cell.notebook, cell.index, agentBlock.id, 'markdown', content);
-                return { success: true };
+
+                return MARKDOWN_BLOCK_ADDED_TEXT;
             },
             addAndExecuteCodeBlock: async ({ code }: { code: string }) => {
-                const cellIndex = await insertEphemeralCell(cell.notebook, cell.index, agentBlock.id, 'code', code);
-                const insertedCell = cell.notebook.cellAt(cellIndex);
+                try {
+                    const cellIndex = await insertEphemeralCell(cell.notebook, cell.index, agentBlock.id, 'code', code);
+                    const insertedCell = cell.notebook.cellAt(cellIndex);
 
-                const { success } = await executeEphemeralCell(insertedCell, execution.token);
-                return success ? { success } : { success: false, error: new Error('Ephemeral cell execution failed') };
+                    const { success, outputs } = await executeEphemeralCell(insertedCell, execution.token);
+                    const outputText = describeExecutionOutputs(outputs);
+
+                    return success ? `Output:\n${outputText}` : `Execution failed:\n${outputText}`;
+                } catch (error) {
+                    const executionError = error instanceof Error ? error : new Error(String(error));
+
+                    return `Execution error: ${executionError.message}`;
+                }
             },
             onAgentEvent: async (event: AgentStreamEvent) => {
                 logger.info('Agent event', JSON.stringify(event));

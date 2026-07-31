@@ -1,5 +1,31 @@
 import type { ActivationFunction } from 'vscode-notebook-renderer';
 
+// markdown-it ships no type declarations and is only a transitive dependency, so describe the
+// small surface this renderer touches rather than depending on its internals wholesale.
+interface MarkdownItToken {
+    content: string;
+}
+
+interface MarkdownItRuleState {
+    Token: new (type: string, tag: string, nesting: number) => MarkdownItToken;
+    env?: {
+        outputItem?: {
+            metadata?: Record<string, unknown>;
+        };
+    };
+    tokens: MarkdownItToken[];
+}
+
+interface MarkdownIt {
+    core: {
+        ruler: {
+            push(name: string, rule: (state: MarkdownItRuleState) => void): void;
+        };
+    };
+}
+
+type ExtendMarkdownIt = (callback: (md: MarkdownIt) => void) => void;
+
 const styleContent = `
 .alert {
     width: auto;
@@ -61,8 +87,12 @@ export const activate: ActivationFunction = async (ctx) => {
     document.head.appendChild(template);
 
     const markdownRenderer = await ctx.getRenderer('vscode.markdown-it-renderer');
-    if (markdownRenderer) {
-        (markdownRenderer as any).extendMarkdownIt((md: any) => {
+    // RendererApi exposes extension hooks through an index signature, so extendMarkdownIt arrives
+    // as unknown and has to be narrowed before it can be called.
+    const extendMarkdownIt = markdownRenderer?.extendMarkdownIt as ExtendMarkdownIt | undefined;
+
+    if (typeof extendMarkdownIt === 'function') {
+        extendMarkdownIt((md) => {
             addEphemeralCellWrapper(md);
         });
     }
@@ -70,8 +100,8 @@ export const activate: ActivationFunction = async (ctx) => {
     return undefined;
 };
 
-function addEphemeralCellWrapper(md: any): void {
-    md.core.ruler.push('ephemeral_wrapper', (state: any) => {
+function addEphemeralCellWrapper(md: MarkdownIt): void {
+    md.core.ruler.push('ephemeral_wrapper', (state) => {
         const metadata = state.env?.outputItem?.metadata;
         if (!metadata || metadata.is_ephemeral !== true) {
             return;
